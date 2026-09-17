@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import Settings
 from app.errors import install_error_handlers
@@ -42,6 +43,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.started_at = datetime.now(UTC).isoformat()
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["*"],
+        allow_headers=["Authorization", "Content-Type"],
+        allow_credentials=False,
+        max_age=600,
+    )
     install_error_handlers(app)
     from app.api import api_router
     from app.jobs.events import events_websocket
