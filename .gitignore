@@ -1,0 +1,33 @@
+# python
+backend/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.hypothesis/
+backend/build/
+backend/dist/
+# node
+node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+# rust / tauri
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+frontend/src-tauri/binaries/*
+!frontend/src-tauri/binaries/.gitkeep
+# worktrees and local data
+.worktrees/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.pt
+*.onnx
+*.engine
+.env
+.env.*
+# os
+Thumbs.db
+.DS_Store
