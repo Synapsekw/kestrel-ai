@@ -31,3 +31,4 @@ frontend/src-tauri/binaries/*
 # os
 Thumbs.db
 .DS_Store
+.superpowers/
