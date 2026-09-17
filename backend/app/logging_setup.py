@@ -13,6 +13,8 @@ def configure_logging(data_dir: Path, level: str) -> Path:
     log_file = log_dir / "backend.log"
     root = logging.getLogger()
     root.setLevel(level.upper())
+    logging.getLogger("alembic").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     already = any(
         isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == log_file for h in root.handlers
     )

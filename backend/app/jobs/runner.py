@@ -1,9 +1,186 @@
+"""Thread-pool job runner. Each job writes its state to the project DB and publishes events."""
+
+import logging
+import threading
+import time
+import traceback
+from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
+
+from app.db.models import Job
+from app.errors import not_found
+from app.jobs.events import EventBus
+from app.jobs.registry import get_job_type
+from app.projects.service import ProjectHandle
+
+PROGRESS_DB_INTERVAL_S = 0.25
+
+
+class JobCancelled(Exception):
+    pass
+
+
+class JobContext:
+    """What a job function receives: project handle, params, a logger, progress and cancellation."""
+
+    def __init__(
+        self, runner: "JobRunner", project: ProjectHandle, job_id: str, params: dict, log: logging.Logger
+    ):
+        self.runner, self.project, self.job_id, self.params, self.log = runner, project, job_id, params, log
+        self.cancelled = threading.Event()
+        self._last_db_write = 0.0
+
+    def check_cancelled(self) -> None:
+        if self.cancelled.is_set():
+            raise JobCancelled()
+
+    def progress(self, fraction: float, message: str = "") -> None:
+        fraction = max(0.0, min(1.0, float(fraction)))
+        now = time.monotonic()
+        if now - self._last_db_write >= PROGRESS_DB_INTERVAL_S:
+            self._last_db_write = now
+            self.runner.update(self.project, self.job_id, progress=fraction, message=message)
+        self.runner.events.publish(
+            {
+                "type": "job.progress",
+                "project_id": self.project.id,
+                "job_id": self.job_id,
+                "progress": fraction,
+                "message": message,
+                "payload": {},
+            }
+        )
+
+    def publish(self, type: str, payload: dict) -> None:
+        """Domain events such as images.changed or boxes.changed."""
+        self.runner.events.publish(
+            {
+                "type": type,
+                "project_id": self.project.id,
+                "job_id": self.job_id,
+                "progress": None,
+                "message": "",
+                "payload": payload,
+            }
+        )
+
+
 class JobRunner:
-    def __init__(self, events):
+    def __init__(self, events: EventBus, workers: int = 2):
         self.events = events
+        self._workers = workers
+        self._pool: ThreadPoolExecutor | None = None
+        self._contexts: dict[str, JobContext] = {}
+        self._lock = threading.Lock()
 
     def start(self) -> None:
-        pass
+        self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="job")
 
     def stop(self) -> None:
-        pass
+        with self._lock:
+            contexts = list(self._contexts.values())
+        for ctx in contexts:
+            ctx.cancelled.set()
+        if self._pool:
+            self._pool.shutdown(wait=True, cancel_futures=True)
+            self._pool = None
+        for ctx in contexts:  # jobs that were still queued never ran; mark them cancelled
+            job = self.get(ctx.project, ctx.job_id)
+            if job.state == "queued":
+                self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
+
+    def submit(self, project: ProjectHandle, type: str, params: dict) -> Job:
+        fn = get_job_type(type)
+        with project.session() as s:
+            job = Job(type=type, params=params)
+            s.add(job)
+            s.flush()
+            job.log_path = f"runs/{job.id}/job.log"
+            s.flush()
+            s.expunge(job)
+        log_dir = project.runs_dir / job.id
+        log_dir.mkdir(parents=True, exist_ok=True)
+        logger = logging.getLogger(f"job.{job.id}")
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+        handler = logging.FileHandler(log_dir / "job.log", encoding="utf-8")
+        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+        logger.addHandler(handler)
+        ctx = JobContext(self, project, job.id, params, logger)
+        with self._lock:
+            self._contexts[job.id] = ctx
+        self._pool.submit(self._run, ctx, fn, handler)
+        return job
+
+    def cancel(self, project: ProjectHandle, job_id: str) -> Job:
+        with self._lock:
+            ctx = self._contexts.get(job_id)
+        if ctx is not None:
+            ctx.cancelled.set()
+            return self.get(project, job_id)
+        job = self.get(project, job_id)
+        if job.state == "queued":  # left over from a previous process
+            return self.update(project, job_id, state="cancelled", finished_at=datetime.now(UTC))
+        return job
+
+    def get(self, project: ProjectHandle, job_id: str) -> Job:
+        with project.session() as s:
+            job = s.get(Job, job_id)
+            if job is None:
+                raise not_found("job", job_id)
+            s.expunge(job)
+            return job
+
+    def update(self, project: ProjectHandle, job_id: str, **fields) -> Job:
+        with project.session() as s:
+            job = s.get(Job, job_id)
+            for k, v in fields.items():
+                setattr(job, k, v)
+            s.flush()
+            s.expunge(job)
+        if "state" in fields:
+            self.events.publish(
+                {
+                    "type": "job.state",
+                    "project_id": project.id,
+                    "job_id": job_id,
+                    "progress": job.progress,
+                    "message": job.message,
+                    "payload": {"state": job.state, "result": job.result, "error": job.error},
+                }
+            )
+        return job
+
+    def _run(self, ctx: JobContext, fn, handler: logging.Handler) -> None:
+        try:
+            if ctx.cancelled.is_set():
+                raise JobCancelled()
+            self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
+            ctx.log.info("job %s started with %s", ctx.job_id, ctx.params)
+            result = fn(ctx)
+            self.update(
+                ctx.project,
+                ctx.job_id,
+                state="succeeded",
+                progress=1.0,
+                result=result,
+                finished_at=datetime.now(UTC),
+            )
+            ctx.log.info("job succeeded")
+        except JobCancelled:
+            self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
+            ctx.log.info("job cancelled")
+        except Exception as e:
+            ctx.log.error("job failed\n%s", traceback.format_exc())
+            self.update(
+                ctx.project,
+                ctx.job_id,
+                state="failed",
+                error=f"{type(e).__name__}: {e}",
+                finished_at=datetime.now(UTC),
+            )
+        finally:
+            ctx.log.removeHandler(handler)
+            handler.close()
+            with self._lock:
+                self._contexts.pop(ctx.job_id, None)
