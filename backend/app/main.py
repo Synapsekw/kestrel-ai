@@ -68,7 +68,7 @@ def main() -> None:
         host=settings.host,
         port=port,
         log_level=settings.log_level.lower(),
-        ws="websockets",
+        ws="auto",
     )
 
 
