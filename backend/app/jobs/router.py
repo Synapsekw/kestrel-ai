@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select, tuple_
 
 from app.db.models import Job
+from app.errors import AppError
 from app.jobs.schemas import JobLog, JobOut, JobPage
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle, get_project
@@ -31,9 +32,13 @@ def list_jobs(
         q = q.where(Job.state == state)
     if type:
         q = q.where(Job.type == type)
-    c = decode_cursor(cursor)
+    c = decode_cursor(cursor, "created_at", "id")
     if c:
-        q = q.where(tuple_(Job.created_at, Job.id) < (datetime.fromisoformat(c["created_at"]), c["id"]))
+        try:
+            after = datetime.fromisoformat(str(c["created_at"]))
+        except ValueError:
+            raise AppError("validation_error", "invalid cursor", 422) from None
+        q = q.where(tuple_(Job.created_at, Job.id) < (after, str(c["id"])))
     with handle.session() as s:
         rows = list(s.execute(q.limit(n + 1)).scalars())
         for r in rows:

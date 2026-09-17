@@ -1,5 +1,6 @@
 """Project registry: opens project folders, owns their engines, tracks recent projects."""
 
+import threading
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -97,38 +98,52 @@ class ProjectRegistry:
     def __init__(self, data_dir: Path):
         self.appdata = AppData(data_dir)
         self._handles: dict[str, ProjectHandle] = {}
+        self._lock = threading.Lock()
 
     def create(self, name: str, folder: Path, classes: list[dict]) -> ProjectHandle:
-        if (folder / "project.db").exists():
-            raise AppError("already_exists", f"{folder} already contains a project", 409)
-        for sub in SUBDIRS:
-            (folder / sub).mkdir(parents=True, exist_ok=True)
-        engine = open_project_db(folder)
-        row = Project(
-            name=name, classes=normalise_classes(classes), import_defaults=dict(DEFAULT_IMPORT_SETTINGS)
-        )
-        with make_session_factory(engine)() as s:
-            s.add(row)
-            s.commit()
-            pid = row.id
-        return self._cache(pid, folder, engine, name)
+        folder = folder.resolve()
+        with self._lock:
+            if (folder / "project.db").exists():
+                raise AppError("already_exists", f"{folder} already contains a project", 409)
+            for sub in SUBDIRS:
+                (folder / sub).mkdir(parents=True, exist_ok=True)
+            engine = open_project_db(folder)
+            row = Project(
+                name=name, classes=normalise_classes(classes), import_defaults=dict(DEFAULT_IMPORT_SETTINGS)
+            )
+            with make_session_factory(engine)() as s:
+                s.add(row)
+                s.commit()
+                pid = row.id
+            return self._cache(pid, folder, engine, name, remember=True)
 
-    def open(self, folder: Path) -> ProjectHandle:
+    def open(self, folder: Path, remember: bool = True) -> ProjectHandle:
+        """Open a project folder. `remember` moves it to the top of the recent list (a user action)."""
+        folder = folder.resolve()
         if not (folder / "project.db").exists():
             raise not_found("project folder", str(folder))
-        for h in self._handles.values():
-            if h.folder == folder:
-                return h
-        engine = open_project_db(folder)
-        with make_session_factory(engine)() as s:
-            row = s.execute(select(Project)).scalar_one()
-            pid, name = row.id, row.name
-        return self._cache(pid, folder, engine, name)
+        with self._lock:
+            for h in self._handles.values():
+                if h.folder == folder:
+                    if remember:
+                        self.appdata.remember(h.id, self._name(h), str(folder))
+                    return h
+            engine = open_project_db(folder)
+            with make_session_factory(engine)() as s:
+                row = s.execute(select(Project)).scalar_one()
+                pid, name = row.id, row.name
+            return self._cache(pid, folder, engine, name, remember)
 
-    def _cache(self, pid: str, folder: Path, engine, name: str) -> ProjectHandle:
+    @staticmethod
+    def _name(h: ProjectHandle) -> str:
+        with h.session() as s:
+            return h.row(s).name
+
+    def _cache(self, pid: str, folder: Path, engine, name: str, remember: bool) -> ProjectHandle:
         h = ProjectHandle(pid, folder, engine)
         self._handles[pid] = h
-        self.appdata.remember(pid, name, str(folder))
+        if remember:
+            self.appdata.remember(pid, name, str(folder))
         return h
 
     def get(self, project_id: str) -> ProjectHandle:
@@ -136,7 +151,7 @@ class ProjectRegistry:
             return self._handles[project_id]
         for r in self.appdata.recent():
             if r["id"] == project_id and (Path(r["folder"]) / "project.db").exists():
-                return self.open(Path(r["folder"]))
+                return self.open(Path(r["folder"]), remember=False)
         raise not_found("project", project_id)
 
     def recent(self) -> list[dict]:

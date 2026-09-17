@@ -60,9 +60,7 @@ def test_recent_skips_deleted_folders(client, project_dir, tmp_path):
     gone.mkdir()
     _create(client, gone, "Gone")
     _create(client, project_dir, "A")
-    from app.projects.service import ProjectRegistry  # noqa: F401  (close handles before deleting)
-
-    client.app.state.projects.close_all()
+    client.app.state.projects.close_all()  # release the SQLite handles before deleting the folder
     shutil.rmtree(gone)
     r = client.get("/api/v1/projects")
     assert [p["name"] for p in r.json()["items"]] == ["A"]
@@ -143,3 +141,30 @@ def test_relative_folder_is_422(client):
     assert r.status_code == 422
     r = client.post("/api/v1/projects/open", json={"folder": "."})
     assert r.status_code == 422
+
+
+def test_recent_order_is_stable_across_listings_and_restarts(settings, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from app.main import create_app
+
+    folders = [tmp_path / n for n in ("a", "b", "c")]
+    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
+        for f in folders:
+            f.mkdir()
+            _create(c, f, f.name)
+    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
+        first = [p["name"] for p in c.get("/api/v1/projects").json()["items"]]
+        second = [p["name"] for p in c.get("/api/v1/projects").json()["items"]]
+    assert first == ["c", "b", "a"] and second == first
+
+
+def test_folder_spellings_resolve_to_one_project(client, project_dir):
+    p = _create(client, project_dir, "A")
+    variants = [str(project_dir) + "\.", str(project_dir).replace("\\", "/"), str(project_dir).upper()]
+    for v in variants:
+        r = client.post("/api/v1/projects/open", json={"folder": v})
+        assert r.status_code == 200 and r.json()["id"] == p["id"], v
+        assert r.json()["folder"] == str(project_dir)
+    assert len(client.get("/api/v1/projects").json()["items"]) == 1
+    assert len(client.app.state.projects._handles) == 1

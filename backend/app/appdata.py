@@ -1,6 +1,7 @@
 """Per-user app data under %APPDATA%/machinery-app: recent projects and settings. Never keys."""
 
 import json
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -18,9 +19,12 @@ class AppData:
         if not self._recent.exists():
             return []
         try:
-            return json.loads(self._recent.read_text("utf-8"))
+            items = json.loads(self._recent.read_text("utf-8"))
         except json.JSONDecodeError:
             return []
+        if not isinstance(items, list):
+            return []
+        return [r for r in items if isinstance(r, dict) and {"id", "name", "folder"} <= set(r)]
 
     def remember(self, project_id: str, name: str, folder: str) -> None:
         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
@@ -33,11 +37,11 @@ class AppData:
                 "last_opened_at": datetime.now(UTC).isoformat(),
             },
         )
-        self._recent.write_text(json.dumps(items[:MAX_RECENT], indent=2), "utf-8")
+        self._write(self._recent, items[:MAX_RECENT])
 
     def forget(self, folder: str) -> None:
         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
-        self._recent.write_text(json.dumps(items, indent=2), "utf-8")
+        self._write(self._recent, items)
 
     def read_settings(self) -> dict:
         if not self._settings.exists():
@@ -45,4 +49,10 @@ class AppData:
         return json.loads(self._settings.read_text("utf-8"))
 
     def write_settings(self, values: dict) -> None:
-        self._settings.write_text(json.dumps(values, indent=2), "utf-8")
+        self._write(self._settings, values)
+
+    @staticmethod
+    def _write(path: Path, value) -> None:
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(value, indent=2), "utf-8")
+        os.replace(tmp, path)

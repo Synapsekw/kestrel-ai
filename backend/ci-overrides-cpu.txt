@@ -1,0 +1,3 @@
+# CI runners have no GPU: override the cu130 pins with the CPU wheels from PyPI.
+torch==2.14.0
+torchvision==0.29.0

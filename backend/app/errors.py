@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
@@ -23,6 +25,8 @@ def envelope(code: str, message: str, details: dict | None = None) -> dict:
     return {"error": {"code": code, "message": message, "details": details or {}}}
 
 
+log = logging.getLogger(__name__)
+
 _HTTP_CODES = {401: "unauthorized", 404: "not_found", 405: "method_not_allowed"}
 
 
@@ -42,5 +46,6 @@ def install_error_handlers(app: FastAPI) -> None:
         return JSONResponse(envelope(code, str(exc.detail)), exc.status_code, headers=exc.headers)
 
     @app.exception_handler(Exception)
-    async def _unhandled(_: Request, exc: Exception):
+    async def _unhandled(request: Request, exc: Exception):
+        log.exception("unhandled error on %s %s", request.method, request.url.path)
         return JSONResponse(envelope("internal_error", f"{type(exc).__name__}: {exc}"), 500)

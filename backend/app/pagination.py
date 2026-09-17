@@ -11,11 +11,15 @@ def encode_cursor(**kv) -> str:
     return base64.urlsafe_b64encode(json.dumps(kv, default=str).encode()).decode()
 
 
-def decode_cursor(s: str | None) -> dict:
+def decode_cursor(s: str | None, *required: str) -> dict:
+    """Decode an opaque cursor; `required` names the keys it must carry (422 otherwise)."""
     if not s:
         return {}
     try:
-        return json.loads(base64.urlsafe_b64decode(s.encode()).decode())
+        value = json.loads(base64.urlsafe_b64decode(s.encode()).decode())
+        if not isinstance(value, dict) or any(k not in value for k in required):
+            raise ValueError("missing cursor keys")
+        return value
     except Exception:
         from app.errors import AppError
 

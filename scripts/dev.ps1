@@ -8,7 +8,10 @@ if ($Mode -eq "mock") {
   pnpm dev
 } else {
   $token = -join ((48..57 + 65..90 + 97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
-  Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\backend'; `$env:APP_TOKEN='$token'; `$env:APP_PORT='8765'; .\.venv\Scripts\python -m app"
+  # Children inherit the environment, so the token never appears on a command line.
+  $env:APP_TOKEN = $token
+  $env:APP_PORT = "8765"
+  Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\backend'; .\.venv\Scripts\python -m app"
   $env:APP_BACKEND_URL = "http://127.0.0.1:8765"
   $env:APP_BACKEND_TOKEN = $token
   Set-Location "$root\frontend"

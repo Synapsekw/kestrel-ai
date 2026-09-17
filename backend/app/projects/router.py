@@ -39,7 +39,7 @@ def list_projects(request: Request) -> ProjectPage:
         folder = Path(r["folder"])
         if not (folder / "project.db").exists():
             continue
-        items.append(_out(reg.open(folder)))
+        items.append(_out(reg.open(folder, remember=False)))
     return ProjectPage(items=items, next_cursor=None)
 
 

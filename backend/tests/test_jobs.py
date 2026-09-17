@@ -165,7 +165,14 @@ def test_websocket_rejects_bad_token(anon):
             pass
 
 
-def test_stop_cancels_running_jobs(settings, project_dir):
+@register_job_type("test_block")
+def _block_job(ctx):
+    ctx.cancelled.wait(10)
+    ctx.check_cancelled()
+    return {"unexpected": True}
+
+
+def test_stop_cancels_running_and_queued_jobs(settings, project_dir):
     from fastapi.testclient import TestClient
 
     from app.main import create_app
@@ -173,8 +180,22 @@ def test_stop_cancels_running_jobs(settings, project_dir):
     app = create_app(settings)
     with TestClient(app, headers={"Authorization": "Bearer test-token"}) as c:
         pid = _project(c, project_dir)
-        job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
-        time.sleep(0.1)
+        h = app.state.projects.get(pid)
+        running = [app.state.jobs.submit(h, "test_block", {}) for _ in range(2)]  # fills both workers
+        queued = app.state.jobs.submit(h, "test_block", {})
+        time.sleep(0.2)
     with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
-        j = c.get(f"/api/v1/projects/{pid}/jobs/{job.id}").json()
-        assert j["state"] in ("cancelled", "succeeded")
+        for job in running + [queued]:
+            assert c.get(f"/api/v1/projects/{pid}/jobs/{job.id}").json()["state"] == "cancelled"
+    assert not app.state.jobs._contexts
+
+
+def test_malformed_cursor_is_422(client, project_dir):
+    pid = _project(client, project_dir)
+    import base64
+
+    bad = base64.urlsafe_b64encode(b'{"nope": 1}').decode()
+    r = client.get(f"/api/v1/projects/{pid}/jobs", params={"cursor": bad})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+    r = client.get(f"/api/v1/projects/{pid}/jobs", params={"cursor": "%%%"})
+    assert r.status_code == 422

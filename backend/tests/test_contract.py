@@ -24,6 +24,17 @@ def _operations(paths: dict) -> set[tuple[str, str]]:
     return {(m.upper(), p) for p, ops in paths.items() for m in ops if m in METHODS}
 
 
+def test_stub_list_matches_routers(app):
+    """Every EXPECTED_STUBS entry is a real operationId, so the set cannot drift from the contract."""
+    ids = {
+        op["operationId"]
+        for ops in yaml.safe_load(SPEC.read_text("utf-8"))["paths"].values()
+        for m, op in ops.items()
+        if m in METHODS
+    }
+    assert EXPECTED_STUBS <= ids, sorted(EXPECTED_STUBS - ids)
+
+
 def test_every_spec_path_is_routed(app):
     wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
     have = _operations(app.openapi()["paths"])
@@ -37,6 +48,46 @@ def test_no_extra_api_routes(app):
 
 
 schema = schemathesis.openapi.from_path(str(SPEC))
+
+# Operations still served by S0 stubs (501). Shrinks as S1, S3 and S4 land; a stale entry here
+# or a stub left behind by a sub-project both fail this test.
+EXPECTED_STUBS = {
+    "listSources",
+    "createSource",
+    "getSource",
+    "getSourceStats",
+    "listImages",
+    "bulkDeleteImages",
+    "getImage",
+    "getImageFile",
+    "getImageThumbnail",
+    "preannotateImage",
+    "listBoxes",
+    "createBox",
+    "updateBox",
+    "deleteBox",
+    "reviewBoxes",
+    "listDatasets",
+    "createDataset",
+    "getDataset",
+    "getDatasetStats",
+    "listModels",
+    "importModel",
+    "trainModel",
+    "getModel",
+    "deleteModel",
+    "exportModel",
+    "listProviders",
+    "updateProvider",
+    "setProviderKey",
+    "deleteProviderKey",
+    "testProvider",
+    "estimateQueryRun",
+    "listQueryRuns",
+    "createQueryRun",
+    "getQueryRun",
+    "promoteQueryRun",
+}
 
 
 @pytest.fixture
@@ -53,14 +104,20 @@ def test_responses_conform(case, app, project_id, tmp_path):
     if isinstance(case.body, dict) and "folder" in case.body:
         # Never let generated data create folders outside the test's temp dir.
         case.body["folder"] = str(tmp_path / "generated")
+    if isinstance(case.query, dict) and "cursor" in case.query:
+        # Cursors are opaque; a generated string is a malformed cursor (422 by design, tested in test_jobs).
+        del case.query["cursor"]
     case.operation.schema.app = app  # in-process ASGI transport, no sockets
     case.operation.app = app
     response = case.call(headers=AUTH)
     if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
         # S0 stub: the operation is routed but not built yet; it must still answer in the error envelope.
+        op_id = case.operation.definition.raw.get("operationId")
+        assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"
         checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
         case.validate_response(response, checks=checks)
         return
+    assert response.status_code < 500, response.text
     # negative_data_rejection: FastAPI ignores unknown query parameters by design.
     # unsupported_method / allow_header_conformance: literal segments such as /projects/open share
     # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.

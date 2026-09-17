@@ -12,3 +12,8 @@ def test_wrong_token_is_401(anon):
 def test_token_as_query_parameter_is_accepted(anon):
     r = anon.get("/api/v1/health", params={"token": "test-token"})
     assert r.status_code == 200
+
+
+def test_non_ascii_token_is_401_not_500(anon):
+    r = anon.get("/api/v1/health", params={"token": "café"})
+    assert r.status_code == 401

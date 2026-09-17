@@ -14,6 +14,7 @@ from app.jobs.registry import get_job_type
 from app.projects.service import ProjectHandle
 
 PROGRESS_DB_INTERVAL_S = 0.25
+log = logging.getLogger(__name__)
 
 
 class JobCancelled(Exception):
@@ -88,6 +89,16 @@ class JobRunner:
             job = self.get(ctx.project, ctx.job_id)
             if job.state == "queued":
                 self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
+                ctx.log.info("job cancelled before it started")
+            self._close_log(ctx)
+        with self._lock:
+            self._contexts.clear()
+
+    @staticmethod
+    def _close_log(ctx: "JobContext") -> None:
+        for h in list(ctx.log.handlers):
+            ctx.log.removeHandler(h)
+            h.close()
 
     def submit(self, project: ProjectHandle, type: str, params: dict) -> Job:
         fn = get_job_type(type)
@@ -109,7 +120,7 @@ class JobRunner:
         ctx = JobContext(self, project, job.id, params, logger)
         with self._lock:
             self._contexts[job.id] = ctx
-        self._pool.submit(self._run, ctx, fn, handler)
+        self._pool.submit(self._run, ctx, fn)
         return job
 
     def cancel(self, project: ProjectHandle, job_id: str) -> Job:
@@ -151,36 +162,30 @@ class JobRunner:
             )
         return job
 
-    def _run(self, ctx: JobContext, fn, handler: logging.Handler) -> None:
+    def _run(self, ctx: JobContext, fn) -> None:
         try:
             if ctx.cancelled.is_set():
                 raise JobCancelled()
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
             ctx.log.info("job %s started with %s", ctx.job_id, ctx.params)
             result = fn(ctx)
-            self.update(
-                ctx.project,
-                ctx.job_id,
-                state="succeeded",
-                progress=1.0,
-                result=result,
-                finished_at=datetime.now(UTC),
-            )
+            self._finish(ctx, state="succeeded", progress=1.0, result=result)
             ctx.log.info("job succeeded")
         except JobCancelled:
-            self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
+            self._finish(ctx, state="cancelled")
             ctx.log.info("job cancelled")
         except Exception as e:
             ctx.log.error("job failed\n%s", traceback.format_exc())
-            self.update(
-                ctx.project,
-                ctx.job_id,
-                state="failed",
-                error=f"{type(e).__name__}: {e}",
-                finished_at=datetime.now(UTC),
-            )
+            log.warning("job %s (%s) failed: %s: %s", ctx.job_id, ctx.params, type(e).__name__, e)
+            self._finish(ctx, state="failed", error=f"{type(e).__name__}: {e}")
         finally:
-            ctx.log.removeHandler(handler)
-            handler.close()
+            self._close_log(ctx)
             with self._lock:
                 self._contexts.pop(ctx.job_id, None)
+
+    def _finish(self, ctx: JobContext, **fields) -> None:
+        """Terminal state write; a DB failure here is logged and never escapes into the executor future."""
+        try:
+            self.update(ctx.project, ctx.job_id, finished_at=datetime.now(UTC), **fields)
+        except Exception:
+            log.exception("could not record terminal state %s for job %s", fields.get("state"), ctx.job_id)

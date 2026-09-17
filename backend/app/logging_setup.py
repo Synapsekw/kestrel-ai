@@ -15,9 +15,14 @@ def configure_logging(data_dir: Path, level: str) -> Path:
     root.setLevel(level.upper())
     logging.getLogger("alembic").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    already = any(
-        isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == log_file for h in root.handlers
-    )
+    already = False
+    for h in list(root.handlers):
+        if isinstance(h, RotatingFileHandler):
+            if Path(h.baseFilename) == log_file:
+                already = True
+            else:  # a previous create_app pointed at another data dir (tests); do not keep both
+                root.removeHandler(h)
+                h.close()
     if not already:
         fh = RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
         fh.setFormatter(logging.Formatter(FORMAT))
