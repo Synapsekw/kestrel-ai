@@ -1,0 +1,15 @@
+{
+  "name": "@machinery-app/contract",
+  "private": true,
+  "scripts": {
+    "lint": "spectral lint openapi.yaml",
+    "mock": "prism mock openapi.yaml --host 127.0.0.1 --port 4010",
+    "generate": "openapi-typescript openapi.yaml -o client/schema.d.ts",
+    "check": "pnpm lint && pnpm generate && git diff --exit-code -- client/schema.d.ts"
+  },
+  "devDependencies": {
+    "@stoplight/prism-cli": "^5",
+    "@stoplight/spectral-cli": "^6",
+    "openapi-typescript": "^7"
+  }
+}

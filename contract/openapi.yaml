@@ -1,0 +1,1947 @@
+openapi: 3.1.0
+info:
+  title: Machinery Detection backend API
+  version: 1.0.0
+  description: |
+    Contract between the Tauri/React frontend and the FastAPI sidecar. This file is the
+    source of truth (spec section 2). The backend validates responses against it in tests,
+    the TypeScript client is generated from it, and Prism serves it as the mock server.
+
+    Conventions:
+    - Every path below carries the `/api/v1` prefix. JSON bodies, UTF-8.
+    - Every request carries the per-launch token, either as `Authorization: Bearer <token>`
+      or as a `token` query parameter (needed for `<img>` sources and websocket connects).
+    - Ids are UUID strings. Timestamps are RFC 3339 strings in UTC.
+    - Boxes are in image pixels: `x, y` top-left corner, `w, h` size.
+    - Every list endpoint paginates with `limit` and `cursor` and returns `next_cursor`
+      (`null` when there is no further page).
+    - Every error uses the `Error` envelope `{error: {code, message, details}}`.
+    - Long work returns a `Job`; progress arrives over the websocket described in
+      `x-websocket` and can be polled through the `jobs` resource.
+servers:
+  - url: http://127.0.0.1:8765
+    description: development backend origin (the packaged app uses a random free port)
+  - url: http://127.0.0.1:4010
+    description: Prism mock server
+security:
+  - bearerAuth: []
+  - tokenQuery: []
+
+x-websocket:
+  path: /api/v1/events
+  query: token=<per-launch token>
+  description: |
+    One websocket per UI instance. The server pushes `Event` objects as JSON text frames and
+    never expects messages from the client. Rejected tokens are closed with code 4401 before
+    the handshake completes. Event types:
+    - `job.progress`: `progress` 0..1 and `message`; `payload` is `{}`.
+    - `job.state`: `payload` is `{state, result, error}` for the job.
+    - `images.changed`: `payload` is `{source_id, count}` after an import batch lands.
+    - `boxes.changed`: `payload` is `{image_ids: [...]}` after proposals or reviews are written by a job.
+  message: "#/components/schemas/Event"
+
+tags:
+  - name: health
+  - name: projects
+  - name: sources
+  - name: images
+  - name: boxes
+  - name: datasets
+  - name: models
+  - name: providers
+  - name: query-runs
+  - name: jobs
+
+paths:
+  /api/v1/health:
+    get:
+      tags: [health]
+      operationId: getHealth
+      summary: Liveness and version. The launcher polls this until it returns 200.
+      responses:
+        "200":
+          description: backend is up
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Health" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ----------------------------------------------------------------- projects
+  /api/v1/projects:
+    get:
+      tags: [projects]
+      operationId: listProjects
+      summary: Recently opened projects, most recent first. Folders that no longer exist are skipped.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: recent projects
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectPage" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [projects]
+      operationId: createProject
+      summary: Create a project in an empty or new folder and open it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectCreate" }
+      responses:
+        "201":
+          description: created and opened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "409":
+          description: the folder already contains a project (`code` is `already_exists`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/open:
+    post:
+      tags: [projects]
+      operationId: openProject
+      summary: Open an existing project folder (one that contains `project.db`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectOpen" }
+      responses:
+        "200":
+          description: opened
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404":
+          description: no project in that folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: getProject
+      responses:
+        "200":
+          description: the project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [projects]
+      operationId: updateProject
+      summary: Update name, pre-annotation model or import defaults (project settings screen).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectUpdate" }
+      responses:
+        "200":
+          description: updated project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/classes:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    put:
+      tags: [projects]
+      operationId: updateClasses
+      summary: |
+        Replace the class list. Items with an `id` keep it (rename, recolour, rehotkey);
+        items without one are new; order is the list order. A class that still has boxes
+        cannot be removed: the request fails with 409 `class_in_use` and the caller must
+        reassign or delete the boxes first.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items: { $ref: "#/components/schemas/ClassDefInput" }
+      responses:
+        "200":
+          description: updated project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "409":
+          description: a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/stats:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: getProjectStats
+      summary: Statistics over all sources (spec section 5).
+      responses:
+        "200":
+          description: statistics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ sources
+  /api/v1/projects/{projectId}/sources:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [sources]
+      operationId: listSources
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: sources
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SourcePage" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [sources]
+      operationId: createSource
+      summary: |
+        Register a folder as a source and start the import job (convert, downscale, dedupe,
+        group). Re-posting the same folder re-uses the source and imports only new files.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SourceCreate" }
+      responses:
+        "202":
+          description: import job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SourceWithJob" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/sources/{sourceId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/sourceId"
+    get:
+      tags: [sources]
+      operationId: getSource
+      responses:
+        "200":
+          description: the source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/sources/{sourceId}/stats:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/sourceId"
+    get:
+      tags: [sources]
+      operationId: getSourceStats
+      responses:
+        "200":
+          description: statistics for one source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Stats" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------- images
+  /api/v1/projects/{projectId}/images:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [images]
+      operationId: listImages
+      summary: Data Manager listing with filters and sort on every column.
+      parameters:
+        - name: source_id
+          in: query
+          schema: { type: string }
+        - name: group_key
+          in: query
+          schema: { type: string }
+        - name: labeled
+          in: query
+          description: true = at least one accepted or edited box; false = none
+          schema: { type: boolean }
+        - name: has_pending
+          in: query
+          description: true = has unreviewed proposals (review queue)
+          schema: { type: boolean }
+        - name: search
+          in: query
+          description: case-insensitive substring of the file name
+          schema: { type: string }
+        - name: ids
+          in: query
+          description: comma-separated image ids; when present other filters are ignored
+          schema: { type: string }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [path, source_id, group_key, labeled, box_count, pending_count, max_pending_confidence, capture_time, created_at]
+            default: path
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: page of images
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImagePage" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/bulk-delete:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [images]
+      operationId: bulkDeleteImages
+      summary: Delete images and their boxes from the project (files under `images/` are removed; originals are never touched).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BulkDelete" }
+      responses:
+        "200":
+          description: deletion count
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BulkDeleteResult" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    get:
+      tags: [images]
+      operationId: getImage
+      responses:
+        "200":
+          description: the image record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Image" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/file:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    get:
+      tags: [images]
+      operationId: getImageFile
+      summary: The image as JPEG, optionally downscaled so the long side is at most `max_side`.
+      parameters:
+        - name: max_side
+          in: query
+          schema: { type: integer, minimum: 64, maximum: 8192 }
+      responses:
+        "200":
+          description: JPEG bytes
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    get:
+      tags: [images]
+      operationId: getImageThumbnail
+      summary: 256 px long-side JPEG, cached under `cache/thumbs/`.
+      responses:
+        "200":
+          description: JPEG bytes
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/preannotate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    post:
+      tags: [images]
+      operationId: preannotateImage
+      summary: |
+        Run the project's pre-annotation model (or `model_id`) on one image synchronously and
+        write proposal boxes with `local_model` provenance. Skipped (`skipped: true`) when the
+        image already has boxes from that model. Runs at `imgsz` 2560 by default.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PreannotateRequest" }
+      responses:
+        "200":
+          description: proposals now on the image (all boxes from that model, new or existing)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PreannotateResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # -------------------------------------------------------------------- boxes
+  /api/v1/projects/{projectId}/images/{imageId}/boxes:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    get:
+      tags: [boxes]
+      operationId: listBoxes
+      summary: All boxes on an image (ground truth and proposals).
+      responses:
+        "200":
+          description: boxes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoxList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [boxes]
+      operationId: createBox
+      summary: Create a person-drawn box. Provenance is `person`, review state `accepted`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoxCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Box" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/boxes/{boxId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/boxId"
+    patch:
+      tags: [boxes]
+      operationId: updateBox
+      summary: Move, resize or reclassify. A proposal edited this way becomes `edited` (ground truth).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoxUpdate" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Box" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [boxes]
+      operationId: deleteBox
+      responses:
+        "204":
+          description: deleted
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/boxes/review:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [boxes]
+      operationId: reviewBoxes
+      summary: Accept or reject proposals in bulk (A and R in the editor, bulk promotion).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BoxReview" }
+      responses:
+        "200":
+          description: number of boxes changed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/BoxReviewResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ----------------------------------------------------------------- datasets
+  /api/v1/projects/{projectId}/datasets:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [datasets]
+      operationId: listDatasets
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: datasets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetPage" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [datasets]
+      operationId: createDataset
+      summary: |
+        Freeze the accepted and edited boxes of the selected images (default: every labeled
+        image), assign splits, and materialise `datasets/<name>/` in YOLO format through a job.
+        Datasets are immutable after creation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetCreate" }
+      responses:
+        "202":
+          description: dataset row created, materialise job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetWithJob" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/datasets/{datasetId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/datasetId"
+    get:
+      tags: [datasets]
+      operationId: getDataset
+      responses:
+        "200":
+          description: the dataset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Dataset" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/datasets/{datasetId}/stats:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/datasetId"
+    get:
+      tags: [datasets]
+      operationId: getDatasetStats
+      responses:
+        "200":
+          description: split and class statistics
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetStats" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------- models
+  /api/v1/projects/{projectId}/models:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [models]
+      operationId: listModels
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: registry
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelPage" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/import:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [models]
+      operationId: importModel
+      summary: Register existing weights (for example COCO yolo11m.pt). The file is copied under `models/`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelImport" }
+      responses:
+        "201":
+          description: registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/train:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [models]
+      operationId: trainModel
+      summary: Start a training job. The Model row is registered when the job succeeds; `job.result.model_id` points at it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrainRequest" }
+      responses:
+        "202":
+          description: training job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/{modelId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/modelId"
+    get:
+      tags: [models]
+      operationId: getModel
+      responses:
+        "200":
+          description: the model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [models]
+      operationId: deleteModel
+      summary: Remove the registry entry and its weights. Boxes keep their `model_id` provenance.
+      responses:
+        "204":
+          description: deleted
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/{modelId}/export:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/modelId"
+    post:
+      tags: [models]
+      operationId: exportModel
+      summary: Export to ONNX or TensorRT through a job; the path lands in `model.exports[format]`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExportRequest" }
+      responses:
+        "202":
+          description: export job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ---------------------------------------------------------------- providers
+  /api/v1/providers:
+    get:
+      tags: [providers]
+      operationId: listProviders
+      summary: Cloud providers with configuration and whether a key is stored. Keys are never returned.
+      responses:
+        "200":
+          description: providers
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/providers/{provider}:
+    parameters:
+      - $ref: "#/components/parameters/provider"
+    patch:
+      tags: [providers]
+      operationId: updateProvider
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderUpdate" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Provider" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/providers/{provider}/key:
+    parameters:
+      - $ref: "#/components/parameters/provider"
+    put:
+      tags: [providers]
+      operationId: setProviderKey
+      summary: Store the API key in Windows Credential Manager. It is never written to disk or logs.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProviderKey" }
+      responses:
+        "204":
+          description: stored
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [providers]
+      operationId: deleteProviderKey
+      responses:
+        "204":
+          description: removed
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/providers/{provider}/test:
+    parameters:
+      - $ref: "#/components/parameters/provider"
+    post:
+      tags: [providers]
+      operationId: testProvider
+      summary: Make one cheap call with the stored key to confirm it works.
+      responses:
+        "200":
+          description: result of the test call (ok false when the key is missing or rejected)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProviderTestResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --------------------------------------------------------------- query runs
+  /api/v1/projects/{projectId}/query-runs/estimate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [query-runs]
+      operationId: estimateQueryRun
+      summary: Images times tiles times the per-provider cost estimate, shown before starting.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueryRunCreate" }
+      responses:
+        "200":
+          description: estimate
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CostEstimate" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/query-runs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [query-runs]
+      operationId: listQueryRuns
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: query runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryRunPage" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [query-runs]
+      operationId: createQueryRun
+      summary: |
+        Run a local model or a cloud vision provider over images through a job. Boxes are
+        written as proposals with the run's provenance as each tile result arrives, so a
+        restarted job skips finished tiles.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QueryRunCreate" }
+      responses:
+        "202":
+          description: run created, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryRunWithJob" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/query-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [query-runs]
+      operationId: getQueryRun
+      responses:
+        "200":
+          description: the run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryRun" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/query-runs/{runId}/promote:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [query-runs]
+      operationId: promoteQueryRun
+      summary: Mark the run's unreviewed boxes at or above `min_confidence` as accepted (a state change, not a copy).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PromoteRequest" }
+      responses:
+        "200":
+          description: run with `promoted_at` set and the number of boxes accepted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PromoteResult" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # --------------------------------------------------------------------- jobs
+  /api/v1/projects/{projectId}/jobs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [jobs]
+      operationId: listJobs
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: "#/components/schemas/JobState" }
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/JobType" }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: jobs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPage" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/jobId"
+    get:
+      tags: [jobs]
+      operationId: getJob
+      responses:
+        "200":
+          description: the job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/jobs/{jobId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/jobId"
+    post:
+      tags: [jobs]
+      operationId: cancelJob
+      summary: Request cancellation. The state becomes `cancelled` once the worker notices; finished jobs are returned unchanged.
+      responses:
+        "200":
+          description: the job after the request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/jobs/{jobId}/log:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/jobId"
+    get:
+      tags: [jobs]
+      operationId: getJobLog
+      parameters:
+        - name: tail
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 200 }
+      responses:
+        "200":
+          description: last lines of the job log
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobLog" }
+        default: { $ref: "#/components/responses/Error" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: the per-launch token passed to the sidecar in `APP_TOKEN`
+    tokenQuery:
+      type: apiKey
+      in: query
+      name: token
+      description: same token as a query parameter, for image URLs and the websocket
+
+  parameters:
+    projectId:
+      name: projectId
+      in: path
+      required: true
+      schema: { type: string }
+    sourceId:
+      name: sourceId
+      in: path
+      required: true
+      schema: { type: string }
+    imageId:
+      name: imageId
+      in: path
+      required: true
+      schema: { type: string }
+    boxId:
+      name: boxId
+      in: path
+      required: true
+      schema: { type: string }
+    datasetId:
+      name: datasetId
+      in: path
+      required: true
+      schema: { type: string }
+    modelId:
+      name: modelId
+      in: path
+      required: true
+      schema: { type: string }
+    runId:
+      name: runId
+      in: path
+      required: true
+      schema: { type: string }
+    jobId:
+      name: jobId
+      in: path
+      required: true
+      schema: { type: string }
+    provider:
+      name: provider
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/ProviderName" }
+    limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 1000, default: 100 }
+    cursor:
+      name: cursor
+      in: query
+      description: opaque cursor from the previous page's `next_cursor`
+      schema: { type: string }
+
+  responses:
+    Error:
+      description: error envelope
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code:
+              type: string
+              description: |
+                machine-readable: unauthorized, not_found, validation_error, already_exists,
+                class_in_use, conflict, not_implemented, provider_error, internal_error
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+      example:
+        error: { code: not_found, message: "project 7f1c… not found", details: {} }
+
+    Health:
+      type: object
+      required: [status, version, pid, started_at]
+      properties:
+        status: { type: string, enum: [ok] }
+        version: { type: string }
+        pid: { type: integer }
+        started_at: { type: string, format: date-time }
+      example:
+        status: ok
+        version: 0.1.0
+        pid: 12345
+        started_at: "2026-09-17T10:00:00Z"
+
+    ClassDefInput:
+      type: object
+      required: [name, colour]
+      properties:
+        id: { type: string, description: keep the id to rename or recolour an existing class }
+        name: { type: string, minLength: 1, maxLength: 64 }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        hotkey:
+          type: [string, "null"]
+          description: single character, 1 to 9 recommended
+          maxLength: 1
+      example: { name: excavator, colour: "#f97316", hotkey: "1" }
+    ClassDef:
+      type: object
+      required: [id, name, colour, hotkey, order]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        colour: { type: string }
+        hotkey: { type: [string, "null"] }
+        order: { type: integer }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", hotkey: "1", order: 0 }
+
+    ImportSettings:
+      type: object
+      description: preparation settings (spec section 5); missing fields take the project defaults
+      properties:
+        max_side: { type: integer, minimum: 512, maximum: 12000, default: 4000 }
+        quality: { type: integer, minimum: 50, maximum: 100, default: 95 }
+        dedupe_threshold: { type: integer, minimum: 0, maximum: 32, default: 4, description: max phash Hamming distance for a duplicate }
+        group_regex:
+          type: string
+          default: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)"
+          description: named groups `camera` and `flight` form the group key; fall back to a 250 m tile, then the source
+      example: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)" }
+
+    Project:
+      type: object
+      required: [id, name, folder, classes, preannotation_model_id, import_defaults, schema_version, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        folder: { type: string, description: absolute path of the project folder }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/ClassDef" }
+        preannotation_model_id: { type: [string, "null"] }
+        import_defaults: { $ref: "#/components/schemas/ImportSettings" }
+        schema_version: { type: integer }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "7f1c2e3a-1111-4000-8000-000000000001"
+        name: Ahmadia
+        folder: "E:\\Projects\\Ahmadia"
+        classes:
+          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", hotkey: "1", order: 0 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000002", name: wheel_loader, colour: "#eab308", hotkey: "2", order: 1 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000003", name: bulldozer, colour: "#22c55e", hotkey: "3", order: 2 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000004", name: dump_truck, colour: "#06b6d4", hotkey: "4", order: 3 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000005", name: crane, colour: "#3b82f6", hotkey: "5", order: 4 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000006", name: concrete_mixer, colour: "#a855f7", hotkey: "6", order: 5 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000007", name: roller, colour: "#ec4899", hotkey: "7", order: 6 }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000008", name: backhoe, colour: "#ef4444", hotkey: "8", order: 7 }
+        preannotation_model_id: "m0000000-2222-4000-8000-000000000001"
+        import_defaults: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)" }
+        schema_version: 1
+        created_at: "2026-09-17T10:00:00Z"
+    ProjectCreate:
+      type: object
+      required: [name, folder, classes]
+      properties:
+        name: { type: string, minLength: 1 }
+        folder: { type: string, description: absolute path; created when missing, must not already hold a project }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/ClassDefInput" }
+      example:
+        name: Ahmadia
+        folder: "E:\\Projects\\Ahmadia"
+        classes:
+          - { name: excavator, colour: "#f97316", hotkey: "1" }
+          - { name: dump_truck, colour: "#06b6d4", hotkey: "2" }
+    ProjectOpen:
+      type: object
+      required: [folder]
+      properties:
+        folder: { type: string }
+      example: { folder: "E:\\Projects\\Ahmadia" }
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+        preannotation_model_id: { type: [string, "null"] }
+        import_defaults: { $ref: "#/components/schemas/ImportSettings" }
+      example: { name: Ahmadia, preannotation_model_id: "m0000000-2222-4000-8000-000000000001" }
+    ProjectPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Project" }
+        next_cursor: { type: [string, "null"] }
+
+    Stats:
+      type: object
+      description: dataset statistics for a project or one source (spec section 5)
+      required: [image_count, labeled_count, unlabeled_count, box_count, pending_review_count, duplicate_count, boxes_per_class, sources, groups, resolution_histogram, capture_time_range, gps_bounds]
+      properties:
+        image_count: { type: integer }
+        labeled_count: { type: integer, description: images with at least one accepted or edited box }
+        unlabeled_count: { type: integer }
+        box_count: { type: integer, description: accepted and edited boxes }
+        pending_review_count: { type: integer, description: unreviewed proposals }
+        duplicate_count: { type: integer, description: files skipped as near-duplicates at import }
+        boxes_per_class:
+          type: array
+          items:
+            type: object
+            required: [class_id, class_name, count]
+            properties:
+              class_id: { type: string }
+              class_name: { type: string }
+              count: { type: integer }
+        sources:
+          type: array
+          items:
+            type: object
+            required: [source_id, site, image_count]
+            properties:
+              source_id: { type: string }
+              site: { type: string }
+              image_count: { type: integer }
+        groups:
+          type: array
+          items:
+            type: object
+            required: [group_key, image_count]
+            properties:
+              group_key: { type: string }
+              image_count: { type: integer }
+        resolution_histogram:
+          type: array
+          items:
+            type: object
+            required: [width, height, count]
+            properties:
+              width: { type: integer }
+              height: { type: integer }
+              count: { type: integer }
+        capture_time_range:
+          type: [object, "null"]
+          required: [min, max]
+          properties:
+            min: { type: string, format: date-time }
+            max: { type: string, format: date-time }
+        gps_bounds:
+          type: [object, "null"]
+          required: [min_lat, min_lon, max_lat, max_lon]
+          properties:
+            min_lat: { type: number }
+            min_lon: { type: number }
+            max_lat: { type: number }
+            max_lon: { type: number }
+      example:
+        image_count: 3299
+        labeled_count: 30
+        unlabeled_count: 3269
+        box_count: 112
+        pending_review_count: 41
+        duplicate_count: 0
+        boxes_per_class:
+          - { class_id: "c1a2b3c4-0000-4000-8000-000000000001", class_name: excavator, count: 40 }
+          - { class_id: "c1a2b3c4-0000-4000-8000-000000000004", class_name: dump_truck, count: 72 }
+        sources:
+          - { source_id: "50000000-3333-4000-8000-000000000001", site: ahmadia, image_count: 3299 }
+        groups:
+          - { group_key: "IX-12-02491_0031", image_count: 471 }
+          - { group_key: "IX-12-02491_0032", image_count: 470 }
+        resolution_histogram:
+          - { width: 4000, height: 2667, count: 3299 }
+        capture_time_range: { min: "2019-04-15T06:35:36Z", max: "2019-04-15T09:12:01Z" }
+        gps_bounds: { min_lat: 29.4901, min_lon: 47.7602, max_lat: 29.4988, max_lon: 47.7701 }
+
+    Source:
+      type: object
+      required: [id, folder, site, settings, image_count, duplicate_count, job_id, imported_at, created_at]
+      properties:
+        id: { type: string }
+        folder: { type: string, description: the imported folder; originals there are never modified }
+        site: { type: string }
+        settings: { $ref: "#/components/schemas/ImportSettings" }
+        image_count: { type: integer }
+        duplicate_count: { type: integer }
+        job_id: { type: [string, "null"], description: the latest import job }
+        imported_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "50000000-3333-4000-8000-000000000001"
+        folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data"
+        site: ahmadia
+        settings: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)" }
+        image_count: 3299
+        duplicate_count: 0
+        job_id: "j0000000-4444-4000-8000-000000000001"
+        imported_at: "2026-09-17T10:30:00Z"
+        created_at: "2026-09-17T10:05:00Z"
+    SourceCreate:
+      type: object
+      required: [folder]
+      properties:
+        folder: { type: string }
+        site: { type: string, description: defaults to the folder name, slugified }
+        settings: { $ref: "#/components/schemas/ImportSettings" }
+      example: { folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data", site: ahmadia }
+    SourceWithJob:
+      type: object
+      required: [source, job]
+      properties:
+        source: { $ref: "#/components/schemas/Source" }
+        job: { $ref: "#/components/schemas/Job" }
+    SourcePage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Source" }
+        next_cursor: { type: [string, "null"] }
+
+    Image:
+      type: object
+      required: [id, path, file_name, width, height, source_id, group_key, capture_time, lat, lon, alt, phash, box_count, pending_count, max_pending_confidence, labeled, created_at]
+      properties:
+        id: { type: string }
+        path: { type: string, description: relative to the project folder, forward slashes }
+        file_name: { type: string }
+        width: { type: integer }
+        height: { type: integer }
+        source_id: { type: string }
+        group_key: { type: string }
+        capture_time: { type: [string, "null"], format: date-time }
+        lat: { type: [number, "null"] }
+        lon: { type: [number, "null"] }
+        alt: { type: [number, "null"] }
+        phash: { type: [string, "null"] }
+        box_count: { type: integer, description: accepted and edited boxes }
+        pending_count: { type: integer, description: unreviewed proposals }
+        max_pending_confidence: { type: [number, "null"], description: highest confidence among unreviewed proposals (review queue sort key) }
+        labeled: { type: boolean }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "10000000-5555-4000-8000-000000000001"
+        path: "images/ahmadia/IX-12-02491_0031_0001.jpg"
+        file_name: "IX-12-02491_0031_0001.jpg"
+        width: 4000
+        height: 2667
+        source_id: "50000000-3333-4000-8000-000000000001"
+        group_key: "IX-12-02491_0031"
+        capture_time: "2019-04-15T06:35:36Z"
+        lat: 29.49469
+        lon: 47.76513
+        alt: 191.3
+        phash: "82a81f67f94615ae"
+        box_count: 3
+        pending_count: 2
+        max_pending_confidence: 0.81
+        labeled: true
+        created_at: "2026-09-17T10:06:00Z"
+    ImagePage:
+      type: object
+      required: [items, next_cursor, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Image" }
+        next_cursor: { type: [string, "null"] }
+        total: { type: integer, description: number of images matching the filter (for the grid scrollbar) }
+      example:
+        items:
+          - id: "10000000-5555-4000-8000-000000000001"
+            path: "images/ahmadia/IX-12-02491_0031_0001.jpg"
+            file_name: "IX-12-02491_0031_0001.jpg"
+            width: 4000
+            height: 2667
+            source_id: "50000000-3333-4000-8000-000000000001"
+            group_key: "IX-12-02491_0031"
+            capture_time: "2019-04-15T06:35:36Z"
+            lat: 29.49469
+            lon: 47.76513
+            alt: 191.3
+            phash: "82a81f67f94615ae"
+            box_count: 3
+            pending_count: 2
+            max_pending_confidence: 0.81
+            labeled: true
+            created_at: "2026-09-17T10:06:00Z"
+          - id: "10000000-5555-4000-8000-000000000002"
+            path: "images/ahmadia/IX-12-02491_0031_0002.jpg"
+            file_name: "IX-12-02491_0031_0002.jpg"
+            width: 4000
+            height: 2667
+            source_id: "50000000-3333-4000-8000-000000000001"
+            group_key: "IX-12-02491_0031"
+            capture_time: "2019-04-15T06:35:39Z"
+            lat: 29.49476
+            lon: 47.76486
+            alt: 191.8
+            phash: "8488349d3494bffb"
+            box_count: 0
+            pending_count: 0
+            max_pending_confidence: null
+            labeled: false
+            created_at: "2026-09-17T10:06:00Z"
+        next_cursor: null
+        total: 2
+    BulkDelete:
+      type: object
+      required: [image_ids]
+      properties:
+        image_ids:
+          type: array
+          items: { type: string }
+          minItems: 1
+      example: { image_ids: ["10000000-5555-4000-8000-000000000002"] }
+    BulkDeleteResult:
+      type: object
+      required: [deleted]
+      properties:
+        deleted: { type: integer }
+      example: { deleted: 1 }
+    PreannotateRequest:
+      type: object
+      properties:
+        model_id: { type: string, description: defaults to the project's pre-annotation model }
+        imgsz: { type: integer, minimum: 320, maximum: 6400, default: 2560 }
+        conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
+      example: { imgsz: 2560, conf: 0.25 }
+    PreannotateResult:
+      type: object
+      required: [skipped, model_id, items]
+      properties:
+        skipped: { type: boolean, description: true when the image already had boxes from this model }
+        model_id: { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Box" }
+      example:
+        skipped: false
+        model_id: "m0000000-2222-4000-8000-000000000001"
+        items:
+          - id: "b0000000-6666-4000-8000-000000000002"
+            image_id: "10000000-5555-4000-8000-000000000001"
+            class_id: "c1a2b3c4-0000-4000-8000-000000000004"
+            x: 1210.5
+            y: 802.0
+            w: 96.0
+            h: 61.0
+            confidence: 0.81
+            provenance: { kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", provider: null, model_name: "yolo11m-coco", query_run_id: null }
+            review_state: unreviewed
+            reviewed_at: null
+            created_at: "2026-09-17T11:00:00Z"
+
+    ProvenanceKind:
+      type: string
+      enum: [person, local_model, cloud_provider]
+    ReviewState:
+      type: string
+      enum: [unreviewed, accepted, rejected, edited]
+    Provenance:
+      type: object
+      required: [kind, model_id, provider, model_name, query_run_id]
+      properties:
+        kind: { $ref: "#/components/schemas/ProvenanceKind" }
+        model_id: { type: [string, "null"] }
+        provider: { type: [string, "null"] }
+        model_name: { type: [string, "null"] }
+        query_run_id: { type: [string, "null"] }
+      example: { kind: person, model_id: null, provider: null, model_name: null, query_run_id: null }
+    Box:
+      type: object
+      required: [id, image_id, class_id, x, y, w, h, confidence, provenance, review_state, reviewed_at, created_at]
+      properties:
+        id: { type: string }
+        image_id: { type: string }
+        class_id: { type: string }
+        x: { type: number }
+        y: { type: number }
+        w: { type: number }
+        h: { type: number }
+        confidence: { type: [number, "null"] }
+        provenance: { $ref: "#/components/schemas/Provenance" }
+        review_state: { $ref: "#/components/schemas/ReviewState" }
+        reviewed_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "b0000000-6666-4000-8000-000000000001"
+        image_id: "10000000-5555-4000-8000-000000000001"
+        class_id: "c1a2b3c4-0000-4000-8000-000000000001"
+        x: 512.0
+        y: 300.0
+        w: 140.0
+        h: 90.0
+        confidence: null
+        provenance: { kind: person, model_id: null, provider: null, model_name: null, query_run_id: null }
+        review_state: accepted
+        reviewed_at: "2026-09-17T10:45:00Z"
+        created_at: "2026-09-17T10:45:00Z"
+    BoxList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Box" }
+      example:
+        items:
+          - id: "b0000000-6666-4000-8000-000000000001"
+            image_id: "10000000-5555-4000-8000-000000000001"
+            class_id: "c1a2b3c4-0000-4000-8000-000000000001"
+            x: 512.0
+            y: 300.0
+            w: 140.0
+            h: 90.0
+            confidence: null
+            provenance: { kind: person, model_id: null, provider: null, model_name: null, query_run_id: null }
+            review_state: accepted
+            reviewed_at: "2026-09-17T10:45:00Z"
+            created_at: "2026-09-17T10:45:00Z"
+          - id: "b0000000-6666-4000-8000-000000000002"
+            image_id: "10000000-5555-4000-8000-000000000001"
+            class_id: "c1a2b3c4-0000-4000-8000-000000000004"
+            x: 1210.5
+            y: 802.0
+            w: 96.0
+            h: 61.0
+            confidence: 0.81
+            provenance: { kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", provider: null, model_name: "yolo11m-coco", query_run_id: null }
+            review_state: unreviewed
+            reviewed_at: null
+            created_at: "2026-09-17T11:00:00Z"
+    BoxCreate:
+      type: object
+      required: [class_id, x, y, w, h]
+      properties:
+        class_id: { type: string }
+        x: { type: number, minimum: 0 }
+        y: { type: number, minimum: 0 }
+        w: { type: number, exclusiveMinimum: 0 }
+        h: { type: number, exclusiveMinimum: 0 }
+      example: { class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 512, y: 300, w: 140, h: 90 }
+    BoxUpdate:
+      type: object
+      properties:
+        class_id: { type: string }
+        x: { type: number, minimum: 0 }
+        y: { type: number, minimum: 0 }
+        w: { type: number, exclusiveMinimum: 0 }
+        h: { type: number, exclusiveMinimum: 0 }
+      example: { x: 520, y: 305 }
+    BoxReview:
+      type: object
+      required: [box_ids, action]
+      properties:
+        box_ids:
+          type: array
+          items: { type: string }
+          minItems: 1
+        action:
+          type: string
+          enum: [accept, reject]
+      example: { box_ids: ["b0000000-6666-4000-8000-000000000002"], action: accept }
+    BoxReviewResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: { type: integer }
+      example: { updated: 1 }
+
+    SplitMethod:
+      type: string
+      enum: [by_group, by_tile, random]
+    Dataset:
+      type: object
+      required: [id, name, classes, split_method, split_params, path, image_count, train_count, val_count, job_id, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/ClassDef" }
+        split_method: { $ref: "#/components/schemas/SplitMethod" }
+        split_params:
+          type: object
+          required: [val_fraction, seed]
+          properties:
+            val_fraction: { type: number }
+            seed: { type: integer }
+        path: { type: string, description: "relative: datasets/<name>; data.yaml lives inside" }
+        image_count: { type: integer }
+        train_count: { type: integer }
+        val_count: { type: integer }
+        job_id: { type: [string, "null"], description: materialise job }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "d0000000-7777-4000-8000-000000000001"
+        name: v1
+        classes:
+          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", hotkey: "1", order: 0 }
+        split_method: by_group
+        split_params: { val_fraction: 0.2, seed: 42 }
+        path: "datasets/v1"
+        image_count: 30
+        train_count: 24
+        val_count: 6
+        job_id: "j0000000-4444-4000-8000-000000000002"
+        created_at: "2026-09-17T12:00:00Z"
+    DatasetCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, pattern: "^[A-Za-z0-9._-]+$" }
+        split_method: { $ref: "#/components/schemas/SplitMethod" }
+        val_fraction: { type: number, minimum: 0.05, maximum: 0.5, default: 0.2 }
+        seed: { type: integer, default: 42 }
+        image_ids:
+          type: array
+          description: defaults to every image with at least one accepted or edited box
+          items: { type: string }
+      example: { name: v1, split_method: by_group, val_fraction: 0.2, seed: 42 }
+    DatasetWithJob:
+      type: object
+      required: [dataset, job]
+      properties:
+        dataset: { $ref: "#/components/schemas/Dataset" }
+        job: { $ref: "#/components/schemas/Job" }
+    DatasetPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Dataset" }
+        next_cursor: { type: [string, "null"] }
+    DatasetStats:
+      type: object
+      required: [image_count, train_count, val_count, boxes_per_class, groups]
+      properties:
+        image_count: { type: integer }
+        train_count: { type: integer }
+        val_count: { type: integer }
+        boxes_per_class:
+          type: array
+          items:
+            type: object
+            required: [class_id, class_name, train, val]
+            properties:
+              class_id: { type: string }
+              class_name: { type: string }
+              train: { type: integer }
+              val: { type: integer }
+        groups:
+          type: array
+          items:
+            type: object
+            required: [group_key, split, image_count]
+            properties:
+              group_key: { type: string }
+              split: { type: string, enum: [train, val] }
+              image_count: { type: integer }
+      example:
+        image_count: 30
+        train_count: 24
+        val_count: 6
+        boxes_per_class:
+          - { class_id: "c1a2b3c4-0000-4000-8000-000000000001", class_name: excavator, train: 31, val: 9 }
+        groups:
+          - { group_key: "IX-12-02491_0031", split: train, image_count: 24 }
+          - { group_key: "IX-12-02491_0032", split: val, image_count: 6 }
+
+    ModelKind:
+      type: string
+      enum: [imported, trained]
+    ClassMetrics:
+      type: object
+      required: [class_name, map50, map50_95, precision, recall]
+      properties:
+        class_name: { type: string }
+        map50: { type: number }
+        map50_95: { type: number }
+        precision: { type: number }
+        recall: { type: number }
+    ModelMetrics:
+      type: object
+      required: [map50, map50_95, precision, recall, per_class]
+      properties:
+        map50: { type: number }
+        map50_95: { type: number }
+        precision: { type: number }
+        recall: { type: number }
+        per_class:
+          type: array
+          items: { $ref: "#/components/schemas/ClassMetrics" }
+      example:
+        map50: 0.71
+        map50_95: 0.44
+        precision: 0.78
+        recall: 0.66
+        per_class:
+          - { class_name: excavator, map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }
+    Model:
+      type: object
+      required: [id, name, kind, weights_path, base_weights, dataset_id, hyperparameters, metrics, class_names, class_aliases, exports, artifacts, run_id, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/ModelKind" }
+        weights_path: { type: string, description: relative to the project folder }
+        base_weights: { type: [string, "null"] }
+        dataset_id: { type: [string, "null"] }
+        hyperparameters:
+          type: object
+          additionalProperties: true
+        metrics:
+          oneOf:
+            - $ref: "#/components/schemas/ModelMetrics"
+            - type: "null"
+        class_names:
+          type: array
+          description: class names the weights predict, in index order
+          items: { type: string }
+        class_aliases:
+          type: object
+          description: model class name to project class name (for COCO weights, `truck` to `dump_truck`)
+          additionalProperties: { type: string }
+        exports:
+          type: object
+          description: format to relative path
+          additionalProperties: { type: string }
+        artifacts:
+          type: object
+          description: relative paths of run artifacts when present
+          properties:
+            results_csv: { type: string }
+            confusion_matrix: { type: string }
+            pr_curve: { type: string }
+        run_id: { type: [string, "null"], description: training job id }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "m0000000-2222-4000-8000-000000000001"
+        name: yolo11m-coco
+        kind: imported
+        weights_path: "models/yolo11m.pt"
+        base_weights: null
+        dataset_id: null
+        hyperparameters: {}
+        metrics: null
+        class_names: [person, bicycle, car, motorcycle, airplane, bus, train, truck]
+        class_aliases: { truck: dump_truck }
+        exports: {}
+        artifacts: {}
+        run_id: null
+        created_at: "2026-09-17T10:10:00Z"
+    ModelImport:
+      type: object
+      required: [name, weights_path]
+      properties:
+        name: { type: string, minLength: 1 }
+        weights_path: { type: string, description: absolute path to a .pt file; copied into models/ }
+        class_aliases:
+          type: object
+          additionalProperties: { type: string }
+      example: { name: yolo11m-coco, weights_path: "E:\\Dev\\Yolo\\models\\yolo11m.pt", class_aliases: { truck: dump_truck } }
+    ModelPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Model" }
+        next_cursor: { type: [string, "null"] }
+    TrainRequest:
+      type: object
+      required: [name, dataset_id, base_model_id]
+      properties:
+        name: { type: string, minLength: 1 }
+        dataset_id: { type: string }
+        base_model_id: { type: string, description: any registry model, including imported COCO weights }
+        epochs: { type: integer, minimum: 1, maximum: 1000, default: 50 }
+        imgsz: { type: integer, minimum: 320, maximum: 4096, default: 1280 }
+        batch: { type: [integer, "null"], description: null = auto }
+        patience: { type: integer, minimum: 0, default: 50 }
+        augmentation:
+          type: string
+          enum: [default, aerial]
+          default: default
+        device: { type: string, default: "0", description: "\"0\" for the first GPU, \"cpu\" otherwise" }
+      example: { name: ahmadia-v1-n, dataset_id: "d0000000-7777-4000-8000-000000000001", base_model_id: "m0000000-2222-4000-8000-000000000002", epochs: 3, imgsz: 1280, batch: null, patience: 50, augmentation: aerial, device: "0" }
+    ExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format:
+          type: string
+          enum: [onnx, engine]
+        imgsz: { type: integer, minimum: 320, maximum: 4096, default: 1280 }
+        half: { type: boolean, default: false }
+      example: { format: onnx, imgsz: 1280 }
+    JobRef:
+      type: object
+      required: [job]
+      properties:
+        job: { $ref: "#/components/schemas/Job" }
+
+    ProviderName:
+      type: string
+      enum: [openai, anthropic]
+    Provider:
+      type: object
+      required: [name, has_key, model_name, requests_per_minute, cost_per_request]
+      properties:
+        name: { $ref: "#/components/schemas/ProviderName" }
+        has_key: { type: boolean, description: whether a key is stored in Credential Manager }
+        model_name: { type: string }
+        requests_per_minute: { type: integer }
+        cost_per_request: { type: number, description: USD per request, user-editable estimate }
+      example: { name: anthropic, has_key: true, model_name: claude-opus-5, requests_per_minute: 30, cost_per_request: 0.02 }
+    ProviderList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Provider" }
+      example:
+        items:
+          - { name: openai, has_key: false, model_name: gpt-5, requests_per_minute: 30, cost_per_request: 0.02 }
+          - { name: anthropic, has_key: true, model_name: claude-opus-5, requests_per_minute: 30, cost_per_request: 0.02 }
+    ProviderUpdate:
+      type: object
+      properties:
+        model_name: { type: string, minLength: 1 }
+        requests_per_minute: { type: integer, minimum: 1, maximum: 10000 }
+        cost_per_request: { type: number, minimum: 0 }
+      example: { model_name: claude-opus-5, requests_per_minute: 30 }
+    ProviderKey:
+      type: object
+      required: [api_key]
+      properties:
+        api_key: { type: string, minLength: 1, format: password }
+      example: { api_key: "sk-…" }
+    ProviderTestResult:
+      type: object
+      required: [ok, message, model_name]
+      properties:
+        ok: { type: boolean }
+        message: { type: string }
+        model_name: { type: string }
+      example: { ok: true, message: "responded in 1.2 s", model_name: claude-opus-5 }
+
+    Tiling:
+      type: object
+      required: [enabled, tile_size, overlap, nms_iou]
+      properties:
+        enabled: { type: boolean, default: true }
+        tile_size: { type: integer, minimum: 256, maximum: 4096, default: 1280 }
+        overlap: { type: number, minimum: 0, maximum: 0.5, default: 0.2 }
+        nms_iou: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+      example: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 }
+    QueryRunKind:
+      type: string
+      enum: [local_model, cloud_provider]
+    QueryRun:
+      type: object
+      required: [id, kind, model_id, provider, model_name, query, image_ids, tiling, conf, job_id, box_count, promoted_at, created_at]
+      properties:
+        id: { type: string }
+        kind: { $ref: "#/components/schemas/QueryRunKind" }
+        model_id: { type: [string, "null"] }
+        provider: { type: [string, "null"] }
+        model_name: { type: [string, "null"] }
+        query: { type: string, description: free text for cloud providers; empty for local models }
+        image_ids:
+          type: array
+          items: { type: string }
+        tiling: { $ref: "#/components/schemas/Tiling" }
+        conf: { type: number, description: confidence threshold applied to results }
+        job_id: { type: [string, "null"] }
+        box_count: { type: integer, description: boxes written so far }
+        promoted_at: { type: [string, "null"], format: date-time }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "q0000000-8888-4000-8000-000000000001"
+        kind: cloud_provider
+        model_id: null
+        provider: anthropic
+        model_name: claude-opus-5
+        query: dump trucks
+        image_ids: ["10000000-5555-4000-8000-000000000001", "10000000-5555-4000-8000-000000000002"]
+        tiling: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 }
+        conf: 0.25
+        job_id: "j0000000-4444-4000-8000-000000000003"
+        box_count: 7
+        promoted_at: null
+        created_at: "2026-09-17T13:00:00Z"
+    QueryRunCreate:
+      type: object
+      required: [kind, image_ids]
+      properties:
+        kind: { $ref: "#/components/schemas/QueryRunKind" }
+        model_id: { type: string, description: required for local_model }
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        query: { type: string, description: required for cloud_provider, e.g. "dump trucks" }
+        image_ids:
+          type: array
+          items: { type: string }
+          minItems: 1
+        tiling: { $ref: "#/components/schemas/Tiling" }
+        conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
+      example: { kind: cloud_provider, provider: anthropic, query: dump trucks, image_ids: ["10000000-5555-4000-8000-000000000001"], tiling: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 }, conf: 0.25 }
+    QueryRunWithJob:
+      type: object
+      required: [query_run, job]
+      properties:
+        query_run: { $ref: "#/components/schemas/QueryRun" }
+        job: { $ref: "#/components/schemas/Job" }
+    QueryRunPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QueryRun" }
+        next_cursor: { type: [string, "null"] }
+    CostEstimate:
+      type: object
+      required: [images, tiles, requests, cost_per_request, estimated_cost]
+      properties:
+        images: { type: integer }
+        tiles: { type: integer, description: total tiles across all images }
+        requests: { type: integer }
+        cost_per_request: { type: number }
+        estimated_cost: { type: number, description: USD; 0 for local models }
+      example: { images: 5, tiles: 40, requests: 40, cost_per_request: 0.02, estimated_cost: 0.8 }
+    PromoteRequest:
+      type: object
+      properties:
+        min_confidence: { type: number, minimum: 0, maximum: 1, default: 0 }
+      example: { min_confidence: 0.5 }
+    PromoteResult:
+      type: object
+      required: [query_run, accepted]
+      properties:
+        query_run: { $ref: "#/components/schemas/QueryRun" }
+        accepted: { type: integer }
+      example:
+        query_run:
+          id: "q0000000-8888-4000-8000-000000000001"
+          kind: cloud_provider
+          model_id: null
+          provider: anthropic
+          model_name: claude-opus-5
+          query: dump trucks
+          image_ids: ["10000000-5555-4000-8000-000000000001"]
+          tiling: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 }
+          conf: 0.25
+          job_id: "j0000000-4444-4000-8000-000000000003"
+          box_count: 7
+          promoted_at: "2026-09-17T13:30:00Z"
+          created_at: "2026-09-17T13:00:00Z"
+        accepted: 6
+
+    JobType:
+      type: string
+      enum: [import, dataset, train, infer, export]
+    JobState:
+      type: string
+      enum: [queued, running, succeeded, failed, cancelled]
+    Job:
+      type: object
+      required: [id, project_id, type, state, progress, message, log_path, params, result, error, created_at, started_at, finished_at]
+      properties:
+        id: { type: string }
+        project_id: { type: string }
+        type: { $ref: "#/components/schemas/JobType" }
+        state: { $ref: "#/components/schemas/JobState" }
+        progress: { type: number, minimum: 0, maximum: 1 }
+        message: { type: string }
+        log_path: { type: string, description: "relative: runs/<job_id>/job.log" }
+        params:
+          type: object
+          additionalProperties: true
+        result:
+          type: [object, "null"]
+          additionalProperties: true
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id}; infer {query_run_id, boxes}; export {format, path}"
+        error: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        started_at: { type: [string, "null"], format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+      example:
+        id: "j0000000-4444-4000-8000-000000000001"
+        project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+        type: import
+        state: running
+        progress: 0.42
+        message: "1386 / 3299 images"
+        log_path: "runs/j0000000-4444-4000-8000-000000000001/job.log"
+        params: { source_id: "50000000-3333-4000-8000-000000000001" }
+        result: null
+        error: null
+        created_at: "2026-09-17T10:05:00Z"
+        started_at: "2026-09-17T10:05:01Z"
+        finished_at: null
+    JobPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Job" }
+        next_cursor: { type: [string, "null"] }
+    JobLog:
+      type: object
+      required: [lines, path]
+      properties:
+        lines:
+          type: array
+          items: { type: string }
+        path: { type: string }
+      example:
+        lines: ["2026-09-17 10:05:01 INFO job started", "2026-09-17 10:05:09 INFO 50 / 3299 images"]
+        path: "runs/j0000000-4444-4000-8000-000000000001/job.log"
+
+    Event:
+      type: object
+      description: websocket message (see `x-websocket`)
+      required: [type, project_id, job_id, progress, message, payload]
+      properties:
+        type:
+          type: string
+          enum: [job.progress, job.state, images.changed, boxes.changed]
+        project_id: { type: string }
+        job_id: { type: [string, "null"] }
+        progress: { type: [number, "null"] }
+        message: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+      example:
+        type: job.progress
+        project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+        job_id: "j0000000-4444-4000-8000-000000000001"
+        progress: 0.42
+        message: "1386 / 3299 images"
+        payload: {}

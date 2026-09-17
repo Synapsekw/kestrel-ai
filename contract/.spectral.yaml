@@ -1,0 +1,11 @@
+extends: ["spectral:oas"]
+rules:
+  operation-tags: off
+  info-contact: off
+  operation-description: off
+  oas3-unused-component: error
+  operation-operationId: error
+overrides:
+  - files: ["openapi.yaml#/components/schemas/Event"]
+    rules:
+      oas3-unused-component: off

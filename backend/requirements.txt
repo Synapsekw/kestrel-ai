@@ -1,0 +1,24 @@
+--extra-index-url https://download.pytorch.org/whl/cu130
+# ML stack: pinned to the reference machine (E:\Dev\Yolo\README.md). Do not change.
+torch==2.14.0+cu130
+torchvision==0.29.0+cu130
+ultralytics==8.4.154
+opencv-python==5.0.0.93
+ImageHash==4.3.2
+numpy==2.4.6
+pillow==12.3.0
+sahi==0.12.6
+# app libraries (exact versions in requirements-lock.txt)
+fastapi
+uvicorn[standard]
+pydantic==2.13.5
+pydantic-settings
+sqlalchemy>=2.0,<3
+alembic
+httpx==0.28.1
+openai==1.109.1
+anthropic
+keyring
+python-multipart
+websockets
+piexif

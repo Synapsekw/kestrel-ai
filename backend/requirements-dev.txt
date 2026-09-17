@@ -1,0 +1,8 @@
+-r requirements.txt
+pytest
+pytest-asyncio
+schemathesis>=4
+hypothesis
+pyyaml
+ruff
+pyinstaller
