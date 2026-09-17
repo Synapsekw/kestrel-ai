@@ -51,7 +51,6 @@ class ProjectUpdate(BaseModel):
     name: str | None = Field(None, min_length=1)
     preannotation_model_id: str | None = None
     import_defaults: ImportSettingsPatch | None = None
-    model_config = {"extra": "forbid"}
 
 
 class ProjectOut(BaseModel):

@@ -39,7 +39,7 @@ def install_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(StarletteHTTPException)
     async def _http(_: Request, exc: StarletteHTTPException):
         code = _HTTP_CODES.get(exc.status_code, "http_error")
-        return JSONResponse(envelope(code, str(exc.detail)), exc.status_code)
+        return JSONResponse(envelope(code, str(exc.detail)), exc.status_code, headers=exc.headers)
 
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, exc: Exception):

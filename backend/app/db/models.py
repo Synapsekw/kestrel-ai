@@ -2,10 +2,10 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, new_id, utcnow
+from app.db.base import Base, UTCDateTime, new_id, utcnow
 
 
 class Project(Base):
@@ -16,7 +16,7 @@ class Project(Base):
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
     preannotation_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     import_defaults: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class Source(Base):
@@ -28,8 +28,8 @@ class Source(Base):
     image_count: Mapped[int] = mapped_column(Integer, default=0)
     duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    imported_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    imported_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class Image(Base):
@@ -39,13 +39,13 @@ class Image(Base):
     width: Mapped[int] = mapped_column(Integer)
     height: Mapped[int] = mapped_column(Integer)
     source_id: Mapped[str] = mapped_column(String(36), ForeignKey("source.id"))
-    capture_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    capture_time: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     lon: Mapped[float | None] = mapped_column(Float, nullable=True)
     alt: Mapped[float | None] = mapped_column(Float, nullable=True)
     phash: Mapped[str | None] = mapped_column(String(16), nullable=True)
     group_key: Mapped[str] = mapped_column(String, default="")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     __table_args__ = (
         Index("ix_image_source", "source_id"),
         Index("ix_image_group", "group_key"),
@@ -69,8 +69,8 @@ class Box(Base):
     model_name: Mapped[str | None] = mapped_column(String, nullable=True)
     query_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     review_state: Mapped[str] = mapped_column(String, default="unreviewed")
-    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     __table_args__ = (
         Index("ix_box_image", "image_id"),
         Index("ix_box_query_run", "query_run_id"),
@@ -87,7 +87,7 @@ class Dataset(Base):
     split_params: Mapped[dict] = mapped_column(JSON, default=dict)  # {val_fraction, seed}
     path: Mapped[str] = mapped_column(String)  # relative: datasets/<name>
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class DatasetImage(Base):
@@ -115,7 +115,7 @@ class Model(Base):
     exports: Mapped[dict] = mapped_column(JSON, default=dict)  # {"onnx": "models/x.onnx"}
     artifacts: Mapped[dict] = mapped_column(JSON, default=dict)  # {results_csv, confusion_matrix, pr_curve}
     run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
 class Job(Base):
@@ -129,9 +129,9 @@ class Job(Base):
     params: Mapped[dict] = mapped_column(JSON, default=dict)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     __table_args__ = (Index("ix_job_state", "state"), Index("ix_job_created", "created_at"))
 
 
@@ -147,5 +147,5 @@ class QueryRun(Base):
     tiling: Mapped[dict] = mapped_column(JSON, default=dict)  # {enabled, tile_size, overlap, nms_iou}
     conf: Mapped[float] = mapped_column(Float, default=0.25)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    promoted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    promoted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)

@@ -1,0 +1,65 @@
+"""Contract conformance: every path in contract/openapi.yaml is routed and every response validates."""
+
+from pathlib import Path
+
+import pytest
+import schemathesis
+import yaml
+from hypothesis import HealthCheck, settings
+from schemathesis.specs.openapi.checks import (
+    allow_header_conformance,
+    content_type_conformance,
+    negative_data_rejection,
+    response_schema_conformance,
+    status_code_conformance,
+    unsupported_method,
+)
+
+SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
+METHODS = ("get", "post", "put", "patch", "delete")
+AUTH = {"Authorization": "Bearer test-token"}
+
+
+def _operations(paths: dict) -> set[tuple[str, str]]:
+    return {(m.upper(), p) for p, ops in paths.items() for m in ops if m in METHODS}
+
+
+def test_every_spec_path_is_routed(app):
+    wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
+    have = _operations(app.openapi()["paths"])
+    assert wanted <= have, sorted(wanted - have)
+
+
+def test_no_extra_api_routes(app):
+    wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
+    have = _operations(app.openapi()["paths"])
+    assert have <= wanted, sorted(have - wanted)
+
+
+schema = schemathesis.openapi.from_path(str(SPEC))
+
+
+@pytest.fixture
+def project_id(client, project_dir) -> str:
+    body = {"name": "A", "folder": str(project_dir), "classes": [{"name": "excavator", "colour": "#ff0000"}]}
+    return client.post("/api/v1/projects", json=body).json()["id"]
+
+
+@schema.parametrize()
+@settings(max_examples=3, deadline=None, suppress_health_check=list(HealthCheck))
+def test_responses_conform(case, app, project_id):
+    if "projectId" in (case.path_parameters or {}):
+        case.path_parameters["projectId"] = project_id
+    case.operation.schema.app = app  # in-process ASGI transport, no sockets
+    case.operation.app = app
+    response = case.call(headers=AUTH)
+    if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
+        # S0 stub: the operation is routed but not built yet; it must still answer in the error envelope.
+        checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
+        case.validate_response(response, checks=checks)
+        return
+    # negative_data_rejection: FastAPI ignores unknown query parameters by design.
+    # unsupported_method / allow_header_conformance: literal segments such as /projects/open share
+    # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.
+    excluded = [negative_data_rejection, unsupported_method, allow_header_conformance]
+    case.validate_response(response, excluded_checks=excluded)
