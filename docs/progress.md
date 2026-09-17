@@ -7,7 +7,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 
 | Wave | Sub-project | Branch | Worktree | State | Blockers |
 |---|---|---|---|---|---|
-| 0 | S0 contract and scaffolding | s0-backend (root checkout), s0-frontend (.worktrees/s0-frontend) | see branches | in review | none |
+| 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
 | 1 | S1 dataset backend | - | - | not started | S0 |
 | 1 | S2 annotation UI | - | - | not started | S0 |
 | 1 | S3 training backend and registry | - | - | not started | S0 |
@@ -15,7 +15,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 2 | S5 training and inference UI | - | - | not started | wave 1 checkpoint |
 | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
 
-Last verified checkpoint: none.
+Last verified checkpoint: 1 (after Wave 0) on main 389687c, 2026-09-17.
 
 ## Plans
 
@@ -53,7 +53,28 @@ Last verified checkpoint: none.
 ## Checkpoints
 
 ### Checkpoint 1 (after Wave 0)
-Not run yet.
+
+Result: PASS on `main` 389687c (2026-09-17), run by the goal owner on the reference machine.
+
+How: `backend/scripts/build.ps1` froze the S0 backend (PyInstaller one-folder, torch excluded until S6) into
+`frontend/src-tauri/binaries/`; `pnpm tauri dev` launched the real app with
+`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`; `frontend/scripts/checkpoint1.mjs` attached to the
+WebView2 over CDP and drove the UI.
+
+| Step | Evidence |
+|---|---|
+| App boots, Tauri spawns the sidecar with a per-launch token and port, health passes, Projects screen renders | `docs/evidence/checkpoint1/checkpoint1-01-projects.png` |
+| Create project from the UI (name, folder, classes) -> navigates to the Data Manager, `project.db` and subfolders exist | `checkpoint1-02-data-manager.png`, `checkpoint1-result.json` |
+| Sidecar killed externally -> blocking dialog "Backend process exited (code -1)" with Restart | `checkpoint1-03-sidecar-died.png` |
+| Restart respawns a new sidecar (new pid) and the UI recovers | `checkpoint1-04-after-restart.png` |
+| Closing the window terminates the sidecar and the dev server (no leftover processes, ports 1420/9222 free) | PowerShell check in the session log |
+| Mock server serves the contract (`pnpm mock`, 200 with token, 401 without) | S0 Task 2 verification |
+
+Suites on main 389687c: backend 97 passed + ruff clean; contract `pnpm check` clean; frontend lint, 7 unit tests, build, 1 e2e passed.
+
+Found and fixed during the checkpoint: the WebView2 origin's CORS preflight was answered 405 (Prism had masked it); CORS is now
+restricted to `tauri.localhost` and the Vite origin (`Settings.cors_origins`). Cold-start timing is measured against the
+installed app in S6 (dev mode includes the cargo build).
 
 ## S0 status detail
 

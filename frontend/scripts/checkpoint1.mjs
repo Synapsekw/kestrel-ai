@@ -31,6 +31,7 @@ async function connect() {
 
 const { browser, page } = await connect();
 step("attach webview", true, page.url());
+await page.goto("http://127.0.0.1:1420/");
 
 await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 60_000 });
 const bootMs = Date.now() - t0;
@@ -48,9 +49,12 @@ step("create project via UI", dbExists, `${page.url()} project.db=${dbExists}`);
 await page.screenshot({ path: join(evidenceDir, "checkpoint1-02-data-manager.png") });
 
 // Kill the sidecar behind the app's back: the UI must show the blocking dialog (spec section 11).
-const before = execSync('tasklist /FI "IMAGENAME eq machinery-backend-x86_64-pc-windows-msvc.exe" /FO CSV /NH').toString();
-step("sidecar process running", before.includes("machinery-backend"), before.trim().split("\n")[0]);
-execSync("taskkill /F /IM machinery-backend-x86_64-pc-windows-msvc.exe");
+// In `tauri dev` the sidecar runs as machinery-backend.exe; the bundle keeps the target-triple suffix.
+const psList = "(Get-Process machinery-backend* -ErrorAction SilentlyContinue | ForEach-Object { $_.ProcessName + ':' + $_.Id }) -join ','";
+const sidecars = () => execSync(`powershell -NoProfile -Command "${psList}"`).toString().trim();
+const before = sidecars();
+step("sidecar process running", before.includes("machinery-backend"), before);
+execSync('powershell -NoProfile -Command "Get-Process machinery-backend* | Stop-Process -Force"');
 const dialog = page.getByRole("alertdialog");
 await dialog.waitFor({ timeout: 15_000 });
 const dialogText = await dialog.innerText();
@@ -60,8 +64,8 @@ await page.screenshot({ path: join(evidenceDir, "checkpoint1-03-sidecar-died.png
 await page.getByRole("button", { name: "Restart" }).click();
 await dialog.waitFor({ state: "detached", timeout: 60_000 });
 await page.getByRole("heading").first().waitFor({ timeout: 60_000 });
-const after = execSync('tasklist /FI "IMAGENAME eq machinery-backend-x86_64-pc-windows-msvc.exe" /FO CSV /NH').toString();
-step("restart respawns sidecar", after.includes("machinery-backend"), (await page.getByRole("heading").first().innerText()).trim());
+const after = sidecars();
+step("restart respawns sidecar", after.includes("machinery-backend") && after !== before, `${after}; heading: ${(await page.getByRole("heading").first().innerText()).trim()}`);
 await page.screenshot({ path: join(evidenceDir, "checkpoint1-04-after-restart.png") });
 
 writeFileSync(join(evidenceDir, "checkpoint1-result.json"), JSON.stringify(result, null, 2));

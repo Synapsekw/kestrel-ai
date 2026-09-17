@@ -1,0 +1,41 @@
+{
+  "steps": [
+    {
+      "name": "attach webview",
+      "ok": true,
+      "detail": "http://127.0.0.1:1420/p/d17ab3a1-9316-4e07-a42d-96d52155d878/data",
+      "at_ms": 23
+    },
+    {
+      "name": "projects screen after health",
+      "ok": true,
+      "detail": "92 ms since launch",
+      "at_ms": 92
+    },
+    {
+      "name": "create project via UI",
+      "ok": true,
+      "detail": "http://127.0.0.1:1420/p/9c5d4941-f6c0-4d2a-aaa3-5650e1cf172e/data project.db=true",
+      "at_ms": 263
+    },
+    {
+      "name": "sidecar process running",
+      "ok": true,
+      "detail": "machinery-backend:26140",
+      "at_ms": 498
+    },
+    {
+      "name": "crash dialog shown",
+      "ok": true,
+      "detail": "The backend is not responding Backend process exited (code -1) URL http://127.0.0.1:55698 Mode tauri Restart",
+      "at_ms": 633
+    },
+    {
+      "name": "restart respawns sidecar",
+      "ok": true,
+      "detail": "machinery-backend:44852; heading: Data Manager",
+      "at_ms": 2194
+    }
+  ],
+  "boot_ms": 92
+}
