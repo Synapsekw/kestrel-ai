@@ -839,7 +839,7 @@ export interface components {
              */
             dedupe_threshold: number;
             /**
-             * @description named groups `camera` and `flight` form the group key; fall back to a 250 m tile, then the source
+             * @description the named group `flight` is the group key (flights span cameras); fall back to a 250 m tile, then the source site
              * @default ^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)
              */
             group_regex: string;
