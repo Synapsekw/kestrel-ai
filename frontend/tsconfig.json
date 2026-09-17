@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "types": ["vite/client", "@testing-library/jest-dom"],
+    "baseUrl": ".",
+    "paths": {
+      "@contract/client": ["../contract/client"],
+      "openapi-fetch": ["./node_modules/openapi-fetch"],
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src", "e2e", "../contract/client"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}
