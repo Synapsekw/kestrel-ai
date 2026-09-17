@@ -136,3 +136,10 @@ def test_project_stats_shape(client, project_dir):
     r = client.get(f"/api/v1/projects/{p['id']}/stats")
     assert r.status_code == 200
     assert r.json()["image_count"] == 0 and r.json()["capture_time_range"] is None
+
+
+def test_relative_folder_is_422(client):
+    r = client.post("/api/v1/projects", json={"name": "A", "folder": "relative/dir", "classes": []})
+    assert r.status_code == 422
+    r = client.post("/api/v1/projects/open", json={"folder": "."})
+    assert r.status_code == 422

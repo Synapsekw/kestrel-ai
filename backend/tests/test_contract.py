@@ -47,9 +47,12 @@ def project_id(client, project_dir) -> str:
 
 @schema.parametrize()
 @settings(max_examples=3, deadline=None, suppress_health_check=list(HealthCheck))
-def test_responses_conform(case, app, project_id):
+def test_responses_conform(case, app, project_id, tmp_path):
     if "projectId" in (case.path_parameters or {}):
         case.path_parameters["projectId"] = project_id
+    if isinstance(case.body, dict) and "folder" in case.body:
+        # Never let generated data create folders outside the test's temp dir.
+        case.body["folder"] = str(tmp_path / "generated")
     case.operation.schema.app = app  # in-process ASGI transport, no sockets
     case.operation.app = app
     response = case.call(headers=AUTH)

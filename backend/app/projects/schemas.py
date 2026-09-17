@@ -3,7 +3,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import Project
 
@@ -37,14 +37,24 @@ class ClassDef(BaseModel):
     order: int
 
 
+def _absolute(v: str) -> str:
+    if not Path(v).is_absolute():
+        raise ValueError("folder must be an absolute path")
+    return v
+
+
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1)
     folder: str
     classes: list[ClassDefInput]
 
+    _folder_abs = field_validator("folder")(_absolute)
+
 
 class ProjectOpen(BaseModel):
     folder: str
+
+    _folder_abs = field_validator("folder")(_absolute)
 
 
 class ProjectUpdate(BaseModel):
