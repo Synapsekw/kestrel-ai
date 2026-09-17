@@ -28,7 +28,7 @@ jobs:
       - run: uv venv --python 3.11.15 .venv
         working-directory: backend
       # CPU wheels on the runner; the reference machine uses the cu130 pins from requirements.txt.
-      - run: uv pip install --python .venv/Scripts/python.exe --override ci-overrides-cpu.txt -r requirements-dev.txt
+      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
         working-directory: backend
         shell: bash
       - run: .venv/Scripts/ruff check . && .venv/Scripts/ruff format --check .
@@ -66,7 +66,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv venv --python 3.11.15 .venv
         working-directory: backend
-      - run: uv pip install --python .venv/Scripts/python.exe --override ci-overrides-cpu.txt -r requirements-dev.txt
+      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
         working-directory: backend
         shell: bash
       - run: .\scripts\build.ps1

@@ -158,9 +158,10 @@ class ProjectRegistry:
         return self.appdata.recent()
 
     def close_all(self) -> None:
-        for h in self._handles.values():
-            h.engine.dispose()
-        self._handles.clear()
+        with self._lock:
+            for h in self._handles.values():
+                h.engine.dispose()
+            self._handles.clear()
 
 
 def get_project(projectId: str, request: Request) -> ProjectHandle:  # noqa: N803 - path param from the contract

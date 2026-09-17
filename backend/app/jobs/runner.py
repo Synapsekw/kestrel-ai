@@ -86,11 +86,15 @@ class JobRunner:
             self._pool.shutdown(wait=True, cancel_futures=True)
             self._pool = None
         for ctx in contexts:  # jobs that were still queued never ran; mark them cancelled
-            job = self.get(ctx.project, ctx.job_id)
-            if job.state == "queued":
-                self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
-                ctx.log.info("job cancelled before it started")
-            self._close_log(ctx)
+            try:
+                job = self.get(ctx.project, ctx.job_id)
+                if job.state == "queued":
+                    self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
+                    ctx.log.info("job cancelled before it started")
+            except Exception:
+                log.exception("could not mark queued job %s cancelled at shutdown", ctx.job_id)
+            finally:
+                self._close_log(ctx)
         with self._lock:
             self._contexts.clear()
 
@@ -167,7 +171,7 @@ class JobRunner:
             if ctx.cancelled.is_set():
                 raise JobCancelled()
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
-            ctx.log.info("job %s started with %s", ctx.job_id, ctx.params)
+            ctx.log.info("job %s started", ctx.job_id)
             result = fn(ctx)
             self._finish(ctx, state="succeeded", progress=1.0, result=result)
             ctx.log.info("job succeeded")
@@ -176,7 +180,7 @@ class JobRunner:
             ctx.log.info("job cancelled")
         except Exception as e:
             ctx.log.error("job failed\n%s", traceback.format_exc())
-            log.warning("job %s (%s) failed: %s: %s", ctx.job_id, ctx.params, type(e).__name__, e)
+            log.warning("job %s failed: %s: %s", ctx.job_id, type(e).__name__, e)  # params may hold secrets
             self._finish(ctx, state="failed", error=f"{type(e).__name__}: {e}")
         finally:
             self._close_log(ctx)

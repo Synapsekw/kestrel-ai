@@ -2,6 +2,7 @@
 
 import json
 import os
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -53,6 +54,6 @@ class AppData:
 
     @staticmethod
     def _write(path: Path, value) -> None:
-        tmp = path.with_suffix(".tmp")
+        tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
         tmp.write_text(json.dumps(value, indent=2), "utf-8")
         os.replace(tmp, path)

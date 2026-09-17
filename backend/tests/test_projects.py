@@ -161,7 +161,8 @@ def test_recent_order_is_stable_across_listings_and_restarts(settings, tmp_path)
 
 def test_folder_spellings_resolve_to_one_project(client, project_dir):
     p = _create(client, project_dir, "A")
-    variants = [str(project_dir) + "\.", str(project_dir).replace("\\", "/"), str(project_dir).upper()]
+    # Windows-only spellings (dot segment, forward slashes, case); the product is Windows-only.
+    variants = [str(project_dir) + "\\.", str(project_dir).replace("\\", "/"), str(project_dir).upper()]
     for v in variants:
         r = client.post("/api/v1/projects/open", json={"folder": v})
         assert r.status_code == 200 and r.json()["id"] == p["id"], v
