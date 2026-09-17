@@ -36,6 +36,12 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![backend_info, restart_backend])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Windows closing is the usual path; Exit also covers quit without a window event.
+            if let tauri::RunEvent::Exit = event {
+                sidecar::stop(&app.state::<sidecar::BackendState>());
+            }
+        });
 }

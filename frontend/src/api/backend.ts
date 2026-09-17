@@ -43,3 +43,14 @@ export async function waitForHealth(
   }
   throw new Error(`backend not healthy after ${timeoutMs} ms: ${lastError}`);
 }
+
+/** Payload of the Rust `backend-terminated` event. */
+export interface BackendTerminated {
+  code?: number | null;
+}
+
+/** The failure message shown when the sidecar dies while the app is running. */
+export function terminationMessage(payload: unknown): string {
+  const code = (payload as BackendTerminated | undefined)?.code;
+  return typeof code === "number" ? `Backend process exited (code ${code})` : "Backend process exited";
+}

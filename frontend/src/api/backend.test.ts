@@ -41,3 +41,16 @@ describe("resolveBackend", () => {
     });
   });
 });
+
+describe("terminationMessage", () => {
+  it("names the exit code when the sidecar reports one", async () => {
+    const { terminationMessage } = await import("./backend");
+    expect(terminationMessage({ code: 3 })).toBe("Backend process exited (code 3)");
+  });
+
+  it("falls back when the sidecar reports no code", async () => {
+    const { terminationMessage } = await import("./backend");
+    expect(terminationMessage({ code: null })).toBe("Backend process exited");
+    expect(terminationMessage(undefined)).toBe("Backend process exited");
+  });
+});

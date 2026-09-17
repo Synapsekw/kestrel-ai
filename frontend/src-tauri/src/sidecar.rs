@@ -1,6 +1,7 @@
 use std::net::TcpListener;
-use std::sync::Mutex;
-use tauri::{AppHandle, Manager};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
@@ -8,6 +9,8 @@ pub struct Backend {
     pub base_url: String,
     pub token: String,
     pub child: Option<CommandChild>,
+    /// Set by [`stop`] so a deliberate kill is not reported as a crash.
+    pub stopping: Arc<AtomicBool>,
 }
 
 pub struct BackendState(pub Mutex<Option<Backend>>);
@@ -37,6 +40,7 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
             base_url: url,
             token: std::env::var("APP_BACKEND_TOKEN").unwrap_or_default(),
             child: None,
+            stopping: Arc::new(AtomicBool::new(false)),
         });
     }
     let port = free_port();
@@ -51,6 +55,9 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
         .env("APP_DATA_DIR", data_dir.to_string_lossy().to_string())
         .spawn()
         .map_err(|e| e.to_string())?;
+    let stopping = Arc::new(AtomicBool::new(false));
+    let watcher = stopping.clone();
+    let app = app.clone();
     tauri::async_runtime::spawn(async move {
         while let Some(ev) = rx.recv().await {
             match ev {
@@ -59,6 +66,11 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
                 }
                 CommandEvent::Terminated(t) => {
                     eprintln!("[backend] terminated {:?}", t);
+                    // A kill from `stop` is expected; anything else is a crash the UI must show.
+                    if !watcher.load(Ordering::SeqCst) {
+                        let _ =
+                            app.emit("backend-terminated", serde_json::json!({ "code": t.code }));
+                    }
                     break;
                 }
                 _ => {}
@@ -69,12 +81,14 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
         base_url: format!("http://127.0.0.1:{port}"),
         token,
         child: Some(child),
+        stopping,
     })
 }
 
 /// Kill the sidecar, if this launch owns one.
 pub fn stop(state: &BackendState) {
     if let Some(b) = state.0.lock().unwrap().take() {
+        b.stopping.store(true, Ordering::SeqCst);
         if let Some(c) = b.child {
             let _ = c.kill();
         }

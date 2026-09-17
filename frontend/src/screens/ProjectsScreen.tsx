@@ -102,11 +102,18 @@ export function ProjectsScreen() {
 
   useEffect(() => {
     let cancelled = false;
-    void api.GET("/api/v1/projects").then(({ data, error: err }) => {
-      if (cancelled) return;
-      if (data) setProjects(data.items);
-      else setError(messageOf(err, "could not list projects"));
-    });
+    void api
+      .GET("/api/v1/projects")
+      .then(({ data, error: err }) => {
+        if (cancelled) return;
+        if (data) setProjects(data.items);
+        else setError(messageOf(err, "could not list projects"));
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        pushLog(`list projects failed: ${e}`);
+        setError(String(e));
+      });
     return () => {
       cancelled = true;
     };
@@ -124,24 +131,36 @@ export function ProjectsScreen() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { data, error: err } = await api.POST("/api/v1/projects", {
-      body: { name, folder, classes: parseClasses(classes) },
-    });
-    setBusy(false);
-    if (data) openProject(data);
-    else setError(messageOf(err, "could not create the project"));
+    try {
+      const { data, error: err } = await api.POST("/api/v1/projects", {
+        body: { name, folder, classes: parseClasses(classes) },
+      });
+      if (data) openProject(data);
+      else setError(messageOf(err, "could not create the project"));
+    } catch (e) {
+      pushLog(`create project failed: ${e}`);
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function onOpen(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { data, error: err } = await api.POST("/api/v1/projects/open", {
-      body: { folder: openFolder },
-    });
-    setBusy(false);
-    if (data) openProject(data);
-    else setError(messageOf(err, "could not open the folder"));
+    try {
+      const { data, error: err } = await api.POST("/api/v1/projects/open", {
+        body: { folder: openFolder },
+      });
+      if (data) openProject(data);
+      else setError(messageOf(err, "could not open the folder"));
+    } catch (e) {
+      pushLog(`open folder failed: ${e}`);
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (

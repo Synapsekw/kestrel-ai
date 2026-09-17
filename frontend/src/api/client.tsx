@@ -3,7 +3,7 @@
    a fast-refresh boundary worth splitting. */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { createApiClient, type ApiClient, type Health } from "@contract/client";
-import { resolveBackend, waitForHealth, type BackendInfo } from "./backend";
+import { resolveBackend, terminationMessage, waitForHealth, type BackendInfo } from "./backend";
 import { Splash } from "@/app/Splash";
 import { pushLog, setBackendContext } from "@/app/diagnostics";
 
@@ -64,6 +64,26 @@ export function ApiProvider({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [attempt]);
+
+  // Spec section 11: the sidecar can die while the app runs, and the UI has to notice.
+  useEffect(() => {
+    if (info?.mode !== "tauri") return;
+    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    void (async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+      const stop = await listen("backend-terminated", (event) => {
+        pushLog(`backend terminated: ${JSON.stringify(event.payload)}`);
+        setError(terminationMessage(event.payload));
+      });
+      if (cancelled) stop();
+      else unlisten = stop;
+    })();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [info]);
 
   const restart = useCallback(async () => {
     setValue(null);

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { useApi } from "@/api/client";
+import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
 
 const ACTIVE_STATES = new Set(["queued", "running"]);
@@ -30,9 +31,14 @@ function useProjectName(projectId: string | undefined): string | null {
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    void api.GET("/api/v1/projects/{projectId}", { params: { path: { projectId } } }).then(({ data }) => {
-      if (!cancelled && data) setLoaded({ id: projectId, name: data.name });
-    });
+    void api
+      .GET("/api/v1/projects/{projectId}", { params: { path: { projectId } } })
+      .then(({ data }) => {
+        if (!cancelled && data) setLoaded({ id: projectId, name: data.name });
+      })
+      .catch((e: unknown) => {
+        pushLog(`load project name failed: ${e}`);
+      });
     return () => {
       cancelled = true;
     };
