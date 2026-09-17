@@ -7,7 +7,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 
 | Wave | Sub-project | Branch | Worktree | State | Blockers |
 |---|---|---|---|---|---|
-| 0 | S0 contract and scaffolding | main | (root) | in progress | none |
+| 0 | S0 contract and scaffolding | s0-backend (root checkout), s0-frontend (.worktrees/s0-frontend) | see branches | in review | none |
 | 1 | S1 dataset backend | - | - | not started | S0 |
 | 1 | S2 annotation UI | - | - | not started | S0 |
 | 1 | S3 training backend and registry | - | - | not started | S0 |
@@ -48,15 +48,38 @@ Last verified checkpoint: none.
 
 ## System installs (the single allowed exception)
 
-- (none yet)
+- 2026-09-17: rustup 1.29.1 via `winget install Rustlang.Rustup`; toolchain stable-x86_64-pc-windows-msvc (rustc 1.98.1, cargo 1.98.1). MSVC 14.29 and Windows SDK 10.0.19041 were already present. Playwright downloaded Chromium into the user profile (not a system install).
 
 ## Checkpoints
 
 ### Checkpoint 1 (after Wave 0)
 Not run yet.
 
+## S0 status detail
+
+| Task | Owner | State | Commit |
+|---|---|---|---|
+| 1 skeleton | goal owner | done | c5b5722 |
+| 2 contract + mock | goal owner | done, mock verified | 4d71fcd |
+| 3 TS client | goal owner | done | 4d71fcd |
+| 4 backend shell | goal owner | done | 715e772 (s0-backend) |
+| 5 DB + projects | goal owner | done | f74ba9a |
+| 6 jobs + events | goal owner | done | ebe00de |
+| 7 stubs + conformance | goal owner | done, 85 backend tests | 88c7160 |
+| 8 frontend shell | sub-agent | done, fix round 1 in progress | be0b87c (s0-frontend) |
+| 9 tauri shell | sub-agent | done in env mode; real sidecar boot unverified | 845e149 |
+| 10 dev script + CI | goal owner | done | ba8728c |
+| 11 checkpoint 1 | goal owner | pending merge | |
+| 12 README | goal owner | pending | |
+
+Contract facts sub-projects must know: every path in `openapi.yaml` carries `/api/v1` (Prism 5 does not route by server base path); the token is accepted as a bearer header or a `token` query parameter; 501 `not_implemented` stubs mark the endpoints S1, S3 and S4 own.
+
+SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-and-scaffolding/progress.md` (git-ignored; if lost, the git log is the record).
+
 ## Log
 
 - 2026-09-17: session 1 started. Read spec, README, reuse files. Toolchain: node 24.11, pnpm 10.24,
   uv 0.11.32 with CPython 3.11.15 available, MSVC 14.29 (VS 2019 Build Tools) and Windows SDK
   10.0.19041 present, WebView2 153 present, Rust missing. Wrote the S0 plan.
+- 2026-09-17: contract written and mock verified; backend tasks 4-7 and 10 implemented test-first (85 tests); Rust installed;
+  frontend+tauri shell implemented by a sub-agent and reviewed (needs fixes, round 1 running); backend review running.
