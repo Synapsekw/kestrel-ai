@@ -1,4 +1,4 @@
-"""The WebView2 origin differs from the backend origin, so browsers preflight requests with the bearer header."""
+"""Browsers preflight cross-origin requests that carry the bearer header (WebView2 and Vite origins)."""
 
 import pytest
 
