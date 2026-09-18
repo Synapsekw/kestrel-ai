@@ -24,7 +24,9 @@ const base = [
   { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
   { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
   { method: "GET", path: /\/images$/, body: exampleImagePage },
-  { method: "GET", path: /\/query-runs$/, body: { items: [], next_cursor: null } },
+  { method: "GET", path: /\/query-runs\/[^/]+$/, body: exampleQueryRun },
+  { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, type: "infer" } },
+  { method: "GET", path: /\/query-runs$/, body: { items: [exampleQueryRun], next_cursor: null } },
 ];
 
 describe("QueryScreen", () => {
@@ -70,11 +72,12 @@ describe("QueryScreen", () => {
     };
     expect(requests.find((r) => r.url.endsWith("/estimate"))?.body).toEqual(expected);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByTestId("run-started")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByTestId("run-card")).toBeInTheDocument());
     expect(requests.find((r) => r.method === "POST" && r.url.endsWith("/query-runs"))?.body).toEqual(
       expected,
     );
     expect(useJobsStore.getState().jobs[runningJob.id].type).toBe("infer");
+    expect(screen.getByTestId("run-history")).toHaveTextContent("dump trucks");
   });
 
   it("preloads a Data Manager selection and clears a stale estimate when the form changes", async () => {

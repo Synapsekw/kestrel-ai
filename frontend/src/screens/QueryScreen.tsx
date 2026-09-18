@@ -17,9 +17,12 @@ import {
   validateQueryForm,
   type QueryForm,
 } from "@/query/queryModel";
+import { RunCard } from "@/query/RunCard";
+import { RunHistory } from "@/query/RunHistory";
 import { SourcePicker } from "@/query/SourcePicker";
 import { TilingFields } from "@/query/TilingFields";
 import { useImageSelection } from "@/query/useImageSelection";
+import { useQueryRuns } from "@/query/useQueryRuns";
 import { useJobsStore } from "@/store/jobs";
 import { useNavigationStore } from "@/store/navigation";
 
@@ -35,6 +38,7 @@ export function QueryScreen() {
   const { project } = useProject(projectId);
   const registry = useModels(projectId);
   const providers = useProviders();
+  const history = useQueryRuns(projectId);
   const preloaded = useNavigationStore((s) => (s.source === "query" ? s.ids : EMPTY));
   const [form, setForm] = useState<QueryForm>(() => ({
     ...DEFAULT_QUERY_FORM,
@@ -101,6 +105,7 @@ export function QueryScreen() {
       useJobsStore.getState().upsert(created.job);
       setEstimate(null);
       setParams({ run: created.query_run.id });
+      history.reload();
     });
   };
 
@@ -115,9 +120,7 @@ export function QueryScreen() {
         )}
       </div>
       {runId ? (
-        <p data-testid="run-started" className="text-sm text-slate-300">
-          Run {runId.slice(0, 8)} started.
-        </p>
+        <RunCard projectId={projectId} runId={runId} />
       ) : (
         <div className="flex max-w-3xl flex-col gap-5">
           <SourcePicker
@@ -171,7 +174,21 @@ export function QueryScreen() {
           {error}
         </p>
       )}
-      {/* run card and history (Task 12) */}
+      <div className="flex max-w-3xl flex-col gap-2">
+        <h2 className="text-lg font-medium">Run history</h2>
+        {history.error && (
+          <p role="alert" className="text-xs text-red-300">
+            {history.error}
+          </p>
+        )}
+        {history.unavailable ? (
+          <p role="note" className="text-xs text-slate-400">
+            Query runs are not available yet (they arrive with the inference backend).
+          </p>
+        ) : (
+          <RunHistory runs={history.runs} selectedId={runId} onSelect={(id) => setParams({ run: id })} />
+        )}
+      </div>
     </section>
   );
 }

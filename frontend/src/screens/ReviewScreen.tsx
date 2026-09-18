@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
 import { useSourceNames } from "@/api/project";
 import { ImageTable } from "@/data/ImageTable";
@@ -21,7 +21,14 @@ export function ReviewScreen() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
   const sourceNames = useSourceNames(projectId);
-  const list = useImageList(projectId, REVIEW_QUEUE_QUERY);
+  const [params] = useSearchParams();
+  // `?ids=` narrows the queue to one query run's images (contract gap 2: `ids` overrides the filters).
+  const runIds = params.get("ids");
+  const query = useMemo(
+    () => (runIds ? { ...REVIEW_QUEUE_QUERY, ids: runIds } : REVIEW_QUEUE_QUERY),
+    [runIds],
+  );
+  const list = useImageList(projectId, query);
   const ids = useMemo(() => list.items.map((i) => i.id), [list.items]);
   const rowContext = useMemo(() => ({ sourceNames }), [sourceNames]);
   const [selection, setSelection] = useState(EMPTY_SELECTION);
@@ -58,6 +65,14 @@ export function ReviewScreen() {
           Images with unreviewed proposals, highest proposal confidence first. Enter opens the editor; A and R
           there accept or reject.
         </p>
+        {runIds && (
+          <p className="text-sm text-slate-300">
+            Showing {runIds.split(",").length} images from a query run.{" "}
+            <Link to={`/p/${projectId}/review`} className="text-orange-300 hover:underline">
+              Show the whole queue
+            </Link>
+          </p>
+        )}
       </div>
       {list.error && (
         <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
