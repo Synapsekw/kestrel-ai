@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type NavSource = "data" | "review" | "selection" | null;
+export type NavSource = "data" | "review" | "selection" | "query" | null;
 
 interface NavigationState {
   ids: string[];
