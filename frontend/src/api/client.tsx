@@ -7,13 +7,13 @@ import { resolveBackend, terminationMessage, waitForHealth, type BackendInfo } f
 import { Splash } from "@/app/Splash";
 import { pushLog, setBackendContext } from "@/app/diagnostics";
 
-interface ApiContextValue {
+export interface ApiContextValue {
   client: ApiClient;
   info: BackendInfo;
   health: Health;
 }
 
-const ApiContext = createContext<ApiContextValue | null>(null);
+export const ApiContext = createContext<ApiContextValue | null>(null);
 
 function useApiContext(): ApiContextValue {
   const ctx = useContext(ApiContext);

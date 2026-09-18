@@ -89,7 +89,7 @@ export function Shell() {
             {activeJobs} active {activeJobs === 1 ? "job" : "jobs"}
           </span>
         </header>
-        <main className="min-h-0 flex-1 overflow-auto p-6">
+        <main className={imageId ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-6"}>
           <Outlet />
         </main>
       </div>
