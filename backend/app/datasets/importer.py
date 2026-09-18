@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -17,6 +19,7 @@ from sqlalchemy import func, select
 from app.datasets.grouping import find_duplicates, group_key
 from app.datasets.prepare import Prepared, list_images, process_one, unique_dest
 from app.db.models import Image, Source
+from app.jobs.cancellation import JobCancelled
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.projects.schemas import ImportSettings
@@ -48,8 +51,40 @@ def _read_duplicates(dest_dir: Path) -> dict[str, dict]:
         return {}
 
 
+_import_locks: dict[str, threading.Lock] = {}
+_import_locks_guard = threading.Lock()
+IMPORT_LOCK_POLL_S = 0.25
+
+
+@contextmanager
+def hold_import_lock(project_id: str, cancelled: threading.Event, log=None):
+    """Imports into one project run one at a time.
+
+    Two imports of the same site used to collide on the dedupe snapshot each took at its start.
+    The wait is polled so a queued import can still be cancelled while it waits for the previous one.
+    """
+    with _import_locks_guard:
+        lock = _import_locks.setdefault(project_id, threading.Lock())
+    waited = False
+    while not lock.acquire(timeout=IMPORT_LOCK_POLL_S):
+        if cancelled.is_set():
+            raise JobCancelled()
+        if not waited and log is not None:
+            log.info("waiting for the previous import into this project to finish")
+        waited = True
+    try:
+        yield
+    finally:
+        lock.release()
+
+
 @register_job_type("import")
 def run_import(ctx: JobContext) -> dict:
+    with hold_import_lock(ctx.project.id, ctx.cancelled, ctx.log):
+        return _run_import(ctx)
+
+
+def _run_import(ctx: JobContext) -> dict:
     handle = ctx.project
     source_id = ctx.params["source_id"]
     ctx.check_cancelled()
