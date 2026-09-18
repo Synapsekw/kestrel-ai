@@ -10,7 +10,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
 | 1 | S1 dataset backend | s1-dataset-backend | .worktrees/s1-dataset-backend | implementer running (opus) since 2026-09-18 | none |
 | 1 | S2 annotation UI | s2-annotation-ui | .worktrees/s2-annotation-ui | implementer running (fable) since 2026-09-18 | none |
-| 1 | S3 training backend and registry | s3-training-backend | .worktrees/s3-training-backend | implemented; review done; fix round 1 running | none |
+| 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | - | - | not started | wave 1 checkpoint |
 | 2 | S5 training and inference UI | - | - | not started | wave 1 checkpoint |
 | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
@@ -116,3 +116,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-17: contract written and mock verified; backend tasks 4-7 and 10 implemented test-first (85 tests); Rust installed;
   frontend+tauri shell implemented by a sub-agent and reviewed (needs fixes, round 1 running); backend review running.
 - 2026-09-18: Wave 1 started. S1 and S3 implementers dispatched in worktrees; S2 plan being written (first attempt stalled, retried).
+- 2026-09-18: S3 reviewed (fable), fixed, re-reviewed (opus), merged to main 1224343; 168 backend tests, GPU training + ONNX export verified on main.
