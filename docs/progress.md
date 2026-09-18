@@ -13,9 +13,9 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | main (merged 6635f71) | - | merged after 2 fix rounds; JobCancelled relocation follow-up open | none |
 | 2 | S5 training and inference UI | main (merged 04a879f) | - | merged after 2 fix rounds | none |
-| 3 | S6 packaging and acceptance | main (merged from s6-packaging-acceptance at 9f3aa01) | - | merged after 2 fix rounds; checkpoint 4 and the acceptance run pending | none |
+| 3 | S6 packaging and acceptance | main (merged from s6-packaging-acceptance at 9f3aa01) | - | merged after 2 fix rounds; checkpoint 4 passed; acceptance run in progress | none |
 
-Last verified checkpoint: 3 (after Wave 2) on main 6635f71 (dev backend from the full venv, Tauri dev app in env mode), 2026-09-18.
+Last verified checkpoint: 4 (after Wave 3) on main 826a3bf (installed app), 2026-09-18. Acceptance run (spec 13.5) in progress.
 
 ## Plans
 
@@ -70,6 +70,21 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
 - 2026-09-17: rustup 1.29.1 via `winget install Rustlang.Rustup`; toolchain stable-x86_64-pc-windows-msvc (rustc 1.98.1, cargo 1.98.1). MSVC 14.29 and Windows SDK 10.0.19041 were already present. Playwright downloaded Chromium into the user profile (not a system install).
 
 ## Checkpoints
+
+### Checkpoint 4 (after Wave 3) — PASS on main 826a3bf, 2026-09-18
+
+Spec 13.4 #4: the installed app. Installer `Machinery Detection_0.1.0_x64-setup.exe` (Inno Setup, 1,797 MB, built at 9f3aa01 = main minus docs) installed per-user with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /CURRENTUSER`: exit 0 in 60 s; install dir `%LOCALAPPDATA%\Programs\Machinery Detection` 3,512 MB (`machinery-app.exe`, `machinery-backend.exe`, `_internal`, uninstaller); Start Menu shortcut present. Driver: `frontend/scripts/checkpoint4.mjs` (launches the installed exe with the WebView2 debugging port, attaches over CDP). Evidence: `docs/evidence/checkpoint4/checkpoint4.json` and screenshots.
+
+| Measure | Value |
+|---|---|
+| First launch after install: process start to Projects heading | 2,969 ms (healthy backend 2,980 ms) |
+| Cold launch (driver run, machine quiet): to Projects heading / healthy backend / GPU probe answered | 1,645 ms / 1,655 ms / 2,682 ms |
+| Warm launch: to Projects heading / healthy backend / GPU probe | 1,625 ms / 1,628 ms / 2,637 ms |
+| Health `gpu` | `{available: true, name: "NVIDIA GeForce RTX 5070 Ti"}` |
+| Project creation from the installed app | PASS (8 classes) |
+| Closing the window stops the sidecar and the app | PASS (cold and warm) |
+
+Success criteria: installer 1.8 GB (< 6 GB); cold start well under 15 s. The first driver attempt failed on the driver's own timing (it read the `gpu` block before the background probe had answered); the driver now polls for it. Uninstall check recorded after the acceptance run.
 
 ### Checkpoint 3 (after Wave 2) — PASS on main 6635f71, 2026-09-18
 
@@ -226,3 +241,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: Goal-owner follow-ups on main: JobCancelled leaf module (e85a363), Train form keeps typed values on list change (024ec6f, with tests), contract Health.gpu optional block (f52267c; client regenerated; contract test green). Wave 3 started: S6 dispatched; ledger `.superpowers/sdd/wave3/ledger.md`. Ruling: the sub-agent builds the installer and dry-runs the acceptance driver on the dev app; install, checkpoint 4 timing and the acceptance run on the installed app stay with the goal owner.
 - 2026-09-18: S6 tasks 1, 2, 4 and 5 done on `s6-packaging-acceptance`: full CUDA PyInstaller bundle with a frozen smoke test, packaging hardening (orphan sweep, Arial pre-seed, sidecar log tee, CSP), the acceptance script and its CDP driver (dry-run green on 20 frames), and the README. Task 3 landed after the ruling on decision 13: the installer is built with Inno Setup 6 (1,797.3 MB in 377 s); install, cold start and checkpoint 4 are the goal owner's.
 - 2026-09-18: S6 reviewed (fable: tasks 1, 2, 5 approved, task 4 rejected), Task 3 reviewed and round 1 re-reviewed (opus, approved with fixes), round 2 re-reviewed (sonnet, approved). Merged to main. Goal-owner verification at 9f3aa01: ruff clean, 403 backend, 4 gpu, contract check, frontend lint, 209 unit, build, 42 e2e. Next: install, checkpoint 4, acceptance run.
+- 2026-09-18: S6 merged 826a3bf; post-merge main: ruff, 403 backend, contract check, frontend lint, 209 unit, build, 42 e2e. Installed the app; checkpoint 4 passed (cold start 1.6 s, first launch 3.0 s). Acceptance run started on the installed app.
