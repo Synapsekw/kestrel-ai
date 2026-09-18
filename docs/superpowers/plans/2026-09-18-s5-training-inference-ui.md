@@ -2,13 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build the model registry, training, query-run and jobs screens plus the provider settings of the desktop app on top of the S2 annotation UI, against the Prism mock server, so that a user can import or train a model, watch the job live, run a local model or a cloud vision query over images, review and promote the results, and manage provider keys, with Vitest and Playwright coverage for every screen.
+**Goal:** Build the model registry, training, query-run and jobs screens plus the provider settings and the image-import entry point of the desktop app on top of the S2 annotation UI, against the Prism mock server, so that a user can import a folder of images, import or train a model, watch the job live, run a local model or a cloud vision query over images, review and promote the results, and manage provider keys, with Vitest and Playwright coverage for every screen.
 
 **Architecture:** Five new API wrapper modules (`api/models.ts`, `api/datasets.ts`, `api/providers.ts`, `api/queryRuns.ts`, `api/jobs.ts`) take the generated `openapi-fetch` client explicitly, so they are unit-tested with the S2 fake `fetch`. The S2 `useJobsStore` grows a panel flag, bulk upsert and terminal-state handling; three small hooks (`useTrackedJob`, `useJobLog`, `useJobList`) poll the `jobs` resource while a job is active so the UI stays live even where the websocket is missing (the mock) and stays consistent when it is present (the real backend). Screens are thin compositions of focused modules under `models/`, `train/`, `query/`, `jobs/` and `settings/`; pure helpers (CSV parsing, alias parsing, form-to-request mapping, message parsing, labels) live in plain `.ts` files with their own tests; a shared `JobCard` renders any job's progress, error, cancel and log everywhere a job is shown.
 
 **Tech Stack:** React 18, TypeScript 5, Vite 6, Tailwind 3, react-router 6, zustand 5, `openapi-fetch` through `@contract/client`, Vitest 3 + Testing Library (jsdom), Playwright 1 against Stoplight Prism 5 (mock server). Inline SVG for the training curve (no chart library).
 
-**Spec:** `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md` section 13.1 row S5 (training screen, model registry screen, query run screen, job panel, settings), drawing on sections 7 (training and registry: parameters, artifacts, exports, pre-annotation model) and 8 (inference: providers, tiling, query run job, cost estimate, promotion), plus sections 2, 3, 6 (screen 5: provider keys), 9, 11, 12 and 13. Contract: `contract/openapi.yaml` (source of truth) and its generated wrapper `contract/client/index.ts`. Existing UI to build on: the S2 branch `s2-annotation-ui` (merging into `main` before S5 starts); read the "Interfaces from S0/S2 you build on" section below first.
+**Spec:** `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md` section 13.1 row S5 (training screen, model registry screen, query run screen, job panel, settings), drawing on sections 7 (training and registry: parameters, artifacts, exports, pre-annotation model) and 8 (inference: providers, tiling, query run job, cost estimate, promotion), plus sections 2, 3, 5 (import job and settings: the goal owner added "Import images" to S5, Task 14), 6 (screen 5: provider keys), 9, 11, 12 and 13. Contract: `contract/openapi.yaml` (source of truth) and its generated wrapper `contract/client/index.ts`. Existing UI to build on: the S2 branch `s2-annotation-ui` (merging into `main` before S5 starts); read the "Interfaces from S0/S2 you build on" section below first.
 
 ## Global Constraints
 
@@ -40,8 +40,9 @@
 - `src/store/changes.ts`: `useChangesStore` with `imagesRevision`, `bumpImages()`, `applyEvent(ev)`.
 - `src/app/diagnostics.ts`: `pushLog(line)`. `src/app/Shell.tsx`: sidebar nav (`Models`, `Train`, `Query`, `Settings` links exist), top bar with `<span>{activeJobs} active job(s)</span>` (replaced by the jobs button in Task 4), `<main className="min-h-0 flex-1 overflow-auto p-6">` around `<Outlet />`.
 - `src/routes.tsx`: `/p/:projectId/models`, `/p/:projectId/train`, `/p/:projectId/query`, `/p/:projectId/settings`, `/p/:projectId/review`, `/p/:projectId/data`, `/p/:projectId/edit/:imageId` already exist and point at the placeholder screens S5 replaces.
-- `src/data/bulkActions.ts` (S2): `DatasetOptions {name, split_method, val_fraction}`, `runModelOnImages(...)` (removed in Task 14), `addImagesToDataset(...)` (changed in Task 14), `deleteImages(api, projectId, imageIds)`.
-- `src/data/SelectionBar.tsx` (S2): props `{projectId, selectedIds, preannotationModelId, onLabel, onDeleted, onClear}`; buttons "Label selected", "Run model", "Add to dataset", "Delete", "Clear selection" (changed in Task 14).
+- `src/data/bulkActions.ts` (S2): `DatasetOptions {name, split_method, val_fraction}`, `runModelOnImages(...)` (removed in Task 15), `addImagesToDataset(...)` (changed in Task 15), `deleteImages(api, projectId, imageIds)`.
+- `src/data/SelectionBar.tsx` (S2): props `{projectId, selectedIds, preannotationModelId, onLabel, onDeleted, onClear}`; buttons "Label selected", "Run model", "Add to dataset", "Delete", "Clear selection" (changed in Task 15).
+- `src/api/project.ts` also exports `fetchSources(api, projectId): Promise<Source[]>` (first page) and `useSourceNames(projectId)`; S5's `api/sources.ts` (Task 14) adds the paged list, stats and create. `src/screens/ProjectsScreen.tsx` shows the Tauri folder-dialog pattern (`open({directory: true})` behind `useBackend().mode === "tauri"`) that the import dialog copies.
 - `src/settings/*` (S2): `ClassesSection`, `PreannotationSection({project, onSaved})`, `ImportDefaultsSection`, `ProvidersPlaceholder` (replaced in Task 13); `src/screens/SettingsScreen.tsx` mounts them.
 - `src/test/fixtures.ts` (S2): `PROJECT_ID`, `IMAGE_ID`, `IMAGE_ID_2`, `MODEL_ID`, `SOURCE_ID`, `CLASS_ID(n)`, `exampleClasses`, `exampleProject`, `exampleImage`, `exampleImage2`, `exampleImagePage`, `personBox`, `proposalBox`, `exampleModel` (imported yolo11m-coco, `metrics: null`, `artifacts: {}`), `exampleJob` (type `infer`, `queued`), `errorBody(code, message, details?)`, `RecordedRequest {method, url, body}`, `FakeRoute {method, path: RegExp, status?, body?: FakeBody | ((req) => FakeBody)}`, `fakeFetch(routes)`, `fakeClient(routes): {api, requests}` (first matching route wins; unknown routes answer 404; `status: 204` or `body: undefined` answers an empty body).
 - `src/test/render.tsx` (S2): `TestApiProvider({api, children})`, `renderWithProviders(ui, {api, route?, path?})` (API context + `MemoryRouter`; `path` mounts `ui` as a route so `useParams`/`useSearchParams` work).
@@ -59,6 +60,7 @@ frontend/src/
     providers.ts          fetchProviders, updateProvider, setProviderKey, deleteProviderKey, testProvider
     queryRuns.ts          DEFAULT_TILING, estimateQueryRun, createQueryRun, fetchQueryRuns, fetchQueryRun, promoteQueryRun
     jobs.ts               fetchJobs, fetchJob, cancelJob, fetchJobLog
+    sources.ts            fetchAllSources, fetchSourceStats, createSource (import job)
   store/
     jobs.ts               (replace) useJobsStore: jobs, panelOpen, upsert, upsertMany, setPanelOpen, applyEvent (terminal states stamp finished_at), active; selectActiveCount, isActiveJob
     navigation.ts         (modify) NavSource gains "query"
@@ -101,7 +103,9 @@ frontend/src/
     providersModel.ts     providerLabel, ProviderForm, formOf, diffProvider
     ProviderCard.tsx      per-provider config form, key entry/removal, Test
     ProvidersSection.tsx  loads GET /providers; replaces ProvidersPlaceholder
+    SourcesSection.tsx    imported folders with counts, per-source stats, "Re-import new files"
   data/
+    ImportImagesDialog.tsx folder (Tauri dialog in tauri mode), site, import settings from the project defaults -> POST sources
     AddToDatasetDialog.tsx dialog: name, split method, val fraction, seed -> POST datasets -> JobCard
     bulkActions.ts        (modify) addImagesToDataset returns DatasetWithJob and sends seed; runModelOnImages removed
     SelectionBar.tsx      (modify) Run model navigates to the query screen; Add to dataset opens the dialog
@@ -109,13 +113,13 @@ frontend/src/
     ModelsScreen.tsx      (replace) registry composition, ?model= selects the detail
     TrainScreen.tsx       (replace) form + progress, ?job= tracks a job
     QueryScreen.tsx       (replace) source, images, tiling, estimate, start, run card, history; ?run= selects a run
-    SettingsScreen.tsx    (modify) mounts ProvidersSection
-    DataManagerScreen.tsx (modify) onRunModel navigation
+    SettingsScreen.tsx    (modify) mounts SourcesSection and ProvidersSection
+    DataManagerScreen.tsx (modify) Import images button and dialog; onRunModel navigation
     ReviewScreen.tsx      (modify) ?ids= narrows the queue to a run's images
   test/
-    fixtures.ts           (modify) trained model, dataset, providers, query run, estimate, job log, running job, RESULTS_CSV
+    fixtures.ts           (modify) trained model, dataset, providers, query run, estimate, job log, running job, RESULTS_CSV, source, stats
 frontend/e2e/
-  models.spec.ts  train.spec.ts  query.spec.ts  jobs.spec.ts  providers.spec.ts  data-manager.spec.ts (modify)  settings.spec.ts (modify)
+  models.spec.ts  train.spec.ts  query.spec.ts  jobs.spec.ts  providers.spec.ts  import.spec.ts  data-manager.spec.ts (modify)
 ```
 
 ## Mock server limitations (verified against Prism 5 on 2026-09-18)
@@ -128,6 +132,7 @@ frontend/e2e/
 - `POST /query-runs/estimate` answers `{images: 5, tiles: 40, requests: 40, cost_per_request: 0.02, estimated_cost: 0.8}` whatever the body; `POST /query-runs` answers run `q…0001` (cloud_provider anthropic, "dump trucks", two image ids, `box_count: 7`, `job_id: j…0003`) with job `j…0001`; `GET /query-runs` lists that run; `POST …/promote` answers `accepted: 6` and `promoted_at` set.
 - `GET /images` ignores every filter and always returns the two example images with `total: 2` and `next_cursor: null`; image-selection tests assert the query string (`labeled=false`, `group_key=`, `limit=`).
 - `GET /datasets` returns dataset `v1` (`d…0001`, 30 images); `POST /datasets` answers 202 with that dataset and job `j…0001`.
+- `GET /sources` returns the example source `ahmadia` (`50000000-…0001`, folder `E:\Dev\Yolo\Ahmadia Construction Data`, 3299 images, 0 duplicates) with `next_cursor: "string"`; `POST /sources` answers 202 with that source and job `j…0001` whatever the body; `GET /sources/{id}/stats` returns the `Stats` example (3299 images, 30 labeled, 3269 unlabeled, 112 boxes, 41 pending, groups `0031` and `0033`). Read from the schema examples, not probed: confirm with `curl` in Task 14 before the e2e.
 - The websocket `/api/v1/events` is 404 on the mock; polling (Task 3) keeps jobs moving. Missing token answers 401. Request validation is on (an invalid body gets 422 with the generic `Error` example); use `page.route` + `route.fulfill` (with `Access-Control-Allow-Origin: *`) for 501 and error scenarios in e2e.
 
 ---
@@ -2031,8 +2036,8 @@ describe("model labels", () => {
   it("formats metrics as percentages and dates as UTC minutes", () => {
     expect(formatMetric(0.71)).toBe("71.0%");
     expect(formatMetric(0.4444)).toBe("44.4%");
-    expect(formatMetric(null)).toBe("\u2013");
-    expect(formatMetric(undefined)).toBe("\u2013");
+    expect(formatMetric(null)).toBe("\–");
+    expect(formatMetric(undefined)).toBe("\–");
     expect(formatDate("2026-09-17T10:10:00Z")).toBe("2026-09-17 10:10");
     expect(kindLabel("imported")).toBe("Imported");
     expect(kindLabel("trained")).toBe("Trained");
@@ -2199,7 +2204,7 @@ import type { Model } from "@contract/client";
 const KIND_LABEL: Record<Model["kind"], string> = { imported: "Imported", trained: "Trained" };
 
 export function formatMetric(v: number | null | undefined): string {
-  return typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "\u2013";
+  return typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "\–";
 }
 
 /** `YYYY-MM-DD HH:mm` in UTC, deterministic across locales (same shape as the Data Manager). */
@@ -2424,7 +2429,7 @@ const routes = [
   { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
   { method: "GET", path: /\/models$/, body: { items: [exampleTrainedModel, exampleModel], next_cursor: null } },
   { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset], next_cursor: null } },
-  { method: "GET", path: /\/artifacts\/results_csv$/, body: RESULTS_CSV },
+  { method: "GET", path: /\/artifacts\/results_csv$/, body: RESULTS_CSV, raw: true },
 ];
 
 describe("ModelsScreen", () => {
@@ -2477,7 +2482,7 @@ describe("ModelsScreen", () => {
 });
 ```
 
-Note: `fakeFetch` serialises `body` with `JSON.stringify`, so the CSV route answers a JSON string literal; `fetchResultsCsv` uses `parseAs: "text"`, which returns that literal with its quotes. `parseResultsCsv` trims lines and splits on commas, so the quotes only pollute the first header cell and the last cell of the last row; the `epoch` column stays at index 0 only if the first cell is `epoch`. To keep the test honest, make the `results_csv` route a function that returns the CSV unchanged: extend `FakeRoute` in `fixtures.ts` with `raw?: boolean` and in `fakeFetch` return `new Response(String(payload), {status, headers: {"Content-Type": "text/csv"}})` when `route.raw` is true; then write the route as `{ method: "GET", path: /\/artifacts\/results_csv$/, body: RESULTS_CSV, raw: true }` in both tests above. This is the one change to `fakeFetch` in S5 (additive).
+Note: `fakeFetch` serialises `body` with `JSON.stringify`, which would wrap the CSV in quotes; the `raw: true` flag on the `results_csv` route (added to `FakeRoute` in Step 3) makes the fake answer the text verbatim as `text/csv`. This is the one change to `fakeFetch` in S5 (additive).
 
 - [ ] **Step 2: Run the tests to verify they fail**
 
@@ -2557,9 +2562,9 @@ export function ModelTable({ models, datasetNames, selectedId, onSelect }: Props
                   {m.name}
                 </button>
               </td>
-              <td className="px-2 py-1 font-mono text-xs">{m.base_weights ?? "\u2013"}</td>
+              <td className="px-2 py-1 font-mono text-xs">{m.base_weights ?? "\–"}</td>
               <td className="px-2 py-1">
-                {m.dataset_id ? (datasetNames[m.dataset_id] ?? m.dataset_id.slice(0, 8)) : "\u2013"}
+                {m.dataset_id ? (datasetNames[m.dataset_id] ?? m.dataset_id.slice(0, 8)) : "\–"}
               </td>
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.map50)}</td>
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.map50_95)}</td>
@@ -2713,7 +2718,7 @@ export function ModelArtifacts({ projectId, model }: { projectId: string; model:
             <TrainingCurve points={curve.points} />
           )
         ) : (
-          <p className="text-xs text-slate-400">Loading results.csv\u2026</p>
+          <p className="text-xs text-slate-400">Loading results.csv\…</p>
         ))}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {cmSrc && <ArtifactImage key={cmSrc} src={cmSrc} alt="Confusion matrix" />}
@@ -2758,11 +2763,11 @@ export function ModelDetail({ projectId, model, project, datasetNames, onProject
       <dl className="grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-4">
         <div>
           <dt className={dt}>Base weights</dt>
-          <dd className={`${dd} font-mono`}>{model.base_weights ?? "\u2013"}</dd>
+          <dd className={`${dd} font-mono`}>{model.base_weights ?? "\–"}</dd>
         </div>
         <div>
           <dt className={dt}>Dataset</dt>
-          <dd className={dd}>{model.dataset_id ? (datasetNames[model.dataset_id] ?? model.dataset_id) : "\u2013"}</dd>
+          <dd className={dd}>{model.dataset_id ? (datasetNames[model.dataset_id] ?? model.dataset_id) : "\–"}</dd>
         </div>
         <div>
           <dt className={dt}>Weights</dt>
@@ -2770,7 +2775,7 @@ export function ModelDetail({ projectId, model, project, datasetNames, onProject
         </div>
         <div>
           <dt className={dt}>Training job</dt>
-          <dd className={`${dd} font-mono`}>{model.run_id ? model.run_id.slice(0, 8) : "\u2013"}</dd>
+          <dd className={`${dd} font-mono`}>{model.run_id ? model.run_id.slice(0, 8) : "\–"}</dd>
         </div>
       </dl>
 
@@ -2780,10 +2785,10 @@ export function ModelDetail({ projectId, model, project, datasetNames, onProject
 
       <div className="flex flex-col gap-1">
         <h3 className="text-sm font-medium">Classes</h3>
-        <p className="text-sm text-slate-300">{model.class_names.join(", ") || "\u2013"}</p>
+        <p className="text-sm text-slate-300">{model.class_names.join(", ") || "\–"}</p>
         {aliases.length > 0 && (
           <p className="text-xs text-slate-400">
-            Aliases: {aliases.map(([from, to]) => `${from} \u2192 ${to}`).join(", ")}
+            Aliases: {aliases.map(([from, to]) => `${from} \→ ${to}`).join(", ")}
           </p>
         )}
       </div>
@@ -2881,7 +2886,7 @@ export function ModelsScreen() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Models</h1>
         <span className="text-xs text-slate-400">
-          {registry.loading ? "Loading\u2026" : `${registry.models.length} in the registry`}
+          {registry.loading ? "Loading\…" : `${registry.models.length} in the registry`}
         </span>
         {/* import button (Task 7) */}
       </div>
@@ -3211,7 +3216,7 @@ export function ImportModelForm({ projectId, onImported, onClose }: Props) {
 - [ ] **Step 4: Implement `ExportButtons.tsx`**
 
 ```tsx
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Model } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
@@ -3223,14 +3228,26 @@ import { useJobsStore } from "@/store/jobs";
 
 const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
+interface Props {
+  projectId: string;
+  model: Model;
+  /** Called once when the tracked export job succeeds, so the parent can refetch `model.exports`. */
+  onFinished?: () => void;
+}
+
 /** Spec section 7: ONNX and TensorRT exports run as jobs; the path lands in `model.exports[format]`. */
-export function ExportButtons({ projectId, model }: { projectId: string; model: Model }) {
+export function ExportButtons({ projectId, model, onFinished }: Props) {
   const api = useApi();
   const [jobId, setJobId] = useState<string | null>(null);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
   const job = useTrackedJob(projectId, jobId);
   const exports = Object.entries(model.exports);
+  const finished = job?.state === "succeeded";
+
+  useEffect(() => {
+    if (finished) onFinished?.();
+  }, [finished, onFinished]);
 
   async function start(format: ExportFormat) {
     setBusy(format);
@@ -3373,16 +3390,19 @@ const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-80
 const danger = "rounded bg-red-800 px-3 py-1 text-sm hover:bg-red-700 disabled:opacity-50";
 ```
 
-`onChanged` stays in the props (the screen passes `registry.replace`) for the export job's completion: when the tracked export job succeeds, `ExportButtons` cannot know the new `exports` map, so add to `ExportButtons` a prop `onFinished?: () => void` called once when `job.state === "succeeded"`, and in `ModelDetail` pass `onFinished={() => void fetchModel(api, projectId, model.id).then(onChanged).catch((e: unknown) => pushLog(`refresh model failed: ${messageOf(e, String(e))}`))}` (import `fetchModel` from `@/api/models`). Inside `ExportButtons`, call it from a `useEffect` keyed on `job?.state`:
+`onChanged` (the screen passes `registry.replace`) refreshes the row when an export job finishes: in `ModelDetail` add `import { useCallback } from "react";`, `import { deleteModel, fetchModel } from "@/api/models";` and
 
 ```tsx
-  const finished = job?.state === "succeeded";
-  useEffect(() => {
-    if (finished) onFinished?.();
-  }, [finished, onFinished]);
+  const refresh = useCallback(
+    () =>
+      void fetchModel(api, projectId, model.id)
+        .then(onChanged)
+        .catch((e: unknown) => pushLog(`refresh model failed: ${messageOf(e, String(e))}`)),
+    [api, projectId, model.id, onChanged],
+  );
 ```
 
-with `onFinished` declared in the props interface as `onFinished?: () => void` and destructured. Wrap the handler in `ModelDetail` with `useCallback` (deps `[api, projectId, model.id, onChanged]`) so the effect does not re-fire on every render.
+and render `<ExportButtons projectId={projectId} model={model} onFinished={refresh} />` (the `useCallback` keeps the effect in `ExportButtons` from re-firing on every render).
 
 - [ ] **Step 6: Add the import button and form to `ModelsScreen.tsx`**
 
@@ -4234,7 +4254,6 @@ export function TrainScreen() {
 }
 ```
 
-Write `·` in JSX as `{"·"}` (a literal escape inside JSX text is not decoded).
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
@@ -5669,7 +5688,6 @@ export function RunHistory({ runs, selectedId, onSelect }: Props) {
 }
 ```
 
-Write the `·` separators in JSX as `{"·"}`.
 
 - [ ] **Step 5: Mount the card and the history in `QueryScreen.tsx`**
 
@@ -5736,3 +5754,2181 @@ git commit -m "feat(ui): query run card with progress, review link, promotion an
 ```
 
 ---
+
+### Task 13: Settings: providers section replaces the placeholder
+
+**Files:**
+- Create: `frontend/src/settings/providersModel.ts`, `frontend/src/settings/ProviderCard.tsx`, `frontend/src/settings/ProvidersSection.tsx`
+- Delete: `frontend/src/settings/ProvidersPlaceholder.tsx`
+- Modify: `frontend/src/screens/SettingsScreen.tsx` (mount `ProvidersSection`)
+- Test: `frontend/src/settings/providersModel.test.ts`, `frontend/src/settings/ProvidersSection.test.tsx`
+
+**Interfaces:**
+- Consumes: `useProviders`, `providerLabel`, `updateProvider`, `setProviderKey`, `deleteProviderKey`, `testProvider` (Tasks 2 and 10).
+- Produces:
+  - `providersModel.ts`: `interface ProviderForm {model_name: string; requests_per_minute: string; cost_per_request: string}`, `formOf(p: Provider): ProviderForm`, `diffProvider(form, current): {patch: ProviderUpdate | null; error: string | null}` (patch holds only changed fields; `null` when nothing changed; validation: non-empty model name, rpm whole 1..10000, cost number >= 0).
+  - `ProviderCard({provider, onChanged}: {provider: Provider; onChanged: (p: Provider) => void})`: `<section data-testid="provider-{name}">`; `data-testid="key-state-{name}"` badge "Key stored" / "No key stored"; config inputs `aria-label="{Label} model name"`, `"{Label} requests per minute"`, `"{Label} cost per request"` and button "Save {Label} settings" (`PATCH`, `onChanged(answer)`); password input `aria-label="{Label} API key"` (`autoComplete="off"`) and "Save {Label} key" (`PUT`, input cleared in `finally`, `onChanged({...provider, has_key: true})`); "Remove {Label} key" (`DELETE`, `onChanged({...provider, has_key: false})`, disabled without a key); "Test {Label}" (`POST test`, result in `role="status"`: "OK: {message} ({model_name})" or "Failed: {message}").
+  - `ProvidersSection()`: heading "Provider keys", one static sentence mentioning Windows Credential Manager (the S2 settings e2e asserts both), a `ProviderCard` per provider, 501 note "Cloud providers are not available yet".
+
+- [ ] **Step 1: Write the failing tests**
+
+`frontend/src/settings/providersModel.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { exampleProviders } from "@/test/fixtures";
+import { diffProvider, formOf } from "./providersModel";
+
+const anthropic = exampleProviders[1];
+
+describe("provider form model", () => {
+  it("maps a provider to strings and back to a patch of changed fields only", () => {
+    const form = formOf(anthropic);
+    expect(form).toEqual({ model_name: "claude-opus-5", requests_per_minute: "30", cost_per_request: "0.02" });
+    expect(diffProvider(form, anthropic)).toEqual({ patch: null, error: null });
+    expect(diffProvider({ ...form, requests_per_minute: "10" }, anthropic)).toEqual({
+      patch: { requests_per_minute: 10 },
+      error: null,
+    });
+    expect(diffProvider({ model_name: "claude-sonnet-5", requests_per_minute: "30", cost_per_request: "0.01" }, anthropic)).toEqual({
+      patch: { model_name: "claude-sonnet-5", cost_per_request: 0.01 },
+      error: null,
+    });
+  });
+
+  it("validates", () => {
+    const form = formOf(anthropic);
+    expect(diffProvider({ ...form, model_name: " " }, anthropic).error).toBe("Model name is required.");
+    expect(diffProvider({ ...form, requests_per_minute: "0" }, anthropic).error).toBe(
+      "Requests per minute must be a whole number from 1 to 10000.",
+    );
+    expect(diffProvider({ ...form, cost_per_request: "-1" }, anthropic).error).toBe("Cost per request must be 0 or more.");
+    expect(diffProvider({ ...form, cost_per_request: "" }, anthropic).error).toBe("Cost per request must be 0 or more.");
+  });
+});
+```
+
+`frontend/src/settings/ProvidersSection.test.tsx`:
+
+```tsx
+import { describe, it, expect } from "vitest";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { errorBody, exampleProviders, fakeClient } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
+import { ProvidersSection } from "./ProvidersSection";
+
+describe("ProvidersSection", () => {
+  it("stores a key without echoing it, removes a key, tests and patches", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "PUT", path: /\/providers\/openai\/key$/, status: 204 },
+      { method: "DELETE", path: /\/providers\/anthropic\/key$/, status: 204 },
+      { method: "POST", path: /\/providers\/anthropic\/test$/, body: { ok: false, message: "no API key stored", model_name: "claude-opus-5" } },
+      { method: "PATCH", path: /\/providers\/anthropic$/, body: { ...exampleProviders[1], requests_per_minute: 10 } },
+    ]);
+    renderWithProviders(<ProvidersSection />, { api });
+    const openai = await screen.findByTestId("provider-openai");
+    expect(within(openai).getByTestId("key-state-openai")).toHaveTextContent("No key stored");
+    const keyInput = within(openai).getByLabelText("OpenAI API key");
+    expect(keyInput).toHaveAttribute("type", "password");
+    fireEvent.change(keyInput, { target: { value: "sk-secret" } });
+    fireEvent.click(within(openai).getByRole("button", { name: "Save OpenAI key" }));
+    await waitFor(() => expect(within(openai).getByTestId("key-state-openai")).toHaveTextContent("Key stored"));
+    expect(keyInput).toHaveValue("");
+    expect(requests[1]).toMatchObject({ method: "PUT", url: "/api/v1/providers/openai/key", body: { api_key: "sk-secret" } });
+    expect(document.body.textContent).not.toContain("sk-secret");
+
+    const anthropic = screen.getByTestId("provider-anthropic");
+    fireEvent.click(within(anthropic).getByRole("button", { name: "Test Anthropic" }));
+    await waitFor(() => expect(within(anthropic).getByRole("status")).toHaveTextContent("Failed: no API key stored"));
+    fireEvent.change(within(anthropic).getByLabelText("Anthropic requests per minute"), { target: { value: "10" } });
+    fireEvent.click(within(anthropic).getByRole("button", { name: "Save Anthropic settings" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "PATCH")).toBe(true));
+    expect(requests.find((r) => r.method === "PATCH")).toMatchObject({ url: "/api/v1/providers/anthropic", body: { requests_per_minute: 10 } });
+    fireEvent.click(within(anthropic).getByRole("button", { name: "Remove Anthropic key" }));
+    await waitFor(() => expect(within(anthropic).getByTestId("key-state-anthropic")).toHaveTextContent("No key stored"));
+    expect(requests.some((r) => r.method === "DELETE" && r.url === "/api/v1/providers/anthropic/key")).toBe(true);
+  });
+
+  it("clears the key field even when storing fails, and tolerates 501", async () => {
+    const failing = fakeClient([
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "PUT", path: /\/providers\/openai\/key$/, status: 500, body: errorBody("internal_error", "credential manager locked") },
+    ]);
+    const first = renderWithProviders(<ProvidersSection />, { api: failing.api });
+    const openai = await screen.findByTestId("provider-openai");
+    const keyInput = within(openai).getByLabelText("OpenAI API key");
+    fireEvent.change(keyInput, { target: { value: "sk-secret" } });
+    fireEvent.click(within(openai).getByRole("button", { name: "Save OpenAI key" }));
+    await waitFor(() => expect(within(openai).getByRole("alert")).toHaveTextContent("credential manager locked"));
+    expect(keyInput).toHaveValue("");
+    first.unmount();
+
+    const stub = fakeClient([{ method: "GET", path: /\/providers$/, status: 501, body: errorBody("not_implemented", "S4 later") }]);
+    renderWithProviders(<ProvidersSection />, { api: stub.api });
+    expect(await screen.findByRole("note")).toHaveTextContent("Cloud providers are not available yet");
+    expect(screen.getByRole("heading", { name: "Provider keys" })).toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm test src/settings/providersModel.test.ts src/settings/ProvidersSection.test.tsx`
+Expected: both fail with unresolved imports.
+
+- [ ] **Step 3: Implement `providersModel.ts`**
+
+```ts
+import type { Provider } from "@contract/client";
+import type { ProviderUpdate } from "@/api/providers";
+
+export interface ProviderForm {
+  model_name: string;
+  requests_per_minute: string;
+  cost_per_request: string;
+}
+
+export function formOf(p: Provider): ProviderForm {
+  return {
+    model_name: p.model_name,
+    requests_per_minute: String(p.requests_per_minute),
+    cost_per_request: String(p.cost_per_request),
+  };
+}
+
+/** Validates the form and returns only the fields that differ from `current` (null when nothing changed). */
+export function diffProvider(form: ProviderForm, current: Provider): { patch: ProviderUpdate | null; error: string | null } {
+  const model_name = form.model_name.trim();
+  if (!model_name) return { patch: null, error: "Model name is required." };
+  const rpmText = form.requests_per_minute.trim();
+  const requests_per_minute = /^\d+$/.test(rpmText) ? Number(rpmText) : Number.NaN;
+  if (!Number.isFinite(requests_per_minute) || requests_per_minute < 1 || requests_per_minute > 10000) {
+    return { patch: null, error: "Requests per minute must be a whole number from 1 to 10000." };
+  }
+  const costText = form.cost_per_request.trim();
+  const cost_per_request = costText === "" ? Number.NaN : Number(costText);
+  if (!Number.isFinite(cost_per_request) || cost_per_request < 0) {
+    return { patch: null, error: "Cost per request must be 0 or more." };
+  }
+  const patch: ProviderUpdate = {};
+  if (model_name !== current.model_name) patch.model_name = model_name;
+  if (requests_per_minute !== current.requests_per_minute) patch.requests_per_minute = requests_per_minute;
+  if (cost_per_request !== current.cost_per_request) patch.cost_per_request = cost_per_request;
+  return { patch: Object.keys(patch).length > 0 ? patch : null, error: null };
+}
+```
+
+- [ ] **Step 4: Implement `ProviderCard.tsx`**
+
+```tsx
+import { useState, type FormEvent } from "react";
+import type { Provider } from "@contract/client";
+import { useApi } from "@/api/client";
+import { messageOf } from "@/api/errors";
+import { deleteProviderKey, providerLabel, setProviderKey, testProvider, updateProvider } from "@/api/providers";
+import { pushLog } from "@/app/diagnostics";
+import { diffProvider, formOf } from "./providersModel";
+
+interface Props {
+  provider: Provider;
+  onChanged: (p: Provider) => void;
+}
+
+const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
+const label = "flex flex-col gap-1 text-xs text-slate-400";
+const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
+const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+
+/**
+ * One cloud provider (spec section 8): model name, rate limit and cost estimate through PATCH; the API key
+ * goes to Windows Credential Manager through PUT and is dropped from state right after the request.
+ */
+export function ProviderCard({ provider, onChanged }: Props) {
+  const api = useApi();
+  const name = providerLabel(provider.name);
+  // Keyed by provider name: the form keeps the user's edits and is refreshed from each PATCH answer.
+  const [form, setForm] = useState(() => formOf(provider));
+  const [apiKey, setApiKey] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function run(what: string, fn: () => Promise<string | null>) {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      setStatus(await fn());
+    } catch (e) {
+      pushLog(`${what} for ${provider.name} failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, `${what} failed`));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function saveSettings(e: FormEvent) {
+    e.preventDefault();
+    const { patch, error: problem } = diffProvider(form, provider);
+    if (problem) {
+      setError(problem);
+      return;
+    }
+    if (!patch) {
+      setStatus("Nothing to save");
+      return;
+    }
+    void run("save settings", async () => {
+      const saved = await updateProvider(api, provider.name, patch);
+      setForm(formOf(saved));
+      onChanged(saved);
+      return `${name} settings saved`;
+    });
+  }
+
+  function saveKey(e: FormEvent) {
+    e.preventDefault();
+    const key = apiKey;
+    setApiKey("");
+    if (!key.trim()) {
+      setError("Paste the API key first.");
+      return;
+    }
+    void run("store key", async () => {
+      await setProviderKey(api, provider.name, key.trim());
+      onChanged({ ...provider, has_key: true });
+      return "Key stored in Windows Credential Manager";
+    });
+  }
+
+  const removeKey = () =>
+    run("remove key", async () => {
+      await deleteProviderKey(api, provider.name);
+      onChanged({ ...provider, has_key: false });
+      return "Key removed";
+    });
+
+  const test = () =>
+    run("test", async () => {
+      const r = await testProvider(api, provider.name);
+      return r.ok ? `OK: ${r.message} (${r.model_name})` : `Failed: ${r.message}`;
+    });
+
+  return (
+    <section
+      data-testid={`provider-${provider.name}`}
+      className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-800/30 p-4"
+    >
+      <header className="flex items-center gap-2">
+        <h3 className="text-base font-medium">{name}</h3>
+        <span
+          data-testid={`key-state-${provider.name}`}
+          className={`rounded px-2 py-0.5 text-xs ${provider.has_key ? "bg-emerald-800 text-emerald-100" : "bg-slate-700 text-slate-300"}`}
+        >
+          {provider.has_key ? "Key stored" : "No key stored"}
+        </span>
+      </header>
+      <form onSubmit={saveSettings} className="flex flex-wrap items-end gap-3">
+        <label className={label}>
+          Model name
+          <input aria-label={`${name} model name`} value={form.model_name} onChange={(e) => setForm({ ...form, model_name: e.target.value })} className={input} />
+        </label>
+        <label className={label}>
+          Requests per minute
+          <input aria-label={`${name} requests per minute`} type="number" min={1} max={10000} value={form.requests_per_minute} onChange={(e) => setForm({ ...form, requests_per_minute: e.target.value })} className={`${input} w-24`} />
+        </label>
+        <label className={label}>
+          Cost per request (USD)
+          <input aria-label={`${name} cost per request`} type="number" min={0} step={0.001} value={form.cost_per_request} onChange={(e) => setForm({ ...form, cost_per_request: e.target.value })} className={`${input} w-24`} />
+        </label>
+        <button type="submit" className={secondary} disabled={busy}>
+          Save {name} settings
+        </button>
+      </form>
+      <form onSubmit={saveKey} className="flex flex-wrap items-end gap-3">
+        <label className={label}>
+          API key
+          <input
+            aria-label={`${name} API key`}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={provider.has_key ? "Paste a new key to replace the stored one" : "Paste the API key"}
+            className={`${input} w-72`}
+          />
+        </label>
+        <button type="submit" className={primary} disabled={busy}>
+          Save {name} key
+        </button>
+        <button type="button" className={secondary} onClick={() => void removeKey()} disabled={busy || !provider.has_key}>
+          Remove {name} key
+        </button>
+        <button type="button" className={secondary} onClick={() => void test()} disabled={busy}>
+          Test {name}
+        </button>
+      </form>
+      {status && (
+        <p role="status" className="text-xs text-emerald-300">
+          {status}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-red-300">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+```
+
+- [ ] **Step 5: Implement `ProvidersSection.tsx`, delete the placeholder, mount the section**
+
+`frontend/src/settings/ProvidersSection.tsx`:
+
+```tsx
+import { useProviders } from "@/api/providers";
+import { ProviderCard } from "./ProviderCard";
+
+/** Spec section 6 screen 5: provider keys. Keys live in Windows Credential Manager, never in the project folder. */
+export function ProvidersSection() {
+  const { providers, loading, unavailable, error, replace } = useProviders();
+  return (
+    <section className="flex flex-col gap-3">
+      <h2 className="text-lg font-medium">Provider keys</h2>
+      <p className="text-sm text-slate-400">
+        OpenAI and Anthropic API keys are stored in Windows Credential Manager and are never written to the
+        project folder or the logs. The model name, the rate limit and the cost per request feed the query
+        screen's estimate.
+      </p>
+      {loading && <p className="text-xs text-slate-400">Loading providers\…</p>}
+      {unavailable && (
+        <p role="note" className="text-xs text-slate-400">
+          Cloud providers are not available yet (they arrive with the inference backend).
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-red-300">
+          {error}
+        </p>
+      )}
+      {providers.map((p) => (
+        <ProviderCard key={p.name} provider={p} onChanged={replace} />
+      ))}
+    </section>
+  );
+}
+```
+
+Delete `frontend/src/settings/ProvidersPlaceholder.tsx`. In `frontend/src/screens/SettingsScreen.tsx` replace the import `import { ProvidersPlaceholder } from "@/settings/ProvidersPlaceholder";` with `import { ProvidersSection } from "@/settings/ProvidersSection";` and `<ProvidersPlaceholder />` with `<ProvidersSection />`.
+
+- [ ] **Step 6: Run the tests to verify they pass**
+
+Run: `pnpm test src/settings`
+Expected: `providersModel` 2, `ProvidersSection` 2 passed; S2's `ClassesSection`, `PreannotationSection`, `ImportDefaultsSection`, `classesModel` tests still green.
+
+- [ ] **Step 7: Format, lint, type-check, settings e2e and commit**
+
+Run: `pnpm format && pnpm lint && pnpm exec tsc -b && pnpm e2e e2e/settings.spec.ts`
+Expected: lint clean; settings 4 passed (the placeholder test still finds the heading "Provider keys" and the Credential Manager sentence; if `getByText(/Windows Credential Manager/)` reports two matches, change that S2 assertion to `.first()` and note it in the commit).
+
+```bash
+git add src/settings/providersModel.ts src/settings/providersModel.test.ts src/settings/ProviderCard.tsx src/settings/ProvidersSection.tsx src/settings/ProvidersSection.test.tsx src/screens/SettingsScreen.tsx
+git rm src/settings/ProvidersPlaceholder.tsx
+git commit -m "feat(ui): provider settings with key entry, removal, test and rate limit"
+```
+
+---
+
+### Task 14: Import images: sources API, import dialog on the Data Manager, sources section in settings
+
+**Files:**
+- Create: `frontend/src/api/sources.ts`, `frontend/src/data/ImportImagesDialog.tsx`, `frontend/src/settings/SourcesSection.tsx`, `frontend/e2e/import.spec.ts`
+- Modify: `frontend/src/screens/DataManagerScreen.tsx` ("Import images" button and dialog in the header row), `frontend/src/screens/SettingsScreen.tsx` (mount `SourcesSection`), `frontend/src/test/fixtures.ts` (append `exampleSource`, `exampleStats`)
+- Test: `frontend/src/api/sources.test.ts`, `frontend/src/data/ImportImagesDialog.test.tsx`, `frontend/src/settings/SourcesSection.test.tsx`
+
+**Interfaces:**
+- Consumes: `collectPages` (Task 1), `useJobsStore.upsert` / `setPanelOpen` (Task 3), `useBackend().mode` for the Tauri folder dialog (same pattern as `ProjectsScreen`'s `FolderField`), `Project.import_defaults` (spec section 5 settings: `max_side`, `quality`, `dedupe_threshold`, `group_regex`), `useChangesStore` (already refreshes the list on `images.changed` events).
+- Produces:
+  - `fixtures.ts` additions: `exampleSource: Source` (the contract example: `50000000-3333-4000-8000-000000000001`, folder `E:\Dev\Yolo\Ahmadia Construction Data`, site `ahmadia`, 3299 images, 0 duplicates, `job_id` `j…0001`) and `exampleStats: Stats` (the contract example: 3299 images, 30 labeled, 3269 unlabeled, 112 boxes, 41 pending, two groups).
+  - `api/sources.ts`: `type SourceCreate`, `type SourceWithJob`, `fetchAllSources(api, projectId): Promise<Source[]>`, `fetchSourceStats(api, projectId, sourceId): Promise<Stats>`, `createSource(api, projectId, body: SourceCreate): Promise<SourceWithJob>`.
+  - `ImportImagesDialog({project, onClose, onStarted}: {project: Project; onClose: () => void; onStarted: (result: SourceWithJob) => void})`: `<form role="dialog" aria-label="Import images">` with `aria-label="Folder"` (plus "Browse" in tauri mode via `open({directory: true})`), `aria-label="Site name"` (optional; omitted from the body when blank), `aria-label="Max side"`, `"JPEG quality"`, `"Duplicate threshold"`, `"Group regex"` prefilled from `project.import_defaults`; "Start import" posts `{folder, site?, settings}`; on 202 the job is `upsert`ed, the jobs panel is opened (`setPanelOpen(true)`) and `onStarted(result)` is called; "Cancel" calls `onClose`; errors in `role="alert"`.
+  - `SourcesSection({projectId}: {projectId: string})`: `<section data-testid="sources-section">` headed "Sources"; one row per source (site, folder, `image_count` images, `duplicate_count` duplicates, imported time) with a "Stats" button (loads `GET .../sources/{id}/stats` and renders labeled / unlabeled / boxes / pending / groups / resolution) and "Re-import new files" (`POST /sources` with the source's `folder`, `site` and `settings`; job `upsert`ed, panel opened); 501 note "Sources are not available yet".
+  - `DataManagerScreen`: "Import images" button next to the heading; the dialog mounts below the heading row; after a start the screen shows `role="status"` "Import started for {folder} (job {id8})".
+
+- [ ] **Step 1: Append the fixtures**
+
+Append to `frontend/src/test/fixtures.ts` (extend the `@contract/client` import with `Source` and `Stats`):
+
+```ts
+export const exampleSource: Source = {
+  id: SOURCE_ID,
+  folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+  site: "ahmadia",
+  settings: exampleProject.import_defaults,
+  image_count: 3299,
+  duplicate_count: 0,
+  job_id: JOB_ID,
+  imported_at: "2026-09-17T10:30:00Z",
+  created_at: "2026-09-17T10:05:00Z",
+};
+
+export const exampleStats: Stats = {
+  image_count: 3299,
+  labeled_count: 30,
+  unlabeled_count: 3269,
+  box_count: 112,
+  pending_review_count: 41,
+  duplicate_count: 0,
+  boxes_per_class: [
+    { class_id: CLASS_ID(1), class_name: "excavator", count: 40 },
+    { class_id: CLASS_ID(4), class_name: "dump_truck", count: 72 },
+  ],
+  sources: [{ source_id: SOURCE_ID, site: "ahmadia", image_count: 3299 }],
+  groups: [
+    { group_key: "0031", image_count: 697 },
+    { group_key: "0033", image_count: 622 },
+  ],
+  resolution_histogram: [{ width: 4000, height: 2667, count: 3299 }],
+  capture_time_range: { min: "2019-04-15T06:35:36Z", max: "2019-04-15T09:12:01Z" },
+  gps_bounds: { min_lat: 29.4901, min_lon: 47.7602, max_lat: 29.4988, max_lon: 47.7701 },
+};
+```
+
+- [ ] **Step 2: Write the failing tests**
+
+`frontend/src/api/sources.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { errorBody, exampleSource, exampleStats, fakeClient, PROJECT_ID, runningJob, SOURCE_ID } from "@/test/fixtures";
+import { createSource, fetchAllSources, fetchSourceStats } from "./sources";
+
+describe("sources api", () => {
+  it("lists every page, reads stats and starts an import", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/sources$/, body: { items: [exampleSource], next_cursor: "string" } },
+      { method: "GET", path: /\/sources\/[^/]+\/stats$/, body: exampleStats },
+      { method: "POST", path: /\/sources$/, status: 202, body: { source: exampleSource, job: runningJob } },
+    ]);
+    expect((await fetchAllSources(api, PROJECT_ID)).map((s) => s.site)).toEqual(["ahmadia"]);
+    expect(requests[0].url).toBe(`/api/v1/projects/${PROJECT_ID}/sources?limit=1000`);
+    expect((await fetchSourceStats(api, PROJECT_ID, SOURCE_ID)).unlabeled_count).toBe(3269);
+    const body = {
+      folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+      site: "ahmadia",
+      settings: { max_side: 3000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<flight>\\d+)" },
+    };
+    const started = await createSource(api, PROJECT_ID, body);
+    expect(started.job.id).toBe(runningJob.id);
+    expect(requests.at(-1)).toMatchObject({ method: "POST", url: `/api/v1/projects/${PROJECT_ID}/sources`, body });
+  });
+
+  it("surfaces 501 until S1 lands", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/sources$/, status: 501, body: errorBody("not_implemented", "S1 later") },
+    ]);
+    await expect(fetchAllSources(api, PROJECT_ID)).rejects.toMatchObject({ code: "not_implemented", status: 501 });
+  });
+});
+```
+
+`frontend/src/data/ImportImagesDialog.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { errorBody, exampleProject, exampleSource, fakeClient, runningJob } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
+import { useJobsStore } from "@/store/jobs";
+import { ImportImagesDialog } from "./ImportImagesDialog";
+
+describe("ImportImagesDialog", () => {
+  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+
+  it("prefills the project's import defaults, posts the folder and opens the jobs panel", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/sources$/, status: 202, body: { source: exampleSource, job: runningJob } },
+    ]);
+    const onStarted = vi.fn();
+    renderWithProviders(<ImportImagesDialog project={exampleProject} onClose={() => {}} onStarted={onStarted} />, { api });
+    expect(screen.getByLabelText("Max side")).toHaveValue(4000);
+    expect(screen.getByLabelText("JPEG quality")).toHaveValue(95);
+    expect(screen.getByLabelText("Duplicate threshold")).toHaveValue(4);
+    expect(screen.getByLabelText("Group regex")).toHaveValue(exampleProject.import_defaults.group_regex);
+    expect(screen.queryByRole("button", { name: "Browse" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "E:\\Dev\\Yolo\\Ahmadia Construction Data" } });
+    fireEvent.change(screen.getByLabelText("Max side"), { target: { value: "3000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalled());
+    expect(requests[0].body).toEqual({
+      folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+      settings: { max_side: 3000, quality: 95, dedupe_threshold: 4, group_regex: exampleProject.import_defaults.group_regex },
+    });
+    expect(useJobsStore.getState().jobs[runningJob.id]).toBeDefined();
+    expect(useJobsStore.getState().panelOpen).toBe(true);
+  });
+
+  it("sends the site name when given and shows the envelope message on failure", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/sources$/, status: 404, body: errorBody("not_found", "folder does not exist") },
+    ]);
+    renderWithProviders(<ImportImagesDialog project={exampleProject} onClose={() => {}} onStarted={() => {}} />, { api });
+    fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "E:\\nope" } });
+    fireEvent.change(screen.getByLabelText("Site name"), { target: { value: "ahmadia" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start import" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("folder does not exist"));
+    expect(requests[0].body).toMatchObject({ folder: "E:\\nope", site: "ahmadia" });
+  });
+});
+```
+
+`frontend/src/settings/SourcesSection.test.tsx`:
+
+```tsx
+import { describe, it, expect, beforeEach } from "vitest";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { errorBody, exampleSource, exampleStats, fakeClient, PROJECT_ID, runningJob, SOURCE_ID } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
+import { useJobsStore } from "@/store/jobs";
+import { SourcesSection } from "./SourcesSection";
+
+describe("SourcesSection", () => {
+  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+
+  it("lists sources with counts, loads stats on demand and re-imports the same folder", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/sources$/, body: { items: [exampleSource], next_cursor: null } },
+      { method: "GET", path: /\/sources\/[^/]+\/stats$/, body: exampleStats },
+      { method: "POST", path: /\/sources$/, status: 202, body: { source: exampleSource, job: runningJob } },
+    ]);
+    renderWithProviders(<SourcesSection projectId={PROJECT_ID} />, { api });
+    const section = await screen.findByTestId("sources-section");
+    await waitFor(() => expect(section).toHaveTextContent("ahmadia"));
+    expect(section).toHaveTextContent("3299 images");
+    expect(section).toHaveTextContent("0 duplicates");
+    fireEvent.click(screen.getByRole("button", { name: "Stats" }));
+    await waitFor(() => expect(section).toHaveTextContent("3269 unlabeled"));
+    expect(section).toHaveTextContent("41 pending review");
+    expect(section).toHaveTextContent("2 groups");
+    expect(requests[1].url).toBe(`/api/v1/projects/${PROJECT_ID}/sources/${SOURCE_ID}/stats`);
+    fireEvent.click(screen.getByRole("button", { name: "Re-import new files" }));
+    await waitFor(() => expect(useJobsStore.getState().panelOpen).toBe(true));
+    expect(requests[2]).toMatchObject({
+      method: "POST",
+      url: `/api/v1/projects/${PROJECT_ID}/sources`,
+      body: { folder: exampleSource.folder, site: "ahmadia", settings: exampleSource.settings },
+    });
+    expect(useJobsStore.getState().jobs[runningJob.id]).toBeDefined();
+  });
+
+  it("tolerates 501", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/sources$/, status: 501, body: errorBody("not_implemented", "S1 later") },
+    ]);
+    renderWithProviders(<SourcesSection projectId={PROJECT_ID} />, { api });
+    expect(await screen.findByRole("note")).toHaveTextContent("Sources are not available yet");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});
+```
+
+- [ ] **Step 3: Run the tests to verify they fail**
+
+Run: `pnpm test src/api/sources.test.ts src/data/ImportImagesDialog.test.tsx src/settings/SourcesSection.test.tsx`
+Expected: three files fail with unresolved imports.
+
+- [ ] **Step 4: Implement `api/sources.ts`**
+
+```ts
+import type { ApiClient, Source, Stats, components } from "@contract/client";
+import { unwrap } from "./errors";
+import { collectPages } from "./paging";
+
+export type SourceCreate = components["schemas"]["SourceCreate"];
+export type SourceWithJob = components["schemas"]["SourceWithJob"];
+
+const LIST_LIMIT = 1000;
+
+/** Every source (S2's `fetchSources` in `api/project.ts` reads the first page only). */
+export function fetchAllSources(api: ApiClient, projectId: string): Promise<Source[]> {
+  return collectPages((cursor) =>
+    unwrap(
+      api.GET("/api/v1/projects/{projectId}/sources", {
+        params: { path: { projectId }, query: cursor ? { limit: LIST_LIMIT, cursor } : { limit: LIST_LIMIT } },
+      }),
+    ),
+  );
+}
+
+export function fetchSourceStats(api: ApiClient, projectId: string, sourceId: string): Promise<Stats> {
+  return unwrap(
+    api.GET("/api/v1/projects/{projectId}/sources/{sourceId}/stats", { params: { path: { projectId, sourceId } } }),
+  );
+}
+
+/** 202: registers the folder (or re-uses it) and starts the import job; re-posting imports new files only. */
+export function createSource(api: ApiClient, projectId: string, body: SourceCreate): Promise<SourceWithJob> {
+  return unwrap(api.POST("/api/v1/projects/{projectId}/sources", { params: { path: { projectId } }, body }));
+}
+```
+
+- [ ] **Step 5: Implement `ImportImagesDialog.tsx`**
+
+```tsx
+import { useCallback, useState, type FormEvent } from "react";
+import type { ImportSettings, Project } from "@contract/client";
+import { useApi, useBackend } from "@/api/client";
+import { messageOf } from "@/api/errors";
+import { createSource, type SourceWithJob } from "@/api/sources";
+import { pushLog } from "@/app/diagnostics";
+import { useJobsStore } from "@/store/jobs";
+
+interface Props {
+  project: Project;
+  onClose: () => void;
+  onStarted: (result: SourceWithJob) => void;
+}
+
+interface Form {
+  folder: string;
+  site: string;
+  max_side: string;
+  quality: string;
+  dedupe_threshold: string;
+  group_regex: string;
+}
+
+const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
+const label = "flex flex-col gap-1 text-xs text-slate-400";
+const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
+const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+
+function whole(text: string, min: number, max: number): number | null {
+  if (!/^\d+$/.test(text.trim())) return null;
+  const n = Number(text.trim());
+  return n >= min && n <= max ? n : null;
+}
+
+/** Spec section 5 import job: folder, optional site, preparation settings prefilled from the project defaults. */
+export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
+  const api = useApi();
+  const { mode } = useBackend();
+  const d = project.import_defaults;
+  const [form, setForm] = useState<Form>({
+    folder: "",
+    site: "",
+    max_side: String(d.max_side),
+    quality: String(d.quality),
+    dedupe_threshold: String(d.dedupe_threshold),
+    group_regex: d.group_regex,
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const patch = (p: Partial<Form>) => setForm((f) => ({ ...f, ...p }));
+
+  const browse = useCallback(async () => {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({ directory: true, multiple: false });
+    if (typeof picked === "string") setForm((f) => ({ ...f, folder: picked }));
+  }, []);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const max_side = whole(form.max_side, 512, 12000);
+    const quality = whole(form.quality, 50, 100);
+    const dedupe_threshold = whole(form.dedupe_threshold, 0, 32);
+    if (!form.folder.trim()) return setError("Choose the folder to import.");
+    if (max_side === null) return setError("Max side must be a whole number from 512 to 12000.");
+    if (quality === null) return setError("JPEG quality must be a whole number from 50 to 100.");
+    if (dedupe_threshold === null) return setError("Duplicate threshold must be a whole number from 0 to 32.");
+    if (!form.group_regex.trim()) return setError("Group regex is required.");
+    const settings: ImportSettings = { max_side, quality, dedupe_threshold, group_regex: form.group_regex.trim() };
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await createSource(api, project.id, {
+        folder: form.folder.trim(),
+        ...(form.site.trim() ? { site: form.site.trim() } : {}),
+        settings,
+      });
+      useJobsStore.getState().upsert(result.job);
+      useJobsStore.getState().setPanelOpen(true);
+      onStarted(result);
+    } catch (err) {
+      pushLog(`import images failed: ${messageOf(err, String(err))}`);
+      setError(messageOf(err, "could not start the import"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      role="dialog"
+      aria-label="Import images"
+      onSubmit={(e) => void submit(e)}
+      className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-4"
+    >
+      <h2 className="text-lg font-medium">Import images</h2>
+      <p className="text-sm text-slate-400">
+        Originals are never modified: files are converted to JPEG, downscaled past the max side, de-duplicated by
+        perceptual hash and grouped by flight. Re-importing a folder picks up new files only.
+      </p>
+      <label className={label}>
+        Folder
+        <div className="flex gap-2">
+          <input
+            aria-label="Folder"
+            required
+            value={form.folder}
+            onChange={(e) => patch({ folder: e.target.value })}
+            placeholder="E:\Dev\Yolo\Ahmadia Construction Data"
+            className={`${input} min-w-0 flex-1 font-mono`}
+          />
+          {mode === "tauri" && (
+            <button type="button" className={secondary} onClick={() => void browse()}>
+              Browse
+            </button>
+          )}
+        </div>
+      </label>
+      <label className={label}>
+        Site name (optional, defaults to the folder name)
+        <input aria-label="Site name" value={form.site} onChange={(e) => patch({ site: e.target.value })} className={input} />
+      </label>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <label className={label}>
+          Max side
+          <input aria-label="Max side" type="number" min={512} max={12000} value={form.max_side} onChange={(e) => patch({ max_side: e.target.value })} className={input} />
+        </label>
+        <label className={label}>
+          JPEG quality
+          <input aria-label="JPEG quality" type="number" min={50} max={100} value={form.quality} onChange={(e) => patch({ quality: e.target.value })} className={input} />
+        </label>
+        <label className={label}>
+          Duplicate threshold
+          <input aria-label="Duplicate threshold" type="number" min={0} max={32} value={form.dedupe_threshold} onChange={(e) => patch({ dedupe_threshold: e.target.value })} className={input} />
+        </label>
+        <label className={label}>
+          Group regex
+          <input aria-label="Group regex" value={form.group_regex} onChange={(e) => patch({ group_regex: e.target.value })} className={`${input} font-mono`} />
+        </label>
+      </div>
+      {error && (
+        <p role="alert" className="text-xs text-red-300">
+          {error}
+        </p>
+      )}
+      <div className="flex gap-2">
+        <button type="submit" className={primary} disabled={busy}>
+          Start import
+        </button>
+        <button type="button" className={secondary} onClick={onClose} disabled={busy}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+```
+
+`return setError(...)` returns `void` from an async function; keep it that way (the function's return type is `Promise<void>`).
+
+- [ ] **Step 6: Implement `SourcesSection.tsx`**
+
+```tsx
+import { useEffect, useState } from "react";
+import type { Source, Stats } from "@contract/client";
+import { useApi } from "@/api/client";
+import { isNotImplemented, messageOf } from "@/api/errors";
+import { createSource, fetchAllSources, fetchSourceStats } from "@/api/sources";
+import { pushLog } from "@/app/diagnostics";
+import { formatDate } from "@/models/modelLabels";
+import { useJobsStore } from "@/store/jobs";
+
+const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+
+interface ListState {
+  key: string;
+  sources: Source[];
+  unavailable: boolean;
+  error: string | null;
+}
+
+function StatsSummary({ stats }: { stats: Stats }) {
+  const res = stats.resolution_histogram
+    .slice()
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3)
+    .map((r) => `${r.width}x${r.height} (${r.count})`)
+    .join(", ");
+  return (
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-300 md:grid-cols-3">
+      <div>
+        {stats.labeled_count} labeled, {stats.unlabeled_count} unlabeled
+      </div>
+      <div>
+        {stats.box_count} boxes, {stats.pending_review_count} pending review
+      </div>
+      <div>
+        {stats.groups.length} groups, {stats.duplicate_count} duplicates skipped
+      </div>
+      <div className="md:col-span-2">Resolutions: {res || "none"}</div>
+      <div>
+        {stats.capture_time_range
+          ? `Captured ${formatDate(stats.capture_time_range.min)} to ${formatDate(stats.capture_time_range.max)}`
+          : "No capture times"}
+      </div>
+    </dl>
+  );
+}
+
+function SourceRow({ projectId, source }: { projectId: string; source: Source }) {
+  const api = useApi();
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function loadStats() {
+    setBusy(true);
+    setError(null);
+    try {
+      setStats(await fetchSourceStats(api, projectId, source.id));
+    } catch (e) {
+      pushLog(`source stats ${source.id} failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not load the statistics"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function reimport() {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      const result = await createSource(api, projectId, {
+        folder: source.folder,
+        site: source.site,
+        settings: source.settings,
+      });
+      useJobsStore.getState().upsert(result.job);
+      useJobsStore.getState().setPanelOpen(true);
+      setStatus(`Re-import started (job ${result.job.id.slice(0, 8)})`);
+    } catch (e) {
+      pushLog(`re-import ${source.id} failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not start the re-import"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <li className="flex flex-col gap-2 rounded border border-slate-800 bg-slate-800/40 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="font-medium">{source.site}</span>
+        <span className="truncate font-mono text-xs text-slate-400">{source.folder}</span>
+        <span className="text-xs text-slate-300">
+          {source.image_count} images, {source.duplicate_count} duplicates
+          {source.imported_at ? `, imported ${formatDate(source.imported_at)}` : ", not imported yet"}
+        </span>
+        <button type="button" className={`${btn} ml-auto`} onClick={() => void loadStats()} disabled={busy}>
+          Stats
+        </button>
+        <button type="button" className={btn} onClick={() => void reimport()} disabled={busy}>
+          Re-import new files
+        </button>
+      </div>
+      {stats && <StatsSummary stats={stats} />}
+      {status && (
+        <p role="status" className="text-xs text-emerald-300">
+          {status}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-red-300">
+          {error}
+        </p>
+      )}
+    </li>
+  );
+}
+
+/** Spec section 5: imported folders with their counts and per-source statistics; re-import picks up new files only. */
+export function SourcesSection({ projectId }: { projectId: string }) {
+  const api = useApi();
+  const [state, setState] = useState<ListState>({ key: "", sources: [], unavailable: false, error: null });
+  const key = projectId;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllSources(api, projectId)
+      .then((sources) => {
+        if (!cancelled) setState({ key, sources, unavailable: false, error: null });
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        pushLog(`load sources failed: ${messageOf(e, String(e))}`);
+        const unavailable = isNotImplemented(e);
+        setState({ key, sources: [], unavailable, error: unavailable ? null : messageOf(e, "could not load sources") });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, key]);
+
+  const loaded = state.key === key;
+  return (
+    <section data-testid="sources-section" className="flex flex-col gap-3">
+      <h2 className="text-lg font-medium">Sources</h2>
+      <p className="text-sm text-slate-400">
+        Imported folders. Import a new folder from the Data Manager; re-import a folder to pick up files added since.
+      </p>
+      {!loaded && <p className="text-xs text-slate-400">Loading sources\…</p>}
+      {loaded && state.unavailable && (
+        <p role="note" className="text-xs text-slate-400">
+          Sources are not available yet (they arrive with the dataset backend).
+        </p>
+      )}
+      {loaded && state.error && (
+        <p role="alert" className="text-xs text-red-300">
+          {state.error}
+        </p>
+      )}
+      {loaded && !state.unavailable && !state.error && state.sources.length === 0 && (
+        <p className="text-sm text-slate-400">No sources yet.</p>
+      )}
+      <ul className="flex flex-col gap-2">
+        {state.sources.map((s) => (
+          <SourceRow key={s.id} projectId={projectId} source={s} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+```
+
+- [ ] **Step 7: Wire the Data Manager and the settings screen**
+
+In `frontend/src/screens/DataManagerScreen.tsx` add `import { ImportImagesDialog } from "@/data/ImportImagesDialog";`, the state `const [importing, setImporting] = useState(false);`, and replace the heading row with:
+
+```tsx
+      <div className="flex items-baseline justify-between gap-3">
+        <h1 className="text-2xl font-semibold">Data Manager</h1>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setImporting((v) => !v)}
+            disabled={!project}
+            className="rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
+          >
+            Import images
+          </button>
+          <span className="text-xs text-slate-400">J / K move, Enter opens, Space selects</span>
+        </div>
+      </div>
+      {importing && project && (
+        <ImportImagesDialog
+          project={project}
+          onClose={() => setImporting(false)}
+          onStarted={(result) => {
+            setImporting(false);
+            setNotice(`Import started for ${result.source.folder} (job ${result.job.id.slice(0, 8)})`);
+          }}
+        />
+      )}
+```
+
+The existing `notice` line (`{notice && selectedIds.length === 0 && (<p role="status" ...>)}`) shows the message; the list refreshes through `useChangesStore` on `images.changed` events, and on the mock (no websocket) the user can re-open the screen. In `frontend/src/screens/SettingsScreen.tsx` add `import { SourcesSection } from "@/settings/SourcesSection";` and render `<SourcesSection projectId={projectId} />` right after `<ImportDefaultsSection ... />` (before the providers section).
+
+- [ ] **Step 8: Write the e2e spec**
+
+`frontend/e2e/import.spec.ts`:
+
+```ts
+import { test, expect } from "@playwright/test";
+
+const P = "7f1c2e3a-1111-4000-8000-000000000001";
+const SOURCE = "50000000-3333-4000-8000-000000000001";
+const JOB = "j0000000-4444-4000-8000-000000000001";
+const FOLDER = "E:\\Dev\\Yolo\\Ahmadia Construction Data";
+const REGEX = "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)";
+
+test("Import images posts the folder with the project's defaults and shows the job in the panel", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
+  await page.getByRole("button", { name: "Import images" }).click();
+  const dialog = page.getByRole("dialog", { name: "Import images" });
+  await expect(dialog.getByLabel("Max side")).toHaveValue("4000");
+  await expect(dialog.getByLabel("JPEG quality")).toHaveValue("95");
+  await expect(dialog.getByLabel("Duplicate threshold")).toHaveValue("4");
+  await expect(dialog.getByLabel("Group regex")).toHaveValue(REGEX);
+  await expect(dialog.getByRole("button", { name: "Browse" })).toHaveCount(0);
+  await dialog.getByLabel("Folder").fill(FOLDER);
+  await dialog.getByLabel("Site name").fill("ahmadia");
+  await dialog.getByLabel("Max side").fill("3000");
+  const posted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/sources`));
+  await dialog.getByRole("button", { name: "Start import" }).click();
+  expect((await posted).postDataJSON()).toEqual({
+    folder: FOLDER,
+    site: "ahmadia",
+    settings: { max_side: 3000, quality: 95, dedupe_threshold: 4, group_regex: REGEX },
+  });
+  const panel = page.getByRole("dialog", { name: "Jobs" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByTestId(`job-${JOB}`).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
+  await expect(page.getByRole("status").filter({ hasText: "Import started for" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
+});
+
+test("Sources in settings list counts, load stats and re-import the same folder", async ({ page }) => {
+  await page.goto(`/p/${P}/settings`);
+  const section = page.getByTestId("sources-section");
+  await expect(section).toContainText("ahmadia");
+  await expect(section).toContainText("3299 images, 0 duplicates");
+  const stats = page.waitForRequest((r) => r.url().endsWith(`/sources/${SOURCE}/stats`));
+  await section.getByRole("button", { name: "Stats" }).click();
+  await stats;
+  await expect(section).toContainText("3269 unlabeled");
+  await expect(section).toContainText("41 pending review");
+  const reimport = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/sources`));
+  await section.getByRole("button", { name: "Re-import new files" }).click();
+  expect((await reimport).postDataJSON()).toEqual({
+    folder: FOLDER,
+    site: "ahmadia",
+    settings: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: REGEX },
+  });
+  await expect(page.getByRole("dialog", { name: "Jobs" })).toBeVisible();
+});
+```
+
+- [ ] **Step 9: Run the tests to verify they pass**
+
+Run: `pnpm test src/api/sources.test.ts src/data src/settings && pnpm e2e e2e/import.spec.ts e2e/data-manager.spec.ts e2e/settings.spec.ts`
+Expected: `sources` 2, `ImportImagesDialog` 2, `SourcesSection` 2 passed and the other `src/data` / `src/settings` files green; import 2, data-manager 6, settings 4 passed.
+
+- [ ] **Step 10: Format, lint, type-check and commit**
+
+Run: `pnpm format && pnpm lint && pnpm exec tsc -b`
+
+```bash
+git add src/test/fixtures.ts src/api/sources.ts src/api/sources.test.ts src/data/ImportImagesDialog.tsx src/data/ImportImagesDialog.test.tsx src/settings/SourcesSection.tsx src/settings/SourcesSection.test.tsx src/screens/DataManagerScreen.tsx src/screens/SettingsScreen.tsx e2e/import.spec.ts
+git commit -m "feat(ui): import images dialog, sources section with stats and re-import"
+```
+
+---
+
+### Task 15: Data Manager bulk actions: run model navigates to the query screen, add to dataset dialog
+
+**Files:**
+- Create: `frontend/src/data/AddToDatasetDialog.tsx`
+- Modify: `frontend/src/data/bulkActions.ts`, `frontend/src/data/SelectionBar.tsx`, `frontend/src/screens/DataManagerScreen.tsx`, `frontend/e2e/data-manager.spec.ts` (the "run model / add to dataset" test)
+- Test: `frontend/src/data/bulkActions.test.ts` (replace), `frontend/src/data/SelectionBar.test.tsx` (replace), `frontend/src/data/AddToDatasetDialog.test.tsx`
+
+**Interfaces:**
+- Consumes: `createDataset`, `DatasetWithJob`, `SplitMethod` (Task 1), `JobCard`, `useJobsStore`, `useNavigationStore` (`"query"` source, Task 10).
+- Produces:
+  - `bulkActions.ts`: `interface DatasetOptions {name: string; split_method: SplitMethod; val_fraction: number; seed: number}`, `addImagesToDataset(api, projectId, imageIds, opts): Promise<DatasetWithJob>`, `deleteImages(api, projectId, imageIds): Promise<number>`; `runModelOnImages` is removed (the query screen owns the request).
+  - `AddToDatasetDialog({projectId, imageIds, onClose}: {projectId: string; imageIds: string[]; onClose: () => void})`: `<form role="dialog" aria-label="Add to dataset">` with `aria-label="Dataset name"`, `"Split method"`, `"Validation fraction"`, `"Seed"` (default 42), "Create dataset" submit and "Cancel"; after the 202 the job is `upsert`ed and shown as a `JobCard` with a link "Train on it" (`/p/{p}/train`) and a "Close" button.
+  - `SelectionBar` props become `{projectId: string; selectedIds: string[]; onLabel: () => void; onRunModel: () => void; onDeleted: (message: string) => void; onClear: () => void}`; "Run model" calls `onRunModel`; "Add to dataset" opens the dialog.
+  - `DataManagerScreen`: `onRunModel` sets `useNavigationStore.setContext(selectedIds, "query")` and navigates to `/p/{p}/query`.
+
+- [ ] **Step 1: Write the failing tests**
+
+Replace `frontend/src/data/bulkActions.test.ts`:
+
+```ts
+import { describe, it, expect } from "vitest";
+import { errorBody, exampleDataset, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
+import { addImagesToDataset, deleteImages } from "./bulkActions";
+
+describe("bulk actions", () => {
+  it("posts a dataset with the split options, seed and image ids, and a bulk delete", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/datasets$/, status: 202, body: { dataset: exampleDataset, job: { ...runningJob, type: "dataset" } } },
+      { method: "POST", path: /\/images\/bulk-delete$/, body: { deleted: 2 } },
+    ]);
+    const created = await addImagesToDataset(api, PROJECT_ID, ["a", "b"], {
+      name: "v1",
+      split_method: "by_group",
+      val_fraction: 0.2,
+      seed: 7,
+    });
+    expect(created.dataset.id).toBe(exampleDataset.id);
+    expect(created.job.type).toBe("dataset");
+    expect(requests[0].body).toEqual({ name: "v1", split_method: "by_group", val_fraction: 0.2, seed: 7, image_ids: ["a", "b"] });
+    expect(await deleteImages(api, PROJECT_ID, ["a", "b"])).toBe(2);
+    expect(requests[1].body).toEqual({ image_ids: ["a", "b"] });
+  });
+
+  it("surfaces the 501 envelope until S1 lands", async () => {
+    const { api } = fakeClient([
+      { method: "POST", path: /\/datasets$/, status: 501, body: errorBody("not_implemented", "datasets arrive with S1") },
+    ]);
+    await expect(
+      addImagesToDataset(api, PROJECT_ID, ["a"], { name: "v1", split_method: "random", val_fraction: 0.2, seed: 42 }),
+    ).rejects.toMatchObject({ message: "datasets arrive with S1" });
+  });
+});
+```
+
+`frontend/src/data/AddToDatasetDialog.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { errorBody, exampleDataset, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
+import { useJobsStore } from "@/store/jobs";
+import { AddToDatasetDialog } from "./AddToDatasetDialog";
+
+describe("AddToDatasetDialog", () => {
+  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+
+  it("creates the dataset with name, split, fraction and seed, then shows the job", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/datasets$/, status: 202, body: { dataset: exampleDataset, job: { ...runningJob, type: "dataset" } } },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, type: "dataset" } },
+    ]);
+    const onClose = vi.fn();
+    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a", "b"]} onClose={onClose} />, { api });
+    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent("2 images");
+    expect(screen.getByLabelText("Seed")).toHaveValue(42);
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.change(screen.getByLabelText("Split method"), { target: { value: "random" } });
+    fireEvent.change(screen.getByLabelText("Validation fraction"), { target: { value: "0.3" } });
+    fireEvent.change(screen.getByLabelText("Seed"), { target: { value: "7" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    await waitFor(() => expect(screen.getByTestId(`job-${runningJob.id}`)).toBeInTheDocument());
+    expect(requests[0].body).toEqual({ name: "v2", split_method: "random", val_fraction: 0.3, seed: 7, image_ids: ["a", "b"] });
+    expect(useJobsStore.getState().jobs[runningJob.id].type).toBe("dataset");
+    expect(screen.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${PROJECT_ID}/train`);
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("shows the envelope message on failure", async () => {
+    const { api } = fakeClient([
+      { method: "POST", path: /\/datasets$/, status: 409, body: errorBody("already_exists", "dataset v1 exists") },
+    ]);
+    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, { api });
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("dataset v1 exists"));
+  });
+});
+```
+
+Replace `frontend/src/data/SelectionBar.test.tsx`:
+
+```tsx
+import { describe, it, expect, vi } from "vitest";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
+import { SelectionBar } from "./SelectionBar";
+
+function renderBar(api: ReturnType<typeof fakeClient>["api"], props: Partial<Parameters<typeof SelectionBar>[0]> = {}) {
+  const handlers = { onLabel: vi.fn(), onRunModel: vi.fn(), onDeleted: vi.fn(), onClear: vi.fn() };
+  renderWithProviders(<SelectionBar projectId={PROJECT_ID} selectedIds={["a", "b"]} {...handlers} {...props} />, { api });
+  return handlers;
+}
+
+describe("SelectionBar", () => {
+  it("hands label and run-model to the screen, opens the dataset dialog and deletes after confirmation", async () => {
+    const { api, requests } = fakeClient([{ method: "POST", path: /\/images\/bulk-delete$/, body: { deleted: 2 } }]);
+    const h = renderBar(api);
+    fireEvent.click(screen.getByRole("button", { name: "Label selected" }));
+    expect(h.onLabel).toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Run model" }));
+    expect(h.onRunModel).toHaveBeenCalled();
+    expect(requests).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Add to dataset" }));
+    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete 2 images" }));
+    await waitFor(() => expect(h.onDeleted).toHaveBeenCalledWith("2 images deleted"));
+    expect(requests[0].body).toEqual({ image_ids: ["a", "b"] });
+  });
+
+  it("shows the envelope message when a delete fails", async () => {
+    const { api } = fakeClient([
+      { method: "POST", path: /\/images\/bulk-delete$/, status: 500, body: { error: { code: "internal_error", message: "disk full", details: {} } } },
+    ]);
+    renderBar(api, { selectedIds: ["a"] });
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete 1 images" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("disk full"));
+  });
+});
+```
+
+- [ ] **Step 2: Run the tests to verify they fail**
+
+Run: `pnpm test src/data/bulkActions.test.ts src/data/AddToDatasetDialog.test.tsx src/data/SelectionBar.test.tsx`
+Expected: `bulkActions` fails on the `seed: 7` body (S2 hard-codes 42) and the `DatasetWithJob` return; `AddToDatasetDialog` unresolved; `SelectionBar` fails on the `onRunModel` prop being ignored.
+
+- [ ] **Step 3: Replace `bulkActions.ts`**
+
+```ts
+import type { ApiClient } from "@contract/client";
+import { createDataset, type DatasetWithJob, type SplitMethod } from "@/api/datasets";
+import { bulkDeleteImages } from "@/api/images";
+
+export interface DatasetOptions {
+  name: string;
+  split_method: SplitMethod;
+  val_fraction: number;
+  seed: number;
+}
+
+/** "Add to dataset": freeze the selection into a new dataset; the materialise job comes back with it. */
+export function addImagesToDataset(
+  api: ApiClient,
+  projectId: string,
+  imageIds: string[],
+  opts: DatasetOptions,
+): Promise<DatasetWithJob> {
+  return createDataset(api, projectId, { ...opts, image_ids: imageIds });
+}
+
+export function deleteImages(api: ApiClient, projectId: string, imageIds: string[]): Promise<number> {
+  return bulkDeleteImages(api, projectId, imageIds);
+}
+```
+
+- [ ] **Step 4: Implement `AddToDatasetDialog.tsx`**
+
+```tsx
+import { useState, type FormEvent } from "react";
+import { Link } from "react-router-dom";
+import { useApi } from "@/api/client";
+import type { SplitMethod } from "@/api/datasets";
+import { messageOf } from "@/api/errors";
+import { pushLog } from "@/app/diagnostics";
+import { JobCard } from "@/jobs/JobCard";
+import { useTrackedJob } from "@/jobs/useTrackedJob";
+import { useJobsStore } from "@/store/jobs";
+import { addImagesToDataset } from "./bulkActions";
+
+interface Props {
+  projectId: string;
+  imageIds: string[];
+  onClose: () => void;
+}
+
+const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
+const label = "flex flex-col gap-1 text-xs text-slate-400";
+const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
+const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+
+/** Spec section 5 split options (by_group default, val fraction 0.2, seed 42); the job shows inline. */
+export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
+  const api = useApi();
+  const [name, setName] = useState("");
+  const [split, setSplit] = useState<SplitMethod>("by_group");
+  const [valFraction, setValFraction] = useState("0.2");
+  const [seed, setSeed] = useState("42");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const job = useTrackedJob(projectId, jobId);
+  const n = imageIds.length;
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    const fraction = Number(valFraction);
+    const seedValue = Number(seed);
+    if (!(fraction >= 0.05 && fraction <= 0.5)) {
+      setError("Validation fraction must be between 0.05 and 0.5.");
+      return;
+    }
+    if (!Number.isInteger(seedValue)) {
+      setError("Seed must be a whole number.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const created = await addImagesToDataset(api, projectId, imageIds, {
+        name: name.trim(),
+        split_method: split,
+        val_fraction: fraction,
+        seed: seedValue,
+      });
+      useJobsStore.getState().upsert(created.job);
+      setJobId(created.job.id);
+    } catch (err) {
+      pushLog(`add to dataset failed: ${messageOf(err, String(err))}`);
+      setError(messageOf(err, "could not create the dataset"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form
+      role="dialog"
+      aria-label="Add to dataset"
+      onSubmit={(e) => void submit(e)}
+      className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-3"
+    >
+      <p className="text-sm">
+        Freeze the accepted boxes of {n} {n === 1 ? "image" : "images"} into a new dataset (immutable after creation).
+      </p>
+      {jobId === null ? (
+        <>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className={label}>
+              Name
+              <input aria-label="Dataset name" required pattern="[A-Za-z0-9._-]+" value={name} onChange={(e) => setName(e.target.value)} className={input} />
+            </label>
+            <label className={label}>
+              Split
+              <select aria-label="Split method" value={split} onChange={(e) => setSplit(e.target.value as SplitMethod)} className={input}>
+                <option value="by_group">by group</option>
+                <option value="by_tile">by tile</option>
+                <option value="random">random</option>
+              </select>
+            </label>
+            <label className={label}>
+              Validation fraction
+              <input aria-label="Validation fraction" type="number" min={0.05} max={0.5} step={0.05} value={valFraction} onChange={(e) => setValFraction(e.target.value)} className={`${input} w-20`} />
+            </label>
+            <label className={label}>
+              Seed
+              <input aria-label="Seed" type="number" value={seed} onChange={(e) => setSeed(e.target.value)} className={`${input} w-24`} />
+            </label>
+            <button type="submit" className={primary} disabled={busy}>
+              Create dataset
+            </button>
+            <button type="button" className={secondary} onClick={onClose} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        </>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {job ? <JobCard projectId={projectId} job={job} /> : <p className="text-xs text-slate-400">Job queued\…</p>}
+          <div className="flex items-center gap-3">
+            <Link to={`/p/${projectId}/train`} className="text-sm text-orange-300 hover:underline">
+              Train on it
+            </Link>
+            <button type="button" className={secondary} onClick={onClose}>
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-red-300">
+          {error}
+        </p>
+      )}
+    </form>
+  );
+}
+```
+
+- [ ] **Step 5: Replace `SelectionBar.tsx`**
+
+```tsx
+import { useState } from "react";
+import { useApi } from "@/api/client";
+import { messageOf } from "@/api/errors";
+import { pushLog } from "@/app/diagnostics";
+import { useChangesStore } from "@/store/changes";
+import { AddToDatasetDialog } from "./AddToDatasetDialog";
+import { deleteImages } from "./bulkActions";
+
+interface Props {
+  projectId: string;
+  selectedIds: string[];
+  onLabel: () => void;
+  /** Opens the query screen with the selection preloaded (S5). */
+  onRunModel: () => void;
+  /** The selection is gone after a delete, so the message is handed to the screen to show. */
+  onDeleted: (message: string) => void;
+  onClear: () => void;
+}
+
+const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
+
+export function SelectionBar({ projectId, selectedIds, onLabel, onRunModel, onDeleted, onClear }: Props) {
+  const api = useApi();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [mode, setMode] = useState<"idle" | "dataset" | "confirm-delete">("idle");
+  const n = selectedIds.length;
+
+  async function confirmDelete() {
+    setBusy(true);
+    setError(null);
+    try {
+      const deleted = await deleteImages(api, projectId, selectedIds);
+      useChangesStore.getState().bumpImages();
+      onDeleted(`${deleted} ${deleted === 1 ? "image" : "images"} deleted`);
+      setMode("idle");
+    } catch (e) {
+      pushLog(`delete images failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "delete images failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium">{n} selected</span>
+        <button type="button" className={primary} onClick={onLabel} disabled={busy}>
+          Label selected
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={onRunModel}
+          disabled={busy}
+          title="Open the query screen with these images selected"
+        >
+          Run model
+        </button>
+        <button type="button" className={btn} onClick={() => setMode(mode === "dataset" ? "idle" : "dataset")} disabled={busy}>
+          Add to dataset
+        </button>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => setMode(mode === "confirm-delete" ? "idle" : "confirm-delete")}
+          disabled={busy}
+        >
+          Delete
+        </button>
+        <button type="button" className="ml-auto text-xs text-slate-400 hover:text-white" onClick={onClear}>
+          Clear selection
+        </button>
+      </div>
+      {mode === "dataset" && (
+        <AddToDatasetDialog projectId={projectId} imageIds={selectedIds} onClose={() => setMode("idle")} />
+      )}
+      {mode === "confirm-delete" && (
+        <div className="flex items-center gap-2 text-sm">
+          <span>Remove {n} images and their boxes from the project? Original files are not touched.</span>
+          <button
+            type="button"
+            className="rounded bg-red-700 px-3 py-1 text-sm hover:bg-red-600"
+            onClick={() => void confirmDelete()}
+            disabled={busy}
+          >
+            Delete {n} images
+          </button>
+          <button type="button" className={btn} onClick={() => setMode("idle")}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-red-300">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+```
+
+- [ ] **Step 6: Wire the screen and update the e2e**
+
+In `frontend/src/screens/DataManagerScreen.tsx` replace the `<SelectionBar ... />` element with:
+
+```tsx
+        <SelectionBar
+          projectId={projectId}
+          selectedIds={selectedIds}
+          onLabel={labelSelected}
+          onRunModel={() => {
+            useNavigationStore.getState().setContext(selectedIds, "query");
+            void navigate(`/p/${projectId}/query`);
+          }}
+          onDeleted={(message) => {
+            setSelection(clearSelection());
+            setNotice(message);
+          }}
+          onClear={() => setSelection(clearSelection())}
+        />
+```
+
+`project` is still used for the empty-state text, so `useProject` stays.
+
+In `frontend/e2e/data-manager.spec.ts` replace the test `"run model on selected posts a local-model query run; add to dataset posts the ids"` with:
+
+```ts
+test("run model opens the query screen with the selection; add to dataset posts the ids with the seed", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
+  await page.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
+  await page.getByRole("button", { name: "Run model" }).click();
+  await page.waitForURL(`**/p/${P}/query`);
+  await expect(page.getByLabel("Images")).toHaveValue("selection");
+  await expect(page.getByTestId("image-count")).toHaveText("1 image selected");
+
+  await page.goBack();
+  await page.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
+  await page.getByRole("button", { name: "Add to dataset" }).click();
+  await page.getByLabel("Dataset name").fill("v1");
+  await page.getByLabel("Seed").fill("7");
+  const dataset = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/datasets"));
+  await page.getByRole("button", { name: "Create dataset" }).click();
+  expect((await dataset).postDataJSON()).toEqual({
+    name: "v1",
+    split_method: "by_group",
+    val_fraction: 0.2,
+    seed: 7,
+    image_ids: [IMG],
+  });
+  await expect(page.getByRole("dialog", { name: "Add to dataset" }).getByTestId(/^job-/)).toBeVisible();
+  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${P}/train`);
+});
+```
+
+and delete the now-unused `MODEL` constant at the top of that spec if nothing else references it.
+
+- [ ] **Step 7: Run the tests to verify they pass**
+
+Run: `pnpm test src/data && pnpm e2e e2e/data-manager.spec.ts`
+Expected: `bulkActions` 2, `AddToDatasetDialog` 2, `SelectionBar` 2 passed and the other `src/data` tests green; data-manager e2e 6 passed.
+
+- [ ] **Step 8: Format, lint, type-check and commit**
+
+Run: `pnpm format && pnpm lint && pnpm exec tsc -b`
+
+```bash
+git add src/data/bulkActions.ts src/data/bulkActions.test.ts src/data/AddToDatasetDialog.tsx src/data/AddToDatasetDialog.test.tsx src/data/SelectionBar.tsx src/data/SelectionBar.test.tsx src/screens/DataManagerScreen.tsx e2e/data-manager.spec.ts
+git commit -m "feat(ui): run model opens the query screen; add to dataset dialog with seed and job"
+```
+
+---
+
+### Task 16: Playwright e2e for the model registry
+
+**Files:**
+- Create: `frontend/e2e/models.spec.ts`
+
+**Interfaces:**
+- Consumes: Tasks 5-7 screens; the mock (see "Mock server limitations": the registry only holds the imported example, so the trained-model scenario is served through `page.route`).
+
+- [ ] **Step 1: Write the spec**
+
+```ts
+import { test, expect, type Route } from "@playwright/test";
+
+const P = "7f1c2e3a-1111-4000-8000-000000000001";
+const MODEL = "m0000000-2222-4000-8000-000000000001";
+const TRAINED = "m0000000-2222-4000-8000-000000000002";
+const DATASET = "d0000000-7777-4000-8000-000000000001";
+
+const json = (body: unknown, status = 200) => ({
+  status,
+  contentType: "application/json",
+  headers: { "Access-Control-Allow-Origin": "*" },
+  body: JSON.stringify(body),
+});
+
+const trained = {
+  id: TRAINED,
+  name: "ahmadia-v1-n",
+  kind: "trained",
+  weights_path: "models/ahmadia-v1-n.pt",
+  base_weights: "yolo11n.pt",
+  dataset_id: DATASET,
+  hyperparameters: { epochs: 3, imgsz: 1280 },
+  metrics: {
+    map50: 0.71,
+    map50_95: 0.44,
+    precision: 0.78,
+    recall: 0.66,
+    per_class: [{ class_name: "excavator", map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }],
+  },
+  class_names: ["excavator", "dump_truck"],
+  class_aliases: {},
+  exports: { onnx: "models/ahmadia-v1-n.onnx" },
+  artifacts: { results_csv: "runs/j1/results.csv", confusion_matrix: "runs/j1/cm.png", pr_curve: "runs/j1/pr.png" },
+  run_id: null,
+  created_at: "2026-09-17T15:00:00Z",
+};
+
+const imported = {
+  id: MODEL,
+  name: "yolo11m-coco",
+  kind: "imported",
+  weights_path: "models/yolo11m.pt",
+  base_weights: null,
+  dataset_id: null,
+  hyperparameters: {},
+  metrics: null,
+  class_names: ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck"],
+  class_aliases: { truck: "dump_truck" },
+  exports: {},
+  artifacts: {},
+  run_id: null,
+  created_at: "2026-09-17T10:10:00Z",
+};
+
+const CSV = [
+  "epoch,time,metrics/precision(B),metrics/recall(B),metrics/mAP50(B),metrics/mAP50-95(B)",
+  "1,12.3,0.31,0.22,0.18,0.09",
+  "2,24.1,0.52,0.41,0.45,0.24",
+  "3,36.0,0.78,0.66,0.71,0.44",
+].join("\n");
+
+const isModelsList = (url: URL) => url.pathname === `/api/v1/projects/${P}/models`;
+
+test("lists the registry and opens the imported model's detail from the table", async ({ page }) => {
+  await page.goto(`/p/${P}/models`);
+  await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
+  await expect(page.getByTestId("model-table")).toContainText("yolo11m-coco");
+  await expect(page.getByTestId("model-table")).toContainText("Imported");
+  await page.getByRole("button", { name: "Select model yolo11m-coco" }).click();
+  await expect(page).toHaveURL(new RegExp(`model=${MODEL}`));
+  const detail = page.getByTestId("model-detail");
+  await expect(detail).toContainText("dump_truck");
+  await expect(detail).toContainText("No training artifacts (imported weights).");
+  await expect(detail).toContainText("Pre-annotation model");
+});
+
+test("a trained model shows metrics, the per-class table, the curve from results.csv and the artifact images", async ({ page }) => {
+  await page.route(isModelsList, (route: Route) => route.fulfill(json({ items: [trained], next_cursor: null })));
+  await page.route(
+    (url) => url.pathname.endsWith(`/models/${TRAINED}/artifacts/results_csv`),
+    (route) => route.fulfill({ status: 200, contentType: "text/csv", headers: { "Access-Control-Allow-Origin": "*" }, body: CSV }),
+  );
+  const cm = page.waitForRequest((r) => r.url().includes(`/models/${TRAINED}/artifacts/confusion_matrix?token=mock`));
+  await page.goto(`/p/${P}/models?model=${TRAINED}`);
+  await cm;
+  const row = page.getByRole("button", { name: "Select model ahmadia-v1-n" }).locator("xpath=ancestor::tr");
+  await expect(row).toContainText("71.0%");
+  await expect(row).toContainText("v1");
+  await expect(page.getByTestId("class-metrics")).toContainText("excavator");
+  await expect(page.getByTestId("training-curve")).toHaveAttribute("data-points", "3");
+  await expect(page.getByText("Confusion matrix", { exact: true })).toBeVisible();
+  await expect(page.getByText("PR curve", { exact: true })).toBeVisible();
+  await expect(page.getByText("models/ahmadia-v1-n.onnx")).toBeVisible();
+});
+
+test("export, import, use as pre-annotation and delete send the contract requests", async ({ page }) => {
+  // Both models are listed so the imported one (the mock's answer to the import) has a detail to delete.
+  await page.route(isModelsList, (route: Route) => route.fulfill(json({ items: [trained, imported], next_cursor: null })));
+  await page.goto(`/p/${P}/models?model=${TRAINED}`);
+  const exported = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/models/${TRAINED}/export`));
+  await page.getByRole("button", { name: "Export ONNX" }).click();
+  expect((await exported).postDataJSON()).toEqual({ format: "onnx", imgsz: 1280, half: false });
+  await expect(page.getByTestId("model-detail").getByTestId(/^job-/)).toBeVisible();
+  await expect(page.getByText(/1 active job/)).toBeVisible();
+
+  const patched = page.waitForRequest((r) => r.method() === "PATCH" && r.url().endsWith(`/projects/${P}`));
+  await page.getByRole("button", { name: "Use as pre-annotation model" }).click();
+  expect((await patched).postDataJSON()).toEqual({ preannotation_model_id: TRAINED });
+
+  await page.getByRole("button", { name: "Import weights" }).click();
+  await page.getByLabel("Model name").fill("yolo11m-coco");
+  await page.getByLabel("Weights path").fill("E:\\Dev\\Yolo\\models\\yolo11m.pt");
+  await expect(page.getByLabel("Class aliases")).toHaveValue("truck=dump_truck");
+  const imported = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/models/import"));
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  expect((await imported).postDataJSON()).toEqual({
+    name: "yolo11m-coco",
+    weights_path: "E:\\Dev\\Yolo\\models\\yolo11m.pt",
+    class_aliases: { truck: "dump_truck" },
+  });
+  await expect(page).toHaveURL(new RegExp(`model=${MODEL}`));
+
+  await page.getByRole("button", { name: "Delete model" }).click();
+  const deleted = page.waitForRequest((r) => r.method() === "DELETE" && r.url().endsWith(`/models/${MODEL}`));
+  await page.getByRole("button", { name: "Delete permanently" }).click();
+  await deleted;
+  await expect(page.getByTestId("model-detail")).toHaveCount(0);
+});
+
+test("a 501 registry shows the note and keeps the screen usable", async ({ page }) => {
+  await page.route(isModelsList, (route: Route) =>
+    route.fulfill(json({ error: { code: "not_implemented", message: "models arrive with S3", details: {} } }, 501)),
+  );
+  await page.goto(`/p/${P}/models`);
+  await expect(page.getByRole("note")).toContainText("The model registry is not available yet");
+  await expect(page.getByRole("button", { name: "Import weights" })).toBeDisabled();
+});
+```
+
+- [ ] **Step 2: Run the spec**
+
+Run: `pnpm e2e e2e/models.spec.ts`
+Expected: 4 passed. If the confusion-matrix request never fires because the `<img>` is created after the assertion window, move `const cm = page.waitForRequest(...)` above `page.goto` (it already is) and keep the `await cm` right after the navigation.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add e2e/models.spec.ts
+git commit -m "test(ui): model registry e2e against the mock server"
+```
+
+---
+
+### Task 17: Playwright e2e for the training screen
+
+**Files:**
+- Create: `frontend/e2e/train.spec.ts`
+
+- [ ] **Step 1: Write the spec**
+
+```ts
+import { test, expect } from "@playwright/test";
+
+const P = "7f1c2e3a-1111-4000-8000-000000000001";
+const MODEL = "m0000000-2222-4000-8000-000000000001";
+const DATASET = "d0000000-7777-4000-8000-000000000001";
+const JOB = "j0000000-4444-4000-8000-000000000001";
+
+test("starts training with the chosen parameters and shows the live card with log and cancel", async ({ page }) => {
+  await page.goto(`/p/${P}/train`);
+  await expect(page.getByRole("heading", { name: "Train" })).toBeVisible();
+  await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
+  await expect(page.getByLabel("Base model")).toHaveValue(MODEL);
+  await expect(page.getByLabel("Model name")).toHaveValue("v1-yolo11m-coco");
+  await expect(page.getByRole("link", { name: "Create dataset" })).toHaveAttribute("href", `/p/${P}/data`);
+  await page.getByLabel("Model name").fill("ahmadia-v1-n");
+  await page.getByLabel("Epochs").fill("3");
+  await page.getByLabel("Augmentation").selectOption("aerial");
+  await page.getByLabel("Automatic batch size").uncheck();
+  await page.getByLabel("Batch size").fill("8");
+  const post = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/models/train`));
+  await page.getByRole("button", { name: "Start training" }).click();
+  expect((await post).postDataJSON()).toEqual({
+    name: "ahmadia-v1-n",
+    dataset_id: DATASET,
+    base_model_id: MODEL,
+    epochs: 3,
+    imgsz: 1280,
+    batch: 8,
+    patience: 50,
+    augmentation: "aerial",
+    device: "0",
+  });
+  await expect(page).toHaveURL(new RegExp(`job=${JOB}`));
+  const card = page.getByTestId("train-progress");
+  await expect(card).toBeVisible();
+  // The mock answers with its example job (an import at 42 %): no epoch in the message, hence the dash.
+  await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
+  await expect(card.getByTestId("epoch")).toHaveText("\–");
+  await expect(card.getByTestId("elapsed")).not.toHaveText("\–");
+  await expect(card.getByTestId("job-log")).toContainText("job started");
+  await expect(page.getByText(/1 active job/)).toBeVisible();
+  const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
+  await card.getByRole("button", { name: "Cancel job" }).click();
+  await cancel;
+  await page.getByRole("button", { name: "New training" }).click();
+  await expect(page.getByRole("button", { name: "Start training" })).toBeVisible();
+});
+
+test("validation blocks an empty name and a 501 trainer shows the note", async ({ page }) => {
+  await page.route(
+    (url) => url.pathname.endsWith(`/projects/${P}/models/train`),
+    (route) =>
+      route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: { code: "not_implemented", message: "training arrives with S3", details: {} } }),
+      }),
+  );
+  await page.goto(`/p/${P}/train`);
+  await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
+  await page.getByLabel("Model name").fill("");
+  await page.getByRole("button", { name: "Start training" }).click();
+  await expect(page.getByRole("alert")).toContainText("Give the model a name.");
+  await page.getByLabel("Model name").fill("x");
+  await page.getByRole("button", { name: "Start training" }).click();
+  await expect(page.getByRole("note")).toContainText("Training is not available yet");
+  await expect(page.getByRole("button", { name: "Start training" })).toBeEnabled();
+});
+```
+
+- [ ] **Step 2: Run the spec**
+
+Run: `pnpm e2e e2e/train.spec.ts`
+Expected: 2 passed.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add e2e/train.spec.ts
+git commit -m "test(ui): training screen e2e against the mock server"
+```
+
+---
+
+### Task 18: Playwright e2e for the query screen
+
+**Files:**
+- Create: `frontend/e2e/query.spec.ts`
+
+- [ ] **Step 1: Write the spec**
+
+```ts
+import { test, expect } from "@playwright/test";
+
+const P = "7f1c2e3a-1111-4000-8000-000000000001";
+const MODEL = "m0000000-2222-4000-8000-000000000001";
+const IMG = "10000000-5555-4000-8000-000000000001";
+const IMG2 = "10000000-5555-4000-8000-000000000002";
+const RUN = "q0000000-8888-4000-8000-000000000001";
+
+test("estimates and starts a cloud query, then reviews results, promotes and lists the run", async ({ page }) => {
+  const unlabeled = page.waitForRequest((r) => r.url().includes(`/projects/${P}/images?`) && r.url().includes("labeled=false"));
+  await page.goto(`/p/${P}/query`);
+  await unlabeled;
+  await expect(page.getByRole("heading", { name: "Query" })).toBeVisible();
+  await expect(page.getByLabel("Model")).toHaveValue(MODEL);
+  await expect(page.getByTestId("image-count")).toHaveText("2 images selected");
+  await expect(page.getByRole("button", { name: "Start" })).toBeDisabled();
+
+  const grouped = page.waitForRequest((r) => r.url().includes("group_key=0031"));
+  await page.getByLabel("Images").selectOption("group");
+  await page.getByLabel("Group key").fill("0031");
+  await grouped;
+
+  await page.getByLabel("Cloud provider").check();
+  await expect(page.getByLabel("Provider")).toHaveValue("anthropic");
+  await expect(page.getByRole("option", { name: /OpenAI/ })).toBeDisabled();
+  await page.getByLabel("Query").fill("dump trucks");
+  await page.getByLabel("Confidence").fill("0.3");
+
+  const expected = {
+    kind: "cloud_provider",
+    provider: "anthropic",
+    query: "dump trucks",
+    image_ids: [IMG, IMG2],
+    tiling: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 },
+    conf: 0.3,
+  };
+  const estimated = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/query-runs/estimate"));
+  await page.getByRole("button", { name: "Estimate" }).click();
+  expect((await estimated).postDataJSON()).toEqual(expected);
+  await expect(page.getByTestId("estimate")).toContainText("40 requests");
+  await expect(page.getByTestId("estimate")).toContainText("$0.80");
+
+  const created = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/query-runs`));
+  await page.getByRole("button", { name: "Start" }).click();
+  expect((await created).postDataJSON()).toEqual(expected);
+  await expect(page).toHaveURL(new RegExp(`run=${RUN}`));
+  const card = page.getByTestId("run-card");
+  await expect(card).toContainText('Anthropic: "dump trucks"');
+  await expect(card.getByTestId("box-count")).toHaveText("7 boxes written so far");
+  await expect(card.getByTestId(/^job-/)).toBeVisible();
+  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Review results" })).toHaveAttribute("href", `/p/${P}/review?ids=${IMG},${IMG2}`);
+
+  const promoted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/query-runs/${RUN}/promote`));
+  await page.getByLabel("Minimum confidence").fill("0.6");
+  await page.getByRole("button", { name: "Promote" }).click();
+  expect((await promoted).postDataJSON()).toEqual({ min_confidence: 0.6 });
+  await expect(page.getByRole("status").filter({ hasText: "6 boxes accepted" })).toBeVisible();
+  await expect(card.getByText("Promoted")).toBeVisible();
+  await expect(page.getByTestId("run-history")).toContainText("dump trucks");
+
+  const narrowed = page.waitForRequest((r) => r.url().includes(`/projects/${P}/images?`) && r.url().includes(`ids=${IMG}`));
+  await page.getByRole("link", { name: "Review results" }).click();
+  await narrowed;
+  await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
+  await expect(page.getByText(/Showing 2 images from a query run/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Show the whole queue" })).toHaveAttribute("href", `/p/${P}/review`);
+});
+
+test("a local-model run over the first N images; a 501 estimate shows the note", async ({ page }) => {
+  await page.goto(`/p/${P}/query`);
+  await expect(page.getByLabel("Model")).toHaveValue(MODEL);
+  const firstN = page.waitForRequest((r) => r.url().includes(`/projects/${P}/images?`) && r.url().includes("limit=2"));
+  await page.getByLabel("Images").selectOption("first_n");
+  await page.getByLabel("Number of images").fill("2");
+  await firstN;
+  await page.getByLabel("Tiling").uncheck();
+  const estimated = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/query-runs/estimate"));
+  await page.getByRole("button", { name: "Estimate" }).click();
+  expect((await estimated).postDataJSON()).toEqual({
+    kind: "local_model",
+    model_id: MODEL,
+    image_ids: [IMG, IMG2],
+    tiling: { enabled: false, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 },
+    conf: 0.25,
+  });
+  await expect(page.getByTestId("estimate")).toBeVisible();
+
+  await page.route(
+    (url) => url.pathname.endsWith("/query-runs/estimate"),
+    (route) =>
+      route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: { code: "not_implemented", message: "query runs arrive with S4", details: {} } }),
+      }),
+  );
+  await page.getByLabel("Confidence").fill("0.4");
+  await expect(page.getByTestId("estimate")).toHaveCount(0);
+  await page.getByRole("button", { name: "Estimate" }).click();
+  await expect(page.getByRole("note")).toContainText("Query runs are not available yet");
+  await expect(page.getByRole("heading", { name: "Query" })).toBeVisible();
+});
+```
+
+- [ ] **Step 2: Run the spec**
+
+Run: `pnpm e2e e2e/query.spec.ts`
+Expected: 2 passed.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add e2e/query.spec.ts
+git commit -m "test(ui): query screen e2e against the mock server"
+```
+
+---
+
+### Task 19: Playwright e2e for the jobs panel
+
+**Files:**
+- Create: `frontend/e2e/jobs.spec.ts`
+
+- [ ] **Step 1: Write the spec**
+
+```ts
+import { test, expect } from "@playwright/test";
+
+const P = "7f1c2e3a-1111-4000-8000-000000000001";
+const JOB = "j0000000-4444-4000-8000-000000000001";
+
+test("opens the jobs panel from the top bar, shows progress and log, cancels and closes", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
+  await expect(page.getByRole("heading", { name: "Data Manager" })).toBeVisible();
+  const listed = page.waitForRequest((r) => r.method() === "GET" && r.url().includes(`/projects/${P}/jobs?limit=100`));
+  await page.getByRole("button", { name: "0 active jobs" }).click();
+  await listed;
+  const panel = page.getByRole("dialog", { name: "Jobs" });
+  await expect(panel).toBeVisible();
+  const card = panel.getByTestId(`job-${JOB}`);
+  await expect(card).toContainText("Import");
+  await expect(card.getByTestId("job-state")).toHaveText("Running");
+  await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
+  await expect(card).toContainText("1386 / 3299 images");
+  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
+
+  const log = page.waitForRequest((r) => r.url().includes(`/jobs/${JOB}/log?tail=200`));
+  await card.getByRole("button", { name: "Show log" }).click();
+  await log;
+  await expect(card.getByTestId("job-log")).toContainText("50 / 3299 images");
+
+  const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
+  await card.getByRole("button", { name: "Cancel job" }).click();
+  await cancel;
+
+  await page.getByRole("button", { name: "Close jobs" }).click();
+  await expect(panel).toHaveCount(0);
+});
+
+test("a failed job shows its error and no cancel button", async ({ page }) => {
+  await page.route(
+    (url) => url.pathname === `/api/v1/projects/${P}/jobs`,
+    (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({
+          items: [
+            {
+              id: "j-failed",
+              project_id: P,
+              type: "train",
+              state: "failed",
+              progress: 0.3,
+              message: "epoch 15/50 mAP50 0.410",
+              log_path: "runs/j-failed/job.log",
+              params: { name: "ahmadia-v1-n" },
+              result: null,
+              error: "CUDA out of memory",
+              created_at: "2026-09-17T10:05:00Z",
+              started_at: "2026-09-17T10:05:01Z",
+              finished_at: "2026-09-17T10:35:01Z",
+            },
+          ],
+          next_cursor: null,
+        }),
+      }),
+  );
+  await page.goto(`/p/${P}/data`);
+  await page.getByRole("button", { name: "0 active jobs" }).click();
+  const card = page.getByRole("dialog", { name: "Jobs" }).getByTestId("job-j-failed");
+  await expect(card).toContainText("Training: ahmadia-v1-n");
+  await expect(card.getByTestId("job-state")).toHaveText("Failed");
+  await expect(card.getByRole("alert")).toHaveText("CUDA out of memory");
+  await expect(card).toContainText("30 min 00 s");
+  await expect(card.getByRole("button", { name: "Cancel job" })).toHaveCount(0);
+});
+```
+
+- [ ] **Step 2: Run the spec**
+
+Run: `pnpm e2e e2e/jobs.spec.ts`
+Expected: 2 passed.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add e2e/jobs.spec.ts
+git commit -m "test(ui): jobs panel e2e against the mock server"
+```
+
+---
+
+### Task 20: Playwright e2e for the provider settings
+
+**Files:**
+- Create: `frontend/e2e/providers.spec.ts`
+
+- [ ] **Step 1: Write the spec**
+
+```ts
+import { test, expect } from "@playwright/test";
+
+const P = "7f1c2e3a-1111-4000-8000-000000000001";
+
+test("stores a key without echoing it, tests, patches and removes a key", async ({ page }) => {
+  await page.goto(`/p/${P}/settings`);
+  await expect(page.getByRole("heading", { name: "Provider keys" })).toBeVisible();
+  await expect(page.getByTestId("key-state-openai")).toHaveText("No key stored");
+  await expect(page.getByTestId("key-state-anthropic")).toHaveText("Key stored");
+
+  const keyInput = page.getByLabel("OpenAI API key");
+  await expect(keyInput).toHaveAttribute("type", "password");
+  await keyInput.fill("sk-test-123");
+  const put = page.waitForRequest((r) => r.method() === "PUT" && r.url().endsWith("/providers/openai/key"));
+  await page.getByRole("button", { name: "Save OpenAI key" }).click();
+  expect((await put).postDataJSON()).toEqual({ api_key: "sk-test-123" });
+  await expect(keyInput).toHaveValue("");
+  await expect(page.getByTestId("key-state-openai")).toHaveText("Key stored");
+  expect(await page.content()).not.toContain("sk-test-123");
+
+  const tested = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/providers/anthropic/test"));
+  await page.getByRole("button", { name: "Test Anthropic" }).click();
+  await tested;
+  await expect(page.getByRole("status").filter({ hasText: "OK: responded in 1.2 s (claude-opus-5)" })).toBeVisible();
+
+  await page.getByLabel("Anthropic requests per minute").fill("10");
+  const patched = page.waitForRequest((r) => r.method() === "PATCH" && r.url().endsWith("/providers/anthropic"));
+  await page.getByRole("button", { name: "Save Anthropic settings" }).click();
+  expect((await patched).postDataJSON()).toEqual({ requests_per_minute: 10 });
+
+  const removed = page.waitForRequest((r) => r.method() === "DELETE" && r.url().endsWith("/providers/anthropic/key"));
+  await page.getByRole("button", { name: "Remove Anthropic key" }).click();
+  await removed;
+  await expect(page.getByTestId("key-state-anthropic")).toHaveText("No key stored");
+  await expect(page.getByRole("button", { name: "Remove Anthropic key" })).toBeDisabled();
+});
+
+test("a 501 from providers shows the note and leaves the other settings sections working", async ({ page }) => {
+  await page.route(
+    (url) => url.pathname === "/api/v1/providers",
+    (route) =>
+      route.fulfill({
+        status: 501,
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ error: { code: "not_implemented", message: "providers arrive with S4", details: {} } }),
+      }),
+  );
+  await page.goto(`/p/${P}/settings`);
+  await expect(page.getByRole("note").filter({ hasText: "Cloud providers are not available yet" })).toBeVisible();
+  await expect(page.getByLabel("Pre-annotation model")).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Save classes" })).toBeVisible();
+});
+```
+
+- [ ] **Step 2: Run the spec**
+
+Run: `pnpm e2e e2e/providers.spec.ts e2e/settings.spec.ts`
+Expected: providers 2 passed, settings 4 passed.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add e2e/providers.spec.ts
+git commit -m "test(ui): provider settings e2e against the mock server"
+```
+
+---
+
+### Task 21: Final verification
+
+**Files:**
+- No new files. Everything from `frontend/` in the worktree.
+
+- [ ] **Step 1: Format, lint, type-check, unit tests, build**
+
+Run: `pnpm format && pnpm lint && pnpm test && pnpm build`
+Expected: prettier writes nothing new, eslint clean with 0 warnings from S5 files, Vitest green for every file (S2's 29 files plus S5's: `api/paging`, `api/models`, `api/datasets`, `api/providers`, `api/useProviders`, `api/queryRuns`, `api/jobs`, `store/jobs`, `jobs/jobLabels`, `jobs/useTrackedJob`, `jobs/useJobLog`, `jobs/JobCard`, `jobs/JobsPanel`, `models/resultsCsv`, `models/aliases`, `models/modelLabels`, `models/useModels`, `models/ModelArtifacts`, `models/ImportModelForm`, `models/ModelDetail`, `screens/ModelsScreen`, `train/trainModel`, `train/TrainForm`, `train/TrainProgress`, `screens/TrainScreen`, `query/queryModel`, `query/useImageSelection`, `query/RunCard`, `screens/QueryScreen`, `screens/ReviewScreenIds`, `settings/providersModel`, `settings/ProvidersSection`, `api/sources`, `data/ImportImagesDialog`, `settings/SourcesSection`, `data/AddToDatasetDialog`, and the replaced `data/bulkActions`, `data/SelectionBar`), `vite build` writes `dist/`.
+
+- [ ] **Step 2: Full e2e run against the mock, twice**
+
+Run: `pnpm e2e` then `pnpm e2e` again
+Expected: S2's 27 (boot 1, data-manager 6, editor 15, review 1, settings 4) plus S5's 14 (models 4, train 2, query 2, jobs 2, providers 2, import 2) = `41 passed`, both runs. Ports 1420 and 4010 are free afterwards (Playwright stops the servers it started; `reuseExistingServer` means a mock you left running stays yours to stop).
+
+- [ ] **Step 3: Contract untouched**
+
+Run from the repo root of the worktree: `git status --porcelain -- contract` and `pnpm --dir contract check`
+Expected: empty status; Spectral clean; `git diff --exit-code -- client/schema.d.ts` passes.
+
+- [ ] **Step 4: Manual pass in the browser (spec section 12 "demonstrated through the real UI")**
+
+With `pnpm --dir ../contract mock` and `pnpm dev` running, open `http://127.0.0.1:1420/`, Open Ahmadia, then walk: **Data** (Import images: folder, site, defaults prefilled, Start import opens the jobs panel with the job, status line) -> **Settings** (Sources: ahmadia with counts, Stats, Re-import new files) -> **Models** (table, click the row, detail with classes and aliases, "No training artifacts", Import weights form with Browse absent in the browser, Export ONNX shows a job card and the top-bar counter goes to 1, Use as pre-annotation, Delete with confirm) -> **Train** (dataset v1 preselected, base model, suggested name, epochs 3, aerial, Start, `?job=` card at 42 % with the log tail, Cancel, New training) -> **Data** (select two, Run model -> Query with "2 images selected" in selection mode; back, Add to dataset with seed, job card, Train on it link) -> **Query** (cloud provider, OpenAI disabled with the hint, Anthropic, "dump trucks", Estimate card, Start, run card with 7 boxes, Promote 0.5 -> "6 boxes accepted", Review results -> review queue narrowed, Show the whole queue) -> top bar **jobs button** (panel lists the import job, Show log, Cancel, Close) -> **Settings** (provider cards: type a key, Save, field clears, badge flips; Test; change rpm, Save; Remove key). Note anything unexpected in the commit message of a fix commit.
+
+- [ ] **Step 5: Commit any last fixes and report**
+
+```bash
+git add -A src e2e
+git commit -m "chore(ui): S5 training and inference UI verification pass"
+```
+
+Report to the goal owner: the branch name, the commit range, the unit and e2e counts, deviations from this plan with reasons, and the "Contract gaps found" list below (the goal owner owns `contract/openapi.yaml`; do not edit it).
+
+---
+
+## Contract gaps found
+
+Each item stayed inside the contract with the workaround noted; the goal owner decides whether to change `openapi.yaml`.
+
+1. **Page schemas have no examples, so the mock answers `next_cursor: "string"`** on `models`, `datasets`, `query-runs` and `jobs` (only `ImagePage` carries an example). Workaround: `collectPages` stops on a repeated cursor and dedupes by id (Task 1). Suggested change: add an `example` with `next_cursor: null` to `ModelPage`, `DatasetPage`, `QueryRunPage`, `JobPage`, `SourcePage`, `ProjectPage`.
+2. **No way to list a query run's images in the review queue.** `listImages` has no `query_run_id` filter; `ids` exists but "other filters are ignored" and the URL grows with the run. Workaround: "Review results" links to `/review?ids=...` capped at 200 ids (`REVIEW_LINK_MAX_IDS`), and the queue shows every listed image, not only those with pending proposals (Task 12). Suggested change: a `query_run_id` query parameter on `listImages` that combines with `has_pending`.
+3. **`Job.params` is untyped.** The UI reads `params.name` (training title) and `params.model_id` (export link) defensively; when the backend does not put them there the card falls back to the plain type label and no link. Suggested change: document `params` per job type next to `result` in the `Job` description.
+4. **No `finished_at` in `job.state` events.** The event payload is `{state, result, error}`; the store stamps `finished_at` with the client clock on terminal states so elapsed time stops ticking (Task 3). Harmless drift of at most one poll interval; a `finished_at` field in the payload would remove it.
+5. **Artifact endpoint content negotiation.** `GET .../artifacts/{artifact}` lists `image/png` first, so a request without `Accept: text/csv` gets PNG semantics from the mock; the client sends the header explicitly (Task 1). Suggested change: give `results_csv` its own path or list `text/csv` first.
+6. **`listImages.limit` maximum 1000** bounds the query screen's "all unlabeled" / "by group" modes to 20 pages (20 000 images) per run (Task 10); larger projects need a second run. Suggested change: none required; a `count`-only endpoint would let the UI show the exact total before listing.
+7. **`ModelImport.weights_path` must be absolute and exist**, which the browser text field cannot check; a bad path surfaces as the backend's 404 message (S3 report). The Tauri file dialog avoids it inside the app.
+8. **`TrainRequest.name` is not unique** (S3 report): the form suggests `{dataset}-{base}` and does not check for duplicates; the registry shows both rows.
+9. **The generated client requires defaulted fields** (`epochs`, `imgsz`, `patience`, `augmentation`, `device`, `half`, `seed`, `val_fraction`, `conf`, `min_confidence`, all `Tiling` fields): every request sends the contract defaults explicitly; the backend must accept them (S2 gap 5, unchanged).
+
+Everything else the screens need exists: registry list/get/import/train/export/delete with artifacts, datasets list/create/stats, providers list/patch/key/test, query-run estimate/create/list/get/promote, jobs list/get/cancel/log, project patch for the pre-annotation model, and the `job.progress` / `job.state` events.
+
+## Self-review checklist (run before reporting)
+
+- Spec coverage: section 7 registry (Tasks 5-7: list with metrics, per-class table, `results.csv` curve, confusion matrix and PR curve, ONNX/TensorRT export jobs, imported weights with aliases, delete, pre-annotation model selection), section 7 training parameters (Task 8: base model from the registry, epochs, image size 1280, batch auto, patience, augmentation default|aerial, device) and live progress from the epoch messages with log and cancel (Task 9), section 8 query runs (Task 10-12: local model or cloud provider with free-text query, image selection, tiling 1280/0.2/0.5, confidence, cost estimate before start, progress, boxes so far, review, promote with a threshold, history), section 6 screen 5 provider keys in Credential Manager (Task 13), section 9 jobs list/get/cancel/log and the websocket events (Tasks 3-4), section 11 error handling through the envelope and 501 notes on every screen (every task), section 12 Vitest for state and helpers plus Playwright per screen against the mock (every task, Tasks 16-20), section 13.1 row S5 owns the training screen, model registry screen, query run screen, job panel and settings (all tasks), Data Manager bulk actions upgraded (Task 15), V1 scope item 1 / section 5 import entry point: folder picker, site, import settings from the project defaults, `POST /sources`, job in the panel, sources with counts, per-source stats and re-import (Task 14, added by the goal owner).
+- Placeholder scan: the only intentional placeholders are the `data-slot="model-actions"` div and the two `{/* ... (Task 7) */}` comments in Task 6 (replaced verbatim in Task 7), the `run-started` paragraph and the `{/* run card and history (Task 12) */}` comment in Task 11 (replaced in Task 12). Every other step carries its full code.
+- Type consistency to verify by grep once implemented: `collectPages` is used by `fetchAllModels`, `fetchDatasets`, `fetchQueryRuns` and `useImageSelection` with `(cursor?: string)` callbacks; `useTrackedJob(projectId, jobId | null)` returns `Job | null` everywhere (`ExportButtons`, `TrainProgress`, `useTrackedRun`, `AddToDatasetDialog`); `JobCard` props are `{projectId, job, showLog?}`; `useJobsStore.setState({ jobs: {}, panelOpen: false })` in every `beforeEach`; `ModelDetail` props are `{projectId, model, project, datasetNames, onProjectSaved, onChanged, onDeleted}` in both the screen and its tests; `ExportButtons` gains `onFinished?` in Task 7 and `ModelDetail` passes a `useCallback`; `QueryForm` fields are strings except `kind`, `provider`, `mode`, `tilingEnabled`; `imageQuery` returns `{query, maxPages} | null` and `useImageSelection` reads both; `reviewLink` returns `{to, capped}`; `providerLabel` and `useProviders` live in `src/api/providers.ts` and are imported by `query/queryModel.ts`, `query/SourcePicker.tsx`, `settings/ProviderCard.tsx`, `settings/ProvidersSection.tsx`; `DatasetOptions` carries `seed` and `addImagesToDataset` returns `DatasetWithJob`; `SelectionBar` props are `{projectId, selectedIds, onLabel, onRunModel, onDeleted, onClear}`; `NavSource` includes `"query"`; `FakeRoute.raw` exists before `ModelArtifacts.test.tsx` and `ModelsScreen.test.tsx` use it.
