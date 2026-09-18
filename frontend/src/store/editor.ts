@@ -130,10 +130,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
   patchStates: (ids, state) =>
     set((s) => {
-      const now = new Date().toISOString();
+      // `unreview` (undo) clears the decision time; every other state records one.
+      const reviewedAt = state === "unreviewed" ? null : new Date().toISOString();
       const boxes = { ...s.boxes };
       for (const id of ids)
-        if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: now };
+        if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
       return { boxes };
     }),
   select: (id) => set({ selectedId: id }),

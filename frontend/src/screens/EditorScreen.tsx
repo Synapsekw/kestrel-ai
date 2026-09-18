@@ -1,11 +1,23 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
+import type { KonvaEventObject } from "konva/lib/Node";
 import { imageFileUrl, type Project } from "@contract/client";
 import { useBackend } from "@/api/client";
 import { useProject } from "@/api/project";
+import { BoxLayer } from "@/editor/BoxLayer";
 import { EditorCanvas } from "@/editor/EditorCanvas";
-import { displayMaxSide } from "@/editor/geometry";
+import {
+  clampRect,
+  displayMaxSide,
+  isDrawable,
+  normalizeRect,
+  roundRect,
+  toImage,
+  type Point,
+} from "@/editor/geometry";
+import { useEditorActions } from "@/editor/useEditorActions";
 import { useEditorImage } from "@/editor/useEditorImage";
+import { useHistory } from "@/editor/useHistory";
 import { useEditorStore } from "@/store/editor";
 
 export function EditorScreen() {
@@ -38,6 +50,9 @@ function EditorBody({
   const notice = useEditorStore((s) => s.notice);
   const activeClassId = useEditorStore((s) => s.activeClassId);
   const setActiveClass = useEditorStore((s) => s.setActiveClass);
+  const history = useHistory(imageId);
+  const { actions } = useEditorActions(projectId, history);
+  const drawStart = useRef<Point | null>(null);
 
   // A zustand action, not a React state setter: the compiler rule `set-state-in-effect` does not apply.
   useEffect(() => {
@@ -50,6 +65,43 @@ function EditorBody({
     () => (image ? imageFileUrl(baseUrl, token, projectId, image.id, displayMaxSide(image)) : null),
     [baseUrl, token, projectId, image],
   );
+
+  const onBackgroundMouseDown = (e: KonvaEventObject<MouseEvent>) => {
+    if (e.evt.button !== 0) return;
+    const st = useEditorStore.getState();
+    const pos = e.target.getStage()?.getPointerPosition();
+    if (!pos) return;
+    if (!st.activeClassId) {
+      st.setNotice("Pick a class first (keys 1 to 9)");
+      return;
+    }
+    st.select(null);
+    const p = toImage(pos, st.view);
+    drawStart.current = p;
+    st.setDraft({ x: p.x, y: p.y, w: 0, h: 0, classId: st.activeClassId });
+  };
+
+  const onMouseMove = (e: KonvaEventObject<MouseEvent>) => {
+    const start = drawStart.current;
+    const st = useEditorStore.getState();
+    const pos = e.target.getStage()?.getPointerPosition();
+    if (!start || !pos || !st.image || !st.draft) return;
+    st.setDraft({
+      ...clampRect(normalizeRect(start, toImage(pos, st.view)), st.image),
+      classId: st.draft.classId,
+    });
+  };
+
+  const onMouseUp = () => {
+    const start = drawStart.current;
+    drawStart.current = null;
+    const st = useEditorStore.getState();
+    const draft = st.draft;
+    st.setDraft(null);
+    if (!start || !draft || !st.image) return;
+    const rect = roundRect(clampRect(draft, st.image));
+    if (isDrawable(rect)) void actions.drawBox(rect, draft.classId);
+  };
 
   return (
     <div className="flex h-full min-h-0">
@@ -78,7 +130,17 @@ function EditorBody({
           </p>
         )}
         <div className="min-h-0 flex-1">
-          <EditorCanvas src={src} />
+          <EditorCanvas
+            src={src}
+            onBackgroundMouseDown={onBackgroundMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseUp={onMouseUp}
+          >
+            <BoxLayer
+              classes={project.classes}
+              onCommitRect={(id, before, after) => void actions.commitRect(id, before, after)}
+            />
+          </EditorCanvas>
         </div>
       </div>
       <aside

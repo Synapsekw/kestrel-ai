@@ -55,3 +55,40 @@ test("pans with space-drag", async ({ page }) => {
   await expect.poll(async () => (await readView(page)).x).toBeCloseTo(before.x + 60, 0);
   expect((await readView(page)).scale).toBe(before.scale);
 });
+
+test("drawing on the canvas posts a box in image pixels with the active class", async ({ page }) => {
+  await openEditor(page);
+  const from = await displayPoint(page, 2000, 1500);
+  const to = await displayPoint(page, 2400, 1800);
+  const posted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+  const body = (await posted).postDataJSON() as { class_id: string; x: number; y: number; w: number; h: number };
+  const { scale } = await readView(page);
+  const tolerance = 2 / scale + 1;
+  expect(body.class_id).toBe("c1a2b3c4-0000-4000-8000-000000000001");
+  expect(Math.abs(body.x - 2000)).toBeLessThan(tolerance);
+  expect(Math.abs(body.y - 1500)).toBeLessThan(tolerance);
+  expect(Math.abs(body.w - 400)).toBeLessThan(tolerance);
+  expect(Math.abs(body.h - 300)).toBeLessThan(tolerance);
+});
+
+test("dragging a box patches its position", async ({ page }) => {
+  await openEditor(page);
+  const centre = await displayPoint(page, 512 + 70, 300 + 45);
+  const patched = page.waitForRequest(
+    (r) => r.method() === "PATCH" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 40, centre.y + 20, { steps: 8 });
+  await page.mouse.up();
+  const body = (await patched).postDataJSON() as { x: number; y: number; w: number; h: number };
+  const { scale } = await readView(page);
+  expect(Math.abs(body.x - (512 + 40 / scale))).toBeLessThan(2 / scale + 1);
+  expect(Math.abs(body.y - (300 + 20 / scale))).toBeLessThan(2 / scale + 1);
+  expect(body.w).toBeCloseTo(140, 0);
+  expect(body.h).toBeCloseTo(90, 0);
+});

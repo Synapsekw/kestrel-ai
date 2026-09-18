@@ -49,6 +49,8 @@ describe("editor store", () => {
     s.patchStates([proposalBox.id], "accepted");
     expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("accepted");
     expect(useEditorStore.getState().boxes[proposalBox.id].reviewed_at).not.toBeNull();
+    s.patchStates([proposalBox.id], "unreviewed");
+    expect(useEditorStore.getState().boxes[proposalBox.id].reviewed_at).toBeNull();
     s.select(proposalBox.id);
     s.removeBox(proposalBox.id);
     expect(useEditorStore.getState().order).toEqual([personBox.id]);
