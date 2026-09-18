@@ -2,9 +2,8 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { pushLog } from "@/app/diagnostics";
-import { useJobsStore } from "@/store/jobs";
-
-const ACTIVE_STATES = new Set(["queued", "running"]);
+import { JobsButton } from "@/jobs/JobsButton";
+import { JobsPanel } from "@/jobs/JobsPanel";
 
 interface NavItem {
   label: string;
@@ -49,9 +48,6 @@ function useProjectName(projectId: string | undefined): string | null {
 export function Shell() {
   const { projectId, imageId } = useParams();
   const projectName = useProjectName(projectId);
-  const activeJobs = useJobsStore(
-    (s) => Object.values(s.jobs).filter((j) => ACTIVE_STATES.has(j.state)).length,
-  );
 
   return (
     <div className="flex h-full w-full bg-slate-900 text-slate-100">
@@ -82,16 +78,15 @@ export function Shell() {
           ),
         )}
       </nav>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between border-b border-slate-800 px-6 py-3">
           <span className="truncate text-sm text-slate-300">{projectName ?? "No project open"}</span>
-          <span className="rounded bg-slate-800 px-2 py-1 text-xs text-slate-300">
-            {activeJobs} active {activeJobs === 1 ? "job" : "jobs"}
-          </span>
+          <JobsButton />
         </header>
         <main className={imageId ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-6"}>
           <Outlet />
         </main>
+        {projectId && <JobsPanel projectId={projectId} />}
       </div>
     </div>
   );
