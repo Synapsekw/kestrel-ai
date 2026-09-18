@@ -26,6 +26,32 @@ def test_every_tile_is_full_size_and_inside_the_image():
         assert 0 <= t.y and t.y + t.h <= 2667
 
 
+@pytest.mark.parametrize(
+    "width,height",
+    [
+        (4000, 2667),  # both sides larger than the tile
+        (1920, 1080),  # only the height fits in one tile
+        (4000, 800),   # a wide strip: the height is far below the tile size
+        (900, 3000),   # a tall strip: the width is far below the tile size
+        (1280, 1280),  # exactly one tile
+    ],
+)
+def test_no_tile_ever_leaves_the_image(width, height):
+    tiles = make_tiles(width, height, TilingSpec())
+    assert tiles
+    for t in tiles:
+        assert 0 <= t.x and t.x + t.w <= width, t
+        assert 0 <= t.y and t.y + t.h <= height, t
+        assert t.w > 0 and t.h > 0
+
+
+def test_a_short_image_is_one_row_of_tiles_as_tall_as_the_image():
+    tiles = make_tiles(4000, 800, TilingSpec())
+    assert {t.h for t in tiles} == {800}
+    assert {t.y for t in tiles} == {0}
+    assert [t.x for t in tiles] == [0, 1024, 2048, 2720]
+
+
 def test_tiles_are_row_major():
     tiles = make_tiles(4000, 2667, TilingSpec())
     assert [(t.y, t.x) for t in tiles] == sorted((t.y, t.x) for t in tiles)

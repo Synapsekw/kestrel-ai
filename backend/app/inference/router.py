@@ -18,6 +18,7 @@ from app.inference.schemas import (
 )
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
+from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["query-runs"])
 
@@ -59,6 +60,19 @@ def create_query_run(
 def get_query_run(runId: str, handle: ProjectHandle = Depends(get_project)) -> QueryRunOut:  # noqa: N803
     row, count = service.get_query_run(handle, runId)
     return QueryRunOut.from_row(row, count)
+
+
+@router.post("/query-runs/{runId}/resume", response_model=JobRef, status_code=202)
+def resume_query_run(
+    runId: str,  # noqa: N803
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> JobRef:
+    """Run the same query run again. Its persisted tiles are reused, so only the gaps are paid for."""
+    run = service.check_resumable(handle, runId)
+    job = request.app.state.jobs.submit(handle, "infer", {"query_run_id": run.id})
+    service.set_job(handle, run.id, job.id)
+    return JobRef(job=JobOut.from_row(job, handle.id))
 
 
 @router.post("/query-runs/{runId}/promote", response_model=PromoteResult)

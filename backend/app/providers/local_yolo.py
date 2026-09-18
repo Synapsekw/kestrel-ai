@@ -15,19 +15,29 @@ from app.jobs.gpu import hold_gpu
 from app.providers.base import Detection, Tile, TileResult
 from app.providers.tiling import TiledProvider, crop_tile
 
-_MODELS: dict[str, object] = {}
-_MODELS_LOCK = threading.Lock()
+_MODEL: tuple[str, object] | None = None  # (resolved weights path, YOLO); one at a time
+_MODEL_LOCK = threading.Lock()
+
+
+def _new_yolo(key: str):
+    from ultralytics import YOLO
+
+    return YOLO(key)
 
 
 def _load(weights: Path, device: str):
-    """One YOLO instance per weights path; loading a checkpoint twice costs seconds each time."""
-    key = str(Path(weights).resolve())
-    with _MODELS_LOCK:
-        if key not in _MODELS:
-            from ultralytics import YOLO
+    """The loaded YOLO for these weights, cached so a tiled run does not reload per tile.
 
-            _MODELS[key] = YOLO(key)
-        return _MODELS[key]
+    Exactly one model is kept: holding every model a user has ever run keeps its weights on the
+    card, and training wants that memory back. Switching weights drops the old one first.
+    """
+    global _MODEL
+    key = str(Path(weights).resolve())
+    with _MODEL_LOCK:
+        if _MODEL is None or _MODEL[0] != key:
+            _MODEL = None  # drop the previous model before loading, so its VRAM is free
+            _MODEL = (key, _new_yolo(key))
+        return _MODEL[1]
 
 
 def build_class_map(
@@ -47,8 +57,20 @@ def build_class_map(
 class LocalYoloProvider(TiledProvider):
     name = "local"
 
-    def __init__(self, weights: Path, class_map: dict[str, str], imgsz: int = 1280, device: str = "0"):
+    def __init__(
+        self,
+        weights: Path,
+        class_map: dict[str, str],
+        imgsz: int = 1280,
+        device: str = "0",
+        *,
+        gpu_timeout: float | None = None,
+        cancelled: threading.Event | None = None,
+    ):
         self.weights, self.class_map, self.imgsz, self.device = weights, class_map, imgsz, device
+        # How this caller waits for the card: a job passes its cancellation event, a request passes
+        # a short timeout and turns `GpuBusy` into an answer.
+        self.gpu_timeout, self.cancelled = gpu_timeout, cancelled
 
     def detect_tile(
         self,
@@ -66,7 +88,7 @@ class LocalYoloProvider(TiledProvider):
         crop = crop_tile(image, tile)
         imgsz = self.imgsz if (tile.w, tile.h) == image.size else max(tile.w, tile.h)
         dets: list[Detection] = []
-        with hold_gpu(log, "infer"):
+        with hold_gpu(log, "infer", cancelled=self.cancelled, timeout=self.gpu_timeout):
             model = _load(self.weights, self.device)
             for result in model.predict(crop, imgsz=imgsz, conf=conf, device=self.device, verbose=False):
                 dets.extend(self._from_result(result, model.names, tile, raw_ref))

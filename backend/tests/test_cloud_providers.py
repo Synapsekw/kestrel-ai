@@ -56,6 +56,11 @@ class FakeMessages:
 class FakeAnthropic:
     def __init__(self, *outcomes):
         self.messages = FakeMessages(outcomes)
+        self.options: list[dict] = []
+
+    def with_options(self, **kwargs):
+        self.options.append(kwargs)
+        return self
 
 
 def anthropic_provider(*outcomes):
@@ -165,6 +170,8 @@ def test_anthropic_ping_returns_the_model_that_answered():
     provider, client = anthropic_provider(fixture("anthropic_ping"))
     assert provider.ping() == "claude-opus-5-20260101"
     assert client.messages.calls[0]["max_tokens"] == 16
+    # the settings screen waits on this call: it may not hang on the SDK default timeout
+    assert client.options == [{"timeout": 30}]
 
 
 def test_anthropic_detect_tiles_the_whole_image(tmp_path):
@@ -199,6 +206,11 @@ class FakeResponses:
 class FakeOpenAI:
     def __init__(self, *outcomes):
         self.responses = FakeResponses(outcomes)
+        self.options: list[dict] = []
+
+    def with_options(self, **kwargs):
+        self.options.append(kwargs)
+        return self
 
 
 def openai_provider(*outcomes):
@@ -300,3 +312,10 @@ def test_openai_ping_returns_the_model_that_answered():
     provider, client = openai_provider(fixture("openai_ping"))
     assert provider.ping() == "gpt-5-2026-01-01"
     assert client.responses.calls[0]["input"] == "Reply with OK"
+    assert client.options == [{"timeout": 30}]
+
+
+def test_a_detection_call_does_not_shorten_the_timeout(image):
+    provider, client = openai_provider(fixture("openai_boxes"))
+    provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+    assert client.options == []  # only `ping` is the impatient one

@@ -13,6 +13,7 @@ from app.providers.schema import box_list_schema, parse_text, prompt_for
 from app.providers.tiling import TiledProvider, encode_tile
 
 REFUSAL_CATEGORY = "openai_refusal"
+PING_TIMEOUT_S = 30
 
 
 def _as_provider_error(e: Exception) -> ProviderError:
@@ -59,6 +60,10 @@ class OpenAIProvider(TiledProvider):
         if self._client is None:
             self._client = self._client_factory() if self._client_factory else self._default_client()
         return self._client
+
+    def _impatient(self):
+        """The client with a short timeout: `ping` backs a settings screen, not a batch run."""
+        return self.client.with_options(timeout=PING_TIMEOUT_S)
 
     def _default_client(self):
         import openai
@@ -124,7 +129,7 @@ class OpenAIProvider(TiledProvider):
     def ping(self) -> str:
         """One cheap call to prove the key works; returns the model that answered."""
         try:
-            response = self.client.responses.create(model=self.model_name, input="Reply with OK")
+            response = self._impatient().responses.create(model=self.model_name, input="Reply with OK")
         except Exception as e:
             raise _as_provider_error(e) from e
         return response.model or self.model_name

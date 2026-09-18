@@ -26,9 +26,9 @@ class Tiling(BaseModel):
 
 class QueryRunCreate(BaseModel):
     kind: QueryRunKind
-    model_id: str = Field(default=None)
-    provider: ProviderName = Field(default=None)
-    query: str = Field(default=None)
+    model_id: str | None = None  # required for local_model; the service answers 422 when absent
+    provider: ProviderName | None = None  # required for cloud_provider
+    query: str | None = Field(default=None, min_length=1)
     image_ids: list[str] = Field(min_length=1)
     tiling: Tiling = Tiling()
     conf: float = Field(default=0.25, ge=0, le=1)
@@ -96,7 +96,7 @@ class PromoteResult(BaseModel):
 
 
 class PreannotateRequest(BaseModel):
-    model_id: str = Field(default=None)
+    model_id: str | None = None
     imgsz: int = Field(default=2560, ge=320, le=6400)
     conf: float = Field(default=0.25, ge=0, le=1)
 

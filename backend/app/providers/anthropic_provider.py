@@ -14,6 +14,7 @@ from app.providers.tiling import TiledProvider, encode_tile
 
 MAX_TOKENS = 16000
 PING_MAX_TOKENS = 16
+PING_TIMEOUT_S = 30
 
 
 def _as_provider_error(e: Exception) -> ProviderError:
@@ -50,6 +51,10 @@ class AnthropicProvider(TiledProvider):
         if self._client is None:
             self._client = self._client_factory() if self._client_factory else self._default_client()
         return self._client
+
+    def _impatient(self):
+        """The client with a short timeout: `ping` backs a settings screen, not a batch run."""
+        return self.client.with_options(timeout=PING_TIMEOUT_S)
 
     def _default_client(self):
         import anthropic
@@ -118,7 +123,7 @@ class AnthropicProvider(TiledProvider):
     def ping(self) -> str:
         """One cheap call to prove the key works; returns the model that answered."""
         try:
-            response = self.client.messages.create(
+            response = self._impatient().messages.create(
                 model=self.model_name,
                 max_tokens=PING_MAX_TOKENS,
                 messages=[{"role": "user", "content": "Reply with OK"}],

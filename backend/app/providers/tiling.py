@@ -33,8 +33,12 @@ def make_tiles(width: int, height: int, spec: TilingSpec) -> list[Tile]:
     stride = max(1, int(round(spec.tile_size * (1.0 - spec.overlap))))
     xs = _origins(width, spec.tile_size, stride)
     ys = _origins(height, spec.tile_size, stride)
+    # An axis shorter than the tile gives a single origin at 0, and the tile is then as long as the
+    # image on that axis: a 4000x800 strip is one row of 4000/1024 tiles, not a row hanging 480 px
+    # below the image.
+    w, h = min(spec.tile_size, width), min(spec.tile_size, height)
     return [
-        Tile(index=i, x=x, y=y, w=spec.tile_size, h=spec.tile_size)
+        Tile(index=i, x=x, y=y, w=w, h=h)
         for i, (y, x) in enumerate((y, x) for y in ys for x in xs)
     ]
 

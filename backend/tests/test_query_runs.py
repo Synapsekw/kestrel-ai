@@ -2,6 +2,7 @@
 
 import json
 import logging
+import threading
 
 import pytest
 
@@ -19,8 +20,17 @@ class FakeProvider:
 
     name = "fake"
 
-    def __init__(self, *, retryable_failures=0, permanent_tiles=(), refuse_tiles=(), label="excavator"):
+    def __init__(
+        self,
+        *,
+        retryable_failures=0,
+        permanent_tiles=(),
+        refuse_tiles=(),
+        label="excavator",
+        retry_after=None,
+    ):
         self.retryable_left = retryable_failures
+        self.retry_after = retry_after
         self.permanent_tiles = set(permanent_tiles)
         self.refuse_tiles = set(refuse_tiles)
         self.label = label
@@ -32,7 +42,7 @@ class FakeProvider:
             raise ProviderError("tile is cursed", retryable=False)
         if self.retryable_left:
             self.retryable_left -= 1
-            raise ProviderError("busy", retryable=True, retry_after=None)
+            raise ProviderError("busy", retryable=True, retry_after=self.retry_after)
         if tile.index in self.refuse_tiles:
             refusal = {"category": "general_harms", "explanation": "no"}
             return TileResult(tile=tile, detections=[], refusal=refusal)
@@ -48,9 +58,20 @@ class FakeProvider:
         return TileResult(tile=tile, detections=[det], raw={"fake": True})
 
 
+@pytest.fixture(autouse=True)
+def fresh_buckets():
+    """The bucket registry is process state; no test may inherit another test's tokens."""
+    from app.inference import ratelimit
+
+    ratelimit.reset_buckets()
+    yield
+    ratelimit.reset_buckets()
+
+
 @pytest.fixture
 def no_sleep(monkeypatch):
-    monkeypatch.setattr("app.inference.jobs.sleep", lambda seconds: None)
+    """Retry backoff waits on the cancellation event; make that wait return at once."""
+    monkeypatch.setattr("app.inference.jobs.MAX_RETRY_WAIT_S", 0)
 
 
 @pytest.fixture
@@ -371,7 +392,8 @@ def test_cancellation_keeps_the_finished_tiles(
     with pytest.raises(JobCancelled):
         run_infer(ctx)
 
-    persisted = sorted((handle.runs_dir / ctx.job_id / "tiles").rglob("*.json"))
+    # tiles belong to the run, not the job, so a resume can reuse them
+    persisted = sorted((handle.runs_dir / "query-runs" / run.id / "tiles").rglob("*.json"))
     assert len(persisted) == 2
     assert json.loads(persisted[0].read_text("utf-8"))["detections"]
 
@@ -515,11 +537,156 @@ def test_the_token_bucket_refills_over_time():
 def test_the_job_rate_limits_cloud_calls(
     client, handle, cloud_run, job_context, with_key, use_provider, no_sleep, monkeypatch
 ):
-    from app.inference import jobs
+    from app.inference import jobs, ratelimit
 
     acquired = []
-    monkeypatch.setattr(jobs.TokenBucket, "acquire", lambda self: acquired.append(1))
+    monkeypatch.setattr(ratelimit.TokenBucket, "acquire", lambda self: acquired.append(1))
     use_provider(FakeProvider())
     run = cloud_run()
     jobs.run_infer(job_context({"query_run_id": run.id}))
     assert len(acquired) == 4  # one per tile, only for cloud providers
+
+
+def test_a_local_run_is_not_rate_limited(
+    client, handle, job_context, use_provider, no_sleep, frames, monkeypatch
+):
+    from app.inference import jobs, ratelimit
+
+    acquired = []
+    monkeypatch.setattr(ratelimit.TokenBucket, "acquire", lambda self: acquired.append(1))
+    with handle.session() as s:
+        model = Model(name="m", kind="imported", weights_path="models/m.pt", class_names=CLASSES)
+        s.add(model)
+        s.flush()
+        run = QueryRun(
+            kind="local_model",
+            model_id=model.id,
+            model_name="m",
+            image_ids=frames,
+            tiling={"enabled": True, "tile_size": 1280, "overlap": 0.2, "nms_iou": 0.5},
+            conf=0.25,
+        )
+        s.add(run)
+        s.flush()
+        s.expunge(run)
+
+    use_provider(FakeProvider())
+    jobs.run_infer(job_context({"query_run_id": run.id}))
+    assert acquired == []
+
+
+def test_the_bucket_is_shared_per_provider_and_follows_the_configured_rate():
+    from app.inference.ratelimit import bucket_for
+
+    first = bucket_for("anthropic", 30)
+    assert bucket_for("anthropic", 30) is first  # two jobs on one provider share one budget
+    assert bucket_for("openai", 30) is not first
+    assert bucket_for("anthropic", 120).capacity == 120  # a settings change takes effect at once
+    assert first.capacity == 120
+
+
+def test_a_retry_wait_ends_as_soon_as_the_job_is_cancelled(
+    client, handle, cloud_run, job_context, with_key, use_provider
+):
+    import time
+
+    from app.inference.jobs import run_infer
+    from app.jobs.runner import JobCancelled
+
+    run = cloud_run()
+    ctx = job_context({"query_run_id": run.id})
+    # a retryable failure that asks for an hour: cancelling must not wait for it
+    provider = use_provider(FakeProvider(retryable_failures=99, retry_after=3600))
+    threading.Timer(0.2, ctx.cancelled.set).start()
+
+    started = time.monotonic()
+    with pytest.raises(JobCancelled):
+        run_infer(ctx)
+    assert time.monotonic() - started < 5
+    assert provider.calls  # it got as far as calling the provider
+
+
+def test_a_cloud_job_without_the_runner_wiring_fails_loudly(
+    client, handle, cloud_run, job_context, use_provider, no_sleep, monkeypatch
+):
+    from app.inference.jobs import run_infer
+
+    ctx = job_context({"query_run_id": cloud_run().id})
+    monkeypatch.setattr(ctx.runner, "keys", None, raising=False)
+    with pytest.raises(RuntimeError, match="keys"):
+        run_infer(ctx)
+
+
+# --------------------------------------------------------------------- resume
+
+
+def test_resume_reuses_the_finished_tiles_and_keeps_reviewed_boxes(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep
+):
+    from sqlalchemy import select
+
+    provider = use_provider(FakeProvider(permanent_tiles=[1]))
+    out = run_and_wait(client, wait_job, project_id, frames)
+    run_id = out["run"]["id"]
+    assert out["job"]["result"]["failed_tiles"] == 2
+    assert sorted(provider.calls) == [0, 0, 1, 1]
+
+    # the user accepts one of the proposals before resuming
+    with handle.session() as s:
+        keep = s.execute(select(Box).where(Box.query_run_id == run_id)).scalars().first()
+        keep.review_state = "accepted"
+        keep_id = keep.id
+
+    second = use_provider(FakeProvider())
+    r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/resume")
+    assert r.status_code == 202, r.text
+    job = wait_job(project_id, r.json()["job"]["id"])
+
+    assert job["state"] == "succeeded", job
+    assert second.calls == [1, 1]  # only the tiles that had failed
+    assert job["result"]["failed_tiles"] == 0
+    rows = boxes_of(handle)
+    kept = next(r for r in rows if r.id == keep_id)  # the accepted box survived the resume
+    assert kept.review_state == "accepted"
+    assert client.get(f"{BASE}/{project_id}/query-runs/{run_id}").json()["job_id"] == job["id"]
+
+
+def test_resume_of_a_finished_run_calls_the_provider_for_nothing(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep
+):
+    use_provider(FakeProvider())
+    run_id = run_and_wait(client, wait_job, project_id, frames)["run"]["id"]
+    before = sorted((r.id, r.review_state) for r in boxes_of(handle))
+
+    second = use_provider(FakeProvider())
+    r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/resume")
+    job = wait_job(project_id, r.json()["job"]["id"])
+
+    assert job["state"] == "succeeded"
+    assert second.calls == []  # every tile came from the run's own tile folder
+    assert sorted((r.id, r.review_state) for r in boxes_of(handle)) == before  # boxes untouched
+
+
+def test_resume_while_the_job_is_still_running_is_a_conflict(
+    client, project_id, frames, with_key, use_provider
+):
+    release = threading.Event()
+
+    class Blocking(FakeProvider):
+        def detect_tile(self, image, tile, query, classes, *, conf, log, raw_ref=""):
+            release.wait(10)
+            return super().detect_tile(image, tile, query, classes, conf=conf, log=log, raw_ref=raw_ref)
+
+    use_provider(Blocking())
+    created = client.post(f"{BASE}/{project_id}/query-runs", json=cloud_body(frames)).json()
+    run_id = created["query_run"]["id"]
+    try:
+        r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/resume")
+        assert r.status_code == 409, r.text
+        assert r.json()["error"]["code"] == "conflict"
+    finally:
+        release.set()
+
+
+def test_resume_of_an_unknown_run_is_a_404(client, project_id):
+    assert client.post(f"{BASE}/{project_id}/query-runs/ghost/resume").status_code == 404

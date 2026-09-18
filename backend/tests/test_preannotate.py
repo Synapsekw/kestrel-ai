@@ -1,5 +1,7 @@
 """Synchronous pre-annotation when the editor opens an image (spec section 7)."""
 
+import threading
+
 import pytest
 
 from app.db.models import Box, Image, Model, Source
@@ -176,3 +178,61 @@ def test_boxes_from_another_model_do_not_count_as_done(
     body = client.post(f"{BASE}/{project_id}/images/{image_id}/preannotate", json={}).json()
     assert body["skipped"] is False
     assert len(body["items"]) == 2
+
+
+def test_the_gpu_being_busy_is_a_conflict_not_a_hang(client, project_id, image_id, selected, fake_yolo):
+    """A training run can hold the card for hours; the editor gets an answer it can act on."""
+    from app.jobs.gpu import gpu_lock
+
+    gpu_lock.acquire()
+    try:
+        r = client.post(f"{BASE}/{project_id}/images/{image_id}/preannotate", json={})
+    finally:
+        gpu_lock.release()
+
+    assert r.status_code == 409, r.text
+    assert r.json()["error"]["code"] == "conflict"
+    assert "GPU busy" in r.json()["error"]["message"]
+
+
+def test_two_racing_requests_leave_exactly_one_set_of_proposals(
+    client, project_id, image_id, selected, fake_yolo, handle
+):
+    from sqlalchemy import select
+
+    from app.db.models import Box
+
+    results = []
+    barrier = threading.Barrier(2)
+
+    def call():
+        barrier.wait(5)
+        results.append(client.post(f"{BASE}/{project_id}/images/{image_id}/preannotate", json={}))
+
+    threads = [threading.Thread(target=call) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+
+    assert [r.status_code for r in results] == [200, 200], [r.text for r in results]
+    with handle.session() as s:
+        rows = list(s.execute(select(Box).where(Box.model_id == selected)).scalars())
+    assert len(rows) == 2  # not four: the second writer replaced, it did not append
+
+
+def test_reviewed_proposals_are_never_replaced(client, project_id, image_id, selected, fake_yolo, handle):
+    from sqlalchemy import select
+
+    from app.db.models import Box
+
+    client.post(f"{BASE}/{project_id}/images/{image_id}/preannotate", json={})
+    with handle.session() as s:
+        row = s.execute(select(Box).where(Box.model_id == selected)).scalars().first()
+        row.review_state = "accepted"
+        kept = row.id
+    # the skip path returns them; this asserts the write path would not have dropped the decision
+    body = client.post(f"{BASE}/{project_id}/images/{image_id}/preannotate", json={}).json()
+    assert body["skipped"] is True
+    assert kept in {i["id"] for i in body["items"]}
+    assert next(i for i in body["items"] if i["id"] == kept)["review_state"] == "accepted"

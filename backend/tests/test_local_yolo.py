@@ -151,3 +151,60 @@ def test_hold_gpu_serialises_and_logs_a_long_wait(caplog):
 
     assert order == ["train in", "train out", "infer in"]
     assert any("waited" in r.message and "infer" in r.message for r in caplog.records)
+
+
+def test_hold_gpu_gives_up_when_the_caller_passes_a_timeout():
+    from app.jobs.gpu import GpuBusy, gpu_lock
+
+    gpu_lock.acquire()
+    try:
+        with pytest.raises(GpuBusy):
+            with hold_gpu(logging.getLogger("t"), "preannotate", timeout=0.05):
+                pass
+    finally:
+        gpu_lock.release()
+
+
+def test_hold_gpu_raises_job_cancelled_instead_of_waiting_forever():
+    from app.jobs.gpu import gpu_lock
+    from app.jobs.runner import JobCancelled
+
+    cancelled = threading.Event()
+    gpu_lock.acquire()
+    try:
+        threading.Timer(0.1, cancelled.set).start()
+        with pytest.raises(JobCancelled):
+            with hold_gpu(logging.getLogger("t"), "infer", cancelled=cancelled):
+                pass
+    finally:
+        gpu_lock.release()
+
+
+def test_hold_gpu_releases_the_lock_when_the_body_raises():
+    from app.jobs.gpu import gpu_lock
+
+    with pytest.raises(ValueError):
+        with hold_gpu(logging.getLogger("t"), "infer"):
+            raise ValueError("boom")
+    assert gpu_lock.acquire(timeout=0.1)
+    gpu_lock.release()
+
+
+def test_the_model_cache_holds_one_model_at_a_time(monkeypatch):
+    from app.providers import local_yolo
+
+    loaded = []
+
+    class Loader:
+        def __init__(self, path):
+            loaded.append(path)
+
+    monkeypatch.setattr(local_yolo, "_MODEL", None)
+    monkeypatch.setattr(local_yolo, "_new_yolo", lambda key: Loader(key))
+
+    first = local_yolo._load(Path("a.pt"), "0")
+    assert local_yolo._load(Path("a.pt"), "0") is first  # the same weights are not reloaded
+    second = local_yolo._load(Path("b.pt"), "0")
+    assert second is not first
+    assert local_yolo._MODEL[1] is second  # only one model is kept, so its VRAM goes back
+    assert len(loaded) == 2

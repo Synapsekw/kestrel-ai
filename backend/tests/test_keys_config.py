@@ -99,3 +99,21 @@ def test_test_endpoint_without_a_key_is_not_ok(client, provider):
     assert r.status_code == 200, r.text
     expected = {"ok": False, "message": "no API key stored", "model_name": DEFAULTS[provider].model_name}
     assert r.json() == expected
+
+
+def test_the_windows_credential_manager_backend_is_pinned_explicitly():
+    """PyInstaller does not ship keyring's entry points, so the backend cannot be discovered."""
+    import sys
+
+    import keyring
+
+    from app.providers.keys import KeyringKeyStore
+
+    store = KeyringKeyStore()
+    module = store._keyring()  # the lazy import, which pins the backend on Windows
+
+    assert module is keyring
+    if sys.platform == "win32":
+        from keyring.backends.Windows import WinVaultKeyring
+
+        assert isinstance(keyring.get_keyring(), WinVaultKeyring)

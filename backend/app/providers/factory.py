@@ -6,6 +6,8 @@ The SDK modules are imported inside the functions: the API process should not pa
 
 from __future__ import annotations
 
+import threading
+
 from app.db.models import Model
 from app.projects.service import ProjectHandle
 from app.providers.base import Provider, ProviderError
@@ -38,6 +40,8 @@ def get_provider(
     project_class_names: list[str],
     imgsz: int = 1280,
     device: str = "0",
+    gpu_timeout: float | None = None,
+    cancelled: threading.Event | None = None,
 ) -> Provider:
     """`local_model` builds from a registry row, `cloud_provider` from the stored key and config."""
     if kind == "local_model":
@@ -50,6 +54,8 @@ def get_provider(
             ),
             imgsz=imgsz,
             device=device,
+            gpu_timeout=gpu_timeout,
+            cancelled=cancelled,
         )
     if kind == "cloud_provider":
         if provider_name is None or config is None:

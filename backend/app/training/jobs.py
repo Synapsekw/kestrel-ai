@@ -72,7 +72,7 @@ def run_train(ctx: JobContext) -> dict:
         device=p.get("device", "0"),
     )
     ctx.log.info("training %s on dataset %s for %s epochs", p["name"], dataset.name, params.epochs)
-    with hold_gpu(ctx.log, "train"):
+    with hold_gpu(ctx.log, "train", cancelled=ctx.cancelled):
         result = get_trainer().train(params, ctx.progress, ctx.cancelled, ctx.log)
     ctx.check_cancelled()
     model = registry.register_trained(
@@ -93,7 +93,7 @@ def run_export(ctx: JobContext) -> dict:
     handle, p = ctx.project, ctx.params
     model = registry.get_model(handle, p["model_id"])
     fmt = p["format"]
-    with hold_gpu(ctx.log, "export"):
+    with hold_gpu(ctx.log, "export", cancelled=ctx.cancelled):
         exported = get_trainer().export(
             handle.folder / model.weights_path,
             fmt,

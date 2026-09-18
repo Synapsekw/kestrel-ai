@@ -4,13 +4,15 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from pathlib import Path
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.db.models import Box, Image, Model, QueryRun
+from app.db.models import Box, Image, Job, Model, QueryRun
 from app.errors import AppError, not_found
 from app.inference.schemas import PreannotateRequest, QueryRunCreate
+from app.jobs.gpu import GpuBusy
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
 from app.providers.base import Detection, TilingSpec
@@ -21,6 +23,13 @@ from app.providers.tiling import make_tiles
 from app.training import registry
 
 LOCAL_COST_PER_REQUEST = 0.0
+BUSY_JOB_STATES = ("queued", "running")
+PREANNOTATE_GPU_TIMEOUT_S = 2.0
+
+
+def tiles_dir(handle: ProjectHandle, run_id: str) -> Path:
+    """Where a run's tile results live: under the run, not under a job, so a resume reuses them."""
+    return handle.runs_dir / "query-runs" / run_id / "tiles"
 
 
 def class_ids_by_name(handle: ProjectHandle, s: Session) -> dict[str, str]:
@@ -125,6 +134,24 @@ def set_job(handle: ProjectHandle, run_id: str, job_id: str) -> QueryRun:
     return row
 
 
+def check_resumable(handle: ProjectHandle, run_id: str) -> QueryRun:
+    """The run, if a new job may be submitted for it. A live job is a 409, not a second job."""
+    with handle.session() as s:
+        row = s.get(QueryRun, run_id)
+        if row is None:
+            raise not_found("query run", run_id)
+        job = s.get(Job, row.job_id) if row.job_id else None
+        if job is not None and job.state in BUSY_JOB_STATES:
+            raise AppError(
+                "conflict",
+                f"query run {run_id} is still {job.state}; cancel it before resuming",
+                409,
+                {"job_id": job.id, "state": job.state},
+            )
+        s.expunge(row)
+    return row
+
+
 def box_count(s: Session, run_id: str) -> int:
     return s.execute(select(func.count()).select_from(Box).where(Box.query_run_id == run_id)).scalar_one()
 
@@ -223,13 +250,17 @@ def preannotate(
         model_row=model,
         project_class_names=names,
         imgsz=body.imgsz,
+        gpu_timeout=PREANNOTATE_GPU_TIMEOUT_S,
     )
-    dets = provider.detect(
-        path, "", names, TilingSpec(enabled=False), conf=body.conf, log=logging.getLogger(__name__)
-    )
-    _write_proposals(handle, image_id, model, dets)
-    # read back, so a first call and a skipped one list the boxes in the same order
-    return False, model_id, _boxes_from_model(handle, image_id, model_id)
+    try:
+        dets = provider.detect(
+            path, "", names, TilingSpec(enabled=False), conf=body.conf, log=logging.getLogger(__name__)
+        )
+    except GpuBusy as e:
+        # A training or export job holds the card and may do so for hours. Say so, so the editor
+        # can open the image without proposals instead of blocking on a request that never returns.
+        raise AppError("conflict", "GPU busy (training in progress); try again later", 409) from e
+    return False, model_id, _write_proposals(handle, image_id, model, dets)
 
 
 def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> list[Box]:
@@ -250,9 +281,26 @@ def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> li
     return rows
 
 
-def _write_proposals(handle: ProjectHandle, image_id: str, model: Model, dets: list[Detection]) -> None:
+def _write_proposals(
+    handle: ProjectHandle, image_id: str, model: Model, dets: list[Detection]
+) -> list[Box]:
+    """Replace this model's unreviewed proposals on the image, in one transaction.
+
+    Two editor tabs can ask at the same moment: both see no boxes, both run the model, and an
+    appending write would leave two copies. Replacing makes the second writer idempotent, and
+    restricting the delete to `unreviewed` means a review decision is never undone by it.
+    """
     with handle.session() as s:
         by_name = class_ids_by_name(handle, s)
+        s.execute(
+            delete(Box).where(
+                Box.image_id == image_id,
+                Box.model_id == model.id,
+                Box.provenance_kind == "local_model",
+                Box.query_run_id.is_(None),
+                Box.review_state == "unreviewed",
+            )
+        )
         rows = [
             Box(
                 image_id=image_id,
@@ -271,3 +319,6 @@ def _write_proposals(handle: ProjectHandle, image_id: str, model: Model, dets: l
             if d.label in by_name
         ]
         s.add_all(rows)
+        s.flush()
+    # read back, so a first call and a skipped one list the boxes in the same order
+    return _boxes_from_model(handle, image_id, model.id)
