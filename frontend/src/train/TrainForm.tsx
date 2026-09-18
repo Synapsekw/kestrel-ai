@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import type { Dataset, Model, TrainRequest } from "@contract/client";
 import { kindLabel } from "@/models/modelLabels";
@@ -24,7 +24,7 @@ const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm di
 const label = "flex flex-col gap-1 text-xs text-slate-400";
 const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
 
-/** Spec section 7 parameters. Mounted with a `key` by the screen so the preselection happens in the initialiser. */
+/** Spec section 7 parameters. Preselects when the lists arrive (or change) without touching what the user typed. */
 export function TrainForm({
   projectId,
   datasets,
@@ -42,6 +42,24 @@ export function TrainForm({
   }));
   const [error, setError] = useState<string | null>(null);
   const dataset = datasets.find((d) => d.id === form.datasetId);
+
+  // The lists load after mount and change again when a training job registers a model. Fill only
+  // the pickers that are still empty and a name the user has not edited; everything typed survives.
+  const lastSuggested = useRef(form.name);
+  useEffect(() => {
+    setForm((f) => {
+      const datasetId = f.datasetId || (datasets[0]?.id ?? "");
+      const baseModelId = f.baseModelId || (models[0]?.id ?? "");
+      const suggested = suggestName(
+        datasets.find((d) => d.id === datasetId),
+        models.find((m) => m.id === baseModelId),
+      );
+      const name = f.name === "" || f.name === lastSuggested.current ? suggested : f.name;
+      lastSuggested.current = suggested;
+      if (datasetId === f.datasetId && baseModelId === f.baseModelId && name === f.name) return f;
+      return { ...f, datasetId, baseModelId, name };
+    });
+  }, [datasets, models]);
 
   const patch = (p: Partial<Form>) => setForm((f) => ({ ...f, ...p }));
 

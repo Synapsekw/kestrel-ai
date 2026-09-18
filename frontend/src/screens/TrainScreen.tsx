@@ -51,9 +51,6 @@ export function TrainScreen() {
     }
   }
 
-  // The form preselects in its initialiser, so remount it when the lists arrive.
-  const listsKey = `${datasets.datasets.map((d) => d.id).join(",")}|${registry.models.map((m) => m.id).join(",")}`;
-
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -68,7 +65,6 @@ export function TrainScreen() {
         <TrainProgress projectId={projectId} jobId={jobId} />
       ) : (
         <TrainForm
-          key={listsKey}
           projectId={projectId}
           datasets={datasets.datasets}
           models={registry.models}
