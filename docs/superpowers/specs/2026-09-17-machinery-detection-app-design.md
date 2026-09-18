@@ -60,7 +60,7 @@ These were made with the owner and are not to be re-litigated by implementers.
 One repository with three top-level parts.
 
 - `backend/` is a Python 3.11 FastAPI service. It owns everything that touches files, the GPU or the network: datasets, annotation storage, training jobs, inference providers, the model registry. One process, an in-process job runner for long work, no UI. Frozen with PyInstaller into a one-folder build that includes CUDA PyTorch.
-- `frontend/` is the Tauri 2 app: React, TypeScript, Vite, Konva for the canvas. It talks to the backend only over HTTP and one websocket for job events. The Rust layer is configuration only: window, file dialogs (tauri-plugin-dialog), sidecar (tauri-plugin-shell), Windows installer (NSIS via the Tauri bundler).
+- `frontend/` is the Tauri 2 app: React, TypeScript, Vite, Konva for the canvas. It talks to the backend only over HTTP and one websocket for job events. The Rust layer is configuration only: window, file dialogs (tauri-plugin-dialog), sidecar (tauri-plugin-shell), Windows installer (Inno Setup wrapping the `tauri build` output; NSIS and MSI both cap a payload at 2 GB and the CUDA sidecar is 3.4 GB, see progress decision 13).
 - `contract/` holds `openapi.yaml`, the generated TypeScript client, and the mock server config. The backend validates responses against the spec in tests.
 
 ### Process model
@@ -173,7 +173,7 @@ Errors use one shape: `{error: {code, message, details}}`. Every list endpoint p
 ## 10. Packaging, configuration, security
 
 - Backend build: PyInstaller one-folder with hidden imports for ultralytics and torch; CUDA DLLs included; smoke test runs `torch.cuda.is_available()` and one prediction on the built artifact in CI.
-- Frontend build: `tauri build` produces an NSIS installer that bundles the backend folder as a sidecar. WebView2 bootstrapper enabled for Windows 10.
+- Frontend build: `tauri build --no-bundle` produces the app exe; an Inno Setup script (compiled from a local node module, no system install) packages the exe, the sidecar folder and the WebView2 bootstrapper into one per-user setup exe. NSIS and MSI were dropped because both cap a single payload at 2 GB (decision 13).
 - Configuration: settings file in app data; environment variables override for development (`APP_BACKEND_URL` lets the UI target a separately started backend).
 - Security: localhost only binding; random port; per-launch token; keys in Credential Manager; provider calls over HTTPS only; no telemetry.
 

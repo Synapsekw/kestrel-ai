@@ -62,6 +62,7 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
     `ExportRequest.half` documented (onnx on CPU, engine on GPU 0); `BoxReview.action` gains `unreview`
     (undo of accept/reject; person boxes ignored). In the editor, Delete on a proposal means reject.
 11. ONNX export needs `onnx`/`onnxslim`/`onnxruntime`; added to `requirements.txt` (S6 decides TensorRT).
+13. Installer format: NSIS (`makensis` 32-bit payload offsets) and MSI (compound file with 512-byte sectors, one embedded cab) both fail above 2 GB, and the CUDA sidecar is 3.46 GB with no trimmable margin (torch_cuda.dll imports the big CUDA DLLs by name; the frozen smoke test catches removal). Chosen: Inno Setup 6 (LZMA2, no 2 GB limit, per-user install, Start Menu shortcut, uninstaller) compiled by the `innosetup-compiler` npm package inside `frontend/node_modules` (no system install), wrapping `tauri build --no-bundle` output plus the WebView2 bootstrapper. Rejected: WiX external cabs (multi-file distribution) and a split/side-loaded payload (spec asks for one installer). Spec section 10 updated.
 12. Packaged smoke test needs GPU visibility: optional `Health.gpu` `{available, name}` in the contract (f52267c), probed once in a background thread after the first health request so health stays fast.
 
 ## System installs (the single allowed exception)
