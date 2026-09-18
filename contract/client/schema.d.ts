@@ -798,6 +798,7 @@ export interface components {
         ClassDefInput: {
             /** @description keep the id to rename or recolour an existing class */
             id?: string;
+            /** @description must contain a non-whitespace character */
             name: string;
             colour: string;
             /** @description single character, 1 to 9 recommended */
@@ -1007,12 +1008,12 @@ export interface components {
          *       ],
          *       "groups": [
          *         {
-         *           "group_key": "IX-12-02491_0031",
-         *           "image_count": 471
+         *           "group_key": "0031",
+         *           "image_count": 697
          *         },
          *         {
-         *           "group_key": "IX-12-02491_0032",
-         *           "image_count": 470
+         *           "group_key": "0033",
+         *           "image_count": 622
          *         }
          *       ],
          *       "resolution_histogram": [
@@ -1138,7 +1139,7 @@ export interface components {
          *       "width": 4000,
          *       "height": 2667,
          *       "source_id": "50000000-3333-4000-8000-000000000001",
-         *       "group_key": "IX-12-02491_0031",
+         *       "group_key": "0031",
          *       "capture_time": "2019-04-15T06:35:36Z",
          *       "lat": 29.49469,
          *       "lon": 47.76513,
@@ -1186,7 +1187,7 @@ export interface components {
          *           "width": 4000,
          *           "height": 2667,
          *           "source_id": "50000000-3333-4000-8000-000000000001",
-         *           "group_key": "IX-12-02491_0031",
+         *           "group_key": "0031",
          *           "capture_time": "2019-04-15T06:35:36Z",
          *           "lat": 29.49469,
          *           "lon": 47.76513,
@@ -1205,7 +1206,7 @@ export interface components {
          *           "width": 4000,
          *           "height": 2667,
          *           "source_id": "50000000-3333-4000-8000-000000000001",
-         *           "group_key": "IX-12-02491_0031",
+         *           "group_key": "0031",
          *           "capture_time": "2019-04-15T06:35:39Z",
          *           "lat": 29.49476,
          *           "lon": 47.76486,
@@ -1542,12 +1543,12 @@ export interface components {
          *       ],
          *       "groups": [
          *         {
-         *           "group_key": "IX-12-02491_0031",
+         *           "group_key": "0031",
          *           "split": "train",
          *           "image_count": 24
          *         },
          *         {
-         *           "group_key": "IX-12-02491_0032",
+         *           "group_key": "0033",
          *           "split": "val",
          *           "image_count": 6
          *         }
@@ -2431,7 +2432,7 @@ export interface operations {
                 labeled?: boolean;
                 /** @description true = has unreviewed proposals (review queue) */
                 has_pending?: boolean;
-                /** @description case-insensitive substring of the file name */
+                /** @description case-insensitive substring of the image path (file name included) */
                 search?: string;
                 /** @description comma-separated image ids; when present other filters are ignored */
                 ids?: string;

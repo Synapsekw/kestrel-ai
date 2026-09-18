@@ -288,7 +288,7 @@ paths:
           schema: { type: boolean }
         - name: search
           in: query
-          description: case-insensitive substring of the file name
+          description: case-insensitive substring of the image path (file name included)
           schema: { type: string }
         - name: ids
           in: query
@@ -993,7 +993,7 @@ components:
       required: [name, colour]
       properties:
         id: { type: string, description: keep the id to rename or recolour an existing class }
-        name: { type: string, minLength: 1, maxLength: 64 }
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '\S', description: must contain a non-whitespace character }
         colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
         hotkey:
           type: [string, "null"]
@@ -1165,8 +1165,8 @@ components:
         sources:
           - { source_id: "50000000-3333-4000-8000-000000000001", site: ahmadia, image_count: 3299 }
         groups:
-          - { group_key: "IX-12-02491_0031", image_count: 471 }
-          - { group_key: "IX-12-02491_0032", image_count: 470 }
+          - { group_key: "0031", image_count: 697 }
+          - { group_key: "0033", image_count: 622 }
         resolution_histogram:
           - { width: 4000, height: 2667, count: 3299 }
         capture_time_range: { min: "2019-04-15T06:35:36Z", max: "2019-04-15T09:12:01Z" }
@@ -1246,7 +1246,7 @@ components:
         width: 4000
         height: 2667
         source_id: "50000000-3333-4000-8000-000000000001"
-        group_key: "IX-12-02491_0031"
+        group_key: "0031"
         capture_time: "2019-04-15T06:35:36Z"
         lat: 29.49469
         lon: 47.76513
@@ -1274,7 +1274,7 @@ components:
             width: 4000
             height: 2667
             source_id: "50000000-3333-4000-8000-000000000001"
-            group_key: "IX-12-02491_0031"
+            group_key: "0031"
             capture_time: "2019-04-15T06:35:36Z"
             lat: 29.49469
             lon: 47.76513
@@ -1291,7 +1291,7 @@ components:
             width: 4000
             height: 2667
             source_id: "50000000-3333-4000-8000-000000000001"
-            group_key: "IX-12-02491_0031"
+            group_key: "0031"
             capture_time: "2019-04-15T06:35:39Z"
             lat: 29.49476
             lon: 47.76486
@@ -1567,8 +1567,8 @@ components:
         boxes_per_class:
           - { class_id: "c1a2b3c4-0000-4000-8000-000000000001", class_name: excavator, train: 31, val: 9 }
         groups:
-          - { group_key: "IX-12-02491_0031", split: train, image_count: 24 }
-          - { group_key: "IX-12-02491_0032", split: val, image_count: 6 }
+          - { group_key: "0031", split: train, image_count: 24 }
+          - { group_key: "0033", split: val, image_count: 6 }
 
     ModelKind:
       type: string
