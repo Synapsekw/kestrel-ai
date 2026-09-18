@@ -13,7 +13,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | main (merged 6635f71) | - | merged after 2 fix rounds; JobCancelled relocation follow-up open | none |
 | 2 | S5 training and inference UI | main (merged 04a879f) | - | merged after 2 fix rounds | none |
-| 3 | S6 packaging and acceptance | - | - | plan ready (2026-09-18-s6-packaging-acceptance.md); ready to dispatch | none |
+| 3 | S6 packaging and acceptance | s6-packaging-acceptance | .worktrees/s6-packaging-acceptance | implementer dispatched (opus) at f52267c | none |
 
 Last verified checkpoint: 3 (after Wave 2) on main 6635f71 (dev backend from the full venv, Tauri dev app in env mode), 2026-09-18.
 
@@ -62,6 +62,7 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
     `ExportRequest.half` documented (onnx on CPU, engine on GPU 0); `BoxReview.action` gains `unreview`
     (undo of accept/reject; person boxes ignored). In the editor, Delete on a proposal means reject.
 11. ONNX export needs `onnx`/`onnxslim`/`onnxruntime`; added to `requirements.txt` (S6 decides TensorRT).
+12. Packaged smoke test needs GPU visibility: optional `Health.gpu` `{available, name}` in the contract (f52267c), probed once in a background thread after the first health request so health stays fast.
 
 ## System installs (the single allowed exception)
 
@@ -181,3 +182,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S5 reviewed (fable), 2 fix rounds, merged 04a879f. S4 reviewed (fable), round 1 done, round 2 in progress. Contract: query minLength, query-run resume endpoint, model artifacts endpoint.
 - 2026-09-18: S4 fix round 2 re-reviewed (opus) and merged 6635f71; main: 382 backend tests, 4 GPU tests, ruff, contract check clean; frontend 204 unit, 42 e2e. Wave 2 ledger copied to docs. Checkpoint 3 running on the real app (driver frontend/scripts/checkpoint3.mjs).
 - 2026-09-18: Checkpoint 3 passed on the real app (cloud step skipped, no key). Wave 3 next: S6 dispatch. Goal-owner follow-ups: JobCancelled relocation (S4 M4), Train form remount on list change.
+- 2026-09-18: Goal-owner follow-ups on main: JobCancelled leaf module (e85a363), Train form keeps typed values on list change (024ec6f, with tests), contract Health.gpu optional block (f52267c; client regenerated; contract test green). Wave 3 started: S6 dispatched; ledger `.superpowers/sdd/wave3/ledger.md`. Ruling: the sub-agent builds the installer and dry-runs the acceptance driver on the dev app; install, checkpoint 4 timing and the acceptance run on the installed app stay with the goal owner.
