@@ -4,6 +4,7 @@ import { ClassesSection } from "@/settings/ClassesSection";
 import { ImportDefaultsSection } from "@/settings/ImportDefaultsSection";
 import { PreannotationSection } from "@/settings/PreannotationSection";
 import { ProvidersSection } from "@/settings/ProvidersSection";
+import { SourcesSection } from "@/settings/SourcesSection";
 
 export function SettingsScreen() {
   const { projectId = "" } = useParams();
@@ -27,6 +28,7 @@ export function SettingsScreen() {
             project={project}
             onSaved={setProject}
           />
+          <SourcesSection projectId={projectId} />
           <ProvidersSection />
         </>
       )}

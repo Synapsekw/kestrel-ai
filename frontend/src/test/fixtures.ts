@@ -13,6 +13,8 @@ import {
   type Project,
   type Provider,
   type QueryRun,
+  type Source,
+  type Stats,
 } from "@contract/client";
 
 export const PROJECT_ID = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -282,6 +284,39 @@ export const RESULTS_CSV = [
   "2,24.1,1.6,1.9,1.4,0.52,0.41,0.45,0.24,1.5,1.7,1.3,0.001,0.001,0.001",
   "3,36.0,1.4,1.6,1.3,0.78,0.66,0.71,0.44,1.3,1.4,1.2,0.001,0.001,0.001",
 ].join("\n");
+
+export const exampleSource: Source = {
+  id: SOURCE_ID,
+  folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+  site: "ahmadia",
+  settings: exampleProject.import_defaults,
+  image_count: 3299,
+  duplicate_count: 0,
+  job_id: JOB_ID,
+  imported_at: "2026-09-17T10:30:00Z",
+  created_at: "2026-09-17T10:05:00Z",
+};
+
+export const exampleStats: Stats = {
+  image_count: 3299,
+  labeled_count: 30,
+  unlabeled_count: 3269,
+  box_count: 112,
+  pending_review_count: 41,
+  duplicate_count: 0,
+  boxes_per_class: [
+    { class_id: CLASS_ID(1), class_name: "excavator", count: 40 },
+    { class_id: CLASS_ID(4), class_name: "dump_truck", count: 72 },
+  ],
+  sources: [{ source_id: SOURCE_ID, site: "ahmadia", image_count: 3299 }],
+  groups: [
+    { group_key: "0031", image_count: 697 },
+    { group_key: "0033", image_count: 622 },
+  ],
+  resolution_histogram: [{ width: 4000, height: 2667, count: 3299 }],
+  capture_time_range: { min: "2019-04-15T06:35:36Z", max: "2019-04-15T09:12:01Z" },
+  gps_bounds: { min_lat: 29.4901, min_lon: 47.7602, max_lat: 29.4988, max_lon: 47.7701 },
+};
 
 export function errorBody(code: string, message: string, details: Record<string, unknown> = {}) {
   return { error: { code, message, details } };

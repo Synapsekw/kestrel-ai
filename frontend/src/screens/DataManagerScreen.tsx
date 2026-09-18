@@ -4,6 +4,7 @@ import { useProject, useSourceNames } from "@/api/project";
 import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
 import { ImageTable } from "@/data/ImageTable";
+import { ImportImagesDialog } from "@/data/ImportImagesDialog";
 import { SelectionBar } from "@/data/SelectionBar";
 import {
   applyClientFilters,
@@ -41,6 +42,7 @@ export function DataManagerScreen() {
   const ids = useMemo(() => items.map((i) => i.id), [items]);
   const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [notice, setNotice] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [rawFocus, setFocusIndex] = useState(0);
   // Derived, not synced with effects: the focus row is clamped to the list and the selection is
   // pruned to the ids currently listed (React Compiler rule `set-state-in-effect`).
@@ -97,10 +99,30 @@ export function DataManagerScreen() {
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex items-baseline justify-between">
+      <div className="flex items-baseline justify-between gap-3">
         <h1 className="text-2xl font-semibold">Data Manager</h1>
-        <span className="text-xs text-slate-400">J / K move, Enter opens, Space selects</span>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => setImporting((v) => !v)}
+            disabled={!project}
+            className="rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
+          >
+            Import images
+          </button>
+          <span className="text-xs text-slate-400">J / K move, Enter opens, Space selects</span>
+        </div>
       </div>
+      {importing && project && (
+        <ImportImagesDialog
+          project={project}
+          onClose={() => setImporting(false)}
+          onStarted={(result) => {
+            setImporting(false);
+            setNotice(`Import started for ${result.source.folder} (job ${result.job.id.slice(0, 8)})`);
+          }}
+        />
+      )}
       <FilterBar
         query={query}
         onChange={setQuery}
