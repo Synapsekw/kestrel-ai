@@ -117,25 +117,31 @@ acceptance drivers use.
 
    ```powershell
    cd frontend
-   pnpm tauri build        # bundle under frontend/src-tauri/target/release/bundle/
+   pnpm build:installer    # -> src-tauri/target/release/bundle/inno/Machinery Detection_<version>_x64-setup.exe
    ```
 
-   The app binary builds in about a minute; the install tree it would write is 3.47 GB, inside the
-   6 GB success criterion.
+   `frontend/scripts/build-installer.ps1` runs `pnpm tauri build --no-bundle` and then compiles
+   `frontend/installer/machinery-detection.iss` with the Inno Setup 6 compiler that ships inside
+   `node_modules/innosetup-compiler` - nothing is installed system-wide, and the version comes from
+   `tauri.conf.json`. Pass `-SkipTauriBuild` to repackage the release binary that is already built.
 
-   **Known limit - no installer yet.** Neither Tauri bundler can package a 3.4 GB sidecar. NSIS
-   addresses its payload with 32-bit offsets, so `makensis` dies at 2 GB
-   (`Internal compiler error #12345: error mmapping file (2057025505, 33554432) is out of range`),
-   and `--bundles msi` puts everything in one embedded cabinet, which the cabinet format caps at
-   the same 2 GB (`light.exe : error LGHT0001 : Catastrophic failure ... CreateCabFinish`). The
-   measurements, why trimming the CUDA payload does not help, and the options are in
-   `docs/progress.md` under "S6 packaging evidence"; the format is the goal owner's decision.
+   Inno Setup rather than Tauri's own bundlers because both of those cap their payload at 2 GB and
+   this one is 3.4 GB: NSIS addresses its data with 32-bit offsets
+   (`Internal compiler error #12345: error mmapping file ... is out of range`) and the WiX template
+   puts everything in one embedded cabinet
+   (`light.exe : error LGHT0001 : Catastrophic failure ... CreateCabFinish`). `bundle.targets` in
+   `tauri.conf.json` is therefore empty; the rest of the `bundle` block still drives the exe icon
+   and the sidecar and resource staging that `pnpm tauri dev` needs. Measurements are in
+   `docs/progress.md` under "S6 packaging evidence".
 
 ## Install and run the packaged app
 
-- Run the generated installer (`/S` for a silent NSIS install, `msiexec /i "<file>.msi" /qn` for
-  an MSI). The install is per user: no administrator rights, no shared install directory.
-- The WebView2 runtime is fetched by the bootstrapper if the machine does not already have it.
+- Run the generated setup exe (`/VERYSILENT /SUPPRESSMSGBOXES` for an unattended install). The
+  install is per user into `%LOCALAPPDATA%\Programs\Machinery Detection`: no administrator rights,
+  no shared install directory.
+- WebView2: the installer runs Microsoft's bootstrapper only when the runtime is missing, and only
+  when a copy of `MicrosoftEdgeWebview2Setup.exe` was present at build time (see troubleshooting).
+  Windows 11 ships the runtime.
 - The app installs next to the sidecar: `machinery-backend-x86_64-pc-windows-msvc.exe` with its
   `_internal/` folder beside it. Both must stay together.
 - Per-user data lives in `%APPDATA%\ai.synapse-solutions.machinery-app`: `logs/`,
@@ -193,9 +199,12 @@ the variable is absent. No key is ever written to a file, a fixture or a log.
 - **Jobs stuck in "running" after a crash.** Opening the project marks them `failed` with
   "interrupted by application restart" (queued ones become `cancelled`); start the work again.
 - **Re-running the installer** upgrades in place and keeps app data and project folders. Uninstall
-  first only if the install directory itself is damaged.
-- **The first `pnpm tauri build` downloads** NSIS or the WiX toolset and the WebView2 bootstrapper
-  into the Tauri cache under `%LOCALAPPDATA%\tauri`; that needs network access once.
+  removes `%LOCALAPPDATA%\Programs\Machinery Detection` and leaves app data and projects alone.
+- **"The WebView2 runtime is missing" on a fresh machine.** The installer only carries Microsoft's
+  bootstrapper when `frontend/installer/MicrosoftEdgeWebview2Setup.exe` exists at build time; the
+  redistributable is never committed. Drop a copy there (or leave one in the Tauri bundler cache,
+  which the build script picks up) and rebuild, or install the Evergreen runtime on the target
+  machine first. Windows 11 already has it, so the reference machine does not need it.
 - **Training cannot reach the network.** It must not need to: the AMP probe is skipped
   (`app/training/worker.py`), Ultralytics auto-install is off and the plot font is seeded from the
   machine's own fonts (`app/training/fonts.py`).

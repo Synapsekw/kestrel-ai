@@ -81,6 +81,9 @@ importers:
       globals:
         specifier: ^17.12.0
         version: 17.12.0
+      innosetup-compiler:
+        specifier: ^6.3.1
+        version: 6.3.1
       jsdom:
         specifier: ^30.1.0
         version: 30.1.0
@@ -1288,6 +1291,11 @@ packages:
   indent-string@4.0.0:
     resolution: {integrity: sha512-EdDDZu4A2OyIK7Lr/2zG+w5jmbuk1DVBnEwREQvBzspBJkCEbRa8GxU1lghYcaGJCnRWibjDXlq779X1/y5xwg==}
     engines: {node: '>=8'}
+
+  innosetup-compiler@6.3.1:
+    resolution: {integrity: sha512-Qynw7Xjv7ZN/beBvS7Kt+QL50Q/Zbf7cJDHZmxmwNbxqgZEWCZ+5tggC6naF4ij/9PqRfpvDP1ecZLFwusu6Lw==}
+    engines: {node: '>= 0.8.0'}
+    hasBin: true
 
   is-binary-path@2.1.0:
     resolution: {integrity: sha512-ZMERYes6pDydyuGidse7OsHxtbI7WVeUEozgR/g7rd0xUimYNlvZRE/K2MgZTjWy725IfelLeVcEM97mmtRGXw==}
@@ -3083,6 +3091,8 @@ snapshots:
   imurmurhash@0.1.4: {}
 
   indent-string@4.0.0: {}
+
+  innosetup-compiler@6.3.1: {}
 
   is-binary-path@2.1.0:
     dependencies:

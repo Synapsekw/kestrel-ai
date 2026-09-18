@@ -1,8 +1,8 @@
 # Acceptance run (spec 13.5)
 
-The acceptance run is performed **on the installed app** (`Machinery Detection` from the NSIS
-setup), not on a dev build. Every step below names the exact UI action, what to expect, and the
-evidence file it produces under `docs/evidence/acceptance/`.
+The acceptance run is performed **on the installed app** (`Machinery Detection` from the Inno
+Setup installer, `pnpm build:installer`), not on a dev build. Every step below names the exact UI
+action, what to expect, and the evidence file it produces under `docs/evidence/acceptance/`.
 
 `frontend/scripts/acceptance.mjs` performs all eight steps automatically over CDP; this document
 is the source of truth for what "passing" means and is what a person follows when driving by hand.
@@ -14,7 +14,7 @@ is the source of truth for what "passing" means and is what a person follows whe
 
    ```powershell
    $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
-   Start-Process "$env:LOCALAPPDATA\Machinery Detection\Machinery Detection.exe"
+   Start-Process "$env:LOCALAPPDATA\Programs\Machinery Detection\machinery-app.exe"
    ```
 
 3. Choose an empty project folder on a disk with room for 3299 imported frames (about 20 GB).
