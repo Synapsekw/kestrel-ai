@@ -191,11 +191,18 @@ class BoxCreate(BaseModel):
 
 
 class BoxUpdate(BaseModel):
-    class_id: str | None = None
-    x: float | None = Field(default=None, ge=0)
-    y: float | None = Field(default=None, ge=0)
-    w: float | None = Field(default=None, gt=0)
-    h: float | None = Field(default=None, gt=0)
+    """Every field is optional, but none of them is nullable: the contract has no null in BoxUpdate.
+
+    The types therefore stay non-optional and `None` is only the "not sent" default (pydantic does
+    not validate defaults), so an explicit `null` fails validation with 422 instead of reaching the
+    model. `model_dump(exclude_unset=True)` yields exactly the fields the caller sent.
+    """
+
+    class_id: str = Field(default=None)
+    x: float = Field(default=None, ge=0)
+    y: float = Field(default=None, ge=0)
+    w: float = Field(default=None, gt=0)
+    h: float = Field(default=None, gt=0)
 
 
 class BoxReview(BaseModel):

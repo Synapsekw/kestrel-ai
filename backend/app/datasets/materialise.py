@@ -12,7 +12,7 @@ import os
 import shutil
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.datasets.grouping import tile_key
 from app.datasets.schemas import DatasetCreate
@@ -40,10 +40,22 @@ def data_yaml(root: Path, names: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def materialised_name(path: str) -> str:
+    """`images/<site>/<file>` -> `<site>__<file>`.
+
+    A dataset folder is flat, but two sites may hold the same file name, so the site has to stay
+    part of the name. Sites are slugified, so they never contain `__` and the mapping is injective.
+    """
+    parts = path.split("/")
+    return "__".join(parts[1:]) if len(parts) > 2 and parts[0] == "images" else parts[-1]
+
+
 def _place(src: Path, dest: Path) -> str:
     """Hard link when possible; report which of the two happened for the job log."""
     if dest.exists():
-        return "existing"
+        # Names are unique per dataset and a failed job clears its folder, so this can only mean
+        # two images mapped to one name: never silently drop one of them.
+        raise FileExistsError(f"{dest} already exists; refusing to overwrite a materialised image")
     try:
         os.link(src, dest)
         return "linked"
@@ -64,8 +76,30 @@ def _label_text(boxes: list[dict], class_index: dict[str, int], width: int, heig
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def discard(handle: ProjectHandle, dataset_id: str) -> None:
+    """Drop a dataset that was never fully written, so its name is free again."""
+    with handle.session() as s:
+        dataset = s.get(Dataset, dataset_id)
+        if dataset is None:
+            return
+        root = handle.folder / dataset.path
+        s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
+        s.delete(dataset)
+    shutil.rmtree(root, ignore_errors=True)
+
+
 @register_job_type("dataset")
 def materialise(ctx: JobContext) -> dict:
+    """A dataset is immutable, so anything short of a complete write is rolled back."""
+    try:
+        return _materialise(ctx)
+    except Exception:
+        discard(ctx.project, ctx.params["dataset_id"])
+        ctx.log.warning("discarded the incomplete dataset %s", ctx.params["dataset_id"])
+        raise
+
+
+def _materialise(ctx: JobContext) -> dict:
     handle = ctx.project
     dataset_id = ctx.params["dataset_id"]
     ctx.check_cancelled()
@@ -96,7 +130,7 @@ def materialise(ctx: JobContext) -> dict:
     placements: dict[str, int] = {}
     for done, (split, boxes, image) in enumerate(rows, 1):
         ctx.check_cancelled()
-        name = image.path.rsplit("/", 1)[-1]
+        name = materialised_name(image.path)
         how = _place(handle.folder / image.path, root / "images" / split / name)
         placements[how] = placements.get(how, 0) + 1
         label = root / "labels" / split / f"{Path(name).stem}.txt"

@@ -108,16 +108,18 @@ def test_create_dataset_freezes_labelled_images(client, labelled_project, wait_j
     root = project_dir / "datasets" / "v1"
     assert len(list((root / "images" / "train").glob("*.jpg"))) == 6
     assert len(list((root / "images" / "val").glob("*.jpg"))) == 3
+    # the site stays part of the name so two sites cannot collapse into one file
     assert {p.name for p in (root / "images" / "val").glob("*.jpg")} == {
-        f"IX-12-02491_0033_{i:04d}.jpg" for i in (1, 2, 3)
+        f"frames__IX-12-02491_0033_{i:04d}.jpg" for i in (1, 2, 3)
     }
 
-    label = (root / "labels" / "train" / "IX-12-02491_0031_0001.txt").read_text().strip().splitlines()
+    label = (root / "labels" / "train" / "frames__IX-12-02491_0031_0001.txt").read_text().strip().splitlines()
     assert len(label) == 1
     index, cx, cy, w, h = label[0].split()
     assert index == "0"
     assert (float(cx), float(cy), float(w), float(h)) == (0.3, 0.3, 0.1, 0.2)
-    assert len((root / "labels" / "val" / "IX-12-02491_0033_0001.txt").read_text().strip().splitlines()) == 2
+    val_label = (root / "labels" / "val" / "frames__IX-12-02491_0033_0001.txt").read_text()
+    assert len(val_label.strip().splitlines()) == 2
 
     data = yaml.safe_load((root / "data.yaml").read_text())
     assert data["path"] == str(root)
@@ -223,3 +225,73 @@ def test_images_frozen_into_a_dataset_cannot_be_deleted(client, labelled_project
     assert client.post(f"/api/v1/projects/{pid}/images/bulk-delete", json={"image_ids": spare}).json() == {
         "deleted": 1
     }
+
+
+def test_same_file_name_in_two_sites_stays_two_images(
+    client, project, import_source, wait_job, tmp_path, make_jpeg, project_dir
+):
+    """Two sites can hold the same file name; the dataset must not collapse them into one."""
+    pid = project["id"]
+    for site, seed in (("sitea", 1), ("siteb", 2)):
+        make_jpeg(tmp_path / site / "DJI_0001.jpg", WIDTH, HEIGHT, seed=seed)
+        import_source(pid, tmp_path / site, site=site)
+    classes = [c["id"] for c in project["classes"]]
+    images = client.get(f"/api/v1/projects/{pid}/images").json()["items"]
+    assert len(images) == 2
+    boxes = {
+        "images/sitea/DJI_0001.jpg": (classes[0], 100, 60, 40, 60),
+        "images/siteb/DJI_0001.jpg": (classes[1], 200, 120, 80, 30),
+    }
+    for image in images:
+        class_id, x, y, w, h = boxes[image["path"]]
+        r = client.post(
+            f"/api/v1/projects/{pid}/images/{image['id']}/boxes",
+            json={"class_id": class_id, "x": x, "y": y, "w": w, "h": h},
+        )
+        assert r.status_code == 201, r.text
+
+    created = _create_dataset(client, pid, val_fraction=0.05).json()  # both frames land in train
+    assert created["dataset"]["train_count"] == 2 and created["dataset"]["val_count"] == 0
+    assert wait_job(pid, created["job"]["id"])["state"] == "succeeded"
+
+    root = project_dir / "datasets" / "v1"
+    jpgs = sorted(p.name for p in (root / "images" / "train").glob("*.jpg"))
+    assert jpgs == ["sitea__DJI_0001.jpg", "siteb__DJI_0001.jpg"]
+    labels = {p.stem: p.read_text().split() for p in (root / "labels" / "train").glob("*.txt")}
+    assert len(labels) == 2
+    assert labels["sitea__DJI_0001"][0] == "0"
+    assert labels["siteb__DJI_0001"][0] == "1"
+    assert float(labels["siteb__DJI_0001"][1]) == (200 + 40) / WIDTH  # the second image kept its own box
+
+
+def test_place_refuses_to_overwrite_an_existing_file(tmp_path):
+    from app.datasets.materialise import _place
+
+    src, dest = tmp_path / "a.jpg", tmp_path / "b.jpg"
+    src.write_bytes(b"x")
+    dest.write_bytes(b"y")
+    with pytest.raises(FileExistsError):
+        _place(src, dest)
+
+
+def test_a_failed_materialise_releases_the_dataset_name(
+    client, labelled_project, wait_job, monkeypatch, project_dir
+):
+    """A dataset is immutable, so a half-written one must not survive to hold its name."""
+    from app.datasets import materialise
+
+    def _boom(src, dest):
+        raise OSError("disk on fire")
+
+    monkeypatch.setattr(materialise, "_place", _boom)
+    pid = labelled_project["pid"]
+    created = _create_dataset(client, pid).json()
+    assert wait_job(pid, created["job"]["id"])["state"] == "failed"
+    assert client.get(f"/api/v1/projects/{pid}/datasets/{created['dataset']['id']}").status_code == 404
+    assert client.get(f"/api/v1/projects/{pid}/datasets").json()["items"] == []
+    assert not (project_dir / "datasets" / "v1").exists()
+
+    monkeypatch.undo()
+    retry = _create_dataset(client, pid)
+    assert retry.status_code == 202, retry.text  # the name is free again
+    assert wait_job(pid, retry.json()["job"]["id"])["state"] == "succeeded"

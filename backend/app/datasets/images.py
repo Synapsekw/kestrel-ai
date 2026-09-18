@@ -6,14 +6,16 @@ of thousands of frames without OFFSET scans.
 
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from PIL import Image as PILImage
 from sqlalchemy import case, delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.db.models import Box, DatasetImage, Image
+from app.db.models import Box, DatasetImage, Image, Source
 from app.errors import AppError, not_found
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
@@ -165,11 +167,17 @@ def _source_file(handle: ProjectHandle, image: Image) -> Path:
 
 
 def _write_derived(src: Path, dest: Path, max_side: int) -> Path:
+    """Write through a private temp name and rename: a concurrent reader sees all of it or none."""
     dest.parent.mkdir(parents=True, exist_ok=True)
-    with PILImage.open(src) as im:
-        im = im.convert("RGB")
-        im.thumbnail((max_side, max_side), PILImage.LANCZOS)
-        im.save(dest, "JPEG", quality=DERIVED_QUALITY, optimize=True)
+    tmp = dest.with_name(f"{dest.name}.{uuid4().hex}.tmp")
+    try:
+        with PILImage.open(src) as im:
+            im = im.convert("RGB")
+            im.thumbnail((max_side, max_side), PILImage.LANCZOS)
+            im.save(tmp, "JPEG", quality=DERIVED_QUALITY, optimize=True)
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
     return dest
 
 
@@ -217,8 +225,14 @@ def bulk_delete(handle: ProjectHandle, image_ids: list[str]) -> int:
             )
         paths = [handle.folder / r.path for r in rows]
         derived = [p for r in rows for p in _derived_files(handle, r.id)]
+        source_ids = {r.source_id for r in rows}
         s.execute(delete(Box).where(Box.image_id.in_([r.id for r in rows])))
         s.execute(delete(Image).where(Image.id.in_([r.id for r in rows])))
+        s.flush()
+        for source in s.execute(select(Source).where(Source.id.in_(source_ids))).scalars():
+            source.image_count = s.execute(
+                select(func.count()).select_from(Image).where(Image.source_id == source.id)
+            ).scalar_one()
     for p in paths + derived:
         p.unlink(missing_ok=True)
     return len(rows)

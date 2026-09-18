@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import func, select, tuple_, update
 
 # importer and materialise register the "import" and "dataset" job types on import.
 from app.datasets import boxes, images, importer, materialise, stats  # noqa: F401
@@ -48,6 +48,12 @@ def _cursor_datetime(value) -> datetime:
         return datetime.fromisoformat(str(value))
     except ValueError:
         raise AppError("validation_error", "invalid cursor", 422) from None
+
+
+def _set_job_id(handle: ProjectHandle, table, row_id: str, job_id: str) -> None:
+    """The job is already running and may have finished (or removed the row); never fail on it."""
+    with handle.session() as s:
+        s.execute(update(table).where(table.id == row_id).values(job_id=job_id))
 
 
 def _split_counts(handle: ProjectHandle, dataset_ids: list[str]) -> dict[tuple[str, str], int]:
@@ -124,10 +130,9 @@ def create_source(
         s.flush()
         source_id = row.id
     job = request.app.state.jobs.submit(handle, "import", {"source_id": source_id})
+    _set_job_id(handle, Source, source_id, job.id)
     with handle.session() as s:
         row = s.get(Source, source_id)
-        row.job_id = job.id
-        s.flush()
         s.expunge(row)
     return SourceWithJob(source=SourceOut.from_row(row), job=JobOut.from_row(job, handle.id))
 
@@ -259,13 +264,15 @@ def create_dataset(
     body: DatasetCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> DatasetWithJob:
     dataset_id = materialise.freeze(handle, body)
-    job = request.app.state.jobs.submit(handle, "dataset", {"dataset_id": dataset_id})
     with handle.session() as s:
         row = s.get(Dataset, dataset_id)
-        row.job_id = job.id
-        s.flush()
         s.expunge(row)
-    return DatasetWithJob(dataset=_datasets_out(handle, [row])[0], job=JobOut.from_row(job, handle.id))
+    out = _datasets_out(handle, [row])[0]  # read before the job starts: it may discard and fail
+    job = request.app.state.jobs.submit(handle, "dataset", {"dataset_id": dataset_id})
+    _set_job_id(handle, Dataset, dataset_id, job.id)
+    return DatasetWithJob(
+        dataset=out.model_copy(update={"job_id": job.id}), job=JobOut.from_row(job, handle.id)
+    )
 
 
 @router.get("/datasets/{datasetId}", response_model=DatasetOut)

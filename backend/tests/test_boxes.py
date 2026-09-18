@@ -198,3 +198,15 @@ def test_review_ignores_person_drawn_boxes(client, labelled):
         assert r.json() == {"updated": 0}, action
     still = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"][0]
     assert still["review_state"] == "accepted" and still["reviewed_at"]
+
+
+def test_patch_rejects_an_explicit_null(client, labelled):
+    """`null` is outside the contract's BoxUpdate schema, so it is a 422, never a 500."""
+    box = _create(client, labelled).json()
+    pid = labelled["pid"]
+    for field in ("x", "y", "w", "h", "class_id"):
+        r = client.patch(f"/api/v1/projects/{pid}/boxes/{box['id']}", json={field: None})
+        assert r.status_code == 422, (field, r.status_code, r.text)
+        assert r.json()["error"]["code"] == "validation_error"
+    unchanged = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"][0]
+    assert (unchanged["x"], unchanged["w"]) == (10, 30)

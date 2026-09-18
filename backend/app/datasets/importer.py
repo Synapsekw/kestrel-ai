@@ -30,6 +30,13 @@ def _relative(handle: ProjectHandle, path: Path) -> str:
     return path.relative_to(handle.folder).as_posix()
 
 
+def _reserved_names(site: str, foreign_paths: set[str], foreign_duplicates: set[str]) -> set[str]:
+    """Lower-cased file names inside `images/<site>/` that another source already owns."""
+    prefix = f"images/{site}/"
+    names = {p.rsplit("/", 1)[-1].lower() for p in foreign_paths if p.startswith(prefix)}
+    return names | {n.lower() for n in foreign_duplicates}
+
+
 def _read_duplicates(dest_dir: Path) -> dict[str, dict]:
     path = dest_dir / DUPLICATES_FILE
     if not path.exists():
@@ -52,7 +59,8 @@ def run_import(ctx: JobContext) -> dict:
             raise ValueError(f"source {source_id} no longer exists")
         folder, site = Path(source.folder), source.site
         settings = ImportSettings(**(source.settings or {}))
-        known_paths = set(s.execute(select(Image.path).where(Image.source_id == source_id)).scalars().all())
+        all_paths = set(s.execute(select(Image.path)).scalars().all())
+        own_paths = set(s.execute(select(Image.path).where(Image.source_id == source_id)).scalars().all())
         known_hashes = list(
             s.execute(
                 select(Image.path, Image.phash)
@@ -63,12 +71,20 @@ def run_import(ctx: JobContext) -> dict:
 
     dest_dir = handle.images_dir / site
     dest_dir.mkdir(parents=True, exist_ok=True)
+    recorded = _read_duplicates(dest_dir)
+    own_duplicates = {n for n, v in recorded.items() if v.get("source_id") == source_id}
     sources = list_images(folder)
     ctx.log.info("%d files in %s", len(sources), folder)
 
-    taken: set[str] = set()
+    # Two sources may share a site, so names another source already owns (including the names its
+    # duplicates used up) are off limits; this source's own names stay free so a re-import lands on
+    # its existing rows instead of importing everything again.
+    taken = _reserved_names(site, all_paths - own_paths, set(recorded) - own_duplicates)
     planned = [(p, unique_dest(dest_dir, p.stem, taken)) for p in sources]
-    todo = [(src, dest) for src, dest in planned if _relative(handle, dest) not in known_paths]
+    todo = []
+    for src, dest in planned:
+        if dest.name not in own_duplicates and _relative(handle, dest) not in all_paths:
+            todo.append((src, dest))
     skipped = len(planned) - len(todo)
     ctx.check_cancelled()
 
@@ -86,8 +102,12 @@ def run_import(ctx: JobContext) -> dict:
 
     for name in duplicates:
         (dest_dir / name).unlink(missing_ok=True)  # our own copy, never the original
-    recorded = _read_duplicates(dest_dir)
-    recorded.update({n: {"duplicate_of": k, "hamming": d} for n, (k, d) in duplicates.items()})
+    recorded.update(
+        {
+            name: {"duplicate_of": kept, "hamming": d, "source_id": source_id}
+            for name, (kept, d) in duplicates.items()
+        }
+    )
     (dest_dir / DUPLICATES_FILE).write_text(json.dumps(recorded, indent=2), "utf-8")
 
     keep = [r for r in prepared if Path(r.dest).name not in duplicates]

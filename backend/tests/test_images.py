@@ -196,3 +196,24 @@ def test_real_frames_list_with_capture_time_and_gps(client, project, import_sour
     assert first["file_name"] == "IX-12-02491_0031_0001.jpg"
     assert first["capture_time"].startswith("2019-04-15T06:35:36")
     assert abs(first["lat"] - 29.49469) < 1e-4 and first["phash"] == "82a81f67f94615ae"
+
+
+def test_bulk_delete_updates_the_source_count(imported, client):
+    pid, source_id = imported["pid"], imported["source_id"]
+    assert client.get(f"/api/v1/projects/{pid}/sources/{source_id}").json()["image_count"] == 20
+    ids = [i["id"] for i in _list(client, pid, limit=3)["items"]]
+    assert client.post(f"/api/v1/projects/{pid}/images/bulk-delete", json={"image_ids": ids}).json() == {
+        "deleted": 3
+    }
+    assert client.get(f"/api/v1/projects/{pid}/sources/{source_id}").json()["image_count"] == 17
+
+
+def test_derived_files_are_published_atomically(imported, client, project_dir):
+    """A half-written cache file must never be visible under the name the next request reads."""
+    pid = imported["pid"]
+    image = _list(client, pid, limit=1)["items"][0]
+    client.get(f"/api/v1/projects/{pid}/images/{image['id']}/thumbnail")
+    client.get(f"/api/v1/projects/{pid}/images/{image['id']}/file", params={"max_side": 160})
+    cache = project_dir / "cache"
+    assert [p.name for p in cache.rglob("*.tmp*")] == []
+    assert sorted(p.name for p in cache.rglob("*.jpg")) == [f"{image['id']}.jpg", f"{image['id']}_160.jpg"]

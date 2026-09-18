@@ -74,19 +74,24 @@ def read_exif(im: Image.Image) -> tuple[datetime | None, float | None, float | N
     return capture, lat, lon, alt
 
 
-def _exif_for_save(exif_bytes: bytes | None) -> bytes | None:
-    """`exif_transpose` already rotated the pixels, so the saved copy must claim orientation 1."""
-    if not exif_bytes:
+def _exif_for_save(original: bytes | None, rotated: bytes | None) -> bytes | None:
+    """`exif_transpose` already rotated the pixels, so the saved copy must claim orientation 1.
+
+    `rotated` is the transposed image's own EXIF, from which Pillow has dropped the orientation
+    tag; it is the fallback when piexif cannot parse the original, because returning the raw
+    original would tell viewers to rotate a second time.
+    """
+    if not original:
         return None
     try:
-        parsed = piexif.load(exif_bytes)
+        parsed = piexif.load(original)
         if parsed["0th"].get(piexif.ImageIFD.Orientation, 1) == 1:
-            return exif_bytes
+            return original
         parsed["0th"][piexif.ImageIFD.Orientation] = 1
         parsed["thumbnail"] = None  # a stale thumbnail would still be the unrotated one
         return piexif.dump(parsed)
     except Exception:
-        return exif_bytes
+        return rotated
 
 
 def process_one(src: str, dest: str, max_side: int, quality: int) -> Prepared:
@@ -102,8 +107,8 @@ def process_one(src: str, dest: str, max_side: int, quality: int) -> Prepared:
             return out
         with Image.open(src) as opened:
             out.capture_time, out.lat, out.lon, out.alt = read_exif(opened)
-            exif_bytes = _exif_for_save(opened.info.get("exif"))
             im = ImageOps.exif_transpose(opened)
+            exif_bytes = _exif_for_save(opened.info.get("exif"), im.info.get("exif"))
             if im.mode != "RGB":
                 im = im.convert("RGB")
             w, h = im.size

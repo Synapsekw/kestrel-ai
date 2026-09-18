@@ -81,3 +81,19 @@ def test_real_frame_matches_manifest(ahmadia_sample, tmp_path):
     assert out.capture_time == datetime(2019, 4, 15, 6, 35, 36, tzinfo=UTC)
     assert abs(out.lat - 29.49469) < 1e-4 and abs(out.lon - 47.76513) < 1e-4
     assert abs(out.alt - 191.3) < 0.1
+
+
+def test_orientation_is_cleared_even_when_piexif_cannot_parse(tmp_path, make_jpeg, monkeypatch):
+    """Falling back to the raw EXIF would re-apply a rotation the pixels already have."""
+    from app.datasets import prepare
+
+    def _boom(_):
+        raise ValueError("unparsable exif")
+
+    monkeypatch.setattr(prepare.piexif, "load", _boom)
+    src = make_jpeg(tmp_path / "rot.jpg", 300, 200, exif={"orientation": 6})
+    out = prepare.process_one(str(src), str(tmp_path / "out.jpg"), 4000, 95)
+    assert (out.width, out.height) == (200, 300)
+    with Image.open(tmp_path / "out.jpg") as im:
+        assert im.size == (200, 300)
+        assert im.getexif().get(piexif.ImageIFD.Orientation, 1) == 1

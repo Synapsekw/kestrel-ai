@@ -168,3 +168,56 @@ def test_sources_list_paginates(client, project, tmp_path, make_jpeg):
     assert len(page2["items"]) == 1 and page2["next_cursor"] is None
     sites = [s["site"] for s in page["items"] + page2["items"]]
     assert sites == ["s0", "s1", "s2"]  # created_at ascending, no duplicates across pages
+
+
+def test_two_sources_can_share_a_site(client, project, import_source, tmp_path, make_jpeg, project_dir):
+    """Same site, same file names, different folders: both must import in full."""
+    pid = project["id"]
+    for folder, base in (("a", 1), ("b", 11)):
+        for i in (1, 2):
+            make_jpeg(tmp_path / folder / f"DJI_000{i}.jpg", 120, 90, seed=base + i)
+    first = import_source(pid, tmp_path / "a", site="shared")
+    second = import_source(pid, tmp_path / "b", site="shared")
+    assert first != second
+
+    handle = client.app.state.projects.get(pid)
+    with handle.session() as s:
+        paths = sorted(i.path for i in s.query(Image).all())
+    assert paths == [
+        "images/shared/DJI_0001.jpg",
+        "images/shared/DJI_0001_1.jpg",
+        "images/shared/DJI_0002.jpg",
+        "images/shared/DJI_0002_1.jpg",
+    ]
+    for source_id in (first, second):
+        assert client.get(f"/api/v1/projects/{pid}/sources/{source_id}").json()["image_count"] == 2
+    assert len(list((project_dir / "images" / "shared").glob("*.jpg"))) == 4
+
+    # and the name plan is stable: re-importing either source adds nothing
+    body = client.post(
+        f"/api/v1/projects/{pid}/sources", json={"folder": str(tmp_path / "b"), "site": "shared"}
+    ).json()
+    res = _wait(client, pid, body["job"]["id"])["result"]
+    assert res == {"source_id": second, "imported": 0, "duplicates": 0, "failed": 0, "skipped": 2}
+
+
+def test_recorded_duplicates_are_not_reconverted(client, project, tmp_path, project_dir):
+    pid = project["id"]
+    folder = tmp_path / "dup"
+    a = _gradient(folder / "A_0001_0001.jpg")
+    PILImage.open(a).save(folder / "A_0001_0002.jpg", "JPEG", quality=70)
+    body = client.post(f"/api/v1/projects/{pid}/sources", json={"folder": str(folder)}).json()
+    assert _wait(client, pid, body["job"]["id"])["result"]["duplicates"] == 1
+
+    again = client.post(f"/api/v1/projects/{pid}/sources", json={"folder": str(folder)}).json()
+    res = _wait(client, pid, again["job"]["id"])["result"]
+    # the known duplicate is skipped outright, not converted and deleted a second time
+    assert res == {
+        "source_id": body["source"]["id"],
+        "imported": 0,
+        "duplicates": 0,
+        "failed": 0,
+        "skipped": 2,
+    }
+    assert not (project_dir / "images" / body["source"]["site"] / "A_0001_0002.jpg").exists()
+    assert client.get(f"/api/v1/projects/{pid}/sources/{body['source']['id']}").json()["duplicate_count"] == 1
