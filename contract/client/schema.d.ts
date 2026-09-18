@@ -1677,7 +1677,7 @@ export interface components {
          */
         ModelImport: {
             name: string;
-            /** @description absolute path to an existing .pt file (422 otherwise); copied into models/ */
+            /** @description absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into models/ */
             weights_path: string;
             class_aliases?: {
                 [key: string]: string;

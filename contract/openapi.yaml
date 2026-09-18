@@ -1658,7 +1658,7 @@ components:
       required: [name, weights_path]
       properties:
         name: { type: string, minLength: 1 }
-        weights_path: { type: string, minLength: 1, description: absolute path to an existing .pt file (422 otherwise); copied into models/ }
+        weights_path: { type: string, minLength: 1, description: absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into models/ }
         class_aliases:
           type: object
           additionalProperties: { type: string }

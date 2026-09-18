@@ -22,6 +22,7 @@ keyring
 python-multipart
 websockets
 piexif
+pyyaml
 # export formats (spec 7): onnx; tensorrt is added in S6 if a cu13 wheel is available
 onnx
 onnxslim
