@@ -6,6 +6,7 @@ from pathlib import Path
 import yaml
 
 from app.errors import AppError
+from app.jobs.gpu import hold_gpu
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.projects.service import ProjectHandle
@@ -71,7 +72,8 @@ def run_train(ctx: JobContext) -> dict:
         device=p.get("device", "0"),
     )
     ctx.log.info("training %s on dataset %s for %s epochs", p["name"], dataset.name, params.epochs)
-    result = get_trainer().train(params, ctx.progress, ctx.cancelled, ctx.log)
+    with hold_gpu(ctx.log, "train", cancelled=ctx.cancelled):
+        result = get_trainer().train(params, ctx.progress, ctx.cancelled, ctx.log)
     ctx.check_cancelled()
     model = registry.register_trained(
         handle,
@@ -91,16 +93,17 @@ def run_export(ctx: JobContext) -> dict:
     handle, p = ctx.project, ctx.params
     model = registry.get_model(handle, p["model_id"])
     fmt = p["format"]
-    exported = get_trainer().export(
-        handle.folder / model.weights_path,
-        fmt,
-        int(p.get("imgsz", 1280)),
-        bool(p.get("half", False)),
-        EXPORT_DEVICE.get(fmt, "0"),
-        handle.runs_dir / ctx.job_id,
-        ctx.cancelled,
-        ctx.log,
-    )
+    with hold_gpu(ctx.log, "export", cancelled=ctx.cancelled):
+        exported = get_trainer().export(
+            handle.folder / model.weights_path,
+            fmt,
+            int(p.get("imgsz", 1280)),
+            bool(p.get("half", False)),
+            EXPORT_DEVICE.get(fmt, "0"),
+            handle.runs_dir / ctx.job_id,
+            ctx.cancelled,
+            ctx.log,
+        )
     ctx.check_cancelled()
     target = handle.models_dir / f"{Path(model.weights_path).stem}.{fmt}"
     target.parent.mkdir(parents=True, exist_ok=True)

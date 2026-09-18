@@ -1,0 +1,10 @@
+{
+  "id": "msg_01TruncatedFixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5",
+  "content": [{ "type": "text", "text": "{\"boxes\": [{\"label\": \"dump_tr" }],
+  "stop_reason": "max_tokens",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 1834, "output_tokens": 16000 }
+}

@@ -8,9 +8,12 @@ from datetime import UTC, datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.appdata import AppData
 from app.config import Settings
 from app.errors import install_error_handlers
 from app.logging_setup import configure_logging
+from app.providers.config import ProviderConfigStore
+from app.providers.keys import KeyringKeyStore
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -28,6 +31,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.events.bind(asyncio.get_running_loop())
         app.state.projects = ProjectRegistry(settings.data_dir)
         app.state.jobs = JobRunner(app.state.events)
+        # jobs reach the key store and provider settings through the runner: a job's params are
+        # persisted in the project DB, so a key must never travel that way.
+        app.state.jobs.keys = app.state.keys
+        app.state.jobs.provider_config = app.state.provider_config
         app.state.jobs.start()
         yield
         app.state.jobs.stop()
@@ -43,6 +50,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     app.state.settings = settings
     app.state.started_at = datetime.now(UTC).isoformat()
+    app.state.keys = KeyringKeyStore()
+    app.state.provider_config = ProviderConfigStore(AppData(settings.data_dir))
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

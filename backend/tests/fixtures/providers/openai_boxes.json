@@ -1,0 +1,25 @@
+{
+  "id": "resp_01BoxesFixture",
+  "object": "response",
+  "created_at": 1789000000,
+  "model": "gpt-5",
+  "status": "completed",
+  "parallel_tool_calls": false,
+  "tool_choice": "auto",
+  "tools": [],
+  "output": [
+    {
+      "id": "msg_01BoxesFixture",
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "annotations": [],
+          "text": "{\"boxes\": [{\"label\": \"dump_truck\", \"x\": 0.5, \"y\": 0.5, \"w\": 0.1, \"h\": 0.2, \"confidence\": 0.82}, {\"label\": \"excavator\", \"x\": 0.1, \"y\": 0.2, \"w\": 0.05, \"h\": 0.05, \"confidence\": 0.61}, {\"label\": \"ufo\", \"x\": 0.0, \"y\": 0.0, \"w\": 0.1, \"h\": 0.1, \"confidence\": 0.99}]}"
+        }
+      ]
+    }
+  ]
+}
