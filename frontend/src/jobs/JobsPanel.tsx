@@ -12,6 +12,7 @@ export function JobsPanel({ projectId }: { projectId: string }) {
   const jobs = useJobsStore((s) => s.jobs);
   const list = useJobList(projectId, open);
   const panelRef = useRef<HTMLElement>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const sorted = useMemo(
     () =>
       Object.values(jobs)
@@ -19,9 +20,16 @@ export function JobsPanel({ projectId }: { projectId: string }) {
         .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [jobs, projectId],
   );
-  // Focus moves into the slide-over when it opens, and Escape closes it from anywhere.
+  // Focus moves into the slide-over when it opens and back to whatever opened it when it closes;
+  // Escape closes it from anywhere.
   useEffect(() => {
-    if (open) panelRef.current?.focus();
+    if (open) {
+      triggerRef.current = document.activeElement as HTMLElement | null;
+      panelRef.current?.focus();
+      return;
+    }
+    triggerRef.current?.focus();
+    triggerRef.current = null;
   }, [open]);
   useEffect(() => {
     if (!open) return;

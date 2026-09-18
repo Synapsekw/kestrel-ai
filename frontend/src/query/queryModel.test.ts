@@ -28,13 +28,14 @@ describe("query form model", () => {
       tiling: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 },
       conf: 0.25,
     });
+    // Disabled tiling normalises back to the contract defaults, whatever the disabled fields hold.
     expect(toQueryRunCreate({ ...cloud, tilingEnabled: false, tileSize: "640", conf: "0.4" }, ["a"])).toEqual(
       {
         kind: "cloud_provider",
         provider: "anthropic",
         query: "dump trucks",
         image_ids: ["a"],
-        tiling: { enabled: false, tile_size: 640, overlap: 0.2, nms_iou: 0.5 },
+        tiling: { enabled: false, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 },
         conf: 0.4,
       },
     );

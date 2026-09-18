@@ -11,6 +11,8 @@ interface State {
   runId: string | null;
   run: QueryRun | null;
   error: string | null;
+  /** The job a resume just handed us; a poll answering with the old job_id is ignored until then. */
+  pendingJobId: string | null;
 }
 
 export interface TrackedRun {
@@ -21,14 +23,22 @@ export interface TrackedRun {
   replace: (run: QueryRun) => void;
   /** Follow a new job for this run (after a resume) without waiting for the next run poll. */
   trackJob: (job: Job) => void;
+  /** Re-arms both pollers after a failure (the "Retry" button of the alert). */
+  retry: () => void;
 }
 
 /** The run (box_count grows while the job writes tiles) and its job; both polled while the job is active. */
 export function useTrackedRun(projectId: string, runId: string | null): TrackedRun {
   const api = useApi();
-  const [state, setState] = useState<State>({ runId: null, run: null, error: null });
+  const [state, setState] = useState<State>({
+    runId: null,
+    run: null,
+    error: null,
+    pendingJobId: null,
+  });
+  const [attempt, setAttempt] = useState(0);
   const run = state.runId === runId ? state.run : null;
-  const { job, error: jobError } = useTrackedJob(projectId, run?.job_id ?? null);
+  const { job, error: jobError, retry: retryJob } = useTrackedJob(projectId, run?.job_id ?? null);
   const live = job !== null && isActiveJob(job);
 
   useEffect(() => {
@@ -40,7 +50,16 @@ export function useTrackedRun(projectId: string, runId: string | null): TrackedR
         .then((r) => {
           if (cancelled) return;
           failed = false;
-          setState({ runId, run: r, error: null });
+          setState((s) => {
+            // A resume handed us a newer job than the backend reports; keep it until it catches up.
+            const stale = s.pendingJobId !== null && r.job_id !== s.pendingJobId;
+            return {
+              runId,
+              run: stale ? { ...r, job_id: s.pendingJobId } : r,
+              error: null,
+              pendingJobId: stale ? s.pendingJobId : null,
+            };
+          });
         })
         .catch((e: unknown) => {
           if (cancelled) return;
@@ -48,6 +67,7 @@ export function useTrackedRun(projectId: string, runId: string | null): TrackedR
           if (!failed) pushLog(`load query run ${runId} failed: ${messageOf(e, String(e))}`);
           failed = true;
           setState((s) => ({
+            ...s,
             runId,
             run: s.runId === runId ? s.run : null,
             error: messageOf(e, "could not load the run"),
@@ -65,13 +85,22 @@ export function useTrackedRun(projectId: string, runId: string | null): TrackedR
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [api, projectId, runId, live]);
+  }, [api, projectId, runId, live, attempt]);
 
-  const replace = useCallback((r: QueryRun) => setState({ runId: r.id, run: r, error: null }), []);
-  const trackJob = useCallback(
-    (j: Job) => setState((s) => (s.run ? { ...s, run: { ...s.run, job_id: j.id } } : s)),
+  const replace = useCallback(
+    (r: QueryRun) => setState({ runId: r.id, run: r, error: null, pendingJobId: null }),
     [],
   );
+  const trackJob = useCallback(
+    (j: Job) => setState((s) => (s.run ? { ...s, run: { ...s.run, job_id: j.id }, pendingJobId: j.id } : s)),
+    [],
+  );
+  const retry = useCallback(() => {
+    setState((s) => ({ ...s, error: null }));
+    setAttempt((a) => a + 1);
+    retryJob();
+  }, [retryJob]);
+
   const runError = state.runId === runId ? state.error : null;
-  return { run, job, error: runError ?? jobError, replace, trackJob };
+  return { run, job, error: runError ?? jobError, replace, trackJob, retry };
 }

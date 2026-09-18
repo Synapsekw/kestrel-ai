@@ -16,7 +16,7 @@ const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-sl
 
 export function RunCard({ projectId, runId }: { projectId: string; runId: string }) {
   const api = useApi();
-  const { run, job, error: loadError, replace, trackJob } = useTrackedRun(projectId, runId);
+  const { run, job, error: loadError, replace, trackJob, retry } = useTrackedRun(projectId, runId);
   const [minConf, setMinConf] = useState("0.5");
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -63,8 +63,14 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
 
   // The card keeps rendering when a later poll fails; the alert sits next to it.
   const alert = loadError && (
-    <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
+    <p
+      role="alert"
+      className="flex flex-wrap items-center gap-2 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200"
+    >
       {loadError}
+      <button type="button" className={secondary} onClick={retry}>
+        Retry
+      </button>
     </p>
   );
   if (!run) {

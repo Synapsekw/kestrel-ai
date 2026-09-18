@@ -75,9 +75,14 @@ export function validateQueryForm(f: QueryForm, imageCount: number, providers: P
   return null;
 }
 
+/**
+ * Disabled tiling sends the contract defaults with `enabled: false`: the tile fields are disabled in
+ * the form, so whatever they happen to hold is not a choice the user made and must not reach the run.
+ */
 export function toTiling(f: QueryForm): Tiling {
+  if (!f.tilingEnabled) return { ...DEFAULT_TILING, enabled: false };
   return {
-    enabled: f.tilingEnabled,
+    enabled: true,
     tile_size: Number(f.tileSize),
     overlap: Number(f.overlap),
     nms_iou: Number(f.nmsIou),

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { createApiClient } from "@contract/client";
 import { errorBody, fakeClient, JOB_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
@@ -20,6 +21,24 @@ async function advance(ticks: number) {
       await vi.advanceTimersByTimeAsync(JOB_POLL_MS);
     });
   }
+}
+
+/** A backend that is down for `downFor` calls and then answers with the running job. */
+function recoveringClient(downFor: number) {
+  const calls = { n: 0 };
+  const fetchImpl: typeof fetch = async () => {
+    calls.n += 1;
+    return calls.n <= downFor
+      ? new Response(JSON.stringify(errorBody("not_found", "job j1 not found")), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        })
+      : new Response(JSON.stringify(runningJob), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+  };
+  return { api: createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl }), calls };
 }
 
 describe("useTrackedJob", () => {
@@ -64,6 +83,39 @@ describe("useTrackedJob", () => {
       expect(result.current.error).toBe("job j1 not found");
       expect(result.current.job).toBeNull();
       expect(requests).toHaveLength(1);
+    });
+
+    it("re-arms and clears the error when the job reaches the store from elsewhere", async () => {
+      const { api, calls } = recoveringClient(1);
+      const { result } = renderHook(() => useTrackedJob(PROJECT_ID, JOB_ID), { wrapper: wrapperFor(api) });
+      await advance(2);
+      expect(result.current.error).toBe("job j1 not found");
+      expect(calls.n).toBe(1);
+
+      // A websocket event or the jobs panel puts the job in the store: the backend is alive again.
+      await act(async () => {
+        useJobsStore.getState().upsert(runningJob);
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(result.current.job?.id).toBe(JOB_ID);
+      expect(result.current.error).toBeNull();
+      expect(calls.n).toBe(2);
+    });
+
+    it("re-arms on retry() after it gave up", async () => {
+      const { api, calls } = recoveringClient(1);
+      const { result } = renderHook(() => useTrackedJob(PROJECT_ID, JOB_ID), { wrapper: wrapperFor(api) });
+      await advance(2);
+      expect(result.current.error).toBe("job j1 not found");
+      expect(calls.n).toBe(1);
+
+      await act(async () => {
+        result.current.retry();
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(result.current.error).toBeNull();
+      expect(result.current.job?.progress).toBe(0.42);
+      expect(calls.n).toBe(2);
     });
 
     it("retries other failures and gives up after the limit", async () => {

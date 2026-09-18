@@ -4,8 +4,9 @@ import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
 import { createSource, fetchAllSources, fetchSourceStats } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
+import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { formatDate } from "@/models/modelLabels";
-import { useJobsStore } from "@/store/jobs";
+import { isActiveJob, useJobsStore } from "@/store/jobs";
 
 const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
@@ -58,6 +59,14 @@ function SourceRow({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reimportJobId, setReimportJobId] = useState<string | null>(null);
+  const { job } = useTrackedJob(projectId, reimportJobId);
+  // The counts only change once the import job has actually run, so the re-list waits for it.
+  const finished = job !== null && !isActiveJob(job);
+
+  useEffect(() => {
+    if (finished) onReimported();
+  }, [finished, onReimported]);
 
   async function loadStats() {
     setBusy(true);
@@ -84,9 +93,8 @@ function SourceRow({
       });
       useJobsStore.getState().upsert(result.job);
       useJobsStore.getState().setPanelOpen(true);
+      setReimportJobId(result.job.id);
       setStatus(`Re-import started (job ${result.job.id.slice(0, 8)})`);
-      // The counts change as the job imports new files; re-list so the row is not stale.
-      onReimported();
     } catch (e) {
       pushLog(`re-import ${source.id} failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "could not start the re-import"));
@@ -149,12 +157,13 @@ export function SourcesSection({ projectId }: { projectId: string }) {
         if (cancelled) return;
         pushLog(`load sources failed: ${messageOf(e, String(e))}`);
         const unavailable = isNotImplemented(e);
-        setState({
+        // A failed re-list keeps the sources already on screen; only the error line is new.
+        setState((prev) => ({
           key,
-          sources: [],
+          sources: unavailable ? [] : prev.sources,
           unavailable,
           error: unavailable ? null : messageOf(e, "could not load sources"),
-        });
+        }));
       });
     return () => {
       cancelled = true;
@@ -185,7 +194,13 @@ export function SourcesSection({ projectId }: { projectId: string }) {
       )}
       <ul className="flex flex-col gap-2">
         {state.sources.map((s) => (
-          <SourceRow key={s.id} projectId={projectId} source={s} onReimported={reload} />
+          <SourceRow
+            // Remounting on changed counts drops the row's cached statistics, which are now stale.
+            key={`${s.id}|${s.image_count}|${s.duplicate_count}|${s.imported_at ?? ""}`}
+            projectId={projectId}
+            source={s}
+            onReimported={reload}
+          />
         ))}
       </ul>
     </section>

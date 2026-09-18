@@ -52,6 +52,26 @@ describe("JobsPanel", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("returns focus to the button that opened it", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/jobs$/, body: { items: [runningJob], next_cursor: null } },
+    ]);
+    renderWithProviders(
+      <>
+        <JobsButton />
+        <JobsPanel projectId={PROJECT_ID} />
+      </>,
+      { api },
+    );
+    const button = screen.getByRole("button", { name: "0 active jobs" });
+    button.focus();
+    fireEvent.click(button);
+    const dialog = await screen.findByRole("dialog", { name: "Jobs" });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    fireEvent.click(screen.getByRole("button", { name: "Close jobs" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: /active job/ })).toHaveFocus());
+  });
+
   it("shows the envelope message when the list fails", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/jobs$/, status: 500, body: errorBody("internal_error", "db locked") },
