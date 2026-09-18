@@ -61,3 +61,69 @@ describe("History", () => {
     expect(h.canRedo()).toBe(false);
   });
 });
+
+describe("History re-entrancy, queue and id aliases", () => {
+  function slow(label: string, log: string[], ms = 20): Command {
+    const wait = () => new Promise<void>((r) => setTimeout(r, ms));
+    return {
+      label,
+      undo: async () => {
+        await wait();
+        log.push(`undo ${label}`);
+      },
+      redo: async () => {
+        await wait();
+        log.push(`redo ${label}`);
+      },
+    };
+  }
+
+  it("ignores a second undo or redo while one is in flight", async () => {
+    const log: string[] = [];
+    const h = new History();
+    h.push(slow("a", log));
+    h.push(slow("b", log));
+    const first = h.undo();
+    expect(await h.undo()).toBeNull();
+    expect((await first)?.label).toBe("b");
+    expect(log).toEqual(["undo b"]);
+    const redo = h.redo();
+    expect(await h.redo()).toBeNull();
+    expect((await redo)?.label).toBe("b");
+    expect(h.canUndo()).toBe(true);
+    expect(h.canRedo()).toBe(false);
+  });
+
+  it("runs queued work one at a time in submission order, even when the first is slower", async () => {
+    const h = new History();
+    const log: string[] = [];
+    const a = h.run(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+      log.push("a");
+      return "a";
+    });
+    const b = h.run(async () => {
+      log.push("b");
+      return "b";
+    });
+    expect(await Promise.all([a, b])).toEqual(["a", "b"]);
+    expect(log).toEqual(["a", "b"]);
+    await expect(
+      h.run(async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+    expect(await h.run(async () => "after")).toBe("after");
+  });
+
+  it("resolves ids through the alias chain and clears it", () => {
+    const h = new History();
+    expect(h.resolve("x")).toBe("x");
+    h.alias("a", "b");
+    h.alias("b", "c");
+    expect(h.resolve("a")).toBe("c");
+    expect(h.resolve("b")).toBe("c");
+    h.clear();
+    expect(h.resolve("a")).toBe("a");
+  });
+});

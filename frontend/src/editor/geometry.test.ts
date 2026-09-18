@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   clampRect,
   displayMaxSide,
+  dragRect,
   duplicateOffset,
   fitView,
   isDrawable,
@@ -91,5 +92,30 @@ describe("rects", () => {
     expect(displayMaxSide(image)).toBe(4000);
     expect(displayMaxSide({ width: 6000, height: 4000 })).toBe(4096);
     expect(displayMaxSide({ width: 800, height: 600 }, 2048)).toBe(800);
+  });
+});
+
+describe("dragRect", () => {
+  const v = { scale: 0.25, x: 0, y: 0 };
+  it("treats a click or a few pixels of jitter as no box", () => {
+    expect(dragRect({ x: 100, y: 100 }, { x: 100, y: 100 }, v, image)).toBeNull();
+    expect(dragRect({ x: 100, y: 100 }, { x: 103, y: 102 }, v, image)).toBeNull();
+    expect(dragRect({ x: 100, y: 100 }, { x: 140, y: 100 }, v, image)).toBeNull();
+  });
+  it("returns the clamped, rounded image rect of a real drag in either direction", () => {
+    expect(dragRect({ x: 100, y: 100 }, { x: 110, y: 108 }, v, image)).toEqual({
+      x: 400,
+      y: 400,
+      w: 40,
+      h: 32,
+    });
+    expect(dragRect({ x: 110, y: 108 }, { x: 100, y: 100 }, v, image)).toEqual({
+      x: 400,
+      y: 400,
+      w: 40,
+      h: 32,
+    });
+    // starts outside the image: clamped into it, the size is kept
+    expect(dragRect({ x: -20, y: -20 }, { x: 10, y: 10 }, v, image)).toEqual({ x: 0, y: 0, w: 120, h: 120 });
   });
 });

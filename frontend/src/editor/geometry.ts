@@ -27,6 +27,8 @@ export const FIT_PADDING = 16;
 export const DISPLAY_MAX_SIDE = 4096;
 /** Smallest box side in image pixels; anything smaller is treated as a click. */
 export const MIN_BOX_SIDE = 2;
+/** A drag shorter than this in display pixels (both axes) is a click, never a box. */
+export const MIN_DRAG_PX = 4;
 
 export function toImage(p: Point, v: ViewTransform): Point {
   return { x: (p.x - v.x) / v.scale, y: (p.y - v.y) / v.scale };
@@ -105,4 +107,16 @@ export function displayMaxSide(image: Size, cap = DISPLAY_MAX_SIDE): number {
 
 export function duplicateOffset(r: Rect, image: Size, offset = 12): Rect {
   return clampRect({ ...r, x: r.x + offset, y: r.y + offset }, image);
+}
+
+/**
+ * The box a drag from `start` to `end` (display pixels) draws, or `null` for a click, a few pixels
+ * of jitter or a degenerate rectangle. The minimum-size check runs on the raw drag, before
+ * clamping, because `clampRect` would otherwise turn a click into a 2 x 2 box.
+ */
+export function dragRect(start: Point, end: Point, view: ViewTransform, image: Size): Rect | null {
+  if (Math.abs(end.x - start.x) < MIN_DRAG_PX && Math.abs(end.y - start.y) < MIN_DRAG_PX) return null;
+  const raw = normalizeRect(toImage(start, view), toImage(end, view));
+  if (!isDrawable(raw)) return null;
+  return roundRect(clampRect(raw, image));
 }

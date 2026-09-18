@@ -44,7 +44,7 @@ export function RegionList({
       <h2 className="border-b border-slate-800 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
         Regions ({boxes.length})
       </h2>
-      <ul role="list" className="min-h-0 flex-1 overflow-auto">
+      <ul role="list" aria-label="Regions" className="min-h-0 flex-1 overflow-auto">
         {boxes.map((b, i) => {
           const n = i + 1;
           const selected = b.id === selectedId;
@@ -52,9 +52,18 @@ export function RegionList({
             <li
               key={b.id}
               role="listitem"
+              tabIndex={0}
               data-box-id={b.id}
-              aria-selected={selected}
+              // `aria-current` rather than `aria-selected`: the row holds a <select>, so a
+              // listbox/option pattern would nest options inside an option.
+              aria-current={selected ? "true" : undefined}
               onClick={() => onSelect(b.id)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && e.target === e.currentTarget) {
+                  e.preventDefault();
+                  onSelect(b.id);
+                }
+              }}
               onMouseEnter={() => onHover(b.id)}
               onMouseLeave={() => onHover(null)}
               className={`flex cursor-pointer flex-col gap-1 border-b border-slate-800/60 px-3 py-2 text-xs ${
@@ -133,12 +142,10 @@ export function RegionList({
             </li>
           );
         })}
-        {boxes.length === 0 && (
-          <li className="px-3 py-4 text-xs text-slate-500">
-            No boxes yet. Pick a class and drag on the image.
-          </li>
-        )}
       </ul>
+      {boxes.length === 0 && (
+        <p className="px-3 py-4 text-xs text-slate-500">No boxes yet. Pick a class and drag on the image.</p>
+      )}
     </div>
   );
 }

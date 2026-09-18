@@ -5,6 +5,7 @@ import { actionForKey, isTypingTarget } from "./hotkeys";
 import type { EditorActions } from "./useEditorActions";
 
 interface Options {
+  /** False while an image loads: editing keys are ignored, next/previous stay live. */
   enabled: boolean;
   classes: ClassDef[];
   actions: EditorActions;
@@ -14,7 +15,6 @@ interface Options {
 /** Document-level hotkeys for the editor (spec section 6); typing targets are left alone. */
 export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): void {
   useEffect(() => {
-    if (!enabled) return;
     const handle = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       const action = actionForKey({
@@ -27,6 +27,13 @@ export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): v
         repeat: e.repeat,
       });
       if (!action) return;
+      if (action.type === "next" || action.type === "prev") {
+        e.preventDefault();
+        if (action.type === "next") nav?.next();
+        else nav?.prev();
+        return;
+      }
+      if (!enabled) return;
       const st = useEditorStore.getState();
       switch (action.type) {
         case "class-key": {
@@ -72,19 +79,12 @@ export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): v
           return;
         case "undo":
           e.preventDefault();
-          void actions.undo();
+          // Undo/redo only when nothing is saving: the compensating call must target settled state.
+          if (st.pending === 0) void actions.undo();
           return;
         case "redo":
           e.preventDefault();
-          void actions.redo();
-          return;
-        case "next":
-          e.preventDefault();
-          nav?.next();
-          return;
-        case "prev":
-          e.preventDefault();
-          nav?.prev();
+          if (st.pending === 0) void actions.redo();
           return;
       }
     };

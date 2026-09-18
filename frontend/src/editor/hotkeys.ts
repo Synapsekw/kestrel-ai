@@ -36,13 +36,14 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   }
   if (e.type !== "keydown") return null;
   const lower = e.key.toLowerCase();
-  if (ctrl && e.shiftKey && !e.altKey && lower === "z") return { type: "redo" };
+  // A held Ctrl+Z / Ctrl+Y must not fire an undo per auto-repeat tick.
+  if (ctrl && e.shiftKey && !e.altKey && lower === "z") return e.repeat ? null : { type: "redo" };
   if (ctrl && !e.shiftKey && !e.altKey) {
     switch (lower) {
       case "z":
-        return { type: "undo" };
+        return e.repeat ? null : { type: "undo" };
       case "y":
-        return { type: "redo" };
+        return e.repeat ? null : { type: "redo" };
       case "d":
         return { type: "duplicate" };
       case "1":

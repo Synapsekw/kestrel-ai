@@ -9,7 +9,8 @@ import { colourOf, nameOf } from "./labels";
 
 interface Props {
   classes: ClassDef[];
-  onCommitRect: (id: string, before: RectShape, after: RectShape) => void;
+  /** Resolves when the move/resize has been saved or has failed; the node is re-synced from the store then. */
+  onCommitRect: (id: string, before: RectShape, after: RectShape) => Promise<void>;
 }
 
 /** Boxes in image pixels; strokes, dashes and labels are kept in screen pixels through `strokeScaleEnabled={false}` and 1/scale. */
@@ -40,6 +41,16 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
   if (!image) return null;
   const px = (n: number) => n / scale;
 
+  /** The Konva node follows the store again: the saved rect on success, the old rect on failure. */
+  const syncNode = (id: string) => {
+    const node = nodeRefs.current.get(id);
+    const box = useEditorStore.getState().boxes[id];
+    if (!node || !box) return;
+    node.scale({ x: 1, y: 1 });
+    node.setAttrs({ x: box.x, y: box.y, width: box.w, height: box.h });
+    node.getLayer()?.batchDraw();
+  };
+
   const commit = (id: string, e: KonvaEventObject<Event>) => {
     const box = boxes[id];
     const node = e.target as Konva.Rect;
@@ -50,7 +61,7 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
     );
     node.scale({ x: 1, y: 1 });
     node.setAttrs({ x: after.x, y: after.y, width: after.w, height: after.h });
-    onCommitRect(id, rectOf(box), roundRect(after));
+    void onCommitRect(id, rectOf(box), roundRect(after)).then(() => syncNode(id));
   };
 
   return (
@@ -77,8 +88,11 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
             dash={proposal ? [8, 4] : undefined}
             opacity={b.review_state === "rejected" ? 0.35 : 1}
             fill={isSelected || b.id === hoveredId ? `${colour}33` : "rgba(0,0,0,0.01)"}
+            // While Space is held the stage pans, so boxes neither capture the pointer nor drag.
+            listening={!spaceHeld}
             draggable={!spaceHeld}
             onMouseDown={(e) => {
+              if (spaceHeld) return;
               e.cancelBubble = true;
               select(b.id);
             }}
@@ -119,6 +133,7 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
       {selectedId && (
         <Transformer
           ref={trRef}
+          listening={!spaceHeld}
           rotateEnabled={false}
           keepRatio={false}
           ignoreStroke

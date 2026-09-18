@@ -64,7 +64,9 @@ export function ImageGrid(p: ImageGridProps) {
       onScroll={onScroll}
       tabIndex={0}
       onKeyDown={p.onKeyDown}
-      role="grid"
+      role="listbox"
+      aria-label="Images"
+      aria-multiselectable="true"
       data-testid="image-grid"
       className="min-h-0 flex-1 overflow-auto outline-none focus:ring-1 focus:ring-orange-500"
     >
@@ -81,7 +83,7 @@ export function ImageGrid(p: ImageGridProps) {
             return (
               <div
                 key={img.id}
-                role="row"
+                role="option"
                 aria-selected={isSelected}
                 onClick={(e) =>
                   p.onCellClick(img.id, index, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey })

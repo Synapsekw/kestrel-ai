@@ -24,7 +24,7 @@ describe("RegionList", () => {
     );
     const rows = screen.getAllByRole("listitem");
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toHaveAttribute("aria-selected", "true");
+    expect(rows[0]).toHaveAttribute("aria-current", "true");
     expect(rows[0]).toHaveTextContent("Person");
     expect(rows[0]).toHaveTextContent("Accepted");
     expect(rows[1]).toHaveTextContent("81%");

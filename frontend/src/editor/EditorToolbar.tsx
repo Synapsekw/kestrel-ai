@@ -21,6 +21,7 @@ const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-
 const KEYS_TITLE = HOTKEY_HELP.map((h) => `${h.keys}: ${h.does}`).join("\n");
 
 export function EditorToolbar(p: ToolbarProps) {
+  const saving = p.pending > 0;
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 text-sm">
       <button
@@ -58,21 +59,24 @@ export function EditorToolbar(p: ToolbarProps) {
         {Math.round(p.zoom * 100)}%
       </span>
       <span className="mx-1 h-4 border-l border-slate-700" />
-      <button type="button" className={btn} onClick={p.onUndo} disabled={!p.canUndo} title="Ctrl+Z">
+      {/* Undo/redo wait for in-flight saves: a compensating call must target settled state. */}
+      <button type="button" className={btn} onClick={p.onUndo} disabled={!p.canUndo || saving} title="Ctrl+Z">
         Undo
       </button>
-      <button type="button" className={btn} onClick={p.onRedo} disabled={!p.canRedo} title="Ctrl+Y">
+      <button type="button" className={btn} onClick={p.onRedo} disabled={!p.canRedo || saving} title="Ctrl+Y">
         Redo
       </button>
       {p.extra}
-      <span className="cursor-help text-xs text-slate-500" title={KEYS_TITLE}>
-        Keys
-      </span>
-      <span
-        role="status"
-        className={`ml-auto text-xs ${p.pending > 0 ? "text-amber-300" : "text-slate-500"}`}
+      <button
+        type="button"
+        className="cursor-help rounded px-1 text-xs text-slate-500 hover:text-slate-300 focus:ring-1 focus:ring-orange-500"
+        title={KEYS_TITLE}
+        aria-label="Keyboard shortcuts"
       >
-        {p.pending > 0 ? "Saving…" : "Saved"}
+        Keys
+      </button>
+      <span role="status" className={`ml-auto text-xs ${saving ? "text-amber-300" : "text-slate-500"}`}>
+        {saving ? "Saving…" : "Saved"}
       </span>
     </div>
   );

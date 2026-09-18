@@ -54,3 +54,12 @@ describe("isTypingTarget", () => {
     expect(isTypingTarget(null)).toBe(false);
   });
 });
+
+describe("undo and redo ignore key repeat", () => {
+  it("returns null for a held Ctrl+Z or Ctrl+Y", () => {
+    expect(actionForKey(key("z", { ctrlKey: true, repeat: true }))).toBeNull();
+    expect(actionForKey(key("y", { ctrlKey: true, repeat: true }))).toBeNull();
+    expect(actionForKey(key("Z", { ctrlKey: true, shiftKey: true, repeat: true }))).toBeNull();
+    expect(actionForKey(key("d", { ctrlKey: true, repeat: true }))).toEqual({ type: "duplicate" });
+  });
+});

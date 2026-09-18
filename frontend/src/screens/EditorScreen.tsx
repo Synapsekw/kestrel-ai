@@ -8,15 +8,7 @@ import { BoxLayer } from "@/editor/BoxLayer";
 import { ClassSidebar } from "@/editor/ClassSidebar";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { EditorToolbar } from "@/editor/EditorToolbar";
-import {
-  clampRect,
-  displayMaxSide,
-  isDrawable,
-  normalizeRect,
-  roundRect,
-  toImage,
-  type Point,
-} from "@/editor/geometry";
+import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
 import { RegionList } from "@/editor/RegionList";
 import { useEditorActions } from "@/editor/useEditorActions";
 import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
@@ -69,7 +61,9 @@ function EditorBody({
   const toggleShowRejected = useEditorStore((s) => s.toggleShowRejected);
   const history = useHistory(imageId);
   const { actions, canUndo, canRedo } = useEditorActions(projectId, history);
+  // Display coordinates of the drag; `dragRect` decides on mouse up whether it was a click.
   const drawStart = useRef<Point | null>(null);
+  const drawEnd = useRef<Point | null>(null);
   const visible = useMemo(() => visibleBoxes({ boxes, order, showRejected }), [boxes, order, showRejected]);
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -109,8 +103,9 @@ function EditorBody({
       return;
     }
     st.select(null);
+    drawStart.current = pos;
+    drawEnd.current = pos;
     const p = toImage(pos, st.view);
-    drawStart.current = p;
     st.setDraft({ x: p.x, y: p.y, w: 0, h: 0, classId: st.activeClassId });
   };
 
@@ -119,21 +114,25 @@ function EditorBody({
     const st = useEditorStore.getState();
     const pos = e.target.getStage()?.getPointerPosition();
     if (!start || !pos || !st.image || !st.draft) return;
+    drawEnd.current = pos;
+    // Visual feedback only; the box itself is decided on mouse up.
     st.setDraft({
-      ...clampRect(normalizeRect(start, toImage(pos, st.view)), st.image),
+      ...clampRect(normalizeRect(toImage(start, st.view), toImage(pos, st.view)), st.image),
       classId: st.draft.classId,
     });
   };
 
   const onMouseUp = () => {
     const start = drawStart.current;
+    const end = drawEnd.current;
     drawStart.current = null;
+    drawEnd.current = null;
     const st = useEditorStore.getState();
     const draft = st.draft;
     st.setDraft(null);
-    if (!start || !draft || !st.image) return;
-    const rect = roundRect(clampRect(draft, st.image));
-    if (isDrawable(rect)) void actions.drawBox(rect, draft.classId);
+    if (!start || !end || !draft || !st.image) return;
+    const rect = dragRect(start, end, st.view, st.image);
+    if (rect) void actions.drawBox(rect, draft.classId);
   };
 
   const reviewControls = (
@@ -217,7 +216,7 @@ function EditorBody({
           >
             <BoxLayer
               classes={project.classes}
-              onCommitRect={(id, before, after) => void actions.commitRect(id, before, after)}
+              onCommitRect={(id, before, after) => actions.commitRect(id, before, after)}
             />
           </EditorCanvas>
         </div>

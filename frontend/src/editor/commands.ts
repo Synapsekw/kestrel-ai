@@ -16,6 +16,15 @@ export interface CommandContext {
 /** A decision the editor takes on proposals; `unreview` is only ever issued by undo. */
 export type ReviewDecision = "accept" | "reject";
 
+/**
+ * Queues a whole command behind the earlier ones of the same image so history order equals action
+ * order; the pending counter covers the wait in the queue too, so "Saving" and `waitForIdle` see it.
+ */
+export function enqueue<T>(ctx: CommandContext, fn: () => Promise<T>): Promise<T> {
+  ctx.store.getState().beginRequest();
+  return ctx.history.run(fn).finally(() => ctx.store.getState().endRequest());
+}
+
 /** Runs one API interaction with the pending counter and error capture; resolves `undefined` on failure. */
 export async function tracked<T>(
   ctx: CommandContext,
@@ -78,6 +87,7 @@ export async function cmdCreateBox(
     },
     redo: async () => {
       const again = await createBox(api, projectId, imageId, body);
+      history.alias(ref.id, again.id);
       ref.id = again.id;
       store.getState().upsertBox(again);
       store.getState().select(again.id);
@@ -100,11 +110,13 @@ export async function cmdUpdateRect(
   store.getState().upsertBox(updated);
   history.push({
     label: "move box",
+    // `resolve`: the box may have been deleted and re-created (new id) by an undo/redo in between.
     undo: async () => {
-      store.getState().upsertBox(await updateBox(api, projectId, id, before));
-      if (restore) await restoreReviewState(ctx, id, restore);
+      const current = history.resolve(id);
+      store.getState().upsertBox(await updateBox(api, projectId, current, before));
+      if (restore) await restoreReviewState(ctx, current, restore);
     },
-    redo: async () => store.getState().upsertBox(await updateBox(api, projectId, id, after)),
+    redo: async () => store.getState().upsertBox(await updateBox(api, projectId, history.resolve(id), after)),
   });
 }
 
@@ -122,10 +134,12 @@ export async function cmdSetClass(ctx: CommandContext, id: string, classId: stri
   history.push({
     label: "change class",
     undo: async () => {
-      store.getState().upsertBox(await updateBox(api, projectId, id, { class_id: previous }));
-      if (restore) await restoreReviewState(ctx, id, restore);
+      const current = history.resolve(id);
+      store.getState().upsertBox(await updateBox(api, projectId, current, { class_id: previous }));
+      if (restore) await restoreReviewState(ctx, current, restore);
     },
-    redo: async () => store.getState().upsertBox(await updateBox(api, projectId, id, { class_id: classId })),
+    redo: async () =>
+      store.getState().upsertBox(await updateBox(api, projectId, history.resolve(id), { class_id: classId })),
   });
 }
 
@@ -165,6 +179,7 @@ export async function cmdDelete(ctx: CommandContext, id: string): Promise<void> 
     label: "delete box",
     undo: async () => {
       const again = await createBox(api, projectId, box.image_id, body);
+      history.alias(ref.id, again.id);
       ref.id = again.id;
       store.getState().upsertBox(again);
     },

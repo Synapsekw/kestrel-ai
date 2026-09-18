@@ -113,3 +113,23 @@ describe("editor store", () => {
     expect(st.viewport).toEqual({ width: 1000, height: 700 });
   });
 });
+
+describe("editor store ignores responses for another image", () => {
+  beforeEach(() => {
+    useEditorStore.getState().reset();
+    useEditorStore.setState({ viewport: { width: 0, height: 0 } });
+  });
+
+  it("drops an upsert whose image_id is not the open image and a select of an absent box", () => {
+    const s = useEditorStore.getState();
+    s.loadImage(exampleImage, [personBox]);
+    s.upsertBox({ ...proposalBox, image_id: "some-other-image" });
+    expect(useEditorStore.getState().order).toEqual([personBox.id]);
+    s.select("missing");
+    expect(useEditorStore.getState().selectedId).toBeNull();
+    s.select(personBox.id);
+    expect(useEditorStore.getState().selectedId).toBe(personBox.id);
+    s.select(null);
+    expect(useEditorStore.getState().selectedId).toBeNull();
+  });
+});

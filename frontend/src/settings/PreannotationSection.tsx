@@ -16,6 +16,7 @@ export function PreannotationSection({ project, onSaved }: Props) {
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,6 +39,8 @@ export function PreannotationSection({ project, onSaved }: Props) {
   }, [api, project.id]);
 
   async function choose(value: string) {
+    if (busy) return;
+    setBusy(true);
     setError(null);
     setStatus(null);
     try {
@@ -46,6 +49,8 @@ export function PreannotationSection({ project, onSaved }: Props) {
     } catch (e) {
       pushLog(`set preannotation model failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "could not save the pre-annotation model"));
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -62,7 +67,7 @@ export function PreannotationSection({ project, onSaved }: Props) {
         <select
           aria-label="Pre-annotation model"
           value={current}
-          disabled={unavailable !== null || models === null}
+          disabled={unavailable !== null || models === null || busy}
           onChange={(e) => void choose(e.target.value)}
           className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm"
         >

@@ -19,6 +19,7 @@ import {
   cmdSetClass,
   cmdUndo,
   cmdUpdateRect,
+  enqueue,
   type CommandContext,
 } from "./commands";
 import { History } from "./history";
@@ -237,5 +238,84 @@ describe("editor commands", () => {
     expect(useEditorStore.getState().error).toBe("draw box failed: disk full");
     expect(useEditorStore.getState().pending).toBe(0);
     expect(c.history.canUndo()).toBe(false);
+  });
+});
+
+describe("editor commands: redo chain and ordering", () => {
+  beforeEach(() => {
+    counter = 0;
+    useEditorStore.getState().reset();
+    useEditorStore.getState().loadImage(exampleImage, [personBox, proposalBox]);
+  });
+
+  it("redo of a move after a re-created box patches the new id", async () => {
+    const c = ctx();
+    const created = await cmdCreateBox(c, exampleImage.id, {
+      class_id: CLASS_ID(2),
+      x: 10,
+      y: 20,
+      w: 30,
+      h: 40,
+    });
+    const before = { x: 10, y: 20, w: 30, h: 40 };
+    const after = { x: 50, y: 60, w: 30, h: 40 };
+    await cmdUpdateRect(c, created!.id, before, after);
+    await cmdUndo(c); // move back
+    await cmdUndo(c); // delete new-1
+    await cmdRedo(c); // re-create as new-2
+    await cmdRedo(c); // move again: must target new-2
+    const last = c.requests.at(-1)!;
+    expect(last).toMatchObject({
+      method: "PATCH",
+      url: `/api/v1/projects/${PROJECT_ID}/boxes/new-2`,
+      body: after,
+    });
+    expect(c.requests.some((r) => r.method === "PATCH" && r.url.endsWith("/new-1") && r.body === after)).toBe(
+      false,
+    );
+    await cmdUndo(c);
+    expect(c.requests.at(-1)).toMatchObject({
+      method: "PATCH",
+      url: `/api/v1/projects/${PROJECT_ID}/boxes/new-2`,
+      body: before,
+    });
+  });
+
+  it("queued commands run in submission order and history follows it", async () => {
+    let calls = 0;
+    const { api, requests } = fakeClient([
+      {
+        method: "PATCH",
+        path: /\/boxes\/[^/]+$/,
+        body: (req) => ({ ...personBox, ...(req.body as object) }),
+      },
+    ]);
+    const slowFetch = api;
+    const c: CommandContext = {
+      api: slowFetch,
+      projectId: PROJECT_ID,
+      store: useEditorStore,
+      history: new History(),
+    };
+    const first = { x: 512, y: 300, w: 140, h: 90 };
+    const second = { x: 600, y: 300, w: 140, h: 90 };
+    const third = { x: 700, y: 300, w: 140, h: 90 };
+    const p1 = enqueue(c, async () => {
+      calls += 1;
+      await new Promise((r) => setTimeout(r, 30));
+      await cmdUpdateRect(c, personBox.id, first, second);
+    });
+    expect(useEditorStore.getState().pending).toBe(2 - 1);
+    const p2 = enqueue(c, () => cmdUpdateRect(c, personBox.id, second, third));
+    expect(useEditorStore.getState().pending).toBe(2);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(calls).toBe(1); // the second command waits while the first is still in its 30 ms
+    await Promise.all([p1, p2]);
+    expect(useEditorStore.getState().pending).toBe(0);
+    expect(requests.map((r) => (r.body as { x: number }).x)).toEqual([600, 700]);
+    await cmdUndo(c);
+    expect((requests.at(-1)!.body as { x: number }).x).toBe(600);
+    await cmdUndo(c);
+    expect((requests.at(-1)!.body as { x: number }).x).toBe(512);
   });
 });

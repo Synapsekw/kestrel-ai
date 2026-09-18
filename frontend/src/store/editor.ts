@@ -114,6 +114,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     }),
   upsertBox: (box) =>
     set((s) => {
+      // A response that arrives after the editor moved to another image must not land here.
+      if (s.imageId !== null && box.image_id !== s.imageId) return s;
       const boxes = { ...s.boxes, [box.id]: box };
       return { boxes, order: sortedIds(boxes) };
     }),
@@ -137,7 +139,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
       return { boxes };
     }),
-  select: (id) => set({ selectedId: id }),
+  select: (id) => set((s) => (id === null || s.boxes[id] ? { selectedId: id } : s)),
   hover: (id) => set({ hoveredId: id }),
   setActiveClass: (id) => set({ activeClassId: id }),
   setViewport: (size) =>

@@ -25,4 +25,15 @@ describe("ImportDefaultsSection", () => {
       },
     });
   });
+
+  it("refuses to save an emptied number field", async () => {
+    const { api, requests } = fakeClient([]);
+    renderWithProviders(<ImportDefaultsSection project={exampleProject} onSaved={() => {}} />, { api });
+    fireEvent.change(screen.getByLabelText("JPEG quality"), { target: { value: "" } });
+    fireEvent.submit(screen.getByRole("button", { name: "Save import defaults" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("Every import default needs a value."),
+    );
+    expect(requests).toHaveLength(0);
+  });
 });

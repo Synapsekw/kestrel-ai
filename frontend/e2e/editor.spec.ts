@@ -105,7 +105,7 @@ test("class hotkeys, fit and 1:1 keys, region list selection, Delete and Ctrl+D"
 
   const excavatorRow = page.getByRole("listitem").filter({ hasText: "Person" });
   await excavatorRow.click();
-  await expect(excavatorRow).toHaveAttribute("aria-selected", "true");
+  await expect(excavatorRow).toHaveAttribute("aria-current", "true");
 
   const duplicated = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
   await page.keyboard.press("Control+d");
@@ -288,4 +288,62 @@ test("resizing a box by its bottom-right handle patches its size", async ({ page
   expect(body.y).toBeCloseTo(300, 0);
   expect(Math.abs(body.w - (140 + 30 / scale))).toBeLessThan(2 / scale + 1);
   expect(Math.abs(body.h - (90 + 20 / scale))).toBeLessThan(2 / scale + 1);
+});
+
+test("a click or a few pixels of jitter on the image never creates a box", async ({ page }) => {
+  await openEditor(page);
+  const posts: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST") posts.push(r.url());
+  });
+  const p = await displayPoint(page, 2000, 1500);
+  await page.mouse.click(p.x, p.y);
+  await page.mouse.move(p.x + 1, p.y + 1);
+  await page.mouse.down();
+  await page.mouse.move(p.x + 3, p.y + 2, { steps: 2 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  expect(posts.filter((u) => u.endsWith("/boxes"))).toEqual([]);
+  await expect(page.getByRole("status").filter({ hasText: /Saved/ })).toBeVisible();
+});
+
+test("space-drag that starts on a box pans the stage instead of moving the box", async ({ page }) => {
+  await openEditor(page);
+  const before = await readView(page);
+  const patches: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "PATCH") patches.push(r.url());
+  });
+  const centre = await displayPoint(page, 512 + 70, 300 + 45);
+  await page.keyboard.down(" ");
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 60, centre.y + 30, { steps: 6 });
+  await page.mouse.up();
+  await page.keyboard.up(" ");
+  await expect.poll(async () => (await readView(page)).x).toBeCloseTo(before.x + 60, 0);
+  await page.waitForTimeout(300);
+  expect(patches).toEqual([]);
+});
+
+test("a failed move reports the error envelope and keeps the box where it was", async ({ page }) => {
+  await page.route(`**/api/v1/projects/${P}/boxes/b0000000-6666-4000-8000-000000000001`, (route) =>
+    route.request().method() === "PATCH"
+      ? route.fulfill({
+          status: 500,
+          contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
+          body: JSON.stringify({ error: { code: "internal_error", message: "disk full", details: {} } }),
+        })
+      : route.continue(),
+  );
+  await openEditor(page);
+  const centre = await displayPoint(page, 512 + 70, 300 + 45);
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 40, centre.y + 20, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByRole("alert")).toContainText("move box failed: disk full");
+  await expect(page.getByRole("status").filter({ hasText: /Saved/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
 });

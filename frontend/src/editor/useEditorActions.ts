@@ -10,6 +10,7 @@ import {
   cmdSetClass,
   cmdUndo,
   cmdUpdateRect,
+  enqueue,
   type CommandContext,
   type ReviewDecision,
 } from "./commands";
@@ -30,7 +31,11 @@ export interface EditorActions {
   redo: () => Promise<void>;
 }
 
-/** Stable command bindings plus undo/redo availability, which re-renders on every history change. */
+/**
+ * Stable command bindings plus undo/redo availability, which re-renders on every history change.
+ * Every action goes through the image's queue (`enqueue`), so commands run one at a time in the
+ * order the user issued them and the history stack matches that order.
+ */
 export function useEditorActions(
   projectId: string,
   history: History,
@@ -46,27 +51,31 @@ export function useEditorActions(
 
   const actions = useMemo<EditorActions>(() => {
     const state = () => useEditorStore.getState();
+    const queued = (fn: () => Promise<unknown>) => enqueue(ctx, fn).then(() => undefined);
     return {
-      drawBox: async (rect, classId) => {
-        const imageId = state().imageId;
-        if (imageId) await cmdCreateBox(ctx, imageId, { class_id: classId, ...rect });
-      },
-      commitRect: (id, before, after) => cmdUpdateRect(ctx, id, before, after),
-      deleteBox: (id) => cmdDelete(ctx, id),
-      deleteSelected: async () => {
-        const id = state().selectedId;
-        if (id) await cmdDelete(ctx, id);
-      },
-      duplicateSelected: async () => {
-        const id = state().selectedId;
-        if (id) await cmdDuplicate(ctx, id);
-      },
-      setClass: (id, classId) => cmdSetClass(ctx, id, classId),
-      review: (ids, action) => cmdReview(ctx, ids, action),
-      acceptAll: () => cmdReview(ctx, visibleProposalIds(state()), "accept"),
-      rejectAll: () => cmdReview(ctx, visibleProposalIds(state()), "reject"),
-      undo: () => cmdUndo(ctx),
-      redo: () => cmdRedo(ctx),
+      drawBox: (rect, classId) =>
+        queued(async () => {
+          const imageId = state().imageId;
+          if (imageId) await cmdCreateBox(ctx, imageId, { class_id: classId, ...rect });
+        }),
+      commitRect: (id, before, after) => queued(() => cmdUpdateRect(ctx, id, before, after)),
+      deleteBox: (id) => queued(() => cmdDelete(ctx, id)),
+      deleteSelected: () =>
+        queued(async () => {
+          const id = state().selectedId;
+          if (id) await cmdDelete(ctx, id);
+        }),
+      duplicateSelected: () =>
+        queued(async () => {
+          const id = state().selectedId;
+          if (id) await cmdDuplicate(ctx, id);
+        }),
+      setClass: (id, classId) => queued(() => cmdSetClass(ctx, id, classId)),
+      review: (ids, action) => queued(() => cmdReview(ctx, ids, action)),
+      acceptAll: () => queued(() => cmdReview(ctx, visibleProposalIds(state()), "accept")),
+      rejectAll: () => queued(() => cmdReview(ctx, visibleProposalIds(state()), "reject")),
+      undo: () => queued(() => cmdUndo(ctx)),
+      redo: () => queued(() => cmdRedo(ctx)),
     };
   }, [ctx]);
 
