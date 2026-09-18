@@ -1,6 +1,8 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
+import type { Model } from "@contract/client";
 import { useProject } from "@/api/project";
+import { ImportModelForm } from "@/models/ImportModelForm";
 import { ModelDetail } from "@/models/ModelDetail";
 import { ModelTable } from "@/models/ModelTable";
 import { useDatasetNames } from "@/models/useDatasetNames";
@@ -11,6 +13,7 @@ export function ModelsScreen() {
   const { project, error: projectError, setProject } = useProject(projectId);
   const registry = useModels(projectId);
   const datasetNames = useDatasetNames(projectId);
+  const [importing, setImporting] = useState(false);
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("model");
   const selected = registry.models.find((m) => m.id === selectedId) ?? null;
@@ -20,6 +23,16 @@ export function ModelsScreen() {
     [setParams],
   );
 
+  const replace = registry.replace;
+  const onImported = useCallback(
+    (model: Model) => {
+      replace(model);
+      setImporting(false);
+      select(model.id);
+    },
+    [replace, select],
+  );
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
@@ -27,7 +40,14 @@ export function ModelsScreen() {
         <span className="text-xs text-slate-400">
           {registry.loading ? "Loading…" : `${registry.models.length} in the registry`}
         </span>
-        {/* import button (Task 7) */}
+        <button
+          type="button"
+          onClick={() => setImporting((v) => !v)}
+          disabled={registry.unavailable}
+          className="ml-auto rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
+        >
+          Import weights
+        </button>
       </div>
       {projectError && (
         <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
@@ -47,7 +67,9 @@ export function ModelsScreen() {
           The model registry is not available yet (it arrives with the training backend).
         </p>
       )}
-      {/* import form (Task 7) */}
+      {importing && (
+        <ImportModelForm projectId={projectId} onImported={onImported} onClose={() => setImporting(false)} />
+      )}
       {!registry.unavailable && (
         <ModelTable
           models={registry.models}

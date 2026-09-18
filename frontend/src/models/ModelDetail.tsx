@@ -1,4 +1,11 @@
+import { useCallback, useState } from "react";
 import type { Model, Project } from "@contract/client";
+import { useApi } from "@/api/client";
+import { messageOf } from "@/api/errors";
+import { deleteModel, fetchModel } from "@/api/models";
+import { patchProject } from "@/api/project";
+import { pushLog } from "@/app/diagnostics";
+import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
 import { formatDate, formatMetric, kindLabel } from "./modelLabels";
 
@@ -14,12 +21,63 @@ export interface ModelDetailProps {
 
 const dt = "text-xs uppercase tracking-wide text-slate-500";
 const dd = "text-sm";
+const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+const danger = "rounded bg-red-800 px-3 py-1 text-sm hover:bg-red-700 disabled:opacity-50";
 
-/** Task 7 adds the actions area; it destructures the remaining props (project and the callbacks). */
-export function ModelDetail(props: ModelDetailProps) {
-  const { projectId, model, datasetNames } = props;
+export function ModelDetail({
+  projectId,
+  model,
+  project,
+  datasetNames,
+  onProjectSaved,
+  onChanged,
+  onDeleted,
+}: ModelDetailProps) {
+  const api = useApi();
   const metrics = model.metrics;
   const aliases = Object.entries(model.class_aliases);
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const isPreannotation = project.preannotation_model_id === model.id;
+
+  /** A finished export changes `model.exports`; refetch the row so the parent list shows the new path. */
+  const refresh = useCallback(
+    () =>
+      void fetchModel(api, projectId, model.id)
+        .then(onChanged)
+        .catch((e: unknown) => pushLog(`refresh model failed: ${messageOf(e, String(e))}`)),
+    [api, projectId, model.id, onChanged],
+  );
+
+  async function setAsPreannotation() {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      onProjectSaved(await patchProject(api, projectId, { preannotation_model_id: model.id }));
+      setStatus("Pre-annotation model set");
+    } catch (e) {
+      pushLog(`set preannotation model failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not set the pre-annotation model"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    try {
+      await deleteModel(api, projectId, model.id);
+      onDeleted(model.id);
+    } catch (e) {
+      pushLog(`delete model ${model.id} failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not delete the model"));
+      setBusy(false);
+    }
+  }
   return (
     <section
       data-testid="model-detail"
@@ -120,7 +178,49 @@ export function ModelDetail(props: ModelDetailProps) {
         <ModelArtifacts projectId={projectId} model={model} />
       </div>
 
-      {/* actions (Task 7): exports, pre-annotation, delete */}
+      <ExportButtons projectId={projectId} model={model} onFinished={refresh} />
+
+      <div className="flex flex-col gap-2 border-t border-slate-800 pt-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {isPreannotation ? (
+            <span className="rounded bg-emerald-800 px-2 py-0.5 text-xs text-emerald-100">
+              Pre-annotation model
+            </span>
+          ) : (
+            <button type="button" className={btn} onClick={() => void setAsPreannotation()} disabled={busy}>
+              Use as pre-annotation model
+            </button>
+          )}
+          {!confirming && (
+            <button type="button" className={danger} onClick={() => setConfirming(true)} disabled={busy}>
+              Delete model
+            </button>
+          )}
+          {status && (
+            <span role="status" className="text-xs text-emerald-300">
+              {status}
+            </span>
+          )}
+        </div>
+        {confirming && (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span>
+              Delete {model.name}? Its weights and exports are removed; boxes keep their provenance.
+            </span>
+            <button type="button" className={danger} onClick={() => void remove()} disabled={busy}>
+              Delete permanently
+            </button>
+            <button type="button" className={btn} onClick={() => setConfirming(false)} disabled={busy}>
+              Cancel
+            </button>
+          </div>
+        )}
+        {error && (
+          <p role="alert" className="text-xs text-red-300">
+            {error}
+          </p>
+        )}
+      </div>
     </section>
   );
 }
