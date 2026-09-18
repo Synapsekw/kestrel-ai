@@ -9,13 +9,13 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 |---|---|---|---|---|---|
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
 | 1 | S1 dataset backend | main (merged cdafe95) | - | merged; checkpoint 2 backend half passed | none |
-| 1 | S2 annotation UI | main (merged 9ed2fd4) | - | merged after 3 fix rounds; editor checkpoint running | none |
+| 1 | S2 annotation UI | main (merged 9ed2fd4) | - | merged; checkpoint 2 editor half passed | none |
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | plan ready (2026-09-18-s4-inference-providers.md); dispatch after checkpoint 2 | checkpoint 2 |
 | 2 | S5 training and inference UI | - | - | plan being written (fable) | checkpoint 2, plan |
 | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
 
-Last verified checkpoint: 1 (after Wave 0) on main 389687c, 2026-09-17.
+Last verified checkpoint: 2 (after Wave 1) on main 9ed2fd4/de07f6a, 2026-09-18.
 
 ## Plans
 
@@ -66,7 +66,11 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
 
 ## Checkpoints
 
-### Checkpoint 2 (after Wave 1), backend half
+### Checkpoint 2 (after Wave 1)
+
+Result: PASS (backend half on cdafe95, editor half on de07f6a, 2026-09-18).
+
+#### Backend half
 
 Result: PASS on `main` cdafe95 (2026-09-18) through the real API (`backend/scripts/checkpoint2_backend.py`
 against a dev backend on 8765). Evidence: `docs/evidence/checkpoint2/checkpoint2-backend.json`.
@@ -79,7 +83,19 @@ against a dev backend on 8765). Evidence: `docs/evidence/checkpoint2/checkpoint2
 | Import yolo11n (80 COCO class names), train 1 epoch imgsz 640 on the GPU: 21 s, progress event "epoch 1/1 mAP50 0.000", metrics + results_csv/confusion_matrix/pr_curve artifacts registered | `train` step |
 | Export ONNX: 10.6 MB file under `models/` | `export onnx` step |
 
-Pending for the full checkpoint: "open the editor against the real backend" (S2).
+#### Editor half (real Tauri app, real sidecar built from main, driven over CDP)
+
+`frontend/scripts/checkpoint2_editor.mjs`; evidence `docs/evidence/checkpoint2/checkpoint2-editor.json` and screenshots.
+
+| Step | Evidence |
+|---|---|
+| Attach to the app, read the sidecar URL/token, create a project and import 20 frames through the real API | `attach and read backend info`, `import via api` |
+| Open the project from the Projects screen; Data Manager lists the real images (virtualised grid) | `checkpoint2-01-data-manager.png` |
+| Enter opens the editor; real frame rendered on the Konva stage; pre-annotate answered 501 (S4 pending) and was tolerated | `checkpoint2-02-editor-open.png` |
+| Drag draws a box; `GET .../boxes` shows one person/accepted box | `checkpoint2-03-box-drawn.png` |
+| Ctrl+Z deletes it on the server (0 boxes); Ctrl+Y recreates it (1 box) | `checkpoint2-editor.json` |
+| Ctrl+Right navigates to the next image; project stats show labeled 1 / boxes 1 | `checkpoint2-04-next-image.png` |
+| Window close terminates the sidecar and dev server; ports 1420/9222 free | session check |
 
 ### Checkpoint 1 (after Wave 0)
 
@@ -137,3 +153,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S3 reviewed (fable), fixed, re-reviewed (opus), merged to main 1224343; 168 backend tests, GPU training + ONNX export verified on main.
 - 2026-09-18: S1 reviewed, fixed, re-reviewed, merged cdafe95 (250 backend tests). Checkpoint 2 backend half passed. Shared venv incident recovered (see wave 1 ledger).
 - 2026-09-18: S2 reviewed (fable), 3 fix rounds, merged 9ed2fd4; main: 252 backend tests, 109 frontend unit, 27 e2e. Model artifact endpoint added (372d962). S4 plan written; S5 plan in progress; 'Import images' UI gap assigned to S5.
+- 2026-09-18: Checkpoint 2 passed in full (editor half on the real app). Wave 2 started: S4 dispatched.
