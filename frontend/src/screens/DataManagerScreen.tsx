@@ -141,8 +141,11 @@ export function DataManagerScreen() {
         <SelectionBar
           projectId={projectId}
           selectedIds={selectedIds}
-          preannotationModelId={project?.preannotation_model_id ?? null}
           onLabel={labelSelected}
+          onRunModel={() => {
+            useNavigationStore.getState().setContext(selectedIds, "query");
+            void navigate(`/p/${projectId}/query`);
+          }}
           onDeleted={(message) => {
             setSelection(clearSelection());
             setNotice(message);

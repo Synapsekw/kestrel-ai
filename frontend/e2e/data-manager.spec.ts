@@ -3,7 +3,6 @@ import { test, expect } from "@playwright/test";
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const IMG = "10000000-5555-4000-8000-000000000001";
 const IMG2 = "10000000-5555-4000-8000-000000000002";
-const MODEL = "m0000000-2222-4000-8000-000000000001";
 
 test("lists images with the default query and shows the seven columns in list view", async ({ page }) => {
   const first = page.waitForRequest((r) => r.method() === "GET" && r.url().includes(`/api/v1/projects/${P}/images?`));
@@ -68,27 +67,35 @@ test("multi-select with checkboxes and bulk delete after confirmation", async ({
   await expect(page.getByRole("status")).toContainText(/images? deleted/);
 });
 
-test("run model on selected posts a local-model query run; add to dataset posts the ids", async ({ page }) => {
+test("run model opens the query screen with the selection; add to dataset posts the ids with the seed", async ({
+  page,
+}) => {
   await page.goto(`/p/${P}/data`);
   await page.getByRole("button", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
-  const run = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/query-runs"));
   await page.getByRole("button", { name: "Run model" }).click();
-  expect((await run).postDataJSON()).toEqual({ kind: "local_model", model_id: MODEL, image_ids: [IMG], conf: 0.25 });
-  await expect(page.getByRole("status")).toContainText("Model run queued");
-  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await page.waitForURL(`**/p/${P}/query`);
+  await expect(page.getByLabel("Images")).toHaveValue("selection");
+  await expect(page.getByTestId("image-count")).toHaveText("1 image selected");
 
+  await page.goBack();
+  await page.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
   await page.getByRole("button", { name: "Add to dataset" }).click();
   await page.getByLabel("Dataset name").fill("v1");
+  await page.getByLabel("Seed").fill("7");
   const dataset = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/datasets"));
   await page.getByRole("button", { name: "Create dataset" }).click();
   expect((await dataset).postDataJSON()).toEqual({
     name: "v1",
     split_method: "by_group",
     val_fraction: 0.2,
-    seed: 42,
+    seed: 7,
     image_ids: [IMG],
   });
+  await expect(page.getByRole("dialog", { name: "Add to dataset" }).getByTestId(/^job-/)).toBeVisible();
+  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${P}/train`);
 });
 
 test("J, K and Enter open the focused image with the list as navigation context", async ({ page }) => {
