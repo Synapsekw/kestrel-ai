@@ -17,7 +17,7 @@ export function ImagePicker({ form, onChange, preloadedCount, count, loading }: 
       <legend className="text-sm font-medium">Images</legend>
       <div className="flex flex-wrap items-end gap-3">
         <label className={label}>
-          Images
+          Selection
           <select
             aria-label="Images"
             value={form.mode}
