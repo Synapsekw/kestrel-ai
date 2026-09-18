@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.appdata import AppData
 from app.config import Settings
 from app.errors import install_error_handlers
+from app.health import GpuProbe
 from app.logging_setup import configure_logging
 from app.providers.config import ProviderConfigStore
 from app.providers.keys import KeyringKeyStore
@@ -51,6 +52,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.started_at = datetime.now(UTC).isoformat()
     app.state.keys = KeyringKeyStore()
+    app.state.gpu_probe = GpuProbe()
     app.state.provider_config = ProviderConfigStore(AppData(settings.data_dir))
     app.add_middleware(
         CORSMiddleware,
