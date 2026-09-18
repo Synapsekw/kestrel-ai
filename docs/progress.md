@@ -11,8 +11,8 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S1 dataset backend | main (merged cdafe95) | - | merged; checkpoint 2 backend half passed | none |
 | 1 | S2 annotation UI | main (merged 9ed2fd4) | - | merged; checkpoint 2 editor half passed | none |
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
-| 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | implementer running (opus) since 2026-09-18 | none |
-| 2 | S5 training and inference UI | s5-training-inference-ui | .worktrees/s5-training-inference-ui | implementer running (opus) since 2026-09-18 | none |
+| 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | fix round 2 in progress (reviewed twice) | none |
+| 2 | S5 training and inference UI | main (merged 04a879f) | - | merged after 2 fix rounds | none |
 | 3 | S6 packaging and acceptance | - | - | plan ready (2026-09-18-s6-packaging-acceptance.md) | checkpoint 3 |
 
 Last verified checkpoint: 2 (after Wave 1) on main 9ed2fd4/de07f6a, 2026-09-18.
@@ -156,3 +156,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S1 reviewed, fixed, re-reviewed, merged cdafe95 (250 backend tests). Checkpoint 2 backend half passed. Shared venv incident recovered (see wave 1 ledger).
 - 2026-09-18: S2 reviewed (fable), 3 fix rounds, merged 9ed2fd4; main: 252 backend tests, 109 frontend unit, 27 e2e. Model artifact endpoint added (372d962). S4 plan written; S5 plan in progress; 'Import images' UI gap assigned to S5.
 - 2026-09-18: Checkpoint 2 passed in full (editor half on the real app). Wave 2 started: S4 dispatched.
+- 2026-09-18: S5 reviewed (fable), 2 fix rounds, merged 04a879f. S4 reviewed (fable), round 1 done, round 2 in progress. Contract: query minLength, query-run resume endpoint, model artifacts endpoint.
