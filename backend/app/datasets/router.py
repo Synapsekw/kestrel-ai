@@ -4,11 +4,23 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import FileResponse
 from sqlalchemy import select, tuple_
 
-from app.datasets import importer  # noqa: F401 - registers the "import" job type
+from app.datasets import images, importer  # noqa: F401 - importer registers the "import" job type
 from app.datasets.grouping import slugify
-from app.datasets.schemas import SourceCreate, SourceOut, SourcePage, SourceWithJob
+from app.datasets.schemas import (
+    BulkDelete,
+    BulkDeleteResult,
+    ImageOut,
+    ImagePage,
+    ImageSort,
+    SortOrder,
+    SourceCreate,
+    SourceOut,
+    SourcePage,
+    SourceWithJob,
+)
 from app.db.models import Source
 from app.errors import AppError, not_found
 from app.jobs.schemas import JobOut
@@ -102,14 +114,63 @@ def source_stats(sourceId: str, handle: ProjectHandle = Depends(get_project)) ->
     return Stats()
 
 
+@router.get("/images", response_model=ImagePage)
+def list_images(
+    handle: ProjectHandle = Depends(get_project),
+    source_id: str | None = None,
+    group_key: str | None = None,
+    labeled: bool | None = None,
+    has_pending: bool | None = None,
+    search: str | None = None,
+    ids: str | None = Query(None, description="comma-separated image ids; overrides the other filters"),
+    sort: ImageSort = "path",
+    order: SortOrder = "asc",
+    limit: int | None = Query(None, ge=1, le=1000),
+    cursor: str | None = None,
+) -> ImagePage:
+    rows, next_cursor, total = images.list_images(
+        handle,
+        source_id=source_id,
+        group_key=group_key,
+        labeled=labeled,
+        has_pending=has_pending,
+        search=search,
+        ids=[i for i in ids.split(",") if i] if ids is not None else None,
+        sort=sort,
+        order=order,
+        limit=limit,
+        cursor=cursor,
+    )
+    return ImagePage(items=[ImageOut.from_row(*r) for r in rows], next_cursor=next_cursor, total=total)
+
+
+@router.post("/images/bulk-delete", response_model=BulkDeleteResult)
+def bulk_delete_images(body: BulkDelete, handle: ProjectHandle = Depends(get_project)) -> BulkDeleteResult:
+    return BulkDeleteResult(deleted=images.bulk_delete(handle, body.image_ids))
+
+
+@router.get("/images/{imageId}", response_model=ImageOut)
+def get_image(imageId: str, handle: ProjectHandle = Depends(get_project)) -> ImageOut:  # noqa: N803
+    return ImageOut.from_row(*images.get_image(handle, imageId))
+
+
+@router.get("/images/{imageId}/file", response_class=FileResponse)
+def get_image_file(
+    imageId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+    max_side: int | None = Query(None, ge=64, le=8192),
+) -> FileResponse:
+    return FileResponse(images.image_file(handle, imageId, max_side), media_type="image/jpeg")
+
+
+@router.get("/images/{imageId}/thumbnail", response_class=FileResponse)
+def get_image_thumbnail(imageId: str, handle: ProjectHandle = Depends(get_project)) -> FileResponse:  # noqa: N803
+    return FileResponse(images.thumbnail(handle, imageId), media_type="image/jpeg")
+
+
 add_stubs(
     router,
     [
-        ("GET", "/images", "images list"),
-        ("POST", "/images/bulk-delete", "images bulk-delete"),
-        ("GET", "/images/{imageId}", "images get"),
-        ("GET", "/images/{imageId}/file", "images file"),
-        ("GET", "/images/{imageId}/thumbnail", "images thumbnail"),
         ("GET", "/images/{imageId}/boxes", "boxes list"),
         ("POST", "/images/{imageId}/boxes", "boxes create"),
         ("PATCH", "/boxes/{boxId}", "boxes update"),

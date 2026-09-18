@@ -1,4 +1,5 @@
 import shutil
+import time
 from pathlib import Path
 
 import numpy as np
@@ -105,6 +106,37 @@ def ahmadia_sample(tmp_path_factory) -> Path:
     for src in sorted(AHMADIA_RAW.glob("*.jpg"))[:SAMPLE_FRAMES]:
         shutil.copy2(src, dest / src.name)
     return dest
+
+
+@pytest.fixture
+def wait_job(client):
+    """Block until a job reaches a terminal state and return its JSON."""
+
+    def _wait(project_id: str, job_id: str, timeout: float = 180.0) -> dict:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            j = client.get(f"/api/v1/projects/{project_id}/jobs/{job_id}").json()
+            if j["state"] in ("succeeded", "failed", "cancelled"):
+                return j
+            time.sleep(0.1)
+        raise AssertionError(f"job {job_id} did not finish within {timeout}s")
+
+    return _wait
+
+
+@pytest.fixture
+def import_source(client, wait_job):
+    """Import a folder into a project and return the new source id."""
+
+    def _import(project_id: str, folder: Path, **body) -> str:
+        r = client.post(f"/api/v1/projects/{project_id}/sources", json={"folder": str(folder), **body})
+        assert r.status_code == 202, r.text
+        created = r.json()
+        job = wait_job(project_id, created["job"]["id"])
+        assert job["state"] == "succeeded", job
+        return created["source"]["id"]
+
+    return _import
 
 
 @pytest.fixture
