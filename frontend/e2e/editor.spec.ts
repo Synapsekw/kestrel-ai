@@ -211,3 +211,62 @@ test("pre-annotates on open when no proposal is pending and tolerates 501", asyn
   await expect(page.getByRole("status").filter({ hasText: "Pre-annotation is not available yet" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+const IMG2 = "10000000-5555-4000-8000-000000000002";
+
+test("Ctrl+Right moves to the next image after in-flight saves finish; Ctrl+Left returns", async ({ page }) => {
+  await page.route(`**/api/v1/projects/${P}/images/${IMG}/boxes`, async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    await new Promise((r) => setTimeout(r, 800));
+    return route.continue();
+  });
+  await openEditor(page);
+  await expect(page.getByTestId("position")).toHaveText("1 / 2");
+  const from = await displayPoint(page, 2000, 1500);
+  const to = await displayPoint(page, 2300, 1700);
+  let postDone = 0;
+  const posted = page
+    .waitForResponse((r) => r.request().method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`))
+    .then(() => {
+      postDone = Date.now();
+    });
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  await expect(page.getByRole("status").filter({ hasText: "Saving…" })).toBeVisible();
+  const secondLoaded = page.waitForResponse((r) => r.url().endsWith(`/images/${IMG2}/boxes`));
+  await page.keyboard.press("Control+ArrowRight");
+  await page.waitForURL(`**/p/${P}/edit/${IMG2}`);
+  const navigated = Date.now();
+  await posted;
+  expect(postDone).toBeLessThanOrEqual(navigated);
+  await expect(page.getByTestId("position")).toHaveText("2 / 2");
+  // Hotkeys are off while an image loads, so wait for the second image before pressing again.
+  await secondLoaded;
+  await expect(page.getByText("Loading…")).toHaveCount(0);
+  await page.keyboard.press("Control+ArrowLeft");
+  await page.waitForURL(`**/p/${P}/edit/${IMG}`);
+});
+
+test("Ctrl+Z undoes a draw with DELETE and Ctrl+Y redoes with POST", async ({ page }) => {
+  await openEditor(page);
+  const from = await displayPoint(page, 2000, 1500);
+  const to = await displayPoint(page, 2300, 1700);
+  const posted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(to.x, to.y, { steps: 6 });
+  await page.mouse.up();
+  await posted;
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+  const deleted = page.waitForRequest(
+    (r) => r.method() === "DELETE" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.keyboard.press("Control+z");
+  await deleted;
+  await expect(page.getByRole("button", { name: "Redo" })).toBeEnabled();
+  const reposted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  await page.keyboard.press("Control+y");
+  await reposted;
+});

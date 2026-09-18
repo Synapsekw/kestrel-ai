@@ -21,6 +21,7 @@ import { RegionList } from "@/editor/RegionList";
 import { useEditorActions } from "@/editor/useEditorActions";
 import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
 import { useEditorImage } from "@/editor/useEditorImage";
+import { useEditorNavigation } from "@/editor/useEditorNavigation";
 import { useHistory } from "@/editor/useHistory";
 import { useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
 
@@ -79,7 +80,12 @@ function EditorBody({
     () => visibleProposalIds({ boxes, order, showRejected }),
     [boxes, order, showRejected],
   );
-  useEditorHotkeys({ enabled: !loading, classes: project.classes, actions });
+  const navigation = useEditorNavigation(projectId, imageId);
+  const nav = useMemo(
+    () => ({ next: navigation.next, prev: navigation.prev }),
+    [navigation.next, navigation.prev],
+  );
+  useEditorHotkeys({ enabled: !loading, classes: project.classes, actions, nav });
 
   // A zustand action, not a React state setter: the compiler rule `set-state-in-effect` does not apply.
   useEffect(() => {
@@ -176,13 +182,13 @@ function EditorBody({
       <div className="flex min-w-0 flex-1 flex-col">
         <EditorToolbar
           fileName={image?.file_name ?? (loading ? "Loading…" : "")}
-          position={null}
+          position={navigation.position}
           zoom={zoom}
           pending={pending}
           canUndo={canUndo}
           canRedo={canRedo}
-          onPrev={() => {}}
-          onNext={() => {}}
+          onPrev={navigation.prev}
+          onNext={navigation.next}
           onFit={fit}
           onOneToOne={oneToOne}
           onUndo={() => void actions.undo()}
