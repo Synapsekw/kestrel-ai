@@ -36,7 +36,7 @@ describe("resolveBackend", () => {
       invoke: vi.fn().mockResolvedValue({
         base_url: "http://127.0.0.1:5555",
         token: "t",
-        log_path: "C:\logs\sidecar.log",
+        log_path: "C:\\logs\\sidecar.log",
       }),
     }));
     const { resolveBackend } = await import("./backend");
@@ -44,7 +44,7 @@ describe("resolveBackend", () => {
       baseUrl: "http://127.0.0.1:5555",
       token: "t",
       mode: "tauri",
-      logPath: "C:\logs\sidecar.log",
+      logPath: "C:\\logs\\sidecar.log",
     });
   });
 

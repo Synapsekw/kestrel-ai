@@ -145,6 +145,43 @@ Found and fixed during the checkpoint: the WebView2 origin's CORS preflight was 
 restricted to `tauri.localhost` and the Vite origin (`Settings.cors_origins`). Cold-start timing is measured against the
 installed app in S6 (dev mode includes the cargo build).
 
+## S6 packaging evidence (reference machine, 2026-09-18)
+
+Measured, not estimated. Reference machine: Windows 11 Pro 26200, RTX 5070 Ti, torch 2.14.0+cu130,
+ultralytics 8.4.154, PyInstaller 6.22.3, Tauri CLI 2.11.4.
+
+| Step | Command | Result |
+|---|---|---|
+| Freeze the backend | `backend\scripts\build.ps1` | 127 s; `dist/machinery-backend` 3,457.8 MB in 14,113 files |
+| Frozen smoke test | `backend\scripts\smoke_frozen.ps1` | pass in 23.8 s: health 0.57 s, `cuda True NVIDIA GeForce RTX 5070 Ti` 3.8 s, predict, 1-epoch worker train 11.0 s, ONNX export 3.2 s, keyring round trip |
+| App binary | `pnpm tauri build` (cargo release) | 65 s; `machinery-app.exe` 11.1 MB |
+| Install tree that the installer would write | - | 3,468.9 MB (app 11.1 MB + sidecar exe and `_internal` 3,457.8 MB), well under the 6 GB success criterion |
+| NSIS installer | `pnpm tauri build` | **fails**: `makensis` `Internal compiler error #12345: error mmapping file (2057025505, 33554432) is out of range` |
+| MSI installer | `pnpm tauri build --bundles msi` | **fails**: `light.exe : error LGHT0001 : Catastrophic failure ... at Microsoft.Tools.WindowsInstallerXml.Cab.Interop.NativeMethods.CreateCabFinish` |
+
+Both failures are the same 2 GB wall, reached from two directions: an NSIS installer addresses its
+payload with 32-bit offsets, and Tauri's WiX template puts everything in one embedded cabinet
+(`<Media Id="1" Cabinet="app.cab" EmbedCab="yes" />`), which the cabinet format caps at 2 GB. The
+payload cannot be brought under 2 GB by trimming: `torch/lib` alone is 2.78 GB and its large CUDA
+DLLs (`cublasLt` 456 MB, `torch_cuda` 404 MB, `cufft` 272 MB, `cudnn_engines_precompiled` 212 MB,
+`cusparse` 144 MB, `cusolver` 121 MB) are imported by name from `torch_cuda.dll`; dropping
+`cufft`/`cusolver`/`cusparse` was tried and `torch.cuda.is_available()` went false (the frozen
+smoke test caught it). Only about 205 MB is genuinely unreferenced (`cusolverMg`,
+`nvrtc64_130_0.alt`, `nvperf_host`).
+
+Open decision for the goal owner (spec 10 says NSIS; checkpoint 4 and the acceptance run wait on it):
+
+1. Custom WiX template (`bundle.windows.wix.template`) using `<MediaTemplate EmbedCab="yes"
+   MaximumUncompressedMediaSize="..."/>`, which splits the payload over several cabinets. Smallest
+   change that keeps a single-file installer; changes the format from NSIS to MSI.
+2. A third-party installer that supports large payloads (Inno Setup 6 handles >2 GB), built outside
+   the Tauri bundler from `target/release` plus `src-tauri/binaries`.
+3. Ship the app and the sidecar payload separately (a small installer plus a downloaded or
+   side-loaded `_internal`), or distribute a portable folder.
+
+Everything downstream of the installer (install, cold start under 15 s, checkpoint 4, the
+acceptance run on the installed app) is blocked until this is chosen.
+
 ## S0 status detail
 
 | Task | Owner | State | Commit |
@@ -181,3 +218,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S5 reviewed (fable), 2 fix rounds, merged 04a879f. S4 reviewed (fable), round 1 done, round 2 in progress. Contract: query minLength, query-run resume endpoint, model artifacts endpoint.
 - 2026-09-18: S4 fix round 2 re-reviewed (opus) and merged 6635f71; main: 382 backend tests, 4 GPU tests, ruff, contract check clean; frontend 204 unit, 42 e2e. Wave 2 ledger copied to docs. Checkpoint 3 running on the real app (driver frontend/scripts/checkpoint3.mjs).
 - 2026-09-18: Checkpoint 3 passed on the real app (cloud step skipped, no key). Wave 3 next: S6 dispatch. Goal-owner follow-ups: JobCancelled relocation (S4 M4), Train form remount on list change.
+- 2026-09-18: S6 tasks 1, 2, 4 and 5 done on `s6-packaging-acceptance`: full CUDA PyInstaller bundle with a frozen smoke test, packaging hardening (orphan sweep, Arial pre-seed, sidecar log tee, CSP), the acceptance script and its CDP driver (dry-run green on 20 frames), and the README. Task 3 is blocked: neither Tauri bundler can package the 3.4 GB sidecar (see S6 packaging evidence above).

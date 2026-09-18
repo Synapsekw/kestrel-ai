@@ -17,8 +17,7 @@ export interface BackendInfo {
 export async function resolveBackend(): Promise<BackendInfo> {
   if ((window as unknown as Record<string, unknown>).__TAURI_INTERNALS__) {
     const { invoke } = await import("@tauri-apps/api/core");
-    const info =
-      await invoke<{ base_url: string; token: string; log_path?: string | null }>("backend_info");
+    const info = await invoke<{ base_url: string; token: string; log_path?: string | null }>("backend_info");
     return {
       baseUrl: info.base_url,
       token: info.token,
