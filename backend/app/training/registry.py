@@ -62,13 +62,20 @@ def import_model(handle: ProjectHandle, name: str, weights_path: str, class_alia
     handle.models_dir.mkdir(parents=True, exist_ok=True)
     target = handle.models_dir / f"{slug(name)}-{uuid.uuid4().hex[:8]}.pt"
     shutil.copy2(source, target)  # the source stays where it is: it may be a read-only input
+    try:
+        class_names = read_class_names(target)
+    except Exception as e:
+        target.unlink(missing_ok=True)  # never leave a half-imported copy in the project
+        raise AppError(
+            "validation_error", f"{weights_path} is not a loadable YOLO checkpoint: {e}", 422
+        ) from e
     row = Model(
         name=name,
         kind="imported",
         weights_path=relative(handle, target),
         hyperparameters={},
         metrics=None,
-        class_names=read_class_names(target),
+        class_names=class_names,
         class_aliases=dict(class_aliases or {}),
         exports={},
         artifacts={},

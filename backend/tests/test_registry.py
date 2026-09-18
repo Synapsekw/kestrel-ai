@@ -229,3 +229,13 @@ def test_register_trained_writes_the_registry_row(client, project_id, handle, fa
     assert out["metrics"]["map50"] == 0.7
     assert out["artifacts"]["results_csv"] == "runs/job-1234abcd/train/results.csv"
     assert (handle.folder / out["artifacts"]["confusion_matrix"]).exists()
+
+
+def test_import_of_an_unreadable_checkpoint_leaves_nothing_behind(client, project_id, handle, tmp_path):
+    """A .pt that torch cannot load is rejected and the half-imported copy is removed."""
+    broken = tmp_path / "broken.pt"
+    broken.write_bytes(b"not a checkpoint")
+    r = client.post(f"{models_url(project_id)}/import", json={"name": "broken", "weights_path": str(broken)})
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "validation_error"
+    assert list(handle.models_dir.glob("*.pt")) == []

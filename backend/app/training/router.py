@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
 from app.training import registry
-from app.training.jobs import check_materialised  # noqa: F401 - registers the train and export job types
+from app.training.jobs import check_materialised  # importing it registers the train and export job types
 from app.training.schemas import (
     ExportRequest,
     JobRef,
