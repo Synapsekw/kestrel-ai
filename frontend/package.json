@@ -11,6 +11,7 @@
     "lint": "eslint src && prettier --check src",
     "format": "prettier --write src",
     "e2e": "playwright test",
+    "build:installer": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-installer.ps1",
     "tauri": "tauri"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.12.0",
+    "innosetup-compiler": "^6.3.1",
     "jsdom": "^30.1.0",
     "postcss": "^8.5.28",
     "prettier": "^3.9.7",

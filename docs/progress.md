@@ -13,7 +13,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | main (merged 6635f71) | - | merged after 2 fix rounds; JobCancelled relocation follow-up open | none |
 | 2 | S5 training and inference UI | main (merged 04a879f) | - | merged after 2 fix rounds | none |
-| 3 | S6 packaging and acceptance | s6-packaging-acceptance | .worktrees/s6-packaging-acceptance | implementer dispatched (opus) at f52267c | none |
+| 3 | S6 packaging and acceptance | main (merged from s6-packaging-acceptance at 9f3aa01) | - | merged after 2 fix rounds; checkpoint 4 and the acceptance run pending | none |
 
 Last verified checkpoint: 3 (after Wave 2) on main 6635f71 (dev backend from the full venv, Tauri dev app in env mode), 2026-09-18.
 
@@ -147,6 +147,46 @@ Found and fixed during the checkpoint: the WebView2 origin's CORS preflight was 
 restricted to `tauri.localhost` and the Vite origin (`Settings.cors_origins`). Cold-start timing is measured against the
 installed app in S6 (dev mode includes the cargo build).
 
+## S6 packaging evidence (reference machine, 2026-09-18)
+
+Measured, not estimated. Reference machine: Windows 11 Pro 26200, RTX 5070 Ti, torch 2.14.0+cu130,
+ultralytics 8.4.154, PyInstaller 6.22.3, Tauri CLI 2.11.4.
+
+| Step | Command | Result |
+|---|---|---|
+| Freeze the backend | `backend\scripts\build.ps1` | 127 s; `dist/machinery-backend` 3,457.8 MB in 14,113 files |
+| Frozen smoke test | `backend\scripts\smoke_frozen.ps1` | pass in 23.8 s: health 0.57 s, `cuda True NVIDIA GeForce RTX 5070 Ti` 3.8 s, predict, 1-epoch worker train 11.0 s, ONNX export 3.2 s, keyring round trip |
+| App binary | `pnpm tauri build` (cargo release) | 65 s; `machinery-app.exe` 11.1 MB |
+| Install tree that the installer would write | - | 3,468.9 MB (app 11.1 MB + sidecar exe and `_internal` 3,457.8 MB), well under the 6 GB success criterion |
+| NSIS installer | `pnpm tauri build` | **fails**: `makensis` `Internal compiler error #12345: error mmapping file (2057025505, 33554432) is out of range` |
+| MSI installer | `pnpm tauri build --bundles msi` | **fails**: `light.exe : error LGHT0001 : Catastrophic failure ... at Microsoft.Tools.WindowsInstallerXml.Cab.Interop.NativeMethods.CreateCabFinish` |
+| Installed layout, run from a temp copy without installing | `machinery-app.exe` from the would-be install tree | sidecar spawned, `GET /api/v1/health` 200 with `gpu {available: true, name: NVIDIA GeForce RTX 5070 Ti}`, page served from `http://tauri.localhost/`; closing the window terminated the sidecar |
+| **Inno Setup installer** | `pnpm build:installer` | **1,797.3 MB in 387 s** (ISCC alone 361.8 s), built without a WebView2 bootstrapper -> `frontend/src-tauri/target/release/bundle/inno/Machinery Detection_0.1.0_x64-setup.exe` |
+
+Both failures are the same 2 GB wall, reached from two directions: an NSIS installer addresses its
+payload with 32-bit offsets, and Tauri's WiX template puts everything in one embedded cabinet
+(`<Media Id="1" Cabinet="app.cab" EmbedCab="yes" />`), which the cabinet format caps at 2 GB. The
+payload cannot be brought under 2 GB by trimming: `torch/lib` alone is 2.78 GB and its large CUDA
+DLLs (`cublasLt` 456 MB, `torch_cuda` 404 MB, `cufft` 272 MB, `cudnn_engines_precompiled` 212 MB,
+`cusparse` 144 MB, `cusolver` 121 MB) are imported by name from `torch_cuda.dll`; dropping
+`cufft`/`cusolver`/`cusparse` was tried and `torch.cuda.is_available()` went false (the frozen
+smoke test caught it). Only about 205 MB is genuinely unreferenced (`cusolverMg`,
+`nvrtc64_130_0.alt`, `nvperf_host`).
+
+Resolved by decision 13: the installer is built with Inno Setup 6, which has no 2 GB limit, from
+`frontend/installer/machinery-detection.iss` via `pnpm build:installer` (`ISCC.exe` comes from the
+`innosetup-compiler` npm package, so nothing is installed system-wide). `bundle.targets` in
+`tauri.conf.json` is now empty; the rest of the `bundle` block still drives the exe icon and the
+sidecar and resource staging `pnpm tauri dev` needs.
+
+Still open for the goal owner: install from the setup exe, measure cold and warm start, run
+checkpoint 4 and the acceptance run on the installed app. The WebView2 bootstrapper is not in the
+installer - nothing on this machine had a copy of `MicrosoftEdgeWebview2Setup.exe` (Tauri's
+`downloadBootstrapper` mode fetches it at install time, so the cache holds none) and the
+redistributable is not committed. The installer's `[Run]` entry and its registry check appear only
+when `frontend/installer/MicrosoftEdgeWebview2Setup.exe` exists at build time; Windows 11 ships the
+runtime, so the reference machine does not need it.
+
 ## S0 status detail
 
 | Task | Owner | State | Commit |
@@ -184,3 +224,5 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S4 fix round 2 re-reviewed (opus) and merged 6635f71; main: 382 backend tests, 4 GPU tests, ruff, contract check clean; frontend 204 unit, 42 e2e. Wave 2 ledger copied to docs. Checkpoint 3 running on the real app (driver frontend/scripts/checkpoint3.mjs).
 - 2026-09-18: Checkpoint 3 passed on the real app (cloud step skipped, no key). Wave 3 next: S6 dispatch. Goal-owner follow-ups: JobCancelled relocation (S4 M4), Train form remount on list change.
 - 2026-09-18: Goal-owner follow-ups on main: JobCancelled leaf module (e85a363), Train form keeps typed values on list change (024ec6f, with tests), contract Health.gpu optional block (f52267c; client regenerated; contract test green). Wave 3 started: S6 dispatched; ledger `.superpowers/sdd/wave3/ledger.md`. Ruling: the sub-agent builds the installer and dry-runs the acceptance driver on the dev app; install, checkpoint 4 timing and the acceptance run on the installed app stay with the goal owner.
+- 2026-09-18: S6 tasks 1, 2, 4 and 5 done on `s6-packaging-acceptance`: full CUDA PyInstaller bundle with a frozen smoke test, packaging hardening (orphan sweep, Arial pre-seed, sidecar log tee, CSP), the acceptance script and its CDP driver (dry-run green on 20 frames), and the README. Task 3 landed after the ruling on decision 13: the installer is built with Inno Setup 6 (1,797.3 MB in 377 s); install, cold start and checkpoint 4 are the goal owner's.
+- 2026-09-18: S6 reviewed (fable: tasks 1, 2, 5 approved, task 4 rejected), Task 3 reviewed and round 1 re-reviewed (opus, approved with fixes), round 2 re-reviewed (sonnet, approved). Merged to main. Goal-owner verification at 9f3aa01: ruff clean, 403 backend, 4 gpu, contract check, frontend lint, 209 unit, build, 42 e2e. Next: install, checkpoint 4, acceptance run.

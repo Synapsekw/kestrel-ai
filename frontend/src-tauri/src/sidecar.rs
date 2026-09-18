@@ -1,4 +1,6 @@
+use crate::logfile::{RotatingLog, MAX_BYTES};
 use std::net::TcpListener;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
@@ -9,6 +11,8 @@ pub struct Backend {
     pub base_url: String,
     pub token: String,
     pub child: Option<CommandChild>,
+    /// Where this launch tees the sidecar's output; `None` when the backend is not ours to log.
+    pub log_path: Option<PathBuf>,
     /// Set by [`stop`] so a deliberate kill is not reported as a crash.
     pub stopping: Arc<AtomicBool>,
 }
@@ -40,6 +44,7 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
             base_url: url,
             token: std::env::var("APP_BACKEND_TOKEN").unwrap_or_default(),
             child: None,
+            log_path: None,
             stopping: Arc::new(AtomicBool::new(false)),
         });
     }
@@ -55,6 +60,11 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
         .env("APP_DATA_DIR", data_dir.to_string_lossy().to_string())
         .spawn()
         .map_err(|e| e.to_string())?;
+    let log = Arc::new(RotatingLog::new(
+        data_dir.join("logs").join("sidecar.log"),
+        MAX_BYTES,
+    ));
+    let log_path = Some(log.path().to_path_buf());
     let stopping = Arc::new(AtomicBool::new(false));
     let watcher = stopping.clone();
     let app = app.clone();
@@ -62,10 +72,13 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
         while let Some(ev) = rx.recv().await {
             match ev {
                 CommandEvent::Stdout(l) | CommandEvent::Stderr(l) => {
-                    eprintln!("[backend] {}", String::from_utf8_lossy(&l))
+                    let line = String::from_utf8_lossy(&l).into_owned();
+                    eprintln!("[backend] {line}");
+                    log.append(&line);
                 }
                 CommandEvent::Terminated(t) => {
                     eprintln!("[backend] terminated {:?}", t);
+                    log.append(&format!("terminated {t:?}"));
                     // A kill from `stop` is expected; anything else is a crash the UI must show.
                     if !watcher.load(Ordering::SeqCst) {
                         let _ =
@@ -81,6 +94,7 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
         base_url: format!("http://127.0.0.1:{port}"),
         token,
         child: Some(child),
+        log_path,
         stopping,
     })
 }

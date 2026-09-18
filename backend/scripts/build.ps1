@@ -2,6 +2,7 @@
 $ErrorActionPreference = "Stop"
 $backend = Split-Path $PSScriptRoot -Parent
 Set-Location $backend
+$started = Get-Date
 
 # PyInstaller logs to stderr; PowerShell 5.1 would turn every line into an error under "Stop".
 $ErrorActionPreference = "Continue"
@@ -16,3 +17,8 @@ Copy-Item "dist\machinery-backend\machinery-backend.exe" (Join-Path $bin "machin
 if (Test-Path (Join-Path $bin "_internal")) { Remove-Item (Join-Path $bin "_internal") -Recurse -Force }
 Copy-Item "dist\machinery-backend\_internal" (Join-Path $bin "_internal") -Recurse
 Write-Host "sidecar copied to $bin"
+
+$bytes = (Get-ChildItem "dist\machinery-backend" -Recurse -File | Measure-Object -Sum Length).Sum
+$elapsed = (Get-Date) - $started
+Write-Host ("dist/machinery-backend: {0:N1} MB in {1:N0} files; build took {2:N0} s" -f `
+  ($bytes / 1MB), (Get-ChildItem "dist\machinery-backend" -Recurse -File).Count, $elapsed.TotalSeconds)

@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.appdata import AppData
 from app.config import Settings
 from app.errors import install_error_handlers
+from app.health import GpuProbe
 from app.logging_setup import configure_logging
 from app.providers.config import ProviderConfigStore
 from app.providers.keys import KeyringKeyStore
@@ -25,12 +26,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         from app.jobs.events import EventBus
         from app.jobs.runner import JobRunner
+        from app.jobs.startup import sweep_orphans
         from app.projects.service import ProjectRegistry
 
         app.state.events = EventBus()
         app.state.events.bind(asyncio.get_running_loop())
-        app.state.projects = ProjectRegistry(settings.data_dir)
         app.state.jobs = JobRunner(app.state.events)
+        # Projects open lazily, so the orphan sweep hangs off the registry rather than startup.
+        app.state.projects = ProjectRegistry(
+            settings.data_dir, on_open=lambda handle: sweep_orphans(handle, app.state.jobs)
+        )
         # jobs reach the key store and provider settings through the runner: a job's params are
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys
@@ -51,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.started_at = datetime.now(UTC).isoformat()
     app.state.keys = KeyringKeyStore()
+    app.state.gpu_probe = GpuProbe()
     app.state.provider_config = ProviderConfigStore(AppData(settings.data_dir))
     app.add_middleware(
         CORSMiddleware,

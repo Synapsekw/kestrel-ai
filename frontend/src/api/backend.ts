@@ -6,6 +6,8 @@ export interface BackendInfo {
   baseUrl: string;
   token: string;
   mode: BackendMode;
+  /** The sidecar log this launch tees to, when the shell owns the backend (spec section 11). */
+  logPath: string | null;
 }
 
 /**
@@ -15,12 +17,23 @@ export interface BackendInfo {
 export async function resolveBackend(): Promise<BackendInfo> {
   if ((window as unknown as Record<string, unknown>).__TAURI_INTERNALS__) {
     const { invoke } = await import("@tauri-apps/api/core");
-    const info = await invoke<{ base_url: string; token: string }>("backend_info");
-    return { baseUrl: info.base_url, token: info.token, mode: "tauri" };
+    const info = await invoke<{ base_url: string; token: string; log_path?: string | null }>("backend_info");
+    return {
+      baseUrl: info.base_url,
+      token: info.token,
+      mode: "tauri",
+      logPath: info.log_path ?? null,
+    };
   }
   const url = import.meta.env.APP_BACKEND_URL;
-  if (url) return { baseUrl: url, token: import.meta.env.APP_BACKEND_TOKEN ?? "", mode: "env" };
-  return { baseUrl: "http://127.0.0.1:4010", token: "mock", mode: "mock" };
+  if (url)
+    return {
+      baseUrl: url,
+      token: import.meta.env.APP_BACKEND_TOKEN ?? "",
+      mode: "env",
+      logPath: null,
+    };
+  return { baseUrl: "http://127.0.0.1:4010", token: "mock", mode: "mock", logPath: null };
 }
 
 /** Poll `GET /api/v1/health` until it answers or the timeout elapses. */
