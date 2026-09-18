@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from PIL import Image as PILImage
+
 
 @dataclass(frozen=True)
 class Detection:
@@ -52,15 +54,31 @@ class ProviderError(Exception):
 
 @dataclass(frozen=True)
 class TileResult:
-    """One tile's outcome: detections, plus the refusal metadata the job log records."""
+    """One tile's outcome: detections, the refusal metadata the job log records, and the raw
+    response the job persists next to it (never the request's credentials)."""
 
     tile: Tile
     detections: list[Detection]
     refusal: dict | None = None
+    raw: dict | None = None
 
 
 class Provider(Protocol):
+    """Every provider answers per tile; `detect` is the whole-image convenience on top of it."""
+
     name: str
+
+    def detect_tile(
+        self,
+        image: PILImage.Image,
+        tile: Tile,
+        query: str,
+        classes: list[str],
+        *,
+        conf: float,
+        log: logging.Logger,
+        raw_ref: str = "",
+    ) -> TileResult: ...
 
     def detect(
         self,

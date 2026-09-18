@@ -11,11 +11,9 @@ import logging
 import threading
 from pathlib import Path
 
-from PIL import Image as PILImage
-
 from app.jobs.gpu import hold_gpu
-from app.providers.base import Detection, TilingSpec
-from app.providers.tiling import crop_tile, make_tiles, nms_per_class
+from app.providers.base import Detection, Tile, TileResult
+from app.providers.tiling import TiledProvider, crop_tile
 
 _MODELS: dict[str, object] = {}
 _MODELS_LOCK = threading.Lock()
@@ -46,40 +44,35 @@ def build_class_map(
     return mapping
 
 
-class LocalYoloProvider:
+class LocalYoloProvider(TiledProvider):
     name = "local"
 
-    def __init__(
-        self, weights: Path, class_map: dict[str, str], imgsz: int = 1280, device: str = "0"
-    ):
+    def __init__(self, weights: Path, class_map: dict[str, str], imgsz: int = 1280, device: str = "0"):
         self.weights, self.class_map, self.imgsz, self.device = weights, class_map, imgsz, device
 
-    def detect(
+    def detect_tile(
         self,
-        image_path: Path,
+        image,
+        tile: Tile,
         query: str,
         classes: list[str],
-        tiling: TilingSpec,
         *,
         conf: float,
         log: logging.Logger,
-    ) -> list[Detection]:
-        with PILImage.open(image_path) as im:
-            image = im.convert("RGB")
-        tiles = make_tiles(image.width, image.height, tiling)
-        imgsz = tiling.tile_size if tiling.enabled else self.imgsz
+        raw_ref: str = "",
+    ) -> TileResult:
+        """One tile on the GPU. `imgsz` is the tile's own size, or the configured size for a
+        whole-image tile, which is how pre-annotation reaches 2560 without tiling."""
+        crop = crop_tile(image, tile)
+        imgsz = self.imgsz if (tile.w, tile.h) == image.size else max(tile.w, tile.h)
         dets: list[Detection] = []
-        with hold_gpu(log, f"infer {Path(image_path).name}"):
+        with hold_gpu(log, "infer"):
             model = _load(self.weights, self.device)
-            for tile in tiles:
-                crop = crop_tile(image, tile)
-                for result in model.predict(
-                    crop, imgsz=imgsz, conf=conf, device=self.device, verbose=False
-                ):
-                    dets.extend(self._from_result(result, model.names, tile))
-        return nms_per_class(dets, tiling.nms_iou)
+            for result in model.predict(crop, imgsz=imgsz, conf=conf, device=self.device, verbose=False):
+                dets.extend(self._from_result(result, model.names, tile, raw_ref))
+        return TileResult(tile=tile, detections=dets)
 
-    def _from_result(self, result, names, tile) -> list[Detection]:
+    def _from_result(self, result, names, tile: Tile, raw_ref: str) -> list[Detection]:
         out: list[Detection] = []
         for row in result.boxes or []:
             label = self.class_map.get(str(names[int(row.cls[0])]))
@@ -94,6 +87,7 @@ class LocalYoloProvider:
                     w=x2 - x1,
                     h=y2 - y1,
                     confidence=float(row.conf[0]),
+                    raw_ref=raw_ref,
                 )
             )
         return out

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from PIL import Image as PILImage
 
-from app.providers.base import Detection, Tile, TilingSpec
+from app.providers.base import Detection, Tile, TileResult, TilingSpec
 
 
 def _origins(dim: int, tile: int, stride: int) -> list[int]:
@@ -76,3 +76,26 @@ def nms_per_class(dets: list[Detection], iou_threshold: float) -> list[Detection
             if all(iou(candidate, k) < iou_threshold for k in kept if k.label == label):
                 kept.append(candidate)
     return kept
+
+
+class TiledProvider:
+    """`detect` for a provider that knows how to do one tile: crop, detect, merge.
+
+    The query-run job drives `detect_tile` itself so it can persist and rate limit per tile; this
+    is the same loop for callers that just want an image's detections (pre-annotation, tests).
+    """
+
+    name: str
+
+    def detect_tile(
+        self, image, tile: Tile, query: str, classes: list[str], *, conf, log, raw_ref: str = ""
+    ) -> TileResult:
+        raise NotImplementedError
+
+    def detect(self, image_path, query: str, classes: list[str], tiling: TilingSpec, *, conf, log):
+        with PILImage.open(image_path) as im:
+            image = im.convert("RGB")
+        dets: list[Detection] = []
+        for tile in make_tiles(image.width, image.height, tiling):
+            dets.extend(self.detect_tile(image, tile, query, classes, conf=conf, log=log).detections)
+        return nms_per_class(dets, tiling.nms_iou)

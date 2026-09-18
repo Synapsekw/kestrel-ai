@@ -1,0 +1,15 @@
+{
+  "id": "msg_01BoxesFixture",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5",
+  "content": [
+    {
+      "type": "text",
+      "text": "{\"boxes\": [{\"label\": \"dump_truck\", \"x\": 0.5, \"y\": 0.5, \"w\": 0.1, \"h\": 0.2, \"confidence\": 0.82}, {\"label\": \"excavator\", \"x\": 0.1, \"y\": 0.2, \"w\": 0.05, \"h\": 0.05, \"confidence\": 0.61}, {\"label\": \"ufo\", \"x\": 0.0, \"y\": 0.0, \"w\": 0.1, \"h\": 0.1, \"confidence\": 0.99}]}"
+    }
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "usage": { "input_tokens": 1834, "output_tokens": 142 }
+}
