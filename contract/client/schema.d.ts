@@ -1674,7 +1674,7 @@ export interface components {
          */
         ModelImport: {
             name: string;
-            /** @description absolute path to a .pt file; copied into models/ */
+            /** @description absolute path to an existing .pt file (422 otherwise); copied into models/ */
             weights_path: string;
             class_aliases?: {
                 [key: string]: string;
@@ -1732,7 +1732,10 @@ export interface components {
             format: "onnx" | "engine";
             /** @default 1280 */
             imgsz: number;
-            /** @default false */
+            /**
+             * @description FP16; only meaningful for engine (built on GPU 0); onnx is exported on the CPU
+             * @default false
+             */
             half: boolean;
         };
         JobRef: {

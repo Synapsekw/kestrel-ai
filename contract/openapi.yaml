@@ -1657,7 +1657,7 @@ components:
       required: [name, weights_path]
       properties:
         name: { type: string, minLength: 1 }
-        weights_path: { type: string, description: absolute path to a .pt file; copied into models/ }
+        weights_path: { type: string, minLength: 1, description: absolute path to an existing .pt file (422 otherwise); copied into models/ }
         class_aliases:
           type: object
           additionalProperties: { type: string }
@@ -1695,7 +1695,7 @@ components:
           type: string
           enum: [onnx, engine]
         imgsz: { type: integer, minimum: 320, maximum: 4096, default: 1280 }
-        half: { type: boolean, default: false }
+        half: { type: boolean, default: false, description: FP16; only meaningful for engine (built on GPU 0); onnx is exported on the CPU }
       example: { format: onnx, imgsz: 1280 }
     JobRef:
       type: object
