@@ -26,12 +26,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         from app.jobs.events import EventBus
         from app.jobs.runner import JobRunner
+        from app.jobs.startup import sweep_orphans
         from app.projects.service import ProjectRegistry
 
         app.state.events = EventBus()
         app.state.events.bind(asyncio.get_running_loop())
-        app.state.projects = ProjectRegistry(settings.data_dir)
         app.state.jobs = JobRunner(app.state.events)
+        # Projects open lazily, so the orphan sweep hangs off the registry rather than startup.
+        app.state.projects = ProjectRegistry(
+            settings.data_dir, on_open=lambda handle: sweep_orphans(handle, app.state.jobs)
+        )
         # jobs reach the key store and provider settings through the runner: a job's params are
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys

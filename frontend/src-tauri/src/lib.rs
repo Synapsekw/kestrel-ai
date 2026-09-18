@@ -1,3 +1,4 @@
+mod logfile;
 mod sidecar;
 
 use tauri::Manager;
@@ -6,7 +7,12 @@ use tauri::Manager;
 fn backend_info(state: tauri::State<sidecar::BackendState>) -> Result<serde_json::Value, String> {
     let guard = state.0.lock().unwrap();
     let backend = guard.as_ref().ok_or("backend not started")?;
-    Ok(serde_json::json!({ "base_url": backend.base_url, "token": backend.token }))
+    Ok(serde_json::json!({
+        "base_url": backend.base_url,
+        "token": backend.token,
+        // Spec section 11: the failure dialog points the operator at the sidecar log.
+        "log_path": backend.log_path.as_ref().map(|p| p.to_string_lossy()),
+    }))
 }
 
 #[tauri::command]

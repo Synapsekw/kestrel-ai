@@ -1,7 +1,7 @@
 """Project registry: opens project folders, owns their engines, tracks recent projects."""
 
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -95,8 +95,10 @@ def check_removed_classes_unused(s: Session, before: list[dict], after: list[dic
 
 
 class ProjectRegistry:
-    def __init__(self, data_dir: Path):
+    def __init__(self, data_dir: Path, on_open: Callable[[ProjectHandle], None] | None = None):
+        """`on_open` runs once per project, the moment it becomes live in this process."""
         self.appdata = AppData(data_dir)
+        self.on_open = on_open
         self._handles: dict[str, ProjectHandle] = {}
         self._lock = threading.Lock()
 
@@ -144,6 +146,8 @@ class ProjectRegistry:
         self._handles[pid] = h
         if remember:
             self.appdata.remember(pid, name, str(folder))
+        if self.on_open is not None:
+            self.on_open(h)
         return h
 
     def get(self, project_id: str) -> ProjectHandle:

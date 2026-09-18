@@ -129,6 +129,12 @@ function BackendFailure({
           <dd className="font-mono">{info?.baseUrl ?? "unknown"}</dd>
           <dt className="text-slate-400">Mode</dt>
           <dd className="font-mono">{info?.mode ?? "unknown"}</dd>
+          {info?.logPath ? (
+            <>
+              <dt className="text-slate-400">Log</dt>
+              <dd className="break-all font-mono">{info.logPath}</dd>
+            </>
+          ) : null}
         </dl>
         <button
           type="button"

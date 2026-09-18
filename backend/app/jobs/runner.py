@@ -138,6 +138,11 @@ class JobRunner:
             return self.update(project, job_id, state="cancelled", finished_at=datetime.now(UTC))
         return job
 
+    def is_live(self, job_id: str) -> bool:
+        """True while this process holds the job: queued in the pool or running right now."""
+        with self._lock:
+            return job_id in self._contexts
+
     def get(self, project: ProjectHandle, job_id: str) -> Job:
         with project.session() as s:
             job = s.get(Job, job_id)

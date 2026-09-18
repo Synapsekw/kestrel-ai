@@ -10,7 +10,7 @@ export function TestApiProvider({ api, children }: { api: ApiClient; children: R
   const value = useMemo<ApiContextValue>(
     () => ({
       client: api,
-      info: { baseUrl: "http://fake", token: "t", mode: "mock" },
+      info: { baseUrl: "http://fake", token: "t", mode: "mock", logPath: null },
       health: { status: "ok", version: "test", pid: 1, started_at: "2026-09-17T00:00:00Z" },
     }),
     [api],

@@ -13,6 +13,7 @@ import traceback
 from collections.abc import Callable
 from pathlib import Path
 
+from app.training.fonts import configure_ultralytics
 from app.training.presets import TrainParams, to_ultralytics_kwargs
 
 LOSS_NAMES_FALLBACK = ("box_loss", "cls_loss", "dfl_loss")
@@ -211,6 +212,8 @@ def main(argv: list[str]) -> int:
     # Never let ultralytics pip-install into the user's environment; a missing optional
     # dependency (for example onnx) has to surface as a job error, not as a silent install.
     os.environ.setdefault("YOLO_AUTOINSTALL", "False")
+    # Keep the config dir (and the plot font it would otherwise download) inside app data.
+    configure_ultralytics()
     if len(argv) < 2 or argv[0] not in ("train", "export"):
         print("usage: worker (train|export) <params.json>", file=sys.stderr)
         return 2

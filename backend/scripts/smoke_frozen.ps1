@@ -186,6 +186,10 @@ try {
   Complete-Step "worker_train"
   Write-Host "worker ok mAP50 $([math]::Round($trained.metrics.map50, 4))"
 
+  $fontSeeded = Test-Path (Join-Path $env:APP_DATA_DIR "ultralytics\Arial.ttf")
+  if (-not $fontSeeded) { throw "the worker did not seed Arial.ttf into the app data config dir" }
+  Write-Host "font ok $($env:APP_DATA_DIR)\ultralytics\Arial.ttf"
+
   # 7. ONNX export, again through the frozen worker
   $export = Invoke-Api POST "/projects/$pid1/models/$($trained.id)/export" @{ format = "onnx"; imgsz = $Imgsz }
   $job = Wait-ApiJob $pid1 $export.job.id
