@@ -1,12 +1,29 @@
+import shutil
 from pathlib import Path
 
+import numpy as np
+import piexif
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 
 from app.config import Settings
 from app.main import create_app
 
 TOKEN = "test-token"
+AHMADIA_RAW = Path(r"E:\Dev\Yolo\data\raw\ahmadia")
+SAMPLE_FRAMES = 20
+EIGHT_CLASSES = [
+    "excavator",
+    "wheel_loader",
+    "bulldozer",
+    "dump_truck",
+    "crane",
+    "concrete_mixer",
+    "roller",
+    "backhoe",
+]
+COLOURS = ["#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#ef4444"]
 
 
 @pytest.fixture
@@ -36,3 +53,66 @@ def project_dir(tmp_path: Path) -> Path:
     d = tmp_path / "proj"
     d.mkdir()
     return d
+
+
+def _deg_to_dms_rational(value: float):
+    value = abs(value)
+    d = int(value)
+    m = int((value - d) * 60)
+    s = round((value - d - m / 60) * 3600 * 10000)
+    return ((d, 1), (m, 1), (s, 10000))
+
+
+@pytest.fixture
+def make_jpeg():
+    """Write a seeded-noise JPEG, optionally with DateTimeOriginal and GPS lat/lon/alt EXIF."""
+
+    def _make(path: Path, width: int, height: int, *, seed: int = 0, exif: dict | None = None) -> Path:
+        rng = np.random.default_rng(seed)
+        arr = rng.integers(0, 255, size=(height, width, 3), dtype=np.uint8)
+        im = Image.fromarray(arr, "RGB")
+        kwargs: dict = {"quality": 90}
+        if exif:
+            zeroth: dict = {}
+            exif_ifd: dict = {}
+            gps: dict = {}
+            if "DateTimeOriginal" in exif:
+                exif_ifd[piexif.ExifIFD.DateTimeOriginal] = exif["DateTimeOriginal"]
+            if "orientation" in exif:
+                zeroth[piexif.ImageIFD.Orientation] = exif["orientation"]
+            if "lat" in exif:
+                gps[piexif.GPSIFD.GPSLatitudeRef] = "N" if exif["lat"] >= 0 else "S"
+                gps[piexif.GPSIFD.GPSLatitude] = _deg_to_dms_rational(exif["lat"])
+                gps[piexif.GPSIFD.GPSLongitudeRef] = "E" if exif["lon"] >= 0 else "W"
+                gps[piexif.GPSIFD.GPSLongitude] = _deg_to_dms_rational(exif["lon"])
+            if "alt" in exif:
+                gps[piexif.GPSIFD.GPSAltitudeRef] = 0
+                gps[piexif.GPSIFD.GPSAltitude] = (int(exif["alt"] * 100), 100)
+            kwargs["exif"] = piexif.dump({"0th": zeroth, "Exif": exif_ifd, "GPS": gps})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        im.save(path, "JPEG", **kwargs)
+        return path
+
+    return _make
+
+
+@pytest.fixture(scope="session")
+def ahmadia_sample(tmp_path_factory) -> Path:
+    """The first 20 real frames, copied once per session. Originals are only ever read."""
+    if not AHMADIA_RAW.is_dir():
+        pytest.skip(f"{AHMADIA_RAW} not present")
+    dest = tmp_path_factory.mktemp("ahmadia_sample")
+    for src in sorted(AHMADIA_RAW.glob("*.jpg"))[:SAMPLE_FRAMES]:
+        shutil.copy2(src, dest / src.name)
+    return dest
+
+
+@pytest.fixture
+def project(client, project_dir) -> dict:
+    classes = [
+        {"name": n, "colour": c, "hotkey": str(i + 1)}
+        for i, (n, c) in enumerate(zip(EIGHT_CLASSES, COLOURS, strict=True))
+    ]
+    r = client.post("/api/v1/projects", json={"name": "T", "folder": str(project_dir), "classes": classes})
+    assert r.status_code == 201, r.text
+    return r.json()
