@@ -175,11 +175,14 @@ export interface RecordedRequest {
   body: unknown;
 }
 
+/** A JSON response payload; kept narrower than `unknown` so a body function keeps its parameter type. */
+export type FakeBody = object | string | number | boolean | null;
+
 export interface FakeRoute {
   method: string;
   path: RegExp;
   status?: number;
-  body?: unknown | ((req: RecordedRequest) => unknown);
+  body?: FakeBody | ((req: RecordedRequest) => FakeBody);
 }
 
 /** A `fetch` that answers from `routes` (first match wins) and records every request. */
