@@ -8,9 +8,9 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | Wave | Sub-project | Branch | Worktree | State | Blockers |
 |---|---|---|---|---|---|
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
-| 1 | S1 dataset backend | - | - | not started | S0 |
-| 1 | S2 annotation UI | - | - | not started | S0 |
-| 1 | S3 training backend and registry | - | - | not started | S0 |
+| 1 | S1 dataset backend | s1-dataset-backend | .worktrees/s1-dataset-backend | implementer running (opus) since 2026-09-18 | none |
+| 1 | S2 annotation UI | s2-annotation-ui | .worktrees/s2-annotation-ui | plan being written (fable); implementer not yet dispatched | plan |
+| 1 | S3 training backend and registry | s3-training-backend | .worktrees/s3-training-backend | implementer running (opus) since 2026-09-18 | none |
 | 2 | S4 inference and providers | - | - | not started | wave 1 checkpoint |
 | 2 | S5 training and inference UI | - | - | not started | wave 1 checkpoint |
 | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
@@ -19,7 +19,14 @@ Last verified checkpoint: 1 (after Wave 0) on main 389687c, 2026-09-17.
 
 ## Plans
 
-- S0: `docs/superpowers/plans/2026-09-17-s0-contract-and-scaffolding.md`
+- S0: `docs/superpowers/plans/2026-09-17-s0-contract-and-scaffolding.md` (ledger: `2026-09-17-s0-ledger.md`)
+- S1: `docs/superpowers/plans/2026-09-17-s1-dataset-backend.md`
+- S2: `docs/superpowers/plans/2026-09-17-s2-annotation-ui.md` (in progress)
+- S3: `docs/superpowers/plans/2026-09-17-s3-training-backend.md`
+
+Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `backend/.venv` in the root checkout
+(one shared environment; sub-agents must not install packages). Implementer reports land in
+`.superpowers/sdd/wave1/<s>-report.md` (git-ignored). Merge order after review: S1, S3, then S2.
 
 ## Decisions the spec does not cover (question, chosen default)
 
@@ -104,3 +111,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
   10.0.19041 present, WebView2 153 present, Rust missing. Wrote the S0 plan.
 - 2026-09-17: contract written and mock verified; backend tasks 4-7 and 10 implemented test-first (85 tests); Rust installed;
   frontend+tauri shell implemented by a sub-agent and reviewed (needs fixes, round 1 running); backend review running.
+- 2026-09-18: Wave 1 started. S1 and S3 implementers dispatched in worktrees; S2 plan being written (first attempt stalled, retried).
