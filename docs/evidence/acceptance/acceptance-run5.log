@@ -1,0 +1,10 @@
+PASS 1. resume on an existing project eb32cbef-7d64-4b1e-8bfb-fd25cc956ba7
+PASS 2. import the source folder images 3299 duplicates 0 flights 0031,0033,0034,0035,0038,0040,0042
+PASS 3. pre-annotation model proposes on at least one of the opened images yolo11m-coco (80 classes), 4 local_model proposals over 10 images (minimum 1)
+PASS 4. label images and freeze dataset v1 by group labeled 80, train 24 val 6, split by_group, frozen images match the 30 labeled ones: true
+PASS 5. train for the requested epochs and register the model model ahmadia-v1 mAP50 0.0000 epoch card "" job.progress events resumed
+PASS 6. run the trained model over unlabeled images, review and promote 50 images (the intended unlabelled ones: true), 54670 boxes (minimum 1), 50 rows in the review queue, promoted_at 2026-09-18T11:00:57.361082Z
+SKIP 7. anthropic vision query (no ANTHROPIC_API_KEY)
+PASS 8. export the trained model to ONNX models/ahmadia-v1-31e53a50.onnx
+acceptance: 7 steps passed, 1 skipped
+  skipped: 7. anthropic vision query: ANTHROPIC_API_KEY is not set in the environment

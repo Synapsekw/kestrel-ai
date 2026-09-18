@@ -60,8 +60,9 @@ is the source of truth for what "passing" means and is what a person follows whe
 
 - **UI**: Models -> **Import weights** -> `Model name` = `yolo11m-coco`,
   `Weights path` = `E:\Dev\Yolo\models\yolo11m.pt` -> **Import** -> **Use as pre-annotation
-  model**. Then open the first 10 images in the editor one after another; pre-annotation runs on
-  open.
+  model**. Then open 10 images spread evenly across the import (every 330th by path, so the
+  flights are all represented; the first frames of a flight are the take-off run-in and carry
+  nothing) in the editor one after another; pre-annotation runs on open.
 - **Expect**: the model is registered with 80 COCO class names and is the project's
   `preannotation_model_id`; at least one of the 10 images carries a box with provenance
   `local_model`.

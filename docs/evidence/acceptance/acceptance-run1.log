@@ -1,0 +1,5 @@
+PASS 1. create project with the eight classes eb32cbef-7d64-4b1e-8bfb-fd25cc956ba7 classes excavator,wheel_loader,bulldozer,dump_truck,crane,concrete_mixer,roller,backhoe
+PASS 2. import the source folder images 3299 duplicates 0 flights 0031,0033,0034,0035,0038,0040,0042
+FAIL 3. pre-annotation model proposes on at least one of the opened images yolo11m-coco (80 classes), 0 local_model proposals over 10 images (minimum 1)
+acceptance: 2 steps passed, 0 skipped
+  failed in: 3. pre-annotation model proposes on at least one of the opened images

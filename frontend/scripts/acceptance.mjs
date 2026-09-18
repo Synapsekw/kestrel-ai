@@ -440,8 +440,19 @@ try {
     );
   }
   const page1 = await api("GET", `/projects/${projectId}/images?limit=${cfg.labelCount}&sort=path`);
+  // Open images spread evenly across the whole import (by path, so across the flights) rather
+  // than the first N: the first frames of a flight are the take-off run-in with nothing on them.
+  const everyImage = [];
+  for (let cursor = ""; ; ) {
+    const pageN = await api("GET", `/projects/${projectId}/images?limit=1000&sort=path${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+    everyImage.push(...pageN.items);
+    if (!pageN.next_cursor) break;
+    cursor = pageN.next_cursor;
+  }
+  const stride = Math.max(1, Math.floor(everyImage.length / cfg.preannotateImages));
+  const toOpen = Array.from({ length: cfg.preannotateImages }, (_, i) => everyImage[Math.min(i * stride, everyImage.length - 1)]).filter(Boolean);
   let proposals = 0;
-  for (const image of page1.items.slice(0, cfg.preannotateImages)) {
+  for (const image of toOpen) {
     const boxes = await openAndPreannotate(projectId, image.id);
     proposals += boxes.items.filter((b) => b.provenance.kind === "local_model").length;
   }
@@ -625,12 +636,18 @@ try {
   // Review: open the run's images in the review queue, which is where a person accepts or rejects.
   await page.getByRole("link", { name: "Review results" }).click();
   await page.getByRole("heading", { name: "Review queue" }).waitFor({ timeout: 60_000 });
-  // The queue is virtualised, so its size is `aria-rowcount`, not the number of mounted rows.
-  const reviewRows = await page
-    .getByRole("grid")
-    .getAttribute("aria-rowcount")
-    .then(Number)
-    .catch(() => 0);
+  // The queue is virtualised, so its size is `aria-rowcount`, not the number of mounted rows;
+  // it is read only once the list has loaded (the grid reports 0 rows while "Loading...").
+  let reviewRows = 0;
+  for (let i = 0; i < 120; i++) {
+    reviewRows = await page
+      .getByRole("grid")
+      .getAttribute("aria-rowcount")
+      .then(Number)
+      .catch(() => 0);
+    if (reviewRows > 0 || run.box_count === 0) break;
+    await sleep(500);
+  }
   await shot(page, "06-review");
   await page.goBack();
   await page.getByTestId("run-card").waitFor({ timeout: 60_000 });

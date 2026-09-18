@@ -33,3 +33,6 @@ frontend/src-tauri/binaries/*
 Thumbs.db
 .DS_Store
 .superpowers/
+
+# built installers (copied out of the build tree)
+dist/

@@ -1,0 +1,112 @@
+{
+  "project_id": "eb32cbef-7d64-4b1e-8bfb-fd25cc956ba7",
+  "steps": [
+    {
+      "name": "1. resume on an existing project",
+      "ok": true,
+      "detail": "eb32cbef-7d64-4b1e-8bfb-fd25cc956ba7"
+    },
+    {
+      "name": "2. import the source folder",
+      "ok": true,
+      "detail": "images 3299 duplicates 0 flights 0031,0033,0034,0035,0038,0040,0042",
+      "seconds": 0.2,
+      "image_count": 3299,
+      "flights": [
+        "0031",
+        "0033",
+        "0034",
+        "0035",
+        "0038",
+        "0040",
+        "0042"
+      ]
+    },
+    {
+      "name": "3. pre-annotation model proposes on at least one of the opened images",
+      "ok": true,
+      "detail": "yolo11m-coco (80 classes), 4 local_model proposals over 10 images (minimum 1)",
+      "seconds": 3.1,
+      "proposals": 4
+    },
+    {
+      "name": "4. label images and freeze dataset v1 by group",
+      "ok": true,
+      "detail": "labeled 80, train 24 val 6, split by_group, frozen images match the 30 labeled ones: true",
+      "seconds": 0.2,
+      "data_yaml": "C:\\Users\\D\\AppData\\Local\\Temp\\acceptance-project\\datasets\\v1\\data.yaml"
+    },
+    {
+      "name": "5. train for the requested epochs and register the model",
+      "ok": true,
+      "detail": "model ahmadia-v1 mAP50 0.0000 epoch card \"\" job.progress events resumed",
+      "seconds": 0.1,
+      "metrics": {
+        "map50": 0,
+        "map50_95": 0,
+        "precision": 0,
+        "recall": 0,
+        "per_class": [
+          {
+            "class_name": "excavator",
+            "map50": 0,
+            "map50_95": 0,
+            "precision": 0,
+            "recall": 0
+          }
+        ]
+      },
+      "progress_events": []
+    },
+    {
+      "name": "6. run the trained model over unlabeled images, review and promote",
+      "ok": true,
+      "detail": "50 images (the intended unlabelled ones: true), 54670 boxes (minimum 1), 50 rows in the review queue, promoted_at 2026-09-18T11:00:57.361082Z",
+      "seconds": 68,
+      "box_count": 54670
+    },
+    {
+      "name": "8. export the trained model to ONNX",
+      "ok": true,
+      "detail": "models/ahmadia-v1-31e53a50.onnx",
+      "seconds": 5.3
+    }
+  ],
+  "skipped": [
+    "7. anthropic vision query: ANTHROPIC_API_KEY is not set in the environment"
+  ],
+  "failed_step": null,
+  "config": {
+    "projectFolder": "C:\\Users\\D\\AppData\\Local\\Temp\\acceptance-project",
+    "evidence": "E:\\Dev\\Yolo\\app\\docs\\evidence\\acceptance",
+    "projectName": "Ahmadia",
+    "source": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+    "site": "ahmadia",
+    "preannotateWeights": "E:\\Dev\\Yolo\\models\\yolo11m.pt",
+    "baseWeights": "E:\\Dev\\Yolo\\models\\yolo11n.pt",
+    "expectImages": 3299,
+    "expectDuplicates": 0,
+    "expectFlights": [
+      "0031",
+      "0033",
+      "0034",
+      "0035",
+      "0038",
+      "0040",
+      "0042"
+    ],
+    "preannotateImages": 10,
+    "minProposals": 1,
+    "labelCount": 30,
+    "epochs": 3,
+    "imgsz": 1280,
+    "batch": 4,
+    "queryImages": 50,
+    "minQueryBoxes": 1,
+    "cloudImages": 5,
+    "minCloudBoxes": 1,
+    "conf": "0.001",
+    "importTimeoutMin": 60,
+    "projectId": "eb32cbef-7d64-4b1e-8bfb-fd25cc956ba7"
+  }
+}
