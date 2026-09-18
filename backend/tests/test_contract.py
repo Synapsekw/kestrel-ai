@@ -53,11 +53,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 # or a stub left behind by a sub-project both fail this test.
 EXPECTED_STUBS = {
     "preannotateImage",
-    "estimateQueryRun",
-    "listQueryRuns",
-    "createQueryRun",
-    "getQueryRun",
-    "promoteQueryRun",
 }
 
 

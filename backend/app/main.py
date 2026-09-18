@@ -31,6 +31,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.events.bind(asyncio.get_running_loop())
         app.state.projects = ProjectRegistry(settings.data_dir)
         app.state.jobs = JobRunner(app.state.events)
+        # jobs reach the key store and provider settings through the runner: a job's params are
+        # persisted in the project DB, so a key must never travel that way.
+        app.state.jobs.keys = app.state.keys
+        app.state.jobs.provider_config = app.state.provider_config
         app.state.jobs.start()
         yield
         app.state.jobs.stop()
