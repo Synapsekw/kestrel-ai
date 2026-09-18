@@ -60,8 +60,10 @@ a = Analysis(
     binaries=binaries,
 )
 pyz = PYZ(a.pure)
-# console=False: the shell plugin gives the sidecar piped stdio either way, so the startup JSON
-# line still reaches Tauri as CommandEvent::Stdout, and a windowed exe keeps the training worker
-# subprocess (which the frozen exe spawns for every run) from flashing a console window.
+# console=False: a windowed exe still writes to whatever stdio handles its parent gives it, so
+# the startup JSON line survives - scripts/smoke_frozen.ps1 starts the exe with stdout
+# redirected to a file and parses the port out of it, which is the same pipe the shell plugin
+# hands the sidecar. Windowed also keeps the training worker subprocess (which the frozen exe
+# spawns for every run) from flashing a console window.
 exe = EXE(pyz, a.scripts, exclude_binaries=True, name="machinery-backend", console=False)
 coll = COLLECT(exe, a.binaries, a.datas, name="machinery-backend")

@@ -38,7 +38,7 @@ def test_this_machine_has_a_font_candidate():
 
 
 def test_configure_ultralytics_points_the_config_dir_at_app_data(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("YOLO_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("YOLO_CONFIG_DIR", "")  # empty reads as unset and is restored
 
     config_dir = fonts.configure_ultralytics(tmp_path / "appdata")
 
@@ -53,20 +53,20 @@ def test_configure_ultralytics_honours_a_config_dir_the_launcher_already_chose(t
 
 
 def test_configure_ultralytics_falls_back_to_app_data_dir_from_the_environment(tmp_path: Path, monkeypatch):
-    monkeypatch.delenv("YOLO_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("YOLO_CONFIG_DIR", "")  # empty reads as unset and is restored
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "inherited"))
     assert fonts.configure_ultralytics() == tmp_path / "inherited" / "ultralytics"
 
 
 def test_configure_ultralytics_is_a_no_op_without_anywhere_to_put_it(monkeypatch):
-    monkeypatch.delenv("YOLO_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("YOLO_CONFIG_DIR", "")  # empty reads as unset and is restored
     monkeypatch.delenv("APP_DATA_DIR", raising=False)
     assert fonts.configure_ultralytics() is None
 
 
 def test_the_worker_seeds_the_font_before_it_does_anything_else(tmp_path: Path, monkeypatch):
     """The worker's setup step runs even when the run itself cannot start."""
-    monkeypatch.delenv("YOLO_CONFIG_DIR", raising=False)
+    monkeypatch.setenv("YOLO_CONFIG_DIR", "")  # empty reads as unset and is restored
     monkeypatch.setenv("APP_DATA_DIR", str(tmp_path / "appdata"))
     run_dir = tmp_path / "run"
     run_dir.mkdir()

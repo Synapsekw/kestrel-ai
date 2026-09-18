@@ -18,10 +18,12 @@ is the source of truth for what "passing" means and is what a person follows whe
    ```
 
 3. Choose an empty project folder on a disk with room for 3299 imported frames (about 20 GB).
-4. For step 7, put the Anthropic key in the environment of the shell that runs the driver
-   (`$env:ANTHROPIC_API_KEY`). The driver stores it through `PUT /providers/anthropic/key` at
-   runtime and deletes it again afterwards; it is never written to a file, a log or a commit.
-   Without the variable the step is skipped with a clear message and the run still passes.
+4. For step 7, either leave the Anthropic key that is already in Credential Manager (the driver
+   uses it and does not touch it) or put one in the environment of the shell that runs the driver
+   (`$env:ANTHROPIC_API_KEY`). A key from the environment is stored through
+   `PUT /providers/anthropic/key` for the run and deleted again afterwards; it is never written to
+   a file, a log or a commit. With neither, the step is skipped with a clear message and the run
+   still passes.
 5. Run the driver:
 
    ```powershell
@@ -29,8 +31,9 @@ is the source of truth for what "passing" means and is what a person follows whe
    ```
 
    The defaults are the real acceptance values; `--source`, `--expect-images`, `--expect-flights`,
-   `--label-count`, `--epochs`, `--query-images` and `--cloud-images` parametrise it for a dry run
-   on a small copy of the frames.
+   `--preannotate-images`, `--min-proposals`, `--label-count`, `--epochs`, `--imgsz`, `--batch`,
+   `--query-images`, `--min-query-boxes`, `--cloud-images` and `--min-cloud-boxes` parametrise it
+   for a dry run on a small copy of the frames. `--project-id` resumes a run whose import is done.
 
 ## Steps
 
@@ -65,43 +68,52 @@ is the source of truth for what "passing" means and is what a person follows whe
 ### 4. Label 30 images and freeze dataset "v1"
 
 - **UI**: for each of 30 images, open the editor, press hotkey `1` (excavator) and drag one box on
-  the canvas. Then Data Manager -> **List** -> tick the 30 labeled rows -> **Add to dataset** ->
-  `Dataset name` = `v1` -> **Create dataset** (split method `by_group`).
-- **Expect**: `GET /stats` reports `labeled_count` >= 30; the dataset job succeeds;
-  `train_count + val_count` == 30 with both above zero; on disk
-  `datasets/v1/images/train`, `datasets/v1/images/val`, `datasets/v1/labels/train`,
-  `datasets/v1/labels/val` exist and `datasets/v1/data.yaml` lists `path`, `train`, `val` and the
-  eight class names.
+  the canvas. Then Data Manager -> `Labeled` = `yes` -> **List** -> select the 30 rows (click the
+  first, shift-click the last) -> **Add to dataset** -> `Dataset name` = `v1` -> **Create dataset**
+  (split method `by_group`, the dialog's default).
+- **Expect**: `GET /stats` reports `labeled_count` >= 30; the dataset job succeeds; the dataset
+  is named `v1` with `split_method` `by_group` and `train_count + val_count` == 30, both above
+  zero; on disk `datasets/v1/images/train`, `datasets/v1/images/val`, `datasets/v1/labels/train`
+  and `datasets/v1/labels/val` exist, and `datasets/v1/data.yaml` lists `path`, `train`, `val`
+  and all eight class names.
 - **Evidence**: `acceptance-04-dataset.png`, `acceptance-04-data-yaml.txt`
 
 ### 5. Train YOLO11n for 3 epochs
 
-- **UI**: Train -> `Dataset` = `v1`, `Base model` = `yolo11m-coco` is the imported COCO model, so
-  import `E:\Dev\Yolo\models\yolo11n.pt` as `yolo11n-coco` first and pick it, `Model name` =
-  `ahmadia-v1`, `Epochs` = `3`, `Image size` = `1280`, `Automatic batch size` off,
-  `Batch size` = `4` -> **Start training**.
-- **Expect**: the Train screen shows a live epoch card; the job reaches `succeeded`; at least 3
-  `job.progress` events arrive over the websocket; the resulting model is registered with
-  `kind: trained` and non-empty `metrics` (`map50`, `map50_95`, `precision`, `recall`).
+- **UI**: the base model for this run is YOLO11n, so import `E:\Dev\Yolo\models\yolo11n.pt` on the
+  Models screen as `yolo11n-coco` first (**Import weights**, same dialog as step 3). Then Train ->
+  `Dataset` = `v1`, `Base model` = `yolo11n-coco`, `Model name` = `ahmadia-v1`, `Epochs` = `3`,
+  `Image size` = `1280`, `Automatic batch size` off, `Batch size` = `4` -> **Start training**.
+- **Expect**: the Train screen shows a live epoch card; the job reaches `succeeded`; at least one
+  `job.progress` event per epoch - 3 for this run - arrives on the `/api/v1/events` websocket for
+  the training job; the resulting model is registered with `kind: trained` and numeric `metrics`
+  (`map50`, `map50_95`, `precision`, `recall`).
 - **Evidence**: `acceptance-05-training.png`
 
 ### 6. Query run over 50 unlabeled images, review and promote
 
-- **UI**: Query -> `Model` = `ahmadia-v1`, `Confidence` = `0.25`, images = the unlabeled ones ->
-  **Estimate** -> **Start**. When the run finishes, set `Minimum confidence` and press **Promote**.
-- **Expect**: the inference job succeeds over 50 images; the run card reports a box count; after
-  promotion `GET /query-runs/{id}` has a non-null `promoted_at` and the promoted boxes carry
-  provenance `local_model` with the run's model id.
-- **Evidence**: `acceptance-06-query-run.png`, `acceptance-06-promoted.png`
+- **UI**: Data Manager -> `Labeled` = `no` -> **List** -> select the first 50 rows (click the first,
+  shift-click the last) -> **Run model**. On the Query screen `Model` = `ahmadia-v1`,
+  `Confidence` = `0.25` -> **Estimate** -> **Start**. **Review** when it finishes: follow
+  **Review results** on the run card, which opens the Review queue narrowed to the run's images
+  (that queue is where a person opens each image and accepts or rejects the proposals with A and
+  R). Then back on the run card set `Minimum confidence` = `0` and press **Promote**.
+- **Expect**: the inference job succeeds over exactly 50 images and writes at least one box; the
+  Review queue lists the run's images; after promotion `GET /query-runs/{id}` has a non-null
+  `promoted_at` and the promoted boxes carry provenance `local_model` with the run's model id.
+- **Evidence**: `acceptance-06-query-run.png`, `acceptance-06-review.png`,
+  `acceptance-06-promoted.png`
 
 ### 7. Anthropic vision query "dump trucks" over 5 images with tiling
 
 - **UI**: Query -> tick `Cloud provider`, `Query` = `dump trucks`, `Tiling` on, 5 images ->
   **Estimate** -> **Start**.
-- **Expect**: the job succeeds; the boxes written by the run carry provenance kind
-  `cloud_provider` with `provider: anthropic` and the model name. The key is removed from
-  Credential Manager afterwards.
-- **Skipped** with `SKIP anthropic query run (no ANTHROPIC_API_KEY)` when the variable is absent.
+- **Expect**: the job succeeds over exactly 5 images with tiling enabled, and at least one box the
+  run wrote carries provenance kind `cloud_provider` with `provider: anthropic`. A key that was
+  already in Credential Manager is used as it is and left alone; a key this run stored from the
+  environment is removed again afterwards, including when the step fails.
+- **Skipped** with `SKIP 7. anthropic vision query (no ANTHROPIC_API_KEY)` when neither a stored
+  key nor the environment variable is there.
 - **Evidence**: `acceptance-07-cloud-run.png`
 
 ### 8. Export the trained model to ONNX
@@ -114,5 +126,6 @@ is the source of truth for what "passing" means and is what a person follows whe
 ## Result
 
 The driver writes `docs/evidence/acceptance/acceptance.json` with, per step, the name, pass/fail,
-the measured values and the elapsed seconds, plus the list of skipped steps. A run passes when
-every step is `ok` and the only skips are ones this document allows.
+the measured values and the elapsed seconds, plus the list of skipped steps; it is written even
+when a step fails, with `failed_step` and the error. A run passes when every step is `ok` and the
+only skips are ones this document allows.

@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.config import Settings
+from app.health import GpuProbe
 from app.main import create_app
 from app.providers.keys import MemoryKeyStore
 
@@ -35,9 +36,15 @@ def settings(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def app(settings):
-    """Every test app keeps its API keys in memory: no test may touch Credential Manager."""
+    """A test app that touches nothing outside the process.
+
+    Keys stay in memory (no test may reach Credential Manager) and the CUDA probe is a stub, so
+    a health request does not import torch into the pytest process. `test_health.py` keeps one
+    test for the real probe.
+    """
     created = create_app(settings)
     created.state.keys = MemoryKeyStore()
+    created.state.gpu_probe = GpuProbe(probe=lambda: {"available": False, "name": "test-gpu"})
     return created
 
 

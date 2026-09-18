@@ -1,5 +1,6 @@
 """Project registry: opens project folders, owns their engines, tracks recent projects."""
 
+import logging
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -23,6 +24,8 @@ DEFAULT_IMPORT_SETTINGS = {
     "group_regex": r"^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)",
 }
 DEFAULT_COLOUR = "#4f46e5"
+
+log = logging.getLogger(__name__)
 
 
 class ProjectHandle:
@@ -147,7 +150,10 @@ class ProjectRegistry:
         if remember:
             self.appdata.remember(pid, name, str(folder))
         if self.on_open is not None:
-            self.on_open(h)
+            try:
+                self.on_open(h)
+            except Exception:  # opening the project is what the operator asked for
+                log.exception("on_open hook failed for project %s at %s", pid, folder)
         return h
 
     def get(self, project_id: str) -> ProjectHandle:

@@ -1,7 +1,7 @@
 import threading
 import time
 
-from app.health import GpuProbe
+from app.health import GpuProbe, probe_cuda
 
 
 def answered(probe: GpuProbe, timeout: float = 5.0) -> dict:
@@ -78,3 +78,11 @@ def test_gpu_probe_reports_no_gpu_when_the_probe_raises():
 
     probe = GpuProbe(probe=boom)
     assert answered(probe) == {"available": False, "name": None}
+
+
+def test_probe_cuda_answers_for_real_on_this_machine():
+    """The one place the suite runs the real probe; the app fixture stubs it everywhere else."""
+    value = probe_cuda()
+    assert set(value) == {"available", "name"}
+    assert isinstance(value["available"], bool)
+    assert value["name"] is None or isinstance(value["name"], str)

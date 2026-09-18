@@ -83,3 +83,18 @@ def test_opening_a_project_in_a_fresh_registry_sweeps_it(handle, app, tmp_path: 
 
     assert states(reopened) == {running: "failed", queued: "cancelled"}
     registry.close_all()
+
+
+def test_a_failing_sweep_never_blocks_opening_a_project(handle, tmp_path: Path, caplog):
+    """The project is what the operator asked for; a sweep that raises is a log line, not a 500."""
+
+    def boom(_handle):
+        raise RuntimeError("sweep exploded")
+
+    registry = ProjectRegistry(tmp_path / "third-appdata", on_open=boom)
+
+    reopened = registry.open(handle.folder)
+
+    assert reopened.folder == handle.folder
+    assert "sweep exploded" in caplog.text
+    registry.close_all()

@@ -12,6 +12,9 @@
   Prints `health ok`, `cuda True <gpu name>`, `predict ok <n> boxes` and `worker ok`, and exits
   non-zero on any failure. Sample frames are copied out of the read-only source folder first.
 
+.PARAMETER Keep
+  Leave the temporary work dir behind; it is deleted on the way out by default.
+
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File backend\scripts\smoke_frozen.ps1
 #>
@@ -22,6 +25,7 @@ param(
   [string] $Source = "E:\Dev\Yolo\data\raw\ahmadia",
   [int] $Frames = 3,
   [int] $Imgsz = 640,
+  [switch] $Keep,  # leave the work dir (project folder, run artefacts, ONNX) on disk
   [string] $WorkDir = (Join-Path $env:TEMP ("machinery-smoke-" + [guid]::NewGuid().ToString("N").Substring(0, 8)))
 )
 
@@ -226,6 +230,13 @@ try {
   if (-not $proc.HasExited) {
     # /T: a training run may still own worker children of our own process tree
     & taskkill /T /F /PID $proc.Id 2>&1 | Out-Null
+    $proc.WaitForExit(10000) | Out-Null
   }
-  Write-Host "work dir: $WorkDir"
+  if ($Keep) {
+    Write-Host "work dir kept: $WorkDir"
+  } else {
+    # A run leaves a project folder, training run folders, weights and a 10 MB ONNX behind.
+    Remove-Item $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "work dir removed: $WorkDir (pass -Keep to inspect it)"
+  }
 }
