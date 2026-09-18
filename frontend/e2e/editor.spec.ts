@@ -270,3 +270,22 @@ test("Ctrl+Z undoes a draw with DELETE and Ctrl+Y redoes with POST", async ({ pa
   await page.keyboard.press("Control+y");
   await reposted;
 });
+
+test("resizing a box by its bottom-right handle patches its size", async ({ page }) => {
+  await openEditor(page);
+  await page.getByRole("listitem").filter({ hasText: "Person" }).click();
+  const corner = await displayPoint(page, 512 + 140, 300 + 90);
+  const patched = page.waitForRequest(
+    (r) => r.method() === "PATCH" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  await page.mouse.move(corner.x + 30, corner.y + 20, { steps: 6 });
+  await page.mouse.up();
+  const body = (await patched).postDataJSON() as { x: number; y: number; w: number; h: number };
+  const { scale } = await readView(page);
+  expect(body.x).toBeCloseTo(512, 0);
+  expect(body.y).toBeCloseTo(300, 0);
+  expect(Math.abs(body.w - (140 + 30 / scale))).toBeLessThan(2 / scale + 1);
+  expect(Math.abs(body.h - (90 + 20 / scale))).toBeLessThan(2 / scale + 1);
+});

@@ -1,3 +1,5 @@
+/* eslint-disable react-refresh/only-export-components --
+   a test-only provider next to the render helper that mounts it; not a fast-refresh boundary. */
 import { useMemo, type ReactElement, type ReactNode } from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { render } from "@testing-library/react";

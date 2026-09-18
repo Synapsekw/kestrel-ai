@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HOTKEY_HELP } from "./hotkeys";
 
 export interface ToolbarProps {
   fileName: string;
@@ -17,6 +18,7 @@ export interface ToolbarProps {
 }
 
 const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-800 disabled:opacity-40";
+const KEYS_TITLE = HOTKEY_HELP.map((h) => `${h.keys}: ${h.does}`).join("\n");
 
 export function EditorToolbar(p: ToolbarProps) {
   return (
@@ -63,6 +65,9 @@ export function EditorToolbar(p: ToolbarProps) {
         Redo
       </button>
       {p.extra}
+      <span className="cursor-help text-xs text-slate-500" title={KEYS_TITLE}>
+        Keys
+      </span>
       <span
         role="status"
         className={`ml-auto text-xs ${p.pending > 0 ? "text-amber-300" : "text-slate-500"}`}

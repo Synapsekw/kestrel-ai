@@ -221,15 +221,3 @@ export function fakeClient(routes: FakeRoute[]): { api: ApiClient; requests: Rec
   const { fetch: fetchImpl, requests } = fakeFetch(routes);
   return { api: createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl }), requests };
 }
-
-/** Routes that mirror the mock server for the common S2 reads. */
-export function mockRoutes(): FakeRoute[] {
-  return [
-    { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
-    { method: "GET", path: /\/projects\/[^/]+\/images$/, body: exampleImagePage },
-    { method: "GET", path: /\/images\/[^/]+$/, body: exampleImage },
-    { method: "GET", path: /\/images\/[^/]+\/boxes$/, body: { items: [personBox, proposalBox] } },
-    { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
-    { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
-  ];
-}
