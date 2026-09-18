@@ -9,8 +9,8 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 |---|---|---|---|---|---|
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
 | 1 | S1 dataset backend | s1-dataset-backend | .worktrees/s1-dataset-backend | implementer running (opus) since 2026-09-18 | none |
-| 1 | S2 annotation UI | s2-annotation-ui | .worktrees/s2-annotation-ui | plan being written (fable); implementer not yet dispatched | plan |
-| 1 | S3 training backend and registry | s3-training-backend | .worktrees/s3-training-backend | implementer running (opus) since 2026-09-18 | none |
+| 1 | S2 annotation UI | s2-annotation-ui | .worktrees/s2-annotation-ui | implementer running (fable) since 2026-09-18 | none |
+| 1 | S3 training backend and registry | s3-training-backend | .worktrees/s3-training-backend | implemented; review done; fix round 1 running | none |
 | 2 | S4 inference and providers | - | - | not started | wave 1 checkpoint |
 | 2 | S5 training and inference UI | - | - | not started | wave 1 checkpoint |
 | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
@@ -21,7 +21,7 @@ Last verified checkpoint: 1 (after Wave 0) on main 389687c, 2026-09-17.
 
 - S0: `docs/superpowers/plans/2026-09-17-s0-contract-and-scaffolding.md` (ledger: `2026-09-17-s0-ledger.md`)
 - S1: `docs/superpowers/plans/2026-09-17-s1-dataset-backend.md`
-- S2: `docs/superpowers/plans/2026-09-17-s2-annotation-ui.md` (in progress)
+- S2: `docs/superpowers/plans/2026-09-17-s2-annotation-ui.md`
 - S3: `docs/superpowers/plans/2026-09-17-s3-training-backend.md`
 
 Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `backend/.venv` in the root checkout
@@ -52,6 +52,10 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
    `uv pip install -r requirements-dev.txt`. The ML stack is pinned to the reference machine;
    app libraries are pinned by `requirements-lock.txt` produced after the first install.
 9. Tauri identifier `ai.synapse-solutions.machinery-app`, product name "Machinery Detection".
+10. Contract additions during Wave 1 (goal owner): `ModelImport.weights_path` minLength 1 (S3 can answer 422);
+    `ExportRequest.half` documented (onnx on CPU, engine on GPU 0); `BoxReview.action` gains `unreview`
+    (undo of accept/reject; person boxes ignored). In the editor, Delete on a proposal means reject.
+11. ONNX export needs `onnx`/`onnxslim`/`onnxruntime`; added to `requirements.txt` (S6 decides TensorRT).
 
 ## System installs (the single allowed exception)
 
