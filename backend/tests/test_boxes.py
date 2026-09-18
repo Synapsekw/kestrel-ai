@@ -156,3 +156,17 @@ def test_image_counts_follow_box_changes(client, labelled):
     assert counts() == (True, 1, 0, None)
     _create(client, labelled)
     assert counts() == (True, 2, 0, None)
+
+
+def test_accepting_an_edited_box_keeps_it_edited(client, labelled):
+    pid = labelled["pid"]
+    box_id = _proposal(client, labelled)
+    client.patch(f"/api/v1/projects/{pid}/boxes/{box_id}", json={"x": 9})
+    r = client.post(f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [box_id], "action": "accept"})
+    assert r.json() == {"updated": 0}  # already ground truth
+    boxes = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"]
+    assert boxes[0]["review_state"] == "edited"
+    # rejecting it is still possible
+    client.post(f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [box_id], "action": "reject"})
+    boxes = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"]
+    assert boxes[0]["review_state"] == "rejected"

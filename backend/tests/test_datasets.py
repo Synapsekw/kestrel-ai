@@ -51,7 +51,7 @@ def test_assign_splits_falls_back_to_random_for_a_single_group():
 def test_assign_splits_always_keeps_a_train_image():
     got = assign_splits(_pairs({"a": 1, "b": 1}), "by_group", 0.5, 42)
     assert sorted(got.values()) == ["train", "val"]
-    assert assign_splits([("only", "g")], "by_group", 0.5, 42) in ({"only": "train"}, {"only": "val"})
+    assert assign_splits([("only", "g")], "by_group", 0.5, 42) == {"only": "train"}
     assert assign_splits([], "by_group", 0.2, 42) == {}
 
 
@@ -208,3 +208,18 @@ def test_dataset_from_real_frames(client, project, import_source, ahmadia_sample
     index, cx, cy, w, h = labels[0].read_text().split()
     assert index == "3" and abs(float(cx) - (2000 + 200) / 4000) < 1e-6
     assert abs(float(cy) - (1333 + 133) / 2667) < 1e-6
+
+
+def test_images_frozen_into_a_dataset_cannot_be_deleted(client, labelled_project, wait_job):
+    pid = labelled_project["pid"]
+    created = _create_dataset(client, pid).json()
+    wait_job(pid, created["job"]["id"])
+    frozen = [i["id"] for i in labelled_project["images"] if i["group_key"] != "0035"][:1]
+    r = client.post(f"/api/v1/projects/{pid}/images/bulk-delete", json={"image_ids": frozen})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert r.json()["error"]["details"]["image_ids"] == frozen
+    # an image the dataset does not hold is still deletable
+    spare = [i["id"] for i in labelled_project["images"] if i["group_key"] == "0035"]
+    assert client.post(f"/api/v1/projects/{pid}/images/bulk-delete", json={"image_ids": spare}).json() == {
+        "deleted": 1
+    }

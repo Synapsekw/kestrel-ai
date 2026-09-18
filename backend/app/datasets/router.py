@@ -50,16 +50,22 @@ def _cursor_datetime(value) -> datetime:
         raise AppError("validation_error", "invalid cursor", 422) from None
 
 
-def _dataset_out(handle: ProjectHandle, row: Dataset) -> DatasetOut:
+def _split_counts(handle: ProjectHandle, dataset_ids: list[str]) -> dict[tuple[str, str], int]:
+    """Train and val counts for a whole page of datasets in one query."""
     with handle.session() as s:
-        counts = dict(
-            s.execute(
-                select(DatasetImage.split, func.count())
-                .where(DatasetImage.dataset_id == row.id)
-                .group_by(DatasetImage.split)
-            ).all()
-        )
-    return DatasetOut.from_row(row, counts.get("train", 0), counts.get("val", 0))
+        rows = s.execute(
+            select(DatasetImage.dataset_id, DatasetImage.split, func.count())
+            .where(DatasetImage.dataset_id.in_(dataset_ids))
+            .group_by(DatasetImage.dataset_id, DatasetImage.split)
+        ).all()
+    return {(dataset_id, split): n for dataset_id, split, n in rows}
+
+
+def _datasets_out(handle: ProjectHandle, rows: list[Dataset]) -> list[DatasetOut]:
+    counts = _split_counts(handle, [r.id for r in rows])
+    return [
+        DatasetOut.from_row(r, counts.get((r.id, "train"), 0), counts.get((r.id, "val"), 0)) for r in rows
+    ]
 
 
 def _source(handle: ProjectHandle, source_id: str) -> Source:
@@ -245,7 +251,7 @@ def list_datasets(
     if len(rows) > n:
         rows = rows[:n]
         next_cursor = encode_cursor(created_at=rows[-1].created_at.isoformat(), id=rows[-1].id)
-    return DatasetPage(items=[_dataset_out(handle, r) for r in rows], next_cursor=next_cursor)
+    return DatasetPage(items=_datasets_out(handle, rows), next_cursor=next_cursor)
 
 
 @router.post("/datasets", response_model=DatasetWithJob, status_code=202)
@@ -259,7 +265,7 @@ def create_dataset(
         row.job_id = job.id
         s.flush()
         s.expunge(row)
-    return DatasetWithJob(dataset=_dataset_out(handle, row), job=JobOut.from_row(job, handle.id))
+    return DatasetWithJob(dataset=_datasets_out(handle, [row])[0], job=JobOut.from_row(job, handle.id))
 
 
 @router.get("/datasets/{datasetId}", response_model=DatasetOut)
@@ -269,7 +275,7 @@ def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) ->
         if row is None:
             raise not_found("dataset", datasetId)
         s.expunge(row)
-    return _dataset_out(handle, row)
+    return _datasets_out(handle, [row])[0]
 
 
 @router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
