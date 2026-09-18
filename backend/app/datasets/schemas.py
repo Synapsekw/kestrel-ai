@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.db.models import Image, Source
+from app.db.models import Box, Image, Source
 from app.jobs.schemas import JobOut
 from app.projects.schemas import ImportSettings
 
@@ -130,3 +130,78 @@ class BulkDelete(BaseModel):
 
 class BulkDeleteResult(BaseModel):
     deleted: int
+
+
+class Provenance(BaseModel):
+    kind: Literal["person", "local_model", "cloud_provider"]
+    model_id: str | None
+    provider: str | None
+    model_name: str | None
+    query_run_id: str | None
+
+
+class BoxOut(BaseModel):
+    id: str
+    image_id: str
+    class_id: str
+    x: float
+    y: float
+    w: float
+    h: float
+    confidence: float | None
+    provenance: Provenance
+    review_state: Literal["unreviewed", "accepted", "rejected", "edited"]
+    reviewed_at: datetime | None
+    created_at: datetime
+
+    @classmethod
+    def from_row(cls, row: Box) -> "BoxOut":
+        return cls(
+            id=row.id,
+            image_id=row.image_id,
+            class_id=row.class_id,
+            x=row.x,
+            y=row.y,
+            w=row.w,
+            h=row.h,
+            confidence=row.confidence,
+            provenance=Provenance(
+                kind=row.provenance_kind,
+                model_id=row.model_id,
+                provider=row.provider,
+                model_name=row.model_name,
+                query_run_id=row.query_run_id,
+            ),
+            review_state=row.review_state,
+            reviewed_at=row.reviewed_at,
+            created_at=row.created_at,
+        )
+
+
+class BoxList(BaseModel):
+    items: list[BoxOut]
+
+
+class BoxCreate(BaseModel):
+    class_id: str
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    w: float = Field(gt=0)
+    h: float = Field(gt=0)
+
+
+class BoxUpdate(BaseModel):
+    class_id: str | None = None
+    x: float | None = Field(default=None, ge=0)
+    y: float | None = Field(default=None, ge=0)
+    w: float | None = Field(default=None, gt=0)
+    h: float | None = Field(default=None, gt=0)
+
+
+class BoxReview(BaseModel):
+    box_ids: list[str] = Field(min_length=1)
+    action: Literal["accept", "reject"]
+
+
+class BoxReviewResult(BaseModel):
+    updated: int
