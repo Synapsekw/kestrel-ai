@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select, tuple_
@@ -186,3 +187,86 @@ def promote(
         count = box_count(s, run_id)
         s.expunge(row)
     return row, count, len(pending), image_ids
+
+
+def preannotate(handle: ProjectHandle, image_id: str, body) -> tuple[bool, str, list[Box]]:
+    """Run the project's pre-annotation model on one image, synchronously (spec section 7).
+
+    FastAPI runs a sync endpoint in the threadpool, and the provider takes the process-wide GPU
+    lock, so this waits for any training run rather than fighting it for memory. The image is only
+    ever pre-annotated once per model: boxes from that model are the record that it has run.
+    """
+    from app.providers.base import TilingSpec
+    from app.providers.factory import get_provider
+
+    with handle.session() as s:
+        image = s.get(Image, image_id)
+        if image is None:
+            raise not_found("image", image_id)
+        model_id = body.model_id or handle.row(s).preannotation_model_id
+        if not model_id:
+            raise AppError("validation_error", "no pre-annotation model selected", 422)
+        names = class_names(handle, s)
+        path = handle.folder / image.path
+
+    model = registry.get_model(handle, model_id)
+    existing = _boxes_from_model(handle, image_id, model_id)
+    if existing:
+        return True, model_id, existing
+
+    provider = get_provider(
+        "local_model",
+        handle=handle,
+        keys=None,
+        config=None,
+        model_row=model,
+        project_class_names=names,
+        imgsz=body.imgsz,
+    )
+    dets = provider.detect(
+        path, "", names, TilingSpec(enabled=False), conf=body.conf, log=logging.getLogger(__name__)
+    )
+    _write_proposals(handle, image_id, model, dets)
+    # read back, so a first call and a skipped one list the boxes in the same order
+    return False, model_id, _boxes_from_model(handle, image_id, model_id)
+
+
+def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> list[Box]:
+    with handle.session() as s:
+        rows = list(
+            s.execute(
+                select(Box)
+                .where(
+                    Box.image_id == image_id,
+                    Box.provenance_kind == "local_model",
+                    Box.model_id == model_id,
+                )
+                .order_by(Box.created_at, Box.id)
+            ).scalars()
+        )
+        for r in rows:
+            s.expunge(r)
+    return rows
+
+
+def _write_proposals(handle: ProjectHandle, image_id: str, model, dets) -> None:
+    with handle.session() as s:
+        by_name = class_ids_by_name(handle, s)
+        rows = [
+            Box(
+                image_id=image_id,
+                class_id=by_name[d.label],
+                x=d.x,
+                y=d.y,
+                w=d.w,
+                h=d.h,
+                confidence=d.confidence,
+                provenance_kind="local_model",
+                model_id=model.id,
+                model_name=model.name,
+                review_state="unreviewed",
+            )
+            for d in dets
+            if d.label in by_name
+        ]
+        s.add_all(rows)

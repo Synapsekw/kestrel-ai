@@ -2,10 +2,13 @@
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 
+from app.datasets.schemas import BoxOut
 from app.inference import service
 from app.inference.jobs import run_infer  # noqa: F401 - the import registers the `infer` job type
 from app.inference.schemas import (
     CostEstimate,
+    PreannotateRequest,
+    PreannotateResult,
     PromoteRequest,
     PromoteResult,
     QueryRunCreate,
@@ -15,7 +18,6 @@ from app.inference.schemas import (
 )
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["query-runs"])
 
@@ -82,5 +84,12 @@ def promote_query_run(
     return PromoteResult(query_run=QueryRunOut.from_row(row, count), accepted=accepted)
 
 
-# S0 stub until task 9 lands the real endpoint.
-add_stubs(router, [("POST", "/images/{imageId}/preannotate", "images preannotate")])
+@router.post("/images/{imageId}/preannotate", response_model=PreannotateResult)
+def preannotate_image(
+    imageId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+    body: PreannotateRequest | None = Body(None),
+) -> PreannotateResult:
+    """Synchronous by design: the editor opens an image and wants its proposals in that response."""
+    skipped, model_id, rows = service.preannotate(handle, imageId, body or PreannotateRequest())
+    return PreannotateResult(skipped=skipped, model_id=model_id, items=[BoxOut.from_row(r) for r in rows])

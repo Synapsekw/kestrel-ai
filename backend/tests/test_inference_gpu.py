@@ -5,6 +5,7 @@ Frames are read from the raw folder and never modified.
 """
 
 import logging
+import shutil
 import time
 from pathlib import Path
 
@@ -38,13 +39,17 @@ def frame() -> Path:
 
 
 @pytest.fixture
-def imported(handle, project):
+def imported_row(handle, project):
     if not YOLO11M.is_file():
         pytest.skip(f"{YOLO11M} not present")
-    row = registry.import_model(handle, "yolo11m", str(YOLO11M), {"truck": "dump_truck"})
+    return registry.import_model(handle, "yolo11m", str(YOLO11M), {"truck": "dump_truck"})
+
+
+@pytest.fixture
+def imported(handle, project, imported_row):
     classes = [c["name"] for c in project["classes"]]
-    class_map = build_class_map(row.class_names, classes, row.class_aliases)
-    return handle.folder / row.weights_path, class_map, classes
+    class_map = build_class_map(imported_row.class_names, classes, imported_row.class_aliases)
+    return handle.folder / imported_row.weights_path, class_map, classes
 
 
 def test_tiled_inference_on_a_real_frame_stays_inside_the_image(imported, frame):
@@ -77,3 +82,37 @@ def test_untiled_inference_at_2560_is_quick(imported, frame):
     elapsed = time.monotonic() - started
     assert isinstance(dets, list)
     assert elapsed < FULL_FRAME_BUDGET_S, f"full-frame inference took {elapsed:.1f} s"
+
+
+def test_preannotate_runs_yolo11m_on_a_real_frame_through_the_api(
+    client, project_id, handle, project_dir, imported_row, frame
+):
+    from app.db.models import Image, Source
+
+    with handle.session() as s:
+        source = Source(folder=str(project_dir), site="gpu")
+        s.add(source)
+        s.flush()
+        shutil.copy2(frame, project_dir / "images" / frame.name)
+        row = Image(path=f"images/{frame.name}", width=4000, height=2667, source_id=source.id)
+        s.add(row)
+        s.flush()
+        image_id = row.id
+    body = {"preannotation_model_id": imported_row.id}
+    assert client.patch(f"/api/v1/projects/{project_id}", json=body).status_code == 200
+
+    started = time.monotonic()
+    r = client.post(
+        f"/api/v1/projects/{project_id}/images/{image_id}/preannotate", json={"imgsz": 2560, "conf": 0.25}
+    )
+    elapsed = time.monotonic() - started
+
+    assert r.status_code == 200, r.text
+    result = r.json()
+    assert result["skipped"] is False
+    assert result["model_id"] == imported_row.id
+    assert isinstance(result["items"], list)
+    assert elapsed < FULL_FRAME_BUDGET_S, f"pre-annotation took {elapsed:.1f} s"
+    for item in result["items"]:
+        assert item["provenance"]["kind"] == "local_model"
+        assert item["review_state"] == "unreviewed"
