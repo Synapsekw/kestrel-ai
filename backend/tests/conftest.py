@@ -42,3 +42,30 @@ def project_dir(tmp_path: Path) -> Path:
 def backend_dir() -> Path:
     """The `backend/` folder: the working directory a worker subprocess needs to resolve `app`."""
     return Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture
+def project(client, project_dir) -> dict:
+    """A project with the two aerial classes the training tests use."""
+    body = {
+        "name": "A",
+        "folder": str(project_dir),
+        "classes": [
+            {"name": "excavator", "colour": "#ff0000"},
+            {"name": "dump_truck", "colour": "#00ff00"},
+        ],
+    }
+    r = client.post("/api/v1/projects", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+@pytest.fixture
+def project_id(project) -> str:
+    return project["id"]
+
+
+@pytest.fixture
+def handle(app, project_id):
+    """The open ProjectHandle behind `project_id` (folders, session)."""
+    return app.state.projects.get(project_id)
