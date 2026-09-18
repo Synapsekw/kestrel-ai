@@ -97,7 +97,8 @@ def main() -> int:
     folder = Path(a.project_folder)
     folder.mkdir(parents=True, exist_ok=True)
     classes = [
-        {"name": n, "colour": c, "hotkey": str(i + 1)} for i, (n, c) in enumerate(zip(CLASSES, COLOURS))
+        {"name": n, "colour": c, "hotkey": str(i + 1)}
+        for i, (n, c) in enumerate(zip(CLASSES, COLOURS, strict=True))
     ]
     project = check(
         api.post("/api/v1/projects", json={"name": "Checkpoint 2", "folder": str(folder), "classes": classes})

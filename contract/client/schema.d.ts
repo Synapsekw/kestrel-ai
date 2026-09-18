@@ -496,6 +496,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/models/{modelId}/artifacts/{artifact}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+                artifact: "results_csv" | "confusion_matrix" | "pr_curve";
+            };
+            cookie?: never;
+        };
+        /** A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) for the registry and training screens. */
+        get: operations["getModelArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/models/{modelId}/export": {
         parameters: {
             query?: never;
@@ -2945,6 +2966,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getModelArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+                artifact: "results_csv" | "confusion_matrix" | "pr_curve";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "text/csv": string;
+                };
+            };
+            /** @description the model has no such artifact */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             default: components["responses"]["Error"];
         };

@@ -1,7 +1,11 @@
 """Model registry and training endpoints (spec section 7)."""
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from typing import Literal
 
+from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import FileResponse
+
+from app.errors import not_found
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
 from app.training import registry
@@ -64,3 +68,21 @@ def export_model(
     params = {"model_id": model.id, **body.model_dump()}
     job = request.app.state.jobs.submit(handle, "export", params)
     return JobRef(job=JobOut.from_row(job, handle.id))
+
+
+ARTIFACT_MEDIA = {"results_csv": "text/csv", "confusion_matrix": "image/png", "pr_curve": "image/png"}
+
+
+@router.get("/{modelId}/artifacts/{artifact}")
+def get_model_artifact(
+    modelId: str,  # noqa: N803
+    artifact: Literal["results_csv", "confusion_matrix", "pr_curve"],
+    handle: ProjectHandle = Depends(get_project),
+) -> FileResponse:
+    """Serve a training artifact recorded on the registry row (relative to the project folder)."""
+    model = registry.get_model(handle, modelId)
+    rel = (model.artifacts or {}).get(artifact)
+    path = handle.folder / rel if rel else None
+    if path is None or not path.is_file():
+        raise not_found("artifact", f"{artifact} of model {modelId}")
+    return FileResponse(path, media_type=ARTIFACT_MEDIA[artifact])

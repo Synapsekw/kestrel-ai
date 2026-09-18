@@ -627,6 +627,34 @@ paths:
         "204":
           description: deleted
         default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/{modelId}/artifacts/{artifact}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/modelId"
+      - name: artifact
+        in: path
+        required: true
+        schema:
+          type: string
+          enum: [results_csv, confusion_matrix, pr_curve]
+    get:
+      tags: [models]
+      operationId: getModelArtifact
+      summary: A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) for the registry and training screens.
+      responses:
+        "200":
+          description: the file
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            text/csv:
+              schema: { type: string }
+        "404":
+          description: the model has no such artifact
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/models/{modelId}/export:
     parameters:
       - $ref: "#/components/parameters/projectId"

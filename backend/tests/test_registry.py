@@ -250,3 +250,38 @@ def test_import_of_an_unreadable_checkpoint_leaves_nothing_behind(client, projec
     assert r.status_code == 422, r.text
     assert r.json()["error"]["code"] == "validation_error"
     assert list(handle.models_dir.glob("*.pt")) == []
+
+
+def test_model_artifacts_are_served(client, project, project_id, handle):
+    from app.db.models import Model
+
+    run_dir = handle.folder / "runs" / "r1" / "train"
+    run_dir.mkdir(parents=True)
+    (run_dir / "results.csv").write_text("epoch,time\n1,2\n", encoding="utf-8")
+    (run_dir / "confusion_matrix.png").write_bytes(b"\x89PNG\r\n\x1a\nfake")
+    with handle.session() as s:
+        m = Model(
+            name="m",
+            kind="trained",
+            weights_path="models/m.pt",
+            artifacts={
+                "results_csv": "runs/r1/train/results.csv",
+                "confusion_matrix": "runs/r1/train/confusion_matrix.png",
+            },
+        )
+        s.add(m)
+        s.flush()
+        mid = m.id
+    base = f"/api/v1/projects/{project_id}/models/{mid}/artifacts"
+    r = client.get(f"{base}/results_csv")
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv") and "epoch" in r.text
+    r = client.get(f"{base}/confusion_matrix")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/png"
+    assert client.get(f"{base}/pr_curve").status_code == 404
+    assert client.get(f"{base}/nope").status_code == 422
+    assert (
+        client.get(
+            f"/api/v1/projects/{project_id}/models/00000000-0000-4000-8000-000000000000/artifacts/pr_curve"
+        ).status_code
+        == 404
+    )
