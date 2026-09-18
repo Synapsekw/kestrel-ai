@@ -1,0 +1,6 @@
+PASS attach http://127.0.0.1:8765
+PASS resume on existing project ed5a8802-439b-4917-a236-68471ff3ba39
+PASS resume on finished training job e5a0a476-b858-478b-b325-34dbcddb84b0 params {"name":"v1-yolo11m-coco","dataset_id":"6a514369-7814-4fda-b875-c4dcd223f7a0","base_model_id":"3f3435de-97d4-445b-a398-3c5a3aa8a123","epochs":50,"imgsz":640,"batch":4,"patience":50,"augmentation":"default","device":"0"}
+PASS local query run from the ui estimate "8 images, 96 tiles, 96 requests, estimated $0.00 (at $0.00 per request)" boxes 5263 result {"query_run_id":"e1a6920d-9e64-49e5-a4e1-67fd1014c1cb","images":8,"tiles":96,"boxes":5263,"cached_images":0,"failed_tiles":0,"refusals":0}
+PASS promote from the ui promoted_at 2026-09-18T08:24:50.198813Z
+SKIP anthropic query run (no ANTHROPIC_API_KEY)

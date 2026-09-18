@@ -1,0 +1,6 @@
+PASS attach http://127.0.0.1:8765
+PASS create project from ui ed5a8802-439b-4917-a236-68471ff3ba39 8 classes
+PASS import via ui dialog {"result":{"source_id":"9cb24079-0f2f-47b7-8f96-c6b7cede2d76","imported":20,"duplicates":0,"failed":0,"skipped":0},"groups":[{"group_key":"0031","image_count":20}]}
+PASS import weights via ui and set pre-annotation model yolo11m-coco classes=80
+PASS pre-annotation on open (10 images) 0 local_model proposals written (COCO weights rarely fire on nadir frames)
+PASS label 12 images in the editor labeled 12, boxes 12

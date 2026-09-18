@@ -1,0 +1,4 @@
+PASS attach http://127.0.0.1:8765
+PASS resume on existing project ed5a8802-439b-4917-a236-68471ff3ba39
+PASS create dataset via bulk action train 10 val 2
+PASS train from the ui epoch card "50 / 50" model 0c2d4482-fdf4-49f6-99d6-e664f2100e26

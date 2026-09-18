@@ -11,11 +11,11 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S1 dataset backend | main (merged cdafe95) | - | merged; checkpoint 2 backend half passed | none |
 | 1 | S2 annotation UI | main (merged 9ed2fd4) | - | merged; checkpoint 2 editor half passed | none |
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
-| 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | fix round 2 in progress (reviewed twice) | none |
+| 2 | S4 inference and providers | main (merged 6635f71) | - | merged after 2 fix rounds; JobCancelled relocation follow-up open | none |
 | 2 | S5 training and inference UI | main (merged 04a879f) | - | merged after 2 fix rounds | none |
-| 3 | S6 packaging and acceptance | - | - | plan ready (2026-09-18-s6-packaging-acceptance.md) | checkpoint 3 |
+| 3 | S6 packaging and acceptance | - | - | plan ready (2026-09-18-s6-packaging-acceptance.md); ready to dispatch | none |
 
-Last verified checkpoint: 2 (after Wave 1) on main 9ed2fd4/de07f6a, 2026-09-18.
+Last verified checkpoint: 3 (after Wave 2) on main 6635f71 (dev backend from the full venv, Tauri dev app in env mode), 2026-09-18.
 
 ## Plans
 
@@ -25,6 +25,7 @@ Last verified checkpoint: 2 (after Wave 1) on main 9ed2fd4/de07f6a, 2026-09-18.
 - S3: `docs/superpowers/plans/2026-09-17-s3-training-backend.md`
 - S4: `docs/superpowers/plans/2026-09-18-s4-inference-providers.md`
 - S5: `docs/superpowers/plans/2026-09-18-s5-training-inference-ui.md`
+- Wave 2 ledger (rulings, deferred minors): `docs/superpowers/plans/2026-09-18-wave2-ledger.md`
 - S6: `docs/superpowers/plans/2026-09-18-s6-packaging-acceptance.md`
 - Wave 2 ledger: `.superpowers/sdd/wave2/ledger.md`
 - Wave 1 ledger: `.superpowers/sdd/wave1/ledger.md` (git-ignored; copied into docs at wave end)
@@ -67,6 +68,27 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
 - 2026-09-17: rustup 1.29.1 via `winget install Rustlang.Rustup`; toolchain stable-x86_64-pc-windows-msvc (rustc 1.98.1, cargo 1.98.1). MSVC 14.29 and Windows SDK 10.0.19041 were already present. Playwright downloaded Chromium into the user profile (not a system install).
 
 ## Checkpoints
+
+### Checkpoint 3 (after Wave 2) — PASS on main 6635f71, 2026-09-18
+
+Spec 13.4 #3: import, label with pre-annotation, create a dataset, train, run a query with the trained model and promote, all from the real app (Tauri dev shell in env mode, `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`) against the dev backend started from the full venv on port 8765. Driver: `frontend/scripts/checkpoint3.mjs` (Playwright over CDP; UI actions, API assertions). The run took three driver invocations because of two driver defects, fixed in place; nothing was re-done: the driver resumes on `CP3_PROJECT_ID` and `CP3_TRAIN_JOB_ID`. Evidence in `docs/evidence/checkpoint3/` (`checkpoint3-run1.log`, `-run2.log`, `-run3.log`, `checkpoint3.json`, screenshots 01–09).
+
+| Step (UI unless noted) | Result | Evidence |
+|---|---|---|
+| Create project from the Projects screen (8 default classes) | PASS, project `ed5a8802` | run1.log |
+| Import images dialog: 20 sample frames (copies from `data/raw/ahmadia`), site ahmadia | PASS: imported 20, duplicates 0, failed 0, one group `0031` | run1.log, `checkpoint3-01-import-started.png`, `-02-data-manager-imported.png` |
+| Models screen: Import weights (`models/yolo11m.pt`, 80 COCO classes), Use as pre-annotation model | PASS | run1.log, `-03-model-imported.png` |
+| Open 10 images in the editor: pre-annotation runs on open | PASS (0 proposals: COCO classes do not fire on nadir construction frames; the call path is exercised and answered 200) | run1.log, `-04-editor-after-preannotate.png` |
+| Label 12 images (hotkey 1, drag a box each) | PASS: labeled 12, boxes 12 | run1.log, `-05-labeled.png` |
+| Data Manager list view: tick the 12 labeled rows, Add to dataset, name `v1`, Create dataset | PASS: dataset job succeeded, train 10 / val 2 | run2.log, `-06-dataset-created.png` |
+| Train screen: start training on `v1` from the imported weights (imgsz 640, batch 4) | PASS: job succeeded, epoch card "50 / 50", model `0c2d4482` registered with metrics (mAP50 0.068, expected for 10 images) | run2.log, `-07-training-done.png` |
+| Query screen: trained model, confidence 0.01, Estimate, Start | PASS: estimate "8 images, 96 tiles, 96 requests"; run succeeded, 8 images, 96 tiles, 5263 boxes, 0 failed tiles | run3.log, `-08-query-run.png` |
+| Promote at minimum confidence 0 | PASS: `promoted_at` set | run3.log, `-09-promoted.png` |
+| Cloud provider query (spec 13.4 #3 "with a cloud provider") | SKIPPED: no `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` in this environment. The driver runs the step when the variable is set (key stored through the providers endpoint at runtime, deleted afterwards, never written). Acceptance step 7 needs the operator to export the key before the run. | `checkpoint3.json` `skipped` |
+
+Driver defects found and fixed during the run (not app defects): Ctrl+A selected page text instead of rows when the table lacked focus (now ticks the row checkboxes by label); `<option>` waits used visibility (now `state: "attached"`).
+
+App observation recorded for a follow-up (not blocking the checkpoint): the Train form is keyed on the dataset and model lists, so it remounts and drops typed values when either list changes. The driver typed before the lists arrived, so the run trained with the suggested name `v1-yolo11m-coco` and the default 50 epochs instead of `cp3-model` / 1 epoch (imgsz and batch, typed after the remount, held). A user editing the form while a training job finishes would lose the edit the same way. Goal-owner fix with a test in the S6 wave.
 
 ### Checkpoint 2 (after Wave 1)
 
@@ -157,3 +179,5 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S2 reviewed (fable), 3 fix rounds, merged 9ed2fd4; main: 252 backend tests, 109 frontend unit, 27 e2e. Model artifact endpoint added (372d962). S4 plan written; S5 plan in progress; 'Import images' UI gap assigned to S5.
 - 2026-09-18: Checkpoint 2 passed in full (editor half on the real app). Wave 2 started: S4 dispatched.
 - 2026-09-18: S5 reviewed (fable), 2 fix rounds, merged 04a879f. S4 reviewed (fable), round 1 done, round 2 in progress. Contract: query minLength, query-run resume endpoint, model artifacts endpoint.
+- 2026-09-18: S4 fix round 2 re-reviewed (opus) and merged 6635f71; main: 382 backend tests, 4 GPU tests, ruff, contract check clean; frontend 204 unit, 42 e2e. Wave 2 ledger copied to docs. Checkpoint 3 running on the real app (driver frontend/scripts/checkpoint3.mjs).
+- 2026-09-18: Checkpoint 3 passed on the real app (cloud step skipped, no key). Wave 3 next: S6 dispatch. Goal-owner follow-ups: JobCancelled relocation (S4 M4), Train form remount on list change.
