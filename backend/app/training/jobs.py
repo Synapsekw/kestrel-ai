@@ -3,6 +3,8 @@
 import shutil
 from pathlib import Path
 
+import yaml
+
 from app.errors import AppError
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
@@ -19,13 +21,34 @@ def data_yaml_path(handle: ProjectHandle, dataset) -> Path:
     return handle.folder / dataset.path / "data.yaml"
 
 
+def yaml_class_names(data_yaml: Path) -> list[str]:
+    """`names` from a YOLO data.yaml, in class-index order (a mapping or a plain list)."""
+    names = (yaml.safe_load(data_yaml.read_text(encoding="utf-8")) or {}).get("names") or {}
+    if isinstance(names, dict):
+        return [str(names[k]) for k in sorted(names, key=lambda k: int(k))]
+    return [str(n) for n in names]
+
+
 def check_materialised(handle: ProjectHandle, dataset) -> Path:
-    """S1's materialise job writes data.yaml; training cannot start before it exists."""
+    """S1's materialise job writes data.yaml; training cannot start before it exists.
+
+    The class snapshot on the Dataset row is what the trained model is registered with, so it has to
+    agree with the file the trainer reads: a drifted data.yaml would label the classes wrongly.
+    """
     path = data_yaml_path(handle, dataset)
     if not path.is_file():
         raise AppError(
             "validation_error",
             f"dataset {dataset.name!r} has no data.yaml at {dataset.path}; materialise it first",
+            422,
+        )
+    snapshot = [str(c.get("name")) for c in (dataset.classes or [])]
+    in_file = yaml_class_names(path)
+    if snapshot != in_file:
+        raise AppError(
+            "validation_error",
+            f"dataset {dataset.name!r} lists classes {snapshot} but {dataset.path}/data.yaml has "
+            f"{in_file}; re-materialise the dataset",
             422,
         )
     return path
@@ -84,5 +107,10 @@ def run_export(ctx: JobContext) -> dict:
     if Path(exported).resolve() != target.resolve():
         shutil.move(str(exported), str(target))
     row = registry.set_export(handle, model.id, fmt, target)
+    # A TensorRT build goes through ONNX and leaves that file next to the weights; register it so it
+    # is not an orphan when the model is deleted.
+    intermediate = target.with_suffix(".onnx")
+    if fmt != "onnx" and intermediate.is_file() and "onnx" not in row.exports:
+        row = registry.set_export(handle, model.id, "onnx", intermediate)
     ctx.log.info("exported %s to %s", model.id, row.exports[fmt])
     return {"format": fmt, "path": row.exports[fmt]}

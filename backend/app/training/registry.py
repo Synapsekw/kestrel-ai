@@ -50,12 +50,14 @@ def relative(handle: ProjectHandle, path: Path) -> str:
 
 def import_model(handle: ProjectHandle, name: str, weights_path: str, class_aliases: dict) -> Model:
     source = Path(weights_path)
-    # 404, not 422: `weights_path` is a reference to a file on disk, and the contract's conformance
-    # test treats a 422 on a schema-valid body as a rejection of valid data.
+    # An empty weights_path is a 422 from the schema (`minLength: 1`). Anything else that is
+    # schema-valid but unusable answers 404: the contract's conformance gate (schemathesis
+    # positive_data_acceptance) rejects a 422 on a schema-compliant body, and no schema can express
+    # "this file exists". See the fix report for the one-line options to make this a 422 instead.
     if not source.is_absolute() or source.suffix.lower() != ".pt" or not source.is_file():
         raise AppError(
             "not_found",
-            f"no .pt weights file at {weights_path!r}; an absolute path to an existing file is required",
+            f"no usable weights at {weights_path!r}: an absolute path to an existing .pt file is required",
             404,
         )
 

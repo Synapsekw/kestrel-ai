@@ -177,3 +177,72 @@ def test_losses_from_the_trainer_supports_both_ultralytics_shapes():
     assert losses_from(DictLoss()) == expected
     assert losses_from(TensorLoss()) == expected
     assert losses_from(object()) == {}
+
+
+# ------------------------------------------------- the __main__ dispatch and the amp decision
+
+
+def test_dispatch_runs_freeze_support_before_anything_else(monkeypatch):
+    """A frozen dataloader child re-runs the exe as `<exe> --multiprocessing-fork <handle>`.
+
+    freeze_support() takes over for that child and never returns, so the API server must never
+    start from it (it would try to bind a port per dataloader worker).
+    """
+    import app.main
+    from app.__main__ import run
+
+    started = []
+    monkeypatch.setattr(app.main, "main", lambda: started.append("api"))
+
+    def fake_freeze_support():
+        raise SystemExit(0)  # what freeze_support does for a forked child
+
+    with pytest.raises(SystemExit):
+        run(["app.exe", "--multiprocessing-fork", "1234"], freeze_support=fake_freeze_support)
+    assert started == []
+
+
+def test_dispatch_starts_the_api_for_a_normal_launch(monkeypatch):
+    import app.main
+    from app.__main__ import run
+
+    calls = []
+    monkeypatch.setattr(app.main, "main", lambda: calls.append("api"))
+    assert run(["app.exe"], freeze_support=lambda: calls.append("freeze")) == 0
+    assert calls == ["freeze", "api"]
+
+
+def test_dispatch_routes_the_worker_subcommand():
+    from app.__main__ import run
+
+    calls = []
+    assert run(["app.exe", "worker"], freeze_support=lambda: calls.append("freeze")) == 2  # usage
+    assert calls == ["freeze"]
+
+
+@pytest.mark.parametrize(
+    ("device", "bf16", "expected"),
+    [
+        ("0", True, "bf16"),
+        ("0", False, False),  # pre-Ampere: autocast(bfloat16) would raise
+        ("cpu", True, False),
+        ("CPU", True, False),  # the contract does not case-fold `device`
+        (" cpu ", True, False),
+        ("0,1", True, "bf16"),
+    ],
+)
+def test_amp_setting_never_asks_for_unsupported_bf16(device, bf16, expected):
+    from app.training.worker import amp_setting
+
+    assert amp_setting(device, lambda: bf16) == expected
+
+
+def test_worker_writes_done_json_for_a_malformed_params_file(tmp_path):
+    import app.training.worker as worker
+
+    params_json = tmp_path / "params.json"
+    params_json.write_text("{not json", encoding="utf-8")
+    assert worker.main(["train", str(params_json)]) == 1
+    done = json.loads((tmp_path / "done.json").read_text(encoding="utf-8"))
+    assert done["ok"] is False
+    assert "JSONDecodeError" in done["error"]

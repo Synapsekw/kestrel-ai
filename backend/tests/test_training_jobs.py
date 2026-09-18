@@ -88,6 +88,18 @@ def wait_for(client, project_id, job_id, timeout=20) -> dict:
     raise AssertionError(f"job {job_id} did not finish")
 
 
+def wait_for_progress(client, project_id, job_id, timeout=20) -> dict:
+    """Block until the job reports its first epoch, so a cancel lands mid-training."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        job = client.get(f"{BASE}/{project_id}/jobs/{job_id}").json()
+        if job["progress"] > 0:
+            return job
+        assert job["state"] in ("queued", "running"), job
+        time.sleep(0.02)
+    raise AssertionError(f"job {job_id} reported no progress")
+
+
 def start_train(client, project_id, dataset_id, base_model_id, **over) -> dict:
     body = {
         "name": "ahmadia v1 n",
@@ -160,7 +172,7 @@ def test_cancelling_training_leaves_no_model(
 ):
     use_fake_trainer(epoch_sleep_s=0.3)
     job = start_train(client, project_id, dataset.id, base_model["id"], epochs=50)
-    time.sleep(0.4)
+    wait_for_progress(client, project_id, job["id"])  # cancel mid-training, not before it starts
     assert client.post(f"{BASE}/{project_id}/jobs/{job['id']}/cancel").status_code == 200
     done = wait_for(client, project_id, job["id"])
     assert done["state"] == "cancelled"
@@ -232,3 +244,42 @@ def test_export_of_an_unknown_model_is_404(client, project_id):
 def test_export_rejects_an_unknown_format(client, project_id, base_model):
     r = client.post(f"{models_url(project_id)}/{base_model['id']}/export", json={"format": "coreml"})
     assert r.status_code == 422
+
+
+def test_train_rejects_a_dataset_whose_yaml_drifted_from_its_class_snapshot(
+    client, project_id, handle, base_model
+):
+    """A stale data.yaml would silently train class 0 as the wrong name (S1 owns materialising)."""
+    dataset = make_dataset(handle, name="drifted")
+    folder = handle.folder / dataset.path
+    data = yaml.safe_load((folder / "data.yaml").read_text(encoding="utf-8"))
+    data["names"] = {0: "dump_truck", 1: "excavator"}  # swapped
+    (folder / "data.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
+
+    body = {"name": "x", "dataset_id": dataset.id, "base_model_id": base_model["id"]}
+    r = client.post(f"{models_url(project_id)}/train", json=body)
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "validation_error"
+    message = r.json()["error"]["message"]
+    assert "excavator" in message and "dump_truck" in message
+
+
+def test_engine_export_also_records_the_intermediate_onnx(
+    client, project_id, handle, base_model, use_fake_trainer
+):
+    """TensorRT goes through ONNX; that file stays next to the weights, so the registry owns it."""
+    use_fake_trainer()
+    r = client.post(f"{models_url(project_id)}/{base_model['id']}/export", json={"format": "engine"})
+    assert r.status_code == 202, r.text
+    done = wait_for(client, project_id, r.json()["job"]["id"])
+    assert done["state"] == "succeeded", done["error"]
+
+    model = client.get(f"{models_url(project_id)}/{base_model['id']}").json()
+    stem = Path(base_model["weights_path"]).with_suffix("")
+    assert model["exports"]["engine"] == f"{stem.as_posix()}.engine"
+    assert model["exports"]["onnx"] == f"{stem.as_posix()}.onnx"
+    files = [handle.folder / model["exports"][k] for k in ("engine", "onnx")]
+    assert all(f.exists() for f in files)
+
+    assert client.delete(f"{models_url(project_id)}/{base_model['id']}").status_code == 204
+    assert not any(f.exists() for f in files)  # no orphan next to the deleted weights

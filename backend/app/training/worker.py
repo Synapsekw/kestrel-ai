@@ -10,6 +10,7 @@ import os
 import sys
 import time
 import traceback
+from collections.abc import Callable
 from pathlib import Path
 
 from app.training.presets import TrainParams, to_ultralytics_kwargs
@@ -54,6 +55,31 @@ def epoch_event(epoch: int, epochs: int, metrics: dict, loss: dict, elapsed: flo
         "elapsed_s": round(float(elapsed), 3),
         "eta_s": round(max(0.0, float(eta)), 3),
     }
+
+
+def cuda_bf16_supported() -> bool:
+    """True only for native bf16; emulation is not worth the autocast overhead."""
+    import torch
+
+    try:
+        return bool(torch.cuda.is_bf16_supported(including_emulation=False))
+    except TypeError:  # older torch without the keyword
+        return bool(torch.cuda.is_bf16_supported())
+    except Exception:
+        return False
+
+
+def amp_setting(device: str, bf16_supported: Callable[[], bool] = cuda_bf16_supported) -> bool | str:
+    """Mixed precision for this run, chosen without Ultralytics' AMP probe.
+
+    The probe downloads a checkpoint the first time a machine trains on CUDA, which a packaged
+    offline app cannot rely on (spec section 10). `bf16` skips it, but Ultralytics hands the value
+    straight to autocast, so it is only safe where the GPU supports bf16 natively; everything else
+    trains in fp32.
+    """
+    if device.strip().lower() == "cpu":
+        return False
+    return "bf16" if bf16_supported() else False
 
 
 def is_new_fit_epoch(last_epoch: int, epoch: int, epochs: int) -> bool:
@@ -157,7 +183,9 @@ def run_train(params: dict) -> dict:
     model.add_callback("on_train_start", on_train_start)
     model.add_callback("on_fit_epoch_end", on_fit_epoch_end)
     model.add_callback("on_train_end", on_train_end)
-    model.train(data=p.data_yaml, **to_ultralytics_kwargs(p))
+    kwargs = to_ultralytics_kwargs(p)
+    kwargs["amp"] = amp_setting(p.device)
+    model.train(data=p.data_yaml, **kwargs)
 
     trainer = model.trainer
     save_dir = Path(trainer.save_dir)
@@ -187,9 +215,10 @@ def main(argv: list[str]) -> int:
         print("usage: worker (train|export) <params.json>", file=sys.stderr)
         return 2
     command, params_json = argv[0], Path(argv[1])
-    params = json.loads(params_json.read_text(encoding="utf-8"))
-    run_dir = Path(params["run_dir"])
+    run_dir = params_json.parent  # the launcher writes params.json into the run folder
     try:
+        params = json.loads(params_json.read_text(encoding="utf-8"))
+        run_dir = Path(params.get("run_dir") or run_dir)
         payload = run_train(params) if command == "train" else run_export(params)
     except Exception as e:
         traceback.print_exc()

@@ -71,7 +71,7 @@ class ModelPage(BaseModel):
 
 class ModelImport(BaseModel):
     name: str = Field(min_length=1)
-    weights_path: str
+    weights_path: str = Field(min_length=1)
     class_aliases: dict[str, str] = Field(default_factory=dict)
 
 

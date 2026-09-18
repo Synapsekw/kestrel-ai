@@ -98,5 +98,7 @@ class FakeTrainer:
             raise JobCancelled()
         self._boom()
         out = Path(weights).with_suffix(f".{fmt}")
+        if fmt != "onnx":
+            out.with_suffix(".onnx").write_bytes(b"fake-onnx")  # TensorRT builds from ONNX
         out.write_bytes(b"fake-export")
         return out

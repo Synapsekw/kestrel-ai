@@ -73,10 +73,21 @@ def test_import_twice_with_the_same_name_gives_two_models(client, project_id, im
     ["models/yolo11n.pt", str(YOLO11N.parent / "does-not-exist.pt"), str(YOLO11N.parent)],
 )
 def test_import_rejects_bad_weights_paths(client, project_id, weights_path):
-    """404, not 422: a schema-valid body that points at no file is a missing reference."""
+    """A schema-valid path that names no usable file is a missing reference (404), not a 422.
+
+    The contract cannot express "this file exists", and its conformance gate fails any 422 on a
+    schema-compliant body; only the empty string is a schema violation (see the test below).
+    """
     r = client.post(f"{models_url(project_id)}/import", json={"name": "x", "weights_path": weights_path})
     assert r.status_code == 404, r.text
     assert r.json()["error"]["code"] == "not_found"
+
+
+def test_import_rejects_an_empty_weights_path(client, project_id):
+    """`minLength: 1` in the contract, so pydantic rejects it before the service sees it."""
+    r = client.post(f"{models_url(project_id)}/import", json={"name": "x", "weights_path": ""})
+    assert r.status_code == 422
+    assert r.json()["error"]["code"] == "validation_error"
 
 
 def test_import_rejects_an_empty_name(client, project_id):

@@ -46,8 +46,7 @@ def to_ultralytics_kwargs(p: TrainParams) -> dict:
         "exist_ok": True,
         "plots": True,
         "verbose": False,
-        # bf16 mixed precision skips the Ultralytics AMP probe, which downloads a probe checkpoint
-        # the first time a machine trains; the packaged app has to work offline (spec section 10).
-        "amp": False if p.device == "cpu" else "bf16",
+        # `amp` is deliberately absent: only the worker can see whether this GPU supports bf16,
+        # so it adds the key (see app/training/worker.py::amp_setting).
         **preset,
     }
