@@ -38,12 +38,15 @@ export function ImageGrid(p: ImageGridProps) {
   const { onNearEnd, focusIndex } = p;
   const count = p.items.length;
   // Columns are derived from the measured width; the first render (width 0) uses one column.
-  const vp = useVirtualRows({ rowHeight: CELL_HEIGHT });
-  const cols = Math.max(1, Math.floor((vp.width || CELL_WIDTH) / CELL_WIDTH));
+  // Destructured at the top: the React Compiler `refs` rule rejects reading the ref through the
+  // hook's return object during render.
+  const { containerRef, onScroll, width, height, scrollTop, scrollToIndex } = useVirtualRows({
+    rowHeight: CELL_HEIGHT,
+  });
+  const cols = Math.max(1, Math.floor((width || CELL_WIDTH) / CELL_WIDTH));
   const rows = Math.ceil(count / cols);
-  const win = computeWindow(vp.scrollTop, vp.height, CELL_HEIGHT, rows, 2);
+  const win = computeWindow(scrollTop, height, CELL_HEIGHT, rows, 2);
   const { end } = win;
-  const { scrollToIndex } = vp;
 
   useEffect(() => {
     if (onNearEnd && count > 0 && end * cols >= count - 20) onNearEnd();
@@ -54,8 +57,8 @@ export function ImageGrid(p: ImageGridProps) {
   const visible = p.items.slice(win.start * cols, win.end * cols);
   return (
     <div
-      ref={vp.containerRef}
-      onScroll={vp.onScroll}
+      ref={containerRef}
+      onScroll={onScroll}
       tabIndex={0}
       onKeyDown={p.onKeyDown}
       role="grid"

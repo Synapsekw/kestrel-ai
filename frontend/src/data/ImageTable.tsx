@@ -27,10 +27,13 @@ function mods(e: MouseEvent): { shift: boolean; ctrl: boolean } {
 export function ImageTable(p: ImageTableProps) {
   const { onNearEnd, focusIndex } = p;
   const count = p.items.length;
-  const vp = useVirtualRows({ rowHeight: ROW_HEIGHT });
-  const win = computeWindow(vp.scrollTop, vp.height, ROW_HEIGHT, count);
+  // Destructured at the top: the React Compiler `refs` rule rejects reading the ref through the
+  // hook's return object during render.
+  const { containerRef, onScroll, height, scrollTop, scrollToIndex } = useVirtualRows({
+    rowHeight: ROW_HEIGHT,
+  });
+  const win = computeWindow(scrollTop, height, ROW_HEIGHT, count);
   const { end } = win;
-  const { scrollToIndex } = vp;
   const template = `2rem ${p.columns.map((c) => c.width).join(" ")}`;
 
   useEffect(() => {
@@ -67,8 +70,8 @@ export function ImageTable(p: ImageTableProps) {
         )}
       </div>
       <div
-        ref={vp.containerRef}
-        onScroll={vp.onScroll}
+        ref={containerRef}
+        onScroll={onScroll}
         tabIndex={0}
         onKeyDown={p.onKeyDown}
         data-testid="image-table"
