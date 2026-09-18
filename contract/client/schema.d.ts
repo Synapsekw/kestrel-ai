@@ -351,7 +351,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Accept or reject proposals in bulk (A and R in the editor, bulk promotion). */
+        /** Accept, reject or unreview proposals in bulk (A and R in the editor, undo, bulk promotion). */
         post: operations["reviewBoxes"];
         delete?: never;
         options?: never;
@@ -1440,8 +1440,11 @@ export interface components {
          */
         BoxReview: {
             box_ids: string[];
-            /** @enum {string} */
-            action: "accept" | "reject";
+            /**
+             * @description accept/reject a proposal; unreview puts a reviewed proposal back to unreviewed (undo). Person-drawn boxes are ignored by all three.
+             * @enum {string}
+             */
+            action: "accept" | "reject" | "unreview";
         };
         /**
          * @example {

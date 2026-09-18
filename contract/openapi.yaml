@@ -471,7 +471,7 @@ paths:
     post:
       tags: [boxes]
       operationId: reviewBoxes
-      summary: Accept or reject proposals in bulk (A and R in the editor, bulk promotion).
+      summary: Accept, reject or unreview proposals in bulk (A and R in the editor, undo, bulk promotion).
       requestBody:
         required: true
         content:
@@ -1459,7 +1459,8 @@ components:
           minItems: 1
         action:
           type: string
-          enum: [accept, reject]
+          enum: [accept, reject, unreview]
+          description: accept/reject a proposal; unreview puts a reviewed proposal back to unreviewed (undo). Person-drawn boxes are ignored by all three.
       example: { box_ids: ["b0000000-6666-4000-8000-000000000002"], action: accept }
     BoxReviewResult:
       type: object
