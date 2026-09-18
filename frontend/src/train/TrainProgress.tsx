@@ -41,7 +41,7 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
   return (
     <section data-testid="train-progress" className="flex max-w-3xl flex-col gap-3">
       {alert}
-      <dl className="grid grid-cols-3 gap-2">
+      <dl className="grid grid-cols-3 gap-2 md:grid-cols-5">
         <div className={tile}>
           <dt className={dt}>Epoch</dt>
           <dd data-testid="epoch" className="text-lg tabular-nums">
@@ -52,6 +52,22 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
           <dt className={dt}>mAP50</dt>
           <dd data-testid="map50" className="text-lg tabular-nums">
             {formatMetric(epoch?.map50)}
+          </dd>
+        </div>
+        <div className={tile}>
+          <dt className={dt}>Loss</dt>
+          <dd data-testid="loss" className="text-sm tabular-nums">
+            {epoch && Object.keys(epoch.losses).length > 0
+              ? Object.entries(epoch.losses)
+                  .map(([name, value]) => `${name} ${value.toFixed(3)}`)
+                  .join(" ")
+              : "–"}
+          </dd>
+        </div>
+        <div className={tile}>
+          <dt className={dt}>ETA</dt>
+          <dd data-testid="eta" className="text-lg tabular-nums">
+            {epoch?.etaSeconds == null ? "–" : formatDuration(epoch.etaSeconds)}
           </dd>
         </div>
         <div className={tile}>

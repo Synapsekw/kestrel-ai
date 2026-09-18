@@ -25,6 +25,23 @@ describe("TrainProgress", () => {
     expect(screen.getByRole("button", { name: "Cancel job" })).toBeInTheDocument();
   });
 
+  it("shows the loss terms and the ETA when the message carries them", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, type: "train" } },
+    ]);
+    useJobsStore.getState().upsert({
+      ...runningJob,
+      type: "train",
+      message: "epoch 2/10 mAP50 0.500 loss box 1.234 cls 2.346 dfl 1.111 ETA 252s",
+      progress: 0.2,
+    });
+    renderWithProviders(<TrainProgress projectId={PROJECT_ID} jobId={runningJob.id} />, { api });
+    expect(screen.getByTestId("loss")).toHaveTextContent("box 1.234");
+    expect(screen.getByTestId("loss")).toHaveTextContent("cls 2.346");
+    expect(screen.getByTestId("loss")).toHaveTextContent("dfl 1.111");
+    expect(screen.getByTestId("eta")).toHaveTextContent("4 min 12 s");
+  });
+
   it("links the registered model when the job succeeded", () => {
     const { api } = fakeClient([{ method: "GET", path: /\/log$/, body: exampleJobLog }]);
     useJobsStore.getState().upsert({

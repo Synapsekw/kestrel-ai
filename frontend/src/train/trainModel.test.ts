@@ -64,8 +64,37 @@ describe("train form model", () => {
   });
 
   it("parses the backend's epoch messages", () => {
-    expect(parseEpochMessage("epoch 3/50 mAP50 0.612")).toEqual({ epoch: 3, epochs: 50, map50: 0.612 });
-    expect(parseEpochMessage("epoch 1/3")).toEqual({ epoch: 1, epochs: 3, map50: null });
+    expect(parseEpochMessage("epoch 3/50 mAP50 0.612")).toEqual({
+      epoch: 3,
+      epochs: 50,
+      map50: 0.612,
+      losses: {},
+      etaSeconds: null,
+    });
+    expect(parseEpochMessage("epoch 1/3")).toEqual({
+      epoch: 1,
+      epochs: 3,
+      map50: null,
+      losses: {},
+      etaSeconds: null,
+    });
+  });
+
+  it("parses the loss terms and the ETA the trainer appends", () => {
+    expect(parseEpochMessage("epoch 2/10 mAP50 0.500 loss box 1.234 cls 2.346 dfl 1.111 ETA 252s")).toEqual({
+      epoch: 2,
+      epochs: 10,
+      map50: 0.5,
+      losses: { box: 1.234, cls: 2.346, dfl: 1.111 },
+      etaSeconds: 252,
+    });
+    expect(parseEpochMessage("epoch 1/3 loss box 0.500 seg 0.250")).toEqual({
+      epoch: 1,
+      epochs: 3,
+      map50: null,
+      losses: { box: 0.5, seg: 0.25 },
+      etaSeconds: null,
+    });
     expect(parseEpochMessage("1386 / 3299 images")).toBeNull();
     expect(parseEpochMessage("")).toBeNull();
   });

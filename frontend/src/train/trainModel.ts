@@ -65,15 +65,37 @@ export function toTrainRequest(f: TrainForm): TrainRequest {
   };
 }
 
-const EPOCH_MESSAGE = /^epoch (\d+)\/(\d+)(?: mAP50 ([\d.]+))?$/;
+const EPOCH_MESSAGE =
+  /^epoch (\d+)\/(\d+)(?: mAP50 ([\d.]+))?(?: loss((?: [a-z_]+ [\d.]+)+))?(?: ETA (\d+)s)?$/;
 
-/** The trainer's `job.progress` message: `epoch 3/50 mAP50 0.612` (mAP50 absent before the first validation). */
-export function parseEpochMessage(
-  message: string,
-): { epoch: number; epochs: number; map50: number | null } | null {
+export interface EpochProgress {
+  epoch: number;
+  epochs: number;
+  map50: number | null;
+  /** Loss terms by short name (`box`, `cls`, `dfl`), empty before the trainer reports any. */
+  losses: Record<string, number>;
+  etaSeconds: number | null;
+}
+
+/**
+ * The trainer's `job.progress` message: `epoch 3/50 mAP50 0.612 loss box 1.234 cls 2.346 dfl 1.111 ETA 252s`
+ * (mAP50 absent before the first validation; loss and ETA absent on older messages).
+ */
+export function parseEpochMessage(message: string): EpochProgress | null {
   const m = EPOCH_MESSAGE.exec(message.trim());
   if (!m) return null;
-  return { epoch: Number(m[1]), epochs: Number(m[2]), map50: m[3] === undefined ? null : Number(m[3]) };
+  const losses: Record<string, number> = {};
+  if (m[4]) {
+    const parts = m[4].trim().split(" ");
+    for (let i = 0; i + 1 < parts.length; i += 2) losses[parts[i]] = Number(parts[i + 1]);
+  }
+  return {
+    epoch: Number(m[1]),
+    epochs: Number(m[2]),
+    map50: m[3] === undefined ? null : Number(m[3]),
+    losses,
+    etaSeconds: m[5] === undefined ? null : Number(m[5]),
+  };
 }
 
 export function suggestName(dataset: Dataset | undefined, base: Model | undefined): string {

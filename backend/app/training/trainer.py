@@ -114,12 +114,32 @@ def progress_fraction(events: list[dict]) -> float:
     return max(0.0, min(1.0, float(e.get("epoch") or 0) / total))
 
 
+def _loss_short_name(key: str) -> str:
+    """`train/box_loss` -> `box`: the message names the term, not the Ultralytics metric key."""
+    name = key.rsplit("/", 1)[-1]
+    return name[: -len("_loss")] if name.endswith("_loss") else name
+
+
 def epoch_message(event: dict) -> str:
+    """The `job.progress` message: epoch, mAP50, the loss terms and an ETA when the event has them.
+
+    Format (spec section 7): `epoch 2/10 mAP50 0.500 loss box 1.234 cls 2.346 dfl 1.111 ETA 252s`.
+    Every part after the epoch is optional so early events and older writers still produce a
+    message the UI parses.
+    """
     epoch, epochs = event.get("epoch"), event.get("epochs")
+    parts = [f"epoch {epoch}/{epochs}"]
     map50 = (event.get("metrics") or {}).get("metrics/mAP50(B)")
-    if map50 is None:
-        return f"epoch {epoch}/{epochs}"
-    return f"epoch {epoch}/{epochs} mAP50 {float(map50):.3f}"
+    if map50 is not None:
+        parts.append(f"mAP50 {float(map50):.3f}")
+    losses = event.get("loss") or {}
+    if losses:
+        terms = " ".join(f"{_loss_short_name(str(k))} {float(v):.3f}" for k, v in losses.items())
+        parts.append(f"loss {terms}")
+    eta = event.get("eta_s")
+    if eta is not None:
+        parts.append(f"ETA {int(round(float(eta)))}s")
+    return " ".join(parts)
 
 
 def _job_log_file(log: logging.Logger) -> Path | None:
