@@ -1,0 +1,51 @@
+{
+  "project_id": "570bc685-5c5c-4754-aad3-e19cd85742e8",
+  "image_id": "8f17b94a-807a-40f4-aa54-776c279db645",
+  "steps": [
+    {
+      "name": "attach and read backend info",
+      "ok": true,
+      "detail": "http://127.0.0.1:57358"
+    },
+    {
+      "name": "import via api",
+      "ok": true,
+      "detail": "20 images"
+    },
+    {
+      "name": "data manager lists real images",
+      "ok": true,
+      "detail": "20 cells rendered (virtualised)"
+    },
+    {
+      "name": "editor opened against the real backend",
+      "ok": true,
+      "detail": "8f17b94a-807a-40f4-aa54-776c279db645"
+    },
+    {
+      "name": "draw box persists through the api",
+      "ok": true,
+      "detail": "{\"id\":\"c27ff845-b8d2-4ba6-b12a-b0f749d7dfad\",\"image_id\":\"8f17b94a-807a-40f4-aa54-776c279db645\",\"class_id\":\"ccee6aed-62c2-4cb8-a889-1dbfc902d285\",\"x\":1160.9,\"y\":425.5,\"w\":689.7,\"h\":459.8,\"confidence\":n"
+    },
+    {
+      "name": "undo deletes the box on the server",
+      "ok": true,
+      "detail": "0 boxes"
+    },
+    {
+      "name": "redo recreates the box on the server",
+      "ok": true,
+      "detail": "1 boxes"
+    },
+    {
+      "name": "ctrl+right navigates to the next image",
+      "ok": true,
+      "detail": "http://127.0.0.1:1420/p/570bc685-5c5c-4754-aad3-e19cd85742e8/edit/f784d41a-5d5f-4c89-9bc3-5e8f91db0d82"
+    },
+    {
+      "name": "stats reflect the label",
+      "ok": true,
+      "detail": "{\"labeled\":1,\"boxes\":1}"
+    }
+  ]
+}

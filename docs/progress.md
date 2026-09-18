@@ -9,10 +9,10 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 |---|---|---|---|---|---|
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
 | 1 | S1 dataset backend | main (merged cdafe95) | - | merged; checkpoint 2 backend half passed | none |
-| 1 | S2 annotation UI | s2-annotation-ui | .worktrees/s2-annotation-ui | implementer running (fable) since 2026-09-18 | none |
+| 1 | S2 annotation UI | main (merged 9ed2fd4) | - | merged after 3 fix rounds; editor checkpoint running | none |
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
-| 2 | S4 inference and providers | - | - | not started | wave 1 checkpoint |
-| 2 | S5 training and inference UI | - | - | not started | wave 1 checkpoint |
+| 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | plan ready (2026-09-18-s4-inference-providers.md); dispatch after checkpoint 2 | checkpoint 2 |
+| 2 | S5 training and inference UI | - | - | plan being written (fable) | checkpoint 2, plan |
 | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
 
 Last verified checkpoint: 1 (after Wave 0) on main 389687c, 2026-09-17.
@@ -23,6 +23,9 @@ Last verified checkpoint: 1 (after Wave 0) on main 389687c, 2026-09-17.
 - S1: `docs/superpowers/plans/2026-09-17-s1-dataset-backend.md`
 - S2: `docs/superpowers/plans/2026-09-17-s2-annotation-ui.md`
 - S3: `docs/superpowers/plans/2026-09-17-s3-training-backend.md`
+- S4: `docs/superpowers/plans/2026-09-18-s4-inference-providers.md`
+- S5: `docs/superpowers/plans/2026-09-18-s5-training-inference-ui.md` (in progress)
+- Wave 1 ledger: `.superpowers/sdd/wave1/ledger.md` (git-ignored; copied into docs at wave end)
 
 Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `backend/.venv` in the root checkout
 (one shared environment; sub-agents must not install packages). Implementer reports land in
@@ -133,3 +136,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: Wave 1 started. S1 and S3 implementers dispatched in worktrees; S2 plan being written (first attempt stalled, retried).
 - 2026-09-18: S3 reviewed (fable), fixed, re-reviewed (opus), merged to main 1224343; 168 backend tests, GPU training + ONNX export verified on main.
 - 2026-09-18: S1 reviewed, fixed, re-reviewed, merged cdafe95 (250 backend tests). Checkpoint 2 backend half passed. Shared venv incident recovered (see wave 1 ledger).
+- 2026-09-18: S2 reviewed (fable), 3 fix rounds, merged 9ed2fd4; main: 252 backend tests, 109 frontend unit, 27 e2e. Model artifact endpoint added (372d962). S4 plan written; S5 plan in progress; 'Import images' UI gap assigned to S5.
