@@ -1,11 +1,13 @@
 """The JSON-lines progress protocol between the training subprocess and the job thread."""
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 from app.training.trainer import latest_epoch, progress_fraction, read_progress
 from app.training.worker import epoch_event, final_metrics_from
@@ -126,3 +128,52 @@ def test_main_dispatches_the_worker_subcommand(backend_dir):
     )
     assert out.returncode == 2
     assert "usage: worker" in out.stderr
+
+
+def test_worker_main_pins_the_ultralytics_environment(tmp_path, monkeypatch):
+    """No auto pip install into the user's environment, and no ultralytics console spam."""
+    import app.training.worker as worker
+
+    monkeypatch.delenv("YOLO_AUTOINSTALL", raising=False)
+    monkeypatch.delenv("YOLO_VERBOSE", raising=False)
+    seen = {}
+    monkeypatch.setattr(
+        worker, "run_train", lambda params: seen.update(os.environ) or {"ok": True, "p": params}
+    )
+    params_json = tmp_path / "params.json"
+    params_json.write_text(json.dumps({"run_dir": str(tmp_path)}), encoding="utf-8")
+
+    assert worker.main(["train", str(params_json)]) == 0
+    assert seen["YOLO_AUTOINSTALL"] == "False"
+    assert seen["YOLO_VERBOSE"] == "False"
+    assert json.loads((tmp_path / "done.json").read_text(encoding="utf-8"))["ok"] is True
+
+
+def test_only_real_fit_epochs_are_written():
+    """Ultralytics replays on_fit_epoch_end for its final validation at epoch = epochs + 1."""
+    from app.training.worker import is_new_fit_epoch
+
+    assert is_new_fit_epoch(0, 1, 10) is True
+    assert is_new_fit_epoch(1, 1, 10) is False  # already written
+    assert is_new_fit_epoch(1, 2, 10) is True
+    assert is_new_fit_epoch(1, 2, 1) is False  # the final-validation replay
+
+
+def test_losses_from_the_trainer_supports_both_ultralytics_shapes():
+    from app.training.worker import losses_from
+
+    class DictLoss:  # ultralytics 8.4: tloss is a dict of running means
+        tloss = {"box_loss": np.float32(1.2), "cls_loss": np.float32(0.8), "dfl_loss": np.float32(1.1)}
+
+    class TensorLoss:  # older releases: a tensor plus loss_names
+        tloss = np.array([1.2, 0.8, 1.1])
+        loss_names = ("box_loss", "cls_loss", "dfl_loss")
+
+    expected = {
+        "box_loss": pytest.approx(1.2),
+        "cls_loss": pytest.approx(0.8),
+        "dfl_loss": pytest.approx(1.1),
+    }
+    assert losses_from(DictLoss()) == expected
+    assert losses_from(TensorLoss()) == expected
+    assert losses_from(object()) == {}

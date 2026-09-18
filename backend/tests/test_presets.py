@@ -36,6 +36,7 @@ def test_default_kwargs():
     assert kw["exist_ok"] is True
     assert kw["plots"] is True
     assert kw["verbose"] is False
+    assert kw["amp"] == "bf16"  # no AMP probe, so no one-time yolo26n.pt download
     assert kw["project"] == str(Path("C:/p/runs/j1"))
     assert not any(k in kw for k in FLIP_KEYS)
     assert "data" not in kw and "model" not in kw
@@ -65,3 +66,7 @@ def test_presets_table():
 def test_params_are_frozen():
     with pytest.raises(dataclasses.FrozenInstanceError):
         params().epochs = 3
+
+
+def test_cpu_training_turns_mixed_precision_off():
+    assert to_ultralytics_kwargs(params(device="cpu"))["amp"] is False

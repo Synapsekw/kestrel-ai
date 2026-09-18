@@ -56,6 +56,15 @@ def epoch_event(epoch: int, epochs: int, metrics: dict, loss: dict, elapsed: flo
     }
 
 
+def is_new_fit_epoch(last_epoch: int, epoch: int, epochs: int) -> bool:
+    """True for the first callback of a real fit epoch.
+
+    Ultralytics fires `on_fit_epoch_end` once more after training, for its final validation, with
+    `epoch` one past the last one; that replay carries no new training progress.
+    """
+    return last_epoch < epoch <= epochs
+
+
 def final_metrics_from(box, names) -> dict:
     """Contract `ModelMetrics` from an ultralytics `DetMetrics.box`-shaped object."""
     indices = getattr(box, "ap_class_index", None)
@@ -102,10 +111,13 @@ def write_done(run_dir: Path, payload: dict) -> None:
     tmp.replace(run_dir / "done.json")
 
 
-def _losses(trainer) -> dict:
+def losses_from(trainer) -> dict:
+    """The running loss terms. Ultralytics 8.4 keeps a dict; older releases a tensor plus names."""
     tloss = getattr(trainer, "tloss", None)
     if tloss is None:
         return {}
+    if isinstance(tloss, dict):
+        return {str(k): float(v) for k, v in tloss.items() if _is_number(v)}
     try:
         values = [float(v) for v in tloss.tolist()]
     except (AttributeError, TypeError, ValueError):
@@ -120,6 +132,7 @@ def run_train(params: dict) -> dict:
     p = TrainParams(**params)
     progress = ProgressWriter(Path(p.run_dir) / "progress.jsonl")
     final: dict = {}
+    written = {"epoch": 0}
 
     def on_train_start(trainer):
         progress.write({"kind": "start", "epochs": int(getattr(trainer, "epochs", p.epochs) or p.epochs)})
@@ -127,10 +140,13 @@ def run_train(params: dict) -> dict:
     def on_fit_epoch_end(trainer):
         epoch = int(getattr(trainer, "epoch", 0)) + 1
         epochs = int(getattr(trainer, "epochs", p.epochs) or p.epochs)
+        if not is_new_fit_epoch(written["epoch"], epoch, epochs):
+            return
+        written["epoch"] = epoch
         started = getattr(trainer, "train_time_start", None)
         elapsed = time.time() - started if started else 0.0
         metrics = dict(getattr(trainer, "metrics", {}) or {})
-        progress.write(epoch_event(epoch, epochs, metrics, _losses(trainer), elapsed))
+        progress.write(epoch_event(epoch, epochs, metrics, losses_from(trainer), elapsed))
 
     def on_train_end(trainer):
         box = getattr(getattr(getattr(trainer, "validator", None), "metrics", None), "box", None)
@@ -164,6 +180,9 @@ def run_export(params: dict) -> dict:
 
 def main(argv: list[str]) -> int:
     os.environ.setdefault("YOLO_VERBOSE", "False")
+    # Never let ultralytics pip-install into the user's environment; a missing optional
+    # dependency (for example onnx) has to surface as a job error, not as a silent install.
+    os.environ.setdefault("YOLO_AUTOINSTALL", "False")
     if len(argv) < 2 or argv[0] not in ("train", "export"):
         print("usage: worker (train|export) <params.json>", file=sys.stderr)
         return 2
