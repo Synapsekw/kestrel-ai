@@ -63,3 +63,11 @@ describe("undo and redo ignore key repeat", () => {
     expect(actionForKey(key("d", { ctrlKey: true, repeat: true }))).toEqual({ type: "duplicate" });
   });
 });
+
+describe("next and previous ignore key repeat", () => {
+  it("returns null for a held Ctrl+Right or Ctrl+Left", () => {
+    expect(actionForKey(key("ArrowRight", { ctrlKey: true, repeat: true }))).toBeNull();
+    expect(actionForKey(key("ArrowLeft", { metaKey: true, repeat: true }))).toBeNull();
+    expect(actionForKey(key("ArrowRight", { ctrlKey: true }))).toEqual({ type: "next" });
+  });
+});

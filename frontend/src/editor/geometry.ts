@@ -110,13 +110,21 @@ export function duplicateOffset(r: Rect, image: Size, offset = 12): Rect {
 }
 
 /**
- * The box a drag from `start` to `end` (display pixels) draws, or `null` for a click, a few pixels
- * of jitter or a degenerate rectangle. The minimum-size check runs on the raw drag, before
- * clamping, because `clampRect` would otherwise turn a click into a 2 x 2 box.
+ * The box a drag draws, or `null` for a click, a few pixels of jitter or a degenerate rectangle.
+ * `anchor` is the image pixel captured at mouse down, so a zoom or pan mid-drag leaves it in place;
+ * `start`/`end` are the display points that decide whether the pointer moved at all; `view` is the
+ * current transform for the pointer. The minimum-size check runs on the raw drag, before clamping,
+ * because `clampRect` would otherwise turn a click into a 2 x 2 box.
  */
-export function dragRect(start: Point, end: Point, view: ViewTransform, image: Size): Rect | null {
+export function dragRect(
+  anchor: Point,
+  start: Point,
+  end: Point,
+  view: ViewTransform,
+  image: Size,
+): Rect | null {
   if (Math.abs(end.x - start.x) < MIN_DRAG_PX && Math.abs(end.y - start.y) < MIN_DRAG_PX) return null;
-  const raw = normalizeRect(toImage(start, view), toImage(end, view));
+  const raw = normalizeRect(anchor, toImage(end, view));
   if (!isDrawable(raw)) return null;
   return roundRect(clampRect(raw, image));
 }

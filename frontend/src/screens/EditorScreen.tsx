@@ -61,7 +61,9 @@ function EditorBody({
   const toggleShowRejected = useEditorStore((s) => s.toggleShowRejected);
   const history = useHistory(imageId);
   const { actions, canUndo, canRedo } = useEditorActions(projectId, history);
-  // Display coordinates of the drag; `dragRect` decides on mouse up whether it was a click.
+  // The anchor is an image pixel (a zoom or pan mid-drag leaves it put); start/end are display
+  // points so `dragRect` can tell a click from a drag on mouse up.
+  const drawAnchor = useRef<Point | null>(null);
   const drawStart = useRef<Point | null>(null);
   const drawEnd = useRef<Point | null>(null);
   const visible = useMemo(() => visibleBoxes({ boxes, order, showRejected }), [boxes, order, showRejected]);
@@ -103,35 +105,38 @@ function EditorBody({
       return;
     }
     st.select(null);
+    const p = toImage(pos, st.view);
+    drawAnchor.current = p;
     drawStart.current = pos;
     drawEnd.current = pos;
-    const p = toImage(pos, st.view);
     st.setDraft({ x: p.x, y: p.y, w: 0, h: 0, classId: st.activeClassId });
   };
 
   const onMouseMove = (e: KonvaEventObject<MouseEvent>) => {
-    const start = drawStart.current;
+    const anchor = drawAnchor.current;
     const st = useEditorStore.getState();
     const pos = e.target.getStage()?.getPointerPosition();
-    if (!start || !pos || !st.image || !st.draft) return;
+    if (!anchor || !pos || !st.image || !st.draft) return;
     drawEnd.current = pos;
     // Visual feedback only; the box itself is decided on mouse up.
     st.setDraft({
-      ...clampRect(normalizeRect(toImage(start, st.view), toImage(pos, st.view)), st.image),
+      ...clampRect(normalizeRect(anchor, toImage(pos, st.view)), st.image),
       classId: st.draft.classId,
     });
   };
 
   const onMouseUp = () => {
+    const anchor = drawAnchor.current;
     const start = drawStart.current;
     const end = drawEnd.current;
+    drawAnchor.current = null;
     drawStart.current = null;
     drawEnd.current = null;
     const st = useEditorStore.getState();
     const draft = st.draft;
     st.setDraft(null);
-    if (!start || !end || !draft || !st.image) return;
-    const rect = dragRect(start, end, st.view, st.image);
+    if (!anchor || !start || !end || !draft || !st.image) return;
+    const rect = dragRect(anchor, start, end, st.view, st.image);
     if (rect) void actions.drawBox(rect, draft.classId);
   };
 

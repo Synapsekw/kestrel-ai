@@ -48,10 +48,11 @@ export function actionForKey(e: KeyLike): EditorAction | null {
         return { type: "duplicate" };
       case "1":
         return { type: "one-to-one" };
+      // Navigation is live while an image loads, so a held key must not walk the whole list.
       case "arrowright":
-        return { type: "next" };
+        return e.repeat ? null : { type: "next" };
       case "arrowleft":
-        return { type: "prev" };
+        return e.repeat ? null : { type: "prev" };
       default:
         return null;
     }

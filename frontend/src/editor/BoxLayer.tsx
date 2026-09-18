@@ -3,6 +3,7 @@ import { Layer, Rect, Text, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import type { ClassDef } from "@contract/client";
+import { pushLog } from "@/app/diagnostics";
 import { useEditorStore, visibleBoxes } from "@/store/editor";
 import { clampRect, MIN_BOX_SIDE, rectOf, roundRect, type Rect as RectShape } from "./geometry";
 import { colourOf, nameOf } from "./labels";
@@ -61,7 +62,9 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
     );
     node.scale({ x: 1, y: 1 });
     node.setAttrs({ x: after.x, y: after.y, width: after.w, height: after.h });
-    void onCommitRect(id, rectOf(box), roundRect(after)).then(() => syncNode(id));
+    void onCommitRect(id, rectOf(box), roundRect(after))
+      .catch((err: unknown) => pushLog(`commit rect failed: ${String(err)}`))
+      .then(() => syncNode(id));
   };
 
   return (

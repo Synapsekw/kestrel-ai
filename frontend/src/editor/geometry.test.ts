@@ -97,25 +97,27 @@ describe("rects", () => {
 
 describe("dragRect", () => {
   const v = { scale: 0.25, x: 0, y: 0 };
+  const anchor = (p: { x: number; y: number }) => toImage(p, v);
   it("treats a click or a few pixels of jitter as no box", () => {
-    expect(dragRect({ x: 100, y: 100 }, { x: 100, y: 100 }, v, image)).toBeNull();
-    expect(dragRect({ x: 100, y: 100 }, { x: 103, y: 102 }, v, image)).toBeNull();
-    expect(dragRect({ x: 100, y: 100 }, { x: 140, y: 100 }, v, image)).toBeNull();
+    const start = { x: 100, y: 100 };
+    expect(dragRect(anchor(start), start, { x: 100, y: 100 }, v, image)).toBeNull();
+    expect(dragRect(anchor(start), start, { x: 103, y: 102 }, v, image)).toBeNull();
+    expect(dragRect(anchor(start), start, { x: 140, y: 100 }, v, image)).toBeNull();
   });
   it("returns the clamped, rounded image rect of a real drag in either direction", () => {
-    expect(dragRect({ x: 100, y: 100 }, { x: 110, y: 108 }, v, image)).toEqual({
-      x: 400,
-      y: 400,
-      w: 40,
-      h: 32,
-    });
-    expect(dragRect({ x: 110, y: 108 }, { x: 100, y: 100 }, v, image)).toEqual({
-      x: 400,
-      y: 400,
-      w: 40,
-      h: 32,
-    });
+    const a = { x: 100, y: 100 };
+    const b = { x: 110, y: 108 };
+    expect(dragRect(anchor(a), a, b, v, image)).toEqual({ x: 400, y: 400, w: 40, h: 32 });
+    expect(dragRect(anchor(b), b, a, v, image)).toEqual({ x: 400, y: 400, w: 40, h: 32 });
     // starts outside the image: clamped into it, the size is kept
-    expect(dragRect({ x: -20, y: -20 }, { x: 10, y: 10 }, v, image)).toEqual({ x: 0, y: 0, w: 120, h: 120 });
+    const out = { x: -20, y: -20 };
+    expect(dragRect(anchor(out), out, { x: 10, y: 10 }, v, image)).toEqual({ x: 0, y: 0, w: 120, h: 120 });
+  });
+  it("keeps the anchor at the same image pixel when the view changes mid-drag", () => {
+    const start = { x: 100, y: 100 };
+    const a = anchor(start); // image (400, 400) under the first view
+    const zoomed = { scale: 0.5, x: -300, y: -300 }; // display (100,100) is now image (800, 800)
+    const rect = dragRect(a, start, { x: 150, y: 140 }, zoomed, image);
+    expect(rect).toEqual({ x: 400, y: 400, w: 500, h: 480 });
   });
 });
