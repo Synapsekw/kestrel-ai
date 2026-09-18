@@ -1,11 +1,19 @@
 """Model registry and training endpoints (spec section 7)."""
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 
+from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 from app.training import registry
-from app.training.schemas import ModelImport, ModelOut, ModelPage
+from app.training.jobs import check_materialised  # noqa: F401 - registers the train and export job types
+from app.training.schemas import (
+    ExportRequest,
+    JobRef,
+    ModelImport,
+    ModelOut,
+    ModelPage,
+    TrainRequest,
+)
 
 router = APIRouter(prefix="/projects/{projectId}/models", tags=["models"])
 
@@ -26,6 +34,14 @@ def import_model(body: ModelImport, handle: ProjectHandle = Depends(get_project)
     return ModelOut.from_row(row)
 
 
+@router.post("/train", response_model=JobRef, status_code=202)
+def train_model(body: TrainRequest, request: Request, handle: ProjectHandle = Depends(get_project)) -> JobRef:
+    registry.get_model(handle, body.base_model_id)  # 404 before the job is queued
+    check_materialised(handle, registry.get_dataset(handle, body.dataset_id))
+    job = request.app.state.jobs.submit(handle, "train", body.model_dump())
+    return JobRef(job=JobOut.from_row(job, handle.id))
+
+
 @router.get("/{modelId}", response_model=ModelOut)
 def get_model(modelId: str, handle: ProjectHandle = Depends(get_project)) -> ModelOut:  # noqa: N803
     return ModelOut.from_row(registry.get_model(handle, modelId))
@@ -37,4 +53,14 @@ def delete_model(modelId: str, handle: ProjectHandle = Depends(get_project)) -> 
     return Response(status_code=204)
 
 
-add_stubs(router, [("POST", "/train", "models train"), ("POST", "/{modelId}/export", "models export")])
+@router.post("/{modelId}/export", response_model=JobRef, status_code=202)
+def export_model(
+    modelId: str,  # noqa: N803
+    body: ExportRequest,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> JobRef:
+    model = registry.get_model(handle, modelId)
+    params = {"model_id": model.id, **body.model_dump()}
+    job = request.app.state.jobs.submit(handle, "export", params)
+    return JobRef(job=JobOut.from_row(job, handle.id))
