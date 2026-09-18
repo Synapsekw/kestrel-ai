@@ -13,28 +13,40 @@ interface State {
   error: string | null;
 }
 
+export interface TrackedRun {
+  run: QueryRun | null;
+  job: Job | null;
+  /** A failed run fetch, or the reason the job poller gave up; the loaded run stays rendered. */
+  error: string | null;
+  replace: (run: QueryRun) => void;
+  /** Follow a new job for this run (after a resume) without waiting for the next run poll. */
+  trackJob: (job: Job) => void;
+}
+
 /** The run (box_count grows while the job writes tiles) and its job; both polled while the job is active. */
-export function useTrackedRun(
-  projectId: string,
-  runId: string | null,
-): { run: QueryRun | null; job: Job | null; error: string | null; replace: (run: QueryRun) => void } {
+export function useTrackedRun(projectId: string, runId: string | null): TrackedRun {
   const api = useApi();
   const [state, setState] = useState<State>({ runId: null, run: null, error: null });
   const run = state.runId === runId ? state.run : null;
-  const job = useTrackedJob(projectId, run?.job_id ?? null);
+  const { job, error: jobError } = useTrackedJob(projectId, run?.job_id ?? null);
   const live = job !== null && isActiveJob(job);
 
   useEffect(() => {
     if (!runId) return;
     let cancelled = false;
+    let failed = false;
     const tick = () => {
       fetchQueryRun(api, projectId, runId)
         .then((r) => {
-          if (!cancelled) setState({ runId, run: r, error: null });
+          if (cancelled) return;
+          failed = false;
+          setState({ runId, run: r, error: null });
         })
         .catch((e: unknown) => {
           if (cancelled) return;
-          pushLog(`load query run ${runId} failed: ${messageOf(e, String(e))}`);
+          // Only the first failure of a run of failures is logged; polling every 2 s must not spam.
+          if (!failed) pushLog(`load query run ${runId} failed: ${messageOf(e, String(e))}`);
+          failed = true;
           setState((s) => ({
             runId,
             run: s.runId === runId ? s.run : null,
@@ -56,5 +68,10 @@ export function useTrackedRun(
   }, [api, projectId, runId, live]);
 
   const replace = useCallback((r: QueryRun) => setState({ runId: r.id, run: r, error: null }), []);
-  return { run, job, error: state.runId === runId ? state.error : null, replace };
+  const trackJob = useCallback(
+    (j: Job) => setState((s) => (s.run ? { ...s, run: { ...s.run, job_id: j.id } } : s)),
+    [],
+  );
+  const runError = state.runId === runId ? state.error : null;
+  return { run, job, error: runError ?? jobError, replace, trackJob };
 }

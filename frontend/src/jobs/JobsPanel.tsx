@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useJobsStore } from "@/store/jobs";
 import { JobCard } from "./JobCard";
 import { useJobList } from "./useJobList";
@@ -11,6 +11,7 @@ export function JobsPanel({ projectId }: { projectId: string }) {
   const setPanelOpen = useJobsStore((s) => s.setPanelOpen);
   const jobs = useJobsStore((s) => s.jobs);
   const list = useJobList(projectId, open);
+  const panelRef = useRef<HTMLElement>(null);
   const sorted = useMemo(
     () =>
       Object.values(jobs)
@@ -18,12 +19,28 @@ export function JobsPanel({ projectId }: { projectId: string }) {
         .sort((a, b) => b.created_at.localeCompare(a.created_at)),
     [jobs, projectId],
   );
+  // Focus moves into the slide-over when it opens, and Escape closes it from anywhere.
+  useEffect(() => {
+    if (open) panelRef.current?.focus();
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setPanelOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open, setPanelOpen]);
+
   if (!open) return null;
   return (
     <aside
+      ref={panelRef}
       id="jobs-panel"
       role="dialog"
       aria-label="Jobs"
+      aria-modal="false"
+      tabIndex={-1}
       className="absolute inset-y-0 right-0 z-20 flex w-[28rem] max-w-full flex-col gap-3 overflow-y-auto border-l border-slate-800 bg-slate-950 p-4 shadow-xl"
     >
       <header className="flex items-center gap-2">

@@ -39,6 +39,19 @@ describe("JobsPanel", () => {
     expect(dialog).not.toBeInTheDocument();
   });
 
+  it("takes focus when it opens and closes on Escape", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/jobs$/, body: { items: [runningJob], next_cursor: null } },
+    ]);
+    useJobsStore.setState({ panelOpen: true });
+    renderWithProviders(<JobsPanel projectId={PROJECT_ID} />, { api });
+    const dialog = await screen.findByRole("dialog", { name: "Jobs" });
+    await waitFor(() => expect(dialog).toHaveFocus());
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(useJobsStore.getState().panelOpen).toBe(false);
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
   it("shows the envelope message when the list fails", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/jobs$/, status: 500, body: errorBody("internal_error", "db locked") },

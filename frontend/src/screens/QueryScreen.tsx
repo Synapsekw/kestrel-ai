@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import type { CostEstimate } from "@contract/client";
 import { useApi } from "@/api/client";
@@ -39,12 +39,23 @@ export function QueryScreen() {
   const registry = useModels(projectId);
   const providers = useProviders();
   const history = useQueryRuns(projectId);
-  const preloaded = useNavigationStore((s) => (s.source === "query" ? s.ids : EMPTY));
+  // The Data Manager selection is consumed once, on entry: it is snapshotted here and dropped from
+  // the store below, so a later visit cannot silently inherit a stale selection.
+  const [preloaded] = useState<string[]>(() => {
+    const nav = useNavigationStore.getState();
+    return nav.source === "query" ? nav.ids : EMPTY;
+  });
   const [form, setForm] = useState<QueryForm>(() => ({
     ...DEFAULT_QUERY_FORM,
     mode: preloaded.length > 0 ? "selection" : DEFAULT_QUERY_FORM.mode,
   }));
   const selection = useImageSelection(projectId, form, preloaded);
+
+  useEffect(() => {
+    if (useNavigationStore.getState().source === "query") {
+      useNavigationStore.getState().setContext([], null);
+    }
+  }, []);
   const [estimate, setEstimate] = useState<{ key: string; value: CostEstimate } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -68,6 +68,14 @@ describe("query form model", () => {
     expect(validateQueryForm({ ...local, conf: "" }, 2, exampleProviders)).toBe(
       "Confidence must be between 0 and 1.",
     );
+    // Disabled tiling fields are not sent to the user as blockers.
+    expect(
+      validateQueryForm(
+        { ...local, tilingEnabled: false, tileSize: "100", overlap: "9" },
+        2,
+        exampleProviders,
+      ),
+    ).toBeNull();
   });
 
   it("maps image modes to list queries", () => {

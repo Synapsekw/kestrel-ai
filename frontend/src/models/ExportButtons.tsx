@@ -23,7 +23,7 @@ export function ExportButtons({ projectId, model, onFinished }: Props) {
   const [jobId, setJobId] = useState<string | null>(null);
   const [busy, setBusy] = useState<ExportFormat | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const job = useTrackedJob(projectId, jobId);
+  const { job } = useTrackedJob(projectId, jobId);
   const exports = Object.entries(model.exports);
   const finished = job?.state === "succeeded";
 

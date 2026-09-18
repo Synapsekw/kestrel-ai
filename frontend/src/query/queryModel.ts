@@ -63,10 +63,14 @@ export function validateQueryForm(f: QueryForm, imageCount: number, providers: P
     if (n === null || n < 1) return "Number of images must be a whole number of at least 1.";
   }
   if (imageCount < 1) return "No images selected.";
-  const tile = whole(f.tileSize);
-  if (tile === null || tile < 256 || tile > 4096) return "Tile size must be a whole number from 256 to 4096.";
-  if (fraction(f.overlap, 0.5) === null) return "Overlap must be between 0 and 0.5.";
-  if (fraction(f.nmsIou, 1) === null) return "NMS IoU must be between 0 and 1.";
+  // The tiling fields are disabled in the form when tiling is off, so they must not block the run.
+  if (f.tilingEnabled) {
+    const tile = whole(f.tileSize);
+    if (tile === null || tile < 256 || tile > 4096)
+      return "Tile size must be a whole number from 256 to 4096.";
+    if (fraction(f.overlap, 0.5) === null) return "Overlap must be between 0 and 0.5.";
+    if (fraction(f.nmsIou, 1) === null) return "NMS IoU must be between 0 and 1.";
+  }
   if (fraction(f.conf, 1) === null) return "Confidence must be between 0 and 1.";
   return null;
 }

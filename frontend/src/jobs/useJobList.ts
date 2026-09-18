@@ -20,16 +20,20 @@ export function useJobList(
   useEffect(() => {
     if (!enabled || !projectId) return;
     let cancelled = false;
+    let failed = false;
     const tick = () => {
       fetchJobs(api, projectId)
         .then((jobs) => {
           if (cancelled) return;
+          failed = false;
           useJobsStore.getState().upsertMany(jobs);
           setStatus({ key, error: null });
         })
         .catch((e: unknown) => {
           if (cancelled) return;
-          pushLog(`list jobs failed: ${messageOf(e, String(e))}`);
+          // Only the first failure of a run of failures is logged; polling must not spam the log.
+          if (!failed) pushLog(`list jobs failed: ${messageOf(e, String(e))}`);
+          failed = true;
           setStatus({ key, error: messageOf(e, "could not load jobs") });
         });
     };
@@ -44,4 +48,26 @@ export function useJobList(
   const reload = useCallback(() => setAttempt((a) => a + 1), []);
   const loaded = status.key === key;
   return { loading: enabled && !loaded, error: loaded ? status.error : null, reload };
+}
+
+/**
+ * One `GET /jobs` when a project opens, so the active-job counter and the training screen's recent
+ * jobs are right after a restart instead of staying empty until the jobs panel is opened.
+ */
+export function useInitialJobs(projectId: string): void {
+  const api = useApi();
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    fetchJobs(api, projectId)
+      .then((jobs) => {
+        if (!cancelled) useJobsStore.getState().upsertMany(jobs);
+      })
+      .catch((e: unknown) => {
+        pushLog(`initial job list failed: ${messageOf(e, String(e))}`);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId]);
 }

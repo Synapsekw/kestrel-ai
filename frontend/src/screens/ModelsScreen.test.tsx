@@ -41,7 +41,7 @@ describe("ModelsScreen", () => {
     expect(row).toHaveTextContent("v1");
     expect(row).toHaveTextContent("71.0%");
     expect(row).toHaveTextContent("44.0%");
-    expect(row).toHaveAttribute("aria-selected", "true");
+    expect(row).toHaveAttribute("aria-current", "true");
     const detail = screen.getByTestId("model-detail");
     expect(detail).toHaveTextContent("yolo11n.pt");
     const classMetrics = screen.getByTestId("class-metrics");

@@ -30,7 +30,7 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const job = useTrackedJob(projectId, jobId);
+  const { job } = useTrackedJob(projectId, jobId);
   const n = imageIds.length;
 
   async function submit(e: FormEvent) {

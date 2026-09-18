@@ -11,7 +11,7 @@ test("opens the jobs panel from the top bar, shows progress and log, cancels and
   const listed = page.waitForRequest(
     (r) => r.method() === "GET" && r.url().includes(`/projects/${P}/jobs?limit=100`),
   );
-  await page.getByRole("button", { name: "0 active jobs" }).click();
+  await page.getByRole("button", { name: /active jobs?$/ }).click();
   await listed;
   const panel = page.getByRole("dialog", { name: "Jobs" });
   await expect(panel).toBeVisible();
@@ -68,7 +68,7 @@ test("a failed job shows its error and no cancel button", async ({ page }) => {
       }),
   );
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "0 active jobs" }).click();
+  await page.getByRole("button", { name: /active jobs?$/ }).click();
   const card = page.getByRole("dialog", { name: "Jobs" }).getByTestId("job-j-failed");
   await expect(card).toContainText("Training: ahmadia-v1-n");
   await expect(card.getByTestId("jobcard-state")).toHaveText("Failed");

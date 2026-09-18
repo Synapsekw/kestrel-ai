@@ -17,10 +17,18 @@ const HEADLINE: Partial<Record<string, string>> = {
 
 /** Live training card: epoch and mAP50 from the `job.progress` message, elapsed from `started_at`, log tail. */
 export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: string }) {
-  const job = useTrackedJob(projectId, jobId);
+  const { job, error } = useTrackedJob(projectId, jobId);
   const active = job ? isActiveJob(job) : true;
   const now = useNow(1000, active);
-  if (!job) return <p className="text-sm text-slate-400">Loading job {jobId.slice(0, 8)}…</p>;
+  if (!job) {
+    return error ? (
+      <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
+        Job {jobId.slice(0, 8)} is not available: {error}
+      </p>
+    ) : (
+      <p className="text-sm text-slate-400">Loading job {jobId.slice(0, 8)}…</p>
+    );
+  }
   const epoch = parseEpochMessage(job.message);
   const elapsed = elapsedSeconds(job, now);
   const headline = HEADLINE[job.state] ?? null;

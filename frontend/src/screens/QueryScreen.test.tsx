@@ -97,6 +97,21 @@ describe("QueryScreen", () => {
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
   });
 
+  it("consumes the carried selection once: the navigation context is cleared", async () => {
+    useNavigationStore.getState().setContext([IMAGE_ID], "query");
+    const { api } = fakeClient(base);
+    renderWithProviders(<QueryScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/query`,
+      path: "/p/:projectId/query",
+    });
+    await waitFor(() => expect(screen.getByLabelText("Images")).toHaveValue("selection"));
+    // The screen keeps its snapshot, but the store no longer carries a query selection.
+    expect(screen.getByTestId("image-count")).toHaveTextContent("1 image selected");
+    expect(useNavigationStore.getState().source).toBeNull();
+    expect(useNavigationStore.getState().ids).toEqual([]);
+  });
+
   it("refuses an invalid form and shows the not-available note on 501", async () => {
     const { api } = fakeClient([
       ...base,

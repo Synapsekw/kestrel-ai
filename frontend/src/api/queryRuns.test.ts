@@ -16,6 +16,7 @@ import {
   fetchQueryRun,
   fetchQueryRuns,
   promoteQueryRun,
+  resumeQueryRun,
 } from "./queryRuns";
 
 describe("query runs api", () => {
@@ -58,6 +59,37 @@ describe("query runs api", () => {
       method: "POST",
       url: `/api/v1/projects/${PROJECT_ID}/query-runs/${RUN_ID}/promote`,
       body: { min_confidence: 0.5 },
+    });
+  });
+
+  it("resumes an interrupted run and surfaces the 409 conflict", async () => {
+    const { api, requests } = fakeClient([
+      {
+        method: "POST",
+        path: /\/resume$/,
+        status: 202,
+        body: { job: { ...runningJob, type: "infer" } },
+      },
+    ]);
+    const job = await resumeQueryRun(api, PROJECT_ID, RUN_ID);
+    expect(job.id).toBe(runningJob.id);
+    expect(requests[0]).toMatchObject({
+      method: "POST",
+      url: `/api/v1/projects/${PROJECT_ID}/query-runs/${RUN_ID}/resume`,
+      body: null,
+    });
+
+    const busy = fakeClient([
+      {
+        method: "POST",
+        path: /\/resume$/,
+        status: 409,
+        body: errorBody("conflict", "the run's job is still running"),
+      },
+    ]);
+    await expect(resumeQueryRun(busy.api, PROJECT_ID, RUN_ID)).rejects.toMatchObject({
+      code: "conflict",
+      status: 409,
     });
   });
 

@@ -156,7 +156,7 @@ export function ProviderCard({ provider, onChanged }: Props) {
           <input
             aria-label={`${name} API key`}
             type="password"
-            autoComplete="off"
+            autoComplete="new-password"
             spellCheck={false}
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}

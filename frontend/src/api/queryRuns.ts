@@ -1,4 +1,12 @@
-import type { ApiClient, CostEstimate, QueryRun, QueryRunCreate, Tiling, components } from "@contract/client";
+import type {
+  ApiClient,
+  CostEstimate,
+  Job,
+  QueryRun,
+  QueryRunCreate,
+  Tiling,
+  components,
+} from "@contract/client";
 import { unwrap } from "./errors";
 import { collectPages } from "./paging";
 
@@ -48,6 +56,19 @@ export function fetchQueryRun(api: ApiClient, projectId: string, runId: string):
   return unwrap(
     api.GET("/api/v1/projects/{projectId}/query-runs/{runId}", { params: { path: { projectId, runId } } }),
   );
+}
+
+/**
+ * Re-submit the run's job: persisted tiles are reused, so an interrupted run continues where it
+ * stopped. 409 `conflict` while the run's job is still queued or running.
+ */
+export async function resumeQueryRun(api: ApiClient, projectId: string, runId: string): Promise<Job> {
+  const r = await unwrap(
+    api.POST("/api/v1/projects/{projectId}/query-runs/{runId}/resume", {
+      params: { path: { projectId, runId } },
+    }),
+  );
+  return r.job;
 }
 
 /** Accept the run's unreviewed boxes at or above `minConfidence` (a state change, not a copy). */

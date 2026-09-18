@@ -28,7 +28,7 @@ export function ModelTable({ models, datasetNames, selectedId, onSelect }: Props
           return (
             <tr
               key={m.id}
-              aria-selected={selected}
+              aria-current={selected ? "true" : undefined}
               onClick={() => onSelect(m.id)}
               className={`cursor-pointer border-b border-slate-800/60 ${selected ? "bg-slate-800" : "hover:bg-slate-800/50"}`}
             >

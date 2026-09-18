@@ -4,6 +4,7 @@ import { useApi } from "@/api/client";
 import { pushLog } from "@/app/diagnostics";
 import { JobsButton } from "@/jobs/JobsButton";
 import { JobsPanel } from "@/jobs/JobsPanel";
+import { useInitialJobs } from "@/jobs/useJobList";
 
 interface NavItem {
   label: string;
@@ -48,6 +49,7 @@ function useProjectName(projectId: string | undefined): string | null {
 export function Shell() {
   const { projectId, imageId } = useParams();
   const projectName = useProjectName(projectId);
+  useInitialJobs(projectId ?? "");
 
   return (
     <div className="flex h-full w-full bg-slate-900 text-slate-100">

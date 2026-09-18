@@ -161,3 +161,46 @@ test("a local-model run over the first N images; a 501 estimate shows the note",
   await expect(page.getByRole("note")).toContainText("Query runs are not available yet");
   await expect(page.getByRole("heading", { name: "Query" })).toBeVisible();
 });
+
+test("an interrupted run offers Resume, which re-submits the run's job", async ({ page }) => {
+  const failedJob = {
+    id: JOB,
+    project_id: P,
+    type: "infer",
+    state: "failed",
+    progress: 0.4,
+    message: "12 / 50 images, 37 boxes",
+    log_path: `runs/${JOB}/job.log`,
+    params: {},
+    result: null,
+    error: "provider timed out",
+    created_at: "2026-09-17T13:00:00Z",
+    started_at: "2026-09-17T13:00:01Z",
+    finished_at: "2026-09-17T13:04:00Z",
+  };
+  const json = (body: unknown) => ({
+    status: 200,
+    contentType: "application/json",
+    headers: { "Access-Control-Allow-Origin": "*" },
+    body: JSON.stringify(body),
+  });
+  await page.route(
+    (url) => url.pathname === `/api/v1/projects/${P}/query-runs/${RUN}`,
+    (route) => route.fulfill(json(runWithMockJob)),
+  );
+  await page.route(
+    (url) => url.pathname === `/api/v1/projects/${P}/jobs/${JOB}`,
+    (route) => route.fulfill(json(failedJob)),
+  );
+
+  await page.goto(`/p/${P}/query?run=${RUN}`);
+  const card = page.getByTestId("run-card");
+  await expect(card.getByTestId("jobcard-state")).toHaveText("Failed");
+  await expect(card.getByRole("alert")).toHaveText("provider timed out");
+  const resumed = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/query-runs/${RUN}/resume`),
+  );
+  await card.getByRole("button", { name: "Resume run" }).click();
+  expect((await resumed).postDataJSON()).toBeNull();
+  await expect(page.getByRole("status").filter({ hasText: "Resumed (job" })).toBeVisible();
+});

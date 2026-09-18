@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Source, Stats } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
@@ -44,7 +44,15 @@ function StatsSummary({ stats }: { stats: Stats }) {
   );
 }
 
-function SourceRow({ projectId, source }: { projectId: string; source: Source }) {
+function SourceRow({
+  projectId,
+  source,
+  onReimported,
+}: {
+  projectId: string;
+  source: Source;
+  onReimported: () => void;
+}) {
   const api = useApi();
   const [stats, setStats] = useState<Stats | null>(null);
   const [busy, setBusy] = useState(false);
@@ -77,6 +85,8 @@ function SourceRow({ projectId, source }: { projectId: string; source: Source })
       useJobsStore.getState().upsert(result.job);
       useJobsStore.getState().setPanelOpen(true);
       setStatus(`Re-import started (job ${result.job.id.slice(0, 8)})`);
+      // The counts change as the job imports new files; re-list so the row is not stale.
+      onReimported();
     } catch (e) {
       pushLog(`re-import ${source.id} failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "could not start the re-import"));
@@ -125,7 +135,9 @@ export function SourcesSection({ projectId }: { projectId: string }) {
     unavailable: false,
     error: null,
   });
-  const key = projectId;
+  const [attempt, setAttempt] = useState(0);
+  const key = `${projectId}|${attempt}`;
+  const reload = useCallback(() => setAttempt((a) => a + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -173,7 +185,7 @@ export function SourcesSection({ projectId }: { projectId: string }) {
       )}
       <ul className="flex flex-col gap-2">
         {state.sources.map((s) => (
-          <SourceRow key={s.id} projectId={projectId} source={s} />
+          <SourceRow key={s.id} projectId={projectId} source={s} onReimported={reload} />
         ))}
       </ul>
     </section>
