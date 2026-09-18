@@ -38,6 +38,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Search
         <input
+          aria-label="Search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search file name"
@@ -47,6 +48,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Source
         <select
+          aria-label="Source"
           value={query.filters.sourceId}
           onChange={(e) => setFilter("sourceId", e.target.value)}
           className={input}
@@ -62,6 +64,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Group
         <input
+          aria-label="Group"
           value={query.filters.groupKey}
           onChange={(e) => setFilter("groupKey", e.target.value)}
           placeholder="flight or tile"
@@ -71,6 +74,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Labeled
         <select
+          aria-label="Labeled"
           value={query.filters.labeled}
           onChange={(e) => setFilter("labeled", e.target.value as TriState)}
           className={input}
@@ -83,6 +87,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Pending review
         <select
+          aria-label="Pending review"
           value={query.filters.pending}
           onChange={(e) => setFilter("pending", e.target.value as TriState)}
           className={input}
@@ -95,6 +100,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Min boxes
         <input
+          aria-label="Min boxes"
           type="number"
           min={0}
           value={query.filters.minBoxes ?? ""}
@@ -105,6 +111,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Captured from
         <input
+          aria-label="Captured from"
           type="date"
           value={query.filters.captureFrom}
           onChange={(e) => setFilter("captureFrom", e.target.value)}
@@ -114,6 +121,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Captured to
         <input
+          aria-label="Captured to"
           type="date"
           value={query.filters.captureTo}
           onChange={(e) => setFilter("captureTo", e.target.value)}
@@ -123,6 +131,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       <label className={label}>
         Sort by
         <select
+          aria-label="Sort by"
           value={query.sort}
           onChange={(e) => onChange({ ...query, sort: e.target.value as SortKey, order: "asc" })}
           className={input}

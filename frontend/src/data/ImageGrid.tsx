@@ -19,10 +19,13 @@ export interface ImageGridProps {
   onKeyDown?: (e: KeyboardEvent<HTMLDivElement>) => void;
 }
 
-/** Mounted with `key={src}` by the grid so a new source starts un-failed without an effect. */
+/**
+ * Mounted with `key={src}` by the grid so a new source starts un-failed without an effect. The
+ * fallback stays neutral because the caption below already shows the file name.
+ */
 function Thumb({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <span className="px-2 text-center text-xs text-slate-400">{alt}</span>;
+  if (failed) return <span className="px-2 text-center text-xs text-slate-500">no thumbnail</span>;
   return (
     <img
       src={src}

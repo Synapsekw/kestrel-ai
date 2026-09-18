@@ -11,7 +11,8 @@ interface Props {
   selectedIds: string[];
   preannotationModelId: string | null;
   onLabel: () => void;
-  onDeleted: () => void;
+  /** The selection is gone after a delete, so the message is handed to the screen to show. */
+  onDeleted: (message: string) => void;
   onClear: () => void;
 }
 
@@ -74,8 +75,9 @@ export function SelectionBar({
     run("delete images", async () => {
       const deleted = await deleteImages(api, projectId, selectedIds);
       useChangesStore.getState().bumpImages();
-      onDeleted();
-      return `${deleted} images deleted`;
+      const message = `${deleted} ${deleted === 1 ? "image" : "images"} deleted`;
+      onDeleted(message);
+      return message;
     });
 
   return (

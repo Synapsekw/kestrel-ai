@@ -40,6 +40,7 @@ export function DataManagerScreen() {
   const items = useMemo(() => applyClientFilters(list.items, query.filters), [list.items, query.filters]);
   const ids = useMemo(() => items.map((i) => i.id), [items]);
   const [selection, setSelection] = useState(EMPTY_SELECTION);
+  const [notice, setNotice] = useState<string | null>(null);
   const [rawFocus, setFocusIndex] = useState(0);
   // Derived, not synced with effects: the focus row is clamped to the list and the selection is
   // pruned to the ids currently listed (React Compiler rule `set-state-in-effect`).
@@ -120,9 +121,17 @@ export function DataManagerScreen() {
           selectedIds={selectedIds}
           preannotationModelId={project?.preannotation_model_id ?? null}
           onLabel={labelSelected}
-          onDeleted={() => setSelection(clearSelection())}
+          onDeleted={(message) => {
+            setSelection(clearSelection());
+            setNotice(message);
+          }}
           onClear={() => setSelection(clearSelection())}
         />
+      )}
+      {notice && selectedIds.length === 0 && (
+        <p role="status" className="text-xs text-emerald-300">
+          {notice}
+        </p>
       )}
       {view === "list" ? (
         <ImageTable

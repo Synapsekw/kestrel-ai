@@ -60,7 +60,7 @@ describe("SelectionBar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete 2 images" }));
-    await waitFor(() => expect(onDeleted).toHaveBeenCalled());
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledWith("2 images deleted"));
     expect(requests[2].body).toEqual({ image_ids: ["a", "b"] });
   });
 
