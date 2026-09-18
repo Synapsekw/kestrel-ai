@@ -36,3 +36,9 @@ def project_dir(tmp_path: Path) -> Path:
     d = tmp_path / "proj"
     d.mkdir()
     return d
+
+
+@pytest.fixture(scope="session")
+def backend_dir() -> Path:
+    """The `backend/` folder: the working directory a worker subprocess needs to resolve `app`."""
+    return Path(__file__).resolve().parents[1]
