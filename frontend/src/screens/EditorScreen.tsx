@@ -3,6 +3,7 @@ import { useParams } from "react-router-dom";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { imageFileUrl, type Project } from "@contract/client";
 import { useBackend } from "@/api/client";
+import { pushLog } from "@/app/diagnostics";
 import { useProject } from "@/api/project";
 import { BoxLayer } from "@/editor/BoxLayer";
 import { ClassSidebar } from "@/editor/ClassSidebar";
@@ -137,7 +138,10 @@ function EditorBody({
     st.setDraft(null);
     if (!anchor || !start || !end || !draft || !st.image) return;
     const rect = dragRect(anchor, start, end, st.view, st.image);
-    if (rect) void actions.drawBox(rect, draft.classId);
+    if (rect)
+      void actions
+        .drawBox(rect, draft.classId)
+        .catch((err: unknown) => pushLog(`draw box failed: ${String(err)}`));
   };
 
   const reviewControls = (
