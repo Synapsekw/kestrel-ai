@@ -11,9 +11,9 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S1 dataset backend | main (merged cdafe95) | - | merged; checkpoint 2 backend half passed | none |
 | 1 | S2 annotation UI | main (merged 9ed2fd4) | - | merged; checkpoint 2 editor half passed | none |
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
-| 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | plan ready (2026-09-18-s4-inference-providers.md); dispatch after checkpoint 2 | checkpoint 2 |
-| 2 | S5 training and inference UI | - | - | plan being written (fable) | checkpoint 2, plan |
-| 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
+| 2 | S4 inference and providers | s4-inference-providers | .worktrees/s4-inference-providers | implementer running (opus) since 2026-09-18 | none |
+| 2 | S5 training and inference UI | s5-training-inference-ui | .worktrees/s5-training-inference-ui | implementer running (opus) since 2026-09-18 | none |
+| 3 | S6 packaging and acceptance | - | - | plan ready (2026-09-18-s6-packaging-acceptance.md) | checkpoint 3 |
 
 Last verified checkpoint: 2 (after Wave 1) on main 9ed2fd4/de07f6a, 2026-09-18.
 
@@ -24,7 +24,9 @@ Last verified checkpoint: 2 (after Wave 1) on main 9ed2fd4/de07f6a, 2026-09-18.
 - S2: `docs/superpowers/plans/2026-09-17-s2-annotation-ui.md`
 - S3: `docs/superpowers/plans/2026-09-17-s3-training-backend.md`
 - S4: `docs/superpowers/plans/2026-09-18-s4-inference-providers.md`
-- S5: `docs/superpowers/plans/2026-09-18-s5-training-inference-ui.md` (in progress)
+- S5: `docs/superpowers/plans/2026-09-18-s5-training-inference-ui.md`
+- S6: `docs/superpowers/plans/2026-09-18-s6-packaging-acceptance.md`
+- Wave 2 ledger: `.superpowers/sdd/wave2/ledger.md`
 - Wave 1 ledger: `.superpowers/sdd/wave1/ledger.md` (git-ignored; copied into docs at wave end)
 
 Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `backend/.venv` in the root checkout
