@@ -4,6 +4,7 @@ import { useProject, useSourceNames } from "@/api/project";
 import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
 import { ImageTable } from "@/data/ImageTable";
+import { SelectionBar } from "@/data/SelectionBar";
 import {
   applyClientFilters,
   DATA_COLUMNS,
@@ -114,10 +115,14 @@ export function DataManagerScreen() {
         </p>
       )}
       {selectedIds.length > 0 && (
-        <div className="text-sm text-slate-300">
-          {/* SelectionBar (Task 9) */}
-          {selectedIds.length} selected
-        </div>
+        <SelectionBar
+          projectId={projectId}
+          selectedIds={selectedIds}
+          preannotationModelId={project?.preannotation_model_id ?? null}
+          onLabel={labelSelected}
+          onDeleted={() => setSelection(clearSelection())}
+          onClear={() => setSelection(clearSelection())}
+        />
       )}
       {view === "list" ? (
         <ImageTable
@@ -155,7 +160,6 @@ export function DataManagerScreen() {
             : "Loading project…"}
         </p>
       )}
-      <button type="button" className="hidden" onClick={labelSelected} aria-hidden="true" />
     </section>
   );
 }
