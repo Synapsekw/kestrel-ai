@@ -671,6 +671,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/query-runs/{runId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Re-submit the run's job. Tiles already persisted for this run are reused, so an interrupted
+         *     run continues where it stopped; boxes the user has already reviewed on this run are kept.
+         */
+        post: operations["resumeQueryRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/query-runs/{runId}/promote": {
         parameters: {
             query?: never;
@@ -3250,6 +3273,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["QueryRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resumeQueryRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description new job queued for the same run */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the run's job is still queued or running (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
