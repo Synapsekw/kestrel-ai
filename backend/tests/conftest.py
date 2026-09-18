@@ -10,6 +10,7 @@ from PIL import Image
 
 from app.config import Settings
 from app.main import create_app
+from app.providers.keys import MemoryKeyStore
 
 TOKEN = "test-token"
 AHMADIA_RAW = Path(r"E:\Dev\Yolo\data\raw\ahmadia")
@@ -34,7 +35,10 @@ def settings(tmp_path: Path) -> Settings:
 
 @pytest.fixture
 def app(settings):
-    return create_app(settings)
+    """Every test app keeps its API keys in memory: no test may touch Credential Manager."""
+    created = create_app(settings)
+    created.state.keys = MemoryKeyStore()
+    return created
 
 
 @pytest.fixture
