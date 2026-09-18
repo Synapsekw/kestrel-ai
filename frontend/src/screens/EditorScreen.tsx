@@ -22,7 +22,7 @@ import { useEditorActions } from "@/editor/useEditorActions";
 import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
 import { useEditorImage } from "@/editor/useEditorImage";
 import { useHistory } from "@/editor/useHistory";
-import { useEditorStore, visibleBoxes } from "@/store/editor";
+import { useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
 
 export function EditorScreen() {
   const { projectId = "", imageId = "" } = useParams();
@@ -65,6 +65,7 @@ function EditorBody({
   const hover = useEditorStore((s) => s.hover);
   const fit = useEditorStore((s) => s.fit);
   const oneToOne = useEditorStore((s) => s.oneToOne);
+  const toggleShowRejected = useEditorStore((s) => s.toggleShowRejected);
   const history = useHistory(imageId);
   const { actions, canUndo, canRedo } = useEditorActions(projectId, history);
   const drawStart = useRef<Point | null>(null);
@@ -74,6 +75,10 @@ function EditorBody({
     for (const b of visible) c[b.class_id] = (c[b.class_id] ?? 0) + 1;
     return c;
   }, [visible]);
+  const proposalIds = useMemo(
+    () => visibleProposalIds({ boxes, order, showRejected }),
+    [boxes, order, showRejected],
+  );
   useEditorHotkeys({ enabled: !loading, classes: project.classes, actions });
 
   // A zustand action, not a React state setter: the compiler rule `set-state-in-effect` does not apply.
@@ -125,6 +130,39 @@ function EditorBody({
     if (isDrawable(rect)) void actions.drawBox(rect, draft.classId);
   };
 
+  const reviewControls = (
+    <>
+      <span className="mx-1 h-4 border-l border-slate-700" />
+      <span className="text-xs text-slate-400" data-testid="proposal-count">
+        {proposalIds.length} {proposalIds.length === 1 ? "proposal" : "proposals"}
+      </span>
+      <button
+        type="button"
+        className="rounded border border-emerald-800 px-2 py-0.5 text-xs text-emerald-200 hover:bg-emerald-900/40 disabled:opacity-40"
+        disabled={proposalIds.length === 0}
+        onClick={() => void actions.acceptAll()}
+      >
+        Accept all (A)
+      </button>
+      <button
+        type="button"
+        className="rounded border border-amber-800 px-2 py-0.5 text-xs text-amber-200 hover:bg-amber-900/40 disabled:opacity-40"
+        disabled={proposalIds.length === 0}
+        onClick={() => void actions.rejectAll()}
+      >
+        Reject all (R)
+      </button>
+      <button
+        type="button"
+        aria-pressed={showRejected}
+        className={`rounded border border-slate-700 px-2 py-0.5 text-xs ${showRejected ? "bg-slate-700 text-white" : "hover:bg-slate-800"}`}
+        onClick={toggleShowRejected}
+      >
+        Show rejected
+      </button>
+    </>
+  );
+
   return (
     <div className="flex h-full min-h-0">
       <aside className="flex w-48 shrink-0 flex-col border-r border-slate-800 bg-slate-950 p-2">
@@ -149,6 +187,7 @@ function EditorBody({
           onOneToOne={oneToOne}
           onUndo={() => void actions.undo()}
           onRedo={() => void actions.redo()}
+          extra={reviewControls}
         />
         {error && (
           <p role="alert" className="border-b border-red-900 bg-red-950 px-3 py-1 text-xs text-red-200">

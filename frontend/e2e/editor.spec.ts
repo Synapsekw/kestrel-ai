@@ -130,3 +130,84 @@ test("a class hotkey with a selected box reclassifies it", async ({ page }) => {
   await page.keyboard.press("3");
   expect((await patched).postDataJSON()).toEqual({ class_id: "c1a2b3c4-0000-4000-8000-000000000003" });
 });
+
+const PROPOSAL = "b0000000-6666-4000-8000-000000000002";
+
+test("A accepts all visible proposals and R rejects them through the review endpoint", async ({ page }) => {
+  await openEditor(page);
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  const accepted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
+  await page.keyboard.press("a");
+  expect((await accepted).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "accept" });
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await expect(page.getByRole("button", { name: "Accept all (A)" })).toBeDisabled();
+});
+
+test("R rejects, Show rejected reveals the row, and the region list accepts one proposal", async ({ page }) => {
+  await openEditor(page);
+  const rejected = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
+  await page.keyboard.press("r");
+  expect((await rejected).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "reject" });
+  await expect(page.getByRole("listitem")).toHaveCount(1);
+  await page.getByRole("button", { name: "Show rejected" }).click();
+  await expect(page.getByRole("listitem")).toHaveCount(2);
+  await expect(page.getByRole("listitem").nth(1)).toContainText("Rejected");
+
+  await openEditor(page);
+  const one = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
+  await page.getByRole("button", { name: "Accept box 2" }).click();
+  expect((await one).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "accept" });
+});
+
+test("pre-annotates on open when no proposal is pending and tolerates 501", async ({ page }) => {
+  await page.route(`**/api/v1/projects/${P}/images/${IMG}/boxes`, (route) =>
+    route.request().method() === "GET"
+      ? route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
+          body: JSON.stringify({
+            items: [
+              {
+                id: "b0000000-6666-4000-8000-000000000001",
+                image_id: IMG,
+                class_id: "c1a2b3c4-0000-4000-8000-000000000001",
+                x: 512,
+                y: 300,
+                w: 140,
+                h: 90,
+                confidence: null,
+                provenance: { kind: "person", model_id: null, provider: null, model_name: null, query_run_id: null },
+                review_state: "accepted",
+                reviewed_at: "2026-09-17T10:45:00Z",
+                created_at: "2026-09-17T10:45:00Z",
+              },
+            ],
+          }),
+        })
+      : route.continue(),
+  );
+  const preannotate = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/preannotate`),
+  );
+  await openEditor(page);
+  await preannotate;
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  await expect(
+    page.getByRole("status").filter({ hasText: "1 proposal from the pre-annotation model" }),
+  ).toBeVisible();
+
+  await page.route(`**/api/v1/projects/${P}/images/${IMG}/preannotate`, (route) =>
+    route.fulfill({
+      status: 501,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        error: { code: "not_implemented", message: "pre-annotation arrives with S4", details: {} },
+      }),
+    }),
+  );
+  await openEditor(page);
+  await expect(page.getByRole("status").filter({ hasText: "Pre-annotation is not available yet" })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
