@@ -6,9 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from app.db.models import Box, Image, Source
+from app.db.models import Box, Dataset, Image, Source
 from app.jobs.schemas import JobOut
-from app.projects.schemas import ImportSettings
+from app.projects.schemas import ClassDef, ImportSettings
 
 ImageSort = Literal[
     "path",
@@ -205,3 +205,80 @@ class BoxReview(BaseModel):
 
 class BoxReviewResult(BaseModel):
     updated: int
+
+
+SplitMethod = Literal["by_group", "by_tile", "random"]
+
+
+class SplitParams(BaseModel):
+    val_fraction: float
+    seed: int
+
+
+class DatasetCreate(BaseModel):
+    name: str = Field(min_length=1, pattern=r"^[A-Za-z0-9._-]+$")
+    split_method: SplitMethod = "by_group"
+    val_fraction: float = Field(default=0.2, ge=0.05, le=0.5)
+    seed: int = 42
+    image_ids: list[str] | None = None
+
+
+class DatasetOut(BaseModel):
+    id: str
+    name: str
+    classes: list[ClassDef]
+    split_method: SplitMethod
+    split_params: SplitParams
+    path: str
+    image_count: int
+    train_count: int
+    val_count: int
+    job_id: str | None
+    created_at: datetime
+
+    @classmethod
+    def from_row(cls, row: Dataset, train_count: int, val_count: int) -> "DatasetOut":
+        return cls(
+            id=row.id,
+            name=row.name,
+            classes=[ClassDef(**c) for c in row.classes or []],
+            split_method=row.split_method,
+            split_params=SplitParams(**row.split_params),
+            path=row.path,
+            image_count=train_count + val_count,
+            train_count=train_count,
+            val_count=val_count,
+            job_id=row.job_id,
+            created_at=row.created_at,
+        )
+
+
+class DatasetWithJob(BaseModel):
+    dataset: DatasetOut
+    job: JobOut
+
+
+class DatasetPage(BaseModel):
+    items: list[DatasetOut]
+    next_cursor: str | None = None
+
+
+class DatasetClassCount(BaseModel):
+    class_id: str
+    class_name: str
+    train: int
+    val: int
+
+
+class DatasetGroupCount(BaseModel):
+    group_key: str
+    split: Literal["train", "val"]
+    image_count: int
+
+
+class DatasetStats(BaseModel):
+    image_count: int
+    train_count: int
+    val_count: int
+    boxes_per_class: list[DatasetClassCount]
+    groups: list[DatasetGroupCount]

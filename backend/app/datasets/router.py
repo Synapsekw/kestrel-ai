@@ -5,9 +5,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
-from sqlalchemy import select, tuple_
+from sqlalchemy import func, select, tuple_
 
-from app.datasets import boxes, images, importer  # noqa: F401 - importer registers the "import" job type
+# importer and materialise register the "import" and "dataset" job types on import.
+from app.datasets import boxes, images, importer, materialise, stats  # noqa: F401
 from app.datasets.grouping import slugify
 from app.datasets.schemas import (
     BoxCreate,
@@ -18,6 +19,11 @@ from app.datasets.schemas import (
     BoxUpdate,
     BulkDelete,
     BulkDeleteResult,
+    DatasetCreate,
+    DatasetOut,
+    DatasetPage,
+    DatasetStats,
+    DatasetWithJob,
     ImageOut,
     ImagePage,
     ImageSort,
@@ -27,13 +33,12 @@ from app.datasets.schemas import (
     SourcePage,
     SourceWithJob,
 )
-from app.db.models import Source
+from app.db.models import Dataset, DatasetImage, Source
 from app.errors import AppError, not_found
 from app.jobs.schemas import JobOut
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.schemas import ImportSettings, Stats
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["datasets"])
 
@@ -43,6 +48,18 @@ def _cursor_datetime(value) -> datetime:
         return datetime.fromisoformat(str(value))
     except ValueError:
         raise AppError("validation_error", "invalid cursor", 422) from None
+
+
+def _dataset_out(handle: ProjectHandle, row: Dataset) -> DatasetOut:
+    with handle.session() as s:
+        counts = dict(
+            s.execute(
+                select(DatasetImage.split, func.count())
+                .where(DatasetImage.dataset_id == row.id)
+                .group_by(DatasetImage.split)
+            ).all()
+        )
+    return DatasetOut.from_row(row, counts.get("train", 0), counts.get("val", 0))
 
 
 def _source(handle: ProjectHandle, source_id: str) -> Source:
@@ -208,12 +225,53 @@ def review_boxes(body: BoxReview, handle: ProjectHandle = Depends(get_project)) 
     return BoxReviewResult(updated=boxes.review_boxes(handle, body.box_ids, body.action))
 
 
-add_stubs(
-    router,
-    [
-        ("GET", "/datasets", "datasets list"),
-        ("POST", "/datasets", "datasets create"),
-        ("GET", "/datasets/{datasetId}", "datasets get"),
-        ("GET", "/datasets/{datasetId}/stats", "datasets stats"),
-    ],
-)
+@router.get("/datasets", response_model=DatasetPage)
+def list_datasets(
+    handle: ProjectHandle = Depends(get_project),
+    limit: int | None = Query(None, ge=1, le=1000),
+    cursor: str | None = None,
+) -> DatasetPage:
+    n = clamp_limit(limit)
+    q = select(Dataset).order_by(Dataset.created_at.desc(), Dataset.id.desc())
+    c = decode_cursor(cursor, "created_at", "id")
+    if c:
+        before = _cursor_datetime(c["created_at"])
+        q = q.where(tuple_(Dataset.created_at, Dataset.id) < (before, str(c["id"])))
+    with handle.session() as s:
+        rows = list(s.execute(q.limit(n + 1)).scalars())
+        for r in rows:
+            s.expunge(r)
+    next_cursor = None
+    if len(rows) > n:
+        rows = rows[:n]
+        next_cursor = encode_cursor(created_at=rows[-1].created_at.isoformat(), id=rows[-1].id)
+    return DatasetPage(items=[_dataset_out(handle, r) for r in rows], next_cursor=next_cursor)
+
+
+@router.post("/datasets", response_model=DatasetWithJob, status_code=202)
+def create_dataset(
+    body: DatasetCreate, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> DatasetWithJob:
+    dataset_id = materialise.freeze(handle, body)
+    job = request.app.state.jobs.submit(handle, "dataset", {"dataset_id": dataset_id})
+    with handle.session() as s:
+        row = s.get(Dataset, dataset_id)
+        row.job_id = job.id
+        s.flush()
+        s.expunge(row)
+    return DatasetWithJob(dataset=_dataset_out(handle, row), job=JobOut.from_row(job, handle.id))
+
+
+@router.get("/datasets/{datasetId}", response_model=DatasetOut)
+def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetOut:  # noqa: N803
+    with handle.session() as s:
+        row = s.get(Dataset, datasetId)
+        if row is None:
+            raise not_found("dataset", datasetId)
+        s.expunge(row)
+    return _dataset_out(handle, row)
+
+
+@router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
+def get_dataset_stats(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetStats:  # noqa: N803
+    return stats.dataset_stats(handle, datasetId)
