@@ -159,7 +159,7 @@ ultralytics 8.4.154, PyInstaller 6.22.3, Tauri CLI 2.11.4.
 | NSIS installer | `pnpm tauri build` | **fails**: `makensis` `Internal compiler error #12345: error mmapping file (2057025505, 33554432) is out of range` |
 | MSI installer | `pnpm tauri build --bundles msi` | **fails**: `light.exe : error LGHT0001 : Catastrophic failure ... at Microsoft.Tools.WindowsInstallerXml.Cab.Interop.NativeMethods.CreateCabFinish` |
 | Installed layout, run from a temp copy without installing | `machinery-app.exe` from the would-be install tree | sidecar spawned, `GET /api/v1/health` 200 with `gpu {available: true, name: NVIDIA GeForce RTX 5070 Ti}`, page served from `http://tauri.localhost/`; closing the window terminated the sidecar |
-| **Inno Setup installer** | `pnpm build:installer` | **1,797.3 MB in 377 s** (ISCC alone 352.3 s) -> `frontend/src-tauri/target/release/bundle/inno/Machinery Detection_0.1.0_x64-setup.exe` |
+| **Inno Setup installer** | `pnpm build:installer` | **1,797.3 MB in 387 s** (ISCC alone 361.8 s), built without a WebView2 bootstrapper -> `frontend/src-tauri/target/release/bundle/inno/Machinery Detection_0.1.0_x64-setup.exe` |
 
 Both failures are the same 2 GB wall, reached from two directions: an NSIS installer addresses its
 payload with 32-bit offsets, and Tauri's WiX template puts everything in one embedded cabinet

@@ -13,7 +13,10 @@
   non-zero on any failure. Sample frames are copied out of the read-only source folder first.
 
 .PARAMETER Keep
-  Leave the temporary work dir behind; it is deleted on the way out by default.
+  Leave the generated work dir behind; it is deleted on the way out by default.
+
+.PARAMETER WorkDir
+  Run in this folder instead of a fresh one under TEMP. A folder given here is never deleted.
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File backend\scripts\smoke_frozen.ps1
@@ -25,13 +28,18 @@ param(
   [string] $Source = "E:\Dev\Yolo\data\raw\ahmadia",
   [int] $Frames = 3,
   [int] $Imgsz = 640,
-  [switch] $Keep,  # leave the work dir (project folder, run artefacts, ONNX) on disk
-  [string] $WorkDir = (Join-Path $env:TEMP ("machinery-smoke-" + [guid]::NewGuid().ToString("N").Substring(0, 8)))
+  [switch] $Keep,  # leave the generated work dir (project folder, run artefacts, ONNX) on disk
+  [string] $WorkDir  # defaults to a fresh folder under $env:TEMP, which is the only one deleted
 )
 
 $ErrorActionPreference = "Stop"
 # $PSScriptRoot is not set yet while parameter defaults are evaluated on PowerShell 5.1.
 if (-not $Dist) { $Dist = Join-Path (Split-Path $PSScriptRoot -Parent) "dist\machinery-backend" }
+# Only a work dir this run generated is ever deleted; one the caller named is left alone.
+$generatedWorkDir = -not $WorkDir
+if ($generatedWorkDir) {
+  $WorkDir = Join-Path $env:TEMP ("machinery-smoke-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+}
 $exe = Join-Path $Dist "machinery-backend.exe"
 if (-not (Test-Path $exe)) { throw "no frozen build at $exe; run backend\scripts\build.ps1 first" }
 if (-not (Test-Path $Weights)) { throw "no weights at $Weights" }
@@ -232,11 +240,15 @@ try {
     & taskkill /T /F /PID $proc.Id 2>&1 | Out-Null
     $proc.WaitForExit(10000) | Out-Null
   }
-  if ($Keep) {
+  if ($Keep -or -not $generatedWorkDir) {
     Write-Host "work dir kept: $WorkDir"
   } else {
     # A run leaves a project folder, training run folders, weights and a 10 MB ONNX behind.
     Remove-Item $WorkDir -Recurse -Force -ErrorAction SilentlyContinue
-    Write-Host "work dir removed: $WorkDir (pass -Keep to inspect it)"
+    if (Test-Path $WorkDir) {
+      Write-Host "work dir could not be removed: $WorkDir"
+    } else {
+      Write-Host "work dir removed: $WorkDir (pass -Keep to inspect it)"
+    }
   }
 }

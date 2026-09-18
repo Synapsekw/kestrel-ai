@@ -42,6 +42,11 @@ if (-not (Test-Path $iscc)) {
 }
 
 $version = (Get-Content (Join-Path $frontend "src-tauri\tauri.conf.json") -Raw | ConvertFrom-Json).version
+# Inno writes the version into VersionInfoVersion, which Windows requires to be numeric: a
+# pre-release version such as 0.2.0-rc1 would otherwise fail deep inside ISCC.
+if ($version -notmatch '^\d+(\.\d+){0,3}$') {
+  throw "the version in src-tauri\tauri.conf.json is '$version'; the installer needs a numeric version such as 0.1.0 (up to four dot-separated numbers)"
+}
 Write-Host "building the installer for version $version"
 
 if (-not $SkipTauriBuild) {
@@ -91,4 +96,5 @@ if ($code -ne 0) { throw "ISCC failed with exit code $code" }
 $setup = Join-Path $output "Machinery Detection_${version}_x64-setup.exe"
 if (-not (Test-Path $setup)) { throw "ISCC reported success but $setup is missing" }
 $elapsed = (Get-Date) - $started
-Write-Host ("installer: {0} ({1:N1} MB) in {2:N0} s" -f $setup, ((Get-Item $setup).Length / 1MB), $elapsed.TotalSeconds)
+$webview2 = if (Test-Path $bootstrapper) { "with the WebView2 bootstrapper" } else { "without a WebView2 bootstrapper" }
+Write-Host ("installer: {0} ({1:N1} MB, {2}) in {3:N0} s" -f $setup, ((Get-Item $setup).Length / 1MB), $webview2, $elapsed.TotalSeconds)

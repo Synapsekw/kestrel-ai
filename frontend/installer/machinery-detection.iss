@@ -34,8 +34,14 @@ PrivilegesRequired=lowest
 DefaultDirName={localappdata}\Programs\Machinery Detection
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
-ArchitecturesAllowed=x64compatible
-ArchitecturesInstallIn64BitMode=x64compatible
+; The install location is fixed because uninstall removes {app} whole: an operator who pointed
+; the install at an existing folder would lose whatever else was in it.
+DisableDirPage=yes
+UsePreviousAppDir=yes
+; x64os, not x64compatible: ARM64 Windows runs x64 code under emulation, where the CUDA sidecar
+; cannot work, so the install would succeed and the app would die on the first torch import.
+ArchitecturesAllowed=x64os
+ArchitecturesInstallIn64BitMode=x64os
 OutputDir={#OutputDir}
 OutputBaseFilename=Machinery Detection_{#AppVersion}_x64-setup
 Compression=lzma2/max

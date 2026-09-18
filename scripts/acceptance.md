@@ -10,6 +10,8 @@ is the source of truth for what "passing" means and is what a person follows whe
 ## Preparation
 
 1. Install the app (`Machinery Detection_0.1.0_x64-setup.exe`, per-user install, no admin needed).
+   It writes `machinery-app.exe`, `machinery-backend.exe` and the sidecar's `_internal/` folder
+   into `%LOCALAPPDATA%\Programs\Machinery Detection`; those three stay together.
 2. Launch it with the WebView2 debugging port so the driver can attach:
 
    ```powershell
@@ -68,14 +70,16 @@ is the source of truth for what "passing" means and is what a person follows whe
 ### 4. Label 30 images and freeze dataset "v1"
 
 - **UI**: for each of 30 images, open the editor, press hotkey `1` (excavator) and drag one box on
-  the canvas. Then Data Manager -> `Labeled` = `yes` -> **List** -> select the 30 rows (click the
-  first, shift-click the last) -> **Add to dataset** -> `Dataset name` = `v1` -> **Create dataset**
-  (split method `by_group`, the dialog's default).
+  the canvas. Then Data Manager -> `Labeled` = `yes` -> **List** -> wait until the filter bar reads
+  the labeled total -> select the 30 rows (click the first, shift-click the last) -> **Add to
+  dataset** -> `Dataset name` = `v1` -> **Create dataset** (split method `by_group`, the dialog's
+  default).
 - **Expect**: `GET /stats` reports `labeled_count` >= 30; the dataset job succeeds; the dataset
   is named `v1` with `split_method` `by_group` and `train_count + val_count` == 30, both above
   zero; on disk `datasets/v1/images/train`, `datasets/v1/images/val`, `datasets/v1/labels/train`
   and `datasets/v1/labels/val` exist, and `datasets/v1/data.yaml` lists `path`, `train`, `val`
-  and all eight class names.
+  and all eight class names; the images frozen into the dataset folder are exactly the 30 labeled
+  ones.
 - **Evidence**: `acceptance-04-dataset.png`, `acceptance-04-data-yaml.txt`
 
 ### 5. Train YOLO11n for 3 epochs
@@ -92,14 +96,16 @@ is the source of truth for what "passing" means and is what a person follows whe
 
 ### 6. Query run over 50 unlabeled images, review and promote
 
-- **UI**: Data Manager -> `Labeled` = `no` -> **List** -> select the first 50 rows (click the first,
-  shift-click the last) -> **Run model**. On the Query screen `Model` = `ahmadia-v1`,
+- **UI**: Data Manager -> `Labeled` = `no` -> **List** -> wait until the filter bar reads the
+  unlabeled total -> select the first 50 rows (click the first, shift-click the last) -> **Run
+  model**. On the Query screen `Model` = `ahmadia-v1`,
   `Confidence` = `0.25` -> **Estimate** -> **Start**. **Review** when it finishes: follow
   **Review results** on the run card, which opens the Review queue narrowed to the run's images
   (that queue is where a person opens each image and accepts or rejects the proposals with A and
   R). Then back on the run card set `Minimum confidence` = `0` and press **Promote**.
-- **Expect**: the inference job succeeds over exactly 50 images and writes at least one box; the
-  Review queue lists the run's images; after promotion `GET /query-runs/{id}` has a non-null
+- **Expect**: the inference job succeeds over exactly the 50 unlabeled images that were selected
+  (`run.image_ids` is that set, not just 50 of anything) and writes at least one box; the Review
+  queue lists the run's images; after promotion `GET /query-runs/{id}` has a non-null
   `promoted_at` and the promoted boxes carry provenance `local_model` with the run's model id.
 - **Evidence**: `acceptance-06-query-run.png`, `acceptance-06-review.png`,
   `acceptance-06-promoted.png`

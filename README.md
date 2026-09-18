@@ -125,6 +125,10 @@ acceptance drivers use.
    `node_modules/innosetup-compiler` - nothing is installed system-wide, and the version comes from
    `tauri.conf.json`. Pass `-SkipTauriBuild` to repackage the release binary that is already built.
 
+   The installer packs the frozen backend from `frontend/src-tauri/binaries/`, not from the Tauri
+   output, and only checks that it is there: re-run step 1 whenever the backend changed, or the
+   installer ships the previous freeze.
+
    Inno Setup rather than Tauri's own bundlers because both of those cap their payload at 2 GB and
    this one is 3.4 GB: NSIS addresses its data with 32-bit offsets
    (`Internal compiler error #12345: error mmapping file ... is out of range`) and the WiX template
@@ -142,8 +146,13 @@ acceptance drivers use.
 - WebView2: the installer runs Microsoft's bootstrapper only when the runtime is missing, and only
   when a copy of `MicrosoftEdgeWebview2Setup.exe` was present at build time (see troubleshooting).
   Windows 11 ships the runtime.
-- The app installs next to the sidecar: `machinery-backend-x86_64-pc-windows-msvc.exe` with its
-  `_internal/` folder beside it. Both must stay together.
+- The app installs next to the sidecar: `machinery-app.exe`, `machinery-backend.exe` and the
+  sidecar's `_internal/` folder, all in the install directory. The names matter: the shell plugin
+  resolves a sidecar as `<folder of the running exe>\machinery-backend.exe`, and the frozen
+  backend loads `_internal/` from beside its own exe. The target triple
+  (`machinery-backend-x86_64-pc-windows-msvc.exe`) is only how the file is named in the build
+  slot, `frontend/src-tauri/binaries/`; the installer renames it on the way in. Do not rename or
+  separate them.
 - Per-user data lives in `%APPDATA%\ai.synapse-solutions.machinery-app`: `logs/`,
   `recent_projects.json`, `settings.json` and `ultralytics/` (the pre-seeded plot font). Uninstall
   removes the program directory and leaves that data alone.

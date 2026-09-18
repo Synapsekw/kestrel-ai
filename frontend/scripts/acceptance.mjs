@@ -13,7 +13,7 @@
 //     --expect-images 60 --expect-flights 0031 --epochs 1 --imgsz 640 --batch 2 \
 //     --preannotate-images 3 --min-proposals 0 --min-query-boxes 0
 import { chromium } from "@playwright/test";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const argv = process.argv.slice(2);
@@ -72,6 +72,13 @@ const ROW_HEIGHT = 36;
 
 const result = { project_id: null, steps: [], skipped: [], failed_step: null, config: cfg };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** The step being worked on, so a throw from anywhere inside it names the right one. */
+let current = "attach";
+const begin = (name) => {
+  current = name;
+  return timer();
+};
 
 function step(name, ok, detail = "", extra = {}) {
   result.steps.push({ name, ok, detail, ...extra });
@@ -263,39 +270,66 @@ const tableRow = (image) =>
  * `scrollHeight` is clamped, so a scroll issued before the rows arrived leaves the window at the
  * top and the row never mounts.
  */
-async function revealRow(image, index, timeoutMs = 60_000) {
+async function clickRow(image, index, options = {}, timeoutMs = 60_000) {
   const locator = tableRow(image);
   const deadline = Date.now() + timeoutMs;
+  let last = null;
   while (Date.now() < deadline) {
     await page.getByTestId("image-table").evaluate((el, top) => {
       el.scrollTop = top;
     }, index * ROW_HEIGHT);
     await sleep(250);
-    if ((await locator.count()) > 0) return locator;
+    if ((await locator.count()) === 0) continue;
+    try {
+      await locator.click({ timeout: 5_000, ...options });
+      return;
+    } catch (e) {
+      last = e; // the row was unmounted again between the check and the click; scroll back
+    }
   }
-  throw new Error(`row ${index} (${image.file_name}) never entered the virtualised window`);
+  throw new Error(
+    `row ${index} (${image.file_name}) never stayed in the virtualised window long enough to click: ${last}`,
+  );
 }
 
 /**
- * Select the first `count` rows of the image table.
+ * Select the first `count` rows of the image table, which must already be showing exactly the
+ * `total` images the caller's filter matches.
  *
  * The table renders only the rows in its viewport plus a small overscan, so ticking 30 or 50
  * checkboxes by label cannot work: rows past the window are not in the DOM at all. This uses the
  * table's own range selection instead - click the first row to set the anchor, shift-click the
  * last one - which needs only those two rows mounted.
+ *
+ * The range is resolved from the ids the table currently holds, so indexing an unfiltered list
+ * would select the wrong images while the `N selected` count still matched. Opening the Data
+ * Manager remounts it at `labeled: all` and it fetches a page before the filter is applied, so
+ * two things are confirmed first: the filter bar reports the filtered total, and the row at the
+ * top of the list is the caller's first image.
  */
-async function selectRows(items, count) {
+async function selectRows(items, count, total) {
   if (items.length < count) throw new Error(`only ${items.length} rows listed, need ${count}`);
-  // The table loads a page at a time; `aria-rowcount` is how many rows it currently holds.
+  await page.getByText(new RegExp(`of ${total} images`)).waitFor({ timeout: 120_000 });
   await page.waitForFunction(
     (n) => Number(document.querySelector('[role="grid"]')?.getAttribute("aria-rowcount")) >= n,
     count,
     { timeout: 120_000 },
   );
-  await (await revealRow(items[0], 0)).click();
-  const last = await revealRow(items[count - 1], count - 1);
-  await last.click({ modifiers: ["Shift"] });
-  await page.getByText(`${count} selected`).waitFor({ timeout: 30_000 });
+  await page.getByTestId("image-table").evaluate((el) => {
+    el.scrollTop = 0;
+  });
+  await page.waitForFunction(
+    (name) => {
+      const rows = document.querySelectorAll('[data-testid="image-table"] [role="row"]');
+      return rows.length > 0 && rows[0].textContent.includes(name);
+    },
+    items[0].file_name,
+    { timeout: 60_000 },
+  );
+
+  await clickRow(items[0], 0);
+  await clickRow(items[count - 1], count - 1, { modifiers: ["Shift"] });
+  await page.getByText(`${count} selected`, { exact: true }).waitFor({ timeout: 30_000 });
 }
 
 async function importWeights(name, path) {
@@ -329,7 +363,7 @@ await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 120_000
 let projectId = cfg.projectId;
 try {
   // -------------------------------------------------------------- 1. project
-  let elapsed = timer();
+  let elapsed = begin("1. create or resume the project");
   if (projectId) {
     await go(`/p/${projectId}/data`);
     step("1. resume on an existing project", true, projectId);
@@ -351,7 +385,7 @@ try {
   result.project_id = projectId;
 
   // --------------------------------------------------------------- 2. import
-  elapsed = timer();
+  elapsed = begin("2. import the source folder");
   let stats = await api("GET", `/projects/${projectId}/stats`);
   if (stats.image_count === 0) {
     await page.getByRole("button", { name: "Import images" }).click();
@@ -381,7 +415,7 @@ try {
   );
 
   // ----------------------------------------------- 3. pre-annotation model
-  elapsed = timer();
+  elapsed = begin("3. pre-annotation model proposes on at least one of the opened images");
   await openScreen("Models", "Models");
   let models = await api("GET", `/projects/${projectId}/models`);
   let preModel = models.items.find((m) => m.name === "yolo11m-coco");
@@ -393,7 +427,18 @@ try {
       (m) => m.name === "yolo11m-coco",
     );
   }
-  const projectAfterModel = await api("GET", `/projects/${projectId}`);
+  // The editor only POSTs /preannotate when the project has a pre-annotation model, so this is
+  // checked before the loop: otherwise the wait inside it would sit there for its full timeout.
+  let projectAfterModel = await api("GET", `/projects/${projectId}`);
+  for (let i = 0; i < 20 && projectAfterModel.preannotation_model_id !== preModel?.id; i++) {
+    await sleep(500);
+    projectAfterModel = await api("GET", `/projects/${projectId}`);
+  }
+  if (projectAfterModel.preannotation_model_id !== preModel?.id) {
+    throw new Error(
+      `the project's pre-annotation model is ${projectAfterModel.preannotation_model_id}, not ${preModel?.id}: "Use as pre-annotation model" did not take`,
+    );
+  }
   const page1 = await api("GET", `/projects/${projectId}/images?limit=${cfg.labelCount}&sort=path`);
   let proposals = 0;
   for (const image of page1.items.slice(0, cfg.preannotateImages)) {
@@ -411,7 +456,7 @@ try {
   );
 
   // ------------------------------------------------ 4. label and cut dataset
-  elapsed = timer();
+  elapsed = begin("4. label images and freeze dataset v1 by group");
   stats = await api("GET", `/projects/${projectId}/stats`);
   if (stats.labeled_count < cfg.labelCount) {
     for (const [i, image] of page1.items.slice(0, cfg.labelCount).entries()) {
@@ -428,7 +473,7 @@ try {
     await page.getByRole("button", { name: "List" }).click();
     await page.getByTestId("image-table").waitFor({ timeout: 60_000 });
     const labeled = await api("GET", `/projects/${projectId}/images?labeled=true&limit=200&sort=path`);
-    await selectRows(labeled.items, cfg.labelCount);
+    await selectRows(labeled.items, cfg.labelCount, labeled.total);
     await page.getByRole("button", { name: "Add to dataset" }).click();
     const dialog = page.getByRole("dialog", { name: "Add to dataset" });
     await dialog.waitFor({ timeout: 15_000 });
@@ -446,6 +491,17 @@ try {
   const yamlText = existsSync(dataYaml) ? readFileSync(dataYaml, "utf8") : "";
   writeFileSync(join(cfg.evidence, "acceptance-04-data-yaml.txt"), yamlText);
   const folders = ["images/train", "images/val", "labels/train", "labels/val"];
+  // Close the loop on the selection: the dataset folder is flat and each file is named
+  // `<site>__<file name>`, so its contents are the ids that were actually frozen.
+  const labeledNow = await api("GET", `/projects/${projectId}/images?labeled=true&limit=200&sort=path`);
+  const intendedFiles = new Set(labeledNow.items.slice(0, cfg.labelCount).map((i) => i.file_name));
+  const frozenFiles = new Set(
+    ["images/train", "images/val"]
+      .flatMap((f) => (existsSync(join(datasetDir, f)) ? readdirSync(join(datasetDir, f)) : []))
+      .map((name) => name.split("__").slice(1).join("__") || name),
+  );
+  const membersMatch =
+    frozenFiles.size === intendedFiles.size && [...intendedFiles].every((f) => frozenFiles.has(f));
   await shot(page, "04-dataset");
   step(
     "4. label images and freeze dataset v1 by group",
@@ -458,13 +514,14 @@ try {
       folders.every((f) => existsSync(join(datasetDir, f))) &&
       /(^|\n)train:/.test(yamlText) &&
       /(^|\n)val:/.test(yamlText) &&
-      CLASS_NAMES.every((name) => yamlText.includes(name)),
-    `labeled ${stats.labeled_count}, train ${dataset.train_count} val ${dataset.val_count}, split ${dataset.split_method}`,
+      CLASS_NAMES.every((name) => yamlText.includes(name)) &&
+      membersMatch,
+    `labeled ${stats.labeled_count}, train ${dataset.train_count} val ${dataset.val_count}, split ${dataset.split_method}, frozen images match the ${intendedFiles.size} labeled ones: ${membersMatch}`,
     { seconds: elapsed(), data_yaml: dataYaml },
   );
 
   // ---------------------------------------------------------------- 5. train
-  elapsed = timer();
+  elapsed = begin("5. train for the requested epochs and register the model");
   await openScreen("Models", "Models");
   models = await api("GET", `/projects/${projectId}/models`);
   let baseModel = models.items.find((m) => m.name === "yolo11n-coco");
@@ -511,18 +568,22 @@ try {
     }
     trained = await api("GET", `/projects/${projectId}/models/${trainJob.result.model_id}`);
   }
-  const epochText = await page
-    .getByTestId("epoch")
-    .innerText()
-    .catch(() => "");
+  // The epoch card is the UI half of the evidence: it only reaches `n / N` because the same
+  // progress events arrived in the page. A resumed run is not on the Train screen, so there is
+  // nothing to read.
+  const epochText =
+    trainJob === null
+      ? ""
+      : (await page.getByTestId("epoch").innerText()).replace(/\s+/g, " ").trim();
   await shot(page, "05-training");
   step(
     "5. train for the requested epochs and register the model",
     trained.kind === "trained" &&
       typeof trained.metrics?.map50 === "number" &&
       typeof trained.metrics?.map50_95 === "number" &&
-      (trainJob === null || progressEvents.length >= cfg.epochs),
-    `model ${trained.name} mAP50 ${trained.metrics?.map50?.toFixed(4)} epoch card "${epochText.replace(/\s+/g, " ")}" job.progress events ${trainJob === null ? "resumed" : progressEvents.length}`,
+      (trainJob === null ||
+        (progressEvents.length >= cfg.epochs && epochText === `${cfg.epochs} / ${cfg.epochs}`)),
+    `model ${trained.name} mAP50 ${trained.metrics?.map50?.toFixed(4)} epoch card "${epochText}" job.progress events ${trainJob === null ? "resumed" : progressEvents.length}`,
     {
       seconds: elapsed(),
       metrics: trained.metrics,
@@ -531,7 +592,7 @@ try {
   );
 
   // ---------------------------------------- 6. query run, review, promote
-  elapsed = timer();
+  elapsed = begin("6. run the trained model over unlabeled images, review and promote");
   await openScreen("Data", "Data Manager");
   await page.getByLabel("Labeled").selectOption("no");
   await page.getByRole("button", { name: "List" }).click();
@@ -540,7 +601,8 @@ try {
     "GET",
     `/projects/${projectId}/images?labeled=false&limit=${cfg.queryImages}&sort=path`,
   );
-  await selectRows(unlabeled.items, cfg.queryImages);
+  const intendedIds = new Set(unlabeled.items.slice(0, cfg.queryImages).map((i) => i.id));
+  await selectRows(unlabeled.items, cfg.queryImages, unlabeled.total);
   await page.getByRole("button", { name: "Run model" }).click();
   await page.getByRole("heading", { name: "Query", exact: true }).waitFor({ timeout: 60_000 });
   await page
@@ -563,11 +625,11 @@ try {
   // Review: open the run's images in the review queue, which is where a person accepts or rejects.
   await page.getByRole("link", { name: "Review results" }).click();
   await page.getByRole("heading", { name: "Review queue" }).waitFor({ timeout: 60_000 });
-  // Data rows only: every one carries a select checkbox, the header row does not.
+  // The queue is virtualised, so its size is `aria-rowcount`, not the number of mounted rows.
   const reviewRows = await page
-    .getByRole("row")
-    .filter({ has: page.getByRole("checkbox") })
-    .count()
+    .getByRole("grid")
+    .getAttribute("aria-rowcount")
+    .then(Number)
     .catch(() => 0);
   await shot(page, "06-review");
   await page.goBack();
@@ -577,17 +639,19 @@ try {
   await sleep(2500);
   run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
   await shot(page, "06-promoted");
+  // Close the loop on the selection: these have to be the unlabelled images the driver picked,
+  // not just fifty of something.
+  const runsIntended =
+    run.image_ids.length === intendedIds.size && run.image_ids.every((id) => intendedIds.has(id));
   step(
     "6. run the trained model over unlabeled images, review and promote",
-    run.image_ids.length === cfg.queryImages &&
-      run.box_count >= cfg.minQueryBoxes &&
-      Boolean(run.promoted_at),
-    `${run.image_ids.length} images, ${run.box_count} boxes (minimum ${cfg.minQueryBoxes}), ${reviewRows} review rows, promoted_at ${run.promoted_at}`,
+    runsIntended && run.box_count >= cfg.minQueryBoxes && Boolean(run.promoted_at),
+    `${run.image_ids.length} images (the intended unlabelled ones: ${runsIntended}), ${run.box_count} boxes (minimum ${cfg.minQueryBoxes}), ${reviewRows} rows in the review queue, promoted_at ${run.promoted_at}`,
     { seconds: elapsed(), box_count: run.box_count },
   );
 
   // ----------------------------------------------- 7. anthropic vision query
-  elapsed = timer();
+  elapsed = begin("7. anthropic vision query with tiling");
   const providers = await api("GET", "/providers");
   const anthropic = providers.items.find((p) => p.name === "anthropic");
   // An operator's stored key is used as it is and never replaced or deleted; only a key this run
@@ -641,7 +705,7 @@ try {
   }
 
   // ----------------------------------------------------------- 8. onnx export
-  elapsed = timer();
+  elapsed = begin("8. export the trained model to ONNX");
   await openScreen("Models", "Models");
   await page.getByRole("button", { name: `Select model ${trained.name}` }).click();
   await page.getByTestId("model-detail").waitFor({ timeout: 60_000 });
@@ -661,7 +725,7 @@ try {
     { seconds: elapsed() },
   );
 } catch (e) {
-  result.failed_step = result.steps.length ? result.steps[result.steps.length - 1].name : "attach";
+  result.failed_step = current;
   result.error = e instanceof Error ? e.message : String(e);
   throw e;
 } finally {
@@ -671,6 +735,6 @@ try {
   const passed = result.steps.filter((s) => s.ok).length;
   console.log(`\nacceptance: ${passed} steps passed, ${result.skipped.length} skipped`);
   for (const s of result.skipped) console.log(`  skipped: ${s}`);
-  if (result.error) console.log(`  failed after: ${result.failed_step}`);
+  if (result.error) console.log(`  failed in: ${result.failed_step}`);
   await browser.close();
 }
