@@ -1,19 +1,38 @@
 import { create } from "zustand";
-import type { AppEvent, Job } from "@contract/client";
+import type { AppEvent, Job, JobState } from "@contract/client";
 
-const ACTIVE: ReadonlySet<Job["state"]> = new Set(["queued", "running"]);
+export const ACTIVE_STATES: ReadonlySet<JobState> = new Set<JobState>(["queued", "running"]);
 
-interface JobsState {
+export function isActiveJob(job: Job): boolean {
+  return ACTIVE_STATES.has(job.state);
+}
+
+export interface JobsState {
   jobs: Record<string, Job>;
+  /** The global jobs slide-over (Shell). */
+  panelOpen: boolean;
   upsert: (job: Job) => void;
-  applyEvent: (ev: AppEvent) => void;
+  upsertMany: (jobs: Job[]) => void;
+  setPanelOpen: (open: boolean) => void;
+  /** `nowIso` stamps `finished_at` on terminal `job.state` events (injected by tests). */
+  applyEvent: (ev: AppEvent, nowIso?: string) => void;
   active: () => Job[];
 }
 
+export const selectActiveCount = (s: JobsState): number => Object.values(s.jobs).filter(isActiveJob).length;
+
 export const useJobsStore = create<JobsState>((set, get) => ({
   jobs: {},
+  panelOpen: false,
   upsert: (job) => set((s) => ({ jobs: { ...s.jobs, [job.id]: job } })),
-  applyEvent: (ev) =>
+  upsertMany: (jobs) =>
+    set((s) => {
+      const next = { ...s.jobs };
+      for (const job of jobs) next[job.id] = job;
+      return { jobs: next };
+    }),
+  setPanelOpen: (open) => set({ panelOpen: open }),
+  applyEvent: (ev, nowIso = new Date().toISOString()) =>
     set((s) => {
       const id = ev.job_id;
       if (!id || !s.jobs[id]) return s;
@@ -28,9 +47,18 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       }
       if (ev.type === "job.state") {
         const patch = (ev.payload ?? {}) as Partial<Job>;
-        return { jobs: { ...s.jobs, [id]: { ...cur, ...patch, progress: ev.progress ?? cur.progress } } };
+        const state = patch.state ?? cur.state;
+        const terminal = !ACTIVE_STATES.has(state);
+        const next: Job = {
+          ...cur,
+          ...patch,
+          state,
+          progress: state === "succeeded" ? 1 : (ev.progress ?? cur.progress),
+          finished_at: cur.finished_at ?? (terminal ? nowIso : null),
+        };
+        return { jobs: { ...s.jobs, [id]: next } };
       }
       return s;
     }),
-  active: () => Object.values(get().jobs).filter((j) => ACTIVE.has(j.state)),
+  active: () => Object.values(get().jobs).filter(isActiveJob),
 }));

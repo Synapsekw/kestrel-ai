@@ -1,0 +1,74 @@
+import { describe, it, expect, vi } from "vitest";
+import { screen, fireEvent } from "@testing-library/react";
+import { exampleDataset, exampleModel, exampleTrainedModel, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
+import { TrainForm } from "./TrainForm";
+
+describe("TrainForm", () => {
+  it("preselects the first dataset and model, suggests a name and submits the request", () => {
+    const { api } = fakeClient([]);
+    const onStart = vi.fn();
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[exampleModel, exampleTrainedModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        busy={false}
+        onStart={onStart}
+      />,
+      { api },
+    );
+    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id);
+    expect(screen.getByLabelText("Base model")).toHaveValue(exampleModel.id);
+    expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
+    expect(screen.getByLabelText("Image size")).toHaveValue(1280);
+    expect(screen.getByLabelText("Automatic batch size")).toBeChecked();
+    expect(screen.getByLabelText("Batch size")).toBeDisabled();
+    expect(screen.getByRole("link", { name: "Create dataset" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/data`,
+    );
+    // "30 images" also appears in the option label, so match the split summary line.
+    expect(screen.getByText(/30 images: 24 train \/ 6 val/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("Augmentation"), { target: { value: "aerial" } });
+    fireEvent.click(screen.getByLabelText("Automatic batch size"));
+    fireEvent.change(screen.getByLabelText("Batch size"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start training" }));
+    expect(onStart).toHaveBeenCalledWith({
+      name: "v1-yolo11m-coco",
+      dataset_id: exampleDataset.id,
+      base_model_id: exampleModel.id,
+      epochs: 3,
+      imgsz: 1280,
+      batch: 8,
+      patience: 50,
+      augmentation: "aerial",
+      device: "0",
+    });
+  });
+
+  it("refuses an invalid form and explains missing datasets", () => {
+    const { api } = fakeClient([]);
+    const onStart = vi.fn();
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[]}
+        models={[exampleModel]}
+        datasetsUnavailable={true}
+        modelsUnavailable={false}
+        busy={false}
+        onStart={onStart}
+      />,
+      { api },
+    );
+    expect(screen.getByRole("note")).toHaveTextContent("Datasets are not available yet");
+    fireEvent.change(screen.getByLabelText("Model name"), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start training" }));
+    expect(onStart).not.toHaveBeenCalled();
+    expect(screen.getByRole("alert")).toHaveTextContent("Choose a dataset.");
+  });
+});

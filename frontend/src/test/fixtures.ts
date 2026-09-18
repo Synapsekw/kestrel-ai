@@ -3,11 +3,18 @@ import {
   type ApiClient,
   type Box,
   type ClassDef,
+  type CostEstimate,
+  type Dataset,
   type Image as ImageRow,
   type ImagePage,
   type Job,
+  type JobLog,
   type Model,
   type Project,
+  type Provider,
+  type QueryRun,
+  type Source,
+  type Stats,
 } from "@contract/client";
 
 export const PROJECT_ID = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -164,6 +171,153 @@ export const exampleJob: Job = {
   finished_at: null,
 };
 
+export const TRAINED_MODEL_ID = "m0000000-2222-4000-8000-000000000002";
+export const DATASET_ID = "d0000000-7777-4000-8000-000000000001";
+export const RUN_ID = "q0000000-8888-4000-8000-000000000001";
+export const JOB_ID = "j0000000-4444-4000-8000-000000000001";
+
+export const exampleTrainedModel: Model = {
+  id: TRAINED_MODEL_ID,
+  name: "ahmadia-v1-n",
+  kind: "trained",
+  weights_path: "models/ahmadia-v1-n.pt",
+  base_weights: "yolo11n.pt",
+  dataset_id: DATASET_ID,
+  hyperparameters: { epochs: 3, imgsz: 1280, augmentation: "aerial" },
+  metrics: {
+    map50: 0.71,
+    map50_95: 0.44,
+    precision: 0.78,
+    recall: 0.66,
+    per_class: [
+      { class_name: "excavator", map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 },
+      { class_name: "dump_truck", map50: 0.62, map50_95: 0.38, precision: 0.74, recall: 0.62 },
+    ],
+  },
+  class_names: ["excavator", "dump_truck"],
+  class_aliases: {},
+  exports: { onnx: "models/ahmadia-v1-n.onnx" },
+  artifacts: {
+    results_csv: "runs/j1/results.csv",
+    confusion_matrix: "runs/j1/confusion_matrix.png",
+    pr_curve: "runs/j1/PR_curve.png",
+  },
+  run_id: "j0000000-4444-4000-8000-000000000009",
+  created_at: "2026-09-17T15:00:00Z",
+};
+
+export const exampleDataset: Dataset = {
+  id: DATASET_ID,
+  name: "v1",
+  classes: [exampleClasses[0]],
+  split_method: "by_group",
+  split_params: { val_fraction: 0.2, seed: 42 },
+  path: "datasets/v1",
+  image_count: 30,
+  train_count: 24,
+  val_count: 6,
+  job_id: "j0000000-4444-4000-8000-000000000002",
+  created_at: "2026-09-17T12:00:00Z",
+};
+
+export const exampleProviders: Provider[] = [
+  { name: "openai", has_key: false, model_name: "gpt-5", requests_per_minute: 30, cost_per_request: 0.02 },
+  {
+    name: "anthropic",
+    has_key: true,
+    model_name: "claude-opus-5",
+    requests_per_minute: 30,
+    cost_per_request: 0.02,
+  },
+];
+
+export const exampleQueryRun: QueryRun = {
+  id: RUN_ID,
+  kind: "cloud_provider",
+  model_id: null,
+  provider: "anthropic",
+  model_name: "claude-opus-5",
+  query: "dump trucks",
+  image_ids: [IMAGE_ID, IMAGE_ID_2],
+  tiling: { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 },
+  conf: 0.25,
+  job_id: "j0000000-4444-4000-8000-000000000003",
+  box_count: 7,
+  promoted_at: null,
+  created_at: "2026-09-17T13:00:00Z",
+};
+
+export const exampleEstimate: CostEstimate = {
+  images: 5,
+  tiles: 40,
+  requests: 40,
+  cost_per_request: 0.02,
+  estimated_cost: 0.8,
+};
+
+export const exampleJobLog: JobLog = {
+  lines: ["2026-09-17 10:05:01 INFO job started", "2026-09-17 10:05:09 INFO 50 / 3299 images"],
+  path: "runs/j0000000-4444-4000-8000-000000000001/job.log",
+};
+
+/** The mock's example job: what every job endpoint and every job-returning POST answers. */
+export const runningJob: Job = {
+  id: JOB_ID,
+  project_id: PROJECT_ID,
+  type: "import",
+  state: "running",
+  progress: 0.42,
+  message: "1386 / 3299 images",
+  log_path: "runs/j0000000-4444-4000-8000-000000000001/job.log",
+  params: { source_id: SOURCE_ID },
+  result: null,
+  error: null,
+  created_at: "2026-09-17T10:05:00Z",
+  started_at: "2026-09-17T10:05:01Z",
+  finished_at: null,
+};
+
+/** Ultralytics `results.csv` shape (8.4); older versions pad the header cells with spaces. */
+export const RESULTS_CSV = [
+  "epoch,time,train/box_loss,train/cls_loss,train/dfl_loss,metrics/precision(B),metrics/recall(B),metrics/mAP50(B),metrics/mAP50-95(B),val/box_loss,val/cls_loss,val/dfl_loss,lr/pg0,lr/pg1,lr/pg2",
+  "1,12.3,1.9,2.4,1.5,0.31,0.22,0.18,0.09,1.8,2.1,1.4,0.001,0.001,0.001",
+  "2,24.1,1.6,1.9,1.4,0.52,0.41,0.45,0.24,1.5,1.7,1.3,0.001,0.001,0.001",
+  "3,36.0,1.4,1.6,1.3,0.78,0.66,0.71,0.44,1.3,1.4,1.2,0.001,0.001,0.001",
+].join("\n");
+
+export const exampleSource: Source = {
+  id: SOURCE_ID,
+  folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+  site: "ahmadia",
+  settings: exampleProject.import_defaults,
+  image_count: 3299,
+  duplicate_count: 0,
+  job_id: JOB_ID,
+  imported_at: "2026-09-17T10:30:00Z",
+  created_at: "2026-09-17T10:05:00Z",
+};
+
+export const exampleStats: Stats = {
+  image_count: 3299,
+  labeled_count: 30,
+  unlabeled_count: 3269,
+  box_count: 112,
+  pending_review_count: 41,
+  duplicate_count: 0,
+  boxes_per_class: [
+    { class_id: CLASS_ID(1), class_name: "excavator", count: 40 },
+    { class_id: CLASS_ID(4), class_name: "dump_truck", count: 72 },
+  ],
+  sources: [{ source_id: SOURCE_ID, site: "ahmadia", image_count: 3299 }],
+  groups: [
+    { group_key: "0031", image_count: 697 },
+    { group_key: "0033", image_count: 622 },
+  ],
+  resolution_histogram: [{ width: 4000, height: 2667, count: 3299 }],
+  capture_time_range: { min: "2019-04-15T06:35:36Z", max: "2019-04-15T09:12:01Z" },
+  gps_bounds: { min_lat: 29.4901, min_lon: 47.7602, max_lat: 29.4988, max_lon: 47.7701 },
+};
+
 export function errorBody(code: string, message: string, details: Record<string, unknown> = {}) {
   return { error: { code, message, details } };
 }
@@ -183,6 +337,8 @@ export interface FakeRoute {
   path: RegExp;
   status?: number;
   body?: FakeBody | ((req: RecordedRequest) => FakeBody);
+  /** Send `body` verbatim as `text/csv` instead of JSON (artifact downloads). */
+  raw?: boolean;
 }
 
 /** A `fetch` that answers from `routes` (first match wins) and records every request. */
@@ -211,6 +367,9 @@ export function fakeFetch(routes: FakeRoute[]): { fetch: typeof fetch; requests:
     const status = route.status ?? 200;
     const payload =
       typeof route.body === "function" ? (route.body as (r: RecordedRequest) => unknown)(rec) : route.body;
+    if (route.raw) {
+      return new Response(String(payload), { status, headers: { "Content-Type": "text/csv" } });
+    }
     if (status === 204 || payload === undefined) return new Response(null, { status });
     return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
