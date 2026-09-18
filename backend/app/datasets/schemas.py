@@ -200,7 +200,7 @@ class BoxUpdate(BaseModel):
 
 class BoxReview(BaseModel):
     box_ids: list[str] = Field(min_length=1)
-    action: Literal["accept", "reject"]
+    action: Literal["accept", "reject", "unreview"]
 
 
 class BoxReviewResult(BaseModel):

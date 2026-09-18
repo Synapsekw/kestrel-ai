@@ -1,6 +1,8 @@
 import pytest
 from PIL import Image as PILImage
 
+from app.db.models import Box
+
 
 def _stats(client, pid, source_id=None):
     base = f"/api/v1/projects/{pid}"
@@ -44,30 +46,41 @@ def two_sources(client, project, import_source, tmp_path, make_jpeg):
     return {"pid": pid, "first": first, "second": second, "classes": project["classes"]}
 
 
+def _proposal(client, pid, image_id, class_id, review_state="unreviewed"):
+    """A model proposal, inserted straight through the model (S4 owns the API for these)."""
+    handle = client.app.state.projects.get(pid)
+    with handle.session() as s:
+        s.add(
+            Box(
+                image_id=image_id,
+                class_id=class_id,
+                x=1,
+                y=1,
+                w=10,
+                h=10,
+                confidence=0.6,
+                provenance_kind="local_model",
+                review_state=review_state,
+            )
+        )
+
+
 def test_box_counts_and_classes(client, two_sources):
     pid = two_sources["pid"]
     classes = two_sources["classes"]
     images = client.get(f"/api/v1/projects/{pid}/images").json()["items"]
-    client.post(
-        f"/api/v1/projects/{pid}/images/{images[0]['id']}/boxes",
-        json={"class_id": classes[0]["id"], "x": 1, "y": 1, "w": 10, "h": 10},
-    )
-    client.post(
-        f"/api/v1/projects/{pid}/images/{images[0]['id']}/boxes",
-        json={"class_id": classes[3]["id"], "x": 20, "y": 1, "w": 10, "h": 10},
-    )
-    proposal = client.post(
-        f"/api/v1/projects/{pid}/images/{images[1]['id']}/boxes",
-        json={"class_id": classes[0]["id"], "x": 1, "y": 1, "w": 10, "h": 10},
-    ).json()
-    client.post(
-        f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [proposal["id"]], "action": "reject"}
-    )
+    for class_id in (classes[0]["id"], classes[3]["id"]):
+        client.post(
+            f"/api/v1/projects/{pid}/images/{images[0]['id']}/boxes",
+            json={"class_id": class_id, "x": 1, "y": 1, "w": 10, "h": 10},
+        )
+    _proposal(client, pid, images[1]["id"], classes[0]["id"], review_state="rejected")
+    _proposal(client, pid, images[2]["id"], classes[0]["id"])
 
     s = _stats(client, pid)
     assert s["image_count"] == 3 and s["labeled_count"] == 1 and s["unlabeled_count"] == 2
-    assert s["box_count"] == 2  # the rejected box is not ground truth
-    assert s["pending_review_count"] == 0
+    assert s["box_count"] == 2  # the rejected proposal is not ground truth
+    assert s["pending_review_count"] == 1
     per_class = {c["class_name"]: c["count"] for c in s["boxes_per_class"]}
     assert per_class["excavator"] == 1 and per_class["dump_truck"] == 1 and per_class["crane"] == 0
     assert len(s["sources"]) == 2 and len(s["groups"]) == 3

@@ -101,20 +101,26 @@ def delete_box(handle: ProjectHandle, box_id: str) -> None:
 
 
 def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
-    """Accept or reject in bulk. Unknown ids are ignored; the count is the boxes that changed state.
+    """Accept, reject or unreview proposals in bulk; the count is the boxes that changed state.
 
-    Accepting an already edited box leaves it `edited`: it is ground truth either way, and the
-    state records that a person changed its geometry.
+    Unknown ids and person-drawn boxes are ignored: only a model proposal has a decision to make
+    or undo. Accepting an already edited box leaves it `edited` — it is ground truth either way,
+    and the state records that a person changed its geometry.
     """
-    accept = action == "accept"
-    target = "accepted" if accept else "rejected"
     now = datetime.now(UTC)
     changed = 0
     with handle.session() as s:
         for row in s.execute(select(Box).where(Box.id.in_(box_ids))).scalars():
-            if row.review_state == target or (accept and row.review_state in GROUND_TRUTH):
+            if row.provenance_kind == "person":
                 continue
-            row.review_state = target
-            row.reviewed_at = now
+            if action == "unreview":
+                if row.review_state == "unreviewed":
+                    continue
+                row.review_state, row.reviewed_at = "unreviewed", None
+            else:
+                target = "accepted" if action == "accept" else "rejected"
+                if row.review_state == target or (action == "accept" and row.review_state in GROUND_TRUTH):
+                    continue
+                row.review_state, row.reviewed_at = target, now
             changed += 1
     return changed

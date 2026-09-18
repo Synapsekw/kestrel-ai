@@ -170,3 +170,31 @@ def test_accepting_an_edited_box_keeps_it_edited(client, labelled):
     client.post(f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [box_id], "action": "reject"})
     boxes = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"]
     assert boxes[0]["review_state"] == "rejected"
+
+
+def test_unreview_returns_a_proposal_to_the_queue(client, labelled):
+    pid = labelled["pid"]
+    box_id = _proposal(client, labelled)
+    client.patch(f"/api/v1/projects/{pid}/boxes/{box_id}", json={"x": 9})  # -> edited
+    r = client.post(f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [box_id], "action": "unreview"})
+    assert r.status_code == 200 and r.json() == {"updated": 1}
+    box = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"][0]
+    assert box["review_state"] == "unreviewed" and box["reviewed_at"] is None
+    assert box["x"] == 9  # the edit itself is kept, only the decision is undone
+    # undoing again changes nothing
+    again = client.post(
+        f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [box_id], "action": "unreview"}
+    )
+    assert again.json() == {"updated": 0}
+
+
+def test_review_ignores_person_drawn_boxes(client, labelled):
+    pid = labelled["pid"]
+    box = _create(client, labelled).json()
+    for action in ("reject", "unreview", "accept"):
+        r = client.post(
+            f"/api/v1/projects/{pid}/boxes/review", json={"box_ids": [box["id"]], "action": action}
+        )
+        assert r.json() == {"updated": 0}, action
+    still = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"][0]
+    assert still["review_state"] == "accepted" and still["reviewed_at"]
