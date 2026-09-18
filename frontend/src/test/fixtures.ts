@@ -302,6 +302,8 @@ export interface FakeRoute {
   path: RegExp;
   status?: number;
   body?: FakeBody | ((req: RecordedRequest) => FakeBody);
+  /** Send `body` verbatim as `text/csv` instead of JSON (artifact downloads). */
+  raw?: boolean;
 }
 
 /** A `fetch` that answers from `routes` (first match wins) and records every request. */
@@ -330,6 +332,9 @@ export function fakeFetch(routes: FakeRoute[]): { fetch: typeof fetch; requests:
     const status = route.status ?? 200;
     const payload =
       typeof route.body === "function" ? (route.body as (r: RecordedRequest) => unknown)(rec) : route.body;
+    if (route.raw) {
+      return new Response(String(payload), { status, headers: { "Content-Type": "text/csv" } });
+    }
     if (status === 204 || payload === undefined) return new Response(null, { status });
     return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
   }) as typeof fetch;
