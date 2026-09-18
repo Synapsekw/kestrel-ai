@@ -134,7 +134,7 @@ def get_source(sourceId: str, handle: ProjectHandle = Depends(get_project)) -> S
 @router.get("/sources/{sourceId}/stats", response_model=Stats)
 def source_stats(sourceId: str, handle: ProjectHandle = Depends(get_project)) -> Stats:  # noqa: N803
     _source(handle, sourceId)
-    return Stats()
+    return stats.compute_stats(handle, source_id=sourceId)
 
 
 @router.get("/images", response_model=ImagePage)

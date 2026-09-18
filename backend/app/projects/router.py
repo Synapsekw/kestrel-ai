@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 
+from app.datasets.stats import compute_stats
 from app.projects.schemas import (
     ClassDefInput,
     ProjectCreate,
@@ -88,4 +89,4 @@ def update_classes(body: list[ClassDefInput], handle: ProjectHandle = Depends(ge
 
 @router.get("/{projectId}/stats", response_model=Stats)
 def project_stats(handle: ProjectHandle = Depends(get_project)) -> Stats:
-    return Stats()
+    return compute_stats(handle, source_id=None)
