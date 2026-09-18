@@ -821,7 +821,11 @@ export interface components {
          *       "status": "ok",
          *       "version": "0.1.0",
          *       "pid": 12345,
-         *       "started_at": "2026-09-17T10:00:00Z"
+         *       "started_at": "2026-09-17T10:00:00Z",
+         *       "gpu": {
+         *         "available": true,
+         *         "name": "NVIDIA GeForce RTX 5070 Ti"
+         *       }
          *     }
          */
         Health: {
@@ -831,6 +835,11 @@ export interface components {
             pid: number;
             /** Format: date-time */
             started_at: string;
+            /** @description CUDA availability, probed once in a background thread after the first health request (absent or null until the probe finishes so health stays fast; spec 10 smoke test). */
+            gpu?: {
+                available: boolean;
+                name: string | null;
+            } | null;
         };
         /**
          * @example {

@@ -1032,11 +1032,22 @@ components:
         version: { type: string }
         pid: { type: integer }
         started_at: { type: string, format: date-time }
+        gpu:
+          type: object
+          nullable: true
+          description: >-
+            CUDA availability, probed once in a background thread after the first health request
+            (absent or null until the probe finishes so health stays fast; spec 10 smoke test).
+          required: [available, name]
+          properties:
+            available: { type: boolean }
+            name: { type: string, nullable: true }
       example:
         status: ok
         version: 0.1.0
         pid: 12345
         started_at: "2026-09-17T10:00:00Z"
+        gpu: { available: true, name: "NVIDIA GeForce RTX 5070 Ti" }
 
     ClassDefInput:
       type: object
