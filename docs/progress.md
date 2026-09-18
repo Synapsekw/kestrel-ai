@@ -8,7 +8,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | Wave | Sub-project | Branch | Worktree | State | Blockers |
 |---|---|---|---|---|---|
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
-| 1 | S1 dataset backend | s1-dataset-backend | .worktrees/s1-dataset-backend | implementer running (opus) since 2026-09-18 | none |
+| 1 | S1 dataset backend | main (merged cdafe95) | - | merged; checkpoint 2 backend half passed | none |
 | 1 | S2 annotation UI | s2-annotation-ui | .worktrees/s2-annotation-ui | implementer running (fable) since 2026-09-18 | none |
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | - | - | not started | wave 1 checkpoint |
@@ -62,6 +62,21 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
 - 2026-09-17: rustup 1.29.1 via `winget install Rustlang.Rustup`; toolchain stable-x86_64-pc-windows-msvc (rustc 1.98.1, cargo 1.98.1). MSVC 14.29 and Windows SDK 10.0.19041 were already present. Playwright downloaded Chromium into the user profile (not a system install).
 
 ## Checkpoints
+
+### Checkpoint 2 (after Wave 1), backend half
+
+Result: PASS on `main` cdafe95 (2026-09-18) through the real API (`backend/scripts/checkpoint2_backend.py`
+against a dev backend on 8765). Evidence: `docs/evidence/checkpoint2/checkpoint2-backend.json`.
+
+| Step | Evidence |
+|---|---|
+| Import 20 ahmadia frames (copied from `data/raw/ahmadia`): imported 20, duplicates 0, failed 0, one group `0031` | `import` step |
+| Label 10 images via the boxes API: labeled_count 10, box_count 20 | `label` step |
+| Dataset `v1` by_group -> 8 train / 2 val, `data.yaml` with absolute path and the eight names in order | `dataset` step |
+| Import yolo11n (80 COCO class names), train 1 epoch imgsz 640 on the GPU: 21 s, progress event "epoch 1/1 mAP50 0.000", metrics + results_csv/confusion_matrix/pr_curve artifacts registered | `train` step |
+| Export ONNX: 10.6 MB file under `models/` | `export onnx` step |
+
+Pending for the full checkpoint: "open the editor against the real backend" (S2).
 
 ### Checkpoint 1 (after Wave 0)
 
@@ -117,3 +132,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
   frontend+tauri shell implemented by a sub-agent and reviewed (needs fixes, round 1 running); backend review running.
 - 2026-09-18: Wave 1 started. S1 and S3 implementers dispatched in worktrees; S2 plan being written (first attempt stalled, retried).
 - 2026-09-18: S3 reviewed (fable), fixed, re-reviewed (opus), merged to main 1224343; 168 backend tests, GPU training + ONNX export verified on main.
+- 2026-09-18: S1 reviewed, fixed, re-reviewed, merged cdafe95 (250 backend tests). Checkpoint 2 backend half passed. Shared venv incident recovered (see wave 1 ledger).

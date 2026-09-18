@@ -1,0 +1,170 @@
+{
+  "steps": [
+    {
+      "name": "create project",
+      "at": 1789706312.5291245,
+      "payload": {
+        "id": "943831e3-d96a-432e-bc84-d74c13b94b19",
+        "classes": 8
+      }
+    },
+    {
+      "name": "import",
+      "at": 1789706313.6084151,
+      "payload": {
+        "result": {
+          "source_id": "4272cd24-9138-47b5-b9cd-d3d43b94d6ba",
+          "imported": 20,
+          "duplicates": 0,
+          "failed": 0,
+          "skipped": 0
+        },
+        "image_count": 20,
+        "groups": [
+          {
+            "group_key": "0031",
+            "image_count": 20
+          }
+        ]
+      }
+    },
+    {
+      "name": "label",
+      "at": 1789706313.6821706,
+      "payload": {
+        "labeled_count": 10,
+        "box_count": 20
+      }
+    },
+    {
+      "name": "dataset",
+      "at": 1789706314.2080476,
+      "payload": {
+        "train": 8,
+        "val": 2,
+        "data_yaml": "path: 'C:\\Users\\D\\AppData\\Local\\Temp\\cp2-4207949e\\datasets\\v1'\ntrain: images/train\nval: images/val\nnames:\n  0: 'excavator'\n  1: 'wheel_loader'\n  2: 'bulldozer'\n  3: 'dump_truck'\n  4: 'crane'\n  5: 'concrete_mixer'\n  6: 'roller'\n  7: 'backhoe'\n",
+        "stats": {
+          "image_count": 10,
+          "train_count": 8,
+          "val_count": 2,
+          "boxes_per_class": [
+            {
+              "class_id": "8a222502-d4cf-437c-9f18-5f1af6e3a928",
+              "class_name": "excavator",
+              "train": 8,
+              "val": 2
+            },
+            {
+              "class_id": "4f09b46c-d5fc-4477-908d-388906a75514",
+              "class_name": "wheel_loader",
+              "train": 0,
+              "val": 0
+            },
+            {
+              "class_id": "41c055d8-3092-4eee-ba95-3e2b2b830467",
+              "class_name": "bulldozer",
+              "train": 0,
+              "val": 0
+            },
+            {
+              "class_id": "276b7609-ea48-47ab-b2ee-86efbdd53ed9",
+              "class_name": "dump_truck",
+              "train": 8,
+              "val": 2
+            },
+            {
+              "class_id": "4102f24b-a987-45dd-a6d1-3a298cbe660d",
+              "class_name": "crane",
+              "train": 0,
+              "val": 0
+            },
+            {
+              "class_id": "64719ca8-24d9-4e1b-8acb-f6bc5815e905",
+              "class_name": "concrete_mixer",
+              "train": 0,
+              "val": 0
+            },
+            {
+              "class_id": "218f7b6c-9f31-4ec9-b80d-6216cae0358a",
+              "class_name": "roller",
+              "train": 0,
+              "val": 0
+            },
+            {
+              "class_id": "6243eb40-aa5d-4e8b-8c26-5738a9789e5b",
+              "class_name": "backhoe",
+              "train": 0,
+              "val": 0
+            }
+          ],
+          "groups": [
+            {
+              "group_key": "0031",
+              "split": "train",
+              "image_count": 8
+            },
+            {
+              "group_key": "0031",
+              "split": "val",
+              "image_count": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "import model",
+      "at": 1789706315.5255194,
+      "payload": {
+        "id": "b872b9e3-1324-427b-9da4-62b35b9414c2",
+        "class_names": 80
+      }
+    },
+    {
+      "name": "train",
+      "at": 1789706336.6941788,
+      "payload": {
+        "seconds": 21.2,
+        "metrics": {
+          "map50": 0.0,
+          "map50_95": 0.0,
+          "precision": 0.0,
+          "recall": 0.0,
+          "per_class": [
+            {
+              "class_name": "excavator",
+              "map50": 0.0,
+              "map50_95": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            },
+            {
+              "class_name": "dump_truck",
+              "map50": 0.0,
+              "map50_95": 0.0,
+              "precision": 0.0,
+              "recall": 0.0
+            }
+          ]
+        },
+        "artifacts": {
+          "results_csv": "runs/65f7e7a7-9ce8-4cac-b97e-cd8ce4ac1ee4/train/results.csv",
+          "confusion_matrix": "runs/65f7e7a7-9ce8-4cac-b97e-cd8ce4ac1ee4/train/confusion_matrix.png",
+          "pr_curve": "runs/65f7e7a7-9ce8-4cac-b97e-cd8ce4ac1ee4/train/BoxPR_curve.png"
+        },
+        "progress_events": 1,
+        "sample_messages": [
+          "epoch 1/1 mAP50 0.000"
+        ]
+      }
+    },
+    {
+      "name": "export onnx",
+      "at": 1789706340.2273612,
+      "payload": {
+        "path": "C:\\Users\\D\\AppData\\Local\\Temp\\cp2-4207949e\\models\\cp2-65f7e7a7.onnx",
+        "bytes": 10607840
+      }
+    }
+  ]
+}
