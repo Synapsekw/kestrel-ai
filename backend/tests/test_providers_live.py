@@ -55,3 +55,31 @@ def test_anthropic_ping_names_a_model():
 
     provider = AnthropicProvider(key_or_skip("ANTHROPIC_API_KEY"), DEFAULTS["anthropic"].model_name)
     assert provider.ping().startswith("claude")
+
+
+def test_openai_answers_a_real_tile(frame):
+    from app.providers.openai_provider import OpenAIProvider
+
+    provider = OpenAIProvider(key_or_skip("OPENAI_API_KEY"), DEFAULTS["openai"].model_name)
+    result = provider.detect_tile(frame, TILE, "vehicles", CLASSES, conf=0.25, log=LOG)
+
+    assert isinstance(result.detections, list)
+    for d in result.detections:
+        assert d.label in CLASSES
+        assert TILE.x <= d.x and d.x + d.w <= TILE.x + TILE.w
+
+
+def test_the_default_openai_model_name_exists():
+    """Spec 15 leaves the OpenAI model name open: check the configured default is still served."""
+    import openai
+
+    client = openai.OpenAI(api_key=key_or_skip("OPENAI_API_KEY"))
+    served = {m.id for m in client.models.list()}
+    assert DEFAULTS["openai"].model_name in served, sorted(n for n in served if n.startswith("gpt"))
+
+
+def test_openai_ping_names_a_model():
+    from app.providers.openai_provider import OpenAIProvider
+
+    provider = OpenAIProvider(key_or_skip("OPENAI_API_KEY"), DEFAULTS["openai"].model_name)
+    assert provider.ping()

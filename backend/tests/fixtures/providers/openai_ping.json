@@ -1,0 +1,19 @@
+{
+  "id": "resp_01PingFixture",
+  "object": "response",
+  "created_at": 1789000003,
+  "model": "gpt-5-2026-01-01",
+  "status": "completed",
+  "parallel_tool_calls": false,
+  "tool_choice": "auto",
+  "tools": [],
+  "output": [
+    {
+      "id": "msg_01PingFixture",
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [{ "type": "output_text", "annotations": [], "text": "OK" }]
+    }
+  ]
+}

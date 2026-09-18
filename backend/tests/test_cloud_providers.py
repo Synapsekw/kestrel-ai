@@ -10,6 +10,7 @@ from pathlib import Path
 
 import anthropic
 import httpx
+import openai
 import pytest
 from PIL import Image as PILImage
 
@@ -175,3 +176,127 @@ def test_anthropic_detect_tiles_the_whole_image(tmp_path):
     dets = provider.detect(path, "dump trucks", CLASSES, TilingSpec(), conf=0.25, log=LOG)
     assert len(client.messages.calls) == 2  # two tiles
     assert {d.label for d in dets} == {"dump_truck", "excavator"}
+
+
+# --------------------------------------------------------------------- openai
+
+
+class FakeResponses:
+    def __init__(self, outcomes):
+        self.outcomes = list(outcomes)
+        self.calls: list[dict] = []
+
+    def create(self, **kwargs):
+        import openai.types.responses as responses
+
+        self.calls.append(kwargs)
+        outcome = self.outcomes[min(len(self.calls), len(self.outcomes)) - 1]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return responses.Response.model_validate(outcome)
+
+
+class FakeOpenAI:
+    def __init__(self, *outcomes):
+        self.responses = FakeResponses(outcomes)
+
+
+def openai_provider(*outcomes):
+    from app.providers.openai_provider import OpenAIProvider
+
+    client = FakeOpenAI(*outcomes)
+    provider = OpenAIProvider(api_key=FAKE_KEY, model_name="gpt-5", client_factory=lambda: client)
+    return provider, client
+
+
+def test_openai_parses_boxes_and_drops_unknown_labels(image):
+    provider, _ = openai_provider(fixture("openai_boxes"))
+    result = provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG, raw_ref="r.json")
+
+    assert [d.label for d in result.detections] == ["dump_truck", "excavator"]
+    assert [(d.x, d.y, d.w, d.h) for d in result.detections] == [
+        pytest.approx((1664.0, 640.0, 128.0, 256.0)),
+        pytest.approx((1152.0, 256.0, 64.0, 64.0)),
+    ]
+    assert result.refusal is None
+
+
+def test_openai_sends_the_documented_request(image):
+    provider, client = openai_provider(fixture("openai_boxes"))
+    provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+
+    (call,) = client.responses.calls
+    assert call["model"] == "gpt-5"
+    assert call["text"] == {
+        "format": {
+            "type": "json_schema",
+            "name": "boxes",
+            "schema": box_list_schema(CLASSES),
+            "strict": True,
+        }
+    }
+    (message,) = call["input"]
+    img, text = message["content"]
+    assert img["type"] == "input_image" and img["detail"] == "high"
+    assert img["image_url"].startswith("data:image/jpeg;base64,")
+    assert FAKE_KEY not in img["image_url"]
+    assert "dump trucks" in text["text"]
+
+
+def test_openai_refusal_is_an_empty_tile_with_the_explanation_logged(image, caplog):
+    provider, _ = openai_provider(fixture("openai_refusal"))
+    with caplog.at_level(logging.WARNING, logger="provider-test"):
+        result = provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+
+    assert result.detections == []
+    assert result.refusal == {
+        "category": "openai_refusal",
+        "explanation": "I'm not able to help with that request.",
+    }
+    assert "refus" in " ".join(r.getMessage() for r in caplog.records)
+
+
+def test_openai_truncated_output_is_a_permanent_error(image):
+    provider, _ = openai_provider(fixture("openai_truncated"))
+    with pytest.raises(ProviderError) as e:
+        provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+    assert e.value.retryable is False
+    assert "truncated" in str(e.value)
+
+
+def test_openai_rate_limit_is_retryable_with_the_retry_after_header(image):
+    response = httpx.Response(
+        429, headers={"retry-after": "3"}, request=httpx.Request("POST", "https://example.invalid/v1")
+    )
+    provider, _ = openai_provider(openai.RateLimitError("slow down", response=response, body=None))
+    with pytest.raises(ProviderError) as e:
+        provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+    assert e.value.retryable is True
+    assert e.value.retry_after == 3
+
+
+def test_openai_server_errors_and_connection_errors_are_retryable(image):
+    for error in (
+        openai.APIStatusError("upstream", response=request_for(502), body=None),
+        openai.APIConnectionError(request=httpx.Request("POST", "https://example.invalid/v1")),
+    ):
+        provider, _ = openai_provider(error)
+        with pytest.raises(ProviderError) as e:
+            provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+        assert e.value.retryable is True, error
+
+
+def test_openai_auth_failure_is_permanent_and_never_shows_the_key(image):
+    error = openai.AuthenticationError("invalid api key", response=request_for(401), body=None)
+    provider, _ = openai_provider(error)
+    with pytest.raises(ProviderError) as e:
+        provider.detect_tile(image, TILE, "dump trucks", CLASSES, conf=0.25, log=LOG)
+    assert e.value.retryable is False
+    assert FAKE_KEY not in str(e.value)
+    assert "401" in str(e.value)
+
+
+def test_openai_ping_returns_the_model_that_answered():
+    provider, client = openai_provider(fixture("openai_ping"))
+    assert provider.ping() == "gpt-5-2026-01-01"
+    assert client.responses.calls[0]["input"] == "Reply with OK"

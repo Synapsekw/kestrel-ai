@@ -1,0 +1,20 @@
+{
+  "id": "resp_01TruncatedFixture",
+  "object": "response",
+  "created_at": 1789000002,
+  "model": "gpt-5",
+  "status": "incomplete",
+  "incomplete_details": { "reason": "max_output_tokens" },
+  "parallel_tool_calls": false,
+  "tool_choice": "auto",
+  "tools": [],
+  "output": [
+    {
+      "id": "msg_01TruncatedFixture",
+      "type": "message",
+      "role": "assistant",
+      "status": "incomplete",
+      "content": [{ "type": "output_text", "annotations": [], "text": "{\"boxes\": [{\"label\": \"dump_tr" }]
+    }
+  ]
+}

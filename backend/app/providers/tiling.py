@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import base64
+import io
+
 from PIL import Image as PILImage
 
 from app.providers.base import Detection, Tile, TileResult, TilingSpec
+
+JPEG_QUALITY = 90
 
 
 def _origins(dim: int, tile: int, stride: int) -> list[int]:
@@ -53,6 +58,20 @@ def to_full_image(det: Detection, tile: Tile) -> Detection:
         confidence=det.confidence,
         raw_ref=det.raw_ref,
     )
+
+
+def encode_tile(image: PILImage.Image, tile: Tile, max_side: int) -> str:
+    """The tile as base64 JPEG for a cloud call, built in memory and never written to disk.
+
+    Coordinates come back normalised to the tile, so downscaling an oversized tile is free of
+    consequence for the geometry and saves upload time.
+    """
+    crop = crop_tile(image, tile)
+    if max(crop.size) > max_side:
+        crop.thumbnail((max_side, max_side))
+    buffer = io.BytesIO()
+    crop.convert("RGB").save(buffer, "JPEG", quality=JPEG_QUALITY)
+    return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 def iou(a: Detection, b: Detection) -> float:

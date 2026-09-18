@@ -6,27 +6,14 @@ puts the API key into a log line, an exception message or a persisted response.
 
 from __future__ import annotations
 
-import base64
-import io
 import logging
 
 from app.providers.base import ProviderError, Tile, TileResult
 from app.providers.schema import box_list_schema, parse_text, prompt_for
-from app.providers.tiling import TiledProvider, crop_tile
+from app.providers.tiling import TiledProvider, encode_tile
 
 MAX_TOKENS = 16000
 PING_MAX_TOKENS = 16
-JPEG_QUALITY = 90
-
-
-def encode_tile(image, tile: Tile, max_side: int) -> str:
-    """The tile as base64 JPEG. Coordinates are normalised, so downscaling is free of consequence."""
-    crop = crop_tile(image, tile)
-    if max(crop.size) > max_side:
-        crop.thumbnail((max_side, max_side))
-    buffer = io.BytesIO()
-    crop.convert("RGB").save(buffer, "JPEG", quality=JPEG_QUALITY)
-    return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
 def _as_provider_error(e: Exception) -> ProviderError:
