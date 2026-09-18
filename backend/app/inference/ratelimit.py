@@ -31,12 +31,13 @@ class TokenBucket:
     def set_rate(self, requests_per_minute: int) -> None:
         """Follow a settings change. Tokens already earned are kept, up to the new capacity."""
         capacity = max(1, int(requests_per_minute))
-        if capacity == self.capacity:
-            return
-        self._refill()
-        self.capacity = capacity
-        self.rate = capacity / SECONDS_PER_MINUTE
-        self.tokens = min(self.tokens, float(capacity))
+        with self._lock:  # `acquire` reads all three of these; do not change them underneath it
+            if capacity == self.capacity:
+                return
+            self._refill()
+            self.capacity = capacity
+            self.rate = capacity / SECONDS_PER_MINUTE
+            self.tokens = min(self.tokens, float(capacity))
 
     def _refill(self) -> None:
         now = self._monotonic()

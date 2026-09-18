@@ -69,9 +69,9 @@ def resume_query_run(
     handle: ProjectHandle = Depends(get_project),
 ) -> JobRef:
     """Run the same query run again. Its persisted tiles are reused, so only the gaps are paid for."""
-    run = service.check_resumable(handle, runId)
-    job = request.app.state.jobs.submit(handle, "infer", {"query_run_id": run.id})
-    service.set_job(handle, run.id, job.id)
+    job = service.resume(
+        handle, runId, lambda run: request.app.state.jobs.submit(handle, "infer", {"query_run_id": run.id})
+    )
     return JobRef(job=JobOut.from_row(job, handle.id))
 
 

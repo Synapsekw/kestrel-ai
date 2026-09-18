@@ -26,7 +26,7 @@ from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.providers.base import Detection, ProviderError, Tile, TileResult, TilingSpec
 from app.providers.factory import get_provider
-from app.providers.tiling import make_tiles, nms_per_class
+from app.providers.tiling import make_tiles, nms_per_class, not_covered_by
 from app.training import registry
 
 RETRY_DELAYS_S = (1, 2, 4, 8, 16)
@@ -84,14 +84,53 @@ def _call_with_retries(
     return None, last
 
 
-def _write_boxes(ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detection]) -> int:
-    """Replace this image's *unreviewed* boxes for the run.
+def _reviewed(s, run: QueryRun, image_id: str, names: dict[str, str]) -> list[Detection]:
+    """This run's already-reviewed boxes on the image, as detections to keep away from."""
+    rows = s.execute(
+        select(Box).where(
+            Box.query_run_id == run.id,
+            Box.image_id == image_id,
+            Box.review_state != "unreviewed",
+        )
+    ).scalars()
+    return [
+        Detection(
+            label=names[r.class_id],
+            x=r.x,
+            y=r.y,
+            w=r.w,
+            h=r.h,
+            confidence=r.confidence or 0.0,
+        )
+        for r in rows
+        if r.class_id in names
+    ]
 
-    Replacing rather than appending keeps a re-run from doubling proposals; leaving reviewed boxes
-    alone keeps a resume from throwing away work the user has already done on this run.
+
+def _write_boxes(
+    ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detection], nms_iou: float
+) -> int:
+    """Replace this image's *unreviewed* boxes for the run, without re-proposing reviewed ones.
+
+    Replacing rather than appending keeps a re-run from doubling proposals, and leaving reviewed
+    boxes alone keeps a resume from throwing away work the user has already done. Those two rules
+    collide on a resume: the detections come from the whole tile cache, so an object the user has
+    already accepted, edited or rejected would come back as a fresh proposal next to their decision.
+    Anything a surviving reviewed box already covers is therefore dropped.
     """
     with ctx.project.session() as s:
         by_name = class_ids_by_name(ctx.project, s)
+        by_id = {v: k for k, v in by_name.items()}
+        keepers = _reviewed(s, run, image_id, by_id)
+        if keepers:
+            before = len(dets)
+            dets = not_covered_by(keepers, dets, nms_iou)
+            ctx.log.info(
+                "image %s: %s of %s detections are already reviewed boxes of this run",
+                image_id,
+                before - len(dets),
+                before,
+            )
         s.execute(
             delete(Box).where(
                 Box.query_run_id == run.id,
@@ -164,16 +203,18 @@ def run_infer(ctx: JobContext) -> dict:
     spec = TilingSpec(**(run.tiling or {}))
     provider = _build_provider(ctx, run, names)
 
-    totals = {"tiles": 0, "boxes": 0, "failed_tiles": 0, "refusals": 0}
+    totals = {"tiles": 0, "boxes": 0, "cached_images": 0, "failed_tiles": 0, "refusals": 0}
     image_ids = list(run.image_ids or [])
     for done, image_id in enumerate(image_ids, start=1):
         dets, all_cached = _run_image(ctx, run, provider, spec, names, image_id, totals)
-        if all_cached:
-            # nothing new came back for this image, so its boxes are already the right ones
-            totals["boxes"] += _count_boxes(ctx, run, image_id)
+        # A complete tile cache only means the boxes are right if they are actually there: tiles are
+        # written per tile and boxes per image, so a killed process can leave the cache full and the
+        # image empty. Rewriting from the cache costs nothing and closes that window.
+        if all_cached and _count_boxes(ctx, run, image_id) > 0:
+            totals["cached_images"] += 1
             ctx.log.info("image %s served entirely from the run's tile cache", image_id)
         else:
-            totals["boxes"] += _write_boxes(ctx, run, image_id, dets)
+            totals["boxes"] += _write_boxes(ctx, run, image_id, dets, spec.nms_iou)
             ctx.publish("boxes.changed", {"image_ids": [image_id]})
         ctx.progress(done / len(image_ids), f"{done} / {len(image_ids)} images, {totals['boxes']} boxes")
     ctx.log.info("run %s finished: %s", run.id, totals)

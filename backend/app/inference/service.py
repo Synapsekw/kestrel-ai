@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import threading
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -24,6 +26,9 @@ from app.training import registry
 
 LOCAL_COST_PER_REQUEST = 0.0
 BUSY_JOB_STATES = ("queued", "running")
+# Checking that a run has no live job and recording the new one is one decision, not two: two
+# resume requests in that gap would otherwise each start a job against the same tile folder.
+_RESUME_LOCK = threading.Lock()
 PREANNOTATE_GPU_TIMEOUT_S = 2.0
 
 
@@ -152,6 +157,15 @@ def check_resumable(handle: ProjectHandle, run_id: str) -> QueryRun:
     return row
 
 
+def resume(handle: ProjectHandle, run_id: str, submit: Callable[[QueryRun], Job]) -> Job:
+    """Submit a new job for an existing run, once. `submit` is the caller's job-runner call."""
+    with _RESUME_LOCK:
+        run = check_resumable(handle, run_id)
+        job = submit(run)
+        set_job(handle, run.id, job.id)
+        return job
+
+
 def box_count(s: Session, run_id: str) -> int:
     return s.execute(select(func.count()).select_from(Box).where(Box.query_run_id == run_id)).scalar_one()
 
@@ -223,9 +237,10 @@ def preannotate(
 ) -> tuple[bool, str, list[Box]]:
     """Run the project's pre-annotation model on one image, synchronously (spec section 7).
 
-    FastAPI runs a sync endpoint in the threadpool, and the provider takes the process-wide GPU
-    lock, so this waits for any training run rather than fighting it for memory. The image is only
-    ever pre-annotated once per model: boxes from that model are the record that it has run.
+    FastAPI runs a sync endpoint in the threadpool, so this blocks one worker and no more. It waits
+    up to `PREANNOTATE_GPU_TIMEOUT_S` for the GPU and then answers 409 rather than queueing behind
+    a training run the editor cannot see. The image is only ever pre-annotated once per model:
+    boxes from that model are the record that it has run.
     """
     with handle.session() as s:
         image = s.get(Image, image_id)

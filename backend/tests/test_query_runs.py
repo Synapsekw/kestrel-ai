@@ -3,6 +3,7 @@
 import json
 import logging
 import threading
+import time
 
 import pytest
 
@@ -251,6 +252,7 @@ def test_the_job_writes_unreviewed_proposals_with_cloud_provenance(
         "images": 2,
         "tiles": 4,
         "boxes": 4,
+        "cached_images": 0,
         "failed_tiles": 0,
         "refusals": 0,
     }
@@ -631,11 +633,13 @@ def test_resume_reuses_the_finished_tiles_and_keeps_reviewed_boxes(
     assert out["job"]["result"]["failed_tiles"] == 2
     assert sorted(provider.calls) == [0, 0, 1, 1]
 
-    # the user accepts one of the proposals before resuming
+    # the user accepts the proposal on the first image before resuming
     with handle.session() as s:
-        keep = s.execute(select(Box).where(Box.query_run_id == run_id)).scalars().first()
+        keep = s.execute(
+            select(Box).where(Box.query_run_id == run_id, Box.image_id == frames[0])
+        ).scalars().one()
         keep.review_state = "accepted"
-        keep_id = keep.id
+        keep_id, kept_geometry = keep.id, (keep.x, keep.y, keep.w, keep.h)
 
     second = use_provider(FakeProvider())
     r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/resume")
@@ -645,9 +649,17 @@ def test_resume_reuses_the_finished_tiles_and_keeps_reviewed_boxes(
     assert job["state"] == "succeeded", job
     assert second.calls == [1, 1]  # only the tiles that had failed
     assert job["result"]["failed_tiles"] == 0
+
     rows = boxes_of(handle)
     kept = next(r for r in rows if r.id == keep_id)  # the accepted box survived the resume
     assert kept.review_state == "accepted"
+    # tile 0 was served from the cache and its detection is the object the user already accepted,
+    # so it must not come back a second time as a fresh proposal
+    first_image = [r for r in rows if r.image_id == frames[0]]
+    assert len(first_image) == 2, [(r.x, r.y, r.review_state) for r in first_image]
+    assert [(r.x, r.y, r.w, r.h) for r in first_image].count(kept_geometry) == 1
+    assert sorted(r.review_state for r in first_image) == ["accepted", "unreviewed"]
+    assert len(rows) == 4  # two per image: nothing was duplicated anywhere
     assert client.get(f"{BASE}/{project_id}/query-runs/{run_id}").json()["job_id"] == job["id"]
 
 
@@ -664,6 +676,8 @@ def test_resume_of_a_finished_run_calls_the_provider_for_nothing(
 
     assert job["state"] == "succeeded"
     assert second.calls == []  # every tile came from the run's own tile folder
+    assert job["result"]["boxes"] == 0  # `boxes` counts what this job inserted
+    assert job["result"]["cached_images"] == 2
     assert sorted((r.id, r.review_state) for r in boxes_of(handle)) == before  # boxes untouched
 
 
@@ -690,3 +704,78 @@ def test_resume_while_the_job_is_still_running_is_a_conflict(
 
 def test_resume_of_an_unknown_run_is_a_404(client, project_id):
     assert client.post(f"{BASE}/{project_id}/query-runs/ghost/resume").status_code == 404
+
+
+def test_a_resume_rewrites_boxes_a_hard_interruption_never_stored(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep
+):
+    """A complete tile cache with no boxes is what a killed process leaves behind.
+
+    Tiles are written per tile and boxes per image, so the gap between the last tile file and the
+    box write is real. A resume that trusted the cache alone would report success and leave the
+    image permanently empty.
+    """
+    from sqlalchemy import delete
+
+    use_provider(FakeProvider())
+    run_id = run_and_wait(client, wait_job, project_id, frames)["run"]["id"]
+    with handle.session() as s:
+        s.execute(delete(Box).where(Box.query_run_id == run_id))
+    assert boxes_of(handle) == []
+
+    second = use_provider(FakeProvider())
+    r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/resume")
+    job = wait_job(project_id, r.json()["job"]["id"])
+
+    assert job["state"] == "succeeded", job
+    assert second.calls == []  # the provider was not asked again: the tile cache was complete
+    assert job["result"]["boxes"] == 4  # the boxes were rebuilt from it
+    assert len(boxes_of(handle)) == 4
+
+
+def test_two_resumes_at_once_start_one_job(
+    client, wait_job, project_id, frames, handle, app, with_key, use_provider, no_sleep
+):
+    """Check-and-set is one step: without it both callers pass the check and submit a job each."""
+    use_provider(FakeProvider())
+    run_id = run_and_wait(client, wait_job, project_id, frames)["run"]["id"]
+    # drop one tile so the resumed job has to call the provider, and make that call block
+    next(iter(sorted((handle.runs_dir / "query-runs" / run_id / "tiles").rglob("*.json")))).unlink()
+
+    release = threading.Event()
+
+    class Blocking(FakeProvider):
+        def detect_tile(self, image, tile, query, classes, *, conf, log, raw_ref=""):
+            release.wait(10)
+            return super().detect_tile(image, tile, query, classes, conf=conf, log=log, raw_ref=raw_ref)
+
+    use_provider(Blocking())
+    real_submit = app.state.jobs.submit
+
+    def slow_submit(*args, **kwargs):
+        time.sleep(0.3)  # widen the window between the check and the write of job_id
+        return real_submit(*args, **kwargs)
+
+    app.state.jobs.submit = slow_submit
+    statuses = []
+    barrier = threading.Barrier(2)
+
+    def resume():
+        barrier.wait(5)
+        statuses.append(client.post(f"{BASE}/{project_id}/query-runs/{run_id}/resume").status_code)
+
+    threads = [threading.Thread(target=resume) for _ in range(2)]
+    try:
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(30)
+    finally:
+        app.state.jobs.submit = real_submit
+        release.set()
+
+    assert sorted(statuses) == [202, 409], statuses
+    infer_jobs = [
+        j for j in client.get(f"{BASE}/{project_id}/jobs").json()["items"] if j["type"] == "infer"
+    ]
+    assert len(infer_jobs) == 2  # the original run and exactly one resume

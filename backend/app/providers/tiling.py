@@ -88,6 +88,21 @@ def iou(a: Detection, b: Detection) -> float:
     return inter / union if union > 0 else 0.0
 
 
+def not_covered_by(
+    keepers: list[Detection], candidates: list[Detection], iou_threshold: float
+) -> list[Detection]:
+    """The candidates no keeper already covers: per-class NMS with the keepers fixed.
+
+    `nms_per_class` picks winners by confidence; this is for the case where the winners are decided
+    in advance, such as boxes a person has already reviewed.
+    """
+    return [
+        c
+        for c in candidates
+        if not any(k.label == c.label and iou(k, c) >= iou_threshold for k in keepers)
+    ]
+
+
 def nms_per_class(dets: list[Detection], iou_threshold: float) -> list[Detection]:
     """Greedy non-maximum suppression, highest confidence first, within each label."""
     kept: list[Detection] = []
