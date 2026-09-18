@@ -13,9 +13,9 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 | 1 | S3 training backend and registry | main (merged 1224343) | - | merged; GPU test passes on main | none |
 | 2 | S4 inference and providers | main (merged 6635f71) | - | merged after 2 fix rounds; JobCancelled relocation follow-up open | none |
 | 2 | S5 training and inference UI | main (merged 04a879f) | - | merged after 2 fix rounds | none |
-| 3 | S6 packaging and acceptance | main (merged from s6-packaging-acceptance at 9f3aa01) | - | merged after 2 fix rounds; checkpoint 4 passed; acceptance run in progress | none |
+| 3 | S6 packaging and acceptance | main (merged from s6-packaging-acceptance at 9f3aa01) | - | merged after 2 fix rounds; checkpoint 4 passed; acceptance run passed (step 7 skipped, no key) | operator key for step 7 |
 
-Last verified checkpoint: 4 (after Wave 3) on main 826a3bf (installed app), 2026-09-18. Acceptance run (spec 13.5) in progress.
+Last verified checkpoint: 4 (after Wave 3) on main 826a3bf (installed app), 2026-09-18. Acceptance run (spec 13.5) passed from the installed app on 9a2e20d (step 7 skipped: no provider key).
 
 ## Plans
 
@@ -26,6 +26,7 @@ Last verified checkpoint: 4 (after Wave 3) on main 826a3bf (installed app), 2026
 - S4: `docs/superpowers/plans/2026-09-18-s4-inference-providers.md`
 - S5: `docs/superpowers/plans/2026-09-18-s5-training-inference-ui.md`
 - Wave 2 ledger (rulings, deferred minors): `docs/superpowers/plans/2026-09-18-wave2-ledger.md`
+- Wave 3 ledger (rulings, deferred minors): `docs/superpowers/plans/2026-09-18-wave3-ledger.md`
 - S6: `docs/superpowers/plans/2026-09-18-s6-packaging-acceptance.md`
 - Wave 2 ledger: `.superpowers/sdd/wave2/ledger.md`
 - Wave 1 ledger: `.superpowers/sdd/wave1/ledger.md` (git-ignored; copied into docs at wave end)
@@ -70,6 +71,34 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
 - 2026-09-17: rustup 1.29.1 via `winget install Rustlang.Rustup`; toolchain stable-x86_64-pc-windows-msvc (rustc 1.98.1, cargo 1.98.1). MSVC 14.29 and Windows SDK 10.0.19041 were already present. Playwright downloaded Chromium into the user profile (not a system install).
 
 ## Checkpoints
+
+### Acceptance run (spec 13.5) — PASS with one operator-dependent step skipped, main 9a2e20d, 2026-09-18
+
+Run from the installed app (`%LOCALAPPDATA%\Programs\Machinery Detection`, installer `dist/Machinery Detection_0.1.0_x64-setup.exe`, 1,797 MB, built at 9f3aa01) by `frontend/scripts/acceptance.mjs` over CDP, following `scripts/acceptance.md`. Source: `E:\Dev\Yolo\Ahmadia Construction Data` (read only; the import job only reads it). Project folder: `%TEMP%\acceptance-project` (about 20 GB, kept as evidence source). Evidence: `docs/evidence/acceptance/` (`acceptance.json`, `acceptance-run1..5.log`, screenshots 01–08, `acceptance-04-data-yaml.txt`). Five driver invocations: run 1 was cut by the tool's 10-minute cap during the import (the import job kept running in the sidecar); later runs resumed with `--project-id` and re-verified the earlier steps through the API.
+
+| Spec step | Result | Evidence |
+|---|---|---|
+| 1. Project "Ahmadia" with the eight classes | PASS | run1.log, `acceptance-01-project.png` |
+| 2. Import the original folder: 3299 images, 0 duplicates, 7 flights | PASS: 3299 / 0 / `0031,0033,0034,0035,0038,0040,0042` (import 6 min) | run1.log, `-02-import.png` |
+| 3. COCO yolo11m as pre-annotation model; open 10 images; proposals on at least one | PASS: 4 `local_model` proposals over 10 images spread across the import. First attempt FAILED with the driver opening the first 10 frames of flight 0031 (take-off run-in, nothing on them). Goal-owner check: the same weights at the pre-annotation defaults (imgsz 2560, conf 0.25) fire on 49 of 100 frames spread across the import, so the driver and `scripts/acceptance.md` now open 10 evenly spread frames. | run2.log, `-03-preannotation.png` |
+| 4. Label 30 images; dataset "v1" split by group; train and val folders; valid data.yaml | PASS: labeled 30, train 24 / val 6, `by_group`, frozen images are exactly the 30 labeled ones, data.yaml names the eight classes | run2.log, `-04-dataset.png`, `-04-data-yaml.txt` |
+| 5. Train YOLO11n for 3 epochs; progress events; registered model with metrics | PASS: 3 `job.progress` websocket events, epoch card "3 / 3", model `ahmadia-v1` registered with metrics (mAP50 0.000, as expected from placeholder boxes) | run2.log, `-05-training.png` |
+| 6. Run the trained model over 50 unlabeled images; review; promote | PASS: 50 images (verified unlabeled), 600 tiles, 0 failed; review queue lists the 50 images; promoted. At the default confidence 0.25 (and at 0.01) the model produced 0 boxes; the goal owner verified with ultralytics directly that its maximum confidence on these frames is 0.0016, so the run was repeated at 0.001: 54,670 boxes. The spec sets no box count; the driver's own minimum of 1 box is what failed first. | run5.log, `-06-query-run.png`, `-06-review.png`, `-06-promoted.png` |
+| 7. Anthropic vision query "dump trucks" over 5 images with tiling; boxes with provider provenance | SKIPPED: no `ANTHROPIC_API_KEY` in this environment and no key in Credential Manager. The driver runs the step when either exists (a key from the environment is stored through the providers endpoint for the run and deleted afterwards; a stored key is used and left alone) and asserts `cloud_provider`/`anthropic` provenance with at least one box. To be run by the operator with a key. | `acceptance.json` `skipped` |
+| 8. Export the model to ONNX; file under `models/` | PASS: `models/ahmadia-v1-31e53a50.onnx` | run5.log, `-08-export.png` |
+
+Uninstall check: `unins000.exe /VERYSILENT` exit 0 in 7 s, install dir and Start Menu shortcut removed, app data kept; reinstalled from `dist/` (exit 0, 58 s).
+
+Driver defects found and fixed during the run (not app defects): first 10 frames by path instead of a spread (step 3); review-queue row count read while the list was still loading (step 6).
+
+## Definition of done (kickoff)
+
+| Item | State |
+|---|---|
+| `pnpm build:installer` (tauri build + Inno Setup) produces an installer; the installed app starts in under 15 s with the sidecar healthy | Done: 1,797 MB installer; cold start 1.6 s (3.0 s on the very first launch), sidecar healthy with GPU visible (checkpoint 4) |
+| Acceptance run passes end to end from the installed app with evidence linked | Done for steps 1–6 and 8; step 7 needs an Anthropic key from the operator (see above) |
+| Backend, frontend and contract suites pass on `main` | Done at 826a3bf and re-run since: ruff, 403 backend, 4 GPU, contract check, frontend lint, 209 unit, build, 42 e2e |
+| README explains build, dev (mock and real backend), tests | Done (`README.md`) |
 
 ### Checkpoint 4 (after Wave 3) — PASS on main 826a3bf, 2026-09-18
 
@@ -242,3 +271,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S6 tasks 1, 2, 4 and 5 done on `s6-packaging-acceptance`: full CUDA PyInstaller bundle with a frozen smoke test, packaging hardening (orphan sweep, Arial pre-seed, sidecar log tee, CSP), the acceptance script and its CDP driver (dry-run green on 20 frames), and the README. Task 3 landed after the ruling on decision 13: the installer is built with Inno Setup 6 (1,797.3 MB in 377 s); install, cold start and checkpoint 4 are the goal owner's.
 - 2026-09-18: S6 reviewed (fable: tasks 1, 2, 5 approved, task 4 rejected), Task 3 reviewed and round 1 re-reviewed (opus, approved with fixes), round 2 re-reviewed (sonnet, approved). Merged to main. Goal-owner verification at 9f3aa01: ruff clean, 403 backend, 4 gpu, contract check, frontend lint, 209 unit, build, 42 e2e. Next: install, checkpoint 4, acceptance run.
 - 2026-09-18: S6 merged 826a3bf; post-merge main: ruff, 403 backend, contract check, frontend lint, 209 unit, build, 42 e2e. Installed the app; checkpoint 4 passed (cold start 1.6 s, first launch 3.0 s). Acceptance run started on the installed app.
+- 2026-09-18: Acceptance run passed from the installed app (7 steps; step 7 skipped for lack of a key). Uninstall verified and reinstalled. S6 worktree removed. Wave 3 ledger copied to docs. Remaining: acceptance step 7 with an operator-provided Anthropic key; deferred minors listed in the wave ledgers.
