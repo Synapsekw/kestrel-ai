@@ -7,6 +7,7 @@ import time
 
 from fastapi import APIRouter, Request, Response
 
+from app.providers import factory
 from app.providers.config import ProviderConfigStore
 from app.providers.keys import KeyStore
 from app.providers.schemas import (
@@ -54,15 +55,13 @@ def delete_provider_key(provider: ProviderName, request: Request) -> Response:
 @router.post("/{provider}/test", response_model=ProviderTestResult)
 def test_provider(provider: ProviderName, request: Request) -> ProviderTestResult:
     """One cheap call with the stored key. Any failure is a result, never a 500."""
-    from app.providers.factory import cloud_provider
-
     keys, config = _stores(request)
     cfg = config.get(provider)
     if keys.get(provider) is None:
         return ProviderTestResult(ok=False, message="no API key stored", model_name=cfg.model_name)
     started = time.monotonic()
     try:
-        model_name = cloud_provider(provider, keys, cfg).ping()
+        model_name = factory.cloud_provider(provider, keys, cfg).ping()
     except Exception as e:  # the message is the SDK's; it never carries the key
         return ProviderTestResult(ok=False, message=f"{type(e).__name__}: {e}", model_name=cfg.model_name)
     return ProviderTestResult(

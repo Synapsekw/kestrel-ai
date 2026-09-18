@@ -8,12 +8,14 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.db.models import Box, Image, QueryRun
+from app.db.models import Box, Image, Model, QueryRun
 from app.errors import AppError, not_found
-from app.inference.schemas import QueryRunCreate
+from app.inference.schemas import PreannotateRequest, QueryRunCreate
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
+from app.providers.base import Detection, TilingSpec
 from app.providers.config import ProviderConfigStore
+from app.providers.factory import get_provider
 from app.providers.keys import KeyStore
 from app.providers.tiling import make_tiles
 from app.training import registry
@@ -189,16 +191,15 @@ def promote(
     return row, count, len(pending), image_ids
 
 
-def preannotate(handle: ProjectHandle, image_id: str, body) -> tuple[bool, str, list[Box]]:
+def preannotate(
+    handle: ProjectHandle, image_id: str, body: PreannotateRequest
+) -> tuple[bool, str, list[Box]]:
     """Run the project's pre-annotation model on one image, synchronously (spec section 7).
 
     FastAPI runs a sync endpoint in the threadpool, and the provider takes the process-wide GPU
     lock, so this waits for any training run rather than fighting it for memory. The image is only
     ever pre-annotated once per model: boxes from that model are the record that it has run.
     """
-    from app.providers.base import TilingSpec
-    from app.providers.factory import get_provider
-
     with handle.session() as s:
         image = s.get(Image, image_id)
         if image is None:
@@ -249,7 +250,7 @@ def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> li
     return rows
 
 
-def _write_proposals(handle: ProjectHandle, image_id: str, model, dets) -> None:
+def _write_proposals(handle: ProjectHandle, image_id: str, model: Model, dets: list[Detection]) -> None:
     with handle.session() as s:
         by_name = class_ids_by_name(handle, s)
         rows = [

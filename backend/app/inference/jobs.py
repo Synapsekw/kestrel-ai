@@ -29,6 +29,7 @@ from app.providers.base import Detection, ProviderError, Tile, TileResult, Tilin
 from app.providers.factory import get_provider
 from app.providers.keys import KeyringKeyStore
 from app.providers.tiling import make_tiles, nms_per_class
+from app.training import registry
 
 RETRY_DELAYS_S = (1, 2, 4, 8, 16)
 MAX_ATTEMPTS = len(RETRY_DELAYS_S)
@@ -110,8 +111,6 @@ def _load_run(ctx: JobContext) -> tuple[QueryRun, list[str]]:
 
 
 def _build_provider(ctx: JobContext, run: QueryRun, names: list[str]):
-    from app.training import registry
-
     runner = ctx.runner
     keys = getattr(runner, "keys", None) or KeyringKeyStore()
     config = getattr(runner, "provider_config", None)
