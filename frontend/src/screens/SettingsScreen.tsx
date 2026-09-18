@@ -3,7 +3,7 @@ import { useProject } from "@/api/project";
 import { ClassesSection } from "@/settings/ClassesSection";
 import { ImportDefaultsSection } from "@/settings/ImportDefaultsSection";
 import { PreannotationSection } from "@/settings/PreannotationSection";
-import { ProvidersPlaceholder } from "@/settings/ProvidersPlaceholder";
+import { ProvidersSection } from "@/settings/ProvidersSection";
 
 export function SettingsScreen() {
   const { projectId = "" } = useParams();
@@ -27,7 +27,7 @@ export function SettingsScreen() {
             project={project}
             onSaved={setProject}
           />
-          <ProvidersPlaceholder />
+          <ProvidersSection />
         </>
       )}
     </section>
