@@ -70,7 +70,8 @@ export function actionForKey(e: KeyLike): EditorAction | null {
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   const tag = target.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
+  // `isContentEditable` is undefined in jsdom, so compare explicitly.
+  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable === true;
 }
 
 export const HOTKEY_HELP: ReadonlyArray<{ keys: string; does: string }> = [
