@@ -117,6 +117,8 @@ Spec 13.4 #4: the installed app. Installer `Machinery Detection_0.1.0_x64-setup.
 | Project creation from the installed app | PASS (8 classes) |
 | Closing the window stops the sidecar and the app | PASS (cold and warm) |
 
+Rebuilt and re-verified from main 6eeec68 (after the progress-message and import-lock changes): freeze 36 s incremental, frozen smoke ok in 27 s, `pnpm build:installer` 464 s, installer 1,797.3 MB (`dist/`), reinstall 57 s; checkpoint 4 driver again PASS: cold 2,992 ms to Projects / 3,005 ms healthy / GPU probe 6,091 ms; warm 1,391 ms / 1,423 ms / 2,950 ms; project creation and sidecar exit on close both PASS.
+
 Success criteria: installer 1.8 GB (< 6 GB); cold start well under 15 s. The first driver attempt failed on the driver's own timing (it read the `gpu` block before the background probe had answered); the driver now polls for it. Uninstall check recorded after the acceptance run.
 
 ### Checkpoint 3 (after Wave 2) — PASS on main 6635f71, 2026-09-18
@@ -277,3 +279,4 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 - 2026-09-18: S6 merged 826a3bf; post-merge main: ruff, 403 backend, contract check, frontend lint, 209 unit, build, 42 e2e. Installed the app; checkpoint 4 passed (cold start 1.6 s, first launch 3.0 s). Acceptance run started on the installed app.
 - 2026-09-18: Acceptance run passed from the installed app (7 steps; step 7 skipped for lack of a key). Uninstall verified and reinstalled. S6 worktree removed. Wave 3 ledger copied to docs. Remaining: acceptance step 7 with an operator-provided Anthropic key; deferred minors listed in the wave ledgers.
 - 2026-09-18: Shared venv deleted with the S6 worktree (junction) and rebuilt from the lock file; rule recorded. Polish: training progress message now carries loss terms and ETA (spec 7), Train screen shows Loss and ETA. Verified on main: ruff, 406 backend, 4 gpu, frontend lint, 211 unit, build, 42 e2e.
+- 2026-09-18: Polish: imports into one project run one at a time (6eeec68, Wave 1 deferred). Installer rebuilt from main (needs `%USERPROFILE%\.cargoin` on PATH and `pnpm install` for the Inno compiler package; README updated), reinstalled, checkpoint 4 re-passed. The installed app now matches main.

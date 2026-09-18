@@ -3,17 +3,17 @@
   "launches": [
     {
       "label": "cold",
-      "pid": 36996,
-      "ms_to_projects": 1645,
-      "ms_to_healthy_backend": 1655,
-      "ms_to_gpu_probe": 2682,
-      "sidecar_pids": "30904",
+      "pid": 17020,
+      "ms_to_projects": 2992,
+      "ms_to_healthy_backend": 3005,
+      "ms_to_gpu_probe": 6091,
+      "sidecar_pids": "39324",
       "log_path": "C:\\Users\\D\\AppData\\Roaming\\ai.synapse-solutions.machinery-app\\logs\\sidecar.log",
       "health": {
         "status": "ok",
         "version": "0.1.0",
-        "pid": 30904,
-        "started_at": "2026-09-18T10:48:51.584642+00:00",
+        "pid": 39324,
+        "started_at": "2026-09-18T13:41:42.935644+00:00",
         "gpu": {
           "available": true,
           "name": "NVIDIA GeForce RTX 5070 Ti"
@@ -22,17 +22,17 @@
     },
     {
       "label": "warm",
-      "pid": 51116,
-      "ms_to_projects": 1625,
-      "ms_to_healthy_backend": 1628,
-      "ms_to_gpu_probe": 2637,
-      "sidecar_pids": "31680",
+      "pid": 46456,
+      "ms_to_projects": 1391,
+      "ms_to_healthy_backend": 1423,
+      "ms_to_gpu_probe": 2950,
+      "sidecar_pids": "27416",
       "log_path": "C:\\Users\\D\\AppData\\Roaming\\ai.synapse-solutions.machinery-app\\logs\\sidecar.log",
       "health": {
         "status": "ok",
         "version": "0.1.0",
-        "pid": 31680,
-        "started_at": "2026-09-18T10:48:57.683841+00:00",
+        "pid": 27416,
+        "started_at": "2026-09-18T13:41:51.519425+00:00",
         "gpu": {
           "available": true,
           "name": "NVIDIA GeForce RTX 5070 Ti"
@@ -44,7 +44,7 @@
     {
       "name": "cold start under 15 s to the Projects screen",
       "ok": true,
-      "detail": "1645 ms"
+      "detail": "2992 ms"
     },
     {
       "name": "sidecar healthy with gpu visible",
@@ -54,7 +54,7 @@
     {
       "name": "project created from the installed app",
       "ok": true,
-      "detail": "7b39d7fa-eec0-46da-beb4-23877d6f2f48 8 classes"
+      "detail": "d119af94-63d1-4a36-9469-45e5a489e5b0 8 classes"
     },
     {
       "name": "cold: closing the window stops the sidecar and the app",
@@ -64,7 +64,7 @@
     {
       "name": "warm start reaches the Projects screen",
       "ok": true,
-      "detail": "1625 ms"
+      "detail": "1391 ms"
     },
     {
       "name": "warm: closing the window stops the sidecar and the app",

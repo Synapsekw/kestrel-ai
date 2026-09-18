@@ -23,7 +23,7 @@ models or OpenAI / Anthropic vision models.
   The build and the numbers below were measured on an RTX 5070 Ti.
 - Node 24 and pnpm 10.
 - uv 0.11 or newer (it fetches CPython 3.11.15 on demand).
-- Rust stable for `x86_64-pc-windows-msvc` (`winget install Rustlang.Rustup`) and the MSVC C++
+- Rust stable for `x86_64-pc-windows-msvc` (`winget install Rustlang.Rustup`; `%USERPROFILE%\.cargo\bin` must be on the `PATH` of the shell that runs `pnpm tauri ...` or `pnpm build:installer`, which is the case in a new shell after rustup) and the MSVC C++
   build tools with a Windows 10 SDK. WebView2 runtime (present on Windows 11).
 - About 20 GB free for the frozen backend, the bundle and the installer.
 
