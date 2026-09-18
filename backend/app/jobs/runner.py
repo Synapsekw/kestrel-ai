@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from app.db.models import Job
 from app.errors import not_found
+from app.jobs.cancellation import JobCancelled
 from app.jobs.events import EventBus
 from app.jobs.registry import get_job_type
 from app.projects.service import ProjectHandle
@@ -17,8 +18,7 @@ PROGRESS_DB_INTERVAL_S = 0.25
 log = logging.getLogger(__name__)
 
 
-class JobCancelled(Exception):
-    pass
+__all__ = ["JobCancelled", "JobContext", "JobRunner"]
 
 
 class JobContext:

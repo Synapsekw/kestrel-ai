@@ -14,6 +14,8 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from app.jobs.cancellation import JobCancelled
+
 WAIT_LOG_THRESHOLD_S = 1.0
 CANCEL_POLL_S = 1.0
 
@@ -22,19 +24,6 @@ gpu_lock = threading.Lock()
 
 class GpuBusy(Exception):
     """The GPU was still held when the caller's timeout ran out."""
-
-
-def _cancelled_error() -> Exception:
-    """The runner's `JobCancelled`, imported late.
-
-    This module is a primitive that training, inference and the request thread all sit on top of;
-    importing the job runner here at module scope would point the dependency the wrong way. Sharing
-    the class matters more than the import style, because the runner recognises a cancelled job by
-    catching exactly this type.
-    """
-    from app.jobs.runner import JobCancelled
-
-    return JobCancelled()
 
 
 def _acquire(cancelled: threading.Event | None, timeout: float | None) -> bool:
@@ -46,7 +35,7 @@ def _acquire(cancelled: threading.Event | None, timeout: float | None) -> bool:
     while not cancelled.is_set():  # poll so a cancelled job stops waiting for a training run
         if gpu_lock.acquire(timeout=CANCEL_POLL_S):
             return True
-    raise _cancelled_error()
+    raise JobCancelled()
 
 
 @contextmanager
