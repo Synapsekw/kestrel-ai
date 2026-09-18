@@ -92,3 +92,41 @@ test("dragging a box patches its position", async ({ page }) => {
   expect(body.w).toBeCloseTo(140, 0);
   expect(body.h).toBeCloseTo(90, 0);
 });
+
+test("class hotkeys, fit and 1:1 keys, region list selection, Delete and Ctrl+D", async ({ page }) => {
+  await openEditor(page);
+  const fitted = await readView(page);
+  await page.keyboard.press("4");
+  await expect(page.getByRole("button", { name: /dump_truck/ })).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("0");
+  await expect(page.getByTestId("editor-canvas")).toHaveAttribute("data-view-scale", "1.0000");
+  await page.keyboard.press("f");
+  await expect(page.getByTestId("editor-canvas")).toHaveAttribute("data-view-scale", fitted.scale.toFixed(4));
+
+  const excavatorRow = page.getByRole("listitem").filter({ hasText: "Person" });
+  await excavatorRow.click();
+  await expect(excavatorRow).toHaveAttribute("aria-selected", "true");
+
+  const duplicated = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  await page.keyboard.press("Control+d");
+  const dupBody = (await duplicated).postDataJSON() as { x: number; y: number; w: number; h: number };
+  expect(dupBody).toEqual({ class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 524, y: 312, w: 140, h: 90 });
+
+  await excavatorRow.click();
+  const deleted = page.waitForRequest(
+    (r) => r.method() === "DELETE" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.keyboard.press("Delete");
+  await deleted;
+  await expect(page.getByRole("status").filter({ hasText: /Saved/ })).toBeVisible();
+});
+
+test("a class hotkey with a selected box reclassifies it", async ({ page }) => {
+  await openEditor(page);
+  await page.getByRole("listitem").filter({ hasText: "Person" }).click();
+  const patched = page.waitForRequest(
+    (r) => r.method() === "PATCH" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.keyboard.press("3");
+  expect((await patched).postDataJSON()).toEqual({ class_id: "c1a2b3c4-0000-4000-8000-000000000003" });
+});
