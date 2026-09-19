@@ -6,6 +6,7 @@ import type { ApiClient, Health } from "@contract/client";
 import { resolveBackend, terminationMessage, waitForHealth, type BackendInfo } from "./backend";
 import { createBackendClient } from "./timeoutFetch";
 import { Splash } from "@/app/Splash";
+import { Button, Icon } from "@/ui";
 import { pushLog, setBackendContext } from "@/app/diagnostics";
 
 export interface ApiContextValue {
@@ -115,35 +116,36 @@ function BackendFailure({
   onRestart: () => void;
 }) {
   return (
-    <div className="flex h-full w-full items-center justify-center bg-slate-900 p-8 text-slate-100">
+    <div className="flex h-full w-full items-center justify-center bg-ground p-8 text-ink">
       <div
         role="alertdialog"
         aria-labelledby="backend-failure-title"
-        className="max-w-xl rounded-lg bg-slate-800 p-6 shadow-xl"
+        className="flex max-w-xl flex-col gap-4 rounded-lg border border-line bg-panel p-6 shadow-float"
       >
-        <h1 id="backend-failure-title" className="mb-2 text-xl font-semibold text-orange-400">
-          The backend is not responding
-        </h1>
-        <p className="mb-4 whitespace-pre-wrap text-sm text-slate-300">{error}</p>
-        <dl className="mb-6 grid grid-cols-[6rem_1fr] gap-x-4 gap-y-1 text-sm">
-          <dt className="text-slate-400">URL</dt>
-          <dd className="font-mono">{info?.baseUrl ?? "unknown"}</dd>
-          <dt className="text-slate-400">Mode</dt>
-          <dd className="font-mono">{info?.mode ?? "unknown"}</dd>
+        <div className="flex items-center gap-2.5">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-danger-soft text-danger">
+            <Icon name="warning" size={16} />
+          </span>
+          <h1 id="backend-failure-title" className="text-base font-semibold">
+            The backend is not responding
+          </h1>
+        </div>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted">{error}</p>
+        <dl className="grid grid-cols-[5rem_1fr] gap-x-4 gap-y-1 text-sm">
+          <dt className="text-muted">URL</dt>
+          <dd className="font-mono text-xs">{info?.baseUrl ?? "unknown"}</dd>
+          <dt className="text-muted">Mode</dt>
+          <dd className="font-mono text-xs">{info?.mode ?? "unknown"}</dd>
           {info?.logPath ? (
             <>
-              <dt className="text-slate-400">Log</dt>
-              <dd className="break-all font-mono">{info.logPath}</dd>
+              <dt className="text-muted">Log</dt>
+              <dd className="break-all font-mono text-xs">{info.logPath}</dd>
             </>
           ) : null}
         </dl>
-        <button
-          type="button"
-          onClick={onRestart}
-          className="rounded bg-orange-600 px-4 py-2 font-medium hover:bg-orange-500"
-        >
+        <Button variant="primary" icon="refresh" onClick={onRestart} className="self-start">
           Restart
-        </button>
+        </Button>
       </div>
     </div>
   );
