@@ -28,7 +28,9 @@ export async function displayPoint(page: Page, ix: number, iy: number) {
 }
 
 test("loads the image record and boxes, fits the image and zooms with the wheel", async ({ page }) => {
-  const boxesRequest = page.waitForRequest((r) => r.method() === "GET" && r.url().endsWith(`/images/${IMG}/boxes`));
+  const boxesRequest = page.waitForRequest(
+    (r) => r.method() === "GET" && r.url().endsWith(`/images/${IMG}/boxes`),
+  );
   const canvas = await openEditor(page);
   await boxesRequest;
   const fitted = await readView(page);
@@ -60,12 +62,20 @@ test("drawing on the canvas posts a box in image pixels with the active class", 
   await openEditor(page);
   const from = await displayPoint(page, 2000, 1500);
   const to = await displayPoint(page, 2400, 1800);
-  const posted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  const posted = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`),
+  );
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 8 });
   await page.mouse.up();
-  const body = (await posted).postDataJSON() as { class_id: string; x: number; y: number; w: number; h: number };
+  const body = (await posted).postDataJSON() as {
+    class_id: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+  };
   const { scale } = await readView(page);
   const tolerance = 2 / scale + 1;
   expect(body.class_id).toBe("c1a2b3c4-0000-4000-8000-000000000001");
@@ -107,10 +117,18 @@ test("class hotkeys, fit and 1:1 keys, region list selection, Delete and Ctrl+D"
   await excavatorRow.click();
   await expect(excavatorRow).toHaveAttribute("aria-current", "true");
 
-  const duplicated = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  const duplicated = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`),
+  );
   await page.keyboard.press("Control+d");
   const dupBody = (await duplicated).postDataJSON() as { x: number; y: number; w: number; h: number };
-  expect(dupBody).toEqual({ class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 524, y: 312, w: 140, h: 90 });
+  expect(dupBody).toEqual({
+    class_id: "c1a2b3c4-0000-4000-8000-000000000001",
+    x: 524,
+    y: 312,
+    w: 140,
+    h: 90,
+  });
 
   await excavatorRow.click();
   const deleted = page.waitForRequest(
@@ -135,21 +153,23 @@ const PROPOSAL = "b0000000-6666-4000-8000-000000000002";
 
 test("A accepts all visible proposals and R rejects them through the review endpoint", async ({ page }) => {
   await openEditor(page);
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
   const accepted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
   await page.keyboard.press("a");
   expect((await accepted).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "accept" });
-  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 suggestions");
   await expect(page.getByRole("button", { name: "Accept all (A)" })).toBeDisabled();
 });
 
-test("R rejects, Show rejected reveals the row, and the region list accepts one proposal", async ({ page }) => {
+test("R rejects, Show rejected reveals the row, and the region list accepts one proposal", async ({
+  page,
+}) => {
   await openEditor(page);
   const rejected = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
   await page.keyboard.press("r");
   expect((await rejected).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "reject" });
   await expect(page.getByRole("listitem")).toHaveCount(1);
-  await page.getByRole("button", { name: "Show rejected" }).click();
+  await page.getByRole("switch", { name: "Show rejected" }).click();
   await expect(page.getByRole("listitem")).toHaveCount(2);
   await expect(page.getByRole("listitem").nth(1)).toContainText("Rejected");
 
@@ -194,14 +214,17 @@ test("N marks the image empty, rejects visible proposals locally, and N again un
     });
   });
   await openEditor(page);
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
   const toggle = page.getByRole("button", { name: /No machinery|Marked empty/ });
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
 
   // The mock's boxes include an accepted Person box: N is refused locally, without a request,
   // while that ground truth is loaded (M3 / fix round 1).
   await expect(toggle).toBeDisabled();
-  await expect(toggle).toHaveAttribute("title", "This image has accepted boxes. Delete or reject them first.");
+  await expect(toggle).toHaveAttribute(
+    "title",
+    "This image has accepted boxes. Delete or reject them first.",
+  );
   await page.keyboard.press("n");
   await expect(page.getByRole("alert")).toHaveText(
     "This image has accepted boxes. Delete or reject them first.",
@@ -221,7 +244,7 @@ test("N marks the image empty, rejects visible proposals locally, and N again un
   await page.keyboard.press("n");
   expect((await marked).postDataJSON()).toEqual({ marked_empty: true });
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 suggestions");
   await expect(
     page.getByRole("status").filter({ hasText: "Marked as empty: this image counts as labeled" }),
   ).toBeVisible();
@@ -251,7 +274,13 @@ test("pre-annotates on open when no proposal is pending and tolerates 501", asyn
                 w: 140,
                 h: 90,
                 confidence: null,
-                provenance: { kind: "person", model_id: null, provider: null, model_name: null, query_run_id: null },
+                provenance: {
+                  kind: "person",
+                  model_id: null,
+                  provider: null,
+                  model_name: null,
+                  query_run_id: null,
+                },
                 review_state: "accepted",
                 reviewed_at: "2026-09-17T10:45:00Z",
                 created_at: "2026-09-17T10:45:00Z",
@@ -266,7 +295,7 @@ test("pre-annotates on open when no proposal is pending and tolerates 501", asyn
   );
   await openEditor(page);
   await preannotate;
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
   await expect(
     page.getByRole("status").filter({ hasText: "1 proposal from the pre-annotation model" }),
   ).toBeVisible();
@@ -282,13 +311,17 @@ test("pre-annotates on open when no proposal is pending and tolerates 501", asyn
     }),
   );
   await openEditor(page);
-  await expect(page.getByRole("status").filter({ hasText: "Pre-annotation is not available yet" })).toBeVisible();
+  await expect(
+    page.getByRole("status").filter({ hasText: "Pre-annotation is not available yet" }),
+  ).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 const IMG2 = "10000000-5555-4000-8000-000000000002";
 
-test("Ctrl+Right moves to the next image after in-flight saves finish; Ctrl+Left returns", async ({ page }) => {
+test("Ctrl+Right moves to the next image after in-flight saves finish; Ctrl+Left returns", async ({
+  page,
+}) => {
   await page.route(`**/api/v1/projects/${P}/images/${IMG}/boxes`, async (route) => {
     if (route.request().method() !== "POST") return route.continue();
     await new Promise((r) => setTimeout(r, 800));
@@ -327,7 +360,9 @@ test("Ctrl+Z undoes a draw with DELETE and Ctrl+Y redoes with POST", async ({ pa
   await openEditor(page);
   const from = await displayPoint(page, 2000, 1500);
   const to = await displayPoint(page, 2300, 1700);
-  const posted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  const posted = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`),
+  );
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(to.x, to.y, { steps: 6 });
@@ -340,7 +375,9 @@ test("Ctrl+Z undoes a draw with DELETE and Ctrl+Y redoes with POST", async ({ pa
   await page.keyboard.press("Control+z");
   await deleted;
   await expect(page.getByRole("button", { name: "Redo" })).toBeEnabled();
-  const reposted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`));
+  const reposted = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/boxes`),
+  );
   await page.keyboard.press("Control+y");
   await reposted;
 });
@@ -422,12 +459,14 @@ test("a failed move reports the error envelope and keeps the box where it was", 
   await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
 });
 
-test("the confidence floor hides weak proposals from the image, the list and Accept all", async ({ page }) => {
+test("the confidence floor hides weak proposals from the image, the list and Accept all", async ({
+  page,
+}) => {
   await openEditor(page);
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
   // The mock's proposal scores 81%: a floor of 90% takes it out of sight.
-  await page.getByLabel("Hide proposals below this confidence").fill("90");
-  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await page.getByLabel("Hide suggestions below this confidence").fill("90");
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 suggestions");
   await expect(page.getByTestId("confidence-floor")).toContainText("below 90% · 1 hidden");
   await expect(page.getByRole("button", { name: "Accept all (A)" })).toBeDisabled();
   let reviewed = false;
@@ -437,6 +476,6 @@ test("the confidence floor hides weak proposals from the image, the list and Acc
   await page.keyboard.press("a");
   await page.waitForTimeout(500);
   expect(reviewed).toBe(false);
-  await page.getByLabel("Hide proposals below this confidence").fill("50");
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  await page.getByLabel("Hide suggestions below this confidence").fill("50");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
 });

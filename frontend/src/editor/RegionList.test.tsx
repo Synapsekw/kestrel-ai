@@ -30,7 +30,7 @@ describe("RegionList", () => {
     expect(rows[0]).toHaveTextContent("Accepted");
     expect(rows[1]).toHaveTextContent("81%");
     expect(rows[1]).toHaveTextContent("Model yolo11m-coco");
-    expect(rows[1]).toHaveTextContent("Proposal");
+    expect(rows[1]).toHaveTextContent("Suggestion");
     expect(screen.getByLabelText("Class of box 2")).toHaveValue(CLASS_ID(4));
 
     fireEvent.click(rows[1]);
@@ -45,7 +45,7 @@ describe("RegionList", () => {
     expect(onDelete).toHaveBeenCalledWith(personBox.id);
   });
 
-  it("does not invite N while the confidence floor hides proposals: N would reject them unseen", () => {
+  it("does not invite N while the confidence floor hides suggestions: N would reject them unseen", () => {
     render(
       <RegionList
         boxes={[]}
@@ -63,7 +63,7 @@ describe("RegionList", () => {
     );
     expect(
       screen.getByText(
-        "10 proposals are hidden by the confidence floor. Lower it to see them before deciding that nothing is here.",
+        "10 suggestions are hidden by the confidence floor. Lower it to see them before deciding that nothing is here.",
       ),
     ).toBeInTheDocument();
     expect(screen.queryByText(/Press N/)).toBeNull();
@@ -101,6 +101,31 @@ describe("RegionList", () => {
       />,
     );
     expect(screen.getByText("Marked empty: no machinery on this image.")).toBeInTheDocument();
+  });
+
+  it("offers Accept and Reject on a suggestion only and strikes a rejected one through", () => {
+    const onReview = vi.fn();
+    const rejected = { ...proposalBox, id: "rejected-box", review_state: "rejected" as const };
+    render(
+      <RegionList
+        boxes={[personBox, proposalBox, rejected]}
+        classes={exampleClasses}
+        selectedId={null}
+        hoveredId={null}
+        markedEmpty={false}
+        onSelect={() => {}}
+        onHover={() => {}}
+        onSetClass={() => {}}
+        onDelete={() => {}}
+        onReview={onReview}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: "Accept box 1" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Reject box 2" }));
+    expect(onReview).toHaveBeenCalledWith(proposalBox.id, "reject");
+    expect(screen.queryByRole("button", { name: "Accept box 3" })).toBeNull();
+    expect(screen.getByText("Rejected").className).toContain("line-through");
+    expect(screen.getByText("Suggestion")).toBeInTheDocument();
   });
 
   it("labels provenance", () => {

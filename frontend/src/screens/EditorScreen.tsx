@@ -10,7 +10,7 @@ import { ClassSidebar } from "@/editor/ClassSidebar";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { BackLink } from "@/editor/BackLink";
 import { ConfidenceFloor } from "@/editor/ConfidenceFloor";
-import { EditorToolbar } from "@/editor/EditorToolbar";
+import { EditorToolbar, ToolbarDivider } from "@/editor/EditorToolbar";
 import { EmptyToggle } from "@/editor/EmptyToggle";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
 import { RegionList } from "@/editor/RegionList";
@@ -26,19 +26,48 @@ import {
   visibleBoxes,
   visibleProposalIds,
 } from "@/store/editor";
+import { Alert, Button, Pill, Skeleton, Switch } from "@/ui";
 
 export function EditorScreen() {
   const { projectId = "", imageId = "" } = useParams();
   const { project, error: projectError } = useProject(projectId);
   if (projectError) {
     return (
-      <p role="alert" className="m-6 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-        {projectError}
-      </p>
+      <div className="p-6">
+        <Alert tone="danger" className="max-w-2xl">
+          {projectError}
+        </Alert>
+      </div>
     );
   }
-  if (!project) return <p className="m-6 text-sm text-slate-400">Loading project…</p>;
+  if (!project) return <EditorSkeleton />;
   return <EditorBody projectId={projectId} imageId={imageId} project={project} />;
+}
+
+/** The editor's frame while the project loads: the same three columns, in skeleton blocks. */
+function EditorSkeleton() {
+  return (
+    <div role="status" aria-label="Loading project" className="flex h-full min-h-0">
+      <div className="flex w-48 shrink-0 flex-col gap-2 border-r border-line bg-side p-3">
+        <Skeleton className="h-3 w-16" />
+        {Array.from({ length: 6 }, (_, i) => (
+          <Skeleton key={i} className="h-6 w-full" />
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex h-11 items-center gap-2 border-b border-line bg-side px-3">
+          <Skeleton className="h-5 w-20" />
+          <Skeleton className="h-5 w-40" />
+        </div>
+        <div className="min-h-0 flex-1 bg-canvas" />
+      </div>
+      <div className="flex w-72 shrink-0 flex-col gap-2 border-l border-line bg-side p-3">
+        <Skeleton className="h-3 w-20" />
+        <Skeleton className="h-7 w-full" />
+        <Skeleton className="h-7 w-full" />
+      </div>
+    </div>
+  );
 }
 
 function EditorBody({
@@ -166,38 +195,26 @@ function EditorBody({
 
   const reviewControls = (
     <>
-      <span className="mx-1 h-4 border-l border-slate-700" />
-      <span className="text-xs text-slate-400" data-testid="proposal-count">
-        {proposalIds.length} {proposalIds.length === 1 ? "proposal" : "proposals"}
-      </span>
-      <button
-        type="button"
-        className="rounded border border-emerald-800 px-2 py-0.5 text-xs text-emerald-200 hover:bg-emerald-900/40 disabled:opacity-40"
-        disabled={proposalIds.length === 0}
-        onClick={() => void actions.acceptAll()}
-      >
+      <ToolbarDivider />
+      <Pill tone={proposalIds.length > 0 ? "warn" : "neutral"} data-testid="proposal-count">
+        {proposalIds.length} {proposalIds.length === 1 ? "suggestion" : "suggestions"}
+      </Pill>
+      <Button size="sm" disabled={proposalIds.length === 0} onClick={() => void actions.acceptAll()}>
         Accept all (A)
-      </button>
-      <button
-        type="button"
-        className="rounded border border-amber-800 px-2 py-0.5 text-xs text-amber-200 hover:bg-amber-900/40 disabled:opacity-40"
-        disabled={proposalIds.length === 0}
-        onClick={() => void actions.rejectAll()}
-      >
+      </Button>
+      <Button size="sm" disabled={proposalIds.length === 0} onClick={() => void actions.rejectAll()}>
         Reject all (R)
-      </button>
-      <button
-        type="button"
-        aria-pressed={showRejected}
-        className={`rounded border border-slate-700 px-2 py-0.5 text-xs ${showRejected ? "bg-slate-700 text-white" : "hover:bg-slate-800"}`}
-        onClick={toggleShowRejected}
-      >
-        Show rejected
-      </button>
+      </Button>
+      <Switch
+        checked={showRejected}
+        onChange={toggleShowRejected}
+        label="Show rejected"
+        className="px-1 !text-[13px]"
+      />
       {(proposalIds.length > 0 || hiddenByFloor > 0 || minConfidence > 0) && (
         <ConfidenceFloor value={minConfidence} hidden={hiddenByFloor} onChange={setMinConfidence} />
       )}
-      <span className="mx-1 h-4 border-l border-slate-700" />
+      <ToolbarDivider />
       <EmptyToggle
         image={image}
         hasGroundTruth={groundTruth}
@@ -209,7 +226,7 @@ function EditorBody({
 
   return (
     <div className="flex h-full min-h-0">
-      <aside className="flex w-48 shrink-0 flex-col border-r border-slate-800 bg-slate-950 p-2">
+      <aside className="flex w-48 shrink-0 flex-col overflow-auto border-r border-line bg-side p-2">
         <ClassSidebar
           classes={project.classes}
           activeClassId={activeClassId}
@@ -234,20 +251,22 @@ function EditorBody({
           onRedo={() => void actions.redo()}
           extra={reviewControls}
         />
+        {/* Errors and notices often follow a hotkey: they appear without the reveal animation. */}
         {error && (
-          <p role="alert" className="border-b border-red-900 bg-red-950 px-3 py-1 text-xs text-red-200">
+          <Alert tone="danger" className="rounded-none border-x-0 border-t-0 py-2 !text-[13px] !animate-none">
             {error}
-          </p>
+          </Alert>
         )}
-        <div className="relative min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1 bg-canvas">
           {/* Overlaid, so the image does not jump when a notice comes or goes. */}
           {notice && (
-            <p
+            <Alert
+              tone="info"
               role="status"
-              className="absolute inset-x-0 top-0 z-10 border-b border-slate-800 bg-slate-900/90 px-3 py-1 text-xs text-slate-300"
+              className="absolute inset-x-3 top-3 z-10 py-2 !text-[13px] shadow-float !animate-none"
             >
               {notice}
-            </p>
+            </Alert>
           )}
           <EditorCanvas
             src={src}
@@ -262,7 +281,7 @@ function EditorBody({
           </EditorCanvas>
         </div>
       </div>
-      <aside className="flex w-72 shrink-0 flex-col border-l border-slate-800 bg-slate-950">
+      <aside className="flex w-72 shrink-0 flex-col border-l border-line bg-side">
         <RegionList
           boxes={visible}
           classes={project.classes}

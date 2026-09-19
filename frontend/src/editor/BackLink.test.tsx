@@ -23,20 +23,14 @@ describe("BackLink", () => {
     );
   });
 
-  it("returns to the Data Manager otherwise, also when the editor was opened directly", () => {
+  it("returns to Images otherwise, also when the editor was opened directly", () => {
     useNavigationStore.getState().setContext(["a"], "data", "/p/p1/data");
     show();
-    expect(screen.getByRole("link", { name: "Back to the Data Manager" })).toHaveAttribute(
-      "href",
-      "/p/p1/data",
-    );
+    expect(screen.getByRole("link", { name: "Back to Images" })).toHaveAttribute("href", "/p/p1/data");
   });
 
-  it("falls back to the Data Manager with no context", () => {
+  it("falls back to Images with no context", () => {
     show();
-    expect(screen.getByRole("link", { name: "Back to the Data Manager" })).toHaveAttribute(
-      "href",
-      "/p/p1/data",
-    );
+    expect(screen.getByRole("link", { name: "Back to Images" })).toHaveAttribute("href", "/p/p1/data");
   });
 });
