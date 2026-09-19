@@ -57,4 +57,35 @@ describe("FilterBar", () => {
     expect(onView).toHaveBeenCalledWith("list");
     expect(screen.getByText("2 of 2 images")).toBeInTheDocument();
   });
+
+  it("offers a visible select-all for the listed images", () => {
+    const onSelectAll = vi.fn();
+    const { rerender } = render(
+      <FilterBar
+        query={DEFAULT_QUERY}
+        onChange={() => {}}
+        view="grid"
+        onView={() => {}}
+        sourceNames={{}}
+        total={40}
+        loaded={40}
+        onSelectAll={onSelectAll}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Select all 40" }));
+    expect(onSelectAll).toHaveBeenCalledOnce();
+    rerender(
+      <FilterBar
+        query={DEFAULT_QUERY}
+        onChange={() => {}}
+        view="grid"
+        onView={() => {}}
+        sourceNames={{}}
+        total={0}
+        loaded={0}
+        onSelectAll={onSelectAll}
+      />,
+    );
+    expect(screen.queryByRole("button", { name: /Select all/ })).toBeNull();
+  });
 });

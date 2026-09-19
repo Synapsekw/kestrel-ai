@@ -127,7 +127,9 @@ export function DataManagerScreen() {
           >
             Import images
           </button>
-          <span className="text-xs text-slate-400">J / K move, Enter opens, Space selects</span>
+          <span className="text-xs text-slate-400">
+            J / K move, Enter or double-click opens, Space selects, Ctrl+A selects all
+          </span>
         </div>
       </div>
       {importing && project && (
@@ -148,6 +150,7 @@ export function DataManagerScreen() {
         onView={setView}
         sourceNames={sourceNames}
         total={list.total}
+        onSelectAll={() => setSelection(selectAll(ids))}
         loaded={items.length}
       />
       {list.error && (

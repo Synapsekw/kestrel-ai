@@ -16,12 +16,14 @@ interface Props {
   sourceNames: Record<string, string>;
   total: number;
   loaded: number;
+  /** Selects the listed (loaded) images; same as Ctrl+A in the list. */
+  onSelectAll?: () => void;
 }
 
 const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
 const label = "flex flex-col gap-0.5 text-xs text-slate-400";
 
-export function FilterBar({ query, onChange, view, onView, sourceNames, total, loaded }: Props) {
+export function FilterBar({ query, onChange, view, onView, sourceNames, total, loaded, onSelectAll }: Props) {
   // The search box owns its text; the query only learns about it after the debounce.
   const [search, setSearch] = useState(query.filters.search);
   useEffect(() => {
@@ -156,6 +158,16 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
         <span className="text-xs text-slate-400">
           {loaded} of {total} images
         </span>
+        {onSelectAll && loaded > 0 && (
+          <button
+            type="button"
+            title="Ctrl+A"
+            onClick={onSelectAll}
+            className="rounded border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
+          >
+            Select all {loaded}
+          </button>
+        )}
         {(["grid", "list"] as ViewMode[]).map((v) => (
           <button
             key={v}
