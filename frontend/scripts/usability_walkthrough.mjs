@@ -103,6 +103,13 @@ const urlIs = async (re, timeout = 20_000) => {
 };
 if (projectId) await page.goto(new URL(`/p/${projectId}/data`, page.url()).href);
 
+
+/** Opens a "More options"-style disclosure if it is closed; a no-op when it is already open. */
+async function openDisclosure(scope, name) {
+  const button = scope.getByRole("button", { name });
+  if ((await button.getAttribute("aria-expanded")) === "false") await button.click();
+}
+
 await step("1 projects screen explains itself; app settings work with no project", async (check, snap) => {
   await page.goto(new URL("/", page.url()).href);
   await page.getByRole("heading", { name: "Projects" }).waitFor();
@@ -125,7 +132,7 @@ await step("2 create a project; a missing folder is named", async (check, snap) 
   await page.getByRole("button", { name: "Create project" }).click();
   await urlIs(/\/p\/[0-9a-f-]+\/data/, 30_000);
   projectId = page.url().split("/p/")[1].split("/")[0];
-  check("empty Data Manager offers the import", await visible(page.getByRole("button", { name: "Import a folder of images" })));
+  check("empty Images screen offers the import", await visible(page.getByRole("button", { name: "Import a folder of images" })));
   await snap("empty-data-manager");
 });
 
@@ -163,8 +170,8 @@ await step("4 add a starter model and use it for pre-annotation", async (check, 
 });
 
 await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
-  await page.getByRole("link", { name: "Data", exact: true }).click();
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("navigation").getByRole("link", { name: /^Images\b/ }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByTestId("image-table").getByText(/\.jpg$/).first().dblclick();
   await urlIs(/\/edit\//);
   const status = page.getByRole("status");
@@ -213,7 +220,7 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
   const stats = await api("GET", `/projects/${projectId}/stats`);
   check("an empty image counts as labeled", stats.labeled_count === before.labeled_count + 1, `${before.labeled_count} -> ${stats.labeled_count}`);
   check("labeled images are counted", stats.labeled_count >= cfg.label + 1, `${stats.labeled_count} labeled`);
-  const back = page.getByRole("link", { name: "Back to the Data Manager" });
+  const back = page.getByRole("link", { name: "Back to Images" });
   check("the editor has a way back", await visible(back));
   await back.click();
   await urlIs(/\/data$/);
@@ -231,6 +238,7 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   check("a name with a space is explained", await visible(page.getByRole("alert").filter({ hasText: "letters, digits, dot, dash and underscore" })));
   await snap("dataset-name-explained");
   await dialog.getByLabel("Dataset name").fill("v1");
+  await openDisclosure(dialog, "Split options");
   await dialog.getByLabel("Split method").selectOption("random");
   await dialog.getByRole("button", { name: "Create dataset" }).click();
   const train = page.getByRole("link", { name: "Train on it" }).first();
@@ -243,6 +251,7 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
 await step("7 train: guidance before, honest verdict after", async (check, snap) => {
   await page.getByLabel("Base model").selectOption({ index: 1 });
   check("a tiny dataset is called out", await visible(page.getByTestId("train-advice")));
+  await openDisclosure(page, /^More options/);
   check("parameters are explained", await visible(page.getByText(/Passes over the training images/)));
   await page.getByLabel("Epochs").fill(cfg.epochs);
   await page.getByLabel("Image size").fill("640");
@@ -265,8 +274,8 @@ await step("8 run the trained model; review; accept as labels with a count; undo
   const card = page.getByTestId("run-card");
   // Runs one local detection with the model whose option matches `kind`; returns the run.
   const detect = async (kind, shotName) => {
-    await page.getByRole("link", { name: "Query" }).click();
-    const again = page.getByRole("button", { name: "New query" });
+    await page.getByRole("navigation").getByRole("link", { name: /^Detect\b/ }).click();
+    const again = page.getByRole("button", { name: "New detection" });
     if (await again.isVisible().catch(() => false)) await again.click();
     const model = page.getByLabel("Model", { exact: true });
     // The list loads after the screen: wait for the model before choosing it.
@@ -302,7 +311,7 @@ await step("8 run the trained model; review; accept as labels with a count; undo
   const before = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
   check("nothing accepted yet", before.promoted_at === null);
   await snap("accept-confirm");
-  await confirm.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click();
+  await confirm.getByRole("button", { name: /^Accept \d+ box(es)? as labels$/ }).click();
   check("accepted", await visible(card.getByText("Accepted as labels")));
   await card.getByRole("button", { name: "Undo acceptance" }).click();
   check("undone", await visible(page.getByRole("status").filter({ hasText: "returned to unreviewed" })));
@@ -310,16 +319,16 @@ await step("8 run the trained model; review; accept as labels with a count; undo
   check("the run is no longer promoted", after.promoted_at === null);
   await snap("accept-undone");
   await card.getByRole("link", { name: "Review results" }).click();
-  check("the review names how many images still wait", await visible(page.getByTestId("run-filter").filter({ hasText: "still have proposals" })));
+  check("the review names how many images still wait", await visible(page.getByTestId("run-filter").filter({ hasText: "still have suggestions" })));
   await snap("review-of-the-run");
   await page.getByTestId("image-table").getByText(/\.jpg$/).first().dblclick();
   await urlIs(/\/edit\//);
   // A dense run is unreadable until the weak proposals are out of the way.
   const shown = await page.getByTestId("proposal-count").innerText();
-  await page.getByLabel("Hide proposals below this confidence").fill("95");
-  check("the confidence floor hides weak proposals", /hidden/.test(await page.getByTestId("confidence-floor").innerText()), `${shown} -> ${await page.getByTestId("proposal-count").innerText()}`);
+  await page.getByLabel("Hide suggestions below this confidence").fill("95");
+  check("the confidence floor hides weak suggestions", /hidden/.test(await page.getByTestId("confidence-floor").innerText()), `${shown} -> ${await page.getByTestId("proposal-count").innerText()}`);
   await snap("review-confidence-floor");
-  await page.getByLabel("Hide proposals below this confidence").fill("0");
+  await page.getByLabel("Hide suggestions below this confidence").fill("0");
   const back = page.getByRole("link", { name: "Back to the review queue" });
   check("the editor leads back to this review", (await back.getAttribute("href"))?.includes("ids="), await back.getAttribute("href"));
   await back.click();

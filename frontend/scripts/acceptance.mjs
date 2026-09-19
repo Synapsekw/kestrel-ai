@@ -138,9 +138,20 @@ async function go(path) {
   }, path);
 }
 
+/** Opens a "More options"-style disclosure if it is closed; a no-op when it is already open. */
+async function openDisclosure(scope, name) {
+  const button = scope.getByRole("button", { name });
+  if ((await button.getAttribute("aria-expanded")) === "false") await button.click();
+}
+
 /** The sidebar link, which is how a person moves between screens. */
 async function openScreen(label, heading) {
-  await page.getByRole("link", { name: label, exact: true }).click();
+  // Pipeline steps carry a count after their name ("Images 40"): match the name as a prefix.
+  await page
+    .getByRole("navigation")
+    .getByRole("link", { name: new RegExp(`^${label}\\b`) })
+    .first()
+    .click();
   await page.getByRole("heading", { name: heading, exact: true }).waitFor({ timeout: 60_000 });
 }
 
@@ -333,10 +344,10 @@ async function selectRows(items, count, total) {
 }
 
 async function importWeights(name, path) {
-  await page.getByRole("button", { name: "Import weights" }).click();
+  await openDisclosure(page, "Import weights from a file");
   await page.getByLabel("Model name").fill(name);
   await page.getByLabel("Weights path").fill(path);
-  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("button", { name: "Import weights", exact: true }).click();
   await page.getByTestId("model-detail").waitFor({ timeout: 300_000 });
 }
 
@@ -479,9 +490,9 @@ try {
   }
   let datasets = await api("GET", `/projects/${projectId}/datasets`);
   if (datasets.items.length === 0) {
-    await openScreen("Data", "Data Manager");
+    await openScreen("Images", "Images");
     await page.getByLabel("Labeled").selectOption("yes");
-    await page.getByRole("button", { name: "List" }).click();
+    await page.getByRole("radio", { name: "List" }).click();
     await page.getByTestId("image-table").waitFor({ timeout: 60_000 });
     const labeled = await api("GET", `/projects/${projectId}/images?labeled=true&limit=200&sort=path`);
     await selectRows(labeled.items, cfg.labelCount, labeled.total);
@@ -560,6 +571,7 @@ try {
       await sleep(500);
       await page.getByLabel("Base model", { exact: true }).selectOption({ label: "yolo11n-coco (Imported)" });
       await page.getByLabel("Model name").fill("ahmadia-v1");
+      await openDisclosure(page, /^More options/);
       await page.getByLabel("Epochs").fill(String(cfg.epochs));
       await page.getByLabel("Image size").fill(String(cfg.imgsz));
       await page.getByLabel("Automatic batch size").uncheck();
@@ -604,9 +616,9 @@ try {
 
   // ---------------------------------------- 6. query run, review, promote
   elapsed = begin("6. run the trained model over unlabeled images, review and promote");
-  await openScreen("Data", "Data Manager");
+  await openScreen("Images", "Images");
   await page.getByLabel("Labeled").selectOption("no");
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByTestId("image-table").waitFor({ timeout: 60_000 });
   const unlabeled = await api(
     "GET",
@@ -615,7 +627,7 @@ try {
   const intendedIds = new Set(unlabeled.items.slice(0, cfg.queryImages).map((i) => i.id));
   await selectRows(unlabeled.items, cfg.queryImages, unlabeled.total);
   await page.getByRole("button", { name: "Run model" }).click();
-  await page.getByRole("heading", { name: "Query", exact: true }).waitFor({ timeout: 60_000 });
+  await page.getByRole("heading", { name: "Detect", exact: true }).waitFor({ timeout: 60_000 });
   await page
     .getByLabel("Model", { exact: true })
     .locator("option", { hasText: trained.name })
@@ -635,7 +647,7 @@ try {
   await shot(page, "06-query-run");
   // Review: open the run's images in the review queue, which is where a person accepts or rejects.
   await page.getByRole("link", { name: "Review results" }).click();
-  await page.getByRole("heading", { name: "Review queue" }).waitFor({ timeout: 60_000 });
+  await page.getByRole("heading", { name: "Review", exact: true }).waitFor({ timeout: 60_000 });
   // The queue is virtualised, so its size is `aria-rowcount`, not the number of mounted rows;
   // it is read only once the list has loaded (the grid reports 0 rows while "Loading...").
   let reviewRows = 0;
@@ -654,7 +666,7 @@ try {
   await page.getByLabel("Minimum confidence").fill("0");
   await page.getByRole("button", { name: "Accept as labels…" }).click();
   // Two steps since the usability wave: the card counts first, then asks.
-  await page.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click({ timeout: 60_000 });
+  await page.getByRole("button", { name: /^Accept \d+ box(es)? as labels$/ }).click({ timeout: 60_000 });
   await sleep(2500);
   run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
   await shot(page, "06-promoted");
@@ -682,16 +694,17 @@ try {
       await api("PUT", "/providers/anthropic/key", { api_key: key }, { redact: true });
     }
     try {
-      await openScreen("Query", "Query");
+      await openScreen("Detect", "Detect");
       await page
-        .getByRole("button", { name: "New query" })
+        .getByRole("button", { name: "New detection" })
         .click({ timeout: 3000 })
         .catch(() => {}); // only there when a run is open
-      await page.getByLabel("Cloud provider").check();
+      await page.getByRole("radio", { name: "Cloud provider" }).click();
       await page.getByLabel("Query", { exact: true }).fill("dump trucks");
       await page.getByLabel("Images", { exact: true }).selectOption({ label: "First N images" });
       await page.getByLabel("Number of images").fill(String(cfg.cloudImages));
-      await page.getByLabel("Tiling").check();
+      await openDisclosure(page, /^Tiling/);
+      await page.getByLabel("Tile large images").check();
       await page.getByRole("button", { name: "Estimate" }).click();
       await page.getByTestId("estimate").waitFor({ timeout: 30_000 });
       await page.getByRole("button", { name: "Start" }).click();

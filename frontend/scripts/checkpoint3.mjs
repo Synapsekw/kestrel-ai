@@ -93,13 +93,19 @@ await page.getByTestId("image-grid").waitFor({ timeout: 30_000 });
 await page.waitForFunction(() => document.querySelectorAll('[data-testid="image-grid"] [role="listitem"]').length >= 12, null, { timeout: 60_000 });
 await shot(page, "02-data-manager-imported");
 
+/** Opens a "More options"-style disclosure if it is closed; a no-op when it is already open. */
+async function openDisclosure(scope, name) {
+  const button = scope.getByRole("button", { name });
+  if ((await button.getAttribute("aria-expanded")) === "false") await button.click();
+}
+
 // 3. Import COCO weights through the Models screen and set them as the pre-annotation model.
 await page.goto(`http://127.0.0.1:1420/p/${pid}/models`);
 await page.getByRole("heading", { name: "Models" }).waitFor({ timeout: 30_000 });
-await page.getByRole("button", { name: "Import weights" }).click();
+await openDisclosure(page, "Import weights from a file");
 await page.getByLabel("Model name").fill("yolo11m-coco");
 await page.getByLabel("Weights path").fill(weightsPath);
-await page.getByRole("button", { name: "Import", exact: true }).click();
+await page.getByRole("button", { name: "Import weights", exact: true }).click();
 await page.getByTestId("model-detail").waitFor({ timeout: 120_000 });
 await page.getByRole("button", { name: "Use as pre-annotation model" }).click();
 await page.waitForFunction(async () => true, null, { timeout: 1000 });
@@ -146,7 +152,7 @@ await shot(page, "05-labeled");
 if (!process.env.CP3_TRAIN_JOB_ID) { // a finished training run implies the dataset exists
 const labeled = await api("GET", `/projects/${pid}/images?labeled=true&limit=50&sort=path`);
 await page.goto(`http://127.0.0.1:1420/p/${pid}/data`);
-await page.getByRole("button", { name: "List" }).click();
+await page.getByRole("radio", { name: "List" }).click();
 await page.getByTestId("image-table").waitFor({ timeout: 30_000 });
 for (const img of labeled.items) {
   const cb = page.getByLabel(`Select ${img.file_name}`);
@@ -180,6 +186,7 @@ if (process.env.CP3_TRAIN_JOB_ID) {
   await page.getByLabel("Dataset", { exact: true }).locator("option", { hasText: "v1" }).waitFor({ state: "attached", timeout: 30_000 });
   await sleep(500);
   await page.getByLabel("Model name").fill("cp3-model");
+  await openDisclosure(page, /^More options/);
   await page.getByLabel("Epochs").fill("1");
   await page.getByLabel("Image size").fill("640");
   await page.getByLabel("Automatic batch size").uncheck();
@@ -203,7 +210,7 @@ const trainedModel = (await api("GET", `/projects/${pid}/models`)).items.find((m
 
 // 8. Query run with the trained model over the unlabeled images, then promote.
 await page.goto(`http://127.0.0.1:1420/p/${pid}/query`);
-await page.getByRole("heading", { name: "Query" }).waitFor({ timeout: 30_000 });
+await page.getByRole("heading", { name: "Detect", exact: true }).waitFor({ timeout: 30_000 });
 await page.getByLabel("Model", { exact: true }).locator("option", { hasText: trainedModel.name }).waitFor({ state: "attached", timeout: 30_000 });
 await page.getByLabel("Model", { exact: true }).selectOption({ label: `${trainedModel.name} (Trained)` }).catch(async () => {
   const opts = await page.getByLabel("Model", { exact: true }).locator("option").allTextContents();
@@ -225,7 +232,7 @@ step("local query run from the ui", inferJob.state === "succeeded", `estimate "$
 await page.getByLabel("Minimum confidence").fill("0");
 await page.getByRole("button", { name: "Accept as labels…" }).click();
 // Two steps since the usability wave: the card counts first, then asks.
-await page.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click({ timeout: 60_000 });
+await page.getByRole("button", { name: /^Accept \d+ box(es)? as labels$/ }).click({ timeout: 60_000 });
 await sleep(2000);
 run = await api("GET", `/projects/${pid}/query-runs/${runId}`);
 step("promote from the ui", Boolean(run.promoted_at), `promoted_at ${run.promoted_at}`);
@@ -236,7 +243,7 @@ const key = process.env.ANTHROPIC_API_KEY;
 if (key) {
   await api("PUT", `/providers/anthropic/key`, { api_key: key });
   await page.goto(`http://127.0.0.1:1420/p/${pid}/query`);
-  await page.getByLabel("Cloud provider").check();
+  await page.getByRole("radio", { name: "Cloud provider" }).click();
   await page.getByLabel("Query", { exact: true }).fill("dump trucks");
   await page.getByLabel("Images", { exact: true }).selectOption({ label: "First N images" }).catch(() => {});
   await page.getByLabel("Number of images").fill("5").catch(() => {});
