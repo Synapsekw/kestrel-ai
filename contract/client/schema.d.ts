@@ -822,7 +822,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Show a file or folder of the project in Windows Explorer. The path is relative to the project folder; 422 when it leaves the folder, 404 when it does not exist. */
+        /** Show a file or folder of the project in Windows Explorer. The path is relative to the project folder; 409 `conflict` when it leaves the folder (a schema-valid body is never answered 422), 404 when it does not exist. */
         post: operations["revealInExplorer"];
         delete?: never;
         options?: never;
