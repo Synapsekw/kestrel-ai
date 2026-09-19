@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ClassDefInput, Project } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf, unwrap } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Button, Disclosure, EmptyState, Field, Input, Pill, SkeletonRows, Textarea } from "@/ui";
 
 const DEFAULT_CLASSES = [
   "excavator",
@@ -45,11 +46,13 @@ function FolderField({
   label,
   value,
   onChange,
+  hint,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (folder: string) => void;
+  hint?: string;
 }) {
   const { mode } = useBackend();
   const pick = useCallback(async () => {
@@ -59,36 +62,29 @@ function FolderField({
   }, [onChange]);
 
   return (
-    <div className="flex flex-col gap-1">
-      <label htmlFor={id} className="text-sm text-slate-300">
-        {label}
-      </label>
+    <Field label={label} htmlFor={id} hint={hint}>
       <div className="flex gap-2">
-        <input
+        <Input
           id={id}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="E:\Projects\Ahmadia"
-          className="min-w-0 flex-1 rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
+          className="font-mono"
         />
         {mode === "tauri" && (
-          <button
-            type="button"
-            onClick={() => void pick()}
-            className="rounded border border-slate-700 px-3 py-1.5 text-sm hover:bg-slate-800"
-          >
+          <Button icon="folder" onClick={() => void pick()}>
             Browse
-          </button>
+          </Button>
         )}
       </div>
-    </div>
+    </Field>
   );
 }
 
 export function ProjectsScreen() {
   const api = useApi();
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<Project[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
@@ -96,6 +92,7 @@ export function ProjectsScreen() {
   const [classes, setClasses] = useState(DEFAULT_CLASSES.join("\n"));
   const [openFolder, setOpenFolder] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  const classNames = useMemo(() => parseClasses(classes).map((c) => c.name), [classes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,11 +101,15 @@ export function ProjectsScreen() {
       .then(({ data, error: err }) => {
         if (cancelled) return;
         if (data) setProjects(data.items);
-        else setError(messageOf(err, "could not list projects"));
+        else {
+          setProjects([]);
+          setError(messageOf(err, "could not list projects"));
+        }
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         pushLog(`list projects failed: ${e}`);
+        setProjects([]);
         setError(String(e));
       });
     return () => {
@@ -153,7 +154,7 @@ export function ProjectsScreen() {
       await unwrap(
         api.DELETE("/api/v1/projects/{projectId}", { params: { path: { projectId: project.id } } }),
       );
-      setProjects((list) => list.filter((p) => p.id !== project.id));
+      setProjects((list) => (list ?? []).filter((p) => p.id !== project.id));
       setRemoving(null);
     } catch (e) {
       pushLog(`forget project failed: ${messageOf(e, String(e))}`);
@@ -186,121 +187,138 @@ export function ProjectsScreen() {
   }
 
   return (
-    <section className="mx-auto flex max-w-4xl flex-col gap-8">
-      <h1 className="text-2xl font-semibold">Projects</h1>
-
-      {error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {error}
+    <section className="mx-auto flex max-w-6xl flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
+        <p className="text-sm text-muted">
+          A project is a folder on disk: the images, labels, datasets and models of one site or one campaign.
         </p>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">Recent</h2>
-        {projects.length === 0 ? (
-          <p className="text-sm text-slate-400">No projects yet.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {projects.map((p) => (
-              <li
-                key={p.id}
-                className="flex flex-wrap items-center justify-between rounded border border-slate-800 bg-slate-800/40 px-3 py-2"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate font-medium">{p.name}</span>
-                  <span className="block truncate font-mono text-xs text-slate-400">{p.folder}</span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  <button
-                    type="button"
-                    aria-label={`Remove ${p.name} from the list`}
-                    onClick={() => setRemoving(p.id)}
-                    className="rounded px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
-                  >
-                    Remove
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => openProject(p)}
-                    className="rounded bg-orange-600 px-3 py-1.5 text-sm font-medium hover:bg-orange-500"
-                  >
-                    Open
-                  </button>
-                </span>
-                {removing === p.id && (
-                  <span className="flex basis-full flex-wrap items-center gap-2 pt-2 text-xs text-slate-300">
-                    Remove {p.name} from this list? The folder and everything in it stay on disk; Open folder
-                    brings the project back.
-                    <button
-                      type="button"
-                      onClick={() => void onForget(p)}
-                      disabled={busy}
-                      className="rounded border border-slate-600 px-2 py-1 hover:bg-slate-800 disabled:opacity-50"
-                    >
-                      Remove from the list
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRemoving(null)}
-                      className="px-2 py-1 hover:underline"
-                    >
-                      Keep
-                    </button>
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
 
-      <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Create project</h2>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="project-name" className="text-sm text-slate-300">
-            Name
-          </label>
-          <input
-            id="project-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 text-sm"
-          />
-        </div>
-        <FolderField id="project-folder" label="Folder" value={folder} onChange={setFolder} />
-        <div className="flex flex-col gap-1">
-          <label htmlFor="project-classes" className="text-sm text-slate-300">
-            Classes (one per line)
-          </label>
-          <textarea
-            id="project-classes"
-            value={classes}
-            onChange={(e) => setClasses(e.target.value)}
-            rows={8}
-            className="rounded border border-slate-700 bg-slate-800 px-2 py-1.5 font-mono text-sm"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={busy}
-          className="self-start rounded bg-orange-600 px-4 py-2 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
-        >
-          Create project
-        </button>
-      </form>
+      {error && (
+        <Alert tone="danger" onDismiss={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
 
-      <form onSubmit={(e) => void onOpen(e)} className="flex flex-col gap-3">
-        <h2 className="text-lg font-medium">Open folder</h2>
-        <FolderField id="open-folder" label="Folder" value={openFolder} onChange={setOpenFolder} />
-        <button
-          type="submit"
-          disabled={busy}
-          className="self-start rounded border border-slate-700 px-4 py-2 text-sm font-medium hover:bg-slate-800 disabled:opacity-50"
-        >
-          Open folder
-        </button>
-      </form>
+      <div className="grid gap-10 lg:grid-cols-[1fr_minmax(20rem,26rem)]">
+        <div className="flex min-w-0 flex-col gap-3">
+          <h2 className="text-base font-semibold">Recent projects</h2>
+          {projects === null ? (
+            <SkeletonRows rows={3} columns={2} />
+          ) : projects.length === 0 ? (
+            <EmptyState icon="folder" title="No projects yet">
+              Create one on the right, or open a folder that already holds a project.
+            </EmptyState>
+          ) : (
+            <ul className="flex flex-col gap-2">
+              {projects.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-panel px-4 py-3 transition-[border-color,box-shadow] duration-140 ease-out hover:border-line-strong hover:shadow-sm motion-reduce:transition-none"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{p.name}</span>
+                    <span className="block truncate font-mono text-xs text-muted">{p.folder}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`Remove ${p.name} from the list`}
+                      onClick={() => setRemoving(removing === p.id ? null : p.id)}
+                    >
+                      Remove
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={() => openProject(p)}>
+                      Open
+                    </Button>
+                  </span>
+                  {removing === p.id && (
+                    <div className="basis-full">
+                      <Alert
+                        tone="warn"
+                        role="status"
+                        actions={
+                          <>
+                            <Button size="sm" onClick={() => void onForget(p)} disabled={busy}>
+                              Remove from the list
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setRemoving(null)}>
+                              Keep
+                            </Button>
+                          </>
+                        }
+                      >
+                        Remove {p.name} from this list? The folder and everything in it stay on disk; Open
+                        folder brings the project back.
+                      </Alert>
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-10">
+          <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-4" noValidate>
+            <h2 className="text-base font-semibold">Create a project</h2>
+            <Field label="Name" htmlFor="project-name">
+              <Input
+                id="project-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                placeholder="Site name or campaign"
+              />
+            </Field>
+            <FolderField
+              id="project-folder"
+              label="Folder"
+              value={folder}
+              onChange={setFolder}
+              hint="A new or empty folder. Imported images are copied here; the originals are never touched."
+            />
+            <div className="flex flex-col gap-2">
+              <p className="text-[13px] font-medium">Classes</p>
+              <div className="flex flex-wrap gap-1.5">
+                {classNames.length === 0 ? (
+                  <span className="text-xs text-danger">Add at least one class.</span>
+                ) : (
+                  classNames.map((c) => <Pill key={c}>{c}</Pill>)
+                )}
+              </div>
+              <Disclosure label="Edit the class list">
+                <Field
+                  label="Classes (one per line)"
+                  htmlFor="project-classes"
+                  hint="Each class gets a colour and a number key in the editor. Classes can be changed later in Project settings."
+                >
+                  <Textarea
+                    id="project-classes"
+                    value={classes}
+                    onChange={(e) => setClasses(e.target.value)}
+                    rows={8}
+                    className="font-mono"
+                  />
+                </Field>
+              </Disclosure>
+            </div>
+            <Button type="submit" variant="primary" loading={busy} icon="plus" className="self-start">
+              Create project
+            </Button>
+          </form>
+
+          <form onSubmit={(e) => void onOpen(e)} className="flex flex-col gap-4" noValidate>
+            <h2 className="text-base font-semibold">Open a project folder</h2>
+            <FolderField id="open-folder" label="Folder" value={openFolder} onChange={setOpenFolder} />
+            <Button type="submit" loading={busy} icon="folder" className="self-start">
+              Open folder
+            </Button>
+          </form>
+        </div>
+      </div>
     </section>
   );
 }
