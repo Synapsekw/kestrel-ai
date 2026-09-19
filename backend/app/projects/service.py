@@ -61,12 +61,16 @@ def normalise_classes(classes: list[dict]) -> list[dict]:
     names: set[str] = set()
     keys: set[str] = set()
     for i, c in enumerate(classes):
+        # 409, not 422: duplicates and names that are blank only to Python's strip() match the
+        # schema, and a schema-valid body must not be answered 422 (see tests/test_contract.py).
         name = (c.get("name") or "").strip()
-        if not name or name in names:
-            raise AppError("validation_error", f"duplicate or empty class name {name!r}", 422)
+        if not name:
+            raise AppError("conflict", "A class name cannot be blank.", 409)
+        if name in names:
+            raise AppError("conflict", f"Two classes are called {name}. Class names must be unique.", 409)
         hotkey = c.get("hotkey") or None
         if hotkey and hotkey in keys:
-            raise AppError("validation_error", f"duplicate hotkey {hotkey!r}", 422)
+            raise AppError("conflict", f"Two classes use the hotkey {hotkey}.", 409)
         names.add(name)
         if hotkey:
             keys.add(hotkey)
