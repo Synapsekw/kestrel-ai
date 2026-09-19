@@ -43,7 +43,12 @@ export function DatasetList({ datasets, selectedId, onSelect }: Props) {
                 <button
                   type="button"
                   aria-label={`Select dataset ${d.name}`}
-                  onClick={() => onSelect(d.id)}
+                  onClick={(e) => {
+                    // The row has its own click-anywhere handler; without this, a click on the
+                    // button would bubble up and call onSelect a second time.
+                    e.stopPropagation();
+                    onSelect(d.id);
+                  }}
                   className="font-medium hover:underline"
                 >
                   {d.name}
