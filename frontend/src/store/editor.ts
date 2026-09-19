@@ -220,6 +220,14 @@ export function visibleProposalIds(s: Visibility): string[] {
     .map((b) => b.id);
 }
 
+/** Unreviewed proposals the confidence floor keeps out of sight (rejected ones do not count). */
+export function hiddenProposalCount(s: Visibility): number {
+  return (
+    visibleProposalIds({ ...s, showRejected: false, minConfidence: 0 }).length -
+    visibleProposalIds({ ...s, showRejected: false }).length
+  );
+}
+
 export function selectedBox(s: Pick<EditorState, "boxes" | "selectedId">): Box | null {
   return s.selectedId ? (s.boxes[s.selectedId] ?? null) : null;
 }

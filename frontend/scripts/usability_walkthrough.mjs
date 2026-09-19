@@ -225,7 +225,7 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await page.getByRole("button", { name: /^Select all \d+$/ }).click();
   await page.getByRole("button", { name: "Add to dataset" }).click();
   const dialog = page.getByRole("dialog", { name: "Add to dataset" });
-  check("the dialog counts the empty image as a negative example", /1 of them marked empty, used as negative examples/.test(await dialog.innerText()));
+  check("the dialog counts the empty image as a negative example", /1 marked empty \(negative examples\)/.test(await dialog.innerText()), (await dialog.innerText()).slice(0, 140));
   await dialog.getByLabel("Dataset name").fill("first set");
   await dialog.getByRole("button", { name: "Create dataset" }).click();
   check("a name with a space is explained", await visible(page.getByRole("alert").filter({ hasText: "letters, digits, dot, dash and underscore" })));

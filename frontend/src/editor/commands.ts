@@ -3,7 +3,7 @@ import { createBox, deleteBox, reviewBoxes, updateBox } from "@/api/boxes";
 import { messageOf } from "@/api/errors";
 import { setMarkedEmpty } from "@/api/images";
 import { pushLog } from "@/app/diagnostics";
-import { hasGroundTruth, type EditorStore } from "@/store/editor";
+import { hasGroundTruth, hiddenProposalCount, type EditorStore } from "@/store/editor";
 import { duplicateOffset, rectEquals, rectOf, roundRect, type Rect } from "./geometry";
 import type { BoxRef, History } from "./history";
 
@@ -279,6 +279,17 @@ export async function cmdToggleEmpty(ctx: CommandContext): Promise<void> {
   const next = !image.marked_empty;
   if (next && hasGroundTruth(store.getState().boxes)) {
     store.getState().setError(GROUND_TRUTH_MESSAGE);
+    return;
+  }
+  // Marking rejects every unreviewed proposal. While the confidence floor hides some of them the
+  // analyst would reject what they never saw, so the mark waits until they are in view.
+  const hidden = next ? hiddenProposalCount(store.getState()) : 0;
+  if (hidden > 0) {
+    store
+      .getState()
+      .setError(
+        `${hidden} ${hidden === 1 ? "proposal is" : "proposals are"} hidden by the confidence floor. Lower it and look before marking the image as empty.`,
+      );
     return;
   }
   store.getState().beginRequest();

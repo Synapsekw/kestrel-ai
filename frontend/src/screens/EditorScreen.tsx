@@ -19,7 +19,13 @@ import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
 import { useEditorImage } from "@/editor/useEditorImage";
 import { useEditorNavigation } from "@/editor/useEditorNavigation";
 import { useHistory } from "@/editor/useHistory";
-import { hasGroundTruth, useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
+import {
+  hasGroundTruth,
+  hiddenProposalCount,
+  useEditorStore,
+  visibleBoxes,
+  visibleProposalIds,
+} from "@/store/editor";
 
 export function EditorScreen() {
   const { projectId = "", imageId = "" } = useParams();
@@ -78,9 +84,7 @@ function EditorBody({
   );
   // Proposals the confidence floor keeps out of sight on this image.
   const hiddenByFloor = useMemo(
-    () =>
-      visibleProposalIds({ boxes, order, showRejected }).length -
-      visibleProposalIds({ boxes, order, showRejected, minConfidence }).length,
+    () => hiddenProposalCount({ boxes, order, showRejected, minConfidence }),
     [boxes, order, showRejected, minConfidence],
   );
   const counts = useMemo(() => {
@@ -265,6 +269,7 @@ function EditorBody({
           selectedId={selectedId}
           hoveredId={hoveredId}
           markedEmpty={image?.marked_empty ?? false}
+          hiddenByFloor={hiddenByFloor}
           onSelect={select}
           onHover={hover}
           onSetClass={(id, classId) => void actions.setClass(id, classId)}

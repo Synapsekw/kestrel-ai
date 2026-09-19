@@ -311,6 +311,22 @@ describe("cmdToggleEmpty", () => {
     expect(useEditorStore.getState().image?.marked_empty).toBe(false);
   });
 
+  it("refuses to mark while the confidence floor hides proposals: they would be rejected unseen", async () => {
+    useEditorStore.getState().loadImage(exampleImage, [proposalBox]); // confidence 0.81
+    useEditorStore.getState().setMinConfidence(0.9);
+    const c = ctx();
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+    expect(useEditorStore.getState().error).toBe(
+      "1 proposal is hidden by the confidence floor. Lower it and look before marking the image as empty.",
+    );
+    expect(c.requests).toHaveLength(0);
+    // With the floor out of the way the mark goes through as before.
+    useEditorStore.getState().setMinConfidence(0);
+    await cmdToggleEmpty(c);
+    expect(c.requests.length).toBeGreaterThan(0);
+  });
+
   it("refuses locally, without a request, while the store already has a ground-truth box (M3)", async () => {
     useEditorStore.getState().loadImage(exampleImage, [proposalBox, personBox]);
     const c = ctx();
