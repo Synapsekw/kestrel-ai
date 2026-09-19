@@ -20,10 +20,12 @@ describe("AddToDatasetDialog", () => {
     ]);
     const onClose = vi.fn();
     renderWithProviders(
-      <AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a", "b"]} onClose={onClose} />,
+      <AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a", "b"]} emptyCount={1} onClose={onClose} />,
       { api },
     );
-    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent("2 images");
+    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent(
+      "Freeze the accepted boxes of 2 images (1 of them marked empty, used as negative examples) into a new dataset",
+    );
     expect(screen.getByLabelText("Seed")).toHaveValue(42);
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
     fireEvent.change(screen.getByLabelText("Split method"), { target: { value: "random" } });
@@ -56,9 +58,10 @@ describe("AddToDatasetDialog", () => {
         body: errorBody("already_exists", "dataset v1 exists"),
       },
     ]);
-    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
-      api,
-    });
+    renderWithProviders(
+      <AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} emptyCount={0} onClose={() => {}} />,
+      { api },
+    );
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("dataset v1 exists"));
@@ -66,9 +69,10 @@ describe("AddToDatasetDialog", () => {
 
   it("refuses a name with a space before sending and says which characters are allowed", async () => {
     const { api, requests } = fakeClient([]);
-    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
-      api,
-    });
+    renderWithProviders(
+      <AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} emptyCount={0} onClose={() => {}} />,
+      { api },
+    );
     const nameInput = screen.getByLabelText("Dataset name");
     // `[A-Za-z0-9._-]+` is not a valid `pattern` under the v flag WebView2 compiles it with.
     expect(nameInput).not.toHaveAttribute("pattern");

@@ -8,9 +8,15 @@ function renderBar(
   api: ReturnType<typeof fakeClient>["api"],
   props: Partial<Parameters<typeof SelectionBar>[0]> = {},
 ) {
-  const handlers = { onLabel: vi.fn(), onRunModel: vi.fn(), onDeleted: vi.fn(), onClear: vi.fn() };
+  const handlers = {
+    onLabel: vi.fn(),
+    onRunModel: vi.fn(),
+    onDeleted: vi.fn(),
+    onMarked: vi.fn(),
+    onClear: vi.fn(),
+  };
   renderWithProviders(
-    <SelectionBar projectId={PROJECT_ID} selectedIds={["a", "b"]} {...handlers} {...props} />,
+    <SelectionBar projectId={PROJECT_ID} selectedIds={["a", "b"]} emptyCount={0} {...handlers} {...props} />,
     { api },
   );
   return handlers;
@@ -35,6 +41,29 @@ describe("SelectionBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete 2 images" }));
     await waitFor(() => expect(h.onDeleted).toHaveBeenCalledWith("2 images deleted"));
     expect(requests[0].body).toEqual({ image_ids: ["a", "b"] });
+  });
+
+  it("marks the selection empty and reports skipped images with accepted boxes", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 1, skipped: 1 } },
+    ]);
+    const h = renderBar(api);
+    fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
+    await waitFor(() =>
+      expect(h.onMarked).toHaveBeenCalledWith(
+        "1 marked as empty, 1 skipped because they have accepted boxes",
+      ),
+    );
+    expect(requests[0]).toMatchObject({ body: { image_ids: ["a", "b"], marked_empty: true } });
+  });
+
+  it("marks the selection empty with no skipped note when nothing was skipped", async () => {
+    const { api } = fakeClient([
+      { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 2, skipped: 0 } },
+    ]);
+    const h = renderBar(api);
+    fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
+    await waitFor(() => expect(h.onMarked).toHaveBeenCalledWith("2 marked as empty"));
   });
 
   it("shows the envelope message when a delete fails", async () => {
