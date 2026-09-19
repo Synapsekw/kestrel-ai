@@ -2221,27 +2221,6 @@ export interface components {
             image_ids?: string[];
         };
         /**
-         * @description `result` of a succeeded `results_export` job
-         * @example {
-         *       "folder": "exports/2026-09-19_101500",
-         *       "files": [
-         *         "detections.csv",
-         *         "counts_by_group.csv",
-         *         "counts_by_image.csv",
-         *         "report.html"
-         *       ],
-         *       "image_count": 3299,
-         *       "box_count": 412
-         *     }
-         */
-        ResultsExportResult: {
-            /** @description project-relative, forward slashes: exports/<timestamp> */
-            folder: string;
-            files: string[];
-            image_count: number;
-            box_count: number;
-        };
-        /**
          * @example {
          *       "path": "exports/2026-09-19_101500"
          *     }
@@ -3673,7 +3652,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description the export job; its `result` is a ResultsExportResult */
+            /** @description the export job; when it succeeds its `result` is `{folder: "exports/<timestamp>" (project-relative, forward slashes), files: string[], image_count: integer, box_count: integer}` */
             202: {
                 headers: {
                     [name: string]: unknown;

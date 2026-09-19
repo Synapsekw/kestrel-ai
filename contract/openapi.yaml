@@ -928,7 +928,7 @@ paths:
             schema: { $ref: "#/components/schemas/ResultsExportRequest" }
       responses:
         "202":
-          description: the export job; its `result` is a ResultsExportResult
+          description: "the export job; when it succeeds its `result` is `{folder: \"exports/<timestamp>\" (project-relative, forward slashes), files: string[], image_count: integer, box_count: integer}`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
@@ -2094,18 +2094,6 @@ components:
           description: defaults to every image of the project
           items: { type: string }
       example: { formats: [csv, html], include_unreviewed: false }
-    ResultsExportResult:
-      type: object
-      description: "`result` of a succeeded `results_export` job"
-      required: [folder, files, image_count, box_count]
-      properties:
-        folder: { type: string, description: "project-relative, forward slashes: exports/<timestamp>" }
-        files:
-          type: array
-          items: { type: string }
-        image_count: { type: integer }
-        box_count: { type: integer }
-      example: { folder: "exports/2026-09-19_101500", files: [detections.csv, counts_by_group.csv, counts_by_image.csv, report.html], image_count: 3299, box_count: 412 }
     RevealRequest:
       type: object
       required: [path]
