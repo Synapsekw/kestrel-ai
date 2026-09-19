@@ -297,7 +297,7 @@ test("pre-annotates on open when no proposal is pending and tolerates 501", asyn
   await preannotate;
   await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
   await expect(
-    page.getByRole("status").filter({ hasText: "1 proposal from the pre-annotation model" }),
+    page.getByRole("status").filter({ hasText: "1 suggestion from the pre-annotation model" }),
   ).toBeVisible();
 
   await page.route(`**/api/v1/projects/${P}/images/${IMG}/preannotate`, (route) =>

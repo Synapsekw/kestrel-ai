@@ -12,7 +12,7 @@ const PREANNOTATING = "Pre-annotating with the project's model…";
 function proposalsNotice(n: number): string {
   if (n === 0)
     return "The pre-annotation model found nothing on this image. General-purpose weights rarely fire on aerial frames; a model trained on this project's labels will do better.";
-  return `${n} ${n === 1 ? "proposal" : "proposals"} from the pre-annotation model (dashed). A accepts all, R rejects all.`;
+  return `${n} ${n === 1 ? "suggestion" : "suggestions"} from the pre-annotation model (dashed). A accepts all, R rejects all.`;
 }
 
 function failureNotice(e: unknown): string {

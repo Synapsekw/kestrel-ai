@@ -318,7 +318,7 @@ describe("cmdToggleEmpty", () => {
     await cmdToggleEmpty(c);
     expect(useEditorStore.getState().image?.marked_empty).toBe(false);
     expect(useEditorStore.getState().error).toBe(
-      "1 proposal is hidden by the confidence floor. Lower it and look before marking the image as empty.",
+      "1 suggestion is hidden by the confidence floor. Lower it and look before marking the image as empty.",
     );
     expect(c.requests).toHaveLength(0);
     // With the floor out of the way the mark goes through as before.

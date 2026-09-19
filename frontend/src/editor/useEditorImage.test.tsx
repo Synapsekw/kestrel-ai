@@ -60,7 +60,7 @@ describe("useEditorImage pre-annotation notices", () => {
     ]);
     await waitFor(() =>
       expect(notices.at(-1)).toBe(
-        "1 proposal from the pre-annotation model (dashed). A accepts all, R rejects all.",
+        "1 suggestion from the pre-annotation model (dashed). A accepts all, R rejects all.",
       ),
     );
   });

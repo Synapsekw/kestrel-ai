@@ -211,7 +211,7 @@ export async function cmdReview(ctx: CommandContext, ids: string[], action: Revi
   if (ok === undefined) return;
   store.getState().patchStates(ids, state);
   history.push({
-    label: `${action} proposals`,
+    label: `${action} suggestions`,
     undo: async () => {
       await reviewBoxes(api, projectId, ids, "unreview");
       store.getState().patchStates(ids, "unreviewed");
@@ -288,7 +288,7 @@ export async function cmdToggleEmpty(ctx: CommandContext): Promise<void> {
     store
       .getState()
       .setError(
-        `${hidden} ${hidden === 1 ? "proposal is" : "proposals are"} hidden by the confidence floor. Lower it and look before marking the image as empty.`,
+        `${hidden} ${hidden === 1 ? "suggestion is" : "suggestions are"} hidden by the confidence floor. Lower it and look before marking the image as empty.`,
       );
     return;
   }
