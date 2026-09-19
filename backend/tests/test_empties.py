@@ -361,3 +361,14 @@ def test_dataset_creation_includes_marked_images_as_negatives(
         f"{BASE}/{project_id}/datasets", json={"name": "v2", "image_ids": [image_ids[0]]}
     ).json()
     assert only_labeled["dataset"]["image_count"] == 1
+
+
+def test_default_selection_of_only_marked_images_has_nothing_to_train_on(
+    client, project_id, handle, image_ids
+):
+    """Every image marked empty and none with a box: a dataset would have nothing to train on."""
+    for image_id in image_ids[:3]:
+        _mark(handle, image_id)
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": "v1"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert "Nothing to train on" in r.json()["error"]["message"]
