@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from app.db.models import Job
 from app.errors import not_found
-from app.jobs.cancellation import JobCancelled
+from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.events import EventBus
 from app.jobs.registry import get_job_type
 from app.projects.service import ProjectHandle
@@ -190,10 +190,9 @@ class JobRunner:
         except Exception as e:
             ctx.log.error("job failed\n%s", traceback.format_exc())
             log.warning("job %s failed: %s: %s", ctx.job_id, type(e).__name__, e)  # params may hold secrets
-            # A ValueError is a job's own way of raising an already-complete, human-facing message
-            # (see e.g. app.exports.yolo_out); anything else is unexpected, so it keeps its class
-            # name as a clue for support instead of reading like a polished error it is not.
-            message = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
+            # A JobFailure carries a message written for the operator; anything else is unexpected
+            # (libraries raise ValueError too), so it keeps its class name as a clue for support.
+            message = str(e) if isinstance(e, JobFailure) else f"{type(e).__name__}: {e}"
             self._finish(ctx, state="failed", error=message)
         finally:
             self._close_log(ctx)

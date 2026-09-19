@@ -6,6 +6,7 @@ import pytest
 
 from app.exports import coco_out, yolo_out
 from app.exports.rows import ExportBox, ExportImage
+from app.jobs.cancellation import JobFailure
 
 CLASSES = [{"id": "c-exc", "name": "excavator"}, {"id": "c-dt", "name": "dump_truck"}]
 
@@ -110,7 +111,7 @@ def test_yolo_refuses_two_images_with_the_same_stem_in_one_site(tmp_path):
         _image(id="i1", path="images/siteA/x.jpg", boxes=[]),
         _image(id="i2", path="images/siteA/x.jpeg", boxes=[]),
     ]
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(JobFailure) as exc_info:
         yolo_out.write(images, CLASSES, tmp_path)
     assert str(exc_info.value) == (
         "x.jpg and x.jpeg in siteA would get the same YOLO label file. Export without YOLO "
@@ -124,7 +125,7 @@ def test_yolo_collision_message_names_the_project_when_there_is_no_site_folder(t
         _image(id="i1", path="x.jpg", boxes=[]),
         _image(id="i2", path="x.jpeg", boxes=[]),
     ]
-    with pytest.raises(ValueError) as exc_info:
+    with pytest.raises(JobFailure) as exc_info:
         yolo_out.write(images, CLASSES, tmp_path)
     assert "in the project would get the same YOLO label file" in str(exc_info.value)
 

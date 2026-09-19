@@ -22,9 +22,16 @@ def _fail_job(ctx):
     raise RuntimeError("boom")
 
 
+@register_job_type("test_fail_for_the_person")
+def _fail_for_the_person_job(ctx):
+    from app.jobs.cancellation import JobFailure
+
+    raise JobFailure("plain message for the person")
+
+
 @register_job_type("test_fail_value_error")
 def _fail_value_error_job(ctx):
-    raise ValueError("plain message for the person")
+    raise ValueError("invalid literal for int() with base 10: 'x'")  # what a library raises
 
 
 @register_job_type("test_domain_event")
@@ -96,13 +103,20 @@ def test_failed_job_records_error(client, project_dir, app):
     assert any("Traceback" in line for line in log["lines"])
 
 
-def test_a_value_error_is_stored_without_the_class_name_prefix(client, project_dir, app):
-    """A job's own ValueError is an already-complete, human-facing message (m3)."""
+def test_a_job_failure_is_stored_as_the_plain_message_it_carries(client, project_dir, app):
+    """JobFailure is a job's own message for the operator: no class name in front of it."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail_for_the_person", {})
+    j = _wait(client, pid, job.id)
+    assert j["state"] == "failed" and j["error"] == "plain message for the person"
+
+
+def test_a_value_error_from_a_library_keeps_its_class_name(client, project_dir, app):
+    """Libraries raise ValueError too; it is unexpected and must not read like a polished message."""
     pid = _project(client, project_dir)
     job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail_value_error", {})
     j = _wait(client, pid, job.id)
-    assert j["state"] == "failed"
-    assert j["error"] == "plain message for the person"
+    assert j["error"] == "ValueError: invalid literal for int() with base 10: 'x'"
 
 
 def test_a_runtime_error_still_keeps_its_class_name(client, project_dir, app):

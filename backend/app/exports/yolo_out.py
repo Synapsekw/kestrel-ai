@@ -11,6 +11,7 @@ from pathlib import Path
 
 from app.datasets.materialise import _label_text
 from app.exports.rows import ExportImage
+from app.jobs.cancellation import JobFailure
 
 FOLDER = "labels_yolo"
 
@@ -42,7 +43,7 @@ def check_no_stem_collisions(images: list[ExportImage]) -> None:
         if earlier is not None:
             site = label_path.parent.as_posix()
             where = f"in {site}" if site != "." else "in the project"
-            raise ValueError(
+            raise JobFailure(
                 f"{Path(earlier).name} and {Path(image.path).name} {where} would get the same "
                 "YOLO label file. Export without YOLO labels, or delete one of the two images "
                 "from the project."
