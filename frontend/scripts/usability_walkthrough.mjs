@@ -373,6 +373,44 @@ await step("9 export the trained model to ONNX", async (check, snap) => {
   await snap("onnx-exported");
 });
 
+await step("9.5 export the results in every format; the model section shows the ONNX file", async (check, snap) => {
+  const { existsSync, readFileSync, readdirSync } = await import("node:fs");
+  await page.getByRole("navigation").getByRole("link", { name: "Export" }).click();
+  await urlIs(/\/export/);
+  const form = page.locator('[aria-label="Results"]');
+  check("the export says what it will contain", await visible(form.getByText(/Exports \d+ accepted boxes on \d+ of \d+ images/)));
+  for (const label of ["Labels in YOLO format", "Labels in COCO format"]) {
+    const box = form.getByLabel(label);
+    if (!(await box.isChecked())) await box.check();
+  }
+  await form.getByLabel(/Include proposals nobody has reviewed yet/).check();
+  await snap("export-form");
+  const before = await api("GET", `/projects/${projectId}/jobs?type=results_export`);
+  await form.getByRole("button", { name: "Export", exact: true }).click();
+  let job = null;
+  for (let i = 0; i < 300; i++) {
+    const jobs = await api("GET", `/projects/${projectId}/jobs?type=results_export`);
+    job = jobs.items.find((j) => !before.items.some((b) => b.id === j.id));
+    if (job && !["queued", "running"].includes(job.state)) break;
+    await sleep(1000);
+  }
+  check("the export job succeeded", job?.state === "succeeded", `${job?.state} ${job?.error ?? ""}`);
+  const row = page.getByTestId(`export-job-${job.id}`);
+  check("the past export is listed with Show in folder", await visible(row.getByRole("button", { name: "Show in folder" }), 30_000));
+  const folder = join(cfg.projectFolder, ...job.result.folder.split("/"));
+  const files = readdirSync(folder);
+  check("every chosen format is on disk", ["detections.csv", "counts_by_group.csv", "counts_by_image.csv", "labels_coco.json", "report.html", "labels_yolo"].every((f) => files.includes(f)), files.join(", "));
+  check("the CSV opens in Excel (UTF-8 with BOM)", readFileSync(join(folder, "detections.csv"))[0] === 0xef);
+  const report = readFileSync(join(folder, "report.html"), "utf8");
+  check("the report is self-contained with thumbnails", report.includes("data:image/jpeg") && !/https?:\/\//.test(report));
+  check("no partial folder is left behind", !readdirSync(join(cfg.projectFolder, "exports")).some((n) => n.startsWith(".partial")));
+  await snap("export-done");
+  const models = page.locator('[aria-label="Model for other applications"]');
+  check("the model section explains ONNX and shows the exported file", await visible(models.getByText(/\.onnx/)));
+  await snap("export-model-section");
+  check("export folder exists", existsSync(folder));
+});
+
 await step("10 no IPC errors in the console", async (check) => {
   const ipc = consoleErrors.filter((e) => /ipc\.localhost|Content Security Policy/.test(e));
   check("the CSP lets Tauri's IPC through", ipc.length === 0, ipc[0] ?? "");
