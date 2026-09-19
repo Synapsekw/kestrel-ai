@@ -58,17 +58,18 @@ The "Closed by" column is filled with the commit that fixes the item.
 | Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | abe0154 |
 | Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | 3a9f9fb |
 | Q10 | Any finished job (found on a detection run by the acceptance dry run on the packaged app) | "100 % · 9 / 10 images" after a run over 10 images: the newest progress message was not stored when it came within 0.25 s of the previous one | The final message of the job | confuses | 66eeb64 |
+| G3 | HTML report thumbnails (seen on the real export) | The class name drawn above each box is small and hard to read on the thumbnail | Readable labels; the count line above each image already names the classes | annoys | open (after this wave) |
 | R1 | Review, empty queue | "0 images waiting" | How proposals get here (pre-annotation, Query) with links | confuses | dcb6002 |
 | R2 | Review from a run (ledger S5) | "Showing 40 images from a query run" counts the ids in the URL, not the images that still have proposals | Real count | annoys | dcb6002 |
 | M1 | Models -> Import with a wrong path | `no usable weights at 'E:\\nope\\x.pt'` (doubled backslashes) | The path as typed | annoys | 662e90b |
 | M2 | Models table (ledger S5) | Rows are not keyboard-focusable | Tab / Enter work | annoys | not a defect: the model name in each row is a button (Tab, Enter); checked 2026-09-19 |
-| M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | |
+| M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | efa614a |
 | M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | d3b123c |
 | X1 | Settings -> Test provider, failing | Green text: "Failed: ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', ...}" | Red, "The key was rejected by Anthropic (401)." | confuses | 3d039eb |
 | X2 | Every timestamp in the UI | UTC without a label (05:06 when the clock says 08:06) while job logs use local time | Local time everywhere | confuses | 9e31da3 |
 | H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | adf9b09 |
 | H2 | Providers | No live request with a valid key has run here; the invalid-key test did reach Anthropic (401). Acceptance step 7 pending an operator key | Step 7 run once with a real key | pending key | |
-| G2 | Results | Reviewed detections cannot leave the app: no export of boxes or counts (per image, flight, class) | CSV / report export | open question for the owner | |
+| G2 | Results | Reviewed detections cannot leave the app: no export of boxes or counts (per image, flight, class) | CSV / report export | open question for the owner | efa614a + 13eb4d3 |
 
 Verified as already fine: the Data Manager refreshes by itself after an import; grid thumbnails
 carry a box-count badge; "Train on it" on the finished dataset job pre-selects the dataset; the

@@ -378,7 +378,7 @@ await step("9.5 export the results in every format; the model section shows the 
   await page.getByRole("navigation").getByRole("link", { name: "Export" }).click();
   await urlIs(/\/export/);
   const form = page.locator('[aria-label="Results"]');
-  check("the export says what it will contain", await visible(form.getByText(/Exports \d+ accepted boxes on \d+ of \d+ images/)));
+  check("the export says what it will contain", await visible(form.getByText(/Exports (all )?\d+ images?: \d+ accepted box(es)? on the \d+ checked images?/)));
   for (const label of ["Labels in YOLO format", "Labels in COCO format"]) {
     const box = form.getByLabel(label);
     if (!(await box.isChecked())) await box.check();
