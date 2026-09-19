@@ -42,7 +42,12 @@ def resolve_inside_project(handle: ProjectHandle, relative_path: str) -> Path:
         # `is_absolute()` alone misses a drive-relative path like `C:foo` (has a drive, no root).
         raise _outside_project("path must be relative to the project folder")
     root = handle.folder.resolve()
-    candidate = (handle.folder / relative_path).resolve()
+    try:
+        candidate = (handle.folder / relative_path).resolve()
+    except (ValueError, OSError) as e:
+        # e.g. an embedded null byte: not a path Windows can resolve at all, schema-valid text
+        # notwithstanding (schemathesis's random data reaches this; a real caller never sends it).
+        raise _outside_project("path is not a valid path") from e
     try:
         candidate.relative_to(root)
     except ValueError:

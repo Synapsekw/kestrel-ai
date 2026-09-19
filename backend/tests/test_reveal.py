@@ -81,6 +81,13 @@ def test_a_drive_relative_path_is_refused(client, project_id, calls):
     assert calls == []
 
 
+def test_a_path_with_an_embedded_null_byte_is_refused_not_a_500(client, project_id, calls):
+    """Schemathesis's random data includes this; `Path.resolve()` raises ValueError on it."""
+    r = client.post(f"{BASE}/{project_id}/reveal", json={"path": "a\x00b"})
+    assert r.status_code == 409, r.text
+    assert calls == []
+
+
 def test_a_missing_path_is_404(client, project_id, calls):
     r = client.post(f"{BASE}/{project_id}/reveal", json={"path": "exports/nope.csv"})
     assert r.status_code == 404, r.text
