@@ -24,7 +24,7 @@
 ## Contract (on the branch)
 
 - `JobType` gains `results_export`.
-- `POST /api/v1/projects/{projectId}/exports` `createResultsExport`, body `ResultsExportRequest { formats: ("csv" | "yolo" | "coco" | "html")[] (minItems 1, unique), include_unreviewed: boolean = false, image_ids?: string[] }` -> 202 `JobRef`. The job's `result` is `ResultsExportResult { folder: string (project-relative, forward slashes), files: string[], image_count: integer, box_count: integer }`.
+- `POST /api/v1/projects/{projectId}/exports` `createResultsExport`, body `ResultsExportRequest { formats: ("csv" | "yolo" | "coco" | "html")[] (minItems 1, unique), include_unreviewed: boolean = false, image_ids?: string[] }` -> 202 `JobRef`. The job's `result` is the object `{ folder: string (project-relative, forward slashes), files: string[], image_count: integer, box_count: integer }` (described on the operation, not a named schema; type it locally in `frontend/src/api/exports.ts`).
 - `POST /api/v1/projects/{projectId}/reveal` `revealInExplorer`, body `{ path: string (project-relative, minLength 1) }` -> 204; 404 when the path does not exist; 422 `validation_error` when it leaves the project folder.
 
 ## Output (exact)

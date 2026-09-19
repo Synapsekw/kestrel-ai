@@ -36,6 +36,7 @@ function projectNavItems(projectId: string | undefined, imageId: string | undefi
     item("Models", "models"),
     item("Train", "train"),
     item("Query", "query"),
+    item("Export", "export"),
     item("Settings", "settings"),
   ];
 }

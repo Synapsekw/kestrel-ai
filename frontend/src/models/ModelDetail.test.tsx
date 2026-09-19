@@ -18,6 +18,31 @@ const noop = () => {};
 describe("ModelDetail actions", () => {
   beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
 
+  it("reveals the weights path and each export path (M3)", async () => {
+    const { api, requests } = fakeClient([{ method: "POST", path: /\/reveal$/, status: 204 }]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleTrainedModel}
+        project={exampleProject}
+        datasetNames={{ names: {}, loaded: false }}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    const buttons = screen.getAllByRole("button", { name: "Show in folder" });
+    expect(buttons).toHaveLength(2); // one next to the weights path, one next to the onnx export
+    fireEvent.click(buttons[0]);
+    await waitFor(() =>
+      expect(requests.find((r) => r.method === "POST")).toMatchObject({
+        url: `/api/v1/projects/${PROJECT_ID}/reveal`,
+        body: { path: exampleTrainedModel.weights_path },
+      }),
+    );
+  });
+
   it("starts an export job and shows it as a job card", async () => {
     const { api, requests } = fakeClient([
       {

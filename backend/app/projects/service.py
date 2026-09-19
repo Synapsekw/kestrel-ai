@@ -39,6 +39,7 @@ class ProjectHandle:
     runs_dir = property(lambda s: s.folder / "runs")
     models_dir = property(lambda s: s.folder / "models")
     thumbs_dir = property(lambda s: s.folder / "cache" / "thumbs")
+    exports_dir = property(lambda s: s.folder / "exports")
 
     @contextmanager
     def session(self) -> Iterator[Session]:

@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends
 
 from app.auth import require_token
 from app.datasets.router import router as datasets_router
+from app.exports.router import router as exports_router
 from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
@@ -22,5 +23,6 @@ for r in (
     starter_project_router,
     providers_router,
     inference_router,
+    exports_router,
 ):
     api_router.include_router(r)
