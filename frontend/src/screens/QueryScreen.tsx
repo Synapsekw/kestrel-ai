@@ -140,6 +140,8 @@ export function QueryScreen() {
             onChange={patch}
             models={registry.models}
             modelsUnavailable={registry.unavailable}
+            modelsLoading={registry.loading}
+            modelsError={registry.error}
             providers={providers.providers}
             providersUnavailable={providers.unavailable}
           />

@@ -10,6 +10,8 @@ interface Props {
   onChange: (patch: Partial<QueryForm>) => void;
   models: Model[];
   modelsUnavailable: boolean;
+  modelsLoading: boolean;
+  modelsError: string | null;
   providers: Provider[];
   providersUnavailable: boolean;
 }
@@ -23,6 +25,8 @@ export function SourcePicker({
   onChange,
   models,
   modelsUnavailable,
+  modelsLoading,
+  modelsError,
   providers,
   providersUnavailable,
 }: Props) {
@@ -70,7 +74,7 @@ export function SourcePicker({
             ))}
           </select>
           {modelsUnavailable && <span role="note">The model registry is not available yet.</span>}
-          {!modelsUnavailable && models.length === 0 && (
+          {!modelsLoading && !modelsUnavailable && !modelsError && models.length === 0 && (
             <span>
               No models yet.{" "}
               <Link to={`/p/${projectId}/models`} className="text-orange-300 hover:underline">
