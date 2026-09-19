@@ -1,10 +1,12 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { Dataset, DatasetStats } from "@contract/client";
 import { useApi } from "@/api/client";
 import { deleteDataset, fetchDatasetStats } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import { formatLocalDate } from "@/models/modelLabels";
+import { Alert, Button, Skeleton, buttonClass } from "@/ui";
 import { splitAdvice } from "./splitAdvice";
 
 export interface DatasetDetailProps {
@@ -12,11 +14,6 @@ export interface DatasetDetailProps {
   dataset: Dataset;
   onDeleted: (id: string) => void;
 }
-
-const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
-const danger = "rounded bg-red-800 px-3 py-1 text-sm hover:bg-red-700 disabled:opacity-50";
-const dt = "text-xs uppercase tracking-wide text-slate-500";
-const dd = "text-sm";
 
 interface StatsState {
   datasetId: string;
@@ -47,6 +44,26 @@ function useDatasetStats(projectId: string, datasetId: string): StatsState {
   return state.datasetId === datasetId ? state : { datasetId, stats: null, error: null };
 }
 
+const SPLIT_LABEL: Record<Dataset["split_method"], string> = {
+  by_group: "By group",
+  by_tile: "By tile",
+  random: "Random",
+};
+
+const th = "h-8 px-2 text-xs font-medium text-muted";
+const td = "h-9 px-2";
+
+function Row({ label, children, mono }: { label: string; children: ReactNode; mono?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b border-line py-2 text-sm last:border-b-0">
+      <dt className="shrink-0 text-muted">{label}</dt>
+      <dd className={mono ? "min-w-0 truncate font-mono text-ink" : "font-medium tabular-nums text-ink"}>
+        {children}
+      </dd>
+    </div>
+  );
+}
+
 export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailProps) {
   const api = useApi();
   const { stats, error: statsError } = useDatasetStats(projectId, dataset.id);
@@ -71,46 +88,55 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
   return (
     <section
       data-testid="dataset-detail"
-      className="flex flex-col gap-4 rounded border border-slate-800 bg-slate-800/30 p-4"
+      className="flex flex-col gap-5 rounded-lg border border-line bg-panel p-5 animate-reveal motion-reduce:animate-none"
     >
-      <header className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-lg font-medium">{dataset.name}</h2>
-        <span className="text-xs text-slate-400">
-          {dataset.image_count} images, {dataset.train_count} train / {dataset.val_count} val
-        </span>
+      <header className="flex flex-wrap items-center gap-3">
+        <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{dataset.name}</h2>
+        <Link to={`/p/${projectId}/train?dataset=${dataset.id}`} className={buttonClass("secondary", "sm")}>
+          Train on this dataset
+        </Link>
       </header>
 
-      {advice && (
-        <p
-          role="alert"
-          className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
-        >
-          {advice}
-        </p>
-      )}
+      {advice && <Alert tone="warn">{advice}</Alert>}
+
+      <dl className="flex flex-col">
+        <Row label="Images">{dataset.image_count}</Row>
+        <Row label="Train / validation">
+          {dataset.train_count} / {dataset.val_count}
+        </Row>
+        <Row label="Split">{SPLIT_LABEL[dataset.split_method]}</Row>
+        <Row label="Validation fraction">{dataset.split_params.val_fraction}</Row>
+        <Row label="Seed">{dataset.split_params.seed}</Row>
+        <Row label="Created">{formatLocalDate(dataset.created_at)}</Row>
+        <Row label="Folder" mono>
+          {dataset.path}
+        </Row>
+      </dl>
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-sm font-medium">Boxes per class</h3>
-        {statsError && (
-          <p role="alert" className="text-xs text-red-300">
-            {statsError}
-          </p>
+        <h3 className="text-sm font-semibold">Boxes per class</h3>
+        {statsError && <Alert tone="danger">{statsError}</Alert>}
+        {!stats && !statsError && (
+          <div className="flex flex-col gap-2" aria-hidden="true">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-2/3" />
+          </div>
         )}
         {stats && (
-          <table data-testid="dataset-class-stats" className="w-full text-left text-sm">
+          <table data-testid="dataset-class-stats" className="w-full text-left text-[13px]">
             <thead>
-              <tr className="text-xs uppercase text-slate-500">
-                <th className="px-2 py-1 font-medium">Class</th>
-                <th className="px-2 py-1 font-medium">Train</th>
-                <th className="px-2 py-1 font-medium">Val</th>
+              <tr>
+                <th className={th}>Class</th>
+                <th className={`${th} text-right`}>Train</th>
+                <th className={`${th} text-right`}>Validation</th>
               </tr>
             </thead>
             <tbody>
               {stats.boxes_per_class.map((c) => (
-                <tr key={c.class_id} className="border-t border-slate-800">
-                  <td className="px-2 py-1">{c.class_name}</td>
-                  <td className="px-2 py-1 tabular-nums">{c.train}</td>
-                  <td className="px-2 py-1 tabular-nums">{c.val}</td>
+                <tr key={c.class_id} className="border-t border-line">
+                  <td className={td}>{c.class_name}</td>
+                  <td className={`${td} text-right tabular-nums`}>{c.train}</td>
+                  <td className={`${td} text-right tabular-nums`}>{c.val}</td>
                 </tr>
               ))}
             </tbody>
@@ -120,21 +146,21 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
 
       {stats && stats.groups.length > 0 && (
         <div className="flex flex-col gap-2">
-          <h3 className="text-sm font-medium">Groups</h3>
-          <table data-testid="dataset-group-stats" className="w-full text-left text-sm">
+          <h3 className="text-sm font-semibold">Flights and tiles</h3>
+          <table data-testid="dataset-group-stats" className="w-full text-left text-[13px]">
             <thead>
-              <tr className="text-xs uppercase text-slate-500">
-                <th className="px-2 py-1 font-medium">Group</th>
-                <th className="px-2 py-1 font-medium">Split</th>
-                <th className="px-2 py-1 font-medium">Images</th>
+              <tr>
+                <th className={th}>Flight or tile</th>
+                <th className={th}>Split</th>
+                <th className={`${th} text-right`}>Images</th>
               </tr>
             </thead>
             <tbody>
               {stats.groups.map((g) => (
-                <tr key={`${g.group_key}-${g.split}`} className="border-t border-slate-800">
-                  <td className="px-2 py-1">{g.group_key}</td>
-                  <td className="px-2 py-1">{g.split}</td>
-                  <td className="px-2 py-1 tabular-nums">{g.image_count}</td>
+                <tr key={`${g.group_key}-${g.split}`} className="border-t border-line">
+                  <td className={`${td} font-mono`}>{g.group_key}</td>
+                  <td className={td}>{g.split}</td>
+                  <td className={`${td} text-right tabular-nums`}>{g.image_count}</td>
                 </tr>
               ))}
             </tbody>
@@ -142,46 +168,37 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
         </div>
       )}
 
-      <dl>
-        <div>
-          <dt className={dt}>Folder</dt>
-          <dd className={`${dd} font-mono`}>{dataset.path}</dd>
-        </div>
-      </dl>
-
-      <div className="flex flex-col gap-2 border-t border-slate-800 pt-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            to={`/p/${projectId}/train?dataset=${dataset.id}`}
-            className="text-sm text-orange-300 hover:underline"
+      <div className="flex flex-col gap-3 border-t border-line pt-4">
+        {confirming ? (
+          <Alert
+            tone="warn"
+            actions={
+              <>
+                <Button variant="danger" size="sm" onClick={() => void remove()} loading={busy}>
+                  Delete permanently
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirming(false)} disabled={busy}>
+                  Cancel
+                </Button>
+              </>
+            }
           >
-            Train on this dataset
-          </Link>
-          {!confirming && (
-            <button type="button" className={danger} onClick={() => setConfirming(true)} disabled={busy}>
-              Delete dataset
-            </button>
-          )}
-        </div>
-        {confirming && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span>
-              Delete dataset {dataset.name}? The frozen copy under {dataset.path} is removed. Images, labels
-              and trained models are kept.
-            </span>
-            <button type="button" className={danger} onClick={() => void remove()} disabled={busy}>
-              Delete permanently
-            </button>
-            <button type="button" className={btn} onClick={() => setConfirming(false)} disabled={busy}>
-              Cancel
-            </button>
-          </div>
+            Delete dataset {dataset.name}? The frozen copy under {dataset.path} is removed. Images, labels and
+            trained models are kept.
+          </Alert>
+        ) : (
+          <Button
+            variant="danger"
+            size="sm"
+            icon="trash"
+            className="self-start"
+            onClick={() => setConfirming(true)}
+            disabled={busy}
+          >
+            Delete dataset
+          </Button>
         )}
-        {error && (
-          <p role="alert" className="text-xs text-red-300">
-            {error}
-          </p>
-        )}
+        {error && <Alert tone="danger">{error}</Alert>}
       </div>
     </section>
   );

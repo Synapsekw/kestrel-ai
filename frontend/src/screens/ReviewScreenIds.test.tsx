@@ -21,7 +21,7 @@ describe("ReviewScreen with ?ids=", () => {
     expect(url.searchParams.get("ids")).toBe(`${IMAGE_ID},${IMAGE_ID_2}`);
     expect(url.searchParams.get("has_pending")).toBe("true");
     expect(
-      await screen.findByText(/of the 2 images of this detection run still have proposals/),
+      await screen.findByText(/of the 2 images of this detection run still have suggestions/),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Show the whole queue" })).toHaveAttribute(
       "href",

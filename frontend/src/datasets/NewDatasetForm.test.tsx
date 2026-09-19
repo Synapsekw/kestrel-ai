@@ -20,6 +20,7 @@ describe("NewDatasetForm", () => {
     ]);
     renderWithProviders(<NewDatasetForm projectId={PROJECT_ID} onClose={vi.fn()} />, { api });
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Split options" }));
     fireEvent.change(screen.getByLabelText("Split method"), { target: { value: "random" } });
     fireEvent.change(screen.getByLabelText("Validation fraction"), { target: { value: "0.3" } });
     fireEvent.change(screen.getByLabelText("Seed"), { target: { value: "7" } });
@@ -57,6 +58,18 @@ describe("NewDatasetForm", () => {
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Nothing to train on"));
+  });
+
+  it("keeps the split options folded away until asked, with the defaults", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(<NewDatasetForm projectId={PROJECT_ID} onClose={vi.fn()} />, { api });
+    const toggle = screen.getByRole("button", { name: "Split options" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Split method")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText("Split method")).toHaveValue("by_group");
+    expect(screen.getByLabelText("Validation fraction")).toHaveValue(0.2);
+    expect(screen.getByLabelText("Seed")).toHaveValue(42);
   });
 
   it("closes on Cancel", () => {
