@@ -19,7 +19,7 @@ The "Closed by" column is filled with the commit that fixes the item.
 | N2 | Settings / provider keys | Keys are global (Credential Manager, `/api/v1/providers`) but the only way to them is a project's Settings screen | An app-level Settings entry that works with no project open | blocks | 78d1f0e |
 | G1 | Models -> Import weights, Train -> Base model | The form asks for the path of a `.pt` file; the installer ships none, the base-model list of a new project is empty, nothing says where weights come from | Starter weights (YOLO11 n/s/m) offered in the app, selectable as base model without a file path | blocks | e83ce88 |
 | N3 | Sidebar inside a project | "Editor" greyed out with no hint | Hint "open an image from Data or Review" | annoys | 78d1f0e |
-| N4 | After creating a project | Lands on an empty Data Manager; nothing tells the order import -> label -> dataset -> train -> run -> review | A next-step hint or project overview (counts and the next action) | confuses | |
+| N4 | After creating a project | Lands on an empty Data Manager; nothing tells the order import -> label -> dataset -> train -> run -> review | A next-step hint or project overview (counts and the next action) | confuses | af354e4 |
 | N5 | Every `invoke` in the installed app | Console: CSP blocks `http://ipc.localhost`, Tauri falls back to postMessage (invisible to the user, noise in diagnostics) | No CSP violation (`connect-src` allows `ipc:` / `http://ipc.localhost`) | annoys | 337ccb6 |
 | P1 | Projects -> Create project with an empty or invalid folder | Red "request validation failed" | Which field is wrong and why | confuses | a8b8bca |
 | P2 | Projects -> Recent | Test leftovers pile up; no way to remove an entry or delete a project | "Remove from list" per entry | annoys | 1dda8ec |
@@ -51,16 +51,16 @@ The "Closed by" column is filled with the commit that fixes the item.
 | Q3 | Query run finished | History row says "0 boxes" until the screen is revisited; the card says "415 boxes written so far" after the end | Consistent final numbers | confuses | d7f9c1c |
 | Q4 | Estimate for a local model | "480 requests, estimated $0.00 (at $0.00 per request)" | No cost wording for local models | annoys | 260c643 |
 | Q5 | Query Start | Disabled until Estimate is clicked; only a small grey hint | Start estimates by itself, or the hint is next to the disabled button as a reason | annoys | 77d23bf |
-| Q6 | Query, tiling off (ledger S4) | Untiled local runs predict at 1280 while pre-annotation uses 2560; not mentioned | Note in the form | annoys | |
-| Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | |
+| Q6 | Query, tiling off (ledger S4) | Untiled local runs predict at 1280 while pre-annotation uses 2560; not mentioned | Note in the form | annoys | 3a9f9fb |
+| Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | 95b6717 |
 | Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | abe0154 |
-| Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | |
+| Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | 3a9f9fb |
 | R1 | Review, empty queue | "0 images waiting" | How proposals get here (pre-annotation, Query) with links | confuses | dcb6002 |
 | R2 | Review from a run (ledger S5) | "Showing 40 images from a query run" counts the ids in the URL, not the images that still have proposals | Real count | annoys | dcb6002 |
 | M1 | Models -> Import with a wrong path | `no usable weights at 'E:\\nope\\x.pt'` (doubled backslashes) | The path as typed | annoys | 662e90b |
 | M2 | Models table (ledger S5) | Rows are not keyboard-focusable | Tab / Enter work | annoys | not a defect: the model name in each row is a button (Tab, Enter); checked 2026-09-19 |
 | M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | |
-| M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | |
+| M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | d3b123c |
 | X1 | Settings -> Test provider, failing | Green text: "Failed: ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', ...}" | Red, "The key was rejected by Anthropic (401)." | confuses | 3d039eb |
 | X2 | Every timestamp in the UI | UTC without a label (05:06 when the clock says 08:06) while job logs use local time | Local time everywhere | confuses | 9e31da3 |
 | H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | adf9b09 |
