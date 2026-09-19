@@ -12,6 +12,7 @@ test("Import images posts the folder with the project's defaults and shows the j
   await page.goto(`/p/${P}/data`);
   await page.getByRole("button", { name: "Import images" }).click();
   const dialog = page.getByRole("dialog", { name: "Import images" });
+  await dialog.getByText("Advanced settings (the defaults suit most imports)").click();
   await expect(dialog.getByLabel("Max side")).toHaveValue("4000");
   await expect(dialog.getByLabel("JPEG quality")).toHaveValue("95");
   await expect(dialog.getByLabel("Duplicate threshold")).toHaveValue("4");

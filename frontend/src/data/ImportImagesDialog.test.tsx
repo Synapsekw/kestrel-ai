@@ -60,5 +60,25 @@ describe("ImportImagesDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start import" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("folder does not exist"));
     expect(requests[0].body).toMatchObject({ folder: "E:\\nope", site: "ahmadia" });
+    // The message belongs to the rejected value: editing the folder clears it.
+    fireEvent.change(screen.getByLabelText("Folder"), { target: { value: "E:\\frames" } });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps the preparation settings under Advanced, each with a plain explanation", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <ImportImagesDialog project={exampleProject} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    const advanced = screen
+      .getByText("Advanced settings (the defaults suit most imports)")
+      .closest("details");
+    expect(advanced).not.toBeNull();
+    expect(advanced).not.toHaveAttribute("open");
+    expect(advanced).toContainElement(screen.getByLabelText("Group regex"));
+    expect(screen.getByText(/Longest side in pixels; larger images are scaled down/)).toBeInTheDocument();
+    expect(screen.getByText(/How alike two images must be to count as duplicates/)).toBeInTheDocument();
+    expect(screen.getByText(/Pattern that reads the flight number from the file name/)).toBeInTheDocument();
   });
 });

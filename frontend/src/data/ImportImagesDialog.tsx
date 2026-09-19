@@ -47,7 +47,10 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const patch = (p: Partial<Form>) => setForm((f) => ({ ...f, ...p }));
+  const patch = (p: Partial<Form>) => {
+    setForm((f) => ({ ...f, ...p }));
+    setError(null); // the message was about the values just replaced
+  };
 
   const browse = useCallback(async () => {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -129,53 +132,70 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
           className={input}
         />
       </label>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <label className={label}>
-          Max side
-          <input
-            aria-label="Max side"
-            type="number"
-            min={512}
-            max={12000}
-            value={form.max_side}
-            onChange={(e) => patch({ max_side: e.target.value })}
-            className={input}
-          />
-        </label>
-        <label className={label}>
-          JPEG quality
-          <input
-            aria-label="JPEG quality"
-            type="number"
-            min={50}
-            max={100}
-            value={form.quality}
-            onChange={(e) => patch({ quality: e.target.value })}
-            className={input}
-          />
-        </label>
-        <label className={label}>
-          Duplicate threshold
-          <input
-            aria-label="Duplicate threshold"
-            type="number"
-            min={0}
-            max={32}
-            value={form.dedupe_threshold}
-            onChange={(e) => patch({ dedupe_threshold: e.target.value })}
-            className={input}
-          />
-        </label>
-        <label className={label}>
-          Group regex
-          <input
-            aria-label="Group regex"
-            value={form.group_regex}
-            onChange={(e) => patch({ group_regex: e.target.value })}
-            className={`${input} font-mono`}
-          />
-        </label>
-      </div>
+      <details className="rounded border border-slate-700 px-3 py-2">
+        <summary className="cursor-pointer text-xs text-slate-300">
+          Advanced settings (the defaults suit most imports)
+        </summary>
+        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+          <label className={label}>
+            Max side
+            <input
+              aria-label="Max side"
+              type="number"
+              min={512}
+              max={12000}
+              value={form.max_side}
+              onChange={(e) => patch({ max_side: e.target.value })}
+              className={input}
+            />
+            <span>
+              Longest side in pixels; larger images are scaled down, smaller ones are kept as they are.
+            </span>
+          </label>
+          <label className={label}>
+            JPEG quality
+            <input
+              aria-label="JPEG quality"
+              type="number"
+              min={50}
+              max={100}
+              value={form.quality}
+              onChange={(e) => patch({ quality: e.target.value })}
+              className={input}
+            />
+            <span>Quality of the prepared copies (95 is visually lossless).</span>
+          </label>
+          <label className={label}>
+            Duplicate threshold
+            <input
+              aria-label="Duplicate threshold"
+              type="number"
+              min={0}
+              max={32}
+              value={form.dedupe_threshold}
+              onChange={(e) => patch({ dedupe_threshold: e.target.value })}
+              className={input}
+            />
+            <span>
+              How alike two images must be to count as duplicates: 0 only identical pictures, 4 near-identical
+              frames, higher values drop more.
+            </span>
+          </label>
+          <label className={label}>
+            Group regex
+            <input
+              aria-label="Group regex"
+              value={form.group_regex}
+              onChange={(e) => patch({ group_regex: e.target.value })}
+              className={`${input} font-mono`}
+            />
+            <span>
+              Pattern that reads the flight number from the file name (camera_flight_frame). Images of one
+              flight stay together when a dataset is split. Leave it unless your files are named differently.
+            </span>
+          </label>
+        </div>
+      </details>
       {error && (
         <p role="alert" className="text-xs text-red-300">
           {error}
