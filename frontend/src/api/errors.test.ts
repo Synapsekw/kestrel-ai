@@ -57,3 +57,44 @@ describe("messageOf / codeOf / isNotImplemented", () => {
     expect(isNotImplemented(new ApiFailure("conflict", "c", 409))).toBe(false);
   });
 });
+
+describe("validation errors", () => {
+  const body = {
+    error: {
+      code: "validation_error",
+      message: "request validation failed",
+      details: {
+        errors: [
+          {
+            loc: ["body", "folder"],
+            msg: "String should have at least 1 character",
+            type: "string_too_short",
+          },
+          { loc: ["body", "classes", 0, "name"], msg: "Field required", type: "missing" },
+        ],
+      },
+    },
+  };
+
+  it("names the fields and the reasons instead of the bare envelope message", () => {
+    expect(messageOf(body, "x")).toBe(
+      "folder: String should have at least 1 character; classes 1 name: Field required",
+    );
+  });
+
+  it("does the same for a thrown ApiFailure", () => {
+    const failure = new ApiFailure("validation_error", "request validation failed", 422, body.error.details);
+    expect(messageOf(failure, "x")).toBe(
+      "folder: String should have at least 1 character; classes 1 name: Field required",
+    );
+  });
+
+  it("falls back to the message when the details carry no errors", () => {
+    expect(
+      messageOf(
+        { error: { code: "validation_error", message: "request validation failed", details: {} } },
+        "x",
+      ),
+    ).toBe("request validation failed");
+  });
+});

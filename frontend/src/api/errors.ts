@@ -25,9 +25,28 @@ export function isEnvelope(v: unknown): v is ErrorEnvelope {
   );
 }
 
+/** "field: reason" per rejected field of a 422, or null when the details carry none. Inputs are never echoed. */
+function validationText(details: Record<string, unknown> | undefined): string | null {
+  const errors = details?.errors;
+  if (!Array.isArray(errors) || errors.length === 0) return null;
+  const parts = errors.map((e: { loc?: unknown[]; msg?: unknown }) => {
+    const loc = (e.loc ?? [])
+      .filter((p, i) => !(i === 0 && (p === "body" || p === "query" || p === "path")))
+      .map((p) => (typeof p === "number" ? String(p + 1) : String(p)))
+      .join(" ");
+    return loc ? `${loc}: ${String(e.msg)}` : String(e.msg);
+  });
+  return parts.join("; ");
+}
+
 /** Human-readable message for an envelope, an ApiFailure, an Error or anything else. */
 export function messageOf(err: unknown, fallback: string): string {
-  if (isEnvelope(err)) return err.error.message;
+  if (isEnvelope(err)) {
+    const { code, message, details } = err.error;
+    return (code === "validation_error" && validationText(details)) || message;
+  }
+  if (err instanceof ApiFailure && err.code === "validation_error")
+    return validationText(err.details) ?? err.message;
   if (err instanceof Error) return err.message || fallback;
   return fallback;
 }

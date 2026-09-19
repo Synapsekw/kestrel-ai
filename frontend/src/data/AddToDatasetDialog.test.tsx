@@ -63,4 +63,23 @@ describe("AddToDatasetDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("dataset v1 exists"));
   });
+
+  it("refuses a name with a space before sending and says which characters are allowed", async () => {
+    const { api, requests } = fakeClient([]);
+    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
+      api,
+    });
+    const nameInput = screen.getByLabelText("Dataset name");
+    // `[A-Za-z0-9._-]+` is not a valid `pattern` under the v flag WebView2 compiles it with.
+    expect(nameInput).not.toHaveAttribute("pattern");
+    expect(screen.getByText("Letters, digits, dot, dash and underscore; no spaces.")).toBeInTheDocument();
+    fireEvent.change(nameInput, { target: { value: "first set" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "The name may only contain letters, digits, dot, dash and underscore (no spaces).",
+      ),
+    );
+    expect(requests).toHaveLength(0);
+  });
 });

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ClassDefInput, Project } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
+import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 
 const DEFAULT_CLASSES = [
@@ -25,11 +26,6 @@ const CLASS_COLOURS = [
   "#ec4899",
   "#ef4444",
 ];
-
-/** The contract wraps failures as `{error: {code, message, details}}`. */
-function messageOf(err: { error: { message: string } } | undefined, fallback: string): string {
-  return err?.error.message ?? fallback;
-}
 
 function parseClasses(text: string): ClassDefInput[] {
   return text
@@ -129,6 +125,10 @@ export function ProjectsScreen() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
+    if (!folder.trim()) {
+      setError("Choose a folder for the project.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -147,6 +147,10 @@ export function ProjectsScreen() {
 
   async function onOpen(e: FormEvent) {
     e.preventDefault();
+    if (!openFolder.trim()) {
+      setError("Choose the project folder to open.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

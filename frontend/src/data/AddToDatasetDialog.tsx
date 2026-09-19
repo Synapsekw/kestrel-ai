@@ -37,6 +37,10 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
     e.preventDefault();
     const fraction = Number(valFraction);
     const seedValue = Number(seed);
+    if (!/^[A-Za-z0-9._-]+$/.test(name)) {
+      setError("The name may only contain letters, digits, dot, dash and underscore (no spaces).");
+      return;
+    }
     if (!(fraction >= 0.05 && fraction <= 0.5)) {
       setError("Validation fraction must be between 0.05 and 0.5.");
       return;
@@ -82,11 +86,11 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
             <input
               aria-label="Dataset name"
               required
-              pattern="[A-Za-z0-9._-]+"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className={input}
             />
+            <span className="text-slate-500">Letters, digits, dot, dash and underscore; no spaces.</span>
           </label>
           <label className={label}>
             Split
