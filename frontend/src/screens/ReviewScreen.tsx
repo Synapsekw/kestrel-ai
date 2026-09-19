@@ -66,8 +66,10 @@ export function ReviewScreen() {
           there accept or reject.
         </p>
         {runIds && (
-          <p className="text-sm text-slate-300">
-            Showing {runIds.split(",").length} images from a query run.{" "}
+          <p data-testid="run-filter" className="text-sm text-slate-300">
+            {list.loading
+              ? "Loading the images of this detection run…"
+              : `${list.total} of the ${runIds.split(",").length} images of this detection run still have proposals to review.`}{" "}
             <Link to={`/p/${projectId}/review`} className="text-orange-300 hover:underline">
               Show the whole queue
             </Link>
@@ -78,6 +80,25 @@ export function ReviewScreen() {
         <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
           {list.error}
         </p>
+      )}
+      {!list.loading && !list.error && list.items.length === 0 && (
+        <div
+          data-testid="review-empty"
+          className="rounded border border-slate-800 bg-slate-800/30 p-4 text-sm"
+        >
+          <p className="font-medium">Nothing to review.</p>
+          <p className="mt-1 text-slate-400">
+            Proposals appear here after a detection run on the{" "}
+            <Link to={`/p/${projectId}/query`} className="text-orange-300 hover:underline">
+              Query screen
+            </Link>
+            , or when the editor opens an image while a pre-annotation model is set in the{" "}
+            <Link to={`/p/${projectId}/settings`} className="text-orange-300 hover:underline">
+              Project settings
+            </Link>
+            .
+          </p>
+        </div>
       )}
       <ImageTable
         items={list.items}

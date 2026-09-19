@@ -19,7 +19,9 @@ describe("ReviewScreen with ?ids=", () => {
     const url = new URL(`http://x${requests.find((r) => r.url.includes("/images?"))?.url}`);
     expect(url.searchParams.get("ids")).toBe(`${IMAGE_ID},${IMAGE_ID_2}`);
     expect(url.searchParams.get("has_pending")).toBe("true");
-    expect(await screen.findByText(/Showing 2 images from a query run/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/of the 2 images of this detection run still have proposals/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Show the whole queue" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/review`,

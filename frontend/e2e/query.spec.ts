@@ -120,7 +120,7 @@ test("estimates and starts a cloud query, then reviews results, promotes and lis
   await page.getByRole("link", { name: "Review results" }).click();
   await narrowed;
   await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
-  await expect(page.getByText(/Showing 2 images from a query run/)).toBeVisible();
+  await expect(page.getByTestId("run-filter")).toContainText("of the 2 images of this detection run");
   await expect(page.getByRole("link", { name: "Show the whole queue" })).toHaveAttribute(
     "href",
     `/p/${P}/review`,
