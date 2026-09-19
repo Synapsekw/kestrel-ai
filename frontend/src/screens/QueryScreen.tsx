@@ -158,7 +158,7 @@ export function QueryScreen() {
               {selection.error}
             </p>
           )}
-          {currentEstimate && <EstimateCard estimate={currentEstimate} />}
+          {currentEstimate && <EstimateCard estimate={currentEstimate} local={form.kind === "local_model"} />}
           <div className="flex items-center gap-2">
             <button
               type="button"
