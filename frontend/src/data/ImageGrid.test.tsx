@@ -1,13 +1,20 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
-import { exampleImage, exampleImagePage, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import {
+  exampleImage,
+  exampleImage2,
+  exampleImagePage,
+  exampleProject,
+  fakeClient,
+  PROJECT_ID,
+} from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { DataManagerScreen } from "@/screens/DataManagerScreen";
 import { ImageGrid } from "./ImageGrid";
 
-/** The grid is rendered through the Data Manager so J/K and selection use the real key handling. */
+/** The grid is rendered through the Images screen so J/K and selection use the real key handling. */
 function renderGrid() {
   const { api } = fakeClient([
     { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
@@ -63,7 +70,7 @@ describe("ImageGrid", () => {
     await waitFor(() => expect(screen.getByText("editor route")).toBeInTheDocument());
   });
 
-  it("shows a slate empty badge instead of the boxes badge for a marked image", () => {
+  it("shows a neutral Empty badge and no box count for a marked image", () => {
     const { api } = fakeClient([]);
     const marked = { ...exampleImage, box_count: 0, pending_count: 0, marked_empty: true };
     renderWithProviders(
@@ -78,7 +85,29 @@ describe("ImageGrid", () => {
       />,
       { api },
     );
-    expect(screen.getByText("empty")).toBeInTheDocument();
+    expect(screen.getByText("Empty")).toBeInTheDocument();
     expect(screen.queryByText(/boxes$/)).toBeNull();
+  });
+
+  it("badges pending suggestions as Review before Labeled, and captions the box count", () => {
+    const { api } = fakeClient([]);
+    const labeled = { ...exampleImage2, id: "done", file_name: "done.jpg", box_count: 1, labeled: true };
+    renderWithProviders(
+      <ImageGrid
+        projectId={PROJECT_ID}
+        items={[exampleImage, labeled]}
+        selected={new Set()}
+        focusIndex={0}
+        onCellClick={() => {}}
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />,
+      { api },
+    );
+    const [pending, done] = screen.getAllByRole("listitem");
+    expect(within(pending).getByText("Review")).toHaveAttribute("title", "2 suggestions to review");
+    expect(within(pending).getByText("3 boxes")).toBeInTheDocument();
+    expect(within(done).getByText("Labeled")).toBeInTheDocument();
+    expect(within(done).getByText("1 box")).toBeInTheDocument();
   });
 });

@@ -53,7 +53,7 @@ describe("FilterBar", () => {
       filters: { ...DEFAULT_QUERY.filters, minBoxes: 3 },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "List" }));
+    fireEvent.click(screen.getByRole("radio", { name: "List" }));
     expect(onView).toHaveBeenCalledWith("list");
     expect(screen.getByText("2 of 2 images")).toBeInTheDocument();
   });

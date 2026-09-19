@@ -1,6 +1,7 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { thumbnailUrl, type Image as ImageRow } from "@contract/client";
 import { useBackend } from "@/api/client";
+import { Checkbox, cx, transition } from "@/ui";
 import { computeWindow, useVirtualRows } from "./useVirtualRows";
 import type { ImageTableProps } from "./ImageTable";
 
@@ -21,20 +22,34 @@ export interface ImageGridProps {
 
 /**
  * Mounted with `key={src}` by the grid so a new source starts un-failed without an effect. The
- * fallback stays neutral because the caption below already shows the file name.
+ * fallback stays neutral because the caption already shows the file name.
  */
 function Thumb({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <span className="px-2 text-center text-xs text-slate-500">no thumbnail</span>;
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setFailed(true)}
-      className="max-h-full max-w-full object-contain"
-    />
-  );
+  if (failed) return <span className="px-2 text-center text-xs text-dim">No thumbnail</span>;
+  return <img src={src} alt={alt} onError={() => setFailed(true)} className="h-full w-full object-cover" />;
 }
+
+/** Top-right state of a tile: suggestions waiting beat marked empty beat labeled. */
+function StatusBadge({ img }: { img: ImageRow }) {
+  const base =
+    "inline-flex h-[18px] items-center rounded-full px-1.5 text-[10px] font-semibold leading-none shadow-sm";
+  if (img.pending_count > 0)
+    return (
+      <span
+        className={cx(base, "bg-warn-strong text-ink")}
+        title={`${img.pending_count} ${img.pending_count === 1 ? "suggestion" : "suggestions"} to review`}
+      >
+        Review
+      </span>
+    );
+  if (img.marked_empty) return <span className={cx(base, "bg-panel text-muted")}>Empty</span>;
+  if (img.labeled) return <span className={cx(base, "bg-ok text-white")}>Labeled</span>;
+  return null;
+}
+
+/** Keeps a click on the checkbox from also reaching the tile (select) or opening it (double-click). */
+const stop = (e: MouseEvent) => e.stopPropagation();
 
 export function ImageGrid(p: ImageGridProps) {
   const { baseUrl, token } = useBackend();
@@ -67,7 +82,7 @@ export function ImageGrid(p: ImageGridProps) {
       role="list"
       aria-label="Images"
       data-testid="image-grid"
-      className="min-h-0 flex-1 overflow-auto outline-none focus:ring-1 focus:ring-orange-500"
+      className="-mx-1.5 min-h-0 flex-1 overflow-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
     >
       <div style={{ height: win.totalHeight, position: "relative" }}>
         <div
@@ -90,38 +105,53 @@ export function ImageGrid(p: ImageGridProps) {
                 }
                 onDoubleClick={() => p.onOpen(img.id)}
                 style={{ width: CELL_WIDTH, height: CELL_HEIGHT }}
-                className={`flex flex-col p-1.5 ${isFocused ? "ring-1 ring-inset ring-orange-500" : ""}`}
+                className="group flex p-1.5"
               >
                 <div
-                  className={`relative flex flex-1 items-center justify-center overflow-hidden rounded bg-slate-800 ${
-                    isSelected ? "outline outline-2 outline-orange-500" : ""
-                  }`}
+                  className={cx(
+                    "relative flex flex-1 items-center justify-center overflow-hidden rounded-lg border bg-well",
+                    "hover:-translate-y-0.5 hover:shadow-float motion-reduce:hover:translate-y-0",
+                    transition,
+                    isSelected
+                      ? "border-accent ring-2 ring-accent"
+                      : isFocused
+                        ? "border-line ring-2 ring-ink/40"
+                        : "border-line",
+                  )}
                 >
                   <Thumb key={src} src={src} alt={img.file_name} />
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${img.file_name}`}
-                    checked={isSelected}
-                    onClick={(e) => e.stopPropagation()}
-                    onChange={() => p.onToggle(img.id)}
-                    className="absolute left-1 top-1"
-                  />
-                  <span className="absolute bottom-1 right-1 flex gap-1 text-[10px]">
-                    {img.marked_empty ? (
-                      <span className="rounded bg-slate-600 px-1">empty</span>
-                    ) : (
-                      img.box_count > 0 && (
-                        <span className="rounded bg-emerald-700 px-1">{img.box_count} boxes</span>
-                      )
+                  <span
+                    className={cx(
+                      "absolute left-1.5 top-1.5 flex",
+                      transition,
+                      isSelected || isFocused
+                        ? "opacity-100"
+                        : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
                     )}
-                    {img.pending_count > 0 && (
-                      <span className="rounded bg-amber-600 px-1">{img.pending_count} pending</span>
+                    onClick={stop}
+                    onDoubleClick={stop}
+                  >
+                    <Checkbox
+                      onDark
+                      aria-label={`Select ${img.file_name}`}
+                      checked={isSelected}
+                      onChange={() => p.onToggle(img.id)}
+                    />
+                  </span>
+                  <span className="absolute right-1.5 top-1.5 flex">
+                    <StatusBadge img={img} />
+                  </span>
+                  <span className="absolute inset-x-0 bottom-0 flex items-end gap-2 bg-gradient-to-t from-canvas/85 via-canvas/40 to-transparent px-2 pb-1.5 pt-6 text-xs text-inverse-fg">
+                    <span className="min-w-0 flex-1 truncate font-mono" title={img.file_name}>
+                      {img.file_name}
+                    </span>
+                    {img.box_count > 0 && (
+                      <span className="shrink-0 tabular-nums">
+                        {img.box_count} {img.box_count === 1 ? "box" : "boxes"}
+                      </span>
                     )}
                   </span>
                 </div>
-                <span className="mt-1 truncate text-xs text-slate-300" title={img.file_name}>
-                  {img.file_name}
-                </span>
               </div>
             );
           })}

@@ -1,9 +1,9 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useProject, useSourceNames } from "@/api/project";
 import { useJobsStore } from "@/store/jobs";
 import { EmptyImages } from "@/data/EmptyImages";
-import { importNotice } from "@/data/importNotice";
+import { importNotice, type Notice } from "@/data/importNotice";
 import { proposalsABulkMarkRejects } from "@/data/markEmptyCounts";
 import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
@@ -32,19 +32,121 @@ import { useImageList } from "@/data/useImageList";
 import { IMAGE_PAGE_SIZE } from "@/api/images";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useNavigationStore } from "@/store/navigation";
+import { Alert, Button, IconButton, Kbd, Skeleton, buttonClass, type AlertTone } from "@/ui";
 
-const NOTICE_TONE = {
-  info: "text-slate-300",
-  ok: "text-emerald-300",
-  warn: "text-amber-300",
-  error: "text-red-300",
-} as const;
+const NOTICE_TONE: Record<Notice["tone"], AlertTone> = {
+  info: "info",
+  ok: "ok",
+  warn: "warn",
+  error: "danger",
+};
+
+/** Alternatives are separate keys ("J / K"); a combination is pressed together ("Ctrl + A"). */
+const SHORTCUTS: { keys: string[][]; does: string }[] = [
+  { keys: [["J"], ["K"]], does: "Next or previous image" },
+  { keys: [["Enter"]], does: "Open the image (or double-click it)" },
+  { keys: [["Space"]], does: "Select or deselect the image" },
+  { keys: [["Ctrl", "A"]], does: "Select all listed images" },
+  { keys: [["Esc"]], does: "Clear the selection" },
+];
+
+/** The keyboard icon button and its small legend; Escape or a click outside closes it. */
+function ShortcutsButton() {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+  return (
+    <div
+      ref={wrapRef}
+      className="relative"
+      onKeyDown={(e) => {
+        if (e.key !== "Escape" || !open) return;
+        e.stopPropagation();
+        setOpen(false);
+        buttonRef.current?.focus();
+      }}
+    >
+      <IconButton
+        ref={buttonRef}
+        icon="keyboard"
+        label="Keyboard shortcuts"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={() => setOpen((v) => !v)}
+      />
+      {open && (
+        <div
+          role="dialog"
+          aria-label="Keyboard shortcuts"
+          className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-line bg-panel p-3 shadow-float animate-reveal motion-reduce:animate-none"
+        >
+          <p className="mb-2 text-xs font-medium text-muted">In the image grid and list</p>
+          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-[13px]">
+            {SHORTCUTS.map((s) => (
+              <div key={s.does} className="contents">
+                <dt className="flex items-center gap-1 text-xs text-muted">
+                  {s.keys.map((combo, i) => (
+                    <span key={combo.join("+")} className="flex items-center gap-1">
+                      {i > 0 && <span aria-hidden="true">/</span>}
+                      {combo.map((k, j) => (
+                        <span key={k} className="flex items-center gap-1">
+                          {j > 0 && <span aria-hidden="true">+</span>}
+                          <Kbd>{k}</Kbd>
+                        </span>
+                      ))}
+                    </span>
+                  ))}
+                </dt>
+                <dd className="text-ink">{s.does}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Placeholder tiles while the first page of images (or the project) loads. */
+function GridSkeleton() {
+  return (
+    <div className="flex flex-wrap gap-3">
+      <span className="sr-only">Loading images</span>
+      {Array.from({ length: 10 }, (_, i) => (
+        <Skeleton key={i} className="h-[178px] w-[188px] rounded-lg" />
+      ))}
+    </div>
+  );
+}
 
 export function DataManagerScreen() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
   const { project } = useProject(projectId);
   const sourceNames = useSourceNames(projectId);
+  // `?notice=all-labeled` (sent by the Label step when nothing is left to label) is read once and
+  // then dropped from the URL, so a reload or a back navigation does not show it again.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [allLabeled, setAllLabeled] = useState(() => searchParams.get("notice") === "all-labeled");
+  useEffect(() => {
+    if (!searchParams.has("notice")) return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("notice");
+        return next;
+      },
+      { replace: true },
+    );
+  }, [searchParams, setSearchParams]);
   const [query, setQuery] = useState<ListQuery>(DEFAULT_QUERY);
   const [view, setView] = useState<ViewMode>("grid");
   const params = useMemo(() => toImageParams(query, IMAGE_PAGE_SIZE), [query]);
@@ -125,22 +227,28 @@ export function DataManagerScreen() {
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex items-baseline justify-between gap-3">
-        <h1 className="text-2xl font-semibold">Data Manager</h1>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setImporting((v) => !v)}
-            disabled={!project}
-            className="rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
-          >
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">Images</h1>
+        <div className="flex items-center gap-2">
+          <ShortcutsButton />
+          <Button variant="primary" icon="import" onClick={() => setImporting((v) => !v)} disabled={!project}>
             Import images
-          </button>
-          <span className="text-xs text-slate-400">
-            J / K move, Enter or double-click opens, Space selects, Ctrl+A selects all
-          </span>
+          </Button>
         </div>
       </div>
+      {allLabeled && (
+        <Alert
+          tone="ok"
+          onDismiss={() => setAllLabeled(false)}
+          actions={
+            <Link to={`/p/${projectId}/datasets`} className={buttonClass("secondary", "sm")}>
+              Open Datasets
+            </Link>
+          }
+        >
+          Every image is labeled. Create a dataset next.
+        </Alert>
+      )}
       {importing && project && (
         <ImportImagesDialog
           project={project}
@@ -162,11 +270,7 @@ export function DataManagerScreen() {
         onSelectAll={() => setSelection(selectAll(ids))}
         loaded={items.length}
       />
-      {list.error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {list.error}
-        </p>
-      )}
+      {list.error && <Alert tone="danger">{list.error}</Alert>}
       {/* One slot of constant height: a bar that appears on the first click of a double-click would
           move the rows away from under the second click. */}
       <div className="flex min-h-[3.25rem] flex-col justify-center">
@@ -194,12 +298,12 @@ export function DataManagerScreen() {
             onClear={() => setSelection(clearSelection())}
           />
         ) : notice ? (
-          <p role="status" className="text-xs text-emerald-300">
+          <Alert tone="ok" onDismiss={() => setNotice(null)}>
             {notice}
-          </p>
+          </Alert>
         ) : (
           items.length > 0 && (
-            <p className="text-xs text-slate-500">
+            <p className="text-[13px] text-muted">
               Select images (checkbox, Space or Ctrl+A) to label them in a row, run a model on them, add them
               to a dataset or delete them.
             </p>
@@ -207,22 +311,13 @@ export function DataManagerScreen() {
         )}
       </div>
       {importBanner && (
-        <p
-          data-testid="import-notice"
-          role={importBanner.tone === "error" ? "alert" : "status"}
-          className={`flex items-center gap-3 text-xs ${NOTICE_TONE[importBanner.tone]}`}
+        <Alert
+          testId="import-notice"
+          tone={NOTICE_TONE[importBanner.tone]}
+          onDismiss={importBanner.tone !== "info" ? () => setImportRun(null) : undefined}
         >
           {importBanner.text}
-          {importBanner.tone !== "info" && (
-            <button
-              type="button"
-              className="text-slate-400 hover:underline"
-              onClick={() => setImportRun(null)}
-            >
-              Dismiss
-            </button>
-          )}
-        </p>
+        </Alert>
       )}
       {empty ? (
         <EmptyImages
@@ -230,6 +325,8 @@ export function DataManagerScreen() {
           onImport={() => setImporting(true)}
           onClearFilters={() => setQuery((q) => ({ ...q, filters: DEFAULT_QUERY.filters }))}
         />
+      ) : items.length === 0 && !list.error && (list.loading || !project) ? (
+        <GridSkeleton />
       ) : view === "list" ? (
         <ImageTable
           items={items}
@@ -258,10 +355,7 @@ export function DataManagerScreen() {
           onKeyDown={onKeyDown}
         />
       )}
-      {list.loading && <p className="text-xs text-slate-400">Loading…</p>}
-      {!list.loading && items.length === 0 && !list.error && !project && (
-        <p className="text-sm text-slate-400">Loading project…</p>
-      )}
+      {list.loading && items.length > 0 && <Skeleton className="h-1.5 w-full shrink-0" />}
     </section>
   );
 }

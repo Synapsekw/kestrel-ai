@@ -1,10 +1,11 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
 import type { ImportSettings, Project } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { createSource, type SourceWithJob } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
+import { Alert, Button, Dialog, Disclosure, Field, Input } from "@/ui";
 
 interface Props {
   project: Project;
@@ -21,11 +22,6 @@ interface Form {
   group_regex: string;
 }
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const label = "flex flex-col gap-1 text-xs text-slate-400";
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
-
 function whole(text: string, min: number, max: number): number | null {
   if (!/^\d+$/.test(text.trim())) return null;
   const n = Number(text.trim());
@@ -36,6 +32,7 @@ function whole(text: string, min: number, max: number): number | null {
 export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
   const api = useApi();
   const { mode } = useBackend();
+  const id = useId();
   const d = project.import_defaults;
   const [form, setForm] = useState<Form>({
     folder: "",
@@ -94,121 +91,109 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
   }
 
   return (
-    <form
-      role="dialog"
-      aria-label="Import images"
+    <Dialog
+      open
+      title="Import images"
+      description="Originals are never modified: files are converted to JPEG, downscaled past the max side, de-duplicated by perceptual hash and grouped by flight. Re-importing a folder picks up new files only."
+      onClose={() => {
+        if (!busy) onClose();
+      }}
       onSubmit={(e) => void submit(e)}
-      className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-4"
+      footer={
+        <>
+          <Button onClick={onClose} disabled={busy}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" icon="import" loading={busy}>
+            Start import
+          </Button>
+        </>
+      }
     >
-      <h2 className="text-lg font-medium">Import images</h2>
-      <p className="text-sm text-slate-400">
-        Originals are never modified: files are converted to JPEG, downscaled past the max side, de-duplicated
-        by perceptual hash and grouped by flight. Re-importing a folder picks up new files only.
-      </p>
-      <label className={label}>
-        Folder
-        <div className="flex gap-2">
-          <input
-            aria-label="Folder"
-            required
-            value={form.folder}
-            onChange={(e) => patch({ folder: e.target.value })}
-            placeholder="E:\Dev\Yolo\Ahmadia Construction Data"
-            className={`${input} min-w-0 flex-1 font-mono`}
-          />
-          {mode === "tauri" && (
-            <button type="button" className={secondary} onClick={() => void browse()}>
-              Browse
-            </button>
-          )}
-        </div>
-      </label>
-      <label className={label}>
-        Site name (optional, defaults to the folder name)
-        <input
-          aria-label="Site name"
-          value={form.site}
-          onChange={(e) => patch({ site: e.target.value })}
-          className={input}
-        />
-      </label>
-      <details className="rounded border border-slate-700 px-3 py-2">
-        <summary className="cursor-pointer text-xs text-slate-300">
-          Advanced settings (the defaults suit most imports)
-        </summary>
-        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className={label}>
-            Max side
-            <input
-              aria-label="Max side"
-              type="number"
-              min={512}
-              max={12000}
-              value={form.max_side}
-              onChange={(e) => patch({ max_side: e.target.value })}
-              className={input}
+      <div className="flex flex-col gap-4">
+        <Field label="Folder" htmlFor={`${id}-folder`}>
+          <div className="flex gap-2">
+            <Input
+              id={`${id}-folder`}
+              required
+              value={form.folder}
+              onChange={(e) => patch({ folder: e.target.value })}
+              placeholder="E:\Dev\Yolo\Ahmadia Construction Data"
+              className="min-w-0 flex-1 font-mono"
             />
-            <span>
-              Longest side in pixels; larger images are scaled down, smaller ones are kept as they are.
-            </span>
-          </label>
-          <label className={label}>
-            JPEG quality
-            <input
-              aria-label="JPEG quality"
-              type="number"
-              min={50}
-              max={100}
-              value={form.quality}
-              onChange={(e) => patch({ quality: e.target.value })}
-              className={input}
-            />
-            <span>Quality of the prepared copies (95 is visually lossless).</span>
-          </label>
-          <label className={label}>
-            Duplicate threshold
-            <input
-              aria-label="Duplicate threshold"
-              type="number"
-              min={0}
-              max={32}
-              value={form.dedupe_threshold}
-              onChange={(e) => patch({ dedupe_threshold: e.target.value })}
-              className={input}
-            />
-            <span>
-              How alike two images must be to count as duplicates: 0 only identical pictures, 4 near-identical
-              frames, higher values drop more.
-            </span>
-          </label>
-          <label className={label}>
-            Group regex
-            <input
-              aria-label="Group regex"
-              value={form.group_regex}
-              onChange={(e) => patch({ group_regex: e.target.value })}
-              className={`${input} font-mono`}
-            />
-            <span>
-              Pattern that reads the flight number from the file name (camera_flight_frame). Images of one
-              flight stay together when a dataset is split. Leave it unless your files are named differently.
-            </span>
-          </label>
-        </div>
-      </details>
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
-      <div className="flex gap-2">
-        <button type="submit" className={primary} disabled={busy}>
-          Start import
-        </button>
-        <button type="button" className={secondary} onClick={onClose} disabled={busy}>
-          Cancel
-        </button>
+            {mode === "tauri" && (
+              <Button icon="folder" onClick={() => void browse()}>
+                Browse
+              </Button>
+            )}
+          </div>
+        </Field>
+        <Field label="Site name" htmlFor={`${id}-site`} hint="Optional. Defaults to the folder name.">
+          <Input id={`${id}-site`} value={form.site} onChange={(e) => patch({ site: e.target.value })} />
+        </Field>
+        <Disclosure label="Advanced settings (the defaults suit most imports)">
+          <div className="grid grid-cols-1 gap-4 rounded-lg border border-line bg-ground p-4 md:grid-cols-2">
+            <Field
+              label="Max side"
+              htmlFor={`${id}-max`}
+              hint="Longest side in pixels; larger images are scaled down, smaller ones are kept as they are."
+            >
+              <Input
+                id={`${id}-max`}
+                type="number"
+                min={512}
+                max={12000}
+                value={form.max_side}
+                onChange={(e) => patch({ max_side: e.target.value })}
+                className="tabular-nums"
+              />
+            </Field>
+            <Field
+              label="JPEG quality"
+              htmlFor={`${id}-quality`}
+              hint="Quality of the prepared copies (95 is visually lossless)."
+            >
+              <Input
+                id={`${id}-quality`}
+                type="number"
+                min={50}
+                max={100}
+                value={form.quality}
+                onChange={(e) => patch({ quality: e.target.value })}
+                className="tabular-nums"
+              />
+            </Field>
+            <Field
+              label="Duplicate threshold"
+              htmlFor={`${id}-dedupe`}
+              hint="How alike two images must be to count as duplicates: 0 only identical pictures, 4 near-identical frames, higher values drop more."
+            >
+              <Input
+                id={`${id}-dedupe`}
+                type="number"
+                min={0}
+                max={32}
+                value={form.dedupe_threshold}
+                onChange={(e) => patch({ dedupe_threshold: e.target.value })}
+                className="tabular-nums"
+              />
+            </Field>
+            <Field
+              label="Group regex"
+              htmlFor={`${id}-regex`}
+              hint="Pattern that reads the flight number from the file name (camera_flight_frame). Images of one flight stay together when a dataset is split. Leave it unless your files are named differently."
+            >
+              <Input
+                id={`${id}-regex`}
+                value={form.group_regex}
+                onChange={(e) => patch({ group_regex: e.target.value })}
+                className="font-mono"
+              />
+            </Field>
+          </div>
+        </Disclosure>
+        {error && <Alert tone="danger">{error}</Alert>}
       </div>
-    </form>
+    </Dialog>
   );
 }

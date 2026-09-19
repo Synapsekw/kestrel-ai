@@ -34,6 +34,8 @@ describe("AddToDatasetDialog", () => {
       "Freeze 2 images into a new dataset (immutable after creation): 1 with accepted boxes, 1 marked empty (negative examples).",
     );
     expect(screen.queryByText(/not labeled yet/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Seed")).toBeNull(); // split options fold away
+    fireEvent.click(screen.getByRole("button", { name: "Split options" }));
     expect(screen.getByLabelText("Seed")).toHaveValue(42);
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
     fireEvent.change(screen.getByLabelText("Split method"), { target: { value: "random" } });
@@ -53,7 +55,7 @@ describe("AddToDatasetDialog", () => {
       "href",
       `/p/${PROJECT_ID}/train`,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     expect(onClose).toHaveBeenCalled();
   });
 

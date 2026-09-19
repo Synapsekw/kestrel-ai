@@ -3,6 +3,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
+import { Alert, Button } from "@/ui";
 import { AddToDatasetDialog } from "./AddToDatasetDialog";
 import { deleteImages, markImagesEmpty, unmarkImagesEmpty } from "./bulkActions";
 
@@ -27,8 +28,8 @@ interface Props {
   onClear: () => void;
 }
 
-const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
+/** A secondary button redrawn for the dark bar (important: it overrides the variant's colours). */
+const onInverse = "!border-inverse-fg/25 !bg-transparent !text-inverse-fg hover:!bg-inverse-fg/10";
 
 export function SelectionBar({
   projectId,
@@ -101,53 +102,98 @@ export function SelectionBar({
   }
 
   return (
-    <div className="flex flex-col gap-2 rounded border border-slate-700 bg-slate-800/60 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">{n} selected</span>
-        <button type="button" className={primary} onClick={onLabel} disabled={busy}>
-          Label selected
-        </button>
-        <button
-          type="button"
-          className={btn}
-          onClick={onRunModel}
-          disabled={busy}
-          title="Open the query screen with these images selected"
-        >
-          Run model
-        </button>
-        <button
-          type="button"
-          className={btn}
-          onClick={() => setMode(mode === "dataset" ? "idle" : "dataset")}
-          disabled={busy}
-        >
-          Add to dataset
-        </button>
-        <button
-          type="button"
-          className={btn}
-          onClick={() => setMode(mode === "confirm-mark" ? "idle" : "confirm-mark")}
-          disabled={busy}
-        >
-          Mark as empty
-        </button>
-        {emptyCount > 0 && (
-          <button type="button" className={btn} onClick={() => void unmark()} disabled={busy}>
-            Unmark empty
-          </button>
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col rounded-lg bg-inverse px-4 text-inverse-fg shadow-float animate-reveal motion-reduce:animate-none">
+        <div className="flex min-h-11 flex-wrap items-center gap-2 py-1.5">
+          <span className="mr-1 text-sm font-medium tabular-nums">{n} selected</span>
+          <Button variant="primary" size="sm" icon="label" onClick={onLabel} disabled={busy}>
+            Label selected
+          </Button>
+          <Button
+            size="sm"
+            className={onInverse}
+            onClick={onRunModel}
+            disabled={busy}
+            title="Open Detect with these images selected"
+          >
+            Run model
+          </Button>
+          <Button
+            size="sm"
+            className={onInverse}
+            aria-haspopup="dialog"
+            onClick={() => setMode(mode === "dataset" ? "idle" : "dataset")}
+            disabled={busy}
+          >
+            Add to dataset
+          </Button>
+          <Button
+            size="sm"
+            className={onInverse}
+            aria-expanded={mode === "confirm-mark"}
+            onClick={() => setMode(mode === "confirm-mark" ? "idle" : "confirm-mark")}
+            disabled={busy}
+          >
+            Mark as empty
+          </Button>
+          {emptyCount > 0 && (
+            <Button size="sm" className={onInverse} onClick={() => void unmark()} disabled={busy}>
+              Unmark empty
+            </Button>
+          )}
+          <Button
+            size="sm"
+            className={onInverse}
+            aria-expanded={mode === "confirm-delete"}
+            onClick={() => setMode(mode === "confirm-delete" ? "idle" : "confirm-delete")}
+            disabled={busy}
+          >
+            Delete
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto !text-inverse-fg/75 hover:!bg-inverse-fg/10 hover:!text-inverse-fg"
+            onClick={onClear}
+          >
+            Clear selection
+          </Button>
+        </div>
+        {mode === "confirm-delete" && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-inverse-fg/15 py-2 text-sm animate-reveal motion-reduce:animate-none">
+            <span className="mr-1">
+              Remove {n} images and their boxes from the project? Original files are not touched.
+            </span>
+            <Button
+              variant="danger"
+              size="sm"
+              icon="trash"
+              className="!border-transparent !bg-danger !text-white hover:!bg-danger/90"
+              onClick={() => void confirmDelete()}
+              loading={busy}
+            >
+              Delete {n} images
+            </Button>
+            <Button size="sm" className={onInverse} onClick={() => setMode("idle")}>
+              Cancel
+            </Button>
+          </div>
         )}
-        <button
-          type="button"
-          className={btn}
-          onClick={() => setMode(mode === "confirm-delete" ? "idle" : "confirm-delete")}
-          disabled={busy}
-        >
-          Delete
-        </button>
-        <button type="button" className="ml-auto text-xs text-slate-400 hover:text-white" onClick={onClear}>
-          Clear selection
-        </button>
+        {mode === "confirm-mark" && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-inverse-fg/15 py-2 text-sm animate-reveal motion-reduce:animate-none">
+            <span className="mr-1">
+              Mark {n} {n === 1 ? "image" : "images"} as empty?
+              {pendingCount > 0 &&
+                ` ${pendingCount} pending ${pendingCount === 1 ? "suggestion" : "suggestions"} on them will be rejected.`}
+            </span>
+            <Button variant="primary" size="sm" onClick={() => void confirmMark()} loading={busy}>
+              Mark {n} as empty
+            </Button>
+            <Button size="sm" className={onInverse} onClick={() => setMode("idle")}>
+              Cancel
+            </Button>
+          </div>
+        )}
       </div>
       {mode === "dataset" && (
         <AddToDatasetDialog
@@ -159,42 +205,7 @@ export function SelectionBar({
           onClose={() => setMode("idle")}
         />
       )}
-      {mode === "confirm-delete" && (
-        <div className="flex items-center gap-2 text-sm">
-          <span>Remove {n} images and their boxes from the project? Original files are not touched.</span>
-          <button
-            type="button"
-            className="rounded bg-red-700 px-3 py-1 text-sm hover:bg-red-600"
-            onClick={() => void confirmDelete()}
-            disabled={busy}
-          >
-            Delete {n} images
-          </button>
-          <button type="button" className={btn} onClick={() => setMode("idle")}>
-            Cancel
-          </button>
-        </div>
-      )}
-      {mode === "confirm-mark" && (
-        <div className="flex items-center gap-2 text-sm">
-          <span>
-            Mark {n} {n === 1 ? "image" : "images"} as empty?
-            {pendingCount > 0 &&
-              ` ${pendingCount} pending ${pendingCount === 1 ? "proposal" : "proposals"} on them will be rejected.`}
-          </span>
-          <button type="button" className={primary} onClick={() => void confirmMark()} disabled={busy}>
-            Mark {n} as empty
-          </button>
-          <button type="button" className={btn} onClick={() => setMode("idle")}>
-            Cancel
-          </button>
-        </div>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
     </div>
   );
 }
