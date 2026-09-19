@@ -42,7 +42,7 @@ describe("ProvidersSection", () => {
     const anthropic = screen.getByTestId("provider-anthropic");
     fireEvent.click(within(anthropic).getByRole("button", { name: "Test Anthropic" }));
     await waitFor(() =>
-      expect(within(anthropic).getByRole("status")).toHaveTextContent("Failed: no API key stored"),
+      expect(within(anthropic).getByRole("alert")).toHaveTextContent("No Anthropic key is stored yet."),
     );
     fireEvent.change(within(anthropic).getByLabelText("Anthropic requests per minute"), {
       target: { value: "10" },

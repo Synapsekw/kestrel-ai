@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { exampleProviders } from "@/test/fixtures";
-import { diffProvider, formOf } from "./providersModel";
+import { diffProvider, formOf, testFailureText } from "./providersModel";
 
 const anthropic = exampleProviders[1];
 
@@ -39,6 +39,37 @@ describe("provider form model", () => {
     );
     expect(diffProvider({ ...form, cost_per_request: "" }, anthropic).error).toBe(
       "Cost per request must be 0 or more.",
+    );
+  });
+});
+
+describe("testFailureText", () => {
+  it("says in plain words that the provider rejected the key", () => {
+    const raw =
+      "ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error'}}";
+    expect(testFailureText("Anthropic", raw)).toBe(
+      "Anthropic rejected the key (401). Check that it was pasted completely and is still active.",
+    );
+    expect(testFailureText("OpenAI", "ProviderError: openai returned 403: forbidden")).toMatch(
+      /^OpenAI rejected the key \(403\)/,
+    );
+  });
+
+  it("names a missing key, an unreachable provider and an unknown model", () => {
+    expect(testFailureText("OpenAI", "no API key stored")).toBe(
+      "No OpenAI key is stored yet. Paste one above and save it.",
+    );
+    expect(testFailureText("Anthropic", "ProviderError: could not reach anthropic: APIConnectionError")).toBe(
+      "Could not reach Anthropic. Check the internet connection.",
+    );
+    expect(testFailureText("Anthropic", "ProviderError: anthropic returned 404: model: claude-x")).toBe(
+      "Anthropic does not know the model name (404). Correct it above and save the settings.",
+    );
+  });
+
+  it("keeps an unrecognised message, without the Python class prefix", () => {
+    expect(testFailureText("OpenAI", "ProviderError: openai returned 500: boom")).toBe(
+      "The OpenAI test failed: openai returned 500: boom",
     );
   });
 });

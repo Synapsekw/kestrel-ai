@@ -38,3 +38,18 @@ export function diffProvider(
   if (cost_per_request !== current.cost_per_request) patch.cost_per_request = cost_per_request;
   return { patch: Object.keys(patch).length > 0 ? patch : null, error: null };
 }
+
+/** Turns the backend's provider-test failure (an SDK exception as text) into a sentence for the operator. */
+export function testFailureText(providerLabel: string, message: string): string {
+  const plain = message.replace(/^[A-Za-z]*Error: /, "");
+  if (plain === "no API key stored")
+    return `No ${providerLabel} key is stored yet. Paste one above and save it.`;
+  const status = /returned (\d{3})/.exec(plain)?.[1];
+  if (status === "401" || status === "403")
+    return `${providerLabel} rejected the key (${status}). Check that it was pasted completely and is still active.`;
+  if (status === "404")
+    return `${providerLabel} does not know the model name (404). Correct it above and save the settings.`;
+  if (plain.startsWith("could not reach"))
+    return `Could not reach ${providerLabel}. Check the internet connection.`;
+  return `The ${providerLabel} test failed: ${plain}`;
+}

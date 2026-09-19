@@ -10,7 +10,7 @@ import {
   updateProvider,
 } from "@/api/providers";
 import { pushLog } from "@/app/diagnostics";
-import { diffProvider, formOf } from "./providersModel";
+import { diffProvider, formOf, testFailureText } from "./providersModel";
 
 interface Props {
   provider: Provider;
@@ -95,7 +95,9 @@ export function ProviderCard({ provider, onChanged }: Props) {
   const test = () =>
     run("test", async () => {
       const r = await testProvider(api, provider.name);
-      return r.ok ? `OK: ${r.message} (${r.model_name})` : `Failed: ${r.message}`;
+      if (r.ok) return `OK: ${r.message} (${r.model_name})`;
+      setError(testFailureText(name, r.message));
+      return null;
     });
 
   return (
