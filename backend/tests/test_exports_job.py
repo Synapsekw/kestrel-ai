@@ -223,6 +223,25 @@ def test_yolo_stem_collision_fails_before_anything_is_written(
     assert not handle.exports_dir.exists()
 
 
+def test_promote_bumps_the_suffix_when_the_final_name_already_exists(tmp_path):
+    """m5: a unit-level test of _promote's collision branch, isolated from the job/API pipeline."""
+    from datetime import datetime
+
+    from app.exports.job import _promote, _reserve_partial_folder
+
+    base = tmp_path
+    partial, stamp, n = _reserve_partial_folder(base, datetime(2026, 9, 19, 10, 15, 0))
+    # Simulate another export having finished into the reserved final name in the meantime.
+    (base / stamp).mkdir()
+
+    final = _promote(base, partial, stamp, n)
+
+    assert final == base / f"{stamp}_2"
+    assert final.is_dir()
+    assert not partial.exists()
+    assert list(base.glob(".partial-*")) == []
+
+
 def test_two_exports_in_the_same_frozen_second_get_stamp_and_stamp_2(
     client, project_id, with_boxes, handle, monkeypatch, wait_job
 ):
