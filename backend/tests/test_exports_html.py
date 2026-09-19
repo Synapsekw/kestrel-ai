@@ -90,14 +90,39 @@ def test_more_than_300_images_with_boxes_are_capped(tmp_path):
     assert "detections.csv" in text
 
 
-def test_checked_and_machinery_totals(tmp_path):
+def test_summary_counts_confirmed_empty_and_untouched(tmp_path):
     images = [
-        _image(path="images/a.jpg", boxes=[_box()]),
-        _image(path="images/b.jpg", marked_empty=True),
-        _image(path="images/c.jpg"),  # never reviewed: not "checked"
+        _image(path="images/a.jpg", boxes=[_box()]),  # confirmed
+        _image(path="images/b.jpg", marked_empty=True),  # empty
+        _image(path="images/c.jpg"),  # untouched: never reviewed
     ]
     text = _write(images, tmp_path, thumbnail_fn=lambda i: None)
-    assert "2 images checked, 1 with machinery." in text
+    assert "Of 3 images, 2 were checked by a person: 1 with machinery, 1 confirmed empty." in text
+    assert "1 image has not been looked at yet." in text
+    assert "only unreviewed proposals" not in text  # none here: the line must not appear at all
+
+
+def test_summary_sentence_pluralises_correctly_for_one_and_many(tmp_path):
+    text = _write([_image(path="images/a.jpg", boxes=[_box()])], tmp_path, thumbnail_fn=lambda i: None)
+    assert "Of 1 image, 1 was checked by a person: 1 with machinery, 0 confirmed empty." in text
+
+    images = [
+        _image(path="images/a.jpg", boxes=[_box(id="ba")]),
+        _image(path="images/b.jpg", boxes=[_box(id="bb")]),
+        _image(path="images/c.jpg", boxes=[_box(id="bc", review_state="unreviewed")]),
+        _image(path="images/d.jpg", boxes=[_box(id="bd", review_state="unreviewed")]),
+        _image(path="images/e.jpg"),
+        _image(path="images/f.jpg"),
+    ]
+    text = _write(
+        images,
+        tmp_path,
+        settings={"formats": ["html"], "include_unreviewed": True},
+        thumbnail_fn=lambda i: None,
+    )
+    assert "Of 6 images, 2 were checked by a person: 2 with machinery, 0 confirmed empty." in text
+    assert "2 images have only unreviewed proposals (dashed boxes below)." in text
+    assert "2 images have not been looked at yet." in text
 
 
 def test_drawn_thumbnail_differs_from_the_undrawn_one(tmp_path, make_jpeg):
@@ -169,7 +194,8 @@ def test_an_image_with_only_unreviewed_boxes_is_not_checked(tmp_path):
         thumbnail_fn=lambda i: None,
     )
     # Only image b is "checked": image a has nothing but an unreviewed proposal.
-    assert "1 images checked, 2 with machinery." in text
+    assert "Of 2 images, 1 was checked by a person: 1 with machinery, 0 confirmed empty." in text
+    assert "1 image has only unreviewed proposals (dashed boxes below)." in text
 
 
 def test_export_time_is_local_with_the_offset(tmp_path):
@@ -226,3 +252,42 @@ def test_image_path_is_escaped_on_its_card(tmp_path):
     )
     assert "<script>alert(1)</script>" not in text
     assert "&lt;script&gt;alert(1)&lt;/script&gt;" in text
+
+
+def test_totals_table_gets_an_unreviewed_column_when_unreviewed_boxes_are_included(tmp_path):
+    images = [_image(boxes=[_box(id="b1"), _box(id="b2", review_state="unreviewed")])]
+    text = _write(
+        images,
+        tmp_path,
+        settings={"formats": ["html"], "include_unreviewed": True},
+        thumbnail_fn=lambda i: None,
+    )
+    assert "<th>of which unreviewed</th>" in text
+    assert "<td>excavator</td><td>2</td><td>1</td>" in text
+
+
+def test_totals_table_has_no_unreviewed_column_without_any(tmp_path):
+    text = _write([_image(boxes=[_box()])], tmp_path, thumbnail_fn=lambda i: None)
+    assert "of which unreviewed" not in text
+
+
+def test_group_table_gets_an_unreviewed_column(tmp_path):
+    images = [_image(boxes=[_box(id="b1"), _box(id="b2", review_state="unreviewed")])]
+    text = _write(
+        images,
+        tmp_path,
+        settings={"formats": ["html"], "include_unreviewed": True},
+        thumbnail_fn=lambda i: None,
+    )
+    assert "<td>flight_1</td><td>1</td><td>2</td><td>1</td><td>2</td>" in text
+
+
+def test_card_counts_show_unreviewed_alongside_the_class_count(tmp_path):
+    images = [_image(boxes=[_box(id="b1"), _box(id="b2", review_state="unreviewed")])]
+    text = _write(
+        images,
+        tmp_path,
+        settings={"formats": ["html"], "include_unreviewed": True},
+        thumbnail_fn=lambda i: None,
+    )
+    assert "excavator 2 (1 unreviewed)" in text
