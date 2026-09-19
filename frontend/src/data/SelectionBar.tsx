@@ -69,8 +69,9 @@ export function SelectionBar({
     setBusy(true);
     setError(null);
     try {
+      // No local bumpImages(): bulk-mark-empty publishes its own images.changed over the
+      // websocket, which the list already reloads on (unlike bulk-delete, which publishes none).
       const { updated, skipped } = await markImagesEmpty(api, projectId, selectedIds);
-      useChangesStore.getState().bumpImages();
       const skippedNote = skipped > 0 ? `, ${skipped} skipped because they have accepted boxes` : "";
       // `already` (already marked before this call) is computed from the loaded rows, not the
       // response: the backend's `updated` counts neither the skipped nor the already-marked ones.
@@ -90,7 +91,6 @@ export function SelectionBar({
     setError(null);
     try {
       const { updated } = await unmarkImagesEmpty(api, projectId, selectedIds);
-      useChangesStore.getState().bumpImages();
       onMarked(`${updated} no longer marked empty`);
     } catch (e) {
       pushLog(`unmark empty failed: ${messageOf(e, String(e))}`);
