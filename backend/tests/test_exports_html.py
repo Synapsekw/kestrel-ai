@@ -192,3 +192,37 @@ def test_on_card_callback_runs_once_per_card(tmp_path):
         on_card=lambda done, total: calls.append((done, total)),
     )
     assert calls == [(1, 3), (2, 3), (3, 3)]
+
+
+def test_class_name_is_escaped_in_the_totals_and_group_tables(tmp_path):
+    classes = [{"id": "c-exc", "name": "<b>excavator</b>", "colour": "#ff0000"}]
+    images = [_image(boxes=[_box(class_name="<b>excavator</b>")])]
+    files = html_out.write(
+        images,
+        classes,
+        tmp_path,
+        project_name="P",
+        export_time=EXPORT_TIME,
+        settings=SETTINGS,
+        thumbnail_fn=lambda i: None,
+    )
+    report = (tmp_path / "report.html").read_text("utf-8")
+    assert files == ["report.html"]
+    assert "<b>excavator</b>" not in report
+    assert "&lt;b&gt;excavator&lt;/b&gt;" in report
+
+
+def test_group_is_escaped_in_the_group_table(tmp_path):
+    text = _write([_image(group="<img src=x onerror=alert(1)>")], tmp_path, thumbnail_fn=lambda i: None)
+    assert "<img src=x" not in text
+    assert "&lt;img src=x onerror=alert(1)&gt;" in text
+
+
+def test_image_path_is_escaped_on_its_card(tmp_path):
+    text = _write(
+        [_image(path="images/<script>alert(1)</script>.jpg", boxes=[_box()])],
+        tmp_path,
+        thumbnail_fn=lambda i: None,
+    )
+    assert "<script>alert(1)</script>" not in text
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in text

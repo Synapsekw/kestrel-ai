@@ -1,5 +1,6 @@
 """Rows loading and the CSV writer (G2, plan Task 1)."""
 
+import csv
 from datetime import UTC, datetime
 
 import pytest
@@ -269,3 +270,47 @@ def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_d
     by_image = _read(folder / "counts_by_image.csv")
     assert "'=1+1" in by_image
     assert "'-flight" in by_image
+
+
+def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(
+    handle, project_dir, tmp_path
+):
+    """csv.writer's own quoting must survive a class name that itself looks like it could break a row."""
+    tricky = 'Wheel, "Loader"'
+    with handle.session() as s:
+        source = Source(folder=str(project_dir), site="siteA")
+        s.add(source)
+        s.flush()
+        img = Image(path="images/a.jpg", width=100, height=100, source_id=source.id, group_key="g1")
+        s.add(img)
+        s.flush()
+        project = handle.row(s)
+        classes = list(project.classes)
+        classes[0] = {**classes[0], "name": tricky}
+        project.classes = classes
+        s.add(project)
+        s.flush()
+        s.add(
+            Box(
+                image_id=img.id,
+                class_id=classes[0]["id"],
+                x=1,
+                y=1,
+                w=10,
+                h=10,
+                provenance_kind="person",
+                review_state="accepted",
+            )
+        )
+    images, classes = rows.load(handle)
+    folder = tmp_path / "out"
+    csv_out.write(images, classes, folder)
+
+    with open(folder / "detections.csv", encoding="utf-8-sig", newline="") as f:
+        rows_read = list(csv.reader(f))
+    class_col = rows_read[0].index("class")
+    assert rows_read[1][class_col] == tricky
+
+    with open(folder / "counts_by_group.csv", encoding="utf-8-sig", newline="") as f:
+        header = next(csv.reader(f))
+    assert tricky in header
