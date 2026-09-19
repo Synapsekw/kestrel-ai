@@ -6,6 +6,7 @@ import { messageOf } from "@/api/errors";
 import { cancelJob } from "@/api/jobs";
 import { pushLog } from "@/app/diagnostics";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
+import { Alert, Button, Icon, Pill, Progress, cx, focusRing, type IconName, type PillTone } from "@/ui";
 import { elapsedSeconds, formatDuration, jobTitle, resultTarget, stateLabel } from "./jobLabels";
 import { JobLogView } from "./JobLogView";
 import { useNow } from "./useNow";
@@ -17,16 +18,23 @@ interface Props {
   showLog?: boolean;
 }
 
-const STATE_CLASS: Record<Job["state"], string> = {
-  queued: "bg-slate-700 text-slate-200",
-  running: "bg-orange-700 text-orange-100",
-  succeeded: "bg-emerald-800 text-emerald-100",
-  failed: "bg-red-800 text-red-100",
-  cancelled: "bg-slate-600 text-slate-200",
+const TYPE_ICON: Record<Job["type"], IconName> = {
+  import: "import",
+  train: "train",
+  infer: "detect",
+  dataset: "datasets",
+  export: "download",
 };
 
-const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-800 disabled:opacity-50";
+const STATE_TONE: Record<Job["state"], PillTone> = {
+  queued: "neutral",
+  running: "accent",
+  succeeded: "ok",
+  failed: "danger",
+  cancelled: "neutral",
+};
 
+/** One job as a row of the jobs drawer: type icon, name, state, progress, elapsed time, actions. */
 export function JobCard({ projectId, job, showLog = false }: Props) {
   const api = useApi();
   const active = isActiveJob(job);
@@ -53,55 +61,50 @@ export function JobCard({ projectId, job, showLog = false }: Props) {
   }
 
   return (
-    <article
-      data-testid={`job-${job.id}`}
-      className="flex flex-col gap-2 rounded border border-slate-700 bg-slate-800/60 p-3 text-sm"
-    >
-      <header className="flex flex-wrap items-center gap-2">
-        <span className="font-medium">{title}</span>
-        <span data-testid="jobcard-state" className={`rounded px-2 py-0.5 text-xs ${STATE_CLASS[job.state]}`}>
-          {stateLabel(job.state)}
+    <article data-testid={`job-${job.id}`} className="flex flex-col gap-2 py-3 text-sm">
+      <header className="flex items-center gap-2">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-well text-muted">
+          <Icon name={TYPE_ICON[job.type]} size={15} />
         </span>
-        {elapsed !== null && <span className="text-xs text-slate-400">{formatDuration(elapsed)}</span>}
-        <span className="ml-auto font-mono text-xs text-slate-500">{job.id.slice(0, 8)}</span>
+        <span className="min-w-0 flex-1 truncate font-medium" title={title}>
+          {title}
+        </span>
+        <Pill data-testid="jobcard-state" tone={STATE_TONE[job.state]} live={job.state === "running"}>
+          {stateLabel(job.state)}
+        </Pill>
       </header>
-      <div
-        role="progressbar"
-        aria-label={`${title} progress`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={percent}
-        className="h-2 w-full overflow-hidden rounded bg-slate-700"
-      >
-        <div className="h-full bg-orange-500 transition-[width]" style={{ width: `${percent}%` }} />
-      </div>
-      <p className="text-xs text-slate-300">
-        {percent}%{job.message ? ` · ${job.message}` : ""}
+      <Progress value={job.progress} running={job.state === "running"} label={`${title} progress`} />
+      <p className="flex items-baseline gap-2 text-xs text-muted">
+        <span className="min-w-0 flex-1 truncate">
+          <span className="tabular-nums">{percent}%</span>
+          {job.message ? ` · ${job.message}` : ""}
+        </span>
+        {elapsed !== null && <span className="shrink-0 tabular-nums">{formatDuration(elapsed)}</span>}
+        <span className="shrink-0 font-mono text-dim">{job.id.slice(0, 8)}</span>
       </p>
-      {job.error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-2 py-1 text-xs text-red-200">
-          {job.error}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {job.error && <Alert tone="danger">{job.error}</Alert>}
+      {error && <Alert tone="danger">{error}</Alert>}
       <div className="flex flex-wrap items-center gap-2">
         {active && (
-          <button type="button" className={btn} onClick={() => void cancel()} disabled={busy}>
+          <Button size="sm" onClick={() => void cancel()} loading={busy}>
             Cancel job
-          </button>
+          </Button>
         )}
+        <Button size="sm" variant="ghost" aria-expanded={logOpen} onClick={() => setLogOpen((o) => !o)}>
+          {logOpen ? "Hide log" : "Show log"}
+        </Button>
         {target && (
-          <Link to={target.to} className="text-xs text-orange-300 hover:underline">
+          <Link
+            to={target.to}
+            className={cx(
+              "ml-auto inline-flex items-center gap-1 rounded-md text-xs font-medium text-accent hover:underline",
+              focusRing,
+            )}
+          >
             {target.label}
+            <Icon name="arrow-right" size={13} />
           </Link>
         )}
-        <button type="button" className={btn} onClick={() => setLogOpen((o) => !o)}>
-          {logOpen ? "Hide log" : "Show log"}
-        </button>
       </div>
       {logOpen && <JobLogView projectId={projectId} jobId={job.id} live={active} />}
     </article>

@@ -8,7 +8,7 @@ describe("job labels", () => {
     expect(jobTitle({ ...runningJob, type: "train", params: { name: "ahmadia-v1-n" } })).toBe(
       "Training: ahmadia-v1-n",
     );
-    expect(jobTitle({ ...runningJob, type: "infer" })).toBe("Query run");
+    expect(jobTitle({ ...runningJob, type: "infer" })).toBe("Detection run");
     expect(stateLabel("cancelled")).toBe("Cancelled");
   });
 
