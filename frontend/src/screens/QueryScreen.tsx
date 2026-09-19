@@ -104,6 +104,8 @@ export function QueryScreen() {
     }
   }
 
+  const local = form.kind === "local_model";
+
   const doEstimate = () => {
     if (validate() || !currentKey) return;
     void guard("estimate", async () => {
@@ -113,7 +115,8 @@ export function QueryScreen() {
   };
 
   const doStart = () => {
-    if (validate() || !currentEstimate) return;
+    // A cloud run starts from the estimate the operator saw; a local run costs nothing.
+    if (validate() || !(local || currentEstimate)) return;
     void guard("start query run", async () => {
       const created = await createQueryRun(api, projectId, toQueryRunCreate(effectiveForm, selection.ids));
       useJobsStore.getState().upsert(created.job);
@@ -161,7 +164,7 @@ export function QueryScreen() {
               {selection.error}
             </p>
           )}
-          {currentEstimate && <EstimateCard estimate={currentEstimate} local={form.kind === "local_model"} />}
+          {currentEstimate && <EstimateCard estimate={currentEstimate} local={local} />}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -171,10 +174,19 @@ export function QueryScreen() {
             >
               Estimate
             </button>
-            <button type="button" className={primary} onClick={doStart} disabled={busy || !currentEstimate}>
+            <button
+              type="button"
+              className={primary}
+              onClick={doStart}
+              disabled={busy || selection.loading || !(local || currentEstimate)}
+            >
               Start
             </button>
-            <span className="text-xs text-slate-400">Estimate first; Start runs the estimated request.</span>
+            <span className="text-xs text-slate-400">
+              {local
+                ? "Runs on this computer at no cost; Estimate shows how many tiles it takes."
+                : "Estimate the cost first; Start then runs exactly that request."}
+            </span>
           </div>
         </div>
       )}

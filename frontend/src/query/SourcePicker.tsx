@@ -74,6 +74,11 @@ export function SourcePicker({
             ))}
           </select>
           {modelsUnavailable && <span role="note">The model registry is not available yet.</span>}
+          {modelsError && (
+            <span role="alert" className="text-red-300">
+              The models could not be loaded: {modelsError}
+            </span>
+          )}
           {!modelsLoading && !modelsUnavailable && !modelsError && models.length === 0 && (
             <span>
               No models yet.{" "}

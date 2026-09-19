@@ -39,7 +39,8 @@ def test_import_without_a_dump_truck_class_sets_no_alias(handle, folder, monkeyp
 def test_a_missing_file_is_a_404_that_names_the_fix(handle, folder):
     with pytest.raises(AppError) as e:
         starter.import_starter(handle, folder, "yolo11m", None)
-    assert e.value.status == 404 and "not part of this build" in e.value.message
+    assert e.value.status == 404
+    assert e.value.message == "The starter model yolo11m is not included in this copy of the app."
 
 
 def test_weights_dir_prefers_the_setting_then_the_frozen_bundle_then_the_checkout(

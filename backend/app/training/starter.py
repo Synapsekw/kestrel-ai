@@ -1,5 +1,6 @@
 """Starter weights that ship with the app (usability gap G1): COCO YOLO11 in three sizes."""
 
+import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -9,6 +10,8 @@ from app.db.models import Model
 from app.errors import AppError
 from app.projects.service import ProjectHandle
 from app.training import registry
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -76,12 +79,9 @@ def project_class_names(handle: ProjectHandle) -> list[str]:
 def import_starter(handle: ProjectHandle, folder: Path, key: str, name: str | None) -> Model:
     f = folder / f"{key}.pt"
     if key not in {s.key for s in CATALOGUE} or not f.is_file():
-        raise AppError(
-            "not_found",
-            f"starter weights {key} are not part of this build; "
-            "run backend/scripts/fetch_starter_weights.ps1",
-            404,
-        )
+        # The operator reads the message; the fix is a developer's (scripts/fetch_starter_weights.ps1).
+        log.warning("starter weights %s missing under %s; run scripts/fetch_starter_weights.ps1", key, folder)
+        raise AppError("not_found", f"The starter model {key} is not included in this copy of the app.", 404)
     names = set(project_class_names(handle))
     aliases = {src: dst for src, dst in DEFAULT_ALIASES.items() if dst in names}
     return registry.import_model(handle, name or f"{key}-coco", str(f.resolve()), aliases)

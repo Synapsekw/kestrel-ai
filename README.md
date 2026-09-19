@@ -221,7 +221,7 @@ the variable is absent. No key is ever written to a file, a fixture or a log.
   fixed ports: 8765 (backend), 1420 (Vite), 4010 (mock), 9222 (WebView2 debugging).
 - **Jobs stuck in "running" after a crash.** Opening the project marks them `failed` with
   "interrupted by application restart" (queued ones become `cancelled`); start the work again.
-- **"starter weights ... are not part of this build" when adding a base model.** The checkout has
+- **"The starter model ... is not included in this copy of the app" when adding a base model.** The checkout has
   not fetched them: run `backend\scripts\fetch_starter_weights.ps1` (dev) or rebuild the installer
   after that script has populated `backend/starter_weights/` (packaged app).
 - **Re-running the installer** upgrades in place and keeps app data and project folders. Uninstall

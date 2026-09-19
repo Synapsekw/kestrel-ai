@@ -53,8 +53,12 @@ describe("QueryScreen", () => {
     });
     await waitFor(() => expect(screen.getByLabelText("Model")).toHaveValue(exampleModel.id));
     await waitFor(() => expect(screen.getByTestId("image-count")).toHaveTextContent("2 images selected"));
-    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
     fireEvent.click(screen.getByLabelText("Cloud provider"));
+    // A cloud run costs money: it cannot start before its estimate was shown.
+    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    expect(
+      screen.getByText("Estimate the cost first; Start then runs exactly that request."),
+    ).toBeInTheDocument();
     const provider = screen.getByLabelText("Provider");
     expect(provider).toHaveValue("anthropic");
     expect(screen.getByRole("option", { name: /OpenAI/ })).toBeDisabled();
@@ -80,6 +84,33 @@ describe("QueryScreen", () => {
     expect(screen.getByTestId("run-history")).toHaveTextContent("dump trucks");
   });
 
+  it("starts a local run without asking for an estimate first", async () => {
+    const { api, requests } = fakeClient([
+      ...base,
+      {
+        method: "POST",
+        path: /\/query-runs$/,
+        status: 202,
+        body: { query_run: exampleQueryRun, job: { ...runningJob, type: "infer" } },
+      },
+    ]);
+    renderWithProviders(<QueryScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/query`,
+      path: "/p/:projectId/query",
+    });
+    await waitFor(() => expect(screen.getByLabelText("Model")).toHaveValue(exampleModel.id));
+    await waitFor(() => expect(screen.getByTestId("image-count")).toHaveTextContent("2 images selected"));
+    expect(screen.getByText(/Runs on this computer at no cost/)).toBeInTheDocument();
+    const start = screen.getByRole("button", { name: "Start" });
+    expect(start).toBeEnabled();
+    fireEvent.click(start);
+    await waitFor(() =>
+      expect(requests.some((r) => r.method === "POST" && /\/query-runs$/.test(r.url))).toBe(true),
+    );
+    expect(requests.some((r) => r.url.endsWith("/estimate"))).toBe(false);
+  });
+
   it("preloads a Data Manager selection and clears a stale estimate when the form changes", async () => {
     useNavigationStore.getState().setContext([IMAGE_ID], "query");
     const { api } = fakeClient([...base, { method: "POST", path: /\/estimate$/, body: exampleEstimate }]);
@@ -94,7 +125,8 @@ describe("QueryScreen", () => {
     await waitFor(() => expect(screen.getByTestId("estimate")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Confidence"), { target: { value: "0.5" } });
     expect(screen.queryByTestId("estimate")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    // Local model: Start does not depend on the estimate (the cloud test covers the disabled case).
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
   });
 
   it("consumes the carried selection once: the navigation context is cleared", async () => {
@@ -152,5 +184,33 @@ describe("QueryScreen", () => {
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
     const link = await screen.findByRole("link", { name: "Add a starter model" });
     expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/models`);
+  });
+
+  it("says so when the model registry is unavailable or failed, and offers no starter hint", async () => {
+    const withoutModels = base.filter((r) => !r.path.test("/api/v1/projects/p/models"));
+    const notYet = fakeClient([
+      ...withoutModels,
+      { method: "GET", path: /\/models$/, status: 501, body: errorBody("not_implemented", "later") },
+    ]);
+    const first = renderWithProviders(<QueryScreen />, {
+      api: notYet.api,
+      route: `/p/${PROJECT_ID}/query`,
+      path: "/p/:projectId/query",
+    });
+    expect(await screen.findByText("The model registry is not available yet.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Add a starter model" })).toBeNull();
+    first.unmount();
+
+    const broken = fakeClient([
+      ...withoutModels,
+      { method: "GET", path: /\/models$/, status: 500, body: errorBody("internal", "database is locked") },
+    ]);
+    renderWithProviders(<QueryScreen />, {
+      api: broken.api,
+      route: `/p/${PROJECT_ID}/query`,
+      path: "/p/:projectId/query",
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("database is locked");
+    expect(screen.queryByRole("link", { name: "Add a starter model" })).toBeNull();
   });
 });

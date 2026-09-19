@@ -48,39 +48,45 @@ function Get-SizeMb([string] $path) {
   return [math]::Round((Get-Item $path).Length / 1MB, 1)
 }
 
-# Deletes $path and exits 1 on a mismatch, so a caller never sees "present"/"copied"/"downloaded"
-# printed for a file that turned out not to be trustworthy.
-function Assert-Checksum([string] $key, [string] $path) {
+# True when $path carries the pinned bytes. A file that does not is removed, so nothing untrusted
+# is ever left where the build would pick it up.
+function Test-Checksum([string] $key, [string] $path) {
   $actual = (Get-FileHash -Algorithm SHA256 $path).Hash
   $expected = $sha256[$key]
-  if ($actual -ne $expected) {
-    Remove-Item $path -Force
-    Write-Error "$key.pt failed SHA-256 verification: expected $expected, got $actual (file removed)"
-    exit 1
-  }
+  if ($actual -eq $expected) { return $true }
+  Remove-Item $path -Force
+  Write-Warning "$key.pt failed SHA-256 verification: expected $expected, got $actual (file removed)"
+  return $false
 }
 
 foreach ($key in $keys) {
   $target = Join-Path $Destination "$key.pt"
 
   if ((Test-Path $target) -and (Get-Item $target).Length -gt $minBytes) {
-    Assert-Checksum $key $target
+    if (-not (Test-Checksum $key $target)) { throw "$key.pt in $Destination is not the pinned release file; run the script again to fetch it" }
     Write-Host "present $key.pt ($(Get-SizeMb $target) MB, sha256 ok)"
     continue
   }
 
+  # A local copy of another release is not an error: fall through to the download.
   $source = Join-Path $sourceDir "$key.pt"
   if (Test-Path $source) {
     Copy-Item $source $target -Force
-    Assert-Checksum $key $target
-    Write-Host "copied $key.pt ($(Get-SizeMb $target) MB, sha256 ok)"
-    continue
+    if (Test-Checksum $key $target) {
+      Write-Host "copied $key.pt ($(Get-SizeMb $target) MB, sha256 ok)"
+      continue
+    }
   }
 
   $part = "$target.part"
-  Invoke-WebRequest -Uri "$releaseUrl/$key.pt" -OutFile $part -UseBasicParsing
+  try {
+    Invoke-WebRequest -Uri "$releaseUrl/$key.pt" -OutFile $part -UseBasicParsing
+  } catch {
+    Remove-Item $part -Force -ErrorAction SilentlyContinue
+    throw
+  }
   Move-Item $part $target -Force
-  Assert-Checksum $key $target
+  if (-not (Test-Checksum $key $target)) { throw "$key.pt downloaded from $releaseUrl does not match the pinned SHA-256" }
   Write-Host "downloaded $key.pt ($(Get-SizeMb $target) MB, sha256 ok)"
 }
 
@@ -92,6 +98,5 @@ foreach ($key in $keys) {
   }
 }
 if ($missing.Count -gt 0) {
-  Write-Error "missing or too small: $($missing -join ', ')"
-  exit 1
+  throw "missing or too small: $($missing -join ', ')"
 }

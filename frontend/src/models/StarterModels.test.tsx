@@ -89,7 +89,7 @@ describe("StarterModels", () => {
         method: "POST",
         path: /\/models\/import-starter$/,
         status: 404,
-        body: errorBody("not_found", "starter weights yolo11s are not part of this build"),
+        body: errorBody("not_found", "The starter model yolo11s is not included in this copy of the app."),
       },
     ]);
     renderWithProviders(
@@ -99,6 +99,8 @@ describe("StarterModels", () => {
     const nano = await screen.findByTestId("starter-yolo11n");
     expect(within(nano).getByText("In the registry")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Add YOLO11 small" }));
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("not part of this build"));
+    await waitFor(() =>
+      expect(screen.getByRole("alert")).toHaveTextContent("is not included in this copy of the app"),
+    );
   });
 });
