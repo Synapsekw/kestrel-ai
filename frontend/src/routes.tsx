@@ -8,6 +8,7 @@ import { ModelsScreen } from "@/screens/ModelsScreen";
 import { TrainScreen } from "@/screens/TrainScreen";
 import { QueryScreen } from "@/screens/QueryScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
+import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
 
 export const router = createBrowserRouter([
   {
@@ -15,6 +16,7 @@ export const router = createBrowserRouter([
     element: <Shell />,
     children: [
       { index: true, element: <ProjectsScreen /> },
+      { path: "settings", element: <AppSettingsScreen /> },
       { path: "p/:projectId/data", element: <DataManagerScreen /> },
       { path: "p/:projectId/edit/:imageId", element: <EditorScreen /> },
       { path: "p/:projectId/review", element: <ReviewScreen /> },
