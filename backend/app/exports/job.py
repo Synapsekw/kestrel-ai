@@ -228,6 +228,12 @@ def run_export(ctx: JobContext) -> dict:
     ctx.check_cancelled()
     images, classes = rows.load(handle, include_unreviewed, image_ids)
 
+    if "yolo" in formats:
+        # Before anything is written, let alone an export folder reserved (m4): a YOLO label-stem
+        # collision is doomed regardless of the other formats, and the caller can fix it (drop
+        # YOLO, or rename/remove an image) without an empty exports/<stamp>/ left to clean up.
+        yolo_out.check_no_stem_collisions(images)
+
     handle.exports_dir.mkdir(parents=True, exist_ok=True)
     now_local = _now_local()
     partial, stamp, n = _reserve_partial_folder(handle.exports_dir, now_local)

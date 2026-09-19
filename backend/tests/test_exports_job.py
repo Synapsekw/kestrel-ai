@@ -178,6 +178,51 @@ def test_a_failed_export_leaves_no_partial_folder(
     assert _no_stamp_or_partial_folders_left(handle)
 
 
+@pytest.fixture
+def stem_collision_images(handle, project_dir, make_jpeg):
+    """Two images in one site, same stem, different extensions: x.jpg and x.jpeg (m3, m4)."""
+    with handle.session() as s:
+        source = Source(folder=str(project_dir), site="siteA")
+        s.add(source)
+        s.flush()
+        class_id = handle.row(s).classes[0]["id"]
+        for ext in ("jpg", "jpeg"):
+            img = Image(
+                path=f"images/siteA/x.{ext}", width=100, height=100, source_id=source.id, group_key="g1"
+            )
+            s.add(img)
+            s.flush()
+            make_jpeg(project_dir / "images" / "siteA" / f"x.{ext}", 100, 100)
+            s.add(
+                Box(
+                    image_id=img.id,
+                    class_id=class_id,
+                    x=1,
+                    y=1,
+                    w=10,
+                    h=10,
+                    provenance_kind="person",
+                    review_state="accepted",
+                )
+            )
+
+
+def test_yolo_stem_collision_fails_before_anything_is_written(
+    client, project_id, stem_collision_images, handle, wait_job
+):
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "yolo"]})
+    job_id = r.json()["job"]["id"]
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "failed", job
+    # rows.load orders images by path, and "x.jpeg" sorts before "x.jpg".
+    assert job["error"] == (
+        "x.jpeg and x.jpg in siteA would get the same YOLO label file. Export without YOLO "
+        "labels, or delete one of the two images from the project."
+    )
+    # m4: the collision is caught before an export folder (even a partial one) is ever created.
+    assert not handle.exports_dir.exists()
+
+
 def test_two_exports_in_the_same_frozen_second_get_stamp_and_stamp_2(
     client, project_id, with_boxes, handle, monkeypatch, wait_job
 ):

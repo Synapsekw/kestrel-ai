@@ -22,6 +22,11 @@ def _fail_job(ctx):
     raise RuntimeError("boom")
 
 
+@register_job_type("test_fail_value_error")
+def _fail_value_error_job(ctx):
+    raise ValueError("plain message for the person")
+
+
 @register_job_type("test_domain_event")
 def _domain_event_job(ctx):
     ctx.publish("images.changed", {"source_id": "s1", "count": 3})
@@ -73,6 +78,23 @@ def test_failed_job_records_error(client, project_dir, app):
     assert j["state"] == "failed" and "boom" in j["error"]
     log = client.get(f"/api/v1/projects/{pid}/jobs/{job.id}/log").json()
     assert any("Traceback" in line for line in log["lines"])
+
+
+def test_a_value_error_is_stored_without_the_class_name_prefix(client, project_dir, app):
+    """A job's own ValueError is an already-complete, human-facing message (m3)."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail_value_error", {})
+    j = _wait(client, pid, job.id)
+    assert j["state"] == "failed"
+    assert j["error"] == "plain message for the person"
+
+
+def test_a_runtime_error_still_keeps_its_class_name(client, project_dir, app):
+    """Anything other than ValueError is unexpected, so it keeps its class name as a clue."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail", {})
+    j = _wait(client, pid, job.id)
+    assert j["error"] == "RuntimeError: boom"
 
 
 def test_cancel_job(client, project_dir, app):
