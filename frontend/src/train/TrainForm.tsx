@@ -6,6 +6,7 @@ import {
   DEFAULT_TRAIN_FORM,
   suggestName,
   toTrainRequest,
+  trainAdvice,
   validateTrainForm,
   type TrainForm as Form,
 } from "./trainModel";
@@ -42,6 +43,7 @@ export function TrainForm({
   }));
   const [error, setError] = useState<string | null>(null);
   const dataset = datasets.find((d) => d.id === form.datasetId);
+  const advice = trainAdvice(dataset, form);
 
   // The lists load after mount and change again when a training job registers a model. Fill only
   // the pickers that are still empty and a name the user has not edited; everything typed survives.
@@ -186,6 +188,7 @@ export function TrainForm({
             onChange={(e) => patch({ epochs: e.target.value })}
             className={input}
           />
+          <span>Passes over the training images. 50 to 100 is usual; 3 is only a smoke test.</span>
         </label>
         <label className={label}>
           Image size
@@ -199,6 +202,10 @@ export function TrainForm({
             onChange={(e) => patch({ imgsz: e.target.value })}
             className={input}
           />
+          <span>
+            Pixels on the long side during training. 1280 keeps small machines visible; 640 is about four
+            times faster.
+          </span>
         </label>
         <label className={label}>
           Batch size
@@ -231,6 +238,7 @@ export function TrainForm({
             onChange={(e) => patch({ patience: e.target.value })}
             className={input}
           />
+          <span>Stops early after this many epochs without improvement. 0 never stops early.</span>
         </label>
         <label className={label}>
           Augmentation
@@ -257,6 +265,16 @@ export function TrainForm({
           </select>
         </label>
       </div>
+      {advice.length > 0 && (
+        <ul
+          data-testid="train-advice"
+          className="flex flex-col gap-1 rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
+        >
+          {advice.map((a) => (
+            <li key={a}>{a}</li>
+          ))}
+        </ul>
+      )}
       {error && (
         <p role="alert" className="text-xs text-red-300">
           {error}

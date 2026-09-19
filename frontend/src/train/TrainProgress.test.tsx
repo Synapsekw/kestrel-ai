@@ -62,4 +62,37 @@ describe("TrainProgress", () => {
     expect(screen.getByTestId("map50")).toHaveTextContent("71.0%");
     expect(screen.getByTestId("elapsed")).toHaveTextContent("14 min 59 s");
   });
+
+  it("warns instead of congratulating when the finished model scores next to nothing", () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/log$/, body: exampleJobLog }]);
+    useJobsStore.getState().upsert({
+      ...runningJob,
+      type: "train",
+      state: "succeeded",
+      progress: 1,
+      message: "epoch 3/3 mAP50 0.000 loss box 4.718 cls 17.227 dfl 2.570 ETA 0s",
+      result: { model_id: "m9", metrics: {} },
+      finished_at: "2026-09-17T10:20:00Z",
+    });
+    renderWithProviders(<TrainProgress projectId={PROJECT_ID} jobId={runningJob.id} />, { api });
+    expect(screen.getByTestId("result-advice")).toHaveTextContent(
+      "mAP50 is 0.0%: this model will find little or nothing.",
+    );
+    // A succeeded job with a usable score carries no such warning (previous test: 71.0%).
+  });
+
+  it("carries no warning when the finished model has a usable score", () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/log$/, body: exampleJobLog }]);
+    useJobsStore.getState().upsert({
+      ...runningJob,
+      type: "train",
+      state: "succeeded",
+      progress: 1,
+      message: "epoch 3/3 mAP50 0.710",
+      result: { model_id: "m9", metrics: {} },
+      finished_at: "2026-09-17T10:20:00Z",
+    });
+    renderWithProviders(<TrainProgress projectId={PROJECT_ID} jobId={runningJob.id} />, { api });
+    expect(screen.queryByTestId("result-advice")).toBeNull();
+  });
 });

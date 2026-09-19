@@ -71,4 +71,26 @@ describe("TrainForm", () => {
     expect(onStart).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a dataset.");
   });
+
+  it("explains the parameters and warns about a dataset too small to learn from", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[{ ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 }]}
+        models={[exampleModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.getByTestId("train-advice")).toHaveTextContent("Only 8 training images");
+    expect(screen.getByText(/Passes over the training images/)).toBeInTheDocument();
+    expect(screen.getByText(/1280 keeps small machines visible/)).toBeInTheDocument();
+    expect(screen.getByText(/Stops early after this many epochs without improvement/)).toBeInTheDocument();
+    // The warning informs; it does not block a deliberate smoke test.
+    expect(screen.getByRole("button", { name: "Start training" })).toBeEnabled();
+  });
 });

@@ -3,7 +3,9 @@ import { exampleDataset, exampleModel } from "@/test/fixtures";
 import {
   DEFAULT_TRAIN_FORM,
   parseEpochMessage,
+  resultAdvice,
   suggestName,
+  trainAdvice,
   toTrainRequest,
   validateTrainForm,
 } from "./trainModel";
@@ -102,5 +104,44 @@ describe("train form model", () => {
   it("suggests a name from the dataset and the base model", () => {
     expect(suggestName(exampleDataset, exampleModel)).toBe("v1-yolo11m-coco");
     expect(suggestName(undefined, exampleModel)).toBe("");
+  });
+});
+
+describe("trainAdvice", () => {
+  const tiny = { ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 };
+  const decent = { ...exampleDataset, image_count: 400, train_count: 320, val_count: 80 };
+
+  it("warns before a training on a handful of images", () => {
+    expect(trainAdvice(tiny, DEFAULT_TRAIN_FORM)).toContain(
+      "Only 8 training images: the model will learn very little. Aim for 200 or more labeled images.",
+    );
+  });
+
+  it("warns when the validation split is too small to measure anything", () => {
+    expect(trainAdvice({ ...decent, val_count: 3 }, DEFAULT_TRAIN_FORM)).toContain(
+      "Only 3 validation images: mAP will jump around and say little about the model.",
+    );
+  });
+
+  it("warns about very few epochs and stays quiet for a sound setup", () => {
+    expect(trainAdvice(decent, { ...DEFAULT_TRAIN_FORM, epochs: "3" })).toEqual([
+      "3 epochs is a smoke test, not a training. 50 to 100 is usual.",
+    ]);
+    expect(trainAdvice(decent, DEFAULT_TRAIN_FORM)).toEqual([]);
+    expect(trainAdvice(undefined, DEFAULT_TRAIN_FORM)).toEqual([]);
+  });
+});
+
+describe("resultAdvice", () => {
+  it("says plainly when the finished model is unlikely to be useful", () => {
+    expect(resultAdvice(0)).toBe(
+      "mAP50 is 0.0%: this model will find little or nothing. Label more images, train for more epochs, then compare again.",
+    );
+    expect(resultAdvice(0.04)).toMatch(/^mAP50 is 4.0%/);
+  });
+
+  it("is silent for a usable model or an unknown score", () => {
+    expect(resultAdvice(0.45)).toBeNull();
+    expect(resultAdvice(null)).toBeNull();
   });
 });

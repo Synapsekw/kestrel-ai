@@ -4,7 +4,7 @@ import { useNow } from "@/jobs/useNow";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { formatMetric } from "@/models/modelLabels";
 import { isActiveJob } from "@/store/jobs";
-import { parseEpochMessage } from "./trainModel";
+import { parseEpochMessage, resultAdvice } from "./trainModel";
 
 const tile = "rounded bg-slate-900 px-3 py-2";
 const dt = "text-xs uppercase tracking-wide text-slate-500";
@@ -38,6 +38,7 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
   const epoch = parseEpochMessage(job.message);
   const elapsed = elapsedSeconds(job, now);
   const headline = HEADLINE[job.state] ?? null;
+  const weak = job.state === "succeeded" ? resultAdvice(epoch?.map50) : null;
   return (
     <section data-testid="train-progress" className="flex max-w-3xl flex-col gap-3">
       {alert}
@@ -80,9 +81,17 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
       {headline && (
         <p
           role="status"
-          className={`text-sm ${job.state === "succeeded" ? "text-emerald-300" : "text-slate-300"}`}
+          className={`text-sm ${job.state === "succeeded" && !weak ? "text-emerald-300" : "text-slate-300"}`}
         >
           {headline}
+        </p>
+      )}
+      {weak && (
+        <p
+          data-testid="result-advice"
+          className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm text-amber-200"
+        >
+          {weak}
         </p>
       )}
       <JobCard projectId={projectId} job={job} showLog />

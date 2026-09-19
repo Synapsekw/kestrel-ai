@@ -102,3 +102,29 @@ export function suggestName(dataset: Dataset | undefined, base: Model | undefine
   if (!dataset || !base) return "";
   return `${dataset.name}-${base.name}`;
 }
+
+/** Warnings shown above Start training: setups that run fine and produce a model nobody can use. */
+export function trainAdvice(dataset: Dataset | undefined, f: TrainForm): string[] {
+  if (!dataset) return [];
+  const advice: string[] = [];
+  if (dataset.train_count < 50)
+    advice.push(
+      `Only ${dataset.train_count} training images: the model will learn very little. Aim for 200 or more labeled images.`,
+    );
+  if (dataset.val_count < 5)
+    advice.push(
+      `Only ${dataset.val_count} validation images: mAP will jump around and say little about the model.`,
+    );
+  const epochs = Number(f.epochs);
+  if (Number.isInteger(epochs) && epochs > 0 && epochs < 10)
+    advice.push(`${epochs} epochs is a smoke test, not a training. 50 to 100 is usual.`);
+  return advice;
+}
+
+/** Below this mAP50 a finished model is called out as unlikely to be useful. */
+const WEAK_MAP50 = 0.05;
+
+export function resultAdvice(map50: number | null | undefined): string | null {
+  if (typeof map50 !== "number" || map50 >= WEAK_MAP50) return null;
+  return `mAP50 is ${(map50 * 100).toFixed(1)}%: this model will find little or nothing. Label more images, train for more epochs, then compare again.`;
+}
