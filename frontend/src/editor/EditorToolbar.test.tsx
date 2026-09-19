@@ -36,6 +36,28 @@ describe("EditorToolbar shortcuts help", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
+  it("keeps the icon buttons' names and shows each hotkey in the tooltip", () => {
+    render(<EditorToolbar {...props} />);
+    const titles: Record<string, string> = {
+      Previous: "Previous image (Ctrl+Left)",
+      Next: "Next image (Ctrl+Right)",
+      Fit: "Fit (F)",
+      "1:1": "1:1 (0 or Ctrl+1)",
+      Undo: "Undo (Ctrl+Z)",
+      Redo: "Redo (Ctrl+Y)",
+    };
+    for (const [name, title] of Object.entries(titles)) {
+      expect(screen.getByRole("button", { name })).toHaveAttribute("title", title);
+    }
+    expect(screen.getByRole("status")).toHaveTextContent("Saved");
+  });
+
+  it("says Saving while a change is in flight and holds undo until it settles", () => {
+    render(<EditorToolbar {...props} pending={1} canUndo />);
+    expect(screen.getByRole("status")).toHaveTextContent("Saving…");
+    expect(screen.getByRole("button", { name: "Undo" })).toBeDisabled();
+  });
+
   it("puts the way back first in the toolbar", () => {
     render(<EditorToolbar {...props} lead={<a href="/back">Back</a>} />);
     const toolbar = screen.getByRole("link", { name: "Back" }).parentElement;

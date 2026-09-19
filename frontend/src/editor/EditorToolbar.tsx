@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Button, IconButton, Kbd, Pill } from "@/ui";
 import { HOTKEY_HELP } from "./hotkeys";
 
 export interface ToolbarProps {
@@ -19,91 +20,98 @@ export interface ToolbarProps {
   lead?: ReactNode;
 }
 
-const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-800 disabled:opacity-40";
+/** A thin vertical rule between toolbar groups. */
+export function ToolbarDivider() {
+  return <span aria-hidden="true" className="mx-1 h-4 w-px shrink-0 bg-line" />;
+}
 
 export function EditorToolbar(p: ToolbarProps) {
   const saving = p.pending > 0;
   const [keysOpen, setKeysOpen] = useState(false);
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 text-sm">
+    <div className="flex min-h-11 shrink-0 flex-wrap items-center gap-1 border-b border-line bg-side px-3 py-1.5 text-[13px] text-ink">
       {p.lead}
-      <button
-        type="button"
-        className={btn}
+      <IconButton
+        icon="arrow-left"
+        label="Previous"
+        title="Previous image (Ctrl+Left)"
+        size="sm"
         onClick={p.onPrev}
-        title="Ctrl+Left"
         disabled={!p.position || p.position.index <= 0}
-      >
-        Previous
-      </button>
-      <button
-        type="button"
-        className={btn}
+      />
+      <IconButton
+        icon="arrow-right"
+        label="Next"
+        title="Next image (Ctrl+Right)"
+        size="sm"
         onClick={p.onNext}
-        title="Ctrl+Right"
         disabled={!p.position || p.position.index >= p.position.count - 1}
-      >
-        Next
-      </button>
+      />
       {p.position && p.position.index >= 0 && (
-        <span className="text-xs text-slate-400" data-testid="position">
+        <span className="px-1 tabular-nums text-muted" data-testid="position">
           {p.position.index + 1} / {p.position.count}
         </span>
       )}
-      <span className="min-w-0 truncate text-slate-300">{p.fileName}</span>
-      <span className="mx-1 h-4 border-l border-slate-700" />
-      <button type="button" className={btn} onClick={p.onFit} title="F">
-        Fit
-      </button>
-      <button type="button" className={btn} onClick={p.onOneToOne} title="0 or Ctrl+1">
-        1:1
-      </button>
-      <span className="w-12 text-xs tabular-nums text-slate-400" data-testid="zoom">
+      <span className="min-w-0 truncate px-1 font-mono text-ink">{p.fileName}</span>
+      <ToolbarDivider />
+      <IconButton icon="fit" label="Fit" title="Fit (F)" size="sm" onClick={p.onFit} />
+      <IconButton icon="one-to-one" label="1:1" title="1:1 (0 or Ctrl+1)" size="sm" onClick={p.onOneToOne} />
+      <span className="w-11 text-right tabular-nums text-muted" data-testid="zoom">
         {Math.round(p.zoom * 100)}%
       </span>
-      <span className="mx-1 h-4 border-l border-slate-700" />
+      <ToolbarDivider />
       {/* Undo/redo wait for in-flight saves: a compensating call must target settled state. */}
-      <button type="button" className={btn} onClick={p.onUndo} disabled={!p.canUndo || saving} title="Ctrl+Z">
-        Undo
-      </button>
-      <button type="button" className={btn} onClick={p.onRedo} disabled={!p.canRedo || saving} title="Ctrl+Y">
-        Redo
-      </button>
+      <IconButton
+        icon="undo"
+        label="Undo"
+        title="Undo (Ctrl+Z)"
+        size="sm"
+        onClick={p.onUndo}
+        disabled={!p.canUndo || saving}
+      />
+      <IconButton
+        icon="redo"
+        label="Redo"
+        title="Redo (Ctrl+Y)"
+        size="sm"
+        onClick={p.onRedo}
+        disabled={!p.canRedo || saving}
+      />
       {p.extra}
       <div className="relative">
-        <button
-          type="button"
-          className={btn}
-          aria-label="Keyboard shortcuts"
+        <IconButton
+          icon="keyboard"
+          label="Keyboard shortcuts"
+          size="sm"
           aria-expanded={keysOpen}
           onClick={() => setKeysOpen((v) => !v)}
-        >
-          Keys
-        </button>
+        />
         {keysOpen && (
           <div
             role="dialog"
             aria-label="Keyboard shortcuts"
             onKeyDown={(e) => e.key === "Escape" && setKeysOpen(false)}
-            className="absolute left-0 top-full z-20 mt-1 w-80 rounded border border-slate-700 bg-slate-900 p-3 text-xs shadow-lg"
+            className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-line bg-panel p-3 text-[13px] shadow-float"
           >
-            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
               {HOTKEY_HELP.map((h) => (
                 <div key={h.keys} className="contents">
-                  <dt className="font-mono text-slate-200">{h.keys}</dt>
-                  <dd className="text-slate-400">{h.does}</dd>
+                  <dt>
+                    <Kbd>{h.keys}</Kbd>
+                  </dt>
+                  <dd className="text-muted">{h.does}</dd>
                 </div>
               ))}
             </dl>
-            <button type="button" autoFocus className={`${btn} mt-2`} onClick={() => setKeysOpen(false)}>
+            <Button size="sm" autoFocus className="mt-3" onClick={() => setKeysOpen(false)}>
               Close
-            </button>
+            </Button>
           </div>
         )}
       </div>
-      <span role="status" className={`ml-auto text-xs ${saving ? "text-amber-300" : "text-slate-500"}`}>
+      <Pill role="status" tone={saving ? "warn" : "neutral"} dot={saving} className="ml-auto">
         {saving ? "Saving…" : "Saved"}
-      </span>
+      </Pill>
     </div>
   );
 }

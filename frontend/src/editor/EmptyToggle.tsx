@@ -1,4 +1,5 @@
 import type { Image as ImageRow } from "@contract/client";
+import { Button } from "@/ui";
 import { GROUND_TRUTH_MESSAGE } from "./commands";
 
 interface Props {
@@ -14,19 +15,17 @@ export function EmptyToggle({ image, hasGroundTruth, busy, onToggle }: Props) {
   const marked = image?.marked_empty ?? false;
   const disabled = busy || hasGroundTruth || !image;
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
       aria-pressed={marked}
       disabled={disabled}
+      icon={marked ? "check" : undefined}
       title={hasGroundTruth ? GROUND_TRUTH_MESSAGE : undefined}
       onClick={onToggle}
-      className={`rounded border px-2 py-0.5 text-xs disabled:opacity-40 ${
-        marked
-          ? "border-slate-500 bg-slate-700 text-white hover:bg-slate-600"
-          : "border-slate-700 text-slate-200 hover:bg-slate-800"
-      }`}
+      // N toggles this: the pressed look changes without a transition.
+      className={marked ? "!border-line-strong !bg-well !transition-none" : "!transition-none"}
     >
       {marked ? "Marked empty - undo (N)" : "No machinery (N)"}
-    </button>
+    </Button>
   );
 }

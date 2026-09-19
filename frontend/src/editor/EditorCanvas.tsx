@@ -59,7 +59,7 @@ export function EditorCanvas({ src, children, onBackgroundMouseDown, onMouseMove
       data-view-scale={view.scale.toFixed(4)}
       data-view-x={view.x.toFixed(1)}
       data-view-y={view.y.toFixed(1)}
-      className={`relative h-full w-full overflow-hidden bg-slate-950 ${spaceHeld ? "cursor-grab" : "cursor-crosshair"}`}
+      className={`relative h-full w-full overflow-hidden bg-canvas ${spaceHeld ? "cursor-grab" : "cursor-crosshair"}`}
     >
       {image && viewport.width > 0 && viewport.height > 0 && (
         <Stage

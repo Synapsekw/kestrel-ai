@@ -1,4 +1,5 @@
 import type { ClassDef } from "@contract/client";
+import { Button, Kbd, cx } from "@/ui";
 
 interface Props {
   classes: ClassDef[];
@@ -9,29 +10,33 @@ interface Props {
 
 export function ClassSidebar({ classes, activeClassId, counts, onSelect }: Props) {
   return (
-    <div className="flex flex-col gap-1">
-      <h2 className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-slate-400">Classes</h2>
+    <div className="flex flex-col gap-0.5">
+      <h2 className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+        Classes
+      </h2>
       {classes.map((c) => {
         const active = c.id === activeClassId;
         return (
-          <button
+          <Button
             key={c.id}
-            type="button"
+            variant="ghost"
             aria-pressed={active}
             onClick={() => onSelect(c.id)}
-            className={`flex items-center gap-2 rounded px-2 py-1 text-left text-sm ${
-              active ? "bg-slate-800 text-white ring-1 ring-orange-500" : "text-slate-300 hover:bg-slate-800"
-            }`}
-          >
-            <span className="h-3 w-3 shrink-0 rounded-sm" style={{ background: c.colour }} />
-            <span className="min-w-0 flex-1 truncate">{c.name}</span>
-            <span className="text-xs text-slate-500">{counts[c.id] ?? 0}</span>
-            {c.hotkey && (
-              <kbd className="rounded border border-slate-600 px-1 text-[10px] text-slate-300">
-                {c.hotkey}
-              </kbd>
+            // A class hotkey changes the active row: no transition, so nothing moves on a key press.
+            className={cx(
+              "!h-8 w-full !justify-start !gap-2 !px-2 text-left !text-[13px] !font-normal !transition-none",
+              active && "!border-accent !bg-panel",
             )}
-          </button>
+          >
+            <span
+              aria-hidden="true"
+              className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+              style={{ background: c.colour }}
+            />
+            <span className="min-w-0 flex-1 truncate">{c.name}</span>
+            <span className="tabular-nums text-muted">{counts[c.id] ?? 0}</span>
+            {c.hotkey && <Kbd>{c.hotkey}</Kbd>}
+          </Button>
         );
       })}
     </div>
