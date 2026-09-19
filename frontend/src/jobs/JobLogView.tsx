@@ -1,3 +1,4 @@
+import { readableLogLine } from "./logLines";
 import { useJobLog } from "./useJobLog";
 
 interface Props {
@@ -20,7 +21,7 @@ export function JobLogView({ projectId, jobId, live }: Props) {
         aria-label="Job log"
         className="max-h-64 overflow-auto whitespace-pre-wrap rounded bg-slate-950 p-2 font-mono text-xs text-slate-300"
       >
-        {lines.length > 0 ? lines.join("\n") : "(log is empty)"}
+        {lines.length > 0 ? lines.map(readableLogLine).join("\n") : "(log is empty)"}
       </pre>
     </div>
   );
