@@ -81,27 +81,24 @@ export function RegionList({
                 selected ? "bg-panel" : b.id === hoveredId ? "bg-hover" : "hover:bg-hover",
               )}
             >
-              <div className="flex h-8 items-center gap-2 px-2">
+              {/* First line is plain text in the middle, so a click on the row selects it and keeps
+                  keyboard focus off the class chooser (hotkeys ignore focused form controls). */}
+              <div className="flex h-10 items-center gap-2 px-2">
                 <span className="w-4 shrink-0 text-right text-xs tabular-nums text-muted">{n}</span>
                 <span
                   aria-hidden="true"
                   className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
                   style={{ background: colourOf(classes, b.class_id) }}
                 />
-                <Select
-                  dense
-                  aria-label={`Class of box ${n}`}
-                  value={b.class_id}
-                  wrapperClassName="min-w-0 flex-1"
-                  onClick={(e) => e.stopPropagation()}
-                  onChange={(e) => onSetClass(b.id, e.target.value)}
+                <span
+                  title={provenanceLabel(b.provenance)}
+                  className="min-w-0 flex-1 truncate whitespace-nowrap text-ink/80"
                 >
-                  {classes.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </Select>
+                  {provenanceLabel(b.provenance)}
+                </span>
+                <span className="shrink-0 text-xs tabular-nums text-muted">
+                  {b.confidence === null ? "–" : `${Math.round(b.confidence * 100)}%`}
+                </span>
                 <Pill
                   size="sm"
                   tone={REVIEW_TONE[b.review_state]}
@@ -120,16 +117,21 @@ export function RegionList({
                   className="-mr-1 !text-muted opacity-0 hover:!text-danger focus-visible:opacity-100 group-hover:opacity-100 group-focus-visible:opacity-100"
                 />
               </div>
-              <div className="flex min-h-6 items-center gap-2 pb-1.5 pl-8 pr-2 text-xs text-muted">
-                <span
-                  title={provenanceLabel(b.provenance)}
-                  className="min-w-0 max-w-[9rem] truncate whitespace-nowrap"
+              <div className="flex h-7 items-start gap-2 pl-8 pr-2">
+                <Select
+                  dense
+                  aria-label={`Class of box ${n}`}
+                  value={b.class_id}
+                  wrapperClassName="w-40 min-w-0"
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={(e) => onSetClass(b.id, e.target.value)}
                 >
-                  {provenanceLabel(b.provenance)}
-                </span>
-                <span className="shrink-0 tabular-nums">
-                  {b.confidence === null ? "–" : `${Math.round(b.confidence * 100)}%`}
-                </span>
+                  {classes.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </Select>
                 {pending && (
                   <span className="ml-auto flex shrink-0 gap-0.5">
                     <Button

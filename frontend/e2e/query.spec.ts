@@ -91,7 +91,7 @@ test("estimates and starts a cloud detection, then reviews results, accepts as l
   await expect(card).toContainText('Anthropic: "dump trucks"');
   await expect(card.getByTestId("box-count")).toHaveText("7 boxes written so far");
   await expect(card.getByTestId(`job-${JOB}`)).toBeVisible();
-  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Review results" })).toHaveAttribute(
     "href",
     `/p/${P}/review?ids=${IMG},${IMG2}`,
@@ -120,7 +120,7 @@ test("estimates and starts a cloud detection, then reviews results, accepts as l
   );
   await page.getByRole("link", { name: "Review results" }).click();
   await narrowed;
-  await expect(page.getByRole("heading", { name: "Review queue" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review", exact: true })).toBeVisible();
   await expect(page.getByTestId("run-filter")).toContainText("of the 2 images of this detection run");
   await expect(page.getByRole("link", { name: "Show the whole queue" })).toHaveAttribute(
     "href",

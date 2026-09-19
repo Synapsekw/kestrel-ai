@@ -117,7 +117,7 @@ test("run model opens the query screen with the selection; add to dataset posts 
     image_ids: [IMG],
   });
   await expect(page.getByRole("dialog", { name: "Add to dataset" }).getByTestId(/^job-/)).toBeVisible();
-  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${P}/train`);
 });
 

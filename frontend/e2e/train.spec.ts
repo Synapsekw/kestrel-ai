@@ -47,7 +47,7 @@ test("starts training with the chosen parameters and shows the live card with lo
   await expect(card.getByTestId("elapsed")).not.toHaveText("–");
   await card.getByRole("button", { name: "Show log" }).click();
   await expect(card.getByTestId("jobcard-log")).toContainText("job started");
-  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
   const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
   await card.getByRole("button", { name: "Cancel job" }).click();
   await cancel;

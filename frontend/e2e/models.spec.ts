@@ -121,7 +121,7 @@ test("export, import, use as pre-annotation and delete send the contract request
   await page.getByRole("button", { name: "Export ONNX" }).click();
   expect((await exported).postDataJSON()).toEqual({ format: "onnx", imgsz: 1280, half: false });
   await expect(page.getByTestId("model-detail").getByTestId(/^job-/)).toBeVisible();
-  await expect(page.getByText(/1 active job/)).toBeVisible();
+  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
 
   const patched = page.waitForRequest((r) => r.method() === "PATCH" && r.url().endsWith(`/projects/${P}`));
   await page.getByRole("button", { name: "Use as pre-annotation model" }).click();

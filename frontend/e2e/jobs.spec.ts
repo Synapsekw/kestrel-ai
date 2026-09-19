@@ -27,9 +27,7 @@ test("opens the jobs panel from the top bar, shows progress and log, cancels and
   await log;
   await expect(card.getByTestId("jobcard-log")).toContainText("50 / 3299 images");
 
-  const cancel = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`),
-  );
+  const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
   await card.getByRole("button", { name: "Cancel job" }).click();
   await cancel;
 
