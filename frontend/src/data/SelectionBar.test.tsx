@@ -19,7 +19,9 @@ function renderBar(
     <SelectionBar
       projectId={PROJECT_ID}
       selectedIds={["a", "b"]}
+      labeledCount={0}
       emptyCount={0}
+      unlabeledCount={2}
       pendingCount={0}
       {...handlers}
       {...props}

@@ -106,13 +106,16 @@ export function DataManagerScreen() {
   };
 
   const selectedIds = useMemo(() => ids.filter((id) => pruned.selected.has(id)), [ids, pruned]);
-  const selectedEmptyCount = useMemo(
-    () => items.filter((i) => pruned.selected.has(i.id) && i.marked_empty).length,
-    [items, pruned],
+  const selectedRows = useMemo(() => items.filter((i) => pruned.selected.has(i.id)), [items, pruned]);
+  const selectedEmptyCount = useMemo(() => selectedRows.filter((i) => i.marked_empty).length, [selectedRows]);
+  const selectedLabeledCount = useMemo(
+    () => selectedRows.filter((i) => i.box_count > 0).length,
+    [selectedRows],
   );
+  const selectedUnlabeledCount = useMemo(() => selectedRows.filter((i) => !i.labeled).length, [selectedRows]);
   const selectedPendingCount = useMemo(
-    () => items.filter((i) => pruned.selected.has(i.id)).reduce((sum, i) => sum + i.pending_count, 0),
-    [items, pruned],
+    () => selectedRows.reduce((sum, i) => sum + i.pending_count, 0),
+    [selectedRows],
   );
   const labelSelected = () => {
     useNavigationStore.getState().setContext(selectedIds, "selection");
@@ -173,7 +176,9 @@ export function DataManagerScreen() {
           <SelectionBar
             projectId={projectId}
             selectedIds={selectedIds}
+            labeledCount={selectedLabeledCount}
             emptyCount={selectedEmptyCount}
+            unlabeledCount={selectedUnlabeledCount}
             pendingCount={selectedPendingCount}
             onLabel={labelSelected}
             onRunModel={() => {

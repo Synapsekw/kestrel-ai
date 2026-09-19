@@ -12,8 +12,12 @@ import { addImagesToDataset } from "./bulkActions";
 interface Props {
   projectId: string;
   imageIds: string[];
+  /** How many of the selected images have an accepted or edited box. */
+  labeledCount: number;
   /** How many of the selected images are marked empty (E4): shown as negatives, not a defect. */
   emptyCount: number;
+  /** How many are neither: they would freeze in with no boxes, as if they were empty. */
+  unlabeledCount: number;
   onClose: () => void;
 }
 
@@ -23,7 +27,14 @@ const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-or
 const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
 /** Spec section 5 split options (by_group default, val fraction 0.2, seed 42); the job shows inline. */
-export function AddToDatasetDialog({ projectId, imageIds, emptyCount, onClose }: Props) {
+export function AddToDatasetDialog({
+  projectId,
+  imageIds,
+  labeledCount,
+  emptyCount,
+  unlabeledCount,
+  onClose,
+}: Props) {
   const api = useApi();
   const [name, setName] = useState("");
   const [split, setSplit] = useState<SplitMethod>("by_group");
@@ -78,10 +89,15 @@ export function AddToDatasetDialog({ projectId, imageIds, emptyCount, onClose }:
       className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-3"
     >
       <p className="text-sm">
-        Freeze the accepted boxes of {n} {n === 1 ? "image" : "images"}
-        {emptyCount > 0 && ` (${emptyCount} of them marked empty, used as negative examples)`} into a new
-        dataset (immutable after creation).
+        Freeze {n} {n === 1 ? "image" : "images"} into a new dataset (immutable after creation):{" "}
+        {labeledCount} with accepted boxes, {emptyCount} marked empty (negative examples).
       </p>
+      {unlabeledCount > 0 && (
+        <p className="text-xs text-amber-300">
+          {unlabeledCount} selected images are not labeled yet. They would be written without boxes, as if
+          they were empty. Deselect them unless they really show no machinery.
+        </p>
+      )}
       {jobId === null ? (
         <div className="flex flex-wrap items-end gap-2">
           <label className={label}>

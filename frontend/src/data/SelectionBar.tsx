@@ -9,8 +9,12 @@ import { deleteImages, markImagesEmpty, unmarkImagesEmpty } from "./bulkActions"
 interface Props {
   projectId: string;
   selectedIds: string[];
+  /** How many of the selection have an accepted or edited box: passed on to the dataset dialog. */
+  labeledCount: number;
   /** How many of the selection are already marked empty (E4): offers "Unmark empty" when > 0. */
   emptyCount: number;
+  /** How many are neither labeled nor marked: passed on to the dataset dialog's warning. */
+  unlabeledCount: number;
   /** Sum of pending_count over the selection: named in the "Mark as empty" confirmation. */
   pendingCount: number;
   onLabel: () => void;
@@ -29,7 +33,9 @@ const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-or
 export function SelectionBar({
   projectId,
   selectedIds,
+  labeledCount,
   emptyCount,
+  unlabeledCount,
   pendingCount,
   onLabel,
   onRunModel,
@@ -147,7 +153,9 @@ export function SelectionBar({
         <AddToDatasetDialog
           projectId={projectId}
           imageIds={selectedIds}
+          labeledCount={labeledCount}
           emptyCount={emptyCount}
+          unlabeledCount={unlabeledCount}
           onClose={() => setMode("idle")}
         />
       )}
