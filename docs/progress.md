@@ -32,6 +32,8 @@ Friction list, owner ruling and order of work: `docs/usability/2026-09-19-walkth
 | U1 | Open small items: E6 (confidence filter, goal owner, after the E4 fix round), M3 (in G2), S3 (in S2). Closed since: Q6, Q7, Q9, M4, N4 | wave1-e4-trial | in progress | none |
 | U1 | Acceptance step 7 | - | waits for the owner to store the Anthropic key in App settings | owner key |
 
+**Two sessions, one checkout (2026-09-19 14:09).** Another session checked out `ui-site-office` (UI redesign, plan `2026-09-19-u2-site-office-ui.md`) in the main checkout `E:/Dev/Yolo/app`, branched from this wave's trial branch at 8299964. A merge of this session landed on that branch uncommitted and was aborted at once (`git merge --abort`; the other session's commits and untracked files were not touched). Since then the usability wave integrates in its own worktree `.worktrees/wave1` (branch `wave1-s2-trial`), never in the main checkout; every git write checks `git branch --show-current` first; `pnpm e2e` only runs when ports 1420/4010 are free. Open with the owner: how the UI redesign and the rest of this wave (G2, installer, merge to main) are sequenced.
+
 How the walk-through instance is started without touching a running app: a second instance of the installed exe with `WEBVIEW2_USER_DATA_FOLDER=<scratch>` and `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`; stop it by its own PID only.
 
 Verification without touching a running installed app: a private copy of the would-be install tree (`machinery-app.exe`, `machinery-backend.exe`, `_internal`) in a scratch folder, started with its own WebView2 profile and CDP port. The installer itself, checkpoint 4 and the acceptance driver run at the end of the wave.
