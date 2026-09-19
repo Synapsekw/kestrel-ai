@@ -24,9 +24,14 @@ interface StatsState {
   error: string | null;
 }
 
+/**
+ * The caller remounts `DatasetDetail` with `key={dataset.id}` (see DatasetsScreen), so a dataset
+ * change always starts this hook fresh: no second "is this still the right id" guard is needed
+ * here (M4).
+ */
 function useDatasetStats(projectId: string, datasetId: string): StatsState {
   const api = useApi();
-  const [state, setState] = useState<StatsState>({ datasetId: "", stats: null, error: null });
+  const [state, setState] = useState<StatsState>({ datasetId, stats: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +49,7 @@ function useDatasetStats(projectId: string, datasetId: string): StatsState {
     };
   }, [api, projectId, datasetId]);
 
-  return state.datasetId === datasetId ? state : { datasetId, stats: null, error: null };
+  return state;
 }
 
 export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailProps) {
@@ -82,7 +87,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
 
       {advice && (
         <p
-          role="alert"
+          role="note"
           className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
         >
           {advice}
@@ -96,6 +101,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
             {statsError}
           </p>
         )}
+        {!stats && !statsError && <p className="text-sm text-slate-400">Loading…</p>}
         {stats && (
           <table data-testid="dataset-class-stats" className="w-full text-left text-sm">
             <thead>

@@ -41,13 +41,26 @@ describe("DatasetDetail", () => {
     );
   });
 
-  it("shows the split advice when there is one", async () => {
+  it("shows the split advice as a note, not an alert, when there is one (M3)", async () => {
     const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);
     const risky = { ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 };
     renderWithProviders(<DatasetDetail projectId={PROJECT_ID} dataset={risky} onDeleted={vi.fn()} />, {
       api,
     });
-    expect(await screen.findByText(/went to validation although/)).toBeInTheDocument();
+    const advice = await screen.findByRole("note");
+    expect(advice).toHaveTextContent(/went to validation although/);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows Loading… before the stats arrive (M4)", async () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);
+    renderWithProviders(
+      <DatasetDetail projectId={PROJECT_ID} dataset={exampleDataset} onDeleted={vi.fn()} />,
+      { api },
+    );
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    await screen.findByTestId("dataset-class-stats");
+    expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
   });
 
   it("asks for confirmation, deletes, and reports a 409 conflict as an alert", async () => {
