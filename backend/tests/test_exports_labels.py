@@ -45,33 +45,61 @@ def _image(**over) -> ExportImage:
 
 
 def test_yolo_label_text_for_a_known_box(tmp_path):
-    images = [_image(boxes=[_box(class_id="c-exc", x=1000, y=600, w=400, h=300)])]
+    images = [_image(path="images/siteA/a.jpg", boxes=[_box(class_id="c-exc", x=1000, y=600, w=400, h=300)])]
     files = yolo_out.write(images, CLASSES, tmp_path)
-    assert "labels_yolo/a.txt" in files
-    text = (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8")
+    assert files == ["labels_yolo", "labels_yolo/classes.txt"]
+    text = (tmp_path / "labels_yolo" / "siteA" / "a.txt").read_text("utf-8")
     assert text == "0 0.300000 0.250000 0.100000 0.100000\n"
 
 
 def test_yolo_empty_file_for_an_image_without_boxes(tmp_path):
-    images = [_image(path="images/b.jpg", boxes=[])]
+    images = [_image(path="images/siteA/b.jpg", boxes=[])]
     yolo_out.write(images, CLASSES, tmp_path)
-    text = (tmp_path / "labels_yolo" / "b.txt").read_text("utf-8")
+    text = (tmp_path / "labels_yolo" / "siteA" / "b.txt").read_text("utf-8")
     assert text == ""
 
 
 def test_yolo_classes_txt(tmp_path):
     images = [_image(boxes=[])]
     files = yolo_out.write(images, CLASSES, tmp_path)
-    assert "labels_yolo/classes.txt" in files
+    assert files == ["labels_yolo", "labels_yolo/classes.txt"]
     text = (tmp_path / "labels_yolo" / "classes.txt").read_text("utf-8")
     assert text == "excavator\ndump_truck\n"
 
 
 def test_yolo_second_class_index(tmp_path):
-    images = [_image(boxes=[_box(class_id="c-dt", class_name="dump_truck", x=0, y=0, w=100, h=100)])]
+    images = [
+        _image(
+            path="images/siteA/a.jpg",
+            boxes=[_box(class_id="c-dt", class_name="dump_truck", x=0, y=0, w=100, h=100)],
+        )
+    ]
     yolo_out.write(images, CLASSES, tmp_path)
-    text = (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8")
+    text = (tmp_path / "labels_yolo" / "siteA" / "a.txt").read_text("utf-8")
     assert text.startswith("1 ")
+
+
+def test_yolo_mirrors_the_site_so_same_named_images_never_collide(tmp_path):
+    """Two sources can each import a file called DJI_0001.jpg (see test_two_sources_can_share_a_site
+    in test_import.py); the label tree must mirror that, not flatten it."""
+    images = [
+        _image(
+            id="i1",
+            path="images/siteA/DJI_0001.jpg",
+            boxes=[_box(id="bA", class_id="c-exc", x=0, y=0, w=100, h=100)],
+        ),
+        _image(
+            id="i2",
+            path="images/siteB/DJI_0001.jpg",
+            boxes=[_box(id="bB", class_id="c-dt", class_name="dump_truck", x=0, y=0, w=200, h=200)],
+        ),
+    ]
+    yolo_out.write(images, CLASSES, tmp_path)
+    a = (tmp_path / "labels_yolo" / "siteA" / "DJI_0001.txt").read_text("utf-8")
+    b = (tmp_path / "labels_yolo" / "siteB" / "DJI_0001.txt").read_text("utf-8")
+    # Both images default to 4000x3000 (see `_image`); box (0,0,100,100) and (0,0,200,200).
+    assert a == "0 0.012500 0.016667 0.025000 0.033333\n"
+    assert b == "1 0.025000 0.033333 0.050000 0.066667\n"
 
 
 def test_coco_structure(tmp_path):

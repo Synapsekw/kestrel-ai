@@ -1,38 +1,42 @@
-"""YOLO label writer: one `.txt` per image plus `classes.txt` (spec G2)."""
+"""YOLO label writer: one `.txt` per image plus `classes.txt` (spec G2).
+
+The label tree mirrors the image tree under `images/`, so two sites that both happen to import a
+file called `DJI_0001.jpg` still get two label files rather than one silently overwriting the
+other: `images/<site>/<stem>.jpg` -> `labels_yolo/<site>/<stem>.txt`.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
 
+from app.datasets.materialise import _label_text
 from app.exports.rows import ExportImage
 
 FOLDER = "labels_yolo"
 
 
-def _label_text(image: ExportImage, class_index: dict[str, int]) -> str:
-    lines = []
-    for box in image.boxes:
-        index = class_index.get(box.class_id)
-        if index is None:
-            continue
-        cx = (box.x + box.w / 2) / image.width
-        cy = (box.y + box.h / 2) / image.height
-        w = box.w / image.width
-        h = box.h / image.height
-        lines.append(f"{index} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}")
-    return "\n".join(lines) + ("\n" if lines else "")
+def _label_path(image_path: str) -> Path:
+    """`images/<site>/<file>.jpg` -> `<site>/<file>.txt`; a path with no `images/` prefix is kept as-is."""
+    parts = Path(image_path).parts
+    rel = Path(*parts[1:]) if parts and parts[0] == "images" else Path(*parts)
+    return rel.with_suffix(".txt")
+
+
+def _as_box_dicts(image: ExportImage) -> list[dict]:
+    return [{"class_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h} for b in image.boxes]
 
 
 def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[str]:
-    """Writes `labels_yolo/<stem>.txt` for every image (empty when it has no boxes) and `classes.txt`."""
+    """Writes the mirrored label tree and `classes.txt`; returns [`labels_yolo`, `labels_yolo/classes.txt`]
+    (not one entry per image: the job result should name the folder, not enumerate every file in it).
+    """
     out = folder / FOLDER
     out.mkdir(parents=True, exist_ok=True)
     class_index = {c["id"]: i for i, c in enumerate(classes)}
-    files = []
     for image in images:
-        stem = Path(image.path).stem
-        (out / f"{stem}.txt").write_text(_label_text(image, class_index), "utf-8")
-        files.append(f"{FOLDER}/{stem}.txt")
+        label_path = out / _label_path(image.path)
+        label_path.parent.mkdir(parents=True, exist_ok=True)
+        text = _label_text(_as_box_dicts(image), class_index, image.width, image.height)
+        label_path.write_text(text, "utf-8")
     (out / "classes.txt").write_text("".join(f"{c['name']}\n" for c in classes), "utf-8")
-    files.append(f"{FOLDER}/classes.txt")
-    return files
+    return [FOLDER, f"{FOLDER}/classes.txt"]

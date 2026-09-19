@@ -67,13 +67,14 @@ def test_full_export_succeeds_with_every_format(client, project_id, with_boxes, 
         "detections.csv",
         "counts_by_group.csv",
         "counts_by_image.csv",
-        "labels_yolo/a.txt",
+        "labels_yolo",
         "labels_yolo/classes.txt",
         "labels_coco.json",
         "report.html",
     }
     for name in result["files"]:
-        assert (handle.folder / result["folder"] / name).is_file(), name
+        assert (handle.folder / result["folder"] / name).exists(), name
+    assert (handle.folder / result["folder"] / "labels_yolo" / "a.txt").is_file()
 
 
 def test_empty_formats_is_422(client, project_id):
