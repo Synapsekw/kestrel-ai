@@ -1,4 +1,5 @@
 import type { Image as ImageRow } from "@contract/client";
+import { GROUND_TRUTH_MESSAGE } from "./commands";
 
 interface Props {
   image: ImageRow | null;
@@ -17,7 +18,7 @@ export function EmptyToggle({ image, hasGroundTruth, busy, onToggle }: Props) {
       type="button"
       aria-pressed={marked}
       disabled={disabled}
-      title={hasGroundTruth ? "Delete or reject the boxes first" : undefined}
+      title={hasGroundTruth ? GROUND_TRUTH_MESSAGE : undefined}
       onClick={onToggle}
       className={`rounded border px-2 py-0.5 text-xs disabled:opacity-40 ${
         marked

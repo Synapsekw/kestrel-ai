@@ -68,6 +68,20 @@ function keyed(boxes: Box[]): Record<string, Box> {
   return Object.fromEntries(boxes.map((b) => [b.id, b]));
 }
 
+/** An accepted or edited box is ground truth: ground truth and `marked_empty` can never coexist. */
+export function hasGroundTruth(boxes: Record<string, Box>): boolean {
+  return Object.values(boxes).some((b) => b.review_state === "accepted" || b.review_state === "edited");
+}
+
+function isGroundTruth(box: Box): boolean {
+  return box.review_state === "accepted" || box.review_state === "edited";
+}
+
+/** The store's own copy of the "ground truth clears the mark" invariant (E4 fix round 1, I1). */
+function clearMarkIfNeeded(image: ImageRow | null): Partial<EditorState> {
+  return image && image.marked_empty ? { image: { ...image, marked_empty: false } } : {};
+}
+
 const EMPTY = {
   imageId: null,
   image: null,
@@ -113,6 +127,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         boxes: map,
         order: sortedIds(map),
         selectedId: s.selectedId && map[s.selectedId] ? s.selectedId : null,
+        ...(hasGroundTruth(map) ? clearMarkIfNeeded(s.image) : {}),
       };
     }),
   upsertBox: (box) =>
@@ -120,7 +135,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // A response that arrives after the editor moved to another image must not land here.
       if (s.imageId !== null && box.image_id !== s.imageId) return s;
       const boxes = { ...s.boxes, [box.id]: box };
-      return { boxes, order: sortedIds(boxes) };
+      return {
+        boxes,
+        order: sortedIds(boxes),
+        ...(isGroundTruth(box) ? clearMarkIfNeeded(s.image) : {}),
+      };
     }),
   removeBox: (id) =>
     set((s) => {
@@ -138,9 +157,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // `unreview` (undo) clears the decision time; every other state records one.
       const reviewedAt = state === "unreviewed" ? null : new Date().toISOString();
       const boxes = { ...s.boxes };
+      let touchedGroundTruth = false;
       for (const id of ids)
-        if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
-      return { boxes };
+        if (boxes[id]) {
+          boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
+          if (isGroundTruth(boxes[id])) touchedGroundTruth = true;
+        }
+      return { boxes, ...(touchedGroundTruth ? clearMarkIfNeeded(s.image) : {}) };
     }),
   select: (id) => set((s) => (id === null || s.boxes[id] ? { selectedId: id } : s)),
   hover: (id) => set({ hoveredId: id }),

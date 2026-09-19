@@ -57,6 +57,33 @@ describe("editor store", () => {
     expect(useEditorStore.getState().selectedId).toBeNull();
   });
 
+  it("upsertBox clears marked_empty when the box is ground truth, but not otherwise (I1)", () => {
+    const s = useEditorStore.getState();
+    s.loadImage({ ...exampleImage, marked_empty: true }, []);
+    s.upsertBox(proposalBox); // unreviewed: not ground truth
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.upsertBox(personBox); // accepted: ground truth
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("patchStates to accepted clears marked_empty, but rejecting does not (I1)", () => {
+    const s = useEditorStore.getState();
+    s.loadImage({ ...exampleImage, marked_empty: true }, [proposalBox]);
+    s.patchStates([proposalBox.id], "rejected");
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.patchStates([proposalBox.id], "accepted");
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("setBoxes clears marked_empty exactly when the loaded boxes include ground truth (I1)", () => {
+    const s = useEditorStore.getState();
+    s.loadImage({ ...exampleImage, marked_empty: true }, []);
+    s.setBoxes([proposalBox]);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.setBoxes([proposalBox, personBox]);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
   it("replaces the loaded image, but ignores a stale reply for another image", () => {
     const s = useEditorStore.getState();
     s.loadImage(exampleImage, []);
