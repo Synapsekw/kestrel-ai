@@ -18,6 +18,7 @@ import {
   type QueryForm,
 } from "@/query/queryModel";
 import { RunCard } from "@/query/RunCard";
+import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { RunHistory } from "@/query/RunHistory";
 import { SourcePicker } from "@/query/SourcePicker";
 import { TilingFields } from "@/query/TilingFields";
@@ -39,6 +40,8 @@ export function QueryScreen() {
   const registry = useModels(projectId);
   const providers = useProviders();
   const history = useQueryRuns(projectId);
+  // The history row carries the run's box count: refresh it when a detection job ends.
+  useOnJobsFinished("infer", history.reload);
   // The Data Manager selection is consumed once, on entry: it is snapshotted here and dropped from
   // the store below, so a later visit cannot silently inherit a stale selection.
   const [preloaded] = useState<string[]>(() => {

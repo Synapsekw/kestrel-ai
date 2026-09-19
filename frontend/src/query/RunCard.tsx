@@ -108,6 +108,7 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
   if (!run) {
     return alert || <p className="text-sm text-slate-400">Loading run {runId.slice(0, 8)}…</p>;
   }
+  const finished = job !== null && job.state === "succeeded";
   const interrupted = job !== null && !isActiveJob(job) && job.state !== "succeeded";
   const link = reviewLink(projectId, run);
   const tiling = run.tiling.enabled
@@ -148,65 +149,79 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
         </div>
       )}
       <p data-testid="box-count" className="text-sm">
-        {run.box_count} {run.box_count === 1 ? "box" : "boxes"} written so far
+        {boxes(run.box_count)} {finished ? "found" : "written so far"}
       </p>
-      <p className="text-sm">
-        <Link to={link.to} className="text-orange-300 hover:underline">
-          Review results
-        </Link>
-        {link.capped && (
-          <span className="text-xs text-slate-400">
-            {" "}
-            (first {REVIEW_LINK_MAX_IDS} of {run.image_ids.length} images)
-          </span>
-        )}
-      </p>
-      <form onSubmit={countPromotion} className="flex flex-wrap items-end gap-2">
-        <label className="flex flex-col gap-1 text-xs text-slate-400">
-          Minimum confidence
-          <input
-            aria-label="Minimum confidence"
-            type="number"
-            min={0}
-            max={1}
-            step={0.05}
-            value={minConf}
-            onChange={(e) => {
-              setMinConf(e.target.value);
-              setPending(null);
-            }}
-            className={`${input} w-24`}
-          />
-        </label>
-        <button type="submit" className={primary} disabled={busy}>
-          Accept as labels…
-        </button>
-        {run.promoted_at && (
-          <button type="button" className={secondary} onClick={undoPromotion} disabled={busy}>
-            Undo acceptance
-          </button>
-        )}
-        <span className="text-xs text-slate-400">
-          Counts the run&apos;s unreviewed boxes at or above the threshold, then asks before accepting them.
-        </span>
-      </form>
-      {pending && (
-        <div
-          data-testid="promote-confirm"
-          className="flex flex-wrap items-center gap-2 rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm"
+      {finished && run.box_count === 0 && (
+        <p
+          data-testid="no-boxes-advice"
+          className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm text-amber-200"
         >
-          <span>
-            {pending.count} unreviewed {pending.count === 1 ? "box" : "boxes"} at or above {pending.threshold}{" "}
-            will become ground-truth labels and enter new datasets. Review results first if the model is new;
-            Undo acceptance reverses it.
-          </span>
-          <button type="button" className={primary} onClick={confirmPromotion} disabled={busy}>
-            Accept {boxes(pending.count)}
-          </button>
-          <button type="button" className={secondary} onClick={() => setPending(null)}>
-            Cancel
-          </button>
-        </div>
+          Nothing scored at or above confidence {run.conf}. Run again with a lower confidence, or improve the
+          model: a model trained on few images, or for few epochs, is rarely sure of anything.
+        </p>
+      )}
+      {!(finished && run.box_count === 0) && (
+        <>
+          <p className="text-sm">
+            <Link to={link.to} className="text-orange-300 hover:underline">
+              Review results
+            </Link>
+            {link.capped && (
+              <span className="text-xs text-slate-400">
+                {" "}
+                (first {REVIEW_LINK_MAX_IDS} of {run.image_ids.length} images)
+              </span>
+            )}
+          </p>
+          <form onSubmit={countPromotion} className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-1 text-xs text-slate-400">
+              Minimum confidence
+              <input
+                aria-label="Minimum confidence"
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                value={minConf}
+                onChange={(e) => {
+                  setMinConf(e.target.value);
+                  setPending(null);
+                }}
+                className={`${input} w-24`}
+              />
+            </label>
+            <button type="submit" className={primary} disabled={busy}>
+              Accept as labels…
+            </button>
+            {run.promoted_at && (
+              <button type="button" className={secondary} onClick={undoPromotion} disabled={busy}>
+                Undo acceptance
+              </button>
+            )}
+            <span className="text-xs text-slate-400">
+              Counts the run&apos;s unreviewed boxes at or above the threshold, then asks before accepting
+              them.
+            </span>
+          </form>
+          {pending && (
+            <div
+              data-testid="promote-confirm"
+              className="flex flex-wrap items-center gap-2 rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm"
+            >
+              <span>
+                {pending.count} unreviewed {pending.count === 1 ? "box" : "boxes"} at or above{" "}
+                {pending.threshold} will become ground-truth labels and enter new datasets. Review results
+                first if the model is new; Undo acceptance reverses it.
+              </span>
+              <button type="button" className={primary} onClick={confirmPromotion} disabled={busy}>
+                Accept {boxes(pending.count)}
+              </button>
+              <button type="button" className={secondary} onClick={() => setPending(null)}>
+                Cancel
+              </button>
+            </div>
+          )}
+        </>
       )}
       {status && (
         <p role="status" className="text-xs text-emerald-300">

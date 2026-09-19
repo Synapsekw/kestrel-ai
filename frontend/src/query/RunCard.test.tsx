@@ -191,4 +191,18 @@ describe("RunCard", () => {
         .every((r) => (r.body as { dry_run: boolean }).dry_run),
     ).toBe(true);
   });
+
+  it("states the final count once the job is done and explains a run that found nothing", async () => {
+    const done = { ...runningJob, id: RUN_JOB_ID, type: "infer", state: "succeeded", progress: 1 };
+    const { api } = fakeClient([
+      { method: "GET", path: /\/query-runs\/[^/]+$/, body: { ...exampleQueryRun, box_count: 0, conf: 0.25 } },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: done },
+    ]);
+    renderWithProviders(<RunCard projectId={PROJECT_ID} runId={RUN_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("box-count")).toHaveTextContent("0 boxes found"));
+    expect(screen.getByTestId("no-boxes-advice")).toHaveTextContent(
+      "Nothing scored at or above confidence 0.25. Run again with a lower confidence, or improve the model",
+    );
+    expect(screen.queryByRole("button", { name: "Accept as labels…" })).toBeNull();
+  });
 });
