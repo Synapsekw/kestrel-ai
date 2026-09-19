@@ -7,7 +7,7 @@ test("opens the jobs panel from the top bar, shows progress and log, cancels and
   page,
 }) => {
   await page.goto(`/p/${P}/data`);
-  await expect(page.getByRole("heading", { name: "Data Manager" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible();
   const listed = page.waitForRequest(
     (r) => r.method() === "GET" && r.url().includes(`/projects/${P}/jobs?limit=100`),
   );

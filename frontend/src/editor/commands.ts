@@ -207,7 +207,7 @@ export async function cmdReview(ctx: CommandContext, ids: string[], action: Revi
   if (ids.length === 0) return;
   const { api, projectId, store, history } = ctx;
   const state: ReviewState = action === "accept" ? "accepted" : "rejected";
-  const ok = await tracked(ctx, `${action} proposals`, () => reviewBoxes(api, projectId, ids, action));
+  const ok = await tracked(ctx, `${action} suggestions`, () => reviewBoxes(api, projectId, ids, action));
   if (ok === undefined) return;
   store.getState().patchStates(ids, state);
   history.push({

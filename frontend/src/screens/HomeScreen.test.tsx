@@ -56,17 +56,15 @@ describe("HomeScreen", () => {
   });
 
   it("says so when nothing is left to do", async () => {
-    useProgressStore
-      .getState()
-      .set(PROJECT_ID, {
-        ...base,
-        images: 10,
-        labeled: 10,
-        datasets: 1,
-        models: 1,
-        trainedModels: 1,
-        queryRuns: 1,
-      });
+    useProgressStore.getState().set(PROJECT_ID, {
+      ...base,
+      images: 10,
+      labeled: 10,
+      datasets: 1,
+      models: 1,
+      trainedModels: 1,
+      queryRuns: 1,
+    });
     renderHome();
     expect(await screen.findByText("Everything is labeled and reviewed.")).toBeInTheDocument();
     expect(screen.queryByTestId("home-next-step")).toBeNull();
