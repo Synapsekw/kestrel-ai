@@ -20,3 +20,5 @@ class Settings(BaseSettings):
         "http://127.0.0.1:1420",
         "http://localhost:1420",
     ]
+    # Folder with the bundled starter weights; None = next to the frozen exe, else backend/starter_weights.
+    starter_weights_dir: Path | None = None
