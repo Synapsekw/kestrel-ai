@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { promoteQueryRun, resumeQueryRun } from "@/api/queryRuns";
+import { promoteQueryRun, resumeQueryRun, unpromoteQueryRun } from "@/api/queryRuns";
 import { pushLog } from "@/app/diagnostics";
 import { JobCard } from "@/jobs/JobCard";
 import { formatLocalDate } from "@/models/modelLabels";
@@ -22,26 +22,58 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  async function promote(e: FormEvent) {
+  // Accepting is two steps: a dry run counts the boxes, the operator confirms that number.
+  const [pending, setPending] = useState<{ threshold: number; count: number } | null>(null);
+  const boxes = (n: number) => `${n} ${n === 1 ? "box" : "boxes"}`;
+
+  async function act(what: string, fn: () => Promise<string | null>) {
+    setBusy(true);
+    setError(null);
+    setStatus(null);
+    try {
+      setStatus(await fn());
+    } catch (err) {
+      pushLog(`${what} run ${runId} failed: ${messageOf(err, String(err))}`);
+      setError(messageOf(err, `could not ${what} the run`));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function countPromotion(e: FormEvent) {
     e.preventDefault();
     const threshold = Number(minConf);
     if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
       setError("Minimum confidence must be between 0 and 1.");
       return;
     }
-    setBusy(true);
-    setError(null);
-    setStatus(null);
-    try {
+    setPending(null);
+    void act("count the boxes of", async () => {
+      const { accepted } = await promoteQueryRun(api, projectId, runId, threshold, true);
+      if (accepted === 0)
+        return `No unreviewed boxes at or above ${threshold}. Lower the minimum confidence or review the images one by one.`;
+      setPending({ threshold, count: accepted });
+      return null;
+    });
+  }
+
+  function confirmPromotion() {
+    if (!pending) return;
+    const { threshold } = pending;
+    setPending(null);
+    void act("promote", async () => {
       const result = await promoteQueryRun(api, projectId, runId, threshold);
       replace(result.query_run);
-      setStatus(`${result.accepted} ${result.accepted === 1 ? "box" : "boxes"} accepted`);
-    } catch (err) {
-      pushLog(`promote run ${runId} failed: ${messageOf(err, String(err))}`);
-      setError(messageOf(err, "could not promote the run"));
-    } finally {
-      setBusy(false);
-    }
+      return `${boxes(result.accepted)} accepted`;
+    });
+  }
+
+  function undoPromotion() {
+    void act("undo the acceptance of", async () => {
+      const result = await unpromoteQueryRun(api, projectId, runId);
+      replace(result.query_run);
+      return `${boxes(result.reverted)} returned to unreviewed`;
+    });
   }
 
   async function resume() {
@@ -94,7 +126,7 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
             className="rounded bg-emerald-800 px-2 py-0.5 text-xs text-emerald-100"
             title={run.promoted_at}
           >
-            Promoted
+            Accepted as labels
           </span>
         )}
         <span className="text-xs text-slate-400">started {formatLocalDate(run.created_at)}</span>
@@ -129,7 +161,7 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
           </span>
         )}
       </p>
-      <form onSubmit={(e) => void promote(e)} className="flex flex-wrap items-end gap-2">
+      <form onSubmit={countPromotion} className="flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-xs text-slate-400">
           Minimum confidence
           <input
@@ -139,17 +171,43 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
             max={1}
             step={0.05}
             value={minConf}
-            onChange={(e) => setMinConf(e.target.value)}
+            onChange={(e) => {
+              setMinConf(e.target.value);
+              setPending(null);
+            }}
             className={`${input} w-24`}
           />
         </label>
         <button type="submit" className={primary} disabled={busy}>
-          Promote
+          Accept as labels…
         </button>
+        {run.promoted_at && (
+          <button type="button" className={secondary} onClick={undoPromotion} disabled={busy}>
+            Undo acceptance
+          </button>
+        )}
         <span className="text-xs text-slate-400">
-          Accepts the run&apos;s unreviewed boxes at or above the threshold.
+          Counts the run&apos;s unreviewed boxes at or above the threshold, then asks before accepting them.
         </span>
       </form>
+      {pending && (
+        <div
+          data-testid="promote-confirm"
+          className="flex flex-wrap items-center gap-2 rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm"
+        >
+          <span>
+            {pending.count} unreviewed {pending.count === 1 ? "box" : "boxes"} at or above {pending.threshold}{" "}
+            will become ground-truth labels and enter new datasets. Review results first if the model is new;
+            Undo acceptance reverses it.
+          </span>
+          <button type="button" className={primary} onClick={confirmPromotion} disabled={busy}>
+            Accept {boxes(pending.count)}
+          </button>
+          <button type="button" className={secondary} onClick={() => setPending(null)}>
+            Cancel
+          </button>
+        </div>
+      )}
       {status && (
         <p role="status" className="text-xs text-emerald-300">
           {status}

@@ -223,7 +223,9 @@ await sleep(3000);
 await shot(page, "08-query-run");
 step("local query run from the ui", inferJob.state === "succeeded", `estimate "${estimateText.replace(/\s+/g, " ")}" boxes ${run.box_count} result ${JSON.stringify(inferJob.result)}`);
 await page.getByLabel("Minimum confidence").fill("0");
-await page.getByRole("button", { name: "Promote" }).click();
+await page.getByRole("button", { name: "Accept as labels…" }).click();
+// Two steps since the usability wave: the card counts first, then asks.
+await page.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click({ timeout: 60_000 });
 await sleep(2000);
 run = await api("GET", `/projects/${pid}/query-runs/${runId}`);
 step("promote from the ui", Boolean(run.promoted_at), `promoted_at ${run.promoted_at}`);

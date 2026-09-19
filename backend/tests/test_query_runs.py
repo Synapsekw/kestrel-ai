@@ -504,6 +504,48 @@ def test_promote_without_a_threshold_accepts_everything_and_is_idempotent(
     assert {r.review_state for r in boxes_of(handle)} == {"accepted"}
 
 
+def test_a_dry_run_counts_what_a_promotion_would_accept_and_changes_nothing(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep
+):
+    use_provider(FakeProvider())
+    run_id = run_and_wait(client, wait_job, project_id, frames)["run"]["id"]
+
+    r = client.post(
+        f"{BASE}/{project_id}/query-runs/{run_id}/promote", json={"min_confidence": 0.5, "dry_run": True}
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["accepted"] == 2
+    assert r.json()["query_run"]["promoted_at"] is None
+    assert {b.review_state for b in boxes_of(handle)} == {"unreviewed"}
+
+
+def test_unpromote_returns_the_promoted_boxes_to_unreviewed_and_spares_the_persons_work(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep
+):
+    use_provider(FakeProvider())
+    run_id = run_and_wait(client, wait_job, project_id, frames)["run"]["id"]
+    # The person accepts one low-confidence box by hand before the promotion.
+    by_hand = next(b for b in boxes_of(handle) if round(b.confidence, 1) == 0.4)
+    r = client.post(f"{BASE}/{project_id}/boxes/review", json={"box_ids": [by_hand.id], "action": "accept"})
+    assert r.status_code == 200, r.text
+    assert client.post(
+        f"{BASE}/{project_id}/query-runs/{run_id}/promote", json={"min_confidence": 0.5}
+    ).json()["accepted"] == 2
+
+    r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/unpromote")
+    assert r.status_code == 200, r.text
+    assert r.json()["reverted"] == 2
+    assert r.json()["query_run"]["promoted_at"] is None
+    states = {b.id: b.review_state for b in boxes_of(handle)}
+    assert states[by_hand.id] == "accepted"
+    assert sorted(states.values()) == ["accepted", "unreviewed", "unreviewed", "unreviewed"]
+    assert all(b.reviewed_at is None for b in boxes_of(handle) if b.review_state == "unreviewed")
+
+    # Nothing left to undo: a second call is a no-op, an unknown run is a 404.
+    assert client.post(f"{BASE}/{project_id}/query-runs/{run_id}/unpromote").json()["reverted"] == 0
+    assert client.post(f"{BASE}/{project_id}/query-runs/nope/unpromote").status_code == 404
+
+
 # ----------------------------------------------------------------- rate limits
 
 

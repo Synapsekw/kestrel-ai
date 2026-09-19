@@ -15,12 +15,27 @@ from app.inference.schemas import (
     QueryRunOut,
     QueryRunPage,
     QueryRunWithJob,
+    UnpromoteResult,
 )
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
 from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["query-runs"])
+
+
+def _boxes_changed(request: Request, handle: ProjectHandle, image_ids: list[str]) -> None:
+    if image_ids:
+        request.app.state.events.publish(
+            {
+                "type": "boxes.changed",
+                "project_id": handle.id,
+                "job_id": None,
+                "progress": None,
+                "message": "",
+                "payload": {"image_ids": image_ids},
+            }
+        )
 
 
 def _config(request: Request):
@@ -82,20 +97,21 @@ def promote_query_run(
     handle: ProjectHandle = Depends(get_project),
     body: PromoteRequest | None = Body(None),
 ) -> PromoteResult:
-    threshold = (body or PromoteRequest()).min_confidence
-    row, count, accepted, image_ids = service.promote(handle, runId, threshold)
-    if image_ids:
-        request.app.state.events.publish(
-            {
-                "type": "boxes.changed",
-                "project_id": handle.id,
-                "job_id": None,
-                "progress": None,
-                "message": "",
-                "payload": {"image_ids": image_ids},
-            }
-        )
+    req = body or PromoteRequest()
+    row, count, accepted, image_ids = service.promote(handle, runId, req.min_confidence, req.dry_run)
+    _boxes_changed(request, handle, image_ids)
     return PromoteResult(query_run=QueryRunOut.from_row(row, count), accepted=accepted)
+
+
+@router.post("/query-runs/{runId}/unpromote", response_model=UnpromoteResult)
+def unpromote_query_run(
+    runId: str,  # noqa: N803
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> UnpromoteResult:
+    row, count, reverted, image_ids = service.unpromote(handle, runId)
+    _boxes_changed(request, handle, image_ids)
+    return UnpromoteResult(query_run=QueryRunOut.from_row(row, count), reverted=reverted)
 
 
 @router.post("/images/{imageId}/preannotate", response_model=PreannotateResult)

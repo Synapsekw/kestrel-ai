@@ -205,9 +205,13 @@ def list_query_runs(
 
 
 def promote(
-    handle: ProjectHandle, run_id: str, min_confidence: float
+    handle: ProjectHandle, run_id: str, min_confidence: float, dry_run: bool = False
 ) -> tuple[QueryRun, int, int, list[str]]:
-    """Accept the run's pending boxes at or above the threshold. A state change, never a copy."""
+    """Accept the run's pending boxes at or above the threshold. A state change, never a copy.
+
+    A dry run only counts them. Accepted boxes carry `reviewed_at == promoted_at`, which is how
+    `unpromote` tells them from boxes a person accepted.
+    """
     now = datetime.now(UTC)
     with handle.session() as s:
         row = s.get(QueryRun, run_id)
@@ -222,6 +226,10 @@ def promote(
                 )
             ).scalars()
         )
+        if dry_run:
+            count = box_count(s, run_id)
+            s.expunge(row)
+            return row, count, len(pending), []
         for box in pending:
             box.review_state, box.reviewed_at = "accepted", now
         row.promoted_at = now
@@ -230,6 +238,33 @@ def promote(
         count = box_count(s, run_id)
         s.expunge(row)
     return row, count, len(pending), image_ids
+
+
+def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, list[str]]:
+    """Undo `promote`: its boxes go back to unreviewed; anything a person reviewed since stays."""
+    with handle.session() as s:
+        row = s.get(QueryRun, run_id)
+        if row is None:
+            raise not_found("query run", run_id)
+        promoted: list[Box] = []
+        if row.promoted_at is not None:
+            promoted = list(
+                s.execute(
+                    select(Box).where(
+                        Box.query_run_id == run_id,
+                        Box.review_state == "accepted",
+                        Box.reviewed_at == row.promoted_at,
+                    )
+                ).scalars()
+            )
+        for box in promoted:
+            box.review_state, box.reviewed_at = "unreviewed", None
+        row.promoted_at = None
+        image_ids = sorted({b.image_id for b in promoted})
+        s.flush()
+        count = box_count(s, run_id)
+        s.expunge(row)
+    return row, count, len(promoted), image_ids
 
 
 def preannotate(

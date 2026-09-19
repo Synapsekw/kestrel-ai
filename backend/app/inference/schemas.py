@@ -88,11 +88,17 @@ class CostEstimate(BaseModel):
 
 class PromoteRequest(BaseModel):
     min_confidence: float = Field(default=0, ge=0, le=1)
+    dry_run: bool = False
 
 
 class PromoteResult(BaseModel):
     query_run: QueryRunOut
     accepted: int
+
+
+class UnpromoteResult(BaseModel):
+    query_run: QueryRunOut
+    reverted: int
 
 
 class PreannotateRequest(BaseModel):

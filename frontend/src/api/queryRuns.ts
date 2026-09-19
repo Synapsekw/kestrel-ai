@@ -12,6 +12,7 @@ import { collectPages } from "./paging";
 
 export type QueryRunWithJob = components["schemas"]["QueryRunWithJob"];
 export type PromoteResult = components["schemas"]["PromoteResult"];
+export type UnpromoteResult = components["schemas"]["UnpromoteResult"];
 
 /** Spec section 8 defaults; every field is required by the generated client. */
 export const DEFAULT_TILING: Tiling = { enabled: true, tile_size: 1280, overlap: 0.2, nms_iou: 0.5 };
@@ -71,17 +72,34 @@ export async function resumeQueryRun(api: ApiClient, projectId: string, runId: s
   return r.job;
 }
 
-/** Accept the run's unreviewed boxes at or above `minConfidence` (a state change, not a copy). */
+/**
+ * Accept the run's unreviewed boxes at or above `minConfidence` (a state change, not a copy).
+ * With `dryRun` nothing changes and `accepted` is the number a real call would accept.
+ */
 export function promoteQueryRun(
   api: ApiClient,
   projectId: string,
   runId: string,
   minConfidence: number,
+  dryRun = false,
 ): Promise<PromoteResult> {
   return unwrap(
     api.POST("/api/v1/projects/{projectId}/query-runs/{runId}/promote", {
       params: { path: { projectId, runId } },
-      body: { min_confidence: minConfidence },
+      body: { min_confidence: minConfidence, dry_run: dryRun },
+    }),
+  );
+}
+
+/** Undo a promotion: the boxes it accepted return to unreviewed; a person's reviews are kept. */
+export function unpromoteQueryRun(
+  api: ApiClient,
+  projectId: string,
+  runId: string,
+): Promise<UnpromoteResult> {
+  return unwrap(
+    api.POST("/api/v1/projects/{projectId}/query-runs/{runId}/unpromote", {
+      params: { path: { projectId, runId } },
     }),
   );
 }

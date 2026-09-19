@@ -714,6 +714,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/query-runs/{runId}/unpromote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. */
+        post: operations["unpromoteQueryRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/jobs": {
         parameters: {
             query?: never;
@@ -2001,6 +2021,11 @@ export interface components {
         PromoteRequest: {
             /** @default 0 */
             min_confidence: number;
+            /**
+             * @description count the boxes a promotion would accept without changing anything (`promoted_at` stays as it is)
+             * @default false
+             */
+            dry_run: boolean;
         };
         /**
          * @example {
@@ -2032,6 +2057,37 @@ export interface components {
         PromoteResult: {
             query_run: components["schemas"]["QueryRun"];
             accepted: number;
+        };
+        /**
+         * @example {
+         *       "query_run": {
+         *         "id": "q0000000-8888-4000-8000-000000000001",
+         *         "kind": "cloud_provider",
+         *         "model_id": null,
+         *         "provider": "anthropic",
+         *         "model_name": "claude-opus-5",
+         *         "query": "dump trucks",
+         *         "image_ids": [
+         *           "10000000-5555-4000-8000-000000000001"
+         *         ],
+         *         "tiling": {
+         *           "enabled": true,
+         *           "tile_size": 1280,
+         *           "overlap": 0.2,
+         *           "nms_iou": 0.5
+         *         },
+         *         "conf": 0.25,
+         *         "job_id": "j0000000-4444-4000-8000-000000000003",
+         *         "box_count": 7,
+         *         "promoted_at": null,
+         *         "created_at": "2026-09-17T13:00:00Z"
+         *       },
+         *       "reverted": 6
+         *     }
+         */
+        UnpromoteResult: {
+            query_run: components["schemas"]["QueryRun"];
+            reverted: number;
         };
         /** @enum {string} */
         JobType: "import" | "dataset" | "train" | "infer" | "export";
@@ -3343,6 +3399,30 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PromoteResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    unpromoteQueryRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description run with `promoted_at` cleared and the number of boxes returned to unreviewed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnpromoteResult"];
                 };
             };
             default: components["responses"]["Error"];

@@ -652,7 +652,9 @@ try {
   await page.goBack();
   await page.getByTestId("run-card").waitFor({ timeout: 60_000 });
   await page.getByLabel("Minimum confidence").fill("0");
-  await page.getByRole("button", { name: "Promote" }).click();
+  await page.getByRole("button", { name: "Accept as labels…" }).click();
+  // Two steps since the usability wave: the card counts first, then asks.
+  await page.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click({ timeout: 60_000 });
   await sleep(2500);
   run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
   await shot(page, "06-promoted");

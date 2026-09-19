@@ -100,11 +100,18 @@ test("estimates and starts a cloud query, then reviews results, promotes and lis
     (r) => r.method() === "POST" && r.url().endsWith(`/query-runs/${RUN}/promote`),
   );
   await page.getByLabel("Minimum confidence").fill("0.6");
-  await page.getByRole("button", { name: "Promote" }).click();
-  expect((await promoted).postDataJSON()).toEqual({ min_confidence: 0.6 });
+  await page.getByRole("button", { name: "Accept as labels…" }).click();
+  // The first request only counts; the operator confirms the number before anything is accepted.
+  expect((await promoted).postDataJSON()).toEqual({ min_confidence: 0.6, dry_run: true });
+  await expect(page.getByTestId("promote-confirm")).toContainText("6 unreviewed boxes at or above 0.6");
+  const confirmed = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/query-runs/${RUN}/promote`),
+  );
+  await page.getByRole("button", { name: "Accept 6 boxes" }).click();
+  expect((await confirmed).postDataJSON()).toEqual({ min_confidence: 0.6, dry_run: false });
   promotedAt = "2026-09-17T13:30:00Z";
   await expect(page.getByRole("status").filter({ hasText: "6 boxes accepted" })).toBeVisible();
-  await expect(card.getByText("Promoted")).toBeVisible();
+  await expect(card.getByText("Accepted as labels")).toBeVisible();
   await expect(page.getByTestId("run-history")).toContainText("dump trucks");
 
   const narrowed = page.waitForRequest(

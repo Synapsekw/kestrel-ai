@@ -31,7 +31,15 @@ describe("RunCard", () => {
       {
         method: "POST",
         path: /\/promote$/,
-        body: { query_run: { ...exampleQueryRun, promoted_at: "2026-09-17T13:30:00Z" }, accepted: 6 },
+        body: (req) =>
+          (req.body as { dry_run?: boolean }).dry_run
+            ? { query_run: exampleQueryRun, accepted: 6 }
+            : { query_run: { ...exampleQueryRun, promoted_at: "2026-09-17T13:30:00Z" }, accepted: 6 },
+      },
+      {
+        method: "POST",
+        path: /\/unpromote$/,
+        body: { query_run: exampleQueryRun, reverted: 6 },
       },
     ]);
     renderWithProviders(<RunCard projectId={PROJECT_ID} runId={RUN_ID} />, { api });
@@ -45,14 +53,30 @@ describe("RunCard", () => {
     );
     expect(screen.getByLabelText("Minimum confidence")).toHaveValue(0.5);
     fireEvent.change(screen.getByLabelText("Minimum confidence"), { target: { value: "0.6" } });
-    fireEvent.click(screen.getByRole("button", { name: "Promote" }));
+    // Step 1 only counts: nothing is accepted until the operator confirms the number.
+    fireEvent.click(screen.getByRole("button", { name: "Accept as labels…" }));
+    const confirm = await screen.findByRole("button", { name: "Accept 6 boxes" });
+    expect(screen.getByTestId("promote-confirm")).toHaveTextContent(
+      "6 unreviewed boxes at or above 0.6 will become ground-truth labels",
+    );
+    expect(requests.filter((r) => r.url.endsWith("/promote")).map((r) => r.body)).toEqual([
+      { min_confidence: 0.6, dry_run: true },
+    ]);
+    expect(screen.queryByText("Accepted as labels")).not.toBeInTheDocument();
+    fireEvent.click(confirm);
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("6 boxes accepted"));
-    expect(requests.find((r) => r.url.endsWith("/promote"))).toMatchObject({
+    expect(requests.filter((r) => r.url.endsWith("/promote"))[1]).toMatchObject({
       method: "POST",
       url: `/api/v1/projects/${PROJECT_ID}/query-runs/${RUN_ID}/promote`,
       body: { min_confidence: 0.6 },
     });
-    expect(screen.getByText("Promoted")).toBeInTheDocument();
+    expect(screen.getByText("Accepted as labels")).toBeInTheDocument();
+    // The acceptance can be undone from the same card.
+    fireEvent.click(screen.getByRole("button", { name: "Undo acceptance" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("6 boxes returned to unreviewed"),
+    );
+    expect(screen.queryByText("Accepted as labels")).not.toBeInTheDocument();
     // A running job offers no resume.
     expect(screen.queryByRole("button", { name: "Resume run" })).not.toBeInTheDocument();
   });
@@ -134,5 +158,37 @@ describe("RunCard", () => {
       expect(screen.getByRole("alert")).toHaveTextContent("the run's job is still running"),
     );
     expect(screen.getByTestId("run-card")).toBeInTheDocument();
+  });
+
+  it("says so when nothing would be accepted and lets the operator cancel a count", async () => {
+    let wouldAccept = 0;
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/query-runs\/[^/]+$/, body: exampleQueryRun },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, id: RUN_JOB_ID, type: "infer" } },
+      {
+        method: "POST",
+        path: /\/promote$/,
+        body: () => ({ query_run: exampleQueryRun, accepted: wouldAccept }),
+      },
+    ]);
+    renderWithProviders(<RunCard projectId={PROJECT_ID} runId={RUN_ID} />, { api });
+    await screen.findByTestId("run-card");
+    fireEvent.click(screen.getByRole("button", { name: "Accept as labels…" }));
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "No unreviewed boxes at or above 0.5. Lower the minimum confidence or review the images one by one.",
+      ),
+    );
+    expect(screen.queryByTestId("promote-confirm")).not.toBeInTheDocument();
+    wouldAccept = 3;
+    fireEvent.click(screen.getByRole("button", { name: "Accept as labels…" }));
+    await screen.findByRole("button", { name: "Accept 3 boxes" });
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByTestId("promote-confirm")).not.toBeInTheDocument();
+    expect(
+      requests
+        .filter((r) => r.url.endsWith("/promote"))
+        .every((r) => (r.body as { dry_run: boolean }).dry_run),
+    ).toBe(true);
   });
 });
