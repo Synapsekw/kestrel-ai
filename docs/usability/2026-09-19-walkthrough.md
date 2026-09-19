@@ -20,15 +20,15 @@ The "Closed by" column is filled with the commit that fixes the item.
 | G1 | Models -> Import weights, Train -> Base model | The form asks for the path of a `.pt` file; the installer ships none, the base-model list of a new project is empty, nothing says where weights come from | Starter weights (YOLO11 n/s/m) offered in the app, selectable as base model without a file path | blocks | |
 | N3 | Sidebar inside a project | "Editor" greyed out with no hint | Hint "open an image from Data or Review" | annoys | 78d1f0e |
 | N4 | After creating a project | Lands on an empty Data Manager; nothing tells the order import -> label -> dataset -> train -> run -> review | A next-step hint or project overview (counts and the next action) | confuses | |
-| N5 | Every `invoke` in the installed app | Console: CSP blocks `http://ipc.localhost`, Tauri falls back to postMessage (invisible to the user, noise in diagnostics) | No CSP violation (`connect-src` allows `ipc:` / `http://ipc.localhost`) | annoys | |
+| N5 | Every `invoke` in the installed app | Console: CSP blocks `http://ipc.localhost`, Tauri falls back to postMessage (invisible to the user, noise in diagnostics) | No CSP violation (`connect-src` allows `ipc:` / `http://ipc.localhost`) | annoys | 337ccb6 |
 | P1 | Projects -> Create project with an empty or invalid folder | Red "request validation failed" | Which field is wrong and why | confuses | a8b8bca |
-| P2 | Projects -> Recent | Test leftovers pile up; no way to remove an entry or delete a project | "Remove from list" per entry | annoys | |
+| P2 | Projects -> Recent | Test leftovers pile up; no way to remove an entry or delete a project | "Remove from list" per entry | annoys | 1dda8ec |
 | D1 | Data Manager, empty project | At the very bottom: "No images match. Import a folder from the Projects screen or clear the filters." (import is on this screen, not on Projects) | Centered empty state with an "Import images" action | confuses | 62c7f8f |
 | D2 | Data Manager after an import | Green "Import started for <path> (job ...)" stays forever; no "imported 40, 0 duplicates, 0 failed" | Completion summary, then the banner goes away | confuses | 795c4da |
 | D3 | Starting any job | Jobs panel opens by itself over the toolbar (covers Import images and the job counter) | Panel stays closed or does not cover the controls; the counter shows progress | annoys | 795c4da |
 | D4 | Import images dialog, Import defaults | "Group regex" shows a raw regular expression; "Max side", "Duplicate threshold" have no unit or explanation | Plain-language help per field; regex under "Advanced" | confuses | e0324ca |
 | D5 | Import images dialog | The error of the previous attempt stays while the folder is edited | Error clears on edit | annoys | e0324ca |
-| D6 | Data Manager list right after the first import | Source column shows `805e6866` (id) until the screen is revisited; the Source filter lacks the new source | Site name at once | confuses | |
+| D6 | Data Manager list right after the first import | Source column shows `805e6866` (id) until the screen is revisited; the Source filter lacks the new source | Site name at once | confuses | 8035af5 |
 | D7 | Data Manager selection | No "select all"; Ctrl+A works but the hint only lists J/K, Enter, Space | Select-all checkbox in the header and in the hint | confuses | 16baa6d |
 | D8 | Data Manager grid | Single click only focuses; open needs double-click or Enter; the hint mentions keys only | Hint mentions double-click | annoys | 16baa6d |
 | E1 | Editor with a pre-annotation model set | For 2-6 s after opening an image nothing shows that the model is running; the model is not named | "Pre-annotating with <model>..." status | confuses | 564f605 |
@@ -37,18 +37,18 @@ The "Closed by" column is filled with the commit that fixes the item.
 | E4 | Editor / datasets: images without machinery | "Labeled" means "has at least one accepted box" (`images.py`); an empty image can never be marked done and never enters a dataset as a negative | "No objects" action that marks the image reviewed and lets it into datasets | confuses | |
 | E5 | Editor region list with model proposals | The provenance badge wraps one word per line ("Model / v1- / coco- / m"), each row ~110 px, 67 rows | One-line rows | annoys | 5bc1a2a |
 | E6 | Editor with many proposals | 67 overlapping dashed boxes and labels; no way to hide low-confidence proposals | Confidence slider filtering visible proposals (A/R act on visible ones) | confuses | |
-| E7 | Editor requests (ledger S2) | No request timeout: a hung request stalls the per-image queue, "Saving..." forever | Timeout with an error and retry | confuses | |
-| E8 | Editor opened from a review of one run | No "back to the queue"; the Review nav entry opens the whole queue, the run filter is lost | Back link that keeps the filter | annoys | |
+| E7 | Editor requests (ledger S2) | No request timeout: a hung request stalls the per-image queue, "Saving..." forever | Timeout with an error and retry | confuses | 0e9fe06 |
+| E8 | Editor opened from a review of one run | No "back to the queue"; the Review nav entry opens the whole queue, the run filter is lost | Back link that keeps the filter | annoys | 130c6ae |
 | S1 | Add to dataset, name "first set" | "request validation failed"; the input's `pattern` is an invalid regex in WebView2 (`/v` flag, console error), so native validation never fires | "Letters, digits, dot, dash, underscore" next to the field, checked before sending | confuses | a8b8bca |
 | S2 | Datasets | No screen lists datasets; they exist only as options of the Train dropdown; no split, class counts or delete | Datasets screen (list, stats, delete) | confuses | |
 | S3 | Add to dataset, by group, 14 images in 4 groups, fraction 0.2 | Result 8 train / 6 val (43 %), no warning | Warning when the achieved split is far from the requested one, suggestion to use random | confuses | |
 | T1 | Train form | 50 epochs, image size 1280, patience 50 with no guidance | One line per field (what it does, sensible range, rough duration) | confuses | 5b0cba7 |
 | T2 | Train on 14 images / result mAP50 0.0 % | Green "Training finished: the model is registered."; no warning before or after | Warning for tiny datasets before start; "this model is unlikely to be useful" when mAP is near zero | confuses | 5b0cba7 |
-| T3 | Train progress | The log is open by default and shows the worker command line and raw JSON lines | Log collapsed; human-readable epoch lines | annoys | |
+| T3 | Train progress | The log is open by default and shows the worker command line and raw JSON lines | Log collapsed; human-readable epoch lines | annoys | 07af1a1 |
 | Q1 | Query run card "Promote" | One click at the default 0.5 accepted 109 junk boxes as ground truth: no explanation, no confirmation, no undo | Plain wording ("Accept N boxes as labels"), the count before confirming, an undo | confuses | 150bbdb |
 | Q2 | Query with a weak model at confidence 0.25 | Either nothing (acceptance run: 0 boxes, empty review queue, no explanation) or junk | When a run ends with 0 boxes: say so and suggest a lower confidence or a better model | confuses | d7f9c1c |
 | Q3 | Query run finished | History row says "0 boxes" until the screen is revisited; the card says "415 boxes written so far" after the end | Consistent final numbers | confuses | d7f9c1c |
-| Q4 | Estimate for a local model | "480 requests, estimated $0.00 (at $0.00 per request)" | No cost wording for local models | annoys | |
+| Q4 | Estimate for a local model | "480 requests, estimated $0.00 (at $0.00 per request)" | No cost wording for local models | annoys | 260c643 |
 | Q5 | Query Start | Disabled until Estimate is clicked; only a small grey hint | Start estimates by itself, or the hint is next to the disabled button as a reason | annoys | |
 | Q6 | Query, tiling off (ledger S4) | Untiled local runs predict at 1280 while pre-annotation uses 2560; not mentioned | Note in the form | annoys | |
 | Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | |

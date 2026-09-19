@@ -103,7 +103,7 @@ is the source of truth for what "passing" means and is what a person follows whe
   `Confidence` = `0.25` -> **Estimate** -> **Start**. **Review** when it finishes: follow
   **Review results** on the run card, which opens the Review queue narrowed to the run's images
   (that queue is where a person opens each image and accepts or rejects the proposals with A and
-  R). Then back on the run card set `Minimum confidence` = `0` and press **Promote**.
+  R). Then back on the run card set `Minimum confidence` = `0`, press **Accept as labels…**, read the count and confirm with **Accept N boxes** (the card then offers **Undo acceptance**).
 - **Expect**: the inference job succeeds over exactly the 50 unlabeled images that were selected
   (`run.image_ids` is that set, not just 50 of anything) and writes at least one box; the Review
   queue lists the run's images; after promotion `GET /query-runs/{id}` has a non-null
