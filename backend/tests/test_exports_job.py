@@ -123,3 +123,45 @@ def test_cancellation_between_formats_leaves_the_job_cancelled(
     client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
     job = wait_job(project_id, job_id)
     assert job["state"] == "cancelled", job
+
+
+def _no_stamp_or_partial_folders_left(handle) -> bool:
+    exports_dir = handle.exports_dir
+    if not exports_dir.is_dir():
+        return True
+    return list(exports_dir.iterdir()) == []
+
+
+def test_a_cancelled_export_leaves_no_partial_and_no_final_folder(
+    client, project_id, with_boxes, handle, monkeypatch, wait_job
+):
+    started = threading.Event()
+    real_write = __import__("app.exports.csv_out", fromlist=["write"]).write
+
+    def slow_write(images, classes, folder):
+        started.set()
+        time.sleep(0.5)
+        return real_write(images, classes, folder)
+
+    monkeypatch.setattr("app.exports.job.csv_out.write", slow_write)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "yolo"]})
+    job_id = r.json()["job"]["id"]
+    assert started.wait(2), "the csv writer never started"
+    client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "cancelled", job
+    assert _no_stamp_or_partial_folders_left(handle)
+
+
+def test_a_failed_export_leaves_no_partial_folder(
+    client, project_id, with_boxes, handle, monkeypatch, wait_job
+):
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.exports.job.html_out.write", boom)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "html"]})
+    job_id = r.json()["job"]["id"]
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "failed", job
+    assert _no_stamp_or_partial_folders_left(handle)
