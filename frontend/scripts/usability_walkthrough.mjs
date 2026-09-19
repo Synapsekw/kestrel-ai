@@ -112,13 +112,13 @@ async function openDisclosure(scope, name) {
 
 await step("1 projects screen explains itself; app settings work with no project", async (check, snap) => {
   await page.goto(new URL("/", page.url()).href);
-  await page.getByRole("heading", { name: "Projects" }).waitFor();
+  await page.getByRole("heading", { name: "Projects", exact: true }).waitFor();
   const nav = page.getByRole("navigation");
   check("sidebar says why the project entries are disabled", await visible(nav.getByText("Open or create a project to use these.")));
-  check("disabled entry carries a tooltip", (await nav.getByText("Train", { exact: true }).getAttribute("title")) === "Open or create a project first");
+  check("no project steps until a project is open", (await nav.getByText("Train", { exact: true }).count()) === 0);
   await snap("projects");
   await nav.getByRole("link", { name: "App settings" }).click();
-  check("App settings opens without a project", await visible(page.getByRole("heading", { name: "App settings" })));
+  check("App settings opens without a project", await visible(page.getByRole("heading", { name: "App settings", exact: true })));
   check("provider cards are there", await visible(page.getByTestId("provider-anthropic")));
   await snap("app-settings");
   await nav.getByRole("link", { name: "Projects" }).click();
@@ -130,8 +130,13 @@ await step("2 create a project; a missing folder is named", async (check, snap) 
   check("missing folder is named", await visible(page.getByRole("alert").filter({ hasText: "Choose a folder for the project." })));
   await page.fill("#project-folder", cfg.projectFolder);
   await page.getByRole("button", { name: "Create project" }).click();
-  await urlIs(/\/p\/[0-9a-f-]+\/data/, 30_000);
+  await urlIs(/\/p\/[0-9a-f-]+$/, 30_000);
   projectId = page.url().split("/p/")[1].split("/")[0];
+  const next = page.getByTestId("home-next-step");
+  check("the new project's home names the first step", await visible(next.filter({ hasText: "Import images" })));
+  await snap("home-new-project");
+  await next.getByRole("link", { name: /Import images/ }).click();
+  await urlIs(/\/data$/);
   check("empty Images screen offers the import", await visible(page.getByRole("button", { name: "Import a folder of images" })));
   await snap("empty-data-manager");
 });
@@ -157,7 +162,7 @@ await step("3 import a folder; the banner ends with a summary", async (check, sn
 
 await step("4 add a starter model and use it for pre-annotation", async (check, snap) => {
   await page.getByRole("link", { name: "Models" }).click();
-  check("starter models are offered", await visible(page.getByRole("heading", { name: "Starter models" })));
+  check("starter models are offered", await visible(page.getByRole("heading", { name: "Starter models", exact: true })));
   await snap("models-starters");
   await page.getByRole("button", { name: "Add YOLO11 nano" }).click();
   check("the model is registered", await visible(page.getByRole("button", { name: "Select model yolo11n-coco" }), 120_000));
@@ -293,7 +298,10 @@ await step("8 run the trained model; review; accept as labels with a count; undo
     const found = await api("GET", `/projects/${projectId}/query-runs/${id}`);
     check(`card shows the final count (${label})`, count.startsWith(`${found.box_count} `), `${count} / api ${found.box_count}`);
     await sleep(1500);
-    check("history shows the same count", await visible(page.getByTestId("run-history").getByText(new RegExp(`${found.box_count} boxes`))));
+    check(
+      "history shows the same count",
+      await visible(page.getByTestId("run-history").getByRole("cell", { name: String(found.box_count), exact: true }).first()),
+    );
     return found;
   };
   let run = await detect("(Trained)", "query-trained-model");

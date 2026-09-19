@@ -47,11 +47,32 @@ export function jobToastText(job: Job): string {
   }
 }
 
+/** Stable default: a new object per render would resubscribe the hook and forget running jobs. */
+const NO_PATH = { current: "" };
+
+/** The screen (route segment) that already reports each job type's outcome inline. */
+const REPORTED_ON: Partial<Record<Job["type"], string>> = {
+  import: "data",
+  dataset: "data",
+  train: "train",
+  infer: "query",
+};
+
+/** True when the screen at `pathname` shows this job's outcome itself, so a toast would repeat it. */
+export function reportedInline(job: Job, pathname: string): boolean {
+  const segment = REPORTED_ON[job.type];
+  return !!segment && pathname.replace(/\/$/, "").endsWith(`/p/${job.project_id}/${segment}`);
+}
+
 /**
- * Shows a toast when a job of this project that was seen running reaches a terminal state.
+ * Shows a toast when a job of this project that was seen running reaches a terminal state, unless
+ * the current screen already reports it (`pathnameRef` is read at the moment the job ends).
  * Failures carry a "Show log" action that opens the jobs drawer.
  */
-export function useJobToasts(projectId: string | undefined): void {
+export function useJobToasts(
+  projectId: string | undefined,
+  pathnameRef: { current: string } = NO_PATH,
+): void {
   useEffect(() => {
     if (!projectId) return;
     const active = new Set<string>();
@@ -63,6 +84,7 @@ export function useJobToasts(projectId: string | undefined): void {
           continue;
         }
         if (!active.delete(job.id)) continue;
+        if (reportedInline(job, pathnameRef.current)) continue;
         if (job.state === "failed") {
           toast("danger", jobToastText(job), {
             label: "Show log",
@@ -77,5 +99,5 @@ export function useJobToasts(projectId: string | undefined): void {
     };
     scan(useJobsStore.getState().jobs);
     return useJobsStore.subscribe((s) => scan(s.jobs));
-  }, [projectId]);
+  }, [projectId, pathnameRef]);
 }

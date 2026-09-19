@@ -60,9 +60,4 @@ await shot("14-app-settings", "/settings");
 await shot("15-jobs-drawer", `/p/${P}/data`, async () => {
   await page.getByRole("button", { name: /active jobs?$/ }).click();
 });
-await shot("16-sidebar-locked-tooltip", `/p/${P}/data`, async () => {
-  const locked = page.getByRole("navigation").locator('a[aria-disabled="true"]').first();
-  if (await locked.count()) await locked.focus();
-});
-
 await browser.close();

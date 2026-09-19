@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@contract/client";
-import { jobToastText } from "./useJobToasts";
+import { jobToastText, reportedInline } from "./useJobToasts";
 
 const base: Job = {
   id: "j1",
@@ -39,5 +39,17 @@ describe("jobToastText", () => {
     expect(jobToastText({ ...base, type: "infer", result: { query_run_id: "q", boxes: 415 } })).toBe(
       "Detection finished: 415 boxes found",
     );
+  });
+});
+
+describe("reportedInline", () => {
+  it("is true only on the screen that shows the job's outcome", () => {
+    expect(reportedInline(base, "/p/p1/data")).toBe(true);
+    expect(reportedInline(base, "/p/p1/data/")).toBe(true);
+    expect(reportedInline(base, "/p/p1/train")).toBe(false);
+    expect(reportedInline({ ...base, type: "train" }, "/p/p1/train")).toBe(true);
+    expect(reportedInline({ ...base, type: "infer" }, "/p/p1/query")).toBe(true);
+    expect(reportedInline({ ...base, type: "export" }, "/p/p1/models")).toBe(false);
+    expect(reportedInline(base, "/p/other/data")).toBe(false);
   });
 });

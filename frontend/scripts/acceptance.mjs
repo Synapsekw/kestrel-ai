@@ -369,7 +369,7 @@ const timer = () => {
 // Start from the Projects screen wherever the app was left (a resumed run reattaches to a
 // window that is still on a project screen).
 await go("/");
-await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 120_000 });
+await page.getByRole("heading", { name: "Projects", exact: true }).waitFor({ timeout: 120_000 });
 
 let projectId = cfg.projectId;
 try {

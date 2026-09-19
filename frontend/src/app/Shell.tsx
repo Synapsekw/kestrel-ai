@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { pushLog } from "@/app/diagnostics";
@@ -37,7 +37,12 @@ export function Shell() {
   const projectName = useProjectName(projectId);
   useInitialJobs(projectId ?? "");
   useProjectProgress(projectId);
-  useJobToasts(projectId);
+  // Read when a job ends: a toast is skipped on the screen that already reports that job.
+  const pathnameRef = useRef(pathname);
+  useEffect(() => {
+    pathnameRef.current = pathname;
+  }, [pathname]);
+  useJobToasts(projectId, pathnameRef);
   const isHome = !!projectId && pathname.replace(/\/$/, "") === `/p/${projectId}`;
   const editor = !!imageId;
 

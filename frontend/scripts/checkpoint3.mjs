@@ -33,7 +33,7 @@ async function connect() {
 
 const { browser, page } = await connect();
 await page.goto("http://127.0.0.1:1420/");
-await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 60_000 });
+await page.getByRole("heading", { name: "Projects", exact: true }).waitFor({ timeout: 60_000 });
 const info = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("backend_info"));
 const api = async (method, path, body) => {
   const r = await fetch(`${info.base_url}/api/v1${path}`, {
@@ -101,7 +101,7 @@ async function openDisclosure(scope, name) {
 
 // 3. Import COCO weights through the Models screen and set them as the pre-annotation model.
 await page.goto(`http://127.0.0.1:1420/p/${pid}/models`);
-await page.getByRole("heading", { name: "Models" }).waitFor({ timeout: 30_000 });
+await page.getByRole("heading", { name: "Models", exact: true }).waitFor({ timeout: 30_000 });
 await openDisclosure(page, "Import weights from a file");
 await page.getByLabel("Model name").fill("yolo11m-coco");
 await page.getByLabel("Weights path").fill(weightsPath);
@@ -181,7 +181,7 @@ if (process.env.CP3_TRAIN_JOB_ID) {
   step("resume on finished training job", trainJob.state === "succeeded", `${trainJob.id} params ${JSON.stringify(trainJob.params)}`);
 } else {
   await page.goto(`http://127.0.0.1:1420/p/${pid}/train`);
-  await page.getByRole("heading", { name: "Train" }).waitFor({ timeout: 30_000 });
+  await page.getByRole("heading", { name: "Train", exact: true }).waitFor({ timeout: 30_000 });
   // The form remounts when the dataset and model lists arrive; fill only once the dataset is listed.
   await page.getByLabel("Dataset", { exact: true }).locator("option", { hasText: "v1" }).waitFor({ state: "attached", timeout: 30_000 });
   await sleep(500);
