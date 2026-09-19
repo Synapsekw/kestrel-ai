@@ -12,10 +12,11 @@ describe("nextStep", () => {
     });
     expect(nextStep("p", { ...base, images: 400, labeled: 30 })).toMatchObject({
       text: "Keep labeling (30 of 400 labeled; a first useful model needs about 200), or freeze a dataset and try a training.",
-      to: "/p/p/data",
+      to: "/p/p/datasets",
     });
     expect(nextStep("p", { ...base, images: 400, labeled: 250 })).toMatchObject({
       text: "Freeze the 250 labeled images into a dataset.",
+      to: "/p/p/datasets",
     });
     expect(nextStep("p", { ...base, images: 400, labeled: 250, datasets: 1 })).toMatchObject({
       text: "Add a starter model: training needs one as its base.",

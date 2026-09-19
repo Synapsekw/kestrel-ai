@@ -17,11 +17,13 @@ from sqlalchemy import delete, or_, select
 from app.datasets.grouping import tile_key
 from app.datasets.schemas import DatasetCreate
 from app.datasets.splits import assign_splits
-from app.db.models import Box, Dataset, DatasetImage, Image
-from app.errors import AppError
+from app.db.models import Box, Dataset, DatasetImage, Image, Job
+from app.errors import AppError, not_found
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.projects.service import ProjectHandle
+
+ACTIVE_JOB_STATES = ("queued", "running")
 
 GROUND_TRUTH = ("accepted", "edited")
 
@@ -86,6 +88,40 @@ def discard(handle: ProjectHandle, dataset_id: str) -> None:
         s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
         s.delete(dataset)
     shutil.rmtree(root, ignore_errors=True)
+
+
+def _remove_dataset_folder(handle: ProjectHandle, root: Path) -> None:
+    """Refuse to remove anything outside `<project>/datasets`, and never follow a link out of it."""
+    datasets_root = handle.datasets_dir.resolve()
+    resolved = root.resolve()
+    if resolved != datasets_root and datasets_root not in resolved.parents:
+        raise AppError("conflict", f"refusing to delete {resolved}: outside the datasets folder", 409)
+    if resolved.is_dir():
+        shutil.rmtree(resolved)
+
+
+def delete_dataset(handle: ProjectHandle, dataset_id: str) -> None:
+    """Remove a dataset's row and frozen folder. Images, labels and trained models are kept.
+
+    Refused while a job that depends on the dataset -- its own materialise job or a `train` job
+    reading it -- is queued or running.
+    """
+    with handle.session() as s:
+        dataset = s.get(Dataset, dataset_id)
+        if dataset is None:
+            raise not_found("dataset", dataset_id)
+        active = list(s.execute(select(Job).where(Job.state.in_(ACTIVE_JOB_STATES))).scalars())
+        for job in active:
+            if job.id == dataset.job_id or (
+                job.type == "train" and (job.params or {}).get("dataset_id") == dataset_id
+            ):
+                raise AppError(
+                    "conflict", f"dataset {dataset.name!r} is in use by a running job", 409
+                )
+        root = handle.folder / dataset.path
+        s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
+        s.delete(dataset)
+    _remove_dataset_folder(handle, root)
 
 
 @register_job_type("dataset")

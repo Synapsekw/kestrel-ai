@@ -49,3 +49,11 @@ export function createDataset(
 ): Promise<DatasetWithJob> {
   return unwrap(api.POST("/api/v1/projects/{projectId}/datasets", { params: { path: { projectId } }, body }));
 }
+
+export async function deleteDataset(api: ApiClient, projectId: string, datasetId: string): Promise<void> {
+  await unwrap<unknown>(
+    api.DELETE("/api/v1/projects/{projectId}/datasets/{datasetId}", {
+      params: { path: { projectId, datasetId } },
+    }),
+  );
+}

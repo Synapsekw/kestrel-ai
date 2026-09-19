@@ -315,3 +315,8 @@ def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) ->
 @router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
 def get_dataset_stats(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetStats:  # noqa: N803
     return stats.dataset_stats(handle, datasetId)
+
+
+@router.delete("/datasets/{datasetId}", status_code=204)
+def delete_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> None:  # noqa: N803
+    materialise.delete_dataset(handle, datasetId)

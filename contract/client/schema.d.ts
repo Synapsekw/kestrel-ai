@@ -416,7 +416,8 @@ export interface paths {
         get: operations["getDataset"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a dataset (its row and the frozen copy under `datasets/<name>`). Images, labels and models trained on it are kept. 409 `conflict` while a training job that uses it, or its own materialise job, is queued or running. */
+        delete: operations["deleteDataset"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3109,6 +3110,28 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Dataset"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

@@ -578,6 +578,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Dataset" }
         default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [datasets]
+      operationId: deleteDataset
+      summary: Delete a dataset (its row and the frozen copy under `datasets/<name>`). Images, labels and models trained on it are kept. 409 `conflict` while a training job that uses it, or its own materialise job, is queued or running.
+      responses:
+        "204":
+          description: deleted
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/datasets/{datasetId}/stats:
     parameters:
       - $ref: "#/components/parameters/projectId"

@@ -13,7 +13,10 @@ test("starts training with the chosen parameters and shows the live card with lo
   await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
   await expect(page.getByLabel("Base model")).toHaveValue(MODEL);
   await expect(page.getByLabel("Model name")).toHaveValue("v1-yolo11m-coco");
-  await expect(page.getByRole("link", { name: "Create dataset" })).toHaveAttribute("href", `/p/${P}/data`);
+  await expect(page.getByRole("link", { name: "Create dataset" })).toHaveAttribute(
+    "href",
+    `/p/${P}/datasets`,
+  );
   await page.getByLabel("Model name").fill("ahmadia-v1-n");
   await page.getByLabel("Epochs").fill("3");
   await page.getByLabel("Augmentation").selectOption("aerial");

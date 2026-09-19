@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DATASET_ID, errorBody, exampleDataset, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
-import { createDataset, fetchDataset, fetchDatasets, fetchDatasetStats } from "./datasets";
+import { createDataset, deleteDataset, fetchDataset, fetchDatasets, fetchDatasetStats } from "./datasets";
 
 describe("datasets api", () => {
   it("lists, gets, reads stats and creates with the split parameters and seed", async () => {
@@ -39,5 +39,26 @@ describe("datasets api", () => {
       { method: "GET", path: /\/datasets$/, status: 501, body: errorBody("not_implemented", "S1 later") },
     ]);
     await expect(fetchDatasets(api, PROJECT_ID)).rejects.toMatchObject({ status: 501 });
+  });
+
+  it("deletes a dataset", async () => {
+    const { api, requests } = fakeClient([{ method: "DELETE", path: /\/datasets\/[^/]+$/, status: 204 }]);
+    await deleteDataset(api, PROJECT_ID, DATASET_ID);
+    expect(requests[0]).toMatchObject({
+      method: "DELETE",
+      url: `/api/v1/projects/${PROJECT_ID}/datasets/${DATASET_ID}`,
+    });
+  });
+
+  it("surfaces the 409 conflict when a job uses the dataset", async () => {
+    const { api } = fakeClient([
+      {
+        method: "DELETE",
+        path: /\/datasets\/[^/]+$/,
+        status: 409,
+        body: errorBody("conflict", "dataset 'v1' is in use by a running job"),
+      },
+    ]);
+    await expect(deleteDataset(api, PROJECT_ID, DATASET_ID)).rejects.toMatchObject({ status: 409 });
   });
 });

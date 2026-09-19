@@ -1,25 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "react-router-dom";
-import type { Dataset } from "@contract/client";
+import { useState, type FormEvent } from "react";
 import { useApi } from "@/api/client";
-import { fetchDataset, type SplitMethod } from "@/api/datasets";
+import { createDataset, type SplitMethod } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
-import { splitAdvice } from "@/datasets/splitAdvice";
 import { JobCard } from "@/jobs/JobCard";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
-import { addImagesToDataset } from "./bulkActions";
 
 interface Props {
   projectId: string;
-  imageIds: string[];
-  /** How many of the selected images have an accepted or edited box. */
-  labeledCount: number;
-  /** How many of the selected images are marked empty (E4): shown as negatives, not a defect. */
-  emptyCount: number;
-  /** How many are neither: they would freeze in with no boxes, as if they were empty. */
-  unlabeledCount: number;
   onClose: () => void;
 }
 
@@ -28,15 +17,11 @@ const label = "flex flex-col gap-1 text-xs text-slate-400";
 const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
 const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
-/** Spec section 5 split options (by_group default, val fraction 0.2, seed 42); the job shows inline. */
-export function AddToDatasetDialog({
-  projectId,
-  imageIds,
-  labeledCount,
-  emptyCount,
-  unlabeledCount,
-  onClose,
-}: Props) {
+/**
+ * Creates a dataset from every labeled image (accepted boxes or marked empty): the contract
+ * defaults the selection when `image_ids` is left out (spec section 5).
+ */
+export function NewDatasetForm({ projectId, onClose }: Props) {
   const api = useApi();
   const [name, setName] = useState("");
   const [split, setSplit] = useState<SplitMethod>("by_group");
@@ -45,26 +30,7 @@ export function AddToDatasetDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [createdDatasetId, setCreatedDatasetId] = useState<string | null>(null);
-  const [dataset, setDataset] = useState<Dataset | null>(null);
   const { job } = useTrackedJob(projectId, jobId);
-  const n = imageIds.length;
-
-  // The job may discard the dataset on failure; only trust it once the job has succeeded.
-  useEffect(() => {
-    if (job?.state !== "succeeded" || !createdDatasetId) return;
-    let cancelled = false;
-    fetchDataset(api, projectId, createdDatasetId)
-      .then((d) => {
-        if (!cancelled) setDataset(d);
-      })
-      .catch((e: unknown) => {
-        pushLog(`refetch dataset ${createdDatasetId} failed: ${messageOf(e, String(e))}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, projectId, createdDatasetId, job?.state]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -85,7 +51,7 @@ export function AddToDatasetDialog({
     setBusy(true);
     setError(null);
     try {
-      const created = await addImagesToDataset(api, projectId, imageIds, {
+      const created = await createDataset(api, projectId, {
         name: name.trim(),
         split_method: split,
         val_fraction: fraction,
@@ -93,9 +59,8 @@ export function AddToDatasetDialog({
       });
       useJobsStore.getState().upsert(created.job);
       setJobId(created.job.id);
-      setCreatedDatasetId(created.dataset.id);
     } catch (err) {
-      pushLog(`add to dataset failed: ${messageOf(err, String(err))}`);
+      pushLog(`create dataset failed: ${messageOf(err, String(err))}`);
       setError(messageOf(err, "could not create the dataset"));
     } finally {
       setBusy(false);
@@ -104,22 +69,14 @@ export function AddToDatasetDialog({
 
   return (
     <form
-      role="dialog"
-      aria-label="Add to dataset"
+      aria-label="New dataset"
       onSubmit={(e) => void submit(e)}
       className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-3"
     >
       <p className="text-sm">
-        Freeze {n} {n === 1 ? "image" : "images"} into a new dataset (immutable after creation):{" "}
-        {labeledCount} with accepted boxes, {emptyCount} marked empty (negative examples).
+        Freeze every labeled image (accepted boxes and images marked empty) into a new dataset, immutable once
+        created.
       </p>
-      {unlabeledCount > 0 && (
-        <p className="text-xs text-amber-300">
-          {unlabeledCount === 1
-            ? "1 selected image is not labeled yet. It would be written without boxes, as if it were empty. Deselect it unless it really shows no machinery."
-            : `${unlabeledCount} selected images are not labeled yet. They would be written without boxes, as if they were empty. Deselect them unless they really show no machinery.`}
-        </p>
-      )}
       {jobId === null ? (
         <div className="flex flex-wrap items-end gap-2">
           <label className={label}>
@@ -183,26 +140,7 @@ export function AddToDatasetDialog({
           ) : (
             <p className="text-xs text-slate-400">Job queued…</p>
           )}
-          {dataset && splitAdvice(dataset) && (
-            <p
-              role="alert"
-              className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
-            >
-              {splitAdvice(dataset)}
-            </p>
-          )}
           <div className="flex items-center gap-3">
-            <Link to={`/p/${projectId}/train`} className="text-sm text-orange-300 hover:underline">
-              Train on it
-            </Link>
-            {dataset && (
-              <Link
-                to={`/p/${projectId}/datasets?dataset=${dataset.id}`}
-                className="text-sm text-orange-300 hover:underline"
-              >
-                Open dataset
-              </Link>
-            )}
             <button type="button" className={secondary} onClick={onClose}>
               Close
             </button>
