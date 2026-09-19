@@ -36,6 +36,8 @@ Friction list, owner ruling and order of work: `docs/usability/2026-09-19-walkth
 
 How the walk-through instance is started without touching a running app: a second instance of the installed exe with `WEBVIEW2_USER_DATA_FOLDER=<scratch>` and `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`; stop it by its own PID only.
 
+Working rules added on 2026-09-19 (afternoon): integration in `.worktrees/wave1` (branch `wave1-s2-trial`, fast-forwarded into `usability-wave1` after each verified step); e2e on own ports (`E2E_WEB_PORT`, `E2E_MOCK_PORT`; 1420/4010 are held by the UI session's dev servers); a worktree freezes the backend with `build.ps1 -Venv E:/Dev/Yolo/app/backend/.venv` and needs its own `backend/starter_weights` (fetch script).
+
 Verification without touching a running installed app: a private copy of the would-be install tree (`machinery-app.exe`, `machinery-backend.exe`, `_internal`) in a scratch folder, started with its own WebView2 profile and CDP port. The installer itself, checkpoint 4 and the acceptance driver run at the end of the wave.
 
 Worktree removal as practised for G1: list reparse points (2,106 pnpm links, none pointing outside), remove each link with `rmdir`/`del`, then `git worktree remove --force`; the shared venv was checked afterwards.
