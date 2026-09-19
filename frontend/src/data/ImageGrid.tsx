@@ -107,8 +107,12 @@ export function ImageGrid(p: ImageGridProps) {
                     className="absolute left-1 top-1"
                   />
                   <span className="absolute bottom-1 right-1 flex gap-1 text-[10px]">
-                    {img.box_count > 0 && (
-                      <span className="rounded bg-emerald-700 px-1">{img.box_count} boxes</span>
+                    {img.marked_empty ? (
+                      <span className="rounded bg-slate-600 px-1">empty</span>
+                    ) : (
+                      img.box_count > 0 && (
+                        <span className="rounded bg-emerald-700 px-1">{img.box_count} boxes</span>
+                      )
                     )}
                     {img.pending_count > 0 && (
                       <span className="rounded bg-amber-600 px-1">{img.pending_count} pending</span>

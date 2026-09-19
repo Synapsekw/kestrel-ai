@@ -16,6 +16,8 @@ describe("actionForKey", () => {
     expect(actionForKey(key("F"))).toEqual({ type: "fit" });
     expect(actionForKey(key("a"))).toEqual({ type: "accept-all" });
     expect(actionForKey(key("r"))).toEqual({ type: "reject-all" });
+    expect(actionForKey(key("n"))).toEqual({ type: "toggle-empty" });
+    expect(actionForKey(key("N"))).toEqual({ type: "toggle-empty" });
     expect(actionForKey(key("Delete"))).toEqual({ type: "delete" });
     expect(actionForKey(key("Backspace"))).toEqual({ type: "delete" });
     expect(actionForKey(key("Escape"))).toEqual({ type: "escape" });

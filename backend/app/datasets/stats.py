@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.datasets.schemas import DatasetClassCount, DatasetGroupCount, DatasetStats
 from app.db.models import Box, Dataset, DatasetImage, Image, Source
@@ -70,10 +70,10 @@ def compute_stats(handle: ProjectHandle, source_id: str | None = None) -> Stats:
         classes = list(handle.row(s).classes or [])
         image_count = s.execute(select(func.count()).select_from(Image).where(*scope)).scalar_one()
         labeled_count = s.execute(
-            select(func.count(func.distinct(Box.image_id)))
-            .select_from(Box)
-            .join(Image, Image.id == Box.image_id)
-            .where(ground_truth, *scope)
+            select(func.count(func.distinct(Image.id)))
+            .select_from(Image)
+            .outerjoin(Box, (Box.image_id == Image.id) & ground_truth)
+            .where(or_(Image.marked_empty, Box.id.is_not(None)), *scope)
         ).scalar_one()
         box_counts = dict(
             s.execute(

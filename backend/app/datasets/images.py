@@ -12,7 +12,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from PIL import Image as PILImage
-from sqlalchemy import case, delete, func, select, tuple_
+from sqlalchemy import case, delete, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.db.models import Box, DatasetImage, Image, Source
@@ -52,7 +52,7 @@ def _sort_expression(name: str, stats):
         "group_key": Image.group_key,
         "created_at": Image.created_at,
         "capture_time": func.coalesce(Image.capture_time, EPOCH),
-        "labeled": case((box_count > 0, 1), else_=0),
+        "labeled": case((or_(box_count > 0, Image.marked_empty), 1), else_=0),
         "box_count": box_count,
         "pending_count": func.coalesce(stats.c.pending_count, 0),
         "max_pending_confidence": func.coalesce(stats.c.max_pending_confidence, -1.0),
@@ -83,7 +83,7 @@ def _filtered(stats, *, source_id, group_key, labeled, has_pending, search, ids)
     if search:
         q = q.where(Image.path.icontains(search, autoescape=True))
     if labeled is not None:
-        has_gt = func.coalesce(stats.c.box_count, 0) > 0
+        has_gt = or_(func.coalesce(stats.c.box_count, 0) > 0, Image.marked_empty)
         q = q.where(has_gt if labeled else ~has_gt)
     if has_pending is not None:
         pending = func.coalesce(stats.c.pending_count, 0) > 0

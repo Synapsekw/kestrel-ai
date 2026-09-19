@@ -90,6 +90,10 @@ describe("toggleSort / columns / formatting / keyboard", () => {
       "2019-04-15 06:35",
     ]);
     expect(DATA_COLUMNS[1].render(exampleImage, { sourceNames: {} })).toBe("50000000");
+    const labeledColumn = DATA_COLUMNS[3];
+    expect(labeledColumn.render(exampleImage2, ctx)).toBe("no");
+    expect(labeledColumn.render({ ...exampleImage2, labeled: true, marked_empty: true }, ctx)).toBe("empty");
+    expect(labeledColumn.render(exampleImage, ctx)).toBe("yes"); // labeled by boxes, not marked
     expect(REVIEW_COLUMNS.map((c) => c.label)).toEqual([
       "File",
       "Group",

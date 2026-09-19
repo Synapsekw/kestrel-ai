@@ -35,6 +35,7 @@ export interface EditorState {
   showRejected: boolean;
 
   loadImage: (image: ImageRow, boxes: Box[]) => void;
+  setImage: (image: ImageRow) => void;
   setBoxes: (boxes: Box[]) => void;
   upsertBox: (box: Box) => void;
   removeBox: (id: string) => void;
@@ -103,6 +104,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         fitted: canFit,
       };
     }),
+  // A response for an image the editor has since navigated away from must not land here.
+  setImage: (image) => set((s) => (s.imageId === image.id ? { image } : s)),
   setBoxes: (boxes) =>
     set((s) => {
       const map = keyed(boxes);

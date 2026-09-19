@@ -4,23 +4,36 @@ import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
 import { AddToDatasetDialog } from "./AddToDatasetDialog";
-import { deleteImages } from "./bulkActions";
+import { deleteImages, markImagesEmpty } from "./bulkActions";
 
 interface Props {
   projectId: string;
   selectedIds: string[];
+  /** How many of the selection are already marked empty (E4): passed on to the dataset dialog. */
+  emptyCount: number;
   onLabel: () => void;
   /** Opens the query screen with the selection preloaded (S5). */
   onRunModel: () => void;
   /** The selection is gone after a delete, so the message is handed to the screen to show. */
   onDeleted: (message: string) => void;
+  /** The selection is cleared after marking (E4), like a delete, so the message is handed to the screen to show. */
+  onMarked: (message: string) => void;
   onClear: () => void;
 }
 
 const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
 
-export function SelectionBar({ projectId, selectedIds, onLabel, onRunModel, onDeleted, onClear }: Props) {
+export function SelectionBar({
+  projectId,
+  selectedIds,
+  emptyCount,
+  onLabel,
+  onRunModel,
+  onDeleted,
+  onMarked,
+  onClear,
+}: Props) {
   const api = useApi();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,6 +51,22 @@ export function SelectionBar({ projectId, selectedIds, onLabel, onRunModel, onDe
     } catch (e) {
       pushLog(`delete images failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "delete images failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markEmpty() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { updated, skipped } = await markImagesEmpty(api, projectId, selectedIds);
+      useChangesStore.getState().bumpImages();
+      const skippedNote = skipped > 0 ? `, ${skipped} skipped because they have accepted boxes` : "";
+      onMarked(`${updated} marked as empty${skippedNote}`);
+    } catch (e) {
+      pushLog(`mark as empty failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "mark as empty failed"));
     } finally {
       setBusy(false);
     }
@@ -67,6 +96,9 @@ export function SelectionBar({ projectId, selectedIds, onLabel, onRunModel, onDe
         >
           Add to dataset
         </button>
+        <button type="button" className={btn} onClick={() => void markEmpty()} disabled={busy}>
+          Mark as empty
+        </button>
         <button
           type="button"
           className={btn}
@@ -80,7 +112,12 @@ export function SelectionBar({ projectId, selectedIds, onLabel, onRunModel, onDe
         </button>
       </div>
       {mode === "dataset" && (
-        <AddToDatasetDialog projectId={projectId} imageIds={selectedIds} onClose={() => setMode("idle")} />
+        <AddToDatasetDialog
+          projectId={projectId}
+          imageIds={selectedIds}
+          emptyCount={emptyCount}
+          onClose={() => setMode("idle")}
+        />
       )}
       {mode === "confirm-delete" && (
         <div className="flex items-center gap-2 text-sm">

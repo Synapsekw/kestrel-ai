@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from sqlalchemy import select
 
+from app.datasets.empties import clear_mark_for_ground_truth
 from app.db.models import Box, Image
 from app.errors import AppError, not_found
 from app.projects.service import ProjectHandle
@@ -68,6 +69,7 @@ def create_box(
             reviewed_at=datetime.now(UTC),
         )
         s.add(row)
+        clear_mark_for_ground_truth(s, [image_id])
         s.flush()
         s.expunge(row)
     return row
@@ -87,6 +89,7 @@ def update_box(handle: ProjectHandle, box_id: str, **fields) -> Box:
         if row.review_state not in GROUND_TRUTH:  # editing a proposal is a review decision
             row.review_state = "edited"
             row.reviewed_at = datetime.now(UTC)
+            clear_mark_for_ground_truth(s, [row.image_id])
         s.flush()
         s.expunge(row)
     return row
@@ -109,6 +112,7 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
     """
     now = datetime.now(UTC)
     changed = 0
+    accepted_image_ids: set[str] = set()
     with handle.session() as s:
         for row in s.execute(select(Box).where(Box.id.in_(box_ids))).scalars():
             if row.provenance_kind == "person":
@@ -122,5 +126,8 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
                 if row.review_state == target or (action == "accept" and row.review_state in GROUND_TRUTH):
                     continue
                 row.review_state, row.reviewed_at = target, now
+                if action == "accept":
+                    accepted_image_ids.add(row.image_id)
             changed += 1
+        clear_mark_for_ground_truth(s, accepted_image_ids)
     return changed

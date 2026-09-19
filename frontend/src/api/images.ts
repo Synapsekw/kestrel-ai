@@ -43,6 +43,37 @@ export async function bulkDeleteImages(
   return r.deleted;
 }
 
+export type BulkMarkEmptyResult = components["schemas"]["BulkMarkEmptyResult"];
+
+/** "No machinery on this image": marks it empty (or undoes the mark) - E4. */
+export function setMarkedEmpty(
+  api: ApiClient,
+  projectId: string,
+  imageId: string,
+  value: boolean,
+): Promise<ImageRow> {
+  return unwrap(
+    api.PATCH("/api/v1/projects/{projectId}/images/{imageId}", {
+      params: { path: { projectId, imageId } },
+      body: { marked_empty: value },
+    }),
+  );
+}
+
+export function bulkMarkEmpty(
+  api: ApiClient,
+  projectId: string,
+  imageIds: string[],
+  value: boolean,
+): Promise<BulkMarkEmptyResult> {
+  return unwrap(
+    api.POST("/api/v1/projects/{projectId}/images/bulk-mark-empty", {
+      params: { path: { projectId } },
+      body: { image_ids: imageIds, marked_empty: value },
+    }),
+  );
+}
+
 /** No body: the backend uses the project's pre-annotation model and its defaults. */
 export function preannotateImage(
   api: ApiClient,

@@ -217,6 +217,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/images/bulk-mark-empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark images as containing no machinery (or undo it). Images that have accepted or edited boxes are skipped; unknown ids are ignored. Marking rejects the images' unreviewed proposals. */
+        post: operations["bulkMarkEmpty"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/images/{imageId}": {
         parameters: {
             query?: never;
@@ -233,7 +252,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Mark the image as containing no machinery (it then counts as labeled and enters datasets as a negative), or undo it. Marking rejects its unreviewed proposals. 409 `conflict` while the image has accepted or edited boxes. */
+        patch: operations["updateImage"];
         trace?: never;
     };
     "/api/v1/projects/{projectId}/images/{imageId}/file": {
@@ -1259,6 +1279,7 @@ export interface components {
          *       "pending_count": 2,
          *       "max_pending_confidence": 0.81,
          *       "labeled": true,
+         *       "marked_empty": false,
          *       "created_at": "2026-09-17T10:06:00Z"
          *     }
          */
@@ -1283,7 +1304,10 @@ export interface components {
             pending_count: number;
             /** @description highest confidence among unreviewed proposals (review queue sort key) */
             max_pending_confidence: number | null;
+            /** @description has an accepted or edited box */
             labeled: boolean;
+            /** @description a person said there is no machinery on this image; it counts as labeled and enters datasets as a negative example */
+            marked_empty: boolean;
             /** Format: date-time */
             created_at: string;
         };
@@ -1307,6 +1331,7 @@ export interface components {
          *           "pending_count": 2,
          *           "max_pending_confidence": 0.81,
          *           "labeled": true,
+         *           "marked_empty": false,
          *           "created_at": "2026-09-17T10:06:00Z"
          *         },
          *         {
@@ -1326,6 +1351,7 @@ export interface components {
          *           "pending_count": 0,
          *           "max_pending_confidence": null,
          *           "labeled": false,
+         *           "marked_empty": false,
          *           "created_at": "2026-09-17T10:06:00Z"
          *         }
          *       ],
@@ -1338,6 +1364,38 @@ export interface components {
             next_cursor: string | null;
             /** @description number of images matching the filter (for the grid scrollbar) */
             total: number;
+        };
+        /**
+         * @example {
+         *       "marked_empty": true
+         *     }
+         */
+        ImageUpdate: {
+            marked_empty: boolean;
+        };
+        /**
+         * @example {
+         *       "image_ids": [
+         *         "10000000-5555-4000-8000-000000000002"
+         *       ],
+         *       "marked_empty": true
+         *     }
+         */
+        BulkMarkEmpty: {
+            image_ids: string[];
+            marked_empty: boolean;
+        };
+        /**
+         * @example {
+         *       "updated": 1,
+         *       "skipped": 0
+         *     }
+         */
+        BulkMarkEmptyResult: {
+            /** @description images whose mark changed */
+            updated: number;
+            /** @description images left alone because they have accepted or edited boxes */
+            skipped: number;
         };
         /**
          * @example {
@@ -2691,6 +2749,33 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    bulkMarkEmpty: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkMarkEmpty"];
+            };
+        };
+        responses: {
+            /** @description how many images changed and how many were skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkMarkEmptyResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getImage: {
         parameters: {
             query?: never;
@@ -2704,6 +2789,34 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description the image record */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Image"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageUpdate"];
+            };
+        };
+        responses: {
+            /** @description the updated image record */
             200: {
                 headers: {
                     [name: string]: unknown;

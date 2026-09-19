@@ -12,6 +12,8 @@ import { addImagesToDataset } from "./bulkActions";
 interface Props {
   projectId: string;
   imageIds: string[];
+  /** How many of the selected images are marked empty (E4): shown as negatives, not a defect. */
+  emptyCount: number;
   onClose: () => void;
 }
 
@@ -21,7 +23,7 @@ const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-or
 const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
 /** Spec section 5 split options (by_group default, val fraction 0.2, seed 42); the job shows inline. */
-export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
+export function AddToDatasetDialog({ projectId, imageIds, emptyCount, onClose }: Props) {
   const api = useApi();
   const [name, setName] = useState("");
   const [split, setSplit] = useState<SplitMethod>("by_group");
@@ -76,8 +78,9 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
       className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-3"
     >
       <p className="text-sm">
-        Freeze the accepted boxes of {n} {n === 1 ? "image" : "images"} into a new dataset (immutable after
-        creation).
+        Freeze the accepted boxes of {n} {n === 1 ? "image" : "images"}
+        {emptyCount > 0 && ` (${emptyCount} of them marked empty, used as negative examples)`} into a new
+        dataset (immutable after creation).
       </p>
       {jobId === null ? (
         <div className="flex flex-wrap items-end gap-2">

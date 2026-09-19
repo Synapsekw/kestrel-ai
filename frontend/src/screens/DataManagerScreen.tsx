@@ -106,6 +106,10 @@ export function DataManagerScreen() {
   };
 
   const selectedIds = useMemo(() => ids.filter((id) => pruned.selected.has(id)), [ids, pruned]);
+  const selectedEmptyCount = useMemo(
+    () => items.filter((i) => pruned.selected.has(i.id) && i.marked_empty).length,
+    [items, pruned],
+  );
   const labelSelected = () => {
     useNavigationStore.getState().setContext(selectedIds, "selection");
     void navigate(`/p/${projectId}/edit/${selectedIds[0]}`);
@@ -165,12 +169,17 @@ export function DataManagerScreen() {
           <SelectionBar
             projectId={projectId}
             selectedIds={selectedIds}
+            emptyCount={selectedEmptyCount}
             onLabel={labelSelected}
             onRunModel={() => {
               useNavigationStore.getState().setContext(selectedIds, "query");
               void navigate(`/p/${projectId}/query`);
             }}
             onDeleted={(message) => {
+              setSelection(clearSelection());
+              setNotice(message);
+            }}
+            onMarked={(message) => {
               setSelection(clearSelection());
               setNotice(message);
             }}

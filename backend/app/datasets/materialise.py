@@ -12,7 +12,7 @@ import os
 import shutil
 from pathlib import Path
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, or_, select
 
 from app.datasets.grouping import tile_key
 from app.datasets.schemas import DatasetCreate
@@ -191,7 +191,10 @@ def _select_images(s, image_ids: list[str] | None) -> list[Image]:
     if image_ids is not None:
         q = q.where(Image.id.in_(image_ids))
     else:
-        q = q.where(Image.id.in_(select(Box.image_id).where(Box.review_state.in_(GROUND_TRUTH)).distinct()))
+        has_ground_truth = Image.id.in_(
+            select(Box.image_id).where(Box.review_state.in_(GROUND_TRUTH)).distinct()
+        )
+        q = q.where(or_(has_ground_truth, Image.marked_empty))
     return list(s.execute(q).scalars())
 
 

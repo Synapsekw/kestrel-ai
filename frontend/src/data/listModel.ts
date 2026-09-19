@@ -131,7 +131,7 @@ export const DATA_COLUMNS: ColumnDef[] = [
     label: "Labeled",
     sortKey: "labeled",
     width: "5rem",
-    render: (i) => (i.labeled ? "yes" : "no"),
+    render: (i) => (i.marked_empty ? "empty" : i.labeled ? "yes" : "no"),
   },
   boxesColumn,
   pendingColumn,

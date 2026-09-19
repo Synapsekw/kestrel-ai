@@ -10,6 +10,7 @@ import { ClassSidebar } from "@/editor/ClassSidebar";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { BackLink } from "@/editor/BackLink";
 import { EditorToolbar } from "@/editor/EditorToolbar";
+import { EmptyToggle } from "@/editor/EmptyToggle";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
 import { RegionList } from "@/editor/RegionList";
 import { useEditorActions } from "@/editor/useEditorActions";
@@ -77,6 +78,10 @@ function EditorBody({
   const proposalIds = useMemo(
     () => visibleProposalIds({ boxes, order, showRejected }),
     [boxes, order, showRejected],
+  );
+  const hasGroundTruth = useMemo(
+    () => Object.values(boxes).some((b) => b.review_state === "accepted" || b.review_state === "edited"),
+    [boxes],
   );
   const navigation = useEditorNavigation(projectId, imageId);
   const nav = useMemo(
@@ -175,6 +180,13 @@ function EditorBody({
       >
         Show rejected
       </button>
+      <span className="mx-1 h-4 border-l border-slate-700" />
+      <EmptyToggle
+        image={image}
+        hasGroundTruth={hasGroundTruth}
+        busy={pending > 0}
+        onToggle={() => void actions.toggleEmpty()}
+      />
     </>
   );
 
@@ -239,6 +251,7 @@ function EditorBody({
           classes={project.classes}
           selectedId={selectedId}
           hoveredId={hoveredId}
+          markedEmpty={image?.marked_empty ?? false}
           onSelect={select}
           onHover={hover}
           onSetClass={(id, classId) => void actions.setClass(id, classId)}
