@@ -5,6 +5,7 @@ import { messageOf } from "@/api/errors";
 import { deleteModel, fetchModel } from "@/api/models";
 import { patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { RevealButton } from "@/exports/RevealButton";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
 import { classMapping, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
@@ -111,7 +112,10 @@ export function ModelDetail({
         </div>
         <div>
           <dt className={dt}>Weights</dt>
-          <dd className={`${dd} font-mono`}>{model.weights_path}</dd>
+          <dd className={`${dd} flex flex-wrap items-center gap-2 font-mono`}>
+            {model.weights_path}
+            <RevealButton projectId={projectId} path={model.weights_path} />
+          </dd>
         </div>
         <div>
           <dt className={dt}>Training job</dt>

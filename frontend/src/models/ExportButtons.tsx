@@ -4,6 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { exportModel, type ExportFormat } from "@/api/models";
 import { pushLog } from "@/app/diagnostics";
+import { RevealButton } from "@/exports/RevealButton";
 import { JobCard } from "@/jobs/JobCard";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
@@ -52,9 +53,10 @@ export function ExportButtons({ projectId, model, onFinished }: Props) {
       {exports.length > 0 ? (
         <ul className="text-sm">
           {exports.map(([format, path]) => (
-            <li key={format} className="flex gap-2">
+            <li key={format} className="flex flex-wrap items-center gap-2">
               <span className="w-16 uppercase text-slate-400">{format}</span>
               <span className="font-mono text-xs">{path}</span>
+              <RevealButton projectId={projectId} path={path} />
             </li>
           ))}
         </ul>

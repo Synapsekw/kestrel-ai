@@ -50,7 +50,7 @@ describe("Shell navigation", () => {
   it("links to the Datasets screen between Review and Models", () => {
     renderShell(`/p/${PROJECT_ID}/data`);
     const nav = screen.getByRole("navigation");
-    const labels = ["Data", "Editor", "Review", "Datasets", "Models", "Train", "Query", "Settings"];
+    const labels = ["Data", "Editor", "Review", "Datasets", "Models", "Train", "Query", "Export", "Settings"];
     const order = labels.map((label) => within(nav).getByText(label));
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();

@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { runningJob } from "@/test/fixtures";
-import { elapsedSeconds, formatDuration, jobTitle, resultTarget, stateLabel } from "./jobLabels";
+import {
+  elapsedSeconds,
+  formatDuration,
+  jobTitle,
+  resultsExportFiles,
+  resultsExportFolder,
+  resultsExportSummary,
+  resultTarget,
+  stateLabel,
+} from "./jobLabels";
 
 describe("job labels", () => {
   it("titles jobs by type and name", () => {
@@ -55,5 +64,31 @@ describe("job labels", () => {
       to: "/p/p/train",
     });
     expect(resultTarget({ ...runningJob, type: "train", state: "succeeded", result: null }, "p")).toBeNull();
+    expect(
+      resultTarget(
+        { ...runningJob, type: "results_export", state: "succeeded", result: { folder: "exports/x" } },
+        "p",
+      ),
+    ).toBeNull();
+  });
+
+  it("titles a results export and summarises its result", () => {
+    expect(jobTitle({ ...runningJob, type: "results_export" })).toBe("Results export");
+    const succeeded = {
+      ...runningJob,
+      type: "results_export" as const,
+      state: "succeeded" as const,
+      result: {
+        folder: "exports/2026-09-19_101500",
+        files: ["detections.csv", "report.html"],
+        image_count: 12,
+        box_count: 30,
+      },
+    };
+    expect(resultsExportSummary(succeeded)).toBe("12 images, 30 boxes");
+    expect(resultsExportFiles(succeeded)).toEqual(["detections.csv", "report.html"]);
+    expect(resultsExportFolder(succeeded)).toBe("exports/2026-09-19_101500");
+    expect(resultsExportSummary({ ...succeeded, state: "running" })).toBeNull();
+    expect(resultsExportSummary({ ...runningJob, type: "train" })).toBeNull();
   });
 });
