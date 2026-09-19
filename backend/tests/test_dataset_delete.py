@@ -263,3 +263,111 @@ def test_names_that_are_not_safe_folder_names_or_collide_by_case_are_refused(
     r = client.post(f"{BASE}/{project_id}/datasets", json={"name": name})
     assert r.status_code == 409, r.text
     assert r.json()["error"]["code"] in ("conflict", "already_exists")
+
+
+# ------------------------------------------------ crash windows (re-review of 8299964)
+
+
+def _second_dataset(client, project_id, wait_job, name="v2"):
+    created = client.post(f"{BASE}/{project_id}/datasets", json={"name": name}).json()
+    assert wait_job(project_id, created["job"]["id"])["state"] == "succeeded"
+    return created["dataset"]
+
+
+def test_a_commit_that_fails_after_the_move_puts_the_folder_back(
+    client, project_id, handle, labeled_dataset, monkeypatch
+):
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm import Session
+
+    real_commit = Session.commit
+    calls = {"n": 0}
+
+    def failing_once(self):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
+        return real_commit(self)
+
+    monkeypatch.setattr(Session, "commit", failing_once)
+    ds = labeled_dataset
+    with pytest.raises(OperationalError):  # the test client re-raises what the app answers 500 for
+        client.delete(f"{BASE}/{project_id}/datasets/{ds['id']}")
+    monkeypatch.undo()
+
+    assert client.get(f"{BASE}/{project_id}/datasets/{ds['id']}").status_code == 200
+    assert any((handle.folder / ds["path"]).rglob("*.jpg"))
+    assert not list(handle.datasets_dir.glob(".deleting-*"))
+
+
+def test_a_tombstone_whose_dataset_still_exists_is_restored_never_destroyed(
+    client, project_id, handle, labeled_dataset, wait_job
+):
+    """A kill between the move and the commit leaves the row and a tombstone: the data comes back."""
+    import os
+
+    ds = labeled_dataset
+    other = _second_dataset(client, project_id, wait_job)
+    folder = handle.folder / ds["path"]
+    os.replace(folder, folder.with_name(f".deleting-{ds['id']}"))
+
+    # Deleting an unrelated dataset sweeps tombstones; it must give v1 its folder back, not remove it.
+    assert client.delete(f"{BASE}/{project_id}/datasets/{other['id']}").status_code == 204
+    assert any(folder.rglob("*.jpg"))
+    assert not list(handle.datasets_dir.glob(".deleting-*"))
+
+
+def test_opening_a_project_restores_a_tombstone_left_by_a_crash(handle, labeled_dataset):
+    import os
+
+    from app.datasets.materialise import reconcile_tombstones
+
+    folder = handle.folder / labeled_dataset["path"]
+    os.replace(folder, folder.with_name(f".deleting-{labeled_dataset['id']}"))
+    reconcile_tombstones(handle)
+    assert any(folder.rglob("*.jpg"))
+
+
+def test_a_tombstone_without_a_row_is_removed(handle, labeled_dataset):
+    from app.datasets.materialise import reconcile_tombstones
+
+    leftover = handle.datasets_dir / ".deleting-gone"
+    leftover.mkdir()
+    (leftover / "a.txt").write_text("x")
+    reconcile_tombstones(handle)
+    assert not leftover.exists()
+    assert any((handle.folder / labeled_dataset["path"]).rglob("*.jpg"))
+
+
+def test_deleting_works_when_the_project_folder_is_reached_through_a_junction(
+    handle, labeled_dataset, tmp_path
+):
+    import _winapi
+
+    from app.datasets.materialise import delete_dataset
+    from app.projects.service import ProjectHandle
+
+    link = tmp_path / "project-link"
+    _winapi.CreateJunction(str(handle.folder), str(link))
+    try:
+        through_link = ProjectHandle(handle.id, link, handle.engine)
+        delete_dataset(through_link, labeled_dataset["id"])
+        assert not (handle.folder / labeled_dataset["path"]).exists()
+        assert handle.images_dir.is_dir()
+    finally:
+        link.rmdir()  # removes the link, never the project
+
+
+def test_discarding_a_failed_dataset_never_removes_more_than_its_own_folder(handle, labeled_dataset):
+    from app.datasets.materialise import discard
+
+    _set_path(handle, labeled_dataset["id"], "datasets")
+    discard(handle, labeled_dataset["id"])
+    assert handle.datasets_dir.is_dir()
+    assert any(handle.datasets_dir.rglob("*.jpg"))
+
+
+@pytest.mark.parametrize("name", [".", ".."])
+def test_dot_names_are_refused_like_every_other_unusable_name(client, project_id, labeled_dataset, name):
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": name})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict", r.text

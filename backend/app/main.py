@@ -24,6 +24,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        from app.datasets.materialise import reconcile_tombstones
         from app.jobs.events import EventBus
         from app.jobs.runner import JobRunner
         from app.jobs.startup import sweep_orphans
@@ -32,10 +33,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.events = EventBus()
         app.state.events.bind(asyncio.get_running_loop())
         app.state.jobs = JobRunner(app.state.events)
-        # Projects open lazily, so the orphan sweep hangs off the registry rather than startup.
-        app.state.projects = ProjectRegistry(
-            settings.data_dir, on_open=lambda handle: sweep_orphans(handle, app.state.jobs)
-        )
+        def on_open(handle) -> None:
+            sweep_orphans(handle, app.state.jobs)
+            reconcile_tombstones(handle)  # a dataset delete that a crash cut short gets its folder back
+
+        # Projects open lazily, so these sweeps hang off the registry rather than startup.
+        app.state.projects = ProjectRegistry(settings.data_dir, on_open=on_open)
         # jobs reach the key store and provider settings through the runner: a job's params are
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys
