@@ -154,7 +154,19 @@ export function TrainForm({
               </option>
             ))}
           </select>
-          <span>Any registry model, including imported COCO weights.</span>
+          <span>
+            {models.length > 0 ? (
+              "Any registry model, including imported COCO weights."
+            ) : (
+              <>
+                No models yet.{" "}
+                <Link to={`/p/${projectId}/models`} className="text-orange-300 hover:underline">
+                  Add a starter model
+                </Link>{" "}
+                to get started.
+              </>
+            )}
+          </span>
         </label>
       </div>
       {datasetsUnavailable && (

@@ -72,6 +72,43 @@ describe("TrainForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a dataset.");
   });
 
+  it("points to a starter model when the registry is empty", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.queryByText(/Any registry model, including imported COCO weights/)).not.toBeInTheDocument();
+    const link = screen.getByRole("link", { name: "Add a starter model" });
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/models`);
+  });
+
+  it("shows the usual base model help text once the registry has a model", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[exampleModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.getByText(/Any registry model, including imported COCO weights/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+  });
+
   it("explains the parameters and warns about a dataset too small to learn from", () => {
     const { api } = fakeClient([]);
     renderWithProviders(

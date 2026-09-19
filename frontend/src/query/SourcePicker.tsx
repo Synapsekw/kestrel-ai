@@ -1,9 +1,11 @@
+import { Link } from "react-router-dom";
 import type { Model, Provider, ProviderName } from "@contract/client";
 import { providerLabel } from "@/api/providers";
 import { kindLabel } from "@/models/modelLabels";
 import type { QueryForm } from "./queryModel";
 
 interface Props {
+  projectId: string;
   form: QueryForm;
   onChange: (patch: Partial<QueryForm>) => void;
   models: Model[];
@@ -16,6 +18,7 @@ const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm di
 const label = "flex flex-col gap-1 text-xs text-slate-400";
 
 export function SourcePicker({
+  projectId,
   form,
   onChange,
   models,
@@ -67,6 +70,15 @@ export function SourcePicker({
             ))}
           </select>
           {modelsUnavailable && <span role="note">The model registry is not available yet.</span>}
+          {!modelsUnavailable && models.length === 0 && (
+            <span>
+              No models yet.{" "}
+              <Link to={`/p/${projectId}/models`} className="text-orange-300 hover:underline">
+                Add a starter model
+              </Link>{" "}
+              to get started.
+            </span>
+          )}
         </label>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

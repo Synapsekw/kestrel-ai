@@ -135,6 +135,7 @@ export function QueryScreen() {
       ) : (
         <div className="flex max-w-3xl flex-col gap-5">
           <SourcePicker
+            projectId={projectId}
             form={effectiveForm}
             onChange={patch}
             models={registry.models}

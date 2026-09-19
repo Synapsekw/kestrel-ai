@@ -133,4 +133,21 @@ describe("QueryScreen", () => {
     );
     expect(screen.getByRole("heading", { name: "Query" })).toBeInTheDocument();
   });
+
+  it("points to a starter model when the registry is empty", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
+      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "GET", path: /\/images$/, body: exampleImagePage },
+      { method: "GET", path: /\/query-runs$/, body: { items: [], next_cursor: null } },
+    ]);
+    renderWithProviders(<QueryScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/query`,
+      path: "/p/:projectId/query",
+    });
+    const link = await screen.findByRole("link", { name: "Add a starter model" });
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/models`);
+  });
 });
