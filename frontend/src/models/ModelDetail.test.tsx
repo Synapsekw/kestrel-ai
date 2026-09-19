@@ -35,7 +35,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleTrainedModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={noop}
         onChanged={noop}
         onDeleted={noop}
@@ -67,7 +67,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleTrainedModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={onProjectSaved}
         onChanged={noop}
         onDeleted={noop}
@@ -88,7 +88,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={onProjectSaved}
         onChanged={noop}
         onDeleted={noop}
@@ -107,7 +107,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleTrainedModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={noop}
         onChanged={noop}
         onDeleted={onDeleted}
@@ -124,6 +124,41 @@ describe("ModelDetail actions", () => {
     });
   });
 
+  it("shows 'deleted dataset' once names have loaded and the model's dataset is missing (I4)", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleTrainedModel}
+        project={exampleProject}
+        datasetNames={{ names: {}, loaded: true }}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    expect(screen.getByText("deleted dataset")).toBeInTheDocument();
+  });
+
+  it("falls back to the raw id while dataset names are still loading or unavailable (I4)", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleTrainedModel}
+        project={exampleProject}
+        datasetNames={{ names: {}, loaded: false }}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    expect(screen.queryByText("deleted dataset")).not.toBeInTheDocument();
+    expect(screen.getByText(exampleTrainedModel.dataset_id!)).toBeInTheDocument();
+  });
+
   it("says how many of the model's classes produce proposals in this project", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
@@ -131,7 +166,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={noop}
         onChanged={noop}
         onDeleted={noop}
