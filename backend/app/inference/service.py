@@ -11,6 +11,7 @@ from pathlib import Path
 from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
+from app.datasets.empties import clear_mark_for_ground_truth
 from app.db.models import Box, Image, Job, Model, QueryRun
 from app.errors import AppError, not_found
 from app.inference.schemas import PreannotateRequest, QueryRunCreate
@@ -234,6 +235,7 @@ def promote(
             box.review_state, box.reviewed_at = "accepted", now
         row.promoted_at = now
         image_ids = sorted({b.image_id for b in pending})
+        clear_mark_for_ground_truth(s, image_ids)
         s.flush()
         count = box_count(s, run_id)
         s.expunge(row)

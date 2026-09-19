@@ -9,12 +9,33 @@ import sqlite3
 import pytest
 from alembic import command
 from alembic.config import Config
+from test_query_runs import FakeProvider, run_and_wait
 
 from app.db.models import Box, Image
 from app.db.session import MIGRATIONS
 
 BASE = "/api/v1/projects"
 FLIGHTS = ("0001", "0002")
+
+
+@pytest.fixture
+def with_key(app):
+    app.state.keys.set("anthropic", "sk-fake-key")
+
+
+@pytest.fixture
+def use_provider(monkeypatch):
+    def _use(provider):
+        monkeypatch.setattr("app.inference.jobs.get_provider", lambda *a, **k: provider)
+        return provider
+
+    return _use
+
+
+@pytest.fixture
+def no_sleep(monkeypatch):
+    """Retry backoff waits on the cancellation event; make that wait return at once."""
+    monkeypatch.setattr("app.inference.jobs.MAX_RETRY_WAIT_S", 0)
 
 
 @pytest.fixture
@@ -200,3 +221,84 @@ def test_bulk_marking_empty_publishes_events_for_the_whole_request(
     boxes_changed = [e for e in seen if e["type"] == "boxes.changed"]
     assert images_changed and set(images_changed[0]["payload"]["image_ids"]) == {image_ids[0], image_ids[1]}
     assert boxes_changed and boxes_changed[0]["payload"]["image_ids"] == [image_ids[0]]
+
+
+# --------------------------------------------------- ground truth clears the mark
+
+
+def test_drawing_a_box_clears_the_mark(client, project_id, handle, image_ids, add_person_box):
+    _mark(handle, image_ids[0])
+    add_person_box(image_ids[0])
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is False
+
+
+def test_accepting_a_proposal_clears_the_mark_but_rejecting_does_not(
+    client, project_id, handle, image_ids, add_proposal
+):
+    _mark(handle, image_ids[0])
+    accepted_box = add_proposal(image_ids[0])
+    r = client.post(f"{BASE}/{project_id}/boxes/review", json={"box_ids": [accepted_box], "action": "accept"})
+    assert r.status_code == 200, r.text
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is False
+
+    _mark(handle, image_ids[1])
+    rejected_box = add_proposal(image_ids[1])
+    r = client.post(f"{BASE}/{project_id}/boxes/review", json={"box_ids": [rejected_box], "action": "reject"})
+    assert r.status_code == 200, r.text
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[1]}").json()["marked_empty"] is True
+
+
+def test_editing_a_proposal_clears_the_mark(client, project_id, handle, image_ids, add_proposal):
+    _mark(handle, image_ids[0])
+    box_id = add_proposal(image_ids[0])
+    r = client.patch(f"{BASE}/{project_id}/boxes/{box_id}", json={"x": 5})
+    assert r.status_code == 200, r.text
+    assert r.json()["review_state"] == "edited"
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is False
+
+
+def test_promoting_a_query_run_clears_the_mark(
+    client, wait_job, project_id, handle, image_ids, with_key, use_provider, no_sleep
+):
+    use_provider(FakeProvider())
+    _mark(handle, image_ids[0])
+    out = run_and_wait(client, wait_job, project_id, image_ids[:1])
+    r = client.post(f"{BASE}/{project_id}/query-runs/{out['run']['id']}/promote")
+    assert r.status_code == 200, r.text
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is False
+
+
+def test_a_dry_run_promotion_does_not_clear_the_mark(
+    client, wait_job, project_id, handle, image_ids, with_key, use_provider, no_sleep
+):
+    use_provider(FakeProvider())
+    _mark(handle, image_ids[0])
+    out = run_and_wait(client, wait_job, project_id, image_ids[:1])
+    r = client.post(f"{BASE}/{project_id}/query-runs/{out['run']['id']}/promote", json={"dry_run": True})
+    assert r.status_code == 200, r.text
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is True
+
+
+def test_dataset_creation_includes_marked_images_as_negatives(
+    client, project_id, handle, image_ids, add_person_box, wait_job, project_dir
+):
+    add_person_box(image_ids[0])
+    _mark(handle, image_ids[10])
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": "v1"})
+    assert r.status_code == 202, r.text
+    body = r.json()
+    assert body["dataset"]["image_count"] == 2
+    finished = wait_job(project_id, body["job"]["id"])
+    assert finished["state"] == "succeeded", finished
+
+    root = project_dir / "datasets" / "v1"
+    labels = list(root.rglob("*.txt"))
+    assert len(labels) == 2
+    empty_labels = [p for p in labels if p.read_text() == ""]
+    assert len(empty_labels) == 1
+
+    # explicit image_ids is unaffected: the negative is excluded when not named
+    only_labeled = client.post(
+        f"{BASE}/{project_id}/datasets", json={"name": "v2", "image_ids": [image_ids[0]]}
+    ).json()
+    assert only_labeled["dataset"]["image_count"] == 1
