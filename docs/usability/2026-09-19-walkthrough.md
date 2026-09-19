@@ -71,8 +71,20 @@ carry a box-count badge; "Train on it" on the finished dataset job pre-selects t
 model name is suggested; a provider test without a key says "no API key stored"; "0 proposals from
 the pre-annotation model" exists (E1/E2 are about what is missing around it).
 
-## Functional gaps (mini sub-projects, in order)
+## Owner ruling (2026-09-19)
 
-1. **G1 starter weights** (blocks): ship YOLO11 n/s/m with the installer, offer them on the Models screen and in Train.
-2. **N1+N2+N4 navigation** (blocks/confuses): app-level Settings, explained sidebar, project overview with the next step.
-3. **E4 negatives**, **S2 Datasets screen**, **E6 confidence filter**, **G2 results export** - to be ranked with the owner.
+Shown to the owner before any fix. Blocking: **N1, N2, G1** and additionally **Q1** (promote
+safety), **G2** (results export), **E4** (negative images), **S2** (Datasets screen); in the table
+above these four count as *blocks*. G1: bundle `yolo11n/s/m.pt` in the installer. Acceptance step 7:
+the owner stores the Anthropic key through the app's Settings screen (Credential Manager); the
+driver uses a stored key and leaves it alone.
+
+## Order of work
+
+1. Wave U1, goal owner, test-first, one commit per item: navigation and copy (N1, N2, N3, D1, D2,
+   P1, S1, X1, X2, E1, E2, E3, Q1 confirmation, Q3, T1, T2, R1, Q8 and the annoyances that are one-liners).
+2. Functional gaps as mini sub-projects with a plan each, one after the other, each merged and
+   verified on the real app before the next starts: **G1 starter weights**, **E4 negative images**,
+   **S2 Datasets screen**, **G2 results export**, then **Q1 undo of a promotion**, **E6 confidence
+   filter**, **N4 project overview**.
+3. End of each wave: rebuilt installer, checkpoint 4, acceptance driver, `docs/progress.md`.

@@ -17,6 +17,22 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 
 Last verified checkpoint: 4 (after Wave 3) on main 826a3bf (installed app), 2026-09-18. Acceptance run (spec 13.5) passed from the installed app on 9a2e20d (step 7 skipped: no provider key).
 
+## Phase 2: usability (goal 2, kickoff `KICKOFF_PROMPT_2.md` in the session of 2026-09-19)
+
+Friction list, owner ruling and order of work: `docs/usability/2026-09-19-walkthrough.md` (the "Closed by" column names the commit per item). Evidence: `docs/evidence/usability/`.
+
+| Wave | Item | Branch | State | Blockers |
+|---|---|---|---|---|
+| U1 | Walk-through of the installed app (51 items), owner ruling: N1, N2, G1, Q1, G2, E4, S2 block | usability-wave1 | done (e1277e2) | none |
+| U1 | Small fixes by the goal owner, test-first: N1/N2/N3 78d1f0e, X2 9e31da3, X1 3d039eb, P1/S1 a8b8bca, Q1 150bbdb (contract: `dry_run`, `unpromote`), D1 62c7f8f, T1/T2 5b0cba7 | usability-wave1 | in progress | none |
+| U1 | G1 starter weights (plan `docs/superpowers/plans/2026-09-19-g1-starter-weights.md`) | g1-starter-weights (worktree `.worktrees/g1-starter-weights`) | implementer dispatched (sonnet); contract edit fd71e19 on the branch | none |
+| U1 | E4 negatives, S2 Datasets screen, G2 results export | - | not started (one after the other, after G1 is merged and verified) | none |
+| U1 | Acceptance step 7 | - | waits for the owner to store the Anthropic key in App settings | owner key |
+
+How the walk-through instance is started without touching a running app: a second instance of the installed exe with `WEBVIEW2_USER_DATA_FOLDER=<scratch>` and `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`; stop it by its own PID only.
+
+Last verified commit on main: 302708a (phase 1). Nothing of phase 2 is merged to main yet.
+
 ## Plans
 
 - S0: `docs/superpowers/plans/2026-09-17-s0-contract-and-scaffolding.md` (ledger: `2026-09-17-s0-ledger.md`)
