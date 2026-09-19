@@ -1,4 +1,3 @@
-import type { KeyboardEvent } from "react";
 import type { Dataset } from "@contract/client";
 import { formatLocalDate } from "@/models/modelLabels";
 
@@ -17,13 +16,6 @@ const SPLIT_LABEL: Record<Dataset["split_method"], string> = {
 };
 
 export function DatasetList({ datasets, selectedId, onSelect }: Props) {
-  function onKeyDown(e: KeyboardEvent<HTMLTableRowElement>, id: string) {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      onSelect(id);
-    }
-  }
-
   return (
     <table data-testid="dataset-table" className="w-full border-collapse text-left text-sm">
       <thead>
@@ -41,16 +33,22 @@ export function DatasetList({ datasets, selectedId, onSelect }: Props) {
           return (
             <tr
               key={d.id}
-              tabIndex={0}
-              role="row"
               aria-current={selected ? "true" : undefined}
               onClick={() => onSelect(d.id)}
-              onKeyDown={(e) => onKeyDown(e, d.id)}
-              className={`cursor-pointer border-b border-slate-800/60 focus:outline focus:outline-1 focus:outline-orange-500 ${
+              className={`cursor-pointer border-b border-slate-800/60 ${
                 selected ? "bg-slate-800" : "hover:bg-slate-800/50"
               }`}
             >
-              <td className="px-2 py-1 font-medium">{d.name}</td>
+              <td className="px-2 py-1">
+                <button
+                  type="button"
+                  aria-label={`Select dataset ${d.name}`}
+                  onClick={() => onSelect(d.id)}
+                  className="font-medium hover:underline"
+                >
+                  {d.name}
+                </button>
+              </td>
               <td className="px-2 py-1 tabular-nums">{d.image_count}</td>
               <td className="px-2 py-1 tabular-nums">
                 {d.train_count} / {d.val_count}

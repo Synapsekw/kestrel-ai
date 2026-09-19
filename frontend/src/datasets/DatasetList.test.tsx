@@ -8,27 +8,32 @@ describe("DatasetList", () => {
   it("renders one row per dataset with image counts, split and created date", () => {
     const onSelect = vi.fn();
     render(<DatasetList datasets={[exampleDataset]} selectedId={null} onSelect={onSelect} />);
-    const row = screen.getByText("v1").closest("tr");
+    const row = screen.getByRole("button", { name: "Select dataset v1" }).closest("tr");
     expect(row).toHaveTextContent("30");
     expect(row).toHaveTextContent("24 / 6");
     expect(row).toHaveTextContent("by group");
     expect(row).toHaveTextContent(formatLocalDate(exampleDataset.created_at));
   });
 
-  it("selects a row by click", () => {
+  it("selects a dataset by clicking its name button (M9)", () => {
     const onSelect = vi.fn();
     render(<DatasetList datasets={[exampleDataset]} selectedId={null} onSelect={onSelect} />);
-    fireEvent.click(screen.getByText("v1"));
+    fireEvent.click(screen.getByRole("button", { name: "Select dataset v1" }));
     expect(onSelect).toHaveBeenCalledWith(exampleDataset.id);
   });
 
-  it("selects the focused row on Enter and marks the selected row", () => {
+  it("selects a dataset by clicking anywhere on its row", () => {
+    const onSelect = vi.fn();
+    render(<DatasetList datasets={[exampleDataset]} selectedId={null} onSelect={onSelect} />);
+    fireEvent.click(screen.getByText("24 / 6"));
+    expect(onSelect).toHaveBeenCalledWith(exampleDataset.id);
+  });
+
+  it("marks the selected row and never adds a redundant role='row' (M9)", () => {
     const onSelect = vi.fn();
     render(<DatasetList datasets={[exampleDataset]} selectedId={exampleDataset.id} onSelect={onSelect} />);
-    const row = screen.getByText("v1").closest("tr")!;
+    const row = screen.getByRole("button", { name: "Select dataset v1" }).closest("tr")!;
     expect(row).toHaveAttribute("aria-current", "true");
-    expect(row).toHaveAttribute("tabIndex", "0");
-    fireEvent.keyDown(row, { key: "Enter" });
-    expect(onSelect).toHaveBeenCalledWith(exampleDataset.id);
+    expect(row).not.toHaveAttribute("role", "row");
   });
 });
