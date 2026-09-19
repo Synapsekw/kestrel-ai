@@ -240,6 +240,44 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await urlIs(/\/train/);
 });
 
+await step("6.5 the datasets screen lists, explains and deletes", async (check, snap) => {
+  await page.getByRole("navigation").getByRole("link", { name: "Datasets" }).click();
+  await urlIs(/\/datasets/);
+  const table = page.getByTestId("dataset-table");
+  check("the dataset is listed", await visible(table.getByRole("button", { name: "Select dataset v1" })));
+  await table.getByRole("button", { name: "Select dataset v1" }).click();
+  const detail = page.getByTestId("dataset-detail");
+  check("per-class counts are shown", await visible(detail.getByTestId("dataset-class-stats")));
+  check("the detail leads to training", await visible(detail.getByRole("link", { name: "Train on this dataset" })));
+  await snap("datasets-detail");
+
+  // A second, throw-away dataset: a name differing only by case is refused, then it is deleted.
+  await page.getByRole("button", { name: "New dataset from all labeled images" }).click();
+  const form = page.getByRole("form", { name: "New dataset" }).or(page.locator('[aria-label="New dataset"]')).first();
+  await form.getByLabel("Dataset name").fill("V1");
+  await form.getByRole("button", { name: "Create dataset" }).click();
+  check("a name that differs only by case is refused", await visible(page.getByRole("alert").filter({ hasText: "already exists" })));
+  await form.getByLabel("Dataset name").fill("scratch");
+  await form.getByRole("button", { name: "Create dataset" }).click();
+  const scratch = table.getByRole("button", { name: "Select dataset scratch" });
+  check("the new dataset appears when its job ends", await visible(scratch, 120_000));
+  await sleep(1500);
+  await scratch.click();
+  const scratchId = new URL(page.url()).searchParams.get("dataset");
+  await detail.getByRole("button", { name: "Delete dataset" }).click();
+  check("the delete asks first and says what is kept", await visible(detail.getByText(/Images, labels\s+and trained models are kept/)));
+  await snap("datasets-delete-confirm");
+  await detail.getByRole("button", { name: "Delete permanently" }).click();
+  check("the deleted dataset leaves the list", await scratch.waitFor({ state: "detached", timeout: 15_000 }).then(() => true).catch(() => false));
+  const gone = await fetch(`${base}/api/v1/projects/${projectId}/datasets/${scratchId}`, { headers: { Authorization: `Bearer ${token}` } });
+  check("the backend no longer has it", gone.status === 404, `status ${gone.status}`);
+  await snap("datasets-after-delete");
+
+  await table.getByRole("button", { name: "Select dataset v1" }).click();
+  await detail.getByRole("link", { name: "Train on this dataset" }).click();
+  await urlIs(/\/train\?dataset=/);
+});
+
 await step("7 train: guidance before, honest verdict after", async (check, snap) => {
   await page.getByLabel("Base model").selectOption({ index: 1 });
   check("a tiny dataset is called out", await visible(page.getByTestId("train-advice")));
