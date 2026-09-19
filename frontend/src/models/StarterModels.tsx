@@ -95,17 +95,12 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
                 size="sm"
                 icon="plus"
                 loading={adding}
+                aria-label={adding ? undefined : `Add ${s.name}`}
                 onClick={() => void add(s.key)}
                 disabled={!s.available || busyKey !== null}
                 className="mt-auto self-start"
               >
-                {adding ? (
-                  "Adding…"
-                ) : (
-                  <>
-                    Add<span className="sr-only"> {s.name}</span>
-                  </>
-                )}
+                {adding ? "Adding…" : "Add"}
               </Button>
             </div>
           );
