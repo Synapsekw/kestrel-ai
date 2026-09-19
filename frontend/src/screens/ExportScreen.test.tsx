@@ -48,4 +48,19 @@ describe("ExportScreen", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Export" }));
     expect(await screen.findByTestId(`export-job-${succeeded.id}`)).toHaveTextContent("2 images, 3 boxes");
   });
+
+  it("never shows another project's results_export job under Past exports", async () => {
+    const otherProjectsJob = {
+      ...runningJob,
+      id: "j-other-project",
+      project_id: "some-other-project-id",
+      type: "results_export" as const,
+      state: "succeeded" as const,
+      result: { folder: "exports/x", files: ["detections.csv"], image_count: 1, box_count: 1 },
+    };
+    useJobsStore.getState().upsert(otherProjectsJob);
+    renderScreen([]);
+    expect(await screen.findByText("No exports yet.")).toBeInTheDocument();
+    expect(screen.queryByTestId(`export-job-${otherProjectsJob.id}`)).not.toBeInTheDocument();
+  });
 });
