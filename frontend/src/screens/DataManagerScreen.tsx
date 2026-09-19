@@ -158,22 +158,37 @@ export function DataManagerScreen() {
           {list.error}
         </p>
       )}
-      {selectedIds.length > 0 && (
-        <SelectionBar
-          projectId={projectId}
-          selectedIds={selectedIds}
-          onLabel={labelSelected}
-          onRunModel={() => {
-            useNavigationStore.getState().setContext(selectedIds, "query");
-            void navigate(`/p/${projectId}/query`);
-          }}
-          onDeleted={(message) => {
-            setSelection(clearSelection());
-            setNotice(message);
-          }}
-          onClear={() => setSelection(clearSelection())}
-        />
-      )}
+      {/* One slot of constant height: a bar that appears on the first click of a double-click would
+          move the rows away from under the second click. */}
+      <div className="flex min-h-[3.25rem] flex-col justify-center">
+        {selectedIds.length > 0 ? (
+          <SelectionBar
+            projectId={projectId}
+            selectedIds={selectedIds}
+            onLabel={labelSelected}
+            onRunModel={() => {
+              useNavigationStore.getState().setContext(selectedIds, "query");
+              void navigate(`/p/${projectId}/query`);
+            }}
+            onDeleted={(message) => {
+              setSelection(clearSelection());
+              setNotice(message);
+            }}
+            onClear={() => setSelection(clearSelection())}
+          />
+        ) : notice ? (
+          <p role="status" className="text-xs text-emerald-300">
+            {notice}
+          </p>
+        ) : (
+          items.length > 0 && (
+            <p className="text-xs text-slate-500">
+              Select images (checkbox, Space or Ctrl+A) to label them in a row, run a model on them, add them
+              to a dataset or delete them.
+            </p>
+          )
+        )}
+      </div>
       {importBanner && (
         <p
           data-testid="import-notice"
@@ -190,11 +205,6 @@ export function DataManagerScreen() {
               Dismiss
             </button>
           )}
-        </p>
-      )}
-      {notice && selectedIds.length === 0 && (
-        <p role="status" className="text-xs text-emerald-300">
-          {notice}
         </p>
       )}
       {empty ? (

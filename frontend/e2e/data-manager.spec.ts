@@ -119,3 +119,17 @@ test("label selected opens the editor over the selection only", async ({ page })
   await page.waitForURL(`**/p/${P}/edit/${IMG2}`);
   await expect(page.getByTestId("position")).toHaveText("1 / 1");
 });
+
+test("double-click opens a list row even though the first click selects it", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
+  await page.getByRole("button", { name: "List" }).click();
+  const name = page.getByTestId("image-table").getByText("IX-12-02491_0031_0001.jpg");
+  const before = await name.boundingBox();
+  await name.click();
+  // The selection bar that appears must not move the rows: the second click of a double-click
+  // has to land on the same row.
+  await expect(page.getByText("1 selected")).toBeVisible();
+  expect((await name.boundingBox())?.y).toBe(before?.y);
+  await name.dblclick();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/edit/${IMG}$`));
+});
