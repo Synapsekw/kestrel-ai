@@ -57,6 +57,37 @@ describe("AddToDatasetDialog", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("shows the split advice and an Open dataset link once the job succeeds", async () => {
+    const risky = { ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 };
+    const succeededJob = { ...runningJob, type: "dataset" as const, state: "succeeded" as const };
+    const { api } = fakeClient([
+      {
+        method: "POST",
+        path: /\/datasets$/,
+        status: 202,
+        body: { dataset: exampleDataset, job: succeededJob },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: succeededJob },
+      { method: "GET", path: /\/datasets\/[^/]+$/, body: risky },
+    ]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a", "b"]}
+        labeledCount={1}
+        emptyCount={1}
+        unlabeledCount={0}
+        onClose={vi.fn()}
+      />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    const link = await screen.findByRole("link", { name: "Open dataset" });
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/datasets?dataset=${exampleDataset.id}`);
+    await waitFor(() => expect(screen.getByText(/went to validation although/)).toBeInTheDocument());
+  });
+
   it("shows the envelope message on failure", async () => {
     const { api } = fakeClient([
       {

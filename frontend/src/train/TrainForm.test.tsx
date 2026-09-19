@@ -30,7 +30,7 @@ describe("TrainForm", () => {
     expect(screen.getByLabelText("Batch size")).toBeDisabled();
     expect(screen.getByRole("link", { name: "Create dataset" })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/data`,
+      `/p/${PROJECT_ID}/datasets`,
     );
     // "30 images" also appears in the option label, so match the split summary line.
     expect(screen.getByText(/30 images: 24 train \/ 6 val/)).toBeInTheDocument();

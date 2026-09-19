@@ -143,10 +143,10 @@ export function TrainForm({
             {dataset
               ? `${dataset.image_count} images: ${dataset.train_count} train / ${dataset.val_count} val, ${dataset.classes.length} classes`
               : "Datasets are frozen from labeled images."}{" "}
-            <Link to={`/p/${projectId}/data`} className="text-orange-300 hover:underline">
+            <Link to={`/p/${projectId}/datasets`} className="text-orange-300 hover:underline">
               Create dataset
             </Link>{" "}
-            (select images in the Data Manager and use Add to dataset).
+            (or select images in the Data Manager and use Add to dataset).
           </span>
         </label>
         <label className={label}>
