@@ -79,6 +79,13 @@ export function TilingFields({ form, onChange }: Props) {
           />
         </label>
       </div>
+      <p data-testid="tiling-note" className="max-w-2xl text-xs text-slate-400">
+        {form.tilingEnabled
+          ? "Each image is cut into overlapping tiles so that small machines stay visible; boxes found twice in the overlap are merged. Slower, finds more."
+          : form.kind === "local_model"
+            ? `Without tiling the whole image is scaled down to ${form.tileSize} px before the model sees it, so small machines can disappear. (Pre-annotation in the editor uses 2560 px.)`
+            : "Without tiling each image is sent once, as a whole: cheaper, but small machines are easily missed."}
+      </p>
     </fieldset>
   );
 }

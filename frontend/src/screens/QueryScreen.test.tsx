@@ -84,6 +84,22 @@ describe("QueryScreen", () => {
     expect(screen.getByTestId("run-history")).toHaveTextContent("dump trucks");
   });
 
+  it("says in plain words what the screen does and where the results go", async () => {
+    const { api } = fakeClient(base);
+    renderWithProviders(<QueryScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/query`,
+      path: "/p/:projectId/query",
+    });
+    expect(screen.getByTestId("query-intro")).toHaveTextContent(
+      "Run a model over images to find machinery. What it finds arrives as proposals: dashed boxes that wait in the Review queue until a person accepts or rejects them.",
+    );
+    expect(screen.getByRole("link", { name: "Review queue" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/review`,
+    );
+  });
+
   it("starts a local run without asking for an estimate first", async () => {
     const { api, requests } = fakeClient([
       ...base,

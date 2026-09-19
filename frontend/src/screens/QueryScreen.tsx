@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { CostEstimate } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
@@ -136,6 +136,14 @@ export function QueryScreen() {
           </button>
         )}
       </div>
+      <p data-testid="query-intro" className="max-w-3xl text-sm text-slate-400">
+        Run a model over images to find machinery. What it finds arrives as proposals: dashed boxes that wait
+        in the{" "}
+        <Link to={`/p/${projectId}/review`} className="text-orange-300 hover:underline">
+          Review queue
+        </Link>{" "}
+        until a person accepts or rejects them.
+      </p>
       {runId ? (
         <RunCard projectId={projectId} runId={runId} />
       ) : (
