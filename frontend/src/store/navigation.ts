@@ -5,7 +5,9 @@ export type NavSource = "data" | "review" | "selection" | "query" | null;
 interface NavigationState {
   ids: string[];
   source: NavSource;
-  setContext: (ids: string[], source: NavSource) => void;
+  /** Path and query of the list that opened the editor, for the editor's back link. */
+  returnTo: string | null;
+  setContext: (ids: string[], source: NavSource, returnTo?: string | null) => void;
   neighbours: (id: string) => { prev: string | null; next: string | null; index: number; count: number };
 }
 
@@ -13,7 +15,8 @@ interface NavigationState {
 export const useNavigationStore = create<NavigationState>((set, get) => ({
   ids: [],
   source: null,
-  setContext: (ids, source) => set({ ids: [...ids], source }),
+  returnTo: null,
+  setContext: (ids, source, returnTo = null) => set({ ids: [...ids], source, returnTo }),
   neighbours: (id) => {
     const { ids } = get();
     const index = ids.indexOf(id);

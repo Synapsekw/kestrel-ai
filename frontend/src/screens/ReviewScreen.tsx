@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
 import { useSourceNames } from "@/api/project";
 import { ImageTable } from "@/data/ImageTable";
@@ -22,6 +22,7 @@ export function ReviewScreen() {
   const navigate = useNavigate();
   const sourceNames = useSourceNames(projectId);
   const [params] = useSearchParams();
+  const location = useLocation();
   // `?ids=` narrows the queue to one query run's images (contract gap 2: `ids` overrides the filters).
   const runIds = params.get("ids");
   const query = useMemo(
@@ -38,10 +39,10 @@ export function ReviewScreen() {
 
   const open = useCallback(
     (id: string) => {
-      useNavigationStore.getState().setContext(ids, "review");
+      useNavigationStore.getState().setContext(ids, "review", location.pathname + location.search);
       void navigate(`/p/${projectId}/edit/${id}`);
     },
-    [ids, navigate, projectId],
+    [ids, navigate, projectId, location.pathname, location.search],
   );
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

@@ -66,7 +66,7 @@ export function DataManagerScreen() {
 
   const open = useCallback(
     (id: string) => {
-      useNavigationStore.getState().setContext(ids, "data");
+      useNavigationStore.getState().setContext(ids, "data", `/p/${projectId}/data`);
       void navigate(`/p/${projectId}/edit/${id}`);
     },
     [ids, navigate, projectId],

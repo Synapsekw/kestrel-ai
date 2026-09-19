@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { exampleImagePage, fakeClient, IMAGE_ID, IMAGE_ID_2, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
+import { useNavigationStore } from "@/store/navigation";
 import { ReviewScreen } from "./ReviewScreen";
 
 describe("ReviewScreen with ?ids=", () => {
@@ -25,6 +26,12 @@ describe("ReviewScreen with ?ids=", () => {
     expect(screen.getByRole("link", { name: "Show the whole queue" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/review`,
+    );
+    // Opening an image remembers this filtered queue, so the editor can lead back to it.
+    await screen.findByText("81%");
+    fireEvent.keyDown(screen.getByTestId("image-table"), { key: "Enter" });
+    expect(useNavigationStore.getState().returnTo).toBe(
+      `/p/${PROJECT_ID}/review?ids=${IMAGE_ID},${IMAGE_ID_2}`,
     );
   });
 });

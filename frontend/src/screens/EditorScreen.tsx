@@ -8,6 +8,7 @@ import { useProject } from "@/api/project";
 import { BoxLayer } from "@/editor/BoxLayer";
 import { ClassSidebar } from "@/editor/ClassSidebar";
 import { EditorCanvas } from "@/editor/EditorCanvas";
+import { BackLink } from "@/editor/BackLink";
 import { EditorToolbar } from "@/editor/EditorToolbar";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
 import { RegionList } from "@/editor/RegionList";
@@ -189,6 +190,7 @@ function EditorBody({
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <EditorToolbar
+          lead={<BackLink projectId={projectId} />}
           fileName={image?.file_name ?? (loading ? "Loading…" : "")}
           position={navigation.position}
           zoom={zoom}

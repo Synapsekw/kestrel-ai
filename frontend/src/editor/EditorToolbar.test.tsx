@@ -35,4 +35,10 @@ describe("EditorToolbar shortcuts help", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Close" }));
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+
+  it("puts the way back first in the toolbar", () => {
+    render(<EditorToolbar {...props} lead={<a href="/back">Back</a>} />);
+    const toolbar = screen.getByRole("link", { name: "Back" }).parentElement;
+    expect(toolbar?.firstElementChild).toBe(screen.getByRole("link", { name: "Back" }));
+  });
 });

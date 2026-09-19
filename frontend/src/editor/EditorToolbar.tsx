@@ -15,6 +15,8 @@ export interface ToolbarProps {
   onUndo: () => void;
   onRedo: () => void;
   extra?: ReactNode;
+  /** Rendered before everything else: the way back to the list that opened the editor. */
+  lead?: ReactNode;
 }
 
 const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-800 disabled:opacity-40";
@@ -24,6 +26,7 @@ export function EditorToolbar(p: ToolbarProps) {
   const [keysOpen, setKeysOpen] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 text-sm">
+      {p.lead}
       <button
         type="button"
         className={btn}
