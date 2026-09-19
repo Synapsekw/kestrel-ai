@@ -134,6 +134,7 @@ def test_coco_structure(tmp_path):
     assert ann["category_id"] == 1
     assert ann["image_id"] == ids[0]
     assert ann["score"] == 0.9
+    assert ann["review_state"] == "accepted"
 
 
 def test_coco_no_score_when_confidence_is_none(tmp_path):
@@ -141,6 +142,21 @@ def test_coco_no_score_when_confidence_is_none(tmp_path):
     coco_out.write(images, CLASSES, tmp_path)
     data = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))
     assert "score" not in data["annotations"][0]
+
+
+def test_coco_carries_review_state_on_every_annotation(tmp_path):
+    images = [
+        _image(
+            boxes=[
+                _box(id="b1", review_state="accepted"),
+                _box(id="b2", review_state="unreviewed", confidence=0.4),
+            ]
+        )
+    ]
+    coco_out.write(images, CLASSES, tmp_path)
+    data = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))
+    states = {a["id"]: a["review_state"] for a in data["annotations"]}
+    assert states == {1: "accepted", 2: "unreviewed"}
 
 
 def test_coco_category_ids_are_stable_across_calls(tmp_path):
