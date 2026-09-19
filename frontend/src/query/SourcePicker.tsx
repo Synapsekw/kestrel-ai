@@ -104,7 +104,10 @@ export function SourcePicker({
             {providersUnavailable && <span role="note">Cloud providers are not available yet.</span>}
             {chosen && !chosen.has_key && (
               <span role="note">
-                No API key stored for {providerLabel(chosen.name)}. Add the key in Settings.
+                No API key stored for {providerLabel(chosen.name)}.{" "}
+                <Link to="/settings" className="text-orange-300 hover:underline">
+                  Add the key in App settings
+                </Link>
               </span>
             )}
           </label>
