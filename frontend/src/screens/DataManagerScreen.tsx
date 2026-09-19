@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProject, useSourceNames } from "@/api/project";
+import { EmptyImages } from "@/data/EmptyImages";
 import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
 import { ImageTable } from "@/data/ImageTable";
@@ -97,6 +98,9 @@ export function DataManagerScreen() {
     void navigate(`/p/${projectId}/edit/${selectedIds[0]}`);
   };
 
+  const empty = !list.loading && !list.error && items.length === 0 && project !== null && !importing;
+  const filtered = JSON.stringify(query.filters) !== JSON.stringify(DEFAULT_QUERY.filters);
+
   return (
     <section className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
@@ -158,7 +162,13 @@ export function DataManagerScreen() {
           {notice}
         </p>
       )}
-      {view === "list" ? (
+      {empty ? (
+        <EmptyImages
+          filtered={filtered}
+          onImport={() => setImporting(true)}
+          onClearFilters={() => setQuery((q) => ({ ...q, filters: DEFAULT_QUERY.filters }))}
+        />
+      ) : view === "list" ? (
         <ImageTable
           items={items}
           columns={DATA_COLUMNS}
@@ -187,12 +197,8 @@ export function DataManagerScreen() {
         />
       )}
       {list.loading && <p className="text-xs text-slate-400">Loading…</p>}
-      {!list.loading && items.length === 0 && !list.error && (
-        <p className="text-sm text-slate-400">
-          {project
-            ? "No images match. Import a folder from the Projects screen or clear the filters."
-            : "Loading project…"}
-        </p>
+      {!list.loading && items.length === 0 && !list.error && !project && (
+        <p className="text-sm text-slate-400">Loading project…</p>
       )}
     </section>
   );
