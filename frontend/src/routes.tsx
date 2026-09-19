@@ -1,8 +1,10 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Shell } from "@/app/Shell";
 import { ProjectsScreen } from "@/screens/ProjectsScreen";
+import { HomeScreen } from "@/screens/HomeScreen";
 import { DataManagerScreen } from "@/screens/DataManagerScreen";
 import { EditorScreen } from "@/screens/EditorScreen";
+import { LabelResolverScreen } from "@/screens/LabelResolverScreen";
 import { ReviewScreen } from "@/screens/ReviewScreen";
 import { DatasetsScreen } from "@/screens/DatasetsScreen";
 import { ModelsScreen } from "@/screens/ModelsScreen";
@@ -18,7 +20,9 @@ export const router = createBrowserRouter([
     children: [
       { index: true, element: <ProjectsScreen /> },
       { path: "settings", element: <AppSettingsScreen /> },
+      { path: "p/:projectId", element: <HomeScreen /> },
       { path: "p/:projectId/data", element: <DataManagerScreen /> },
+      { path: "p/:projectId/label", element: <LabelResolverScreen /> },
       { path: "p/:projectId/edit/:imageId", element: <EditorScreen /> },
       { path: "p/:projectId/review", element: <ReviewScreen /> },
       { path: "p/:projectId/datasets", element: <DatasetsScreen /> },

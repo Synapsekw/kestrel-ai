@@ -119,7 +119,7 @@ export function ProjectsScreen() {
   const openProject = useCallback(
     (project: Project) => {
       pushLog(`open project ${project.id}`);
-      void navigate(`/p/${project.id}/data`);
+      void navigate(`/p/${project.id}`);
     },
     [navigate],
   );
