@@ -18,7 +18,7 @@ import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
 import { useEditorImage } from "@/editor/useEditorImage";
 import { useEditorNavigation } from "@/editor/useEditorNavigation";
 import { useHistory } from "@/editor/useHistory";
-import { useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
+import { hasGroundTruth, useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
 
 export function EditorScreen() {
   const { projectId = "", imageId = "" } = useParams();
@@ -79,10 +79,7 @@ function EditorBody({
     () => visibleProposalIds({ boxes, order, showRejected }),
     [boxes, order, showRejected],
   );
-  const hasGroundTruth = useMemo(
-    () => Object.values(boxes).some((b) => b.review_state === "accepted" || b.review_state === "edited"),
-    [boxes],
-  );
+  const groundTruth = useMemo(() => hasGroundTruth(boxes), [boxes]);
   const navigation = useEditorNavigation(projectId, imageId);
   const nav = useMemo(
     () => ({ next: navigation.next, prev: navigation.prev }),
@@ -183,7 +180,7 @@ function EditorBody({
       <span className="mx-1 h-4 border-l border-slate-700" />
       <EmptyToggle
         image={image}
-        hasGroundTruth={hasGroundTruth}
+        hasGroundTruth={groundTruth}
         busy={pending > 0}
         onToggle={() => void actions.toggleEmpty()}
       />

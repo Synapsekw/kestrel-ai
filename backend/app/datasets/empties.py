@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.datasets.images import ImageRow, get_image
@@ -19,6 +19,21 @@ from app.errors import AppError, not_found
 from app.projects.service import ProjectHandle
 
 GROUND_TRUTH = ("accepted", "edited")
+
+# SQLite's own limit on bound parameters (`SQLITE_MAX_VARIABLE_NUMBER`) is comfortably above this,
+# but a page of ids from the Data Manager can be large; chunking keeps every `IN (...)` bounded.
+CHUNK_SIZE = 500
+
+
+def _chunks(ids: list[str], size: int = CHUNK_SIZE) -> Iterable[list[str]]:
+    for i in range(0, len(ids), size):
+        yield ids[i : i + size]
+
+
+def ground_truth_message(n: int) -> str:
+    """The one wording used everywhere a mark is refused because of existing ground truth."""
+    box_word = "box" if n == 1 else "boxes"
+    return f"This image has {n} accepted {box_word}. Delete or reject them first."
 
 
 def _ground_truth_count(s: Session, image_id: str) -> int:
@@ -37,6 +52,16 @@ def _reject_pending(s: Session, image_id: str, now: datetime) -> bool:
     for box in pending:
         box.review_state, box.reviewed_at = "rejected", now
     return bool(pending)
+
+
+def count_marked_empty(s: Session, image_ids: Iterable[str]) -> int:
+    """How many of `image_ids` are currently marked empty (for a caller that wants to log it)."""
+    ids = list(image_ids)
+    if not ids:
+        return 0
+    return s.execute(
+        select(func.count()).select_from(Image).where(Image.id.in_(ids), Image.marked_empty.is_(True))
+    ).scalar_one()
 
 
 def clear_mark_for_ground_truth(s: Session, image_ids: Iterable[str]) -> None:
@@ -60,11 +85,7 @@ def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple
         if value:
             gt = _ground_truth_count(s, image_id)
             if gt:
-                raise AppError(
-                    "conflict",
-                    f"the image has {gt} accepted boxes; delete them first or leave it labeled",
-                    409,
-                )
+                raise AppError("conflict", ground_truth_message(gt), 409)
             if _reject_pending(s, image_id, datetime.now(UTC)):
                 rejected_ids.append(image_id)
         image.marked_empty = value
@@ -72,31 +93,48 @@ def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple
     return get_image(handle, image_id), rejected_ids
 
 
+def _distinct_image_ids(s: Session, ids: list[str], *, review_state) -> set[str]:
+    found: set[str] = set()
+    for chunk in _chunks(ids):
+        found.update(
+            s.execute(
+                select(Box.image_id).where(Box.image_id.in_(chunk), review_state).distinct()
+            )
+            .scalars()
+            .all()
+        )
+    return found
+
+
 def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) -> tuple[int, int, list[str]]:
-    """Updated, skipped (ground truth), and the ids whose pending proposals were rejected."""
-    updated = 0
-    skipped = 0
-    rejected_ids: list[str] = []
+    """Updated, skipped (ground truth), and the ids whose pending proposals were rejected.
+
+    Set-based throughout: a handful of bulk queries and bulk updates over the whole id list
+    (chunked), never a per-image round trip.
+    """
     now = datetime.now(UTC)
     with handle.session() as s:
-        images = {i.id: i for i in s.execute(select(Image).where(Image.id.in_(image_ids))).scalars()}
-        for image_id in image_ids:
-            image = images.get(image_id)
-            if image is None:  # unknown ids are ignored
-                continue
-            if value:
-                if image.marked_empty:  # already marked: nothing changed
-                    continue
-                if _ground_truth_count(s, image_id):
-                    skipped += 1
-                    continue
-                if _reject_pending(s, image_id, now):
-                    rejected_ids.append(image_id)
-                image.marked_empty = True
-            else:
-                if not image.marked_empty:
-                    continue
-                image.marked_empty = False
-            updated += 1
-        s.flush()
-    return updated, skipped, rejected_ids
+        existing: dict[str, bool] = {}
+        for chunk in _chunks(image_ids):
+            existing.update(s.execute(select(Image.id, Image.marked_empty).where(Image.id.in_(chunk))).all())
+        known_ids = [i for i in image_ids if i in existing]  # unknown ids are ignored
+
+        if not value:
+            to_unmark = [i for i in known_ids if existing[i]]
+            for chunk in _chunks(to_unmark):
+                s.execute(update(Image).where(Image.id.in_(chunk)).values(marked_empty=False))
+            return len(to_unmark), 0, []
+
+        candidates = [i for i in known_ids if not existing[i]]  # already marked: nothing changed
+        has_ground_truth = _distinct_image_ids(s, candidates, review_state=Box.review_state.in_(GROUND_TRUTH))
+        to_mark = [i for i in candidates if i not in has_ground_truth]
+        rejected_ids = sorted(_distinct_image_ids(s, to_mark, review_state=Box.review_state == "unreviewed"))
+        for chunk in _chunks(to_mark):
+            s.execute(
+                update(Box)
+                .where(Box.image_id.in_(chunk), Box.review_state == "unreviewed")
+                .values(review_state="rejected", reviewed_at=now)
+            )
+        for chunk in _chunks(to_mark):
+            s.execute(update(Image).where(Image.id.in_(chunk)).values(marked_empty=True))
+        return len(to_mark), len(has_ground_truth), rejected_ids

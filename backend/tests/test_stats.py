@@ -97,6 +97,21 @@ def test_source_stats_only_count_their_own_images(client, two_sources):
     assert second["capture_time_range"] is None and second["gps_bounds"] is None
 
 
+def test_source_scoped_stats_count_a_marked_empty_image(client, two_sources):
+    """A mark on an image of one source must not leak into the other source's stats (E4)."""
+    pid = two_sources["pid"]
+    first_images = client.get(
+        f"/api/v1/projects/{pid}/images", params={"source_id": two_sources["first"]}
+    ).json()["items"]
+    r = client.patch(f"/api/v1/projects/{pid}/images/{first_images[0]['id']}", json={"marked_empty": True})
+    assert r.status_code == 200, r.text
+
+    first = _stats(client, pid, two_sources["first"])
+    assert first["labeled_count"] == 1 and first["unlabeled_count"] == 1
+    second = _stats(client, pid, two_sources["second"])
+    assert second["labeled_count"] == 0 and second["unlabeled_count"] == 1
+
+
 def test_duplicate_count_comes_from_the_import(client, project, import_source, tmp_path):
     pid = project["id"]
     folder = tmp_path / "dup"

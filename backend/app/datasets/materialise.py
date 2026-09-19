@@ -144,6 +144,12 @@ def _materialise(ctx: JobContext) -> dict:
     return {"dataset_id": dataset_id, **counts}
 
 
+NOTHING_TO_TRAIN_ON = (
+    "Nothing to train on: the selection has no accepted boxes. A dataset needs at least one "
+    "labeled image; images marked empty are added as negative examples."
+)
+
+
 def freeze(handle: ProjectHandle, body: DatasetCreate) -> str:
     """Snapshot the ground truth of the selected images into a new, immutable dataset row."""
     with handle.session() as s:
@@ -151,16 +157,21 @@ def freeze(handle: ProjectHandle, body: DatasetCreate) -> str:
         classes = list(project.classes or [])
         known = {c["id"] for c in classes}
         selected = _select_images(s, body.image_ids)
-        # The image set is resolved before the name is validated: an empty selection is the
-        # failure a caller will hit first, and it must not be masked by a name complaint.
-        if not selected:
-            raise AppError("conflict", "no image with an accepted or edited box to freeze", 409)
+        frozen = _frozen_boxes(s, [i.id for i in selected], known)
+        # The box count is resolved before the name is validated: a selection with nothing to
+        # train on is the failure a caller will hit first, and it must not be masked by a name
+        # complaint. A selection of only marked-empty images passes `selected` (they are valid
+        # negatives) but still has zero boxes, so `not selected` alone is not the right check.
+        if sum(len(boxes) for boxes in frozen.values()) == 0:
+            # 409, not 422: `image_ids: []` (or an all-negative default selection) is schema-valid
+            # data, and the contract's positive-data-acceptance check forbids rejecting a
+            # schema-valid body with 422 (see router.create_source for the same rule).
+            raise AppError("conflict", NOTHING_TO_TRAIN_ON, 409)
         if body.name in (".", "..") or "/" in body.name or "\\" in body.name:
             raise AppError("validation_error", f"{body.name!r} is not a usable folder name", 422)
         if s.execute(select(Dataset).where(Dataset.name == body.name)).scalar_one_or_none() is not None:
             raise AppError("already_exists", f"dataset {body.name!r} already exists", 409)
 
-        frozen = _frozen_boxes(s, [i.id for i in selected], known)
         keys = {i.id: _split_key(i, body.split_method) for i in selected}
         splits = assign_splits(
             [(i.id, keys[i.id]) for i in selected], body.split_method, body.val_fraction, body.seed

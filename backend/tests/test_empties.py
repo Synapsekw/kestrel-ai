@@ -9,6 +9,7 @@ import sqlite3
 import pytest
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import create_engine, event, text
 from test_query_runs import FakeProvider, run_and_wait
 
 from app.db.models import Box, Image
@@ -111,11 +112,24 @@ def test_a_marked_image_counts_as_labeled_everywhere(client, project_id, handle,
     labeled = client.get(f"{BASE}/{project_id}/images", params={"labeled": "true"}).json()
     assert [i["id"] for i in labeled["items"]] == [image_ids[0]]
     unlabeled = client.get(f"{BASE}/{project_id}/images", params={"labeled": "false"}).json()
-    assert image_ids[0] not in [i["id"] for i in unlabeled["items"]]
+    assert [i["id"] for i in unlabeled["items"]] == image_ids[1:]
 
     stats = client.get(f"{BASE}/{project_id}/stats").json()
     assert stats["labeled_count"] == 1
     assert stats["unlabeled_count"] == len(image_ids) - 1
+
+
+def test_sorting_by_labeled_puts_marked_and_boxed_images_first(
+    client, project_id, handle, image_ids, add_person_box
+):
+    add_person_box(image_ids[5])
+    _mark(handle, image_ids[10])
+    page = client.get(
+        f"{BASE}/{project_id}/images", params={"sort": "labeled", "order": "desc", "limit": 100}
+    ).json()
+    assert {i["id"] for i in page["items"][:2]} == {image_ids[5], image_ids[10]}
+    assert all(item["labeled"] for item in page["items"][:2])
+    assert all(not item["labeled"] for item in page["items"][2:])
 
 
 def test_an_existing_database_gains_the_column_with_false(tmp_path):
@@ -154,6 +168,64 @@ def test_an_existing_database_gains_the_column_with_false(tmp_path):
     assert value == 0
 
 
+def test_downgrade_does_not_cascade_delete_boxes(tmp_path):
+    """The downgrade must ALTER the column away, not recreate the table (which would cascade).
+
+    `sqlite3.connect` does not enforce foreign keys by default, so the migration itself has to run
+    on a connection with `PRAGMA foreign_keys=ON` (as `app/db/session.py` always sets one) for a
+    naive `DROP TABLE image` to actually take `box` down with it and expose the bug.
+    """
+    db_path = tmp_path / "project.db"
+    url = f"sqlite:///{db_path.as_posix()}"
+    engine = create_engine(url, future=True)
+
+    @event.listens_for(engine, "connect")
+    def _pragmas(conn, _):
+        cur = conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
+    cfg = Config(str(MIGRATIONS / "alembic.ini"))
+    cfg.set_main_option("script_location", str(MIGRATIONS))
+    cfg.set_main_option("sqlalchemy.url", url)
+
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+        conn.execute(
+            text(
+                "INSERT INTO source (id, folder, site, settings, image_count, duplicate_count, "
+                "job_id, imported_at, created_at) VALUES "
+                "('s1', 'f', 'site', '{}', 0, 0, NULL, NULL, '2024-01-01 00:00:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO image (id, path, width, height, source_id, capture_time, lat, lon, "
+                "alt, phash, group_key, marked_empty, created_at) VALUES "
+                "('i1', 'images/a.jpg', 10, 10, 's1', NULL, NULL, NULL, NULL, NULL, '', 0, "
+                "'2024-01-01 00:00:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO box (id, image_id, class_id, x, y, w, h, confidence, provenance_kind, "
+                "model_id, provider, model_name, query_run_id, review_state, reviewed_at, created_at) "
+                "VALUES ('b1', 'i1', 'c1', 1, 2, 3, 4, NULL, 'person', NULL, NULL, NULL, NULL, "
+                "'accepted', NULL, '2024-01-01 00:00:00')"
+            )
+        )
+
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.downgrade(cfg, "0001")
+
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM box WHERE id = 'b1'")).scalar_one() == 1
+        cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(image)").fetchall()]
+        assert "marked_empty" not in cols
+
+
 def test_marking_rejects_the_pending_proposals_and_unmarking_keeps_them_rejected(
     client, project_id, handle, image_ids, add_proposal
 ):
@@ -171,25 +243,63 @@ def test_an_image_with_ground_truth_cannot_be_marked_empty(client, project_id, i
     add_person_box(image_ids[0])
     r = client.patch(f"{BASE}/{project_id}/images/{image_ids[0]}", json={"marked_empty": True})
     assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
-    assert "accepted box" in r.json()["error"]["message"]
+    assert r.json()["error"]["message"] == "This image has 1 accepted box. Delete or reject them first."
     assert client.patch(f"{BASE}/{project_id}/images/nope", json={"marked_empty": True}).status_code == 404
 
 
+def test_the_ground_truth_message_is_pluralised(client, project_id, image_ids, add_person_box):
+    add_person_box(image_ids[0])
+    add_person_box(image_ids[0])
+    r = client.patch(f"{BASE}/{project_id}/images/{image_ids[0]}", json={"marked_empty": True})
+    assert r.status_code == 409
+    assert r.json()["error"]["message"] == "This image has 2 accepted boxes. Delete or reject them first."
+
+
 def test_bulk_marks_the_empty_ones_and_skips_images_with_ground_truth(
-    client, project_id, image_ids, add_person_box
+    client, project_id, handle, image_ids, add_person_box, add_proposal
 ):
     add_person_box(image_ids[1])
+    box_id = add_proposal(image_ids[0])
     r = client.post(
         f"{BASE}/{project_id}/images/bulk-mark-empty",
         json={"image_ids": [image_ids[0], image_ids[1], "unknown"], "marked_empty": True},
     )
     assert r.status_code == 200, r.text
     assert r.json() == {"updated": 1, "skipped": 1}
+    assert state_of(handle, box_id) == "rejected"  # the proposal of the bulk-marked image
     r = client.post(
         f"{BASE}/{project_id}/images/bulk-mark-empty",
         json={"image_ids": [image_ids[0]], "marked_empty": True},
     )
     assert r.json() == {"updated": 0, "skipped": 0}  # already marked: nothing changed
+
+
+def test_bulk_unmark_flips_the_flag_back_but_leaves_rejected_proposals_rejected(
+    client, project_id, handle, image_ids, add_proposal
+):
+    box_id = add_proposal(image_ids[0])
+    r = client.post(
+        f"{BASE}/{project_id}/images/bulk-mark-empty",
+        json={"image_ids": [image_ids[0], image_ids[1]], "marked_empty": True},
+    )
+    assert r.json() == {"updated": 2, "skipped": 0}
+
+    r = client.post(
+        f"{BASE}/{project_id}/images/bulk-mark-empty",
+        json={"image_ids": [image_ids[0], image_ids[1], "unknown"], "marked_empty": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"updated": 2, "skipped": 0}
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is False
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[1]}").json()["marked_empty"] is False
+    assert state_of(handle, box_id) == "rejected"  # unmarking never resurrects a rejected proposal
+
+    # nothing left to unmark: no-op
+    r = client.post(
+        f"{BASE}/{project_id}/images/bulk-mark-empty",
+        json={"image_ids": [image_ids[0]], "marked_empty": False},
+    )
+    assert r.json() == {"updated": 0, "skipped": 0}
 
 
 def test_marking_empty_publishes_images_changed_and_boxes_changed(
@@ -302,3 +412,36 @@ def test_dataset_creation_includes_marked_images_as_negatives(
         f"{BASE}/{project_id}/datasets", json={"name": "v2", "image_ids": [image_ids[0]]}
     ).json()
     assert only_labeled["dataset"]["image_count"] == 1
+
+
+def test_by_group_dataset_places_a_negative_in_its_own_groups_split(
+    client, project_id, handle, image_ids, add_person_box, wait_job
+):
+    """`by_group` keeps a whole group in one split; a negative image is no exception (E4)."""
+    add_person_box(image_ids[0])  # flight 0001: ground truth
+    _mark(handle, image_ids[1])  # flight 0001: negative, same group
+    add_person_box(image_ids[10])  # flight 0002: ground truth, so there is something to split off
+    r = client.post(
+        f"{BASE}/{project_id}/datasets",
+        json={"name": "v1", "split_method": "by_group", "val_fraction": 0.5, "seed": 1},
+    )
+    assert r.status_code == 202, r.text
+    body = r.json()
+    finished = wait_job(project_id, body["job"]["id"])
+    assert finished["state"] == "succeeded", finished
+
+    stats = client.get(f"{BASE}/{project_id}/datasets/{body['dataset']['id']}/stats").json()
+    flight_0001 = [g for g in stats["groups"] if g["group_key"] == "0001"]
+    assert len(flight_0001) == 1  # one split entry: the labeled and the negative image agree
+    assert flight_0001[0]["image_count"] == 2
+
+
+def test_default_selection_of_only_marked_images_has_nothing_to_train_on(
+    client, project_id, handle, image_ids
+):
+    """Every image marked empty and none with a box: a dataset would have nothing to train on."""
+    for image_id in image_ids[:3]:
+        _mark(handle, image_id)
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": "v1"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert "Nothing to train on" in r.json()["error"]["message"]

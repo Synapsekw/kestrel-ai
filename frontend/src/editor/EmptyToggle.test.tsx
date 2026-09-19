@@ -31,7 +31,7 @@ describe("EmptyToggle", () => {
     render(<EmptyToggle image={exampleImage} hasGroundTruth={true} busy={false} onToggle={() => {}} />);
     const button = screen.getByRole("button", { name: /No machinery/ });
     expect(button).toBeDisabled();
-    expect(button).toHaveAttribute("title", "Delete or reject the boxes first");
+    expect(button).toHaveAttribute("title", "This image has accepted boxes. Delete or reject them first.");
   });
 
   it("is disabled while a request is in flight", () => {

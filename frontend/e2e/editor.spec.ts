@@ -198,6 +198,25 @@ test("N marks the image empty, rejects visible proposals locally, and N again un
   const toggle = page.getByRole("button", { name: /No machinery|Marked empty/ });
   await expect(toggle).toHaveAttribute("aria-pressed", "false");
 
+  // The mock's boxes include an accepted Person box: N is refused locally, without a request,
+  // while that ground truth is loaded (M3 / fix round 1).
+  await expect(toggle).toBeDisabled();
+  await expect(toggle).toHaveAttribute("title", "This image has accepted boxes. Delete or reject them first.");
+  await page.keyboard.press("n");
+  await expect(page.getByRole("alert")).toHaveText(
+    "This image has accepted boxes. Delete or reject them first.",
+  );
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  // Delete the ground-truth box so the image can be marked.
+  const deletedBox = page.waitForRequest(
+    (r) => r.method() === "DELETE" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.getByRole("listitem").filter({ hasText: "Person" }).click();
+  await page.keyboard.press("Delete");
+  await deletedBox;
+  await expect(toggle).toBeEnabled();
+
   const marked = page.waitForRequest((r) => r.method() === "PATCH" && r.url().endsWith(`/images/${IMG}`));
   await page.keyboard.press("n");
   expect((await marked).postDataJSON()).toEqual({ marked_empty: true });

@@ -11,7 +11,7 @@ from pathlib import Path
 from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.datasets.empties import clear_mark_for_ground_truth
+from app.datasets.empties import clear_mark_for_ground_truth, count_marked_empty
 from app.db.models import Box, Image, Job, Model, QueryRun
 from app.errors import AppError, not_found
 from app.inference.schemas import PreannotateRequest, QueryRunCreate
@@ -24,6 +24,8 @@ from app.providers.factory import get_provider
 from app.providers.keys import KeyStore
 from app.providers.tiling import make_tiles
 from app.training import registry
+
+log = logging.getLogger(__name__)
 
 LOCAL_COST_PER_REQUEST = 0.0
 BUSY_JOB_STATES = ("queued", "running")
@@ -235,7 +237,10 @@ def promote(
             box.review_state, box.reviewed_at = "accepted", now
         row.promoted_at = now
         image_ids = sorted({b.image_id for b in pending})
+        cleared = count_marked_empty(s, image_ids)
         clear_mark_for_ground_truth(s, image_ids)
+        if cleared:
+            log.info("promote %s: cleared the empty mark on %d image(s)", run_id, cleared)
         s.flush()
         count = box_count(s, run_id)
         s.expunge(row)
@@ -286,6 +291,8 @@ def preannotate(
         model_id = body.model_id or handle.row(s).preannotation_model_id
         if not model_id:
             raise AppError("validation_error", "no pre-annotation model selected", 422)
+        if image.marked_empty:  # a person already said there is no machinery here; skip the GPU
+            return True, model_id, []
         names = class_names(handle, s)
         path = handle.folder / image.path
 

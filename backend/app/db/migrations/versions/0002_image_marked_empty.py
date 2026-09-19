@@ -22,5 +22,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("image", schema=None) as batch_op:
-        batch_op.drop_column("marked_empty")
+    # Not `batch_alter_table`: its SQLite strategy recreates the table (copy, drop, rename), and
+    # `image.id` is referenced by `box.image_id` with `ondelete="CASCADE"` — the drop would take
+    # every box with it. A plain `ALTER TABLE ... DROP COLUMN` (SQLite 3.35+) never drops the table.
+    op.execute("ALTER TABLE image DROP COLUMN marked_empty")

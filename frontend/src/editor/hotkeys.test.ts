@@ -73,3 +73,11 @@ describe("next and previous ignore key repeat", () => {
     expect(actionForKey(key("ArrowRight", { ctrlKey: true }))).toEqual({ type: "next" });
   });
 });
+
+describe("N ignores key repeat (I5)", () => {
+  it("returns null for a held N and the action for a single press", () => {
+    expect(actionForKey(key("n", { repeat: true }))).toBeNull();
+    expect(actionForKey(key("N", { repeat: true }))).toBeNull();
+    expect(actionForKey(key("n"))).toEqual({ type: "toggle-empty" });
+  });
+});
