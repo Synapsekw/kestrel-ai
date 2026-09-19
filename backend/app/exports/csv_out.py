@@ -2,9 +2,10 @@
 
 Excel-friendly: UTF-8 with a BOM, comma-separated, `\\r\\n` line endings (the `excel` dialect
 gives us both), a header row, ISO timestamps, `.` as the decimal separator. Every text value (never
-a number) is guarded against formula injection: a value starting with `=`, `+`, `-`, `@`, a tab or
-a carriage return is prefixed with `'`, which Excel/Sheets treat as "this is text" and drop from
-the display, so a class or file name can never execute as a formula when the sheet is opened.
+a number) is guarded against formula injection: a value that would otherwise open as a formula is
+prefixed with `'`. A CSV has no cell formatting of its own, so opening one in Excel shows that `'`
+literally, right there in the cell (it is not a hidden "treat as text" marker the way it is when
+typed directly into the grid) — a visible cost, but the value can never be evaluated as a formula.
 """
 
 from __future__ import annotations
@@ -33,12 +34,25 @@ DETECTIONS_COLUMNS = [
     "box_id",
 ]
 
-_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+_FORMULA_PREFIXES = ("=", "+", "@", "\t", "\r")
 
 
 def _text(v: str) -> str:
-    """A text-column value, guarded against formula injection (never applied to a number)."""
-    return f"'{v}" if v and v[0] in _FORMULA_PREFIXES else v
+    """A text-column value, guarded against formula injection (never applied to a number).
+
+    A leading `=`, `+`, `@`, tab or carriage return always risks a formula. A leading `-` only
+    does when it is not simply a negative number or a plain word that happens to start with a
+    dash — `-flight` and `-0031` (site names, group keys) must round-trip unescaped, so the guard
+    fires for `-` only when the character after it is neither a letter nor a digit (`-=x`, `-@x`, a
+    bare `-`).
+    """
+    if not v:
+        return v
+    if v[0] in _FORMULA_PREFIXES:
+        return f"'{v}"
+    if v[0] == "-" and not (len(v) > 1 and v[1].isalnum()):
+        return f"'{v}"
+    return v
 
 
 def _num(v: float | int | None) -> str:
