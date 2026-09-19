@@ -88,4 +88,14 @@ describe("useEditorImage pre-annotation notices", () => {
     expect(notices.filter(Boolean)).toEqual([]);
     expect(requests.some((r) => r.url.endsWith("/preannotate"))).toBe(false);
   });
+
+  it("stays silent for a marked-empty image, without calling preannotate (I4)", async () => {
+    const { notices, requests } = mount([
+      { method: "GET", path: /\/images\/[^/]+$/, body: { ...exampleImage, marked_empty: true } },
+      { method: "GET", path: /\/boxes$/, body: { items: [], next_cursor: null } },
+    ]);
+    await waitFor(() => expect(useEditorStore.getState().image).not.toBeNull());
+    expect(notices.filter(Boolean)).toEqual([]);
+    expect(requests.some((r) => r.url.endsWith("/preannotate"))).toBe(false);
+  });
 });
