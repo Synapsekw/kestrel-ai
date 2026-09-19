@@ -20,7 +20,7 @@ from pathlib import Path
 from PIL import Image as PILImage
 from PIL import ImageDraw
 
-from app.exports.rows import ExportBox, ExportImage
+from app.exports.rows import ExportBox, ExportImage, class_counts
 
 MAX_SIDE = 640
 MAX_CARDS = 300
@@ -115,14 +115,6 @@ def draw_thumbnail(
     return buf.getvalue()
 
 
-def _class_counts(boxes: list[ExportBox], class_names: list[str]) -> dict[str, int]:
-    counts = dict.fromkeys(class_names, 0)
-    for b in boxes:
-        if b.class_name in counts:
-            counts[b.class_name] += 1
-    return counts
-
-
 def _is_checked(image: ExportImage) -> bool:
     """Marked empty, or has at least one reviewed box; an unreviewed-only image was never looked at."""
     return image.marked_empty or any(b.review_state != "unreviewed" for b in image.boxes)
@@ -145,7 +137,7 @@ def _format_export_time(dt: datetime) -> str:
 def _totals_table(images: list[ExportImage], class_names: list[str]) -> str:
     totals = dict.fromkeys(class_names, 0)
     for image in images:
-        for cls, n in _class_counts(image.boxes, class_names).items():
+        for cls, n in class_counts(image.boxes, class_names).items():
             totals[cls] += n
     rows = "".join(f"<tr><td>{_e(cls)}</td><td>{n}</td></tr>" for cls, n in totals.items())
     return f"<table><thead><tr><th>Class</th><th>Count</th></tr></thead><tbody>{rows}</tbody></table>"
@@ -157,7 +149,7 @@ def _group_table(images: list[ExportImage], class_names: list[str]) -> str:
     for image in images:
         images_per_group[image.group] = images_per_group.get(image.group, 0) + 1
         counts = per_group.setdefault(image.group, dict.fromkeys(class_names, 0))
-        for cls, n in _class_counts(image.boxes, class_names).items():
+        for cls, n in class_counts(image.boxes, class_names).items():
             counts[cls] += n
     head = "".join(f"<th>{_e(c)}</th>" for c in class_names)
     body = []
@@ -179,7 +171,7 @@ def _settings_text(settings: dict) -> str:
 
 
 def _card(image: ExportImage, class_names: list[str], thumbnail: bytes | None) -> str:
-    counts = _class_counts(image.boxes, class_names)
+    counts = class_counts(image.boxes, class_names)
     summary = ", ".join(f"{cls} {n}" for cls, n in counts.items() if n)
     img_tag = ""
     if thumbnail is not None:

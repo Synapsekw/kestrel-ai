@@ -12,7 +12,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from app.exports.rows import ExportImage
+from app.exports.rows import ExportImage, class_counts
 
 DETECTIONS_COLUMNS = [
     "image",
@@ -85,14 +85,6 @@ def _write_detections(images: list[ExportImage], folder: Path) -> str:
     return name
 
 
-def _class_counts(boxes, class_names: list[str]) -> dict[str, int]:
-    counts = dict.fromkeys(class_names, 0)
-    for b in boxes:
-        if b.class_name in counts:
-            counts[b.class_name] += 1
-    return counts
-
-
 def _unreviewed_count(boxes) -> int:
     return sum(1 for b in boxes if b.review_state == "unreviewed")
 
@@ -105,7 +97,7 @@ def _write_counts_by_group(images: list[ExportImage], class_names: list[str], fo
     for image in images:
         images_per_group[image.group] = images_per_group.get(image.group, 0) + 1
         counts = per_group.setdefault(image.group, dict.fromkeys(class_names, 0))
-        for cls, n in _class_counts(image.boxes, class_names).items():
+        for cls, n in class_counts(image.boxes, class_names).items():
             counts[cls] += n
         unreviewed_per_group[image.group] = unreviewed_per_group.get(image.group, 0) + _unreviewed_count(
             image.boxes
@@ -135,7 +127,7 @@ def _write_counts_by_image(images: list[ExportImage], class_names: list[str], fo
         header = ["image", "group", "capture_time", "image_lat", "image_lon", "marked_empty"]
         w.writerow([*header, *(_text(c) for c in class_names), "unreviewed", "total"])
         for image in images:
-            counts = _class_counts(image.boxes, class_names)
+            counts = class_counts(image.boxes, class_names)
             total = sum(counts.values())
             w.writerow(
                 [

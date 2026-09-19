@@ -47,6 +47,15 @@ class ExportImage:
     boxes: list[ExportBox] = field(default_factory=list)
 
 
+def class_counts(boxes: list[ExportBox], class_names: list[str]) -> dict[str, int]:
+    """One image's or one group's per-class box counts, in `class_names` order; shared by every writer."""
+    counts = dict.fromkeys(class_names, 0)
+    for b in boxes:
+        if b.class_name in counts:
+            counts[b.class_name] += 1
+    return counts
+
+
 def _origin_name(provenance_kind: str, provider: str | None, model_name: str | None) -> str:
     if provenance_kind == "person":
         return ""
@@ -66,25 +75,26 @@ def load(
         classes = list(handle.row(s).classes or [])
         class_names = {c["id"]: c["name"] for c in classes}
 
-        q = (
-            select(Image, Source.site)
-            .join(Source, Source.id == Image.source_id)
-            .order_by(Image.path)
+        image_query = (
+            select(Image, Source.site).join(Source, Source.id == Image.source_id).order_by(Image.path)
+        )
+        # Joined to Image rather than an `IN (<every image id>)`: with no explicit selection this
+        # is the whole project, and SQLite has a hard limit on the number of bound parameters a
+        # single IN(...) can hold, which a large project would blow straight through.
+        box_query = (
+            select(Box)
+            .join(Image, Image.id == Box.image_id)
+            .where(Box.review_state.in_(states))
+            .order_by(Box.created_at, Box.id)
         )
         if image_ids is not None:
-            q = q.where(Image.id.in_(image_ids))
-        image_rows = list(s.execute(q).all())
+            image_query = image_query.where(Image.id.in_(image_ids))
+            box_query = box_query.where(Image.id.in_(image_ids))
 
+        image_rows = list(s.execute(image_query).all())
         boxes_by_image: dict[str, list[Box]] = {}
-        if image_rows:
-            selected_ids = [img.id for img, _ in image_rows]
-            box_rows = s.execute(
-                select(Box)
-                .where(Box.image_id.in_(selected_ids), Box.review_state.in_(states))
-                .order_by(Box.created_at, Box.id)
-            ).scalars()
-            for b in box_rows:
-                boxes_by_image.setdefault(b.image_id, []).append(b)
+        for b in s.execute(box_query).scalars():
+            boxes_by_image.setdefault(b.image_id, []).append(b)
 
         images: list[ExportImage] = []
         for image, site in image_rows:
@@ -92,7 +102,7 @@ def load(
                 ExportBox(
                     id=b.id,
                     class_id=b.class_id,
-                    class_name=class_names.get(b.class_id, b.class_id),
+                    class_name=class_names[b.class_id],
                     x=b.x,
                     y=b.y,
                     w=b.w,
@@ -103,7 +113,7 @@ def load(
                     review_state=b.review_state,
                 )
                 for b in boxes_by_image.get(image.id, [])
-                if b.class_id in class_names
+                if b.class_id in class_names  # the class may have been removed from the project since
             ]
             images.append(
                 ExportImage(
