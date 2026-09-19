@@ -14,6 +14,7 @@ models or OpenAI / Anthropic vision models.
 | Part | What | Tooling |
 |---|---|---|
 | `backend/` | FastAPI sidecar: projects, datasets, annotation storage, jobs, training, inference | Python 3.11.15 in `backend/.venv` (uv), pytest, ruff, PyInstaller |
+| `backend/starter_weights/` | The bundled base models (`yolo11n/s/m.pt`, COCO); git-ignored, filled by `scripts/fetch_starter_weights.ps1` | - |
 | `frontend/` | Tauri 2 shell with the React/TypeScript/Vite UI | pnpm, Vitest, Playwright, Rust stable MSVC |
 | `contract/` | `openapi.yaml`, generated TypeScript client, Prism mock server, Spectral lint | pnpm |
 
@@ -89,6 +90,17 @@ acceptance drivers use.
 
 ## Build
 
+0. Fetch the starter weights (once per checkout; the three files are git-ignored and `build.ps1`
+   refuses to run without them):
+
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File backend\scripts\fetch_starter_weights.ps1
+   ```
+
+   Copies `yolo11n.pt` and `yolo11m.pt` from `E:\Dev\Yolo\models\` when present, downloads
+   `yolo11s.pt` (and anything else missing) from the Ultralytics GitHub release, and skips a file
+   already in `backend/starter_weights/` that is over 1 MB.
+
 1. Freeze the backend and copy it into the Tauri sidecar slot:
 
    ```powershell
@@ -107,11 +119,12 @@ acceptance drivers use.
    ```
 
    It starts the exe the way the sidecar does, then checks health, `torch.cuda.is_available()`,
-   an import, one YOLO prediction, a 1-epoch training run through the frozen `worker` subcommand
-   (DataLoader workers, so `multiprocessing.freeze_support()` is exercised), the Ultralytics font
-   pre-seed, an ONNX export and a keyring round trip through Windows Credential Manager. It prints
-   `health ok`, `cuda True <gpu name>`, `predict ok <n> boxes`, `worker ok` and exits non-zero on
-   any failure. About 25 seconds.
+   the three bundled starter weights, an import, one YOLO prediction, a 1-epoch training run
+   through the frozen `worker` subcommand (DataLoader workers, so
+   `multiprocessing.freeze_support()` is exercised), the Ultralytics font pre-seed, an ONNX export
+   and a keyring round trip through Windows Credential Manager. It prints `health ok`,
+   `cuda True <gpu name>`, `starter ok 3`, `predict ok <n> boxes`, `worker ok` and exits non-zero
+   on any failure. About 25 seconds.
 
 3. Build the installer:
 
@@ -207,6 +220,9 @@ the variable is absent. No key is ever written to a file, a fixture or a log.
   fixed ports: 8765 (backend), 1420 (Vite), 4010 (mock), 9222 (WebView2 debugging).
 - **Jobs stuck in "running" after a crash.** Opening the project marks them `failed` with
   "interrupted by application restart" (queued ones become `cancelled`); start the work again.
+- **"starter weights ... are not part of this build" when adding a base model.** The checkout has
+  not fetched them: run `backend\scripts\fetch_starter_weights.ps1` (dev) or rebuild the installer
+  after that script has populated `backend/starter_weights/` (packaged app).
 - **Re-running the installer** upgrades in place and keeps app data and project folders. Uninstall
   removes `%LOCALAPPDATA%\Programs\Machinery Detection` and leaves app data and projects alone.
 - **"The WebView2 runtime is missing" on a fresh machine.** The installer only carries Microsoft's
