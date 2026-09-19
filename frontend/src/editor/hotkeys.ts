@@ -27,7 +27,8 @@ export interface KeyLike {
 
 /**
  * Spec section 6 lists both "1:1 (1)" and class hotkeys 1 to 9. Decision: digits select classes,
- * `0` and `Ctrl+1` are 1:1, `F` fits. Letters `a`, `r`, `f` are editor keys and cannot be class hotkeys.
+ * `0` and `Ctrl+1` are 1:1, `F` fits. Letters `a`, `r`, `f`, `n` are editor keys and cannot be
+ * class hotkeys.
  */
 export function actionForKey(e: KeyLike): EditorAction | null {
   const ctrl = e.ctrlKey || e.metaKey;
@@ -66,7 +67,8 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   if (lower === "0") return { type: "one-to-one" };
   if (lower === "a") return { type: "accept-all" };
   if (lower === "r") return { type: "reject-all" };
-  if (lower === "n") return { type: "toggle-empty" };
+  // A held N must not fire the request-bearing mark toggle once per auto-repeat tick.
+  if (lower === "n") return e.repeat ? null : { type: "toggle-empty" };
   if (e.key.length === 1) return { type: "class-key", key: e.key };
   return null;
 }
