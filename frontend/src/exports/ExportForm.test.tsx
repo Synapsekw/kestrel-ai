@@ -64,14 +64,17 @@ describe("ExportForm", () => {
 
   it("pluralises every count down to the singular when it is exactly 1", () => {
     renderForm({ labeledCount: 1, boxCount: 1, imageCount: 1, pendingReviewCount: 1 });
-    expect(
-      screen.getByText("Exports all 1 image: 1 accepted box on the 1 checked image."),
-    ).toBeInTheDocument();
+    expect(screen.getByText("Exports 1 image: 1 accepted box on the 1 checked image.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: /Include proposals/ }));
     expect(
-      screen.getByText(
-        "Exports all 1 image: 1 accepted box on the 1 checked image and 1 unreviewed proposal.",
-      ),
+      screen.getByText("Exports 1 image: 1 accepted box on the 1 checked image and 1 unreviewed proposal."),
+    ).toBeInTheDocument();
+  });
+
+  it("says 'Exports all' (not '1') once imageCount is more than 1 (m7)", () => {
+    renderForm({ labeledCount: 1, boxCount: 1, imageCount: 2, pendingReviewCount: 0 });
+    expect(
+      screen.getByText("Exports all 2 images: 1 accepted box on the 1 checked image."),
     ).toBeInTheDocument();
   });
 
