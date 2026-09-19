@@ -57,6 +57,15 @@ describe("editor store", () => {
     expect(useEditorStore.getState().selectedId).toBeNull();
   });
 
+  it("replaces the loaded image, but ignores a stale reply for another image", () => {
+    const s = useEditorStore.getState();
+    s.loadImage(exampleImage, []);
+    s.setImage({ ...exampleImage, marked_empty: true });
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.setImage({ ...exampleImage, id: "some-other-image", marked_empty: true });
+    expect(useEditorStore.getState().image?.id).toBe(exampleImage.id);
+  });
+
   it("hides rejected boxes unless asked and lists visible proposals", () => {
     const s = useEditorStore.getState();
     s.loadImage(exampleImage, [personBox, proposalBox, rejected]);

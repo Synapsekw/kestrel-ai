@@ -6,6 +6,7 @@ export type EditorAction =
   | { type: "duplicate" }
   | { type: "accept-all" }
   | { type: "reject-all" }
+  | { type: "toggle-empty" }
   | { type: "next" }
   | { type: "prev" }
   | { type: "undo" }
@@ -65,6 +66,7 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   if (lower === "0") return { type: "one-to-one" };
   if (lower === "a") return { type: "accept-all" };
   if (lower === "r") return { type: "reject-all" };
+  if (lower === "n") return { type: "toggle-empty" };
   if (e.key.length === 1) return { type: "class-key", key: e.key };
   return null;
 }
@@ -87,6 +89,7 @@ export const HOTKEY_HELP: ReadonlyArray<{ keys: string; does: string }> = [
   { keys: "Ctrl+D", does: "duplicate selected box" },
   { keys: "A", does: "accept all visible proposals" },
   { keys: "R", does: "reject all visible proposals" },
+  { keys: "N", does: "no machinery on this image (mark empty / undo)" },
   { keys: "Ctrl+Z / Ctrl+Y", does: "undo / redo" },
   { keys: "Ctrl+Right / Ctrl+Left", does: "next / previous image" },
   { keys: "Esc", does: "deselect" },

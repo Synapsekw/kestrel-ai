@@ -1,6 +1,7 @@
 import type { ApiClient, Box, BoxCreate, ReviewState } from "@contract/client";
 import { createBox, deleteBox, reviewBoxes, updateBox } from "@/api/boxes";
 import { messageOf } from "@/api/errors";
+import { setMarkedEmpty } from "@/api/images";
 import { pushLog } from "@/app/diagnostics";
 import type { EditorStore } from "@/store/editor";
 import { duplicateOffset, rectEquals, rectOf, roundRect, type Rect } from "./geometry";
@@ -78,6 +79,11 @@ export async function cmdCreateBox(
   if (!created) return undefined;
   store.getState().upsertBox(created);
   store.getState().select(created.id);
+  // The backend clears `marked_empty` on new ground truth in the same transaction; mirror it here.
+  const image = store.getState().image;
+  if (image && image.id === imageId && image.marked_empty) {
+    store.getState().setImage({ ...image, marked_empty: false });
+  }
   const ref: BoxRef = { id: created.id };
   history.push({
     label: "draw box",
@@ -218,6 +224,41 @@ export async function cmdReview(ctx: CommandContext, ids: string[], action: Revi
       store.getState().patchStates(ids, state);
     },
   });
+}
+
+/**
+ * "No machinery on this image" (spec section 6, walk-through item E4): not part of the undo
+ * stack (the toggle undoes itself), and the error is shown verbatim, as the backend phrased it.
+ */
+export async function cmdToggleEmpty(ctx: CommandContext): Promise<void> {
+  const { api, projectId, store } = ctx;
+  const image = store.getState().image;
+  if (!image) return;
+  const next = !image.marked_empty;
+  store.getState().beginRequest();
+  store.getState().setError(null);
+  try {
+    const updated = await setMarkedEmpty(api, projectId, image.id, next);
+    store.getState().setImage(updated);
+    if (next) {
+      const rejectIds = Object.values(store.getState().boxes)
+        .filter((b) => b.review_state === "unreviewed")
+        .map((b) => b.id);
+      if (rejectIds.length) store.getState().patchStates(rejectIds, "rejected");
+      store
+        .getState()
+        .setNotice(
+          "Marked as empty: this image counts as labeled and enters datasets as a negative example.",
+        );
+    } else {
+      store.getState().setNotice("No longer marked empty.");
+    }
+  } catch (e) {
+    pushLog(`mark empty failed: ${messageOf(e, String(e))}`);
+    store.getState().setError(messageOf(e, "could not update the mark"));
+  } finally {
+    store.getState().endRequest();
+  }
 }
 
 export async function cmdUndo(ctx: CommandContext): Promise<void> {

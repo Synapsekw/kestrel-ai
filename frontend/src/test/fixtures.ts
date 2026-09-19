@@ -77,6 +77,7 @@ export const exampleImage: ImageRow = {
   pending_count: 2,
   max_pending_confidence: 0.81,
   labeled: true,
+  marked_empty: false,
   created_at: "2026-09-17T10:06:00Z",
 };
 

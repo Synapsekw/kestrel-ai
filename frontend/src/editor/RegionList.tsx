@@ -21,6 +21,8 @@ interface Props {
   classes: ClassDef[];
   selectedId: string | null;
   hoveredId: string | null;
+  /** Whether the image is marked "no machinery" (E4): changes the empty-list text. */
+  markedEmpty: boolean;
   onSelect: (id: string) => void;
   onHover: (id: string | null) => void;
   onSetClass: (id: string, classId: string) => void;
@@ -33,6 +35,7 @@ export function RegionList({
   classes,
   selectedId,
   hoveredId,
+  markedEmpty,
   onSelect,
   onHover,
   onSetClass,
@@ -147,7 +150,11 @@ export function RegionList({
         })}
       </ul>
       {boxes.length === 0 && (
-        <p className="px-3 py-4 text-xs text-slate-500">No boxes yet. Pick a class and drag on the image.</p>
+        <p className="px-3 py-4 text-xs text-slate-500">
+          {markedEmpty
+            ? "Marked empty: no machinery on this image."
+            : "No boxes yet. Pick a class and drag on the image. Nothing here? Press N."}
+        </p>
       )}
     </div>
   );

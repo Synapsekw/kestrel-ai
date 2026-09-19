@@ -17,6 +17,7 @@ import {
   cmdRedo,
   cmdReview,
   cmdSetClass,
+  cmdToggleEmpty,
   cmdUndo,
   cmdUpdateRect,
   enqueue,
@@ -39,6 +40,14 @@ const routes: FakeRoute[] = [
   },
   { method: "DELETE", path: /\/boxes\/[^/]+$/, status: 204 },
   { method: "POST", path: /\/boxes\/review$/, body: { updated: 1 } },
+  {
+    method: "PATCH",
+    path: /\/images\/[^/]+$/,
+    body: (req) => ({
+      ...exampleImage,
+      marked_empty: (req.body as { marked_empty: boolean }).marked_empty,
+    }),
+  },
 ];
 
 const REVIEW_URL = `/api/v1/projects/${PROJECT_ID}/boxes/review`;
@@ -238,6 +247,53 @@ describe("editor commands", () => {
     expect(useEditorStore.getState().error).toBe("draw box failed: disk full");
     expect(useEditorStore.getState().pending).toBe(0);
     expect(c.history.canUndo()).toBe(false);
+  });
+
+  it("clears the empty mark locally after drawing a box on a marked image", async () => {
+    useEditorStore.getState().setImage({ ...exampleImage, marked_empty: true });
+    const c = ctx();
+    await cmdCreateBox(c, exampleImage.id, { class_id: CLASS_ID(2), x: 10, y: 20, w: 30, h: 40 });
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+});
+
+describe("cmdToggleEmpty", () => {
+  beforeEach(() => {
+    counter = 0;
+    useEditorStore.getState().reset();
+    useEditorStore.getState().loadImage(exampleImage, [personBox, proposalBox]);
+  });
+
+  it("marks the image empty, rejects unreviewed boxes locally and sets a notice", async () => {
+    const c = ctx();
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("rejected");
+    expect(useEditorStore.getState().boxes[personBox.id].review_state).toBe("accepted");
+    expect(useEditorStore.getState().notice).toBe(
+      "Marked as empty: this image counts as labeled and enters datasets as a negative example.",
+    );
+
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+    expect(useEditorStore.getState().notice).toBe("No longer marked empty.");
+  });
+
+  it("surfaces a 409 conflict as the editor error, verbatim", async () => {
+    const { api } = fakeClient([
+      {
+        method: "PATCH",
+        path: /\/images\/[^/]+$/,
+        status: 409,
+        body: errorBody("conflict", "the image has 1 accepted boxes; delete them first or leave it labeled"),
+      },
+    ]);
+    const c: CommandContext = { api, projectId: PROJECT_ID, store: useEditorStore, history: new History() };
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().error).toBe(
+      "the image has 1 accepted boxes; delete them first or leave it labeled",
+    );
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
   });
 });
 
