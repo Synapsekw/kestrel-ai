@@ -26,10 +26,31 @@ def _as_box_dicts(image: ExportImage) -> list[dict]:
     return [{"class_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h} for b in image.boxes]
 
 
+def _check_no_stem_collisions(images: list[ExportImage]) -> None:
+    """YOLO tools pair an image and its label by file stem alone, so two images that map to the
+    same label path (e.g. one site's `x.jpg` and `x.jpeg`) cannot both be exported: one would
+    silently overwrite the other's label file. Caught here, before anything is written, with a
+    plain message naming both images, rather than fixed up by inventing an extension-qualified
+    label name that no YOLO trainer would actually look for.
+    """
+    seen: dict[Path, str] = {}
+    for image in images:
+        label_path = _label_path(image.path)
+        earlier = seen.get(label_path)
+        if earlier is not None:
+            raise ValueError(
+                f"{earlier} and {image.path} would both write the YOLO label "
+                f"{FOLDER}/{label_path.as_posix()}: rename one of them (YOLO pairs an image and "
+                "its label by file stem alone, so they cannot share one)."
+            )
+        seen[label_path] = image.path
+
+
 def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[str]:
     """Writes the mirrored label tree and `classes.txt`; returns [`labels_yolo`, `labels_yolo/classes.txt`]
     (not one entry per image: the job result should name the folder, not enumerate every file in it).
     """
+    _check_no_stem_collisions(images)
     out = folder / FOLDER
     out.mkdir(parents=True, exist_ok=True)
     class_index = {c["id"]: i for i, c in enumerate(classes)}
