@@ -55,7 +55,7 @@ describe("RunCard", () => {
     fireEvent.change(screen.getByLabelText("Minimum confidence"), { target: { value: "0.6" } });
     // Step 1 only counts: nothing is accepted until the operator confirms the number.
     fireEvent.click(screen.getByRole("button", { name: "Accept as labels…" }));
-    const confirm = await screen.findByRole("button", { name: "Accept 6 boxes" });
+    const confirm = await screen.findByRole("button", { name: "Accept 6 boxes as labels" });
     expect(screen.getByTestId("promote-confirm")).toHaveTextContent(
       "6 unreviewed boxes at or above 0.6 will become ground-truth labels",
     );
@@ -182,7 +182,7 @@ describe("RunCard", () => {
     expect(screen.queryByTestId("promote-confirm")).not.toBeInTheDocument();
     wouldAccept = 3;
     fireEvent.click(screen.getByRole("button", { name: "Accept as labels…" }));
-    await screen.findByRole("button", { name: "Accept 3 boxes" });
+    await screen.findByRole("button", { name: "Accept 3 boxes as labels" });
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(screen.queryByTestId("promote-confirm")).not.toBeInTheDocument();
     expect(

@@ -1,21 +1,83 @@
-import { useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import type { Job } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
+import { cancelJob } from "@/api/jobs";
 import { promoteQueryRun, resumeQueryRun, unpromoteQueryRun } from "@/api/queryRuns";
 import { pushLog } from "@/app/diagnostics";
-import { JobCard } from "@/jobs/JobCard";
+import { elapsedSeconds, formatDuration, jobTitle, stateLabel } from "@/jobs/jobLabels";
+import { JobLogView } from "@/jobs/JobLogView";
+import { useNow } from "@/jobs/useNow";
 import { formatLocalDate } from "@/models/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
+import { Alert, Button, Field, Input, Pill, Progress, Skeleton, buttonClass, type PillTone } from "@/ui";
 import { REVIEW_LINK_MAX_IDS, reviewLink, runTitle } from "./queryModel";
 import { useTrackedRun } from "./useTrackedRun";
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+const STATE_TONE: Record<Job["state"], PillTone> = {
+  queued: "neutral",
+  running: "accent",
+  succeeded: "ok",
+  failed: "danger",
+  cancelled: "neutral",
+};
+
+/** The run's job: state, progress while it works, the error when it stopped, Cancel and the log. */
+function RunJob({ projectId, job }: { projectId: string; job: Job }) {
+  const api = useApi();
+  const active = isActiveJob(job);
+  const now = useNow(1000, active);
+  const [logOpen, setLogOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const elapsed = elapsedSeconds(job, now);
+  const percent = Math.round(job.progress * 100);
+
+  async function cancel() {
+    setBusy(true);
+    setError(null);
+    try {
+      useJobsStore.getState().upsert(await cancelJob(api, projectId, job.id));
+    } catch (e) {
+      pushLog(`cancel job ${job.id} failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not cancel the job"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div data-testid={`job-${job.id}`} className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+        <Pill data-testid="jobcard-state" tone={STATE_TONE[job.state]} live={job.state === "running"}>
+          {stateLabel(job.state)}
+        </Pill>
+        <span className="font-medium tabular-nums text-ink">{percent}%</span>
+        {job.message && <span className="min-w-0 truncate tabular-nums text-muted">{job.message}</span>}
+        {elapsed !== null && <span className="tabular-nums text-muted">{formatDuration(elapsed)}</span>}
+        <span className="ml-auto flex items-center gap-1">
+          {active && (
+            <Button size="sm" variant="ghost" onClick={() => void cancel()} disabled={busy}>
+              Cancel job
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={() => setLogOpen((o) => !o)} aria-expanded={logOpen}>
+            {logOpen ? "Hide log" : "Show log"}
+          </Button>
+        </span>
+      </div>
+      {active && <Progress value={job.progress} running label={`${jobTitle(job)} progress`} />}
+      {job.error && <Alert tone="danger">{job.error}</Alert>}
+      {error && <Alert tone="danger">{error}</Alert>}
+      {logOpen && <JobLogView projectId={projectId} jobId={job.id} live={active} />}
+    </div>
+  );
+}
 
 export function RunCard({ projectId, runId }: { projectId: string; runId: string }) {
   const api = useApi();
+  const id = useId();
   const { run, job, error: loadError, replace, trackJob, retry } = useTrackedRun(projectId, runId);
   const [minConf, setMinConf] = useState("0.5");
   const [busy, setBusy] = useState(false);
@@ -61,7 +123,7 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
     if (!pending) return;
     const { threshold } = pending;
     setPending(null);
-    void act("promote", async () => {
+    void act("accept the boxes of", async () => {
       const result = await promoteQueryRun(api, projectId, runId, threshold);
       replace(result.query_run);
       return `${boxes(result.accepted)} accepted`;
@@ -95,18 +157,31 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
 
   // The card keeps rendering when a later poll fails; the alert sits next to it.
   const alert = loadError && (
-    <p
-      role="alert"
-      className="flex flex-wrap items-center gap-2 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200"
+    <Alert
+      tone="danger"
+      actions={
+        <Button size="sm" onClick={retry}>
+          Retry
+        </Button>
+      }
     >
       {loadError}
-      <button type="button" className={secondary} onClick={retry}>
-        Retry
-      </button>
-    </p>
+    </Alert>
   );
   if (!run) {
-    return alert || <p className="text-sm text-slate-400">Loading run {runId.slice(0, 8)}…</p>;
+    return (
+      alert || (
+        <div
+          role="status"
+          aria-label={`Loading run ${runId.slice(0, 8)}`}
+          className="flex max-w-3xl flex-col gap-3 rounded-lg border border-line bg-panel p-5"
+        >
+          <Skeleton className="h-5 w-64" />
+          <Skeleton className="h-4 w-96 max-w-full" />
+          <Skeleton className="h-1.5 w-full" />
+        </div>
+      )
+    );
   }
   const finished = job !== null && job.state === "succeeded";
   const interrupted = job !== null && !isActiveJob(job) && job.state !== "succeeded";
@@ -117,122 +192,112 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
   return (
     <section
       data-testid="run-card"
-      className="flex max-w-3xl flex-col gap-3 rounded border border-slate-800 bg-slate-800/30 p-4"
+      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-panel p-5"
     >
       {alert}
-      <header className="flex flex-wrap items-baseline gap-2">
-        <h2 className="text-lg font-medium">{runTitle(run)}</h2>
-        {run.promoted_at && (
-          <span
-            className="rounded bg-emerald-800 px-2 py-0.5 text-xs text-emerald-100"
-            title={run.promoted_at}
-          >
-            Accepted as labels
-          </span>
-        )}
-        <span className="text-xs text-slate-400">started {formatLocalDate(run.created_at)}</span>
-      </header>
-      <p className="text-xs text-slate-400">
-        {run.image_ids.length} {run.image_ids.length === 1 ? "image" : "images"}, {tiling}, confidence{" "}
-        {run.conf}
-        {run.model_name ? `, model ${run.model_name}` : ""}
-      </p>
-      {job && <JobCard projectId={projectId} job={job} />}
-      {interrupted && (
+      <header className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={secondary} onClick={() => void resume()} disabled={busy}>
+          <h2 className="text-base font-semibold">{runTitle(run)}</h2>
+          {run.promoted_at && (
+            <Pill tone="ok" title={run.promoted_at}>
+              Accepted as labels
+            </Pill>
+          )}
+          <span className="ml-auto text-xs text-muted">started {formatLocalDate(run.created_at)}</span>
+        </div>
+        <p className="text-[13px] tabular-nums text-muted">
+          {run.image_ids.length} {run.image_ids.length === 1 ? "image" : "images"}, {tiling}, confidence{" "}
+          {run.conf}
+          {run.model_name ? `, model ${run.model_name}` : ""}
+        </p>
+      </header>
+      {job && <RunJob projectId={projectId} job={job} />}
+      {interrupted && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button icon="play" onClick={() => void resume()} disabled={busy}>
             Resume run
-          </button>
-          <span className="text-xs text-slate-400">
+          </Button>
+          <span className="text-[13px] text-muted">
             Finished tiles are reused, so the run continues where it stopped.
           </span>
         </div>
       )}
-      <p data-testid="box-count" className="text-sm">
+      <p data-testid="box-count" className="text-sm font-medium tabular-nums">
         {boxes(run.box_count)} {finished ? "found" : "written so far"}
       </p>
       {finished && run.box_count === 0 && (
-        <p
-          data-testid="no-boxes-advice"
-          className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm text-amber-200"
-        >
+        <Alert tone="warn" testId="no-boxes-advice">
           Nothing scored at or above confidence {run.conf}. Run again with a lower confidence, or improve the
           model: a model trained on few images, or for few epochs, is rarely sure of anything.
-        </p>
+        </Alert>
       )}
       {!(finished && run.box_count === 0) && (
         <>
-          <p className="text-sm">
-            <Link to={link.to} className="text-orange-300 hover:underline">
+          <div className="flex flex-wrap items-center gap-3">
+            <Link to={link.to} className={buttonClass("primary", "sm")}>
               Review results
             </Link>
             {link.capped && (
-              <span className="text-xs text-slate-400">
-                {" "}
-                (first {REVIEW_LINK_MAX_IDS} of {run.image_ids.length} images)
+              <span className="text-xs tabular-nums text-muted">
+                First {REVIEW_LINK_MAX_IDS} of {run.image_ids.length} images
               </span>
             )}
-          </p>
-          <form onSubmit={countPromotion} className="flex flex-wrap items-end gap-2">
-            <label className="flex flex-col gap-1 text-xs text-slate-400">
-              Minimum confidence
-              <input
-                aria-label="Minimum confidence"
-                type="number"
-                min={0}
-                max={1}
-                step={0.05}
-                value={minConf}
-                onChange={(e) => {
-                  setMinConf(e.target.value);
-                  setPending(null);
-                }}
-                className={`${input} w-24`}
-              />
-            </label>
-            <button type="submit" className={primary} disabled={busy}>
-              Accept as labels…
-            </button>
-            {run.promoted_at && (
-              <button type="button" className={secondary} onClick={undoPromotion} disabled={busy}>
-                Undo acceptance
-              </button>
-            )}
-            <span className="text-xs text-slate-400">
+          </div>
+          <form onSubmit={countPromotion} className="flex flex-col gap-2 border-t border-line pt-4">
+            <div className="flex flex-wrap items-end gap-2">
+              <Field label="Minimum confidence" htmlFor={`${id}-min-conf`}>
+                <Input
+                  id={`${id}-min-conf`}
+                  type="number"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={minConf}
+                  onChange={(e) => {
+                    setMinConf(e.target.value);
+                    setPending(null);
+                  }}
+                  className="w-28 tabular-nums"
+                />
+              </Field>
+              <Button type="submit" disabled={busy}>
+                Accept as labels…
+              </Button>
+              {run.promoted_at && (
+                <Button variant="ghost" icon="undo" onClick={undoPromotion} disabled={busy}>
+                  Undo acceptance
+                </Button>
+              )}
+            </div>
+            <p className="text-xs leading-relaxed text-muted">
               Counts the run&apos;s unreviewed boxes at or above the threshold, then asks before accepting
               them.
-            </span>
+            </p>
           </form>
           {pending && (
-            <div
-              data-testid="promote-confirm"
-              className="flex flex-wrap items-center gap-2 rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-sm"
+            <Alert
+              tone="warn"
+              testId="promote-confirm"
+              actions={
+                <>
+                  <Button size="sm" variant="primary" onClick={confirmPromotion} disabled={busy}>
+                    Accept {boxes(pending.count)} as labels
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setPending(null)}>
+                    Cancel
+                  </Button>
+                </>
+              }
             >
-              <span>
-                {pending.count} unreviewed {pending.count === 1 ? "box" : "boxes"} at or above{" "}
-                {pending.threshold} will become ground-truth labels and enter new datasets. Review results
-                first if the model is new; Undo acceptance reverses it.
-              </span>
-              <button type="button" className={primary} onClick={confirmPromotion} disabled={busy}>
-                Accept {boxes(pending.count)}
-              </button>
-              <button type="button" className={secondary} onClick={() => setPending(null)}>
-                Cancel
-              </button>
-            </div>
+              {pending.count} unreviewed {pending.count === 1 ? "box" : "boxes"} at or above{" "}
+              {pending.threshold} will become ground-truth labels and enter new datasets. Review results first
+              if the model is new; Undo acceptance reverses it.
+            </Alert>
           )}
         </>
       )}
-      {status && (
-        <p role="status" className="text-xs text-emerald-300">
-          {status}
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {status && <Alert tone="ok">{status}</Alert>}
+      {error && <Alert tone="danger">{error}</Alert>}
     </section>
   );
 }

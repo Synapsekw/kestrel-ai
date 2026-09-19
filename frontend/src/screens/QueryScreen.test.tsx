@@ -53,7 +53,7 @@ describe("QueryScreen", () => {
     });
     await waitFor(() => expect(screen.getByLabelText("Model")).toHaveValue(exampleModel.id));
     await waitFor(() => expect(screen.getByTestId("image-count")).toHaveTextContent("2 images selected"));
-    fireEvent.click(screen.getByLabelText("Cloud provider"));
+    fireEvent.click(screen.getByRole("radio", { name: "Cloud provider" }));
     // A cloud run costs money: it cannot start before its estimate was shown.
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
     expect(
@@ -92,12 +92,23 @@ describe("QueryScreen", () => {
       path: "/p/:projectId/query",
     });
     expect(screen.getByTestId("query-intro")).toHaveTextContent(
-      "Run a model over images to find machinery. What it finds arrives as proposals: dashed boxes that wait in the Review queue until a person accepts or rejects them.",
+      "Run a model over images; it suggests boxes for you to review.",
     );
-    expect(screen.getByRole("link", { name: "Review queue" })).toHaveAttribute(
-      "href",
-      `/p/${PROJECT_ID}/review`,
-    );
+    expect(screen.getByRole("link", { name: "review" })).toHaveAttribute("href", `/p/${PROJECT_ID}/review`);
+  });
+
+  it("shows an opened run with New detection, which returns to the form", async () => {
+    const { api } = fakeClient(base);
+    renderWithProviders(<QueryScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/query?run=${exampleQueryRun.id}`,
+      path: "/p/:projectId/query",
+    });
+    expect(await screen.findByTestId("run-card")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "New detection" }));
+    expect(screen.queryByTestId("run-card")).not.toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "Source" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "New detection" })).not.toBeInTheDocument();
   });
 
   it("starts a local run without asking for an estimate first", async () => {
@@ -171,15 +182,15 @@ describe("QueryScreen", () => {
       path: "/p/:projectId/query",
     });
     await waitFor(() => expect(screen.getByTestId("image-count")).toHaveTextContent("2 images selected"));
-    fireEvent.click(screen.getByLabelText("Cloud provider"));
+    fireEvent.click(screen.getByRole("radio", { name: "Cloud provider" }));
     fireEvent.click(screen.getByRole("button", { name: "Estimate" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Describe what to find");
     fireEvent.change(screen.getByLabelText("Query"), { target: { value: "cranes" } });
     fireEvent.click(screen.getByRole("button", { name: "Estimate" }));
     await waitFor(() =>
-      expect(screen.getByRole("note")).toHaveTextContent("Query runs are not available yet"),
+      expect(screen.getByRole("note")).toHaveTextContent("Detection runs are not available yet"),
     );
-    expect(screen.getByRole("heading", { name: "Query" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Detect" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
   });
 
