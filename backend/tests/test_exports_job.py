@@ -271,3 +271,53 @@ def test_cancellation_inside_the_html_cards_leaves_the_job_cancelled(
     job = wait_job(project_id, job_id)
     assert job["state"] == "cancelled", job
     assert _no_stamp_or_partial_folders_left(handle)
+
+
+def test_project_opened_sweeps_a_leftover_partial_export_folder(project_id, handle, tmp_path):
+    """N2: a crash-left .partial-<stamp> folder is removed the next time the project opens."""
+    from app.main import project_opened
+    from app.projects.service import ProjectRegistry
+
+    partial = handle.exports_dir / ".partial-2026-09-19_101500"
+    partial.mkdir(parents=True)
+    (partial / "detections.csv").write_text("x", "utf-8")
+
+    class _NoLiveJobs:
+        def is_live(self, job_id):
+            return False
+
+    registry = ProjectRegistry(tmp_path / "appdata2", on_open=lambda h: project_opened(h, _NoLiveJobs()))
+    registry.open(handle.folder, remember=False)
+
+    assert not partial.exists()
+
+
+def test_sweep_skips_while_a_results_export_job_is_active(handle):
+    from app.db.models import Job
+    from app.exports.job import sweep_partial_exports
+
+    partial = handle.exports_dir / ".partial-2026-09-19_101500"
+    partial.mkdir(parents=True)
+    with handle.session() as s:
+        s.add(Job(type="results_export", state="running"))
+
+    sweep_partial_exports(handle)
+    assert partial.exists()
+
+
+def test_sweep_only_removes_partial_directories_never_a_stray_file(handle):
+    from app.exports.job import sweep_partial_exports
+
+    handle.exports_dir.mkdir(parents=True, exist_ok=True)
+    stray_file = handle.exports_dir / ".partial-not-a-folder"
+    stray_file.write_text("x", "utf-8")
+
+    sweep_partial_exports(handle)
+    assert stray_file.exists()
+
+
+def test_sweep_does_nothing_with_no_exports_dir(handle):
+    from app.exports.job import sweep_partial_exports
+
+    assert not handle.exports_dir.exists()
+    sweep_partial_exports(handle)  # must not raise

@@ -19,16 +19,19 @@ from app.providers.keys import KeyringKeyStore
 
 def project_opened(handle, runner) -> None:
     """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
-    their folders back. Each step on its own, so one failing never skips the other."""
+    their folders back, sweep partial exports a crash left behind. Each step on its own, so one
+    failing never skips the others."""
     import logging
 
     from app.datasets import materialise
+    from app.exports import job as exports_job
     from app.jobs import startup
 
     log = logging.getLogger(__name__)
     for step, run in (
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
+        ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
     ):
         try:
             run()
