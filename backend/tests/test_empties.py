@@ -230,8 +230,16 @@ def test_an_image_with_ground_truth_cannot_be_marked_empty(client, project_id, i
     add_person_box(image_ids[0])
     r = client.patch(f"{BASE}/{project_id}/images/{image_ids[0]}", json={"marked_empty": True})
     assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
-    assert "accepted box" in r.json()["error"]["message"]
+    assert r.json()["error"]["message"] == "This image has 1 accepted box. Delete or reject them first."
     assert client.patch(f"{BASE}/{project_id}/images/nope", json={"marked_empty": True}).status_code == 404
+
+
+def test_the_ground_truth_message_is_pluralised(client, project_id, image_ids, add_person_box):
+    add_person_box(image_ids[0])
+    add_person_box(image_ids[0])
+    r = client.patch(f"{BASE}/{project_id}/images/{image_ids[0]}", json={"marked_empty": True})
+    assert r.status_code == 409
+    assert r.json()["error"]["message"] == "This image has 2 accepted boxes. Delete or reject them first."
 
 
 def test_bulk_marks_the_empty_ones_and_skips_images_with_ground_truth(

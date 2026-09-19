@@ -21,6 +21,12 @@ from app.projects.service import ProjectHandle
 GROUND_TRUTH = ("accepted", "edited")
 
 
+def ground_truth_message(n: int) -> str:
+    """The one wording used everywhere a mark is refused because of existing ground truth."""
+    box_word = "box" if n == 1 else "boxes"
+    return f"This image has {n} accepted {box_word}. Delete or reject them first."
+
+
 def _ground_truth_count(s: Session, image_id: str) -> int:
     return s.execute(
         select(func.count())
@@ -37,6 +43,16 @@ def _reject_pending(s: Session, image_id: str, now: datetime) -> bool:
     for box in pending:
         box.review_state, box.reviewed_at = "rejected", now
     return bool(pending)
+
+
+def count_marked_empty(s: Session, image_ids: Iterable[str]) -> int:
+    """How many of `image_ids` are currently marked empty (for a caller that wants to log it)."""
+    ids = list(image_ids)
+    if not ids:
+        return 0
+    return s.execute(
+        select(func.count()).select_from(Image).where(Image.id.in_(ids), Image.marked_empty.is_(True))
+    ).scalar_one()
 
 
 def clear_mark_for_ground_truth(s: Session, image_ids: Iterable[str]) -> None:
@@ -60,11 +76,7 @@ def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple
         if value:
             gt = _ground_truth_count(s, image_id)
             if gt:
-                raise AppError(
-                    "conflict",
-                    f"the image has {gt} accepted boxes; delete them first or leave it labeled",
-                    409,
-                )
+                raise AppError("conflict", ground_truth_message(gt), 409)
             if _reject_pending(s, image_id, datetime.now(UTC)):
                 rejected_ids.append(image_id)
         image.marked_empty = value
