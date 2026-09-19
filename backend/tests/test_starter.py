@@ -57,6 +57,18 @@ def test_weights_dir_prefers_the_setting_then_the_frozen_bundle_then_the_checkou
     assert starter.weights_dir(unset).parent.name == "backend"
 
 
+def test_weights_dir_falls_back_to_the_checkout_if_a_frozen_process_somehow_has_no_meipass(
+    monkeypatch, settings
+):
+    """`_MEIPASS` is always set by a real PyInstaller bundle; this only guards a getattr, never a crash."""
+    unset = settings.model_copy(update={"starter_weights_dir": None})
+    monkeypatch.delattr("sys._MEIPASS", raising=False)
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    result = starter.weights_dir(unset)
+    assert result.name == "starter_weights"
+    assert result.parent.name == "backend"
+
+
 def test_the_api_lists_and_imports(client, project_id, folder, monkeypatch):
     monkeypatch.setattr(starter, "weights_dir", lambda settings: folder)
     r = client.get("/api/v1/starter-models")

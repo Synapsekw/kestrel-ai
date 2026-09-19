@@ -47,7 +47,8 @@ datas = (
     + collect_data_files("ultralytics")  # cfg/*.yaml, the default trackers and assets
     + collect_data_files("torch", include_py_files=False)
     # Starter weights (usability gap G1): yolo11n/s/m.pt, fetched by scripts/fetch_starter_weights.ps1.
-    + [(str(p), "starter_weights") for p in sorted(Path("starter_weights").glob("yolo11*.pt"))]
+    # Relative to this spec file (SPECPATH), not the cwd PyInstaller happens to be run from.
+    + [(str(p), "starter_weights") for p in sorted((Path(SPECPATH) / "starter_weights").glob("yolo11*.pt"))]
 )
 
 binaries = (

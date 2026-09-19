@@ -19,11 +19,14 @@ $code = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 if ($code -ne 0) { throw "pyinstaller failed with exit code $code" }
 
+foreach ($key in @("yolo11n", "yolo11s", "yolo11m")) {
+  $bundledStarter = "dist\machinery-backend\_internal\starter_weights\$key.pt"
+  if (-not (Test-Path $bundledStarter)) { throw "starter weights did not make it into the bundle: $bundledStarter" }
+}
+
 $bin = Join-Path $backend "..\frontend\src-tauri\binaries"
 New-Item -ItemType Directory -Force $bin | Out-Null
 Copy-Item "dist\machinery-backend\machinery-backend.exe" (Join-Path $bin "machinery-backend-x86_64-pc-windows-msvc.exe") -Force
-$bundledStarter = "dist\machinery-backend\_internal\starter_weights\yolo11n.pt"
-if (-not (Test-Path $bundledStarter)) { throw "starter weights did not make it into the bundle: $bundledStarter" }
 
 if (Test-Path (Join-Path $bin "_internal")) { Remove-Item (Join-Path $bin "_internal") -Recurse -Force }
 Copy-Item "dist\machinery-backend\_internal" (Join-Path $bin "_internal") -Recurse

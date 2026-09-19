@@ -41,9 +41,14 @@ DEFAULT_ALIASES = {"truck": "dump_truck"}
 def weights_dir(settings: Settings) -> Path:
     if settings.starter_weights_dir is not None:
         return settings.starter_weights_dir
+    checkout = Path(__file__).resolve().parents[2] / "starter_weights"
     if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "starter_weights"
-    return Path(__file__).resolve().parents[2] / "starter_weights"
+        # PyInstaller always sets _MEIPASS on a real frozen run; the getattr only guards against
+        # a process that reports itself frozen without one, which falls back to the checkout path
+        # rather than a meaningless sys.executable-relative guess.
+        meipass = getattr(sys, "_MEIPASS", None)
+        return Path(meipass) / "starter_weights" if meipass else checkout
+    return checkout
 
 
 def list_starters(folder: Path) -> list[dict]:
