@@ -2,8 +2,9 @@
    the provider and the hooks that read its context belong to one module; this file is not
    a fast-refresh boundary worth splitting. */
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { createApiClient, type ApiClient, type Health } from "@contract/client";
+import type { ApiClient, Health } from "@contract/client";
 import { resolveBackend, terminationMessage, waitForHealth, type BackendInfo } from "./backend";
+import { createBackendClient } from "./timeoutFetch";
 import { Splash } from "@/app/Splash";
 import { pushLog, setBackendContext } from "@/app/diagnostics";
 
@@ -48,7 +49,7 @@ export function ApiProvider({ children }: { children: ReactNode }) {
         setInfo(resolved);
         setBackendContext(resolved, null);
         pushLog(`backend: ${resolved.mode} at ${resolved.baseUrl}`);
-        const client = createApiClient({ baseUrl: resolved.baseUrl, token: resolved.token });
+        const client = createBackendClient({ baseUrl: resolved.baseUrl, token: resolved.token });
         const health = await waitForHealth(client);
         if (cancelled) return;
         setBackendContext(resolved, health);
