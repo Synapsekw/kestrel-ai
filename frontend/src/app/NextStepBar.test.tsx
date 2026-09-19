@@ -37,10 +37,9 @@ describe("NextStepBar", () => {
       { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
     ]);
     renderWithProviders(<NextStepBar projectId={PROJECT_ID} />, { api });
-    expect(await screen.findByRole("link", { name: "Review the proposals on 3 images." })).toHaveAttribute(
-      "href",
-      `/p/${PROJECT_ID}/review`,
-    );
+    expect(
+      await screen.findByRole("link", { name: "Review the 3 proposals waiting in the queue." }),
+    ).toHaveAttribute("href", `/p/${PROJECT_ID}/review`);
   });
 
   it("renders nothing when the numbers cannot be loaded", async () => {

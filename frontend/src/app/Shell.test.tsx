@@ -50,7 +50,7 @@ describe("Shell navigation", () => {
   it("shows the project's next step on project screens and nothing on the Projects screen", async () => {
     const first = renderShell(`/p/${PROJECT_ID}/data`);
     expect(await screen.findByTestId("next-step")).toHaveTextContent(
-      "Next: Review the proposals on 2 images.",
+      "Next: Review the 2 proposals waiting in the queue.",
     );
     first.unmount();
     renderShell("/");
