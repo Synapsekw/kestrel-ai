@@ -44,8 +44,8 @@ describe("splitAdvice", () => {
     expect(message).toBe(
       "6 of 14 images (43 %) went to validation although 20 % was requested: whole map tiles stay " +
         "together, and this selection has few of them. Add labeled images from more places, or " +
-        "accept the uneven split: a random split would hit the fraction, but it lets neighbouring " +
-        "frames of one flight into validation, which overstates accuracy.",
+        "accept the uneven split: a random split would hit the fraction, but it lets overlapping " +
+        "frames of one place into validation, which overstates accuracy.",
     );
   });
 
