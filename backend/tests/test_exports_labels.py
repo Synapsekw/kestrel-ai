@@ -1,0 +1,124 @@
+"""YOLO and COCO label writers (G2, plan Task 2)."""
+
+import json
+
+from app.exports import coco_out, yolo_out
+from app.exports.rows import ExportBox, ExportImage
+
+CLASSES = [{"id": "c-exc", "name": "excavator"}, {"id": "c-dt", "name": "dump_truck"}]
+
+
+def _box(**over) -> ExportBox:
+    base = dict(
+        id="b1",
+        class_id="c-exc",
+        class_name="excavator",
+        x=0,
+        y=0,
+        w=10,
+        h=10,
+        confidence=None,
+        origin="person",
+        origin_name="",
+        review_state="accepted",
+    )
+    base.update(over)
+    return ExportBox(**base)
+
+
+def _image(**over) -> ExportImage:
+    base = dict(
+        id="i1",
+        path="images/a.jpg",
+        source_site="siteA",
+        group="flight_1",
+        capture_time=None,
+        lat=None,
+        lon=None,
+        width=4000,
+        height=3000,
+        marked_empty=False,
+        boxes=[],
+    )
+    base.update(over)
+    return ExportImage(**base)
+
+
+def test_yolo_label_text_for_a_known_box(tmp_path):
+    images = [_image(boxes=[_box(class_id="c-exc", x=1000, y=600, w=400, h=300)])]
+    files = yolo_out.write(images, CLASSES, tmp_path)
+    assert "labels_yolo/a.txt" in files
+    text = (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8")
+    assert text == "0 0.300000 0.250000 0.100000 0.100000\n"
+
+
+def test_yolo_empty_file_for_an_image_without_boxes(tmp_path):
+    images = [_image(path="images/b.jpg", boxes=[])]
+    yolo_out.write(images, CLASSES, tmp_path)
+    text = (tmp_path / "labels_yolo" / "b.txt").read_text("utf-8")
+    assert text == ""
+
+
+def test_yolo_classes_txt(tmp_path):
+    images = [_image(boxes=[])]
+    files = yolo_out.write(images, CLASSES, tmp_path)
+    assert "labels_yolo/classes.txt" in files
+    text = (tmp_path / "labels_yolo" / "classes.txt").read_text("utf-8")
+    assert text == "excavator\ndump_truck\n"
+
+
+def test_yolo_second_class_index(tmp_path):
+    images = [_image(boxes=[_box(class_id="c-dt", class_name="dump_truck", x=0, y=0, w=100, h=100)])]
+    yolo_out.write(images, CLASSES, tmp_path)
+    text = (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8")
+    assert text.startswith("1 ")
+
+
+def test_coco_structure(tmp_path):
+    images = [
+        _image(
+            path="images/a.jpg",
+            width=4000,
+            height=3000,
+            boxes=[_box(class_id="c-exc", x=100, y=200, w=50, h=60, confidence=0.9)],
+        ),
+        _image(path="images/b.jpg", width=1000, height=1000, boxes=[]),
+    ]
+    files = coco_out.write(images, CLASSES, tmp_path)
+    assert files == ["labels_coco.json"]
+    data = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))
+
+    assert [(im["file_name"], im["width"], im["height"]) for im in data["images"]] == [
+        ("images/a.jpg", 4000, 3000),
+        ("images/b.jpg", 1000, 1000),
+    ]
+    ids = [im["id"] for im in data["images"]]
+    assert len(set(ids)) == 2
+
+    assert [c["id"] for c in data["categories"]] == [1, 2]
+    assert [c["name"] for c in data["categories"]] == ["excavator", "dump_truck"]
+
+    assert len(data["annotations"]) == 1
+    ann = data["annotations"][0]
+    assert ann["bbox"] == [100, 200, 50, 60]
+    assert ann["area"] == 50 * 60
+    assert ann["iscrowd"] == 0
+    assert ann["category_id"] == 1
+    assert ann["image_id"] == ids[0]
+    assert ann["score"] == 0.9
+
+
+def test_coco_no_score_when_confidence_is_none(tmp_path):
+    images = [_image(boxes=[_box(confidence=None)])]
+    coco_out.write(images, CLASSES, tmp_path)
+    data = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))
+    assert "score" not in data["annotations"][0]
+
+
+def test_coco_category_ids_are_stable_across_calls(tmp_path):
+    images = [_image(boxes=[])]
+    coco_out.write(images, CLASSES, tmp_path / "run1")
+    coco_out.write(images, CLASSES, tmp_path / "run2")
+    d1 = json.loads((tmp_path / "run1" / "labels_coco.json").read_text("utf-8"))
+    d2 = json.loads((tmp_path / "run2" / "labels_coco.json").read_text("utf-8"))
+    assert d1["categories"] == d2["categories"]
