@@ -61,7 +61,13 @@ export function TrainForm({
   const lastSuggested = useRef(form.name);
   useEffect(() => {
     setForm((f) => {
-      const datasetId = f.datasetId || (datasets[0]?.id ?? "");
+      // A datasetId survives while the list is still empty (still loading); once a non-empty list
+      // arrives, an id that is not in it (an unknown ?dataset=, or one since deleted) falls back to
+      // the first dataset instead of staying stuck on a value the picker can never show (I5).
+      const datasetId =
+        f.datasetId && (datasets.length === 0 || datasets.some((d) => d.id === f.datasetId))
+          ? f.datasetId
+          : (datasets[0]?.id ?? "");
       const baseModelId = f.baseModelId || (models[0]?.id ?? "");
       const suggested = suggestName(
         datasets.find((d) => d.id === datasetId),

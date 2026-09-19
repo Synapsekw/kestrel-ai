@@ -1,9 +1,10 @@
 import type { Model } from "@contract/client";
 import { formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
+import type { DatasetNames } from "./useDatasetNames";
 
 interface Props {
   models: Model[];
-  datasetNames: Record<string, string>;
+  datasetNames: DatasetNames;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -45,7 +46,10 @@ export function ModelTable({ models, datasetNames, selectedId, onSelect }: Props
               </td>
               <td className="px-2 py-1 font-mono text-xs">{m.base_weights ?? "–"}</td>
               <td className="px-2 py-1">
-                {m.dataset_id ? (datasetNames[m.dataset_id] ?? m.dataset_id.slice(0, 8)) : "–"}
+                {m.dataset_id
+                  ? (datasetNames.names[m.dataset_id] ??
+                    (datasetNames.loaded ? "deleted dataset" : m.dataset_id.slice(0, 8)))
+                  : "–"}
               </td>
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.map50)}</td>
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.map50_95)}</td>

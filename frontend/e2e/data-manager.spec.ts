@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const IMG = "10000000-5555-4000-8000-000000000001";
 const IMG2 = "10000000-5555-4000-8000-000000000002";
+const DATASET = "d0000000-7777-4000-8000-000000000001";
 
 test("lists images with the default query and shows the seven columns in list view", async ({ page }) => {
   const first = page.waitForRequest((r) => r.method() === "GET" && r.url().includes(`/api/v1/projects/${P}/images?`));
@@ -111,7 +112,10 @@ test("run model opens the query screen with the selection; add to dataset posts 
   });
   await expect(page.getByRole("dialog", { name: "Add to dataset" }).getByTestId(/^job-/)).toBeVisible();
   await expect(page.getByText(/1 active job/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${P}/train`);
+  await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute(
+    "href",
+    `/p/${P}/train?dataset=${DATASET}`,
+  );
 });
 
 test("J, K and Enter open the focused image with the list as navigation context", async ({ page }) => {

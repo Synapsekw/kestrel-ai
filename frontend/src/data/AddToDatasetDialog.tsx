@@ -1,8 +1,8 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import type { Dataset } from "@contract/client";
 import { useApi } from "@/api/client";
-import { fetchDataset, type SplitMethod } from "@/api/datasets";
+import type { SplitMethod } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { splitAdvice } from "@/datasets/splitAdvice";
@@ -45,26 +45,14 @@ export function AddToDatasetDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [createdDatasetId, setCreatedDatasetId] = useState<string | null>(null);
-  const [dataset, setDataset] = useState<Dataset | null>(null);
+  // The creation response already carries the dataset's final counts (freeze() computes the split
+  // before the job writes files), so no refetch is needed once the job succeeds (M7). A failed job
+  // discards the row, so the advice/"Open dataset" link only show once the job has succeeded.
+  const [createdDataset, setCreatedDataset] = useState<Dataset | null>(null);
   const { job } = useTrackedJob(projectId, jobId);
   const n = imageIds.length;
-
-  // The job may discard the dataset on failure; only trust it once the job has succeeded.
-  useEffect(() => {
-    if (job?.state !== "succeeded" || !createdDatasetId) return;
-    let cancelled = false;
-    fetchDataset(api, projectId, createdDatasetId)
-      .then((d) => {
-        if (!cancelled) setDataset(d);
-      })
-      .catch((e: unknown) => {
-        pushLog(`refetch dataset ${createdDatasetId} failed: ${messageOf(e, String(e))}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, projectId, createdDatasetId, job?.state]);
+  const succeeded = job?.state === "succeeded" && createdDataset ? createdDataset : null;
+  const advice = succeeded ? splitAdvice(succeeded) : null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -93,7 +81,7 @@ export function AddToDatasetDialog({
       });
       useJobsStore.getState().upsert(created.job);
       setJobId(created.job.id);
-      setCreatedDatasetId(created.dataset.id);
+      setCreatedDataset(created.dataset);
     } catch (err) {
       pushLog(`add to dataset failed: ${messageOf(err, String(err))}`);
       setError(messageOf(err, "could not create the dataset"));
@@ -183,21 +171,24 @@ export function AddToDatasetDialog({
           ) : (
             <p className="text-xs text-slate-400">Job queued…</p>
           )}
-          {dataset && splitAdvice(dataset) && (
+          {advice && (
             <p
-              role="alert"
+              role="note"
               className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
             >
-              {splitAdvice(dataset)}
+              {advice}
             </p>
           )}
           <div className="flex items-center gap-3">
-            <Link to={`/p/${projectId}/train`} className="text-sm text-orange-300 hover:underline">
+            <Link
+              to={`/p/${projectId}/train${createdDataset ? `?dataset=${createdDataset.id}` : ""}`}
+              className="text-sm text-orange-300 hover:underline"
+            >
               Train on it
             </Link>
-            {dataset && (
+            {succeeded && (
               <Link
-                to={`/p/${projectId}/datasets?dataset=${dataset.id}`}
+                to={`/p/${projectId}/datasets?dataset=${succeeded.id}`}
                 className="text-sm text-orange-300 hover:underline"
               >
                 Open dataset

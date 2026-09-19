@@ -21,12 +21,27 @@ export function DatasetsScreen() {
 
   useOnJobsFinished("dataset", datasets.reload);
 
+  const { remove, reload } = datasets;
+  const onDeleted = useCallback(
+    (id: string) => {
+      select(null);
+      // Drop it from the list at once; reload() then confirms it with the server (M5b, I6).
+      remove(id);
+      reload();
+    },
+    [select, remove, reload],
+  );
+
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-semibold">Datasets</h1>
         <span className="text-xs text-slate-400">
-          {datasets.loading ? "Loading…" : `${datasets.datasets.length} datasets`}
+          {datasets.loading
+            ? "Loading…"
+            : datasets.datasets.length === 1
+              ? "1 dataset"
+              : `${datasets.datasets.length} datasets`}
         </span>
         <button
           type="button"
@@ -48,7 +63,7 @@ export function DatasetsScreen() {
           role="note"
           className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
         >
-          Datasets are not available yet (they arrive with the dataset backend).
+          Datasets are not available.
         </p>
       )}
 
@@ -80,16 +95,14 @@ export function DatasetsScreen() {
         </p>
       )}
 
+      {selectedId && !selected && !datasets.loading && !datasets.unavailable && (
+        <p role="note" className="text-sm text-slate-400">
+          That dataset no longer exists.
+        </p>
+      )}
+
       {selected && (
-        <DatasetDetail
-          key={selected.id}
-          projectId={projectId}
-          dataset={selected}
-          onDeleted={() => {
-            select(null);
-            datasets.reload();
-          }}
-        />
+        <DatasetDetail key={selected.id} projectId={projectId} dataset={selected} onDeleted={onDeleted} />
       )}
     </section>
   );

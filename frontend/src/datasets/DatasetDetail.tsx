@@ -5,6 +5,7 @@ import { useApi } from "@/api/client";
 import { deleteDataset, fetchDatasetStats } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import { useJobsStore } from "@/store/jobs";
 import { splitAdvice } from "./splitAdvice";
 
 export interface DatasetDetailProps {
@@ -24,9 +25,14 @@ interface StatsState {
   error: string | null;
 }
 
+/**
+ * The caller remounts `DatasetDetail` with `key={dataset.id}` (see DatasetsScreen), so a dataset
+ * change always starts this hook fresh: no second "is this still the right id" guard is needed
+ * here (M4).
+ */
 function useDatasetStats(projectId: string, datasetId: string): StatsState {
   const api = useApi();
-  const [state, setState] = useState<StatsState>({ datasetId: "", stats: null, error: null });
+  const [state, setState] = useState<StatsState>({ datasetId, stats: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -44,7 +50,7 @@ function useDatasetStats(projectId: string, datasetId: string): StatsState {
     };
   }, [api, projectId, datasetId]);
 
-  return state.datasetId === datasetId ? state : { datasetId, stats: null, error: null };
+  return state;
 }
 
 export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailProps) {
@@ -54,6 +60,13 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // From the jobs store only (no fetch): recent jobs are already loaded project-wide (M5e). A
+  // dataset whose own materialise job never reached the store (long finished, or never seen this
+  // session) is treated as normal -- the common case for an established dataset.
+  const materialiseJob = useJobsStore((s) => (dataset.job_id ? s.jobs[dataset.job_id] : undefined));
+  const jobState = materialiseJob?.state;
+  const isWriting = jobState === "queued" || jobState === "running";
+  const isIncomplete = jobState === "failed" || jobState === "cancelled";
 
   async function remove() {
     setBusy(true);
@@ -78,11 +91,17 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
         <span className="text-xs text-slate-400">
           {dataset.image_count} images, {dataset.train_count} train / {dataset.val_count} val
         </span>
+        {isWriting && (
+          <span className="rounded bg-slate-700 px-2 py-0.5 text-xs text-slate-200">being written…</span>
+        )}
+        {isIncomplete && (
+          <span className="rounded bg-red-900 px-2 py-0.5 text-xs text-red-100">incomplete</span>
+        )}
       </header>
 
       {advice && (
         <p
-          role="alert"
+          role="note"
           className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
         >
           {advice}
@@ -96,6 +115,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
             {statsError}
           </p>
         )}
+        {!stats && !statsError && <p className="text-sm text-slate-400">Loading…</p>}
         {stats && (
           <table data-testid="dataset-class-stats" className="w-full text-left text-sm">
             <thead>
@@ -151,12 +171,14 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
 
       <div className="flex flex-col gap-2 border-t border-slate-800 pt-3">
         <div className="flex flex-wrap items-center gap-3">
-          <Link
-            to={`/p/${projectId}/train?dataset=${dataset.id}`}
-            className="text-sm text-orange-300 hover:underline"
-          >
-            Train on this dataset
-          </Link>
+          {!isWriting && !isIncomplete && (
+            <Link
+              to={`/p/${projectId}/train?dataset=${dataset.id}`}
+              className="text-sm text-orange-300 hover:underline"
+            >
+              Train on this dataset
+            </Link>
+          )}
           {!confirming && (
             <button type="button" className={danger} onClick={() => setConfirming(true)} disabled={busy}>
               Delete dataset

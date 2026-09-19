@@ -49,26 +49,27 @@ describe("AddToDatasetDialog", () => {
       image_ids: ["a", "b"],
     });
     expect(useJobsStore.getState().jobs[runningJob.id].type).toBe("dataset");
+    // The dataset row already exists once creation returns (M7): "Train on it" carries its id at
+    // once, without waiting for the materialise job to succeed.
     expect(screen.getByRole("link", { name: "Train on it" })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/train`,
+      `/p/${PROJECT_ID}/train?dataset=${exampleDataset.id}`,
     );
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
   });
 
-  it("shows the split advice and an Open dataset link once the job succeeds", async () => {
+  it("shows the split advice and an Open dataset link once the job succeeds, with no refetch (M7)", async () => {
     const risky = { ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 };
     const succeededJob = { ...runningJob, type: "dataset" as const, state: "succeeded" as const };
-    const { api } = fakeClient([
+    const { api, requests } = fakeClient([
       {
         method: "POST",
         path: /\/datasets$/,
         status: 202,
-        body: { dataset: exampleDataset, job: succeededJob },
+        body: { dataset: risky, job: succeededJob },
       },
       { method: "GET", path: /\/jobs\/[^/]+$/, body: succeededJob },
-      { method: "GET", path: /\/datasets\/[^/]+$/, body: risky },
     ]);
     renderWithProviders(
       <AddToDatasetDialog
@@ -84,8 +85,39 @@ describe("AddToDatasetDialog", () => {
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
     const link = await screen.findByRole("link", { name: "Open dataset" });
-    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/datasets?dataset=${exampleDataset.id}`);
-    await waitFor(() => expect(screen.getByText(/went to validation although/)).toBeInTheDocument());
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/datasets?dataset=${risky.id}`);
+    const advice = screen.getByRole("note");
+    expect(advice).toHaveTextContent(/went to validation although/);
+    // No GET .../datasets/{id}: the advice comes from the creation response, not a refetch.
+    expect(requests.every((r) => r.method !== "GET" || !r.url.includes("/datasets/"))).toBe(true);
+  });
+
+  it("shows neither the advice nor Open dataset while the job is still running", async () => {
+    const { api } = fakeClient([
+      {
+        method: "POST",
+        path: /\/datasets$/,
+        status: 202,
+        body: { dataset: { ...exampleDataset, val_count: 0 }, job: { ...runningJob, type: "dataset" } },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, type: "dataset" } },
+    ]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={vi.fn()}
+      />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    await waitFor(() => expect(screen.getByTestId(`job-${runningJob.id}`)).toBeInTheDocument());
+    expect(screen.queryByRole("link", { name: "Open dataset" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("shows the envelope message on failure", async () => {
