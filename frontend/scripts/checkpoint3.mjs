@@ -82,7 +82,7 @@ await dialog.waitFor({ timeout: 10_000 });
 await dialog.getByLabel("Folder").fill(sampleFolder);
 await dialog.getByLabel("Site name").fill("ahmadia");
 await dialog.getByRole("button", { name: "Start import" }).click();
-await page.getByRole("dialog", { name: "Jobs" }).waitFor({ timeout: 15_000 });
+await page.getByTestId("import-notice").waitFor({ timeout: 15_000 }); // the banner reports the import; the jobs panel stays closed
 await shot(page, "01-import-started");
 jobs = await api("GET", `/projects/${pid}/jobs?type=import`);
 const importJob = await waitJob(pid, jobs.items[0].id);

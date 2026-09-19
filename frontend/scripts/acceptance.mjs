@@ -394,7 +394,7 @@ try {
     await dialog.getByLabel("Folder").fill(cfg.source);
     await dialog.getByLabel("Site name").fill(cfg.site);
     await dialog.getByRole("button", { name: "Start import" }).click();
-    await page.getByRole("dialog", { name: "Jobs" }).waitFor({ timeout: 30_000 });
+    await page.getByTestId("import-notice").waitFor({ timeout: 30_000 }); // the banner reports the import; the jobs panel stays closed
     const jobs = await api("GET", `/projects/${projectId}/jobs?type=import`);
     const job = await waitJob(projectId, jobs.items[0].id, cfg.importTimeoutMin * 60_000);
     if (job.state !== "succeeded") throw new Error(`import failed: ${job.error}`);
