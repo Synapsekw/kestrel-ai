@@ -91,15 +91,15 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
               </div>
               <p className="text-xs text-slate-400">{s.description}</p>
               <p className="text-xs text-slate-500">
-                {s.available ? `${s.size_mb} MB` : "not part of this build; run fetch_starter_weights.ps1"}
+                {s.available ? `${s.size_mb} MB` : "Not included in this copy of the app."}
               </p>
               <button
                 type="button"
                 onClick={() => void add(s.key)}
-                disabled={!s.available || busyKey === s.key}
+                disabled={!s.available || busyKey !== null}
                 className="mt-auto rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
               >
-                Add {s.name}
+                {busyKey === s.key ? "Adding…" : `Add ${s.name}`}
               </button>
             </div>
           );
