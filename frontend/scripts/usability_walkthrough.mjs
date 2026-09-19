@@ -248,8 +248,12 @@ await step("7 train: guidance before, honest verdict after", async (check, snap)
 await step("8 run the trained model; review; accept as labels with a count; undo", async (check, snap) => {
   await page.getByRole("link", { name: "Query" }).click();
   const model = page.getByLabel("Model", { exact: true });
+  // The list loads after the screen: wait for the trained model before choosing it.
+  await model.locator("option", { hasText: "(Trained)" }).first().waitFor({ state: "attached", timeout: 30_000 });
   const options = await model.locator("option").allInnerTexts();
-  await model.selectOption({ label: options.find((o) => /Trained/.test(o)) });
+  const trained = options.find((o) => /Trained/.test(o));
+  await model.selectOption({ label: trained });
+  check("the trained model is the one that runs", Boolean(trained), trained);
   await page.getByLabel("Confidence", { exact: true }).fill("0.01");
   check("a local run explains that it is free", await visible(page.getByText(/Runs on this computer at no cost/)));
   await snap("query-form");
