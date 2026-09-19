@@ -9,8 +9,9 @@
   runs, the `worker` subcommand trains with DataLoader workers (freeze_support), ONNX export
   works, and keyring reaches Windows Credential Manager without setuptools entry points.
 
-  Prints `health ok`, `cuda True <gpu name>`, `predict ok <n> boxes` and `worker ok`, and exits
-  non-zero on any failure. Sample frames are copied out of the read-only source folder first.
+  Prints `health ok`, `cuda True <gpu name>`, `starter ok 3`, `predict ok <n> boxes` and
+  `worker ok`, and exits non-zero on any failure. Sample frames are copied out of the read-only
+  source folder first.
 
 .PARAMETER Keep
   Leave the generated work dir behind; it is deleted on the way out by default.
@@ -168,8 +169,12 @@ try {
   Write-Host "import ok $($stats.image_count) images"
 
   $model = Invoke-Api POST "/projects/$pid1/models/import-starter" @{ key = "yolo11n" }
+  if ($model.class_aliases.truck -ne "dump_truck") {
+    throw "expected truck aliased to dump_truck, got $($model.class_aliases | ConvertTo-Json -Compress)"
+  }
   Complete-Step "import_model"
   Write-Host "model ok $($model.name) $($model.class_names.Count) classes"
+  Write-Host "alias ok"
 
   # 6. one prediction through the packaged torch/ultralytics stack
   $images = Invoke-Api GET "/projects/$pid1/images?limit=$Frames&sort=path"
