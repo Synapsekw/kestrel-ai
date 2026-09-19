@@ -24,14 +24,20 @@ Friction list, owner ruling and order of work: `docs/usability/2026-09-19-walkth
 | Wave | Item | Branch | State | Blockers |
 |---|---|---|---|---|
 | U1 | Walk-through of the installed app (51 items), owner ruling: N1, N2, G1, Q1, G2, E4, S2 block | usability-wave1 | done (e1277e2) | none |
-| U1 | Small fixes by the goal owner, test-first: N1/N2/N3 78d1f0e, X2 9e31da3, X1 3d039eb, P1/S1 a8b8bca, Q1 150bbdb (contract: `dry_run`, `unpromote`), D1 62c7f8f, T1/T2 5b0cba7 | usability-wave1 | in progress | none |
-| U1 | G1 starter weights (plan `docs/superpowers/plans/2026-09-19-g1-starter-weights.md`) | g1-starter-weights (worktree `.worktrees/g1-starter-weights`) | implementer dispatched (sonnet); contract edit fd71e19 on the branch | none |
-| U1 | E4 negatives, S2 Datasets screen, G2 results export | - | not started (one after the other, after G1 is merged and verified) | none |
+| U1 | Small fixes by the goal owner, test-first, one commit each (ids and commits in the friction list): N1-N3, N5, P1, P2, D1-D9, E1-E3, E5, E7, E8, S1, T1-T3, Q1-Q5, Q8, R1, R2, M1, X1, X2, H1 | usability-wave1 | done; verified on the packaged app by `frontend/scripts/usability_walkthrough.mjs` (10 steps passed at a5b9e6c minus the driver fix) | none |
+| U1 | G1 starter weights (plan `2026-09-19-g1-starter-weights.md`) | merged into usability-wave1 at e83ce88 (+ re-review fixes 77d23bf) | implemented (sonnet), reviewed (fable), fix round 1, re-reviewed (opus), goal-owner fixes; frozen build 3,520 MB, `smoke_frozen.ps1` ok (`starter ok 3`, `alias ok`); verified on the packaged app (starter model added with the truck alias) | none |
+| U1 | E4 negative images (plan `2026-09-19-e4-negative-images.md`; contract 916942c) | e4-negative-images (worktree `.worktrees/e4-negative-images`) | implementer dispatched (sonnet) | none |
+| U1 | S2 Datasets screen (plan `2026-09-19-s2-datasets-screen.md`), then G2 results export (plan `2026-09-19-g2-results-export.md`; owner wants CSV, YOLO/COCO, HTML report, unreviewed option, ONNX for other applications) | - | plans written; each starts when its predecessor is merged and verified | none |
+| U1 | Open small items: Q6, Q7, Q9, M3 (in G2), M4, S3 (in S2), E6, N4 | - | not started | none |
 | U1 | Acceptance step 7 | - | waits for the owner to store the Anthropic key in App settings | owner key |
 
 How the walk-through instance is started without touching a running app: a second instance of the installed exe with `WEBVIEW2_USER_DATA_FOLDER=<scratch>` and `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=9222`; stop it by its own PID only.
 
-Last verified commit on main: 302708a (phase 1). Nothing of phase 2 is merged to main yet.
+Verification without touching a running installed app: a private copy of the would-be install tree (`machinery-app.exe`, `machinery-backend.exe`, `_internal`) in a scratch folder, started with its own WebView2 profile and CDP port. The installer itself, checkpoint 4 and the acceptance driver run at the end of the wave.
+
+Worktree removal as practised for G1: list reparse points (2,106 pnpm links, none pointing outside), remove each link with `rmdir`/`del`, then `git worktree remove --force`; the shared venv was checked afterwards.
+
+Last verified commit on main: 302708a (phase 1). Nothing of phase 2 is merged to main yet; usability-wave1 is green (424 backend, contract check, lint, tsc, 282 unit, build, 45 e2e).
 
 ## Plans
 

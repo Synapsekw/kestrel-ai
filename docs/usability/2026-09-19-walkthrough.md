@@ -17,7 +17,7 @@ The "Closed by" column is filled with the commit that fixes the item.
 |---|---|---|---|---|---|
 | N1 | Sidebar on the Projects screen (`Shell.tsx` `navItems`) | Data, Editor, Review, Models, Train, Query, Settings greyed out, no tooltip, no text | "Open or create a project first", or entries that explain themselves | blocks | 78d1f0e |
 | N2 | Settings / provider keys | Keys are global (Credential Manager, `/api/v1/providers`) but the only way to them is a project's Settings screen | An app-level Settings entry that works with no project open | blocks | 78d1f0e |
-| G1 | Models -> Import weights, Train -> Base model | The form asks for the path of a `.pt` file; the installer ships none, the base-model list of a new project is empty, nothing says where weights come from | Starter weights (YOLO11 n/s/m) offered in the app, selectable as base model without a file path | blocks | |
+| G1 | Models -> Import weights, Train -> Base model | The form asks for the path of a `.pt` file; the installer ships none, the base-model list of a new project is empty, nothing says where weights come from | Starter weights (YOLO11 n/s/m) offered in the app, selectable as base model without a file path | blocks | e83ce88 |
 | N3 | Sidebar inside a project | "Editor" greyed out with no hint | Hint "open an image from Data or Review" | annoys | 78d1f0e |
 | N4 | After creating a project | Lands on an empty Data Manager; nothing tells the order import -> label -> dataset -> train -> run -> review | A next-step hint or project overview (counts and the next action) | confuses | |
 | N5 | Every `invoke` in the installed app | Console: CSP blocks `http://ipc.localhost`, Tauri falls back to postMessage (invisible to the user, noise in diagnostics) | No CSP violation (`connect-src` allows `ipc:` / `http://ipc.localhost`) | annoys | 337ccb6 |
@@ -31,7 +31,7 @@ The "Closed by" column is filled with the commit that fixes the item.
 | D6 | Data Manager list right after the first import | Source column shows `805e6866` (id) until the screen is revisited; the Source filter lacks the new source | Site name at once | confuses | 8035af5 |
 | D7 | Data Manager selection | No "select all"; Ctrl+A works but the hint only lists J/K, Enter, Space | Select-all checkbox in the header and in the hint | confuses | 16baa6d |
 | D8 | Data Manager grid | Single click only focuses; open needs double-click or Enter; the hint mentions keys only | Hint mentions double-click | annoys | 16baa6d |
-| D9 | Data Manager list, double-click on a row (found while verifying the fixes on the packaged app) | The first click selects the row, the selection bar appears and pushes the rows down 60 px, the second click lands elsewhere: the image never opens | Double-click opens the image | confuses | |
+| D9 | Data Manager list, double-click on a row (found while verifying the fixes on the packaged app) | The first click selects the row, the selection bar appears and pushes the rows down 60 px, the second click lands elsewhere: the image never opens | Double-click opens the image | confuses | 612b341 |
 | E1 | Editor with a pre-annotation model set | For 2-6 s after opening an image nothing shows that the model is running; the model is not named | "Pre-annotating with <model>..." status | confuses | 564f605 |
 | E2 | Editor, pre-annotation found nothing | "0 proposals from the pre-annotation model" appears (the image jumps down); no reason, no next step; COCO weights found nothing even on a yard full of trucks | Explanation (COCO weights rarely fire on nadir imagery; train a project model and use it) without a layout jump | confuses | 564f605 |
 | E3 | Editor toolbar "Keys" | Looks like a button, a click does nothing; the shortcuts are a native tooltip after ~1 s hover | Click opens a shortcuts popover | confuses | af4b4d7 |
@@ -50,20 +50,20 @@ The "Closed by" column is filled with the commit that fixes the item.
 | Q2 | Query with a weak model at confidence 0.25 | Either nothing (acceptance run: 0 boxes, empty review queue, no explanation) or junk | When a run ends with 0 boxes: say so and suggest a lower confidence or a better model | confuses | d7f9c1c |
 | Q3 | Query run finished | History row says "0 boxes" until the screen is revisited; the card says "415 boxes written so far" after the end | Consistent final numbers | confuses | d7f9c1c |
 | Q4 | Estimate for a local model | "480 requests, estimated $0.00 (at $0.00 per request)" | No cost wording for local models | annoys | 260c643 |
-| Q5 | Query Start | Disabled until Estimate is clicked; only a small grey hint | Start estimates by itself, or the hint is next to the disabled button as a reason | annoys | |
+| Q5 | Query Start | Disabled until Estimate is clicked; only a small grey hint | Start estimates by itself, or the hint is next to the disabled button as a reason | annoys | 77d23bf |
 | Q6 | Query, tiling off (ledger S4) | Untiled local runs predict at 1280 while pre-annotation uses 2560; not mentioned | Note in the form | annoys | |
 | Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | |
-| Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | |
+| Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | abe0154 |
 | Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | |
 | R1 | Review, empty queue | "0 images waiting" | How proposals get here (pre-annotation, Query) with links | confuses | dcb6002 |
 | R2 | Review from a run (ledger S5) | "Showing 40 images from a query run" counts the ids in the URL, not the images that still have proposals | Real count | annoys | dcb6002 |
 | M1 | Models -> Import with a wrong path | `no usable weights at 'E:\\nope\\x.pt'` (doubled backslashes) | The path as typed | annoys | 662e90b |
-| M2 | Models table (ledger S5) | Rows are not keyboard-focusable | Tab / Enter work | annoys | |
+| M2 | Models table (ledger S5) | Rows are not keyboard-focusable | Tab / Enter work | annoys | not a defect: the model name in each row is a button (Tab, Enter); checked 2026-09-19 |
 | M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | |
 | M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | |
 | X1 | Settings -> Test provider, failing | Green text: "Failed: ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', ...}" | Red, "The key was rejected by Anthropic (401)." | confuses | 3d039eb |
 | X2 | Every timestamp in the UI | UTC without a label (05:06 when the clock says 08:06) while job logs use local time | Local time everywhere | confuses | 9e31da3 |
-| H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | |
+| H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | adf9b09 |
 | H2 | Providers | No live request with a valid key has run here; the invalid-key test did reach Anthropic (401). Acceptance step 7 pending an operator key | Step 7 run once with a real key | pending key | |
 | G2 | Results | Reviewed detections cannot leave the app: no export of boxes or counts (per image, flight, class) | CSV / report export | open question for the owner | |
 
