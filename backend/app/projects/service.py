@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.appdata import AppData
 from app.db.base import new_id
-from app.db.models import Box, Project
+from app.db.models import Box, Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
 
@@ -163,6 +163,20 @@ class ProjectRegistry:
             if r["id"] == project_id and (Path(r["folder"]) / "project.db").exists():
                 return self.open(Path(r["folder"]), remember=False)
         raise not_found("project", project_id)
+
+    def forget(self, project_id: str) -> None:
+        """Drop the project from the recent list and close it. Nothing in its folder is touched."""
+        h = self.get(project_id)
+        with h.session() as s:
+            active = s.execute(
+                select(func.count()).select_from(Job).where(Job.state.in_(("queued", "running")))
+            ).scalar_one()
+        if active:
+            raise AppError("conflict", f"{active} job(s) still run in this project; cancel them first", 409)
+        with self._lock:
+            self._handles.pop(project_id, None)
+            h.engine.dispose()
+        self.appdata.forget(str(h.folder))
 
     def recent(self) -> list[dict]:
         return self.appdata.recent()

@@ -154,6 +154,14 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [projects]
+      operationId: forgetProject
+      summary: Remove the project from the recent list. The project folder and everything in it stay on disk; "Open folder" brings it back.
+      responses:
+        "204":
+          description: forgotten
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/classes:
     parameters:
       - $ref: "#/components/parameters/projectId"

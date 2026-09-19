@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ClassDefInput, Project } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
-import { messageOf } from "@/api/errors";
+import { messageOf, unwrap } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 
 const DEFAULT_CLASSES = [
@@ -95,6 +95,7 @@ export function ProjectsScreen() {
   const [folder, setFolder] = useState("");
   const [classes, setClasses] = useState(DEFAULT_CLASSES.join("\n"));
   const [openFolder, setOpenFolder] = useState("");
+  const [removing, setRemoving] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -145,6 +146,23 @@ export function ProjectsScreen() {
     }
   }
 
+  async function onForget(project: Project) {
+    setBusy(true);
+    setError(null);
+    try {
+      await unwrap(
+        api.DELETE("/api/v1/projects/{projectId}", { params: { path: { projectId: project.id } } }),
+      );
+      setProjects((list) => list.filter((p) => p.id !== project.id));
+      setRemoving(null);
+    } catch (e) {
+      pushLog(`forget project failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not remove the project from the list"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onOpen(e: FormEvent) {
     e.preventDefault();
     if (!openFolder.trim()) {
@@ -186,19 +204,50 @@ export function ProjectsScreen() {
             {projects.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between rounded border border-slate-800 bg-slate-800/40 px-3 py-2"
+                className="flex flex-wrap items-center justify-between rounded border border-slate-800 bg-slate-800/40 px-3 py-2"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{p.name}</span>
                   <span className="block truncate font-mono text-xs text-slate-400">{p.folder}</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => openProject(p)}
-                  className="rounded bg-orange-600 px-3 py-1.5 text-sm font-medium hover:bg-orange-500"
-                >
-                  Open
-                </button>
+                <span className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    aria-label={`Remove ${p.name} from the list`}
+                    onClick={() => setRemoving(p.id)}
+                    className="rounded px-2 py-1.5 text-xs text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                  >
+                    Remove
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openProject(p)}
+                    className="rounded bg-orange-600 px-3 py-1.5 text-sm font-medium hover:bg-orange-500"
+                  >
+                    Open
+                  </button>
+                </span>
+                {removing === p.id && (
+                  <span className="flex basis-full flex-wrap items-center gap-2 pt-2 text-xs text-slate-300">
+                    Remove {p.name} from this list? The folder and everything in it stay on disk; Open folder
+                    brings the project back.
+                    <button
+                      type="button"
+                      onClick={() => void onForget(p)}
+                      disabled={busy}
+                      className="rounded border border-slate-600 px-2 py-1 hover:bg-slate-800 disabled:opacity-50"
+                    >
+                      Remove from the list
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRemoving(null)}
+                      className="px-2 py-1 hover:underline"
+                    >
+                      Keep
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>

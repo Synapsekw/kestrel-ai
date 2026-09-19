@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 
 from app.datasets.stats import compute_stats
 from app.projects.schemas import (
@@ -58,6 +58,12 @@ def open_project(body: ProjectOpen, request: Request) -> ProjectOut:
 @router.get("/{projectId}", response_model=ProjectOut)
 def get_project_route(handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
     return _out(handle)
+
+
+@router.delete("/{projectId}", status_code=204)
+def forget_project(projectId: str, request: Request) -> Response:  # noqa: N803 - path param from the contract
+    _registry(request).forget(projectId)
+    return Response(status_code=204)
 
 
 @router.patch("/{projectId}", response_model=ProjectOut)

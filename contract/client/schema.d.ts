@@ -68,7 +68,8 @@ export interface paths {
         get: operations["getProject"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove the project from the recent list. The project folder and everything in it stay on disk; "Open folder" brings it back. */
+        delete: operations["forgetProject"];
         options?: never;
         head?: never;
         /** Update name, pre-annotation model or import defaults (project settings screen). */
@@ -2340,6 +2341,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Project"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    forgetProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description forgotten */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };

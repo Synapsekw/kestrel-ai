@@ -53,6 +53,19 @@ def test_recent_projects_listed(client, project_dir):
     assert r.json()["next_cursor"] is None
 
 
+def test_forgetting_a_project_drops_it_from_the_recent_list_and_keeps_the_folder(client, project_dir):
+    created = _create(client, project_dir, "A")
+    r = client.delete(f"/api/v1/projects/{created['id']}")
+    assert r.status_code == 204, r.text
+    assert client.get("/api/v1/projects").json()["items"] == []
+    assert (project_dir / "project.db").is_file()
+    # Open folder brings it back, with the same id.
+    reopened = client.post("/api/v1/projects/open", json={"folder": str(project_dir)})
+    assert reopened.status_code == 200 and reopened.json()["id"] == created["id"]
+    assert [p["name"] for p in client.get("/api/v1/projects").json()["items"]] == ["A"]
+    assert client.delete("/api/v1/projects/nope").status_code == 404
+
+
 def test_recent_skips_deleted_folders(client, project_dir, tmp_path):
     import shutil
 
