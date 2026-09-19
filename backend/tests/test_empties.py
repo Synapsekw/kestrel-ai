@@ -243,20 +243,50 @@ def test_the_ground_truth_message_is_pluralised(client, project_id, image_ids, a
 
 
 def test_bulk_marks_the_empty_ones_and_skips_images_with_ground_truth(
-    client, project_id, image_ids, add_person_box
+    client, project_id, handle, image_ids, add_person_box, add_proposal
 ):
     add_person_box(image_ids[1])
+    box_id = add_proposal(image_ids[0])
     r = client.post(
         f"{BASE}/{project_id}/images/bulk-mark-empty",
         json={"image_ids": [image_ids[0], image_ids[1], "unknown"], "marked_empty": True},
     )
     assert r.status_code == 200, r.text
     assert r.json() == {"updated": 1, "skipped": 1}
+    assert state_of(handle, box_id) == "rejected"  # the proposal of the bulk-marked image
     r = client.post(
         f"{BASE}/{project_id}/images/bulk-mark-empty",
         json={"image_ids": [image_ids[0]], "marked_empty": True},
     )
     assert r.json() == {"updated": 0, "skipped": 0}  # already marked: nothing changed
+
+
+def test_bulk_unmark_flips_the_flag_back_but_leaves_rejected_proposals_rejected(
+    client, project_id, handle, image_ids, add_proposal
+):
+    box_id = add_proposal(image_ids[0])
+    r = client.post(
+        f"{BASE}/{project_id}/images/bulk-mark-empty",
+        json={"image_ids": [image_ids[0], image_ids[1]], "marked_empty": True},
+    )
+    assert r.json() == {"updated": 2, "skipped": 0}
+
+    r = client.post(
+        f"{BASE}/{project_id}/images/bulk-mark-empty",
+        json={"image_ids": [image_ids[0], image_ids[1], "unknown"], "marked_empty": False},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json() == {"updated": 2, "skipped": 0}
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[0]}").json()["marked_empty"] is False
+    assert client.get(f"{BASE}/{project_id}/images/{image_ids[1]}").json()["marked_empty"] is False
+    assert state_of(handle, box_id) == "rejected"  # unmarking never resurrects a rejected proposal
+
+    # nothing left to unmark: no-op
+    r = client.post(
+        f"{BASE}/{project_id}/images/bulk-mark-empty",
+        json={"image_ids": [image_ids[0]], "marked_empty": False},
+    )
+    assert r.json() == {"updated": 0, "skipped": 0}
 
 
 def test_marking_empty_publishes_images_changed_and_boxes_changed(
