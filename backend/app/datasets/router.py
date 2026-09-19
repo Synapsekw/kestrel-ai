@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select, tuple_, update
 
 # importer and materialise register the "import" and "dataset" job types on import.
-from app.datasets import boxes, images, importer, materialise, stats  # noqa: F401
+from app.datasets import boxes, empties, images, importer, materialise, stats  # noqa: F401
 from app.datasets.grouping import slugify
 from app.datasets.schemas import (
     BoxCreate,
@@ -19,6 +19,8 @@ from app.datasets.schemas import (
     BoxUpdate,
     BulkDelete,
     BulkDeleteResult,
+    BulkMarkEmpty,
+    BulkMarkEmptyResult,
     DatasetCreate,
     DatasetOut,
     DatasetPage,
@@ -27,6 +29,7 @@ from app.datasets.schemas import (
     ImageOut,
     ImagePage,
     ImageSort,
+    ImageUpdate,
     SortOrder,
     SourceCreate,
     SourceOut,
@@ -35,6 +38,7 @@ from app.datasets.schemas import (
 )
 from app.db.models import Dataset, DatasetImage, Source
 from app.errors import AppError, not_found
+from app.events_util import publish_image_ids_event
 from app.jobs.schemas import JobOut
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.schemas import ImportSettings, Stats
@@ -183,9 +187,32 @@ def bulk_delete_images(body: BulkDelete, handle: ProjectHandle = Depends(get_pro
     return BulkDeleteResult(deleted=images.bulk_delete(handle, body.image_ids))
 
 
+@router.post("/images/bulk-mark-empty", response_model=BulkMarkEmptyResult)
+def bulk_mark_empty_images(
+    body: BulkMarkEmpty, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> BulkMarkEmptyResult:
+    updated, skipped, rejected_ids = empties.bulk_mark_empty(handle, body.image_ids, body.marked_empty)
+    publish_image_ids_event(request, handle, "images.changed", body.image_ids)
+    publish_image_ids_event(request, handle, "boxes.changed", rejected_ids)
+    return BulkMarkEmptyResult(updated=updated, skipped=skipped)
+
+
 @router.get("/images/{imageId}", response_model=ImageOut)
 def get_image(imageId: str, handle: ProjectHandle = Depends(get_project)) -> ImageOut:  # noqa: N803
     return ImageOut.from_row(*images.get_image(handle, imageId))
+
+
+@router.patch("/images/{imageId}", response_model=ImageOut)
+def update_image(
+    imageId: str,  # noqa: N803
+    body: ImageUpdate,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> ImageOut:
+    row, rejected_ids = empties.set_marked_empty(handle, imageId, body.marked_empty)
+    publish_image_ids_event(request, handle, "images.changed", [imageId])
+    publish_image_ids_event(request, handle, "boxes.changed", rejected_ids)
+    return ImageOut.from_row(*row)
 
 
 @router.get("/images/{imageId}/file", response_class=FileResponse)
@@ -288,3 +315,8 @@ def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) ->
 @router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
 def get_dataset_stats(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetStats:  # noqa: N803
     return stats.dataset_stats(handle, datasetId)
+
+
+@router.delete("/datasets/{datasetId}", status_code=204)
+def delete_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> None:  # noqa: N803
+    materialise.delete_dataset(handle, datasetId)

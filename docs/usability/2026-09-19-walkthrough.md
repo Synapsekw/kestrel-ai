@@ -19,7 +19,7 @@ The "Closed by" column is filled with the commit that fixes the item.
 | N2 | Settings / provider keys | Keys are global (Credential Manager, `/api/v1/providers`) but the only way to them is a project's Settings screen | An app-level Settings entry that works with no project open | blocks | 78d1f0e |
 | G1 | Models -> Import weights, Train -> Base model | The form asks for the path of a `.pt` file; the installer ships none, the base-model list of a new project is empty, nothing says where weights come from | Starter weights (YOLO11 n/s/m) offered in the app, selectable as base model without a file path | blocks | e83ce88 |
 | N3 | Sidebar inside a project | "Editor" greyed out with no hint | Hint "open an image from Data or Review" | annoys | 78d1f0e |
-| N4 | After creating a project | Lands on an empty Data Manager; nothing tells the order import -> label -> dataset -> train -> run -> review | A next-step hint or project overview (counts and the next action) | confuses | |
+| N4 | After creating a project | Lands on an empty Data Manager; nothing tells the order import -> label -> dataset -> train -> run -> review | A next-step hint or project overview (counts and the next action) | confuses | af354e4 |
 | N5 | Every `invoke` in the installed app | Console: CSP blocks `http://ipc.localhost`, Tauri falls back to postMessage (invisible to the user, noise in diagnostics) | No CSP violation (`connect-src` allows `ipc:` / `http://ipc.localhost`) | annoys | 337ccb6 |
 | P1 | Projects -> Create project with an empty or invalid folder | Red "request validation failed" | Which field is wrong and why | confuses | a8b8bca |
 | P2 | Projects -> Recent | Test leftovers pile up; no way to remove an entry or delete a project | "Remove from list" per entry | annoys | 1dda8ec |
@@ -35,14 +35,16 @@ The "Closed by" column is filled with the commit that fixes the item.
 | E1 | Editor with a pre-annotation model set | For 2-6 s after opening an image nothing shows that the model is running; the model is not named | "Pre-annotating with <model>..." status | confuses | 564f605 |
 | E2 | Editor, pre-annotation found nothing | "0 proposals from the pre-annotation model" appears (the image jumps down); no reason, no next step; COCO weights found nothing even on a yard full of trucks | Explanation (COCO weights rarely fire on nadir imagery; train a project model and use it) without a layout jump | confuses | 564f605 |
 | E3 | Editor toolbar "Keys" | Looks like a button, a click does nothing; the shortcuts are a native tooltip after ~1 s hover | Click opens a shortcuts popover | confuses | af4b4d7 |
-| E4 | Editor / datasets: images without machinery | "Labeled" means "has at least one accepted box" (`images.py`); an empty image can never be marked done and never enters a dataset as a negative | "No objects" action that marks the image reviewed and lets it into datasets | confuses | |
+| E4 | Editor / datasets: images without machinery | "Labeled" means "has at least one accepted box" (`images.py`); an empty image can never be marked done and never enters a dataset as a negative | "No objects" action that marks the image reviewed and lets it into datasets | confuses | 16d480f |
 | E5 | Editor region list with model proposals | The provenance badge wraps one word per line ("Model / v1- / coco- / m"), each row ~110 px, 67 rows | One-line rows | annoys | 5bc1a2a |
-| E6 | Editor with many proposals | 67 overlapping dashed boxes and labels; no way to hide low-confidence proposals | Confidence slider filtering visible proposals (A/R act on visible ones) | confuses | |
+| E6 | Editor with many proposals | 67 overlapping dashed boxes and labels; no way to hide low-confidence proposals | Confidence slider filtering visible proposals (A/R act on visible ones) | confuses | 2f36ebc |
 | E7 | Editor requests (ledger S2) | No request timeout: a hung request stalls the per-image queue, "Saving..." forever | Timeout with an error and retry | confuses | 0e9fe06 |
 | E8 | Editor opened from a review of one run | No "back to the queue"; the Review nav entry opens the whole queue, the run filter is lost | Back link that keeps the filter | annoys | 130c6ae |
+| E9 | Editor, confidence floor (E6) together with "No machinery" (E4); found on the packaged app while reading the walk-through screenshots | With every proposal hidden by the floor the region panel says "Nothing here? Press N", and N rejects the hidden proposals unseen | The panel names the hidden proposals; N refuses until they are in view | confuses | aa50eb7 |
+| E10 | Editor class hotkeys; found by the walk-through driver on the packaged app | A new box stays selected, so pressing the hotkey of the next class re-classes the box just drawn; the help said only "1-9: select class" | The help says what the key does and how to keep the box (Esc first) | confuses | 94868a0 |
 | S1 | Add to dataset, name "first set" | "request validation failed"; the input's `pattern` is an invalid regex in WebView2 (`/v` flag, console error), so native validation never fires | "Letters, digits, dot, dash, underscore" next to the field, checked before sending | confuses | a8b8bca |
-| S2 | Datasets | No screen lists datasets; they exist only as options of the Train dropdown; no split, class counts or delete | Datasets screen (list, stats, delete) | confuses | |
-| S3 | Add to dataset, by group, 14 images in 4 groups, fraction 0.2 | Result 8 train / 6 val (43 %), no warning | Warning when the achieved split is far from the requested one, suggestion to use random | confuses | |
+| S2 | Datasets | No screen lists datasets; they exist only as options of the Train dropdown; no split, class counts or delete | Datasets screen (list, stats, delete) | confuses | 07f3458 |
+| S3 | Add to dataset, by group, 14 images in 4 groups, fraction 0.2 | Result 8 train / 6 val (43 %), no warning | Warning when the achieved split is far from the requested one, suggestion to use random | confuses | c7726a1 |
 | T1 | Train form | 50 epochs, image size 1280, patience 50 with no guidance | One line per field (what it does, sensible range, rough duration) | confuses | 5b0cba7 |
 | T2 | Train on 14 images / result mAP50 0.0 % | Green "Training finished: the model is registered."; no warning before or after | Warning for tiny datasets before start; "this model is unlikely to be useful" when mAP is near zero | confuses | 5b0cba7 |
 | T3 | Train progress | The log is open by default and shows the worker command line and raw JSON lines | Log collapsed; human-readable epoch lines | annoys | 07af1a1 |
@@ -51,16 +53,16 @@ The "Closed by" column is filled with the commit that fixes the item.
 | Q3 | Query run finished | History row says "0 boxes" until the screen is revisited; the card says "415 boxes written so far" after the end | Consistent final numbers | confuses | d7f9c1c |
 | Q4 | Estimate for a local model | "480 requests, estimated $0.00 (at $0.00 per request)" | No cost wording for local models | annoys | 260c643 |
 | Q5 | Query Start | Disabled until Estimate is clicked; only a small grey hint | Start estimates by itself, or the hint is next to the disabled button as a reason | annoys | 77d23bf |
-| Q6 | Query, tiling off (ledger S4) | Untiled local runs predict at 1280 while pre-annotation uses 2560; not mentioned | Note in the form | annoys | |
-| Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | |
+| Q6 | Query, tiling off (ledger S4) | Untiled local runs predict at 1280 while pre-annotation uses 2560; not mentioned | Note in the form | annoys | 3a9f9fb |
+| Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | 95b6717 |
 | Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | abe0154 |
-| Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | |
+| Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | 3a9f9fb |
 | R1 | Review, empty queue | "0 images waiting" | How proposals get here (pre-annotation, Query) with links | confuses | dcb6002 |
 | R2 | Review from a run (ledger S5) | "Showing 40 images from a query run" counts the ids in the URL, not the images that still have proposals | Real count | annoys | dcb6002 |
 | M1 | Models -> Import with a wrong path | `no usable weights at 'E:\\nope\\x.pt'` (doubled backslashes) | The path as typed | annoys | 662e90b |
 | M2 | Models table (ledger S5) | Rows are not keyboard-focusable | Tab / Enter work | annoys | not a defect: the model name in each row is a button (Tab, Enter); checked 2026-09-19 |
 | M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | |
-| M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | |
+| M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | d3b123c |
 | X1 | Settings -> Test provider, failing | Green text: "Failed: ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', ...}" | Red, "The key was rejected by Anthropic (401)." | confuses | 3d039eb |
 | X2 | Every timestamp in the UI | UTC without a label (05:06 when the clock says 08:06) while job logs use local time | Local time everywhere | confuses | 9e31da3 |
 | H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | adf9b09 |

@@ -1,9 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
+import type { Dataset } from "@contract/client";
 import { useApi } from "@/api/client";
 import type { SplitMethod } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import { splitAdvice } from "@/datasets/splitAdvice";
 import { JobCard } from "@/jobs/JobCard";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
@@ -12,6 +14,12 @@ import { addImagesToDataset } from "./bulkActions";
 interface Props {
   projectId: string;
   imageIds: string[];
+  /** How many of the selected images have an accepted or edited box. */
+  labeledCount: number;
+  /** How many of the selected images are marked empty (E4): shown as negatives, not a defect. */
+  emptyCount: number;
+  /** How many are neither: they would freeze in with no boxes, as if they were empty. */
+  unlabeledCount: number;
   onClose: () => void;
 }
 
@@ -21,7 +29,14 @@ const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-or
 const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
 /** Spec section 5 split options (by_group default, val fraction 0.2, seed 42); the job shows inline. */
-export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
+export function AddToDatasetDialog({
+  projectId,
+  imageIds,
+  labeledCount,
+  emptyCount,
+  unlabeledCount,
+  onClose,
+}: Props) {
   const api = useApi();
   const [name, setName] = useState("");
   const [split, setSplit] = useState<SplitMethod>("by_group");
@@ -30,8 +45,14 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
+  // The creation response already carries the dataset's final counts (freeze() computes the split
+  // before the job writes files), so no refetch is needed once the job succeeds (M7). A failed job
+  // discards the row, so the advice/"Open dataset" link only show once the job has succeeded.
+  const [createdDataset, setCreatedDataset] = useState<Dataset | null>(null);
   const { job } = useTrackedJob(projectId, jobId);
   const n = imageIds.length;
+  const succeeded = job?.state === "succeeded" && createdDataset ? createdDataset : null;
+  const advice = succeeded ? splitAdvice(succeeded) : null;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -53,13 +74,14 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
     setError(null);
     try {
       const created = await addImagesToDataset(api, projectId, imageIds, {
-        name: name.trim(),
+        name,
         split_method: split,
         val_fraction: fraction,
         seed: seedValue,
       });
       useJobsStore.getState().upsert(created.job);
       setJobId(created.job.id);
+      setCreatedDataset(created.dataset);
     } catch (err) {
       pushLog(`add to dataset failed: ${messageOf(err, String(err))}`);
       setError(messageOf(err, "could not create the dataset"));
@@ -76,9 +98,16 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
       className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-3"
     >
       <p className="text-sm">
-        Freeze the accepted boxes of {n} {n === 1 ? "image" : "images"} into a new dataset (immutable after
-        creation).
+        Freeze {n} {n === 1 ? "image" : "images"} into a new dataset (immutable after creation):{" "}
+        {labeledCount} with accepted boxes, {emptyCount} marked empty (negative examples).
       </p>
+      {unlabeledCount > 0 && (
+        <p className="text-xs text-amber-300">
+          {unlabeledCount === 1
+            ? "1 selected image is not labeled yet. It would be written without boxes, as if it were empty. Deselect it unless it really shows no machinery."
+            : `${unlabeledCount} selected images are not labeled yet. They would be written without boxes, as if they were empty. Deselect them unless they really show no machinery.`}
+        </p>
+      )}
       {jobId === null ? (
         <div className="flex flex-wrap items-end gap-2">
           <label className={label}>
@@ -142,10 +171,29 @@ export function AddToDatasetDialog({ projectId, imageIds, onClose }: Props) {
           ) : (
             <p className="text-xs text-slate-400">Job queued…</p>
           )}
+          {advice && (
+            <p
+              role="note"
+              className="rounded border border-amber-700 bg-amber-950/40 px-3 py-2 text-xs text-amber-200"
+            >
+              {advice}
+            </p>
+          )}
           <div className="flex items-center gap-3">
-            <Link to={`/p/${projectId}/train`} className="text-sm text-orange-300 hover:underline">
+            <Link
+              to={`/p/${projectId}/train${succeeded ? `?dataset=${succeeded.id}` : ""}`}
+              className="text-sm text-orange-300 hover:underline"
+            >
               Train on it
             </Link>
+            {succeeded && (
+              <Link
+                to={`/p/${projectId}/datasets?dataset=${succeeded.id}`}
+                className="text-sm text-orange-300 hover:underline"
+              >
+                Open dataset
+              </Link>
+            )}
             <button type="button" className={secondary} onClick={onClose}>
               Close
             </button>

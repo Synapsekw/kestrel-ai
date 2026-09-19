@@ -1,10 +1,11 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
-import { exampleImagePage, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { exampleImage, exampleImagePage, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { DataManagerScreen } from "@/screens/DataManagerScreen";
+import { ImageGrid } from "./ImageGrid";
 
 /** The grid is rendered through the Data Manager so J/K and selection use the real key handling. */
 function renderGrid() {
@@ -60,5 +61,24 @@ describe("ImageGrid", () => {
 
     fireEvent.keyDown(grid, { key: "Enter" });
     await waitFor(() => expect(screen.getByText("editor route")).toBeInTheDocument());
+  });
+
+  it("shows a slate empty badge instead of the boxes badge for a marked image", () => {
+    const { api } = fakeClient([]);
+    const marked = { ...exampleImage, box_count: 0, pending_count: 0, marked_empty: true };
+    renderWithProviders(
+      <ImageGrid
+        projectId={PROJECT_ID}
+        items={[marked]}
+        selected={new Set()}
+        focusIndex={0}
+        onCellClick={() => {}}
+        onOpen={() => {}}
+        onToggle={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.getByText("empty")).toBeInTheDocument();
+    expect(screen.queryByText(/boxes$/)).toBeNull();
   });
 });

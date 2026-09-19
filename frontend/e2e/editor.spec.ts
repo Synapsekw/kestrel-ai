@@ -159,6 +159,80 @@ test("R rejects, Show rejected reveals the row, and the region list accepts one 
   expect((await one).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "accept" });
 });
 
+test("N marks the image empty, rejects visible proposals locally, and N again undoes it (E4)", async ({
+  page,
+}) => {
+  // Prism's static mock always echoes the same canned Image (marked_empty: false); intercept the
+  // PATCH so the response reflects what was actually sent, the way the real backend would.
+  await page.route(`**/api/v1/projects/${P}/images/${IMG}`, (route) => {
+    if (route.request().method() !== "PATCH") return route.continue();
+    const sent = route.request().postDataJSON() as { marked_empty: boolean };
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      headers: { "Access-Control-Allow-Origin": "*" },
+      body: JSON.stringify({
+        id: IMG,
+        path: "images/ahmadia/IX-12-02491_0031_0001.jpg",
+        file_name: "IX-12-02491_0031_0001.jpg",
+        width: 4000,
+        height: 2667,
+        source_id: "50000000-3333-4000-8000-000000000001",
+        group_key: "0031",
+        capture_time: "2019-04-15T06:35:36Z",
+        lat: 29.49469,
+        lon: 47.76513,
+        alt: 191.3,
+        phash: "82a81f67f94615ae",
+        box_count: 3,
+        pending_count: 0,
+        max_pending_confidence: null,
+        labeled: true,
+        marked_empty: sent.marked_empty,
+        created_at: "2026-09-17T10:06:00Z",
+      }),
+    });
+  });
+  await openEditor(page);
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  const toggle = page.getByRole("button", { name: /No machinery|Marked empty/ });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  // The mock's boxes include an accepted Person box: N is refused locally, without a request,
+  // while that ground truth is loaded (M3 / fix round 1).
+  await expect(toggle).toBeDisabled();
+  await expect(toggle).toHaveAttribute("title", "This image has accepted boxes. Delete or reject them first.");
+  await page.keyboard.press("n");
+  await expect(page.getByRole("alert")).toHaveText(
+    "This image has accepted boxes. Delete or reject them first.",
+  );
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+  // Delete the ground-truth box so the image can be marked.
+  const deletedBox = page.waitForRequest(
+    (r) => r.method() === "DELETE" && r.url().includes("/boxes/b0000000-6666-4000-8000-000000000001"),
+  );
+  await page.getByRole("listitem").filter({ hasText: "Person" }).click();
+  await page.keyboard.press("Delete");
+  await deletedBox;
+  await expect(toggle).toBeEnabled();
+
+  const marked = page.waitForRequest((r) => r.method() === "PATCH" && r.url().endsWith(`/images/${IMG}`));
+  await page.keyboard.press("n");
+  expect((await marked).postDataJSON()).toEqual({ marked_empty: true });
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await expect(
+    page.getByRole("status").filter({ hasText: "Marked as empty: this image counts as labeled" }),
+  ).toBeVisible();
+
+  const unmarked = page.waitForRequest((r) => r.method() === "PATCH" && r.url().endsWith(`/images/${IMG}`));
+  await page.keyboard.press("n");
+  expect((await unmarked).postDataJSON()).toEqual({ marked_empty: false });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("status").filter({ hasText: "No longer marked empty." })).toBeVisible();
+});
+
 test("pre-annotates on open when no proposal is pending and tolerates 501", async ({ page }) => {
   await page.route(`**/api/v1/projects/${P}/images/${IMG}/boxes`, (route) =>
     route.request().method() === "GET"
@@ -346,4 +420,23 @@ test("a failed move reports the error envelope and keeps the box where it was", 
   await expect(page.getByRole("alert")).toContainText("move box failed: disk full");
   await expect(page.getByRole("status").filter({ hasText: /Saved/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+});
+
+test("the confidence floor hides weak proposals from the image, the list and Accept all", async ({ page }) => {
+  await openEditor(page);
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  // The mock's proposal scores 81%: a floor of 90% takes it out of sight.
+  await page.getByLabel("Hide proposals below this confidence").fill("90");
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await expect(page.getByTestId("confidence-floor")).toContainText("below 90% · 1 hidden");
+  await expect(page.getByRole("button", { name: "Accept all (A)" })).toBeDisabled();
+  let reviewed = false;
+  page.on("request", (r) => {
+    if (r.url().endsWith("/boxes/review")) reviewed = true;
+  });
+  await page.keyboard.press("a");
+  await page.waitForTimeout(500);
+  expect(reviewed).toBe(false);
+  await page.getByLabel("Hide proposals below this confidence").fill("50");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
 });

@@ -8,6 +8,7 @@ import {
   cmdRedo,
   cmdReview,
   cmdSetClass,
+  cmdToggleEmpty,
   cmdUndo,
   cmdUpdateRect,
   enqueue,
@@ -27,6 +28,7 @@ export interface EditorActions {
   review: (ids: string[], action: ReviewDecision) => Promise<void>;
   acceptAll: () => Promise<void>;
   rejectAll: () => Promise<void>;
+  toggleEmpty: () => Promise<void>;
   undo: () => Promise<void>;
   redo: () => Promise<void>;
 }
@@ -74,6 +76,7 @@ export function useEditorActions(
       review: (ids, action) => queued(() => cmdReview(ctx, ids, action)),
       acceptAll: () => queued(() => cmdReview(ctx, visibleProposalIds(state()), "accept")),
       rejectAll: () => queued(() => cmdReview(ctx, visibleProposalIds(state()), "reject")),
+      toggleEmpty: () => queued(() => cmdToggleEmpty(ctx)),
       undo: () => queued(() => cmdUndo(ctx)),
       redo: () => queued(() => cmdRedo(ctx)),
     };

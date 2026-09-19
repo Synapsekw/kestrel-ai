@@ -3,6 +3,7 @@
 from fastapi import APIRouter, Body, Depends, Query, Request
 
 from app.datasets.schemas import BoxOut
+from app.events_util import publish_image_ids_event
 from app.inference import service
 from app.inference.jobs import run_infer  # noqa: F401 - the import registers the `infer` job type
 from app.inference.schemas import (
@@ -25,17 +26,7 @@ router = APIRouter(prefix="/projects/{projectId}", tags=["query-runs"])
 
 
 def _boxes_changed(request: Request, handle: ProjectHandle, image_ids: list[str]) -> None:
-    if image_ids:
-        request.app.state.events.publish(
-            {
-                "type": "boxes.changed",
-                "project_id": handle.id,
-                "job_id": None,
-                "progress": None,
-                "message": "",
-                "payload": {"image_ids": image_ids},
-            }
-        )
+    publish_image_ids_event(request, handle, "boxes.changed", image_ids)
 
 
 def _config(request: Request):

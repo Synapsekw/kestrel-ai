@@ -1,7 +1,13 @@
 # Freeze the backend with PyInstaller (one-folder) and copy it into the Tauri sidecar slot.
+# -Venv points at the environment to freeze with: a git worktree has no .venv of its own (and must
+# not link to the shared one), so it passes the main checkout's, e.g. -Venv E:\Dev\Yolo\app\backend\.venv
+param([string] $Venv = "")
 $ErrorActionPreference = "Stop"
 $backend = Split-Path $PSScriptRoot -Parent
 Set-Location $backend
+if (-not $Venv) { $Venv = Join-Path $backend ".venv" }
+$pyinstaller = Join-Path $Venv "Scripts\pyinstaller.exe"
+if (-not (Test-Path $pyinstaller)) { throw "no PyInstaller at $pyinstaller (pass -Venv <environment>)" }
 $started = Get-Date
 
 # Starter weights (usability gap G1) must be fetched before PyInstaller can bundle them.
@@ -14,7 +20,7 @@ foreach ($key in @("yolo11n", "yolo11s", "yolo11m")) {
 
 # PyInstaller logs to stderr; PowerShell 5.1 would turn every line into an error under "Stop".
 $ErrorActionPreference = "Continue"
-& .\.venv\Scripts\pyinstaller.exe machinery_backend.spec --noconfirm --log-level WARN 2>&1 | ForEach-Object { "$_" }
+& $pyinstaller machinery_backend.spec --noconfirm --log-level WARN 2>&1 | ForEach-Object { "$_" }
 $code = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 if ($code -ne 0) { throw "pyinstaller failed with exit code $code" }

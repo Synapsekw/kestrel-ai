@@ -32,6 +32,7 @@ function projectNavItems(projectId: string | undefined, imageId: string | undefi
       hint: p ? "Open an image from Data or Review" : NO_PROJECT_HINT,
     },
     item("Review", "review"),
+    item("Datasets", "datasets"),
     item("Models", "models"),
     item("Train", "train"),
     item("Query", "query"),

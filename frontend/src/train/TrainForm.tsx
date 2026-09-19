@@ -21,6 +21,8 @@ interface Props {
   modelsError: string | null;
   busy: boolean;
   onStart: (req: TrainRequest) => void;
+  /** Preselects a dataset (the Datasets screen's "Train on this dataset" link, `?dataset=`). */
+  initialDatasetId?: string;
 }
 
 const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm disabled:opacity-50";
@@ -38,23 +40,38 @@ export function TrainForm({
   modelsError,
   busy,
   onStart,
+  initialDatasetId,
 }: Props) {
-  const [form, setForm] = useState<Form>(() => ({
-    ...DEFAULT_TRAIN_FORM,
-    datasetId: datasets[0]?.id ?? "",
-    baseModelId: models[0]?.id ?? "",
-    name: suggestName(datasets[0], models[0]),
-  }));
+  const [form, setForm] = useState<Form>(() => {
+    const datasetId = initialDatasetId ?? datasets[0]?.id ?? "";
+    const dataset = datasets.find((d) => d.id === datasetId) ?? datasets[0];
+    return {
+      ...DEFAULT_TRAIN_FORM,
+      datasetId,
+      baseModelId: models[0]?.id ?? "",
+      name: suggestName(dataset, models[0]),
+    };
+  });
   const [error, setError] = useState<string | null>(null);
   const dataset = datasets.find((d) => d.id === form.datasetId);
   const advice = trainAdvice(dataset, form);
+  // Purely derived from props: true once a non-empty dataset list has actually loaded and the
+  // linked dataset (a "Train on this dataset" link, or ?dataset=) is not in it (I-B2).
+  const initialDatasetMissing =
+    Boolean(initialDatasetId) && datasets.length > 0 && !datasets.some((d) => d.id === initialDatasetId);
 
   // The lists load after mount and change again when a training job registers a model. Fill only
   // the pickers that are still empty and a name the user has not edited; everything typed survives.
   const lastSuggested = useRef(form.name);
   useEffect(() => {
     setForm((f) => {
-      const datasetId = f.datasetId || (datasets[0]?.id ?? "");
+      // A datasetId survives while the list is still empty (still loading); once a non-empty list
+      // arrives, an id that is not in it (an unknown ?dataset=, or one since deleted) falls back to
+      // the first dataset instead of staying stuck on a value the picker can never show (I5).
+      const datasetId =
+        f.datasetId && (datasets.length === 0 || datasets.some((d) => d.id === f.datasetId))
+          ? f.datasetId
+          : (datasets[0]?.id ?? "");
       const baseModelId = f.baseModelId || (models[0]?.id ?? "");
       const suggested = suggestName(
         datasets.find((d) => d.id === datasetId),
@@ -136,11 +153,16 @@ export function TrainForm({
             {dataset
               ? `${dataset.image_count} images: ${dataset.train_count} train / ${dataset.val_count} val, ${dataset.classes.length} classes`
               : "Datasets are frozen from labeled images."}{" "}
-            <Link to={`/p/${projectId}/data`} className="text-orange-300 hover:underline">
+            <Link to={`/p/${projectId}/datasets`} className="text-orange-300 hover:underline">
               Create dataset
             </Link>{" "}
-            (select images in the Data Manager and use Add to dataset).
+            (or select images in the Data Manager and use Add to dataset).
           </span>
+          {initialDatasetMissing && (
+            <span role="note" className="text-amber-300">
+              The dataset from the link no longer exists; the newest one is selected instead.
+            </span>
+          )}
         </label>
         <label className={label}>
           Base model

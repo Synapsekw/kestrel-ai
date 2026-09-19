@@ -49,7 +49,7 @@ export function useEditorImage(
         useEditorStore.getState().loadImage(image, boxes);
         setSettledId(imageId);
         const hasPending = boxes.some((b) => b.review_state === "unreviewed");
-        if (hasPending || !preannotationModelId) return;
+        if (hasPending || !preannotationModelId || image.marked_empty) return;
         useEditorStore.getState().setNotice(PREANNOTATING);
         try {
           const result = await preannotateImage(api, projectId, imageId);

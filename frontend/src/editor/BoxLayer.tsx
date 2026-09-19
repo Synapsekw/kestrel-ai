@@ -27,7 +27,11 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
   const image = useEditorStore((s) => s.image);
   const select = useEditorStore((s) => s.select);
   const hover = useEditorStore((s) => s.hover);
-  const list = useMemo(() => visibleBoxes({ boxes, order, showRejected }), [boxes, order, showRejected]);
+  const minConfidence = useEditorStore((s) => s.minConfidence);
+  const list = useMemo(
+    () => visibleBoxes({ boxes, order, showRejected, minConfidence }),
+    [boxes, order, showRejected, minConfidence],
+  );
 
   const trRef = useRef<Konva.Transformer>(null);
   const nodeRefs = useRef(new Map<string, Konva.Rect>());

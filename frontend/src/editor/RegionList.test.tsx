@@ -15,6 +15,7 @@ describe("RegionList", () => {
         classes={exampleClasses}
         selectedId={personBox.id}
         hoveredId={null}
+        markedEmpty={false}
         onSelect={onSelect}
         onHover={() => {}}
         onSetClass={onSetClass}
@@ -42,6 +43,64 @@ describe("RegionList", () => {
     expect(onSetClass).toHaveBeenCalledWith(personBox.id, CLASS_ID(3));
     fireEvent.click(screen.getByRole("button", { name: "Delete box 1" }));
     expect(onDelete).toHaveBeenCalledWith(personBox.id);
+  });
+
+  it("does not invite N while the confidence floor hides proposals: N would reject them unseen", () => {
+    render(
+      <RegionList
+        boxes={[]}
+        classes={exampleClasses}
+        selectedId={null}
+        hoveredId={null}
+        markedEmpty={false}
+        hiddenByFloor={10}
+        onSelect={() => {}}
+        onHover={() => {}}
+        onSetClass={() => {}}
+        onDelete={() => {}}
+        onReview={() => {}}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "10 proposals are hidden by the confidence floor. Lower it to see them before deciding that nothing is here.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/Press N/)).toBeNull();
+  });
+
+  it("shows the empty state text, and a different one once the image is marked empty", () => {
+    const { rerender } = render(
+      <RegionList
+        boxes={[]}
+        classes={exampleClasses}
+        selectedId={null}
+        hoveredId={null}
+        markedEmpty={false}
+        onSelect={() => {}}
+        onHover={() => {}}
+        onSetClass={() => {}}
+        onDelete={() => {}}
+        onReview={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Nothing here\? Press N\.$/)).toBeInTheDocument();
+
+    rerender(
+      <RegionList
+        boxes={[]}
+        classes={exampleClasses}
+        selectedId={null}
+        hoveredId={null}
+        markedEmpty={true}
+        onSelect={() => {}}
+        onHover={() => {}}
+        onSetClass={() => {}}
+        onDelete={() => {}}
+        onReview={() => {}}
+      />,
+    );
+    expect(screen.getByText("Marked empty: no machinery on this image.")).toBeInTheDocument();
   });
 
   it("labels provenance", () => {

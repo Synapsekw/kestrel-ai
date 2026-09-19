@@ -8,7 +8,15 @@ import {
   proposalBox,
   errorBody,
 } from "@/test/fixtures";
-import { bulkDeleteImages, fetchImage, fetchImagePage, preannotateImage, REVIEW_QUEUE_QUERY } from "./images";
+import {
+  bulkDeleteImages,
+  bulkMarkEmpty,
+  fetchImage,
+  fetchImagePage,
+  preannotateImage,
+  REVIEW_QUEUE_QUERY,
+  setMarkedEmpty,
+} from "./images";
 import { ApiFailure } from "./errors";
 
 describe("images api", () => {
@@ -33,6 +41,23 @@ describe("images api", () => {
     expect((await fetchImage(api, PROJECT_ID, IMAGE_ID)).id).toBe(IMAGE_ID);
     expect(await bulkDeleteImages(api, PROJECT_ID, ["a", "b"])).toBe(2);
     expect(requests[1]).toMatchObject({ method: "POST", body: { image_ids: ["a", "b"] } });
+  });
+
+  it("marks one image empty and bulk-marks a selection", async () => {
+    const { api, requests } = fakeClient([
+      { method: "PATCH", path: /\/images\/[^/]+$/, body: { ...exampleImage, marked_empty: true } },
+      { method: "POST", path: /\/bulk-mark-empty$/, body: { updated: 2, skipped: 1 } },
+    ]);
+    const updated = await setMarkedEmpty(api, PROJECT_ID, IMAGE_ID, true);
+    expect(updated.marked_empty).toBe(true);
+    expect(requests[0]).toMatchObject({ method: "PATCH", body: { marked_empty: true } });
+
+    const result = await bulkMarkEmpty(api, PROJECT_ID, ["a", "b", "c"], true);
+    expect(result).toEqual({ updated: 2, skipped: 1 });
+    expect(requests[1]).toMatchObject({
+      method: "POST",
+      body: { image_ids: ["a", "b", "c"], marked_empty: true },
+    });
   });
 
   it("pre-annotates with no body and surfaces 501 as ApiFailure", async () => {

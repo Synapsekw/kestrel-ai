@@ -8,12 +8,13 @@ import { pushLog } from "@/app/diagnostics";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
 import { classMapping, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
+import type { DatasetNames } from "./useDatasetNames";
 
 export interface ModelDetailProps {
   projectId: string;
   model: Model;
   project: Project;
-  datasetNames: Record<string, string>;
+  datasetNames: DatasetNames;
   onProjectSaved: (p: Project) => void;
   onChanged: (m: Model) => void;
   onDeleted: (id: string) => void;
@@ -102,7 +103,10 @@ export function ModelDetail({
         <div>
           <dt className={dt}>Dataset</dt>
           <dd className={dd}>
-            {model.dataset_id ? (datasetNames[model.dataset_id] ?? model.dataset_id) : "–"}
+            {model.dataset_id
+              ? (datasetNames.names[model.dataset_id] ??
+                (datasetNames.loaded ? "deleted dataset" : model.dataset_id))
+              : "–"}
           </dd>
         </div>
         <div>

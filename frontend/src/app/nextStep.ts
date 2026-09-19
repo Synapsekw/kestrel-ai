@@ -1,7 +1,7 @@
 export interface ProjectProgress {
   images: number;
   labeled: number;
-  /** Images with proposals nobody has reviewed yet. */
+  /** Proposals (boxes, not images) nobody has reviewed yet: `Stats.pending_review_count`. */
   pendingReview: number;
   datasets: number;
   models: number;
@@ -25,7 +25,10 @@ export function nextStep(projectId: string, p: ProjectProgress): NextStep | null
   const at = (screen: string) => `/p/${projectId}/${screen}`;
   if (p.pendingReview > 0)
     return {
-      text: `Review the proposals on ${p.pendingReview} ${p.pendingReview === 1 ? "image" : "images"}.`,
+      text:
+        p.pendingReview === 1
+          ? "Review the proposal waiting in the queue."
+          : `Review the ${p.pendingReview} proposals waiting in the queue.`,
       to: at("review"),
     };
   if (p.images === 0) return { text: "Import a folder of images.", to: at("data") };
@@ -38,9 +41,9 @@ export function nextStep(projectId: string, p: ProjectProgress): NextStep | null
     return p.labeled < USEFUL_LABELED
       ? {
           text: `Keep labeling (${p.labeled} of ${p.images} labeled; a first useful model needs about ${USEFUL_LABELED}), or freeze a dataset and try a training.`,
-          to: at("data"),
+          to: at("datasets"),
         }
-      : { text: `Freeze the ${p.labeled} labeled images into a dataset.`, to: at("data") };
+      : { text: `Freeze the ${p.labeled} labeled images into a dataset.`, to: at("datasets") };
   if (p.models === 0)
     return { text: "Add a starter model: training needs one as its base.", to: at("models") };
   if (p.trainedModels === 0) return { text: "Train a model on the dataset.", to: at("train") };

@@ -67,6 +67,22 @@ test("multi-select with checkboxes and bulk delete after confirmation", async ({
   await expect(page.getByRole("status")).toContainText(/images? deleted/);
 });
 
+test("multi-select and mark as empty reports the result (E4)", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
+  await page.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
+  await page.getByLabel("Select IX-12-02491_0031_0002.jpg").check();
+  await page.getByRole("button", { name: "Mark as empty" }).click();
+  await expect(page.getByText(/Mark 2 images as empty\?/)).toBeVisible();
+  const marked = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/images/bulk-mark-empty"),
+  );
+  await page.getByRole("button", { name: "Mark 2 as empty" }).click();
+  expect((await marked).postDataJSON()).toEqual({ image_ids: [IMG, IMG2], marked_empty: true });
+  // The mock answers its example {updated: 1, skipped: 0}.
+  await expect(page.getByRole("status")).toContainText("1 marked as empty");
+});
+
 test("run model opens the query screen with the selection; add to dataset posts the ids with the seed", async ({
   page,
 }) => {
@@ -95,7 +111,11 @@ test("run model opens the query screen with the selection; add to dataset posts 
   });
   await expect(page.getByRole("dialog", { name: "Add to dataset" }).getByTestId(/^job-/)).toBeVisible();
   await expect(page.getByText(/1 active job/)).toBeVisible();
-  await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${P}/train`);
+  // The mock's materialise job stays "running" (its static example never reaches "succeeded"), so
+  // "Train on it" stays plain until then (I-B1): the row could still be discarded on failure.
+  await expect(
+    page.getByRole("dialog", { name: "Add to dataset" }).getByRole("link", { name: "Train on it" }),
+  ).toHaveAttribute("href", `/p/${P}/train`);
 });
 
 test("J, K and Enter open the focused image with the list as navigation context", async ({ page }) => {

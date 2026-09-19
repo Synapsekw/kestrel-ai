@@ -20,10 +20,20 @@ describe("AddToDatasetDialog", () => {
     ]);
     const onClose = vi.fn();
     renderWithProviders(
-      <AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a", "b"]} onClose={onClose} />,
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a", "b"]}
+        labeledCount={1}
+        emptyCount={1}
+        unlabeledCount={0}
+        onClose={onClose}
+      />,
       { api },
     );
-    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent("2 images");
+    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent(
+      "Freeze 2 images into a new dataset (immutable after creation): 1 with accepted boxes, 1 marked empty (negative examples).",
+    );
+    expect(screen.queryByText(/not labeled yet/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Seed")).toHaveValue(42);
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
     fireEvent.change(screen.getByLabelText("Split method"), { target: { value: "random" } });
@@ -39,12 +49,117 @@ describe("AddToDatasetDialog", () => {
       image_ids: ["a", "b"],
     });
     expect(useJobsStore.getState().jobs[runningJob.id].type).toBe("dataset");
+    // While the job is only running, the row could still be discarded on failure (I-B1): "Train
+    // on it" stays a plain link until the job has actually succeeded.
     expect(screen.getByRole("link", { name: "Train on it" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/train`,
     );
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(onClose).toHaveBeenCalled();
+  });
+
+  it("shows the split advice and an Open dataset link once the job succeeds, with no refetch (M7)", async () => {
+    const risky = { ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 };
+    const succeededJob = { ...runningJob, type: "dataset" as const, state: "succeeded" as const };
+    const { api, requests } = fakeClient([
+      {
+        method: "POST",
+        path: /\/datasets$/,
+        status: 202,
+        body: { dataset: risky, job: succeededJob },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: succeededJob },
+    ]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a", "b"]}
+        labeledCount={1}
+        emptyCount={1}
+        unlabeledCount={0}
+        onClose={vi.fn()}
+      />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    const link = await screen.findByRole("link", { name: "Open dataset" });
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/datasets?dataset=${risky.id}`);
+    // Once the job has succeeded, "Train on it" carries the dataset id too (I-B1). The finished
+    // JobCard shows its own "Train on it" (plain, see jobLabels.ts), hence getAllByRole here.
+    const trainLinks = screen.getAllByRole("link", { name: "Train on it" });
+    expect(
+      trainLinks.some((l) => l.getAttribute("href") === `/p/${PROJECT_ID}/train?dataset=${risky.id}`),
+    ).toBe(true);
+    const advice = screen.getByRole("note");
+    expect(advice).toHaveTextContent(/went to validation although/);
+    // No GET .../datasets/{id}: the advice comes from the creation response, not a refetch.
+    expect(requests.every((r) => r.method !== "GET" || !r.url.includes("/datasets/"))).toBe(true);
+  });
+
+  it("shows neither the advice nor Open dataset while the job is still running, and Train on it stays plain", async () => {
+    const { api } = fakeClient([
+      {
+        method: "POST",
+        path: /\/datasets$/,
+        status: 202,
+        body: { dataset: { ...exampleDataset, val_count: 0 }, job: { ...runningJob, type: "dataset" } },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, type: "dataset" } },
+    ]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={vi.fn()}
+      />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    await waitFor(() => expect(screen.getByTestId(`job-${runningJob.id}`)).toBeInTheDocument());
+    expect(screen.queryByRole("link", { name: "Open dataset" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Train on it" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/train`,
+    );
+  });
+
+  it("keeps Train on it plain once the job has failed (the backend discards the row) (I-B1)", async () => {
+    const failedJob = { ...runningJob, type: "dataset" as const, state: "failed" as const };
+    const { api } = fakeClient([
+      {
+        method: "POST",
+        path: /\/datasets$/,
+        status: 202,
+        body: { dataset: exampleDataset, job: failedJob },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: failedJob },
+    ]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={vi.fn()}
+      />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
+    await waitFor(() => expect(screen.getByTestId(`job-${runningJob.id}`)).toBeInTheDocument());
+    expect(screen.queryByRole("link", { name: "Open dataset" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Train on it" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/train`,
+    );
   });
 
   it("shows the envelope message on failure", async () => {
@@ -56,19 +171,55 @@ describe("AddToDatasetDialog", () => {
         body: errorBody("already_exists", "dataset v1 exists"),
       },
     ]);
-    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
-      api,
-    });
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={() => {}}
+      />,
+      { api },
+    );
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("dataset v1 exists"));
   });
 
+  it("warns when part of the selection is not labeled yet", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a", "b", "c"]}
+        labeledCount={1}
+        emptyCount={1}
+        unlabeledCount={1}
+        onClose={() => {}}
+      />,
+      { api },
+    );
+    expect(
+      screen.getByText(
+        "1 selected image is not labeled yet. It would be written without boxes, as if it were empty. Deselect it unless it really shows no machinery.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("refuses a name with a space before sending and says which characters are allowed", async () => {
     const { api, requests } = fakeClient([]);
-    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
-      api,
-    });
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={() => {}}
+      />,
+      { api },
+    );
     const nameInput = screen.getByLabelText("Dataset name");
     // `[A-Za-z0-9._-]+` is not a valid `pattern` under the v flag WebView2 compiles it with.
     expect(nameInput).not.toHaveAttribute("pattern");

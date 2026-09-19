@@ -167,13 +167,20 @@ def test_duplicate_dataset_name_conflicts(client, labelled_project, wait_job):
     assert again.status_code == 409 and again.json()["error"]["code"] == "already_exists"
 
 
-def test_dataset_without_labelled_images_conflicts(client, project, import_source, tmp_path, make_jpeg):
+def test_dataset_without_labelled_images_is_refused_as_nothing_to_train_on(
+    client, project, import_source, tmp_path, make_jpeg
+):
     pid = project["id"]
     make_jpeg(tmp_path / "bare" / "a.jpg", 64, 64, seed=1)
     import_source(pid, tmp_path / "bare")
     r = _create_dataset(client, pid)
     assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert "Nothing to train on" in r.json()["error"]["message"]
     assert _create_dataset(client, pid, image_ids=["no-such-image"]).status_code == 409
+    # Real images without any accepted box are nothing to train on either (they used to freeze
+    # into a dataset of empty label files).
+    bare = client.get(f"/api/v1/projects/{pid}/images").json()["items"][0]["id"]
+    assert _create_dataset(client, pid, image_ids=[bare]).status_code == 409
 
 
 def test_explicit_image_ids_are_used_verbatim(client, labelled_project, wait_job, project_dir):
@@ -188,8 +195,9 @@ def test_explicit_image_ids_are_used_verbatim(client, labelled_project, wait_job
 
 def test_dataset_names_that_are_not_a_folder_are_rejected(client, labelled_project):
     pid = labelled_project["pid"]
-    assert _create_dataset(client, pid, name="..").status_code == 422
-    assert _create_dataset(client, pid, name=".").status_code == 422
+    # 409, not 422: the names match the schema pattern (see materialise.freeze).
+    assert _create_dataset(client, pid, name="..").status_code == 409
+    assert _create_dataset(client, pid, name=".").status_code == 409
 
 
 def test_dataset_from_real_frames(client, project, import_source, ahmadia_sample, wait_job, project_dir):

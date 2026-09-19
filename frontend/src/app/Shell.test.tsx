@@ -47,10 +47,24 @@ describe("Shell navigation", () => {
     expect(within(nav).getByText("Editor")).toHaveAttribute("title", "Open an image from Data or Review");
   });
 
+  it("links to the Datasets screen between Review and Models", () => {
+    renderShell(`/p/${PROJECT_ID}/data`);
+    const nav = screen.getByRole("navigation");
+    const labels = ["Data", "Editor", "Review", "Datasets", "Models", "Train", "Query", "Settings"];
+    const order = labels.map((label) => within(nav).getByText(label));
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(within(nav).getByRole("link", { name: "Datasets" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/datasets`,
+    );
+  });
+
   it("shows the project's next step on project screens and nothing on the Projects screen", async () => {
     const first = renderShell(`/p/${PROJECT_ID}/data`);
     expect(await screen.findByTestId("next-step")).toHaveTextContent(
-      "Next: Review the proposals on 2 images.",
+      "Next: Review the 2 proposals waiting in the queue.",
     );
     first.unmount();
     renderShell("/");

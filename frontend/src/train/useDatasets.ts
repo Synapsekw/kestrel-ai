@@ -11,6 +11,8 @@ export interface DatasetsList {
   unavailable: boolean;
   error: string | null;
   reload: () => void;
+  /** Drops a dataset from the local list at once, before a `reload()` confirms it with the server. */
+  remove: (id: string) => void;
 }
 
 interface State {
@@ -49,6 +51,10 @@ export function useDatasets(projectId: string): DatasetsList {
   }, [api, projectId, key]);
 
   const reload = useCallback(() => setAttempt((a) => a + 1), []);
+  const remove = useCallback(
+    (id: string) => setState((s) => ({ ...s, datasets: s.datasets.filter((d) => d.id !== id) })),
+    [],
+  );
   const loaded = state.key === key;
   return {
     datasets: state.datasets,
@@ -56,5 +62,6 @@ export function useDatasets(projectId: string): DatasetsList {
     unavailable: loaded && state.unavailable,
     error: loaded ? state.error : null,
     reload,
+    remove,
   };
 }

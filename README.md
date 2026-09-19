@@ -109,6 +109,10 @@ acceptance drivers use.
    .\scripts\build.ps1     # PyInstaller one-folder -> frontend/src-tauri/binaries/
    ```
 
+   From a git worktree (which has no `backend\.venv` and must not link to the shared one) pass the
+   environment explicitly: `.\scripts\build.ps1 -Venv E:\Dev\Yolo\app\backend\.venv`. The worktree
+   also needs its own `backend\starter_weights` (step 0 fetches them).
+
    On the reference machine: about 2 minutes, `dist/machinery-backend` is 3.4 GB in ~14,100 files.
    The bundle carries CUDA torch, torchvision, Ultralytics, OpenCV and the ONNX stack, because the
    same exe is also the training and export worker (`machinery-backend.exe worker train <params>`).
@@ -202,6 +206,18 @@ node frontend\scripts\acceptance.mjs --project-folder <folder> --evidence docs\e
 `scripts/acceptance.md` is the eight-step acceptance run in prose, with the expected values and
 the evidence file names; `acceptance.mjs` takes every expected value as a flag, so it can be
 dry-run against a small copy of the frames before the real run.
+
+`frontend/scripts/usability_walkthrough.mjs` replays the new-user flow (project, import, starter
+model, labeling, dataset, training, detection run, review, accept and undo, ONNX export) and checks
+the usability fixes of `docs/usability/2026-09-19-walkthrough.md`, one screenshot per step:
+
+```powershell
+node frontend\scripts\usability_walkthrough.mjs --project-folder <new folder> --frames <copy of sample frames> --evidence docs\evidence\usability\<run>
+```
+
+`--project-id <id> --from-step <n>` resumes on an existing project. To drive a second instance while
+the installed app is open, give it its own WebView2 profile: set `WEBVIEW2_USER_DATA_FOLDER` to a
+scratch folder next to the debugging-port variable.
 
 Cloud-provider steps read `ANTHROPIC_API_KEY` from the environment, store it through the providers
 key endpoint for the duration of the run, delete it afterwards and skip with a clear message when

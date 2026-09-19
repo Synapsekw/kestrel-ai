@@ -129,6 +129,18 @@ def test_a_second_call_is_skipped_and_returns_the_same_boxes(
     assert len(fake_yolo.calls) == 1  # the model was not asked twice
 
 
+def test_a_marked_empty_image_is_skipped_before_the_gpu_is_touched(
+    client, project_id, image_id, selected, fake_yolo, handle
+):
+    with handle.session() as s:
+        s.get(Image, image_id).marked_empty = True
+    r = client.post(f"{BASE}/{project_id}/images/{image_id}/preannotate", json={})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body == {"skipped": True, "model_id": selected, "items": []}
+    assert fake_yolo.calls == []  # the model was never asked
+
+
 def test_an_explicit_model_id_overrides_the_project_setting(
     client, project_id, image_id, selected, handle, fake_yolo
 ):

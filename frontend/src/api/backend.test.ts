@@ -18,6 +18,13 @@ describe("resolveBackend", () => {
     });
   });
 
+  it("reaches a mock server on another port when VITE_MOCK_URL says so (e2e beside another checkout)", async () => {
+    vi.stubEnv("APP_BACKEND_URL", "");
+    vi.stubEnv("VITE_MOCK_URL", "http://127.0.0.1:4110");
+    const { resolveBackend } = await import("./backend");
+    expect(await resolveBackend()).toMatchObject({ baseUrl: "http://127.0.0.1:4110", mode: "mock" });
+  });
+
   it("uses APP_BACKEND_URL when set", async () => {
     vi.stubEnv("APP_BACKEND_URL", "http://127.0.0.1:8765");
     vi.stubEnv("APP_BACKEND_TOKEN", "abc");

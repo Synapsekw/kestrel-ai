@@ -182,6 +182,8 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
     const cx = bb.x + bb.width / 2;
     const cy = bb.y + bb.height / 2;
     for (const [k, dx] of [["1", -120], ["4", 40]]) {
+      // A new box stays selected and a class key would re-class it: deselect first, as the help says.
+      await page.keyboard.press("Escape");
       await page.keyboard.press(k);
       await page.mouse.move(cx + dx, cy - 30);
       await page.mouse.down();
@@ -195,9 +197,24 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
       await sleep(600);
     }
   }
+  // One more image, without machinery: N marks it empty and it counts as labeled.
+  await page.keyboard.press("Control+ArrowRight");
+  await sleep(1500);
+  const before = await api("GET", `/projects/${projectId}/stats`);
+  await page.keyboard.press("n");
+  const toggle = page.getByRole("button", { name: /Marked empty/ });
+  check("N marks the image as empty", await visible(toggle));
+  check("the toggle shows its state", (await toggle.getAttribute("aria-pressed")) === "true");
+  // The mark is on the undo history like any other edit.
+  await page.keyboard.press("Control+z");
+  check("Ctrl+Z takes the mark back", await visible(page.getByRole("button", { name: "No machinery (N)" })));
+  await page.keyboard.press("n");
+  check("N marks it again", await visible(toggle));
+  await snap("editor-marked-empty");
   await sleep(1500);
   const stats = await api("GET", `/projects/${projectId}/stats`);
-  check("labeled images are counted", stats.labeled_count >= cfg.label, `${stats.labeled_count} labeled`);
+  check("an empty image counts as labeled", stats.labeled_count === before.labeled_count + 1, `${before.labeled_count} -> ${stats.labeled_count}`);
+  check("labeled images are counted", stats.labeled_count >= cfg.label + 1, `${stats.labeled_count} labeled`);
   const back = page.getByRole("link", { name: "Back to the Data Manager" });
   check("the editor has a way back", await visible(back));
   await back.click();
@@ -210,6 +227,7 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await page.getByRole("button", { name: /^Select all \d+$/ }).click();
   await page.getByRole("button", { name: "Add to dataset" }).click();
   const dialog = page.getByRole("dialog", { name: "Add to dataset" });
+  check("the dialog counts the empty image as a negative example", /1 marked empty \(negative examples\)/.test(await dialog.innerText()), (await dialog.innerText()).slice(0, 140));
   await dialog.getByLabel("Dataset name").fill("first set");
   await dialog.getByRole("button", { name: "Create dataset" }).click();
   check("a name with a space is explained", await visible(page.getByRole("alert").filter({ hasText: "letters, digits, dot, dash and underscore" })));
@@ -222,6 +240,44 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await snap("dataset-created");
   await train.click();
   await urlIs(/\/train/);
+});
+
+await step("6.5 the datasets screen lists, explains and deletes", async (check, snap) => {
+  await page.getByRole("navigation").getByRole("link", { name: "Datasets" }).click();
+  await urlIs(/\/datasets/);
+  const table = page.getByTestId("dataset-table");
+  check("the dataset is listed", await visible(table.getByRole("button", { name: "Select dataset v1" })));
+  await table.getByRole("button", { name: "Select dataset v1" }).click();
+  const detail = page.getByTestId("dataset-detail");
+  check("per-class counts are shown", await visible(detail.getByTestId("dataset-class-stats")));
+  check("the detail leads to training", await visible(detail.getByRole("link", { name: "Train on this dataset" })));
+  await snap("datasets-detail");
+
+  // A second, throw-away dataset: a name differing only by case is refused, then it is deleted.
+  await page.getByRole("button", { name: "New dataset from all labeled images" }).click();
+  const form = page.getByRole("form", { name: "New dataset" }).or(page.locator('[aria-label="New dataset"]')).first();
+  await form.getByLabel("Dataset name").fill("V1");
+  await form.getByRole("button", { name: "Create dataset" }).click();
+  check("a name that differs only by case is refused", await visible(page.getByRole("alert").filter({ hasText: "already exists" })));
+  await form.getByLabel("Dataset name").fill("scratch");
+  await form.getByRole("button", { name: "Create dataset" }).click();
+  const scratch = table.getByRole("button", { name: "Select dataset scratch" });
+  check("the new dataset appears when its job ends", await visible(scratch, 120_000));
+  await sleep(1500);
+  await scratch.click();
+  const scratchId = new URL(page.url()).searchParams.get("dataset");
+  await detail.getByRole("button", { name: "Delete dataset" }).click();
+  check("the delete asks first and says what is kept", await visible(detail.getByText(/Images, labels\s+and trained models are kept/)));
+  await snap("datasets-delete-confirm");
+  await detail.getByRole("button", { name: "Delete permanently" }).click();
+  check("the deleted dataset leaves the list", await scratch.waitFor({ state: "detached", timeout: 15_000 }).then(() => true).catch(() => false));
+  const gone = await fetch(`${base}/api/v1/projects/${projectId}/datasets/${scratchId}`, { headers: { Authorization: `Bearer ${token}` } });
+  check("the backend no longer has it", gone.status === 404, `status ${gone.status}`);
+  await snap("datasets-after-delete");
+
+  await table.getByRole("button", { name: "Select dataset v1" }).click();
+  await detail.getByRole("link", { name: "Train on this dataset" }).click();
+  await urlIs(/\/train\?dataset=/);
 });
 
 await step("7 train: guidance before, honest verdict after", async (check, snap) => {
@@ -246,32 +302,39 @@ await step("7 train: guidance before, honest verdict after", async (check, snap)
 });
 
 await step("8 run the trained model; review; accept as labels with a count; undo", async (check, snap) => {
-  await page.getByRole("link", { name: "Query" }).click();
-  const model = page.getByLabel("Model", { exact: true });
-  // The list loads after the screen: wait for the trained model before choosing it.
-  await model.locator("option", { hasText: "(Trained)" }).first().waitFor({ state: "attached", timeout: 30_000 });
-  const options = await model.locator("option").allInnerTexts();
-  const trained = options.find((o) => /Trained/.test(o));
-  await model.selectOption({ label: trained });
-  check("the trained model is the one that runs", Boolean(trained), trained);
-  await page.getByLabel("Confidence", { exact: true }).fill("0.01");
-  check("a local run explains that it is free", await visible(page.getByText(/Runs on this computer at no cost/)));
-  await snap("query-form");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
   const card = page.getByTestId("run-card");
-  await card.waitFor({ timeout: 30_000 });
-  await card.getByTestId("box-count").filter({ hasText: "found" }).waitFor({ timeout: 1_800_000 });
-  const count = await card.getByTestId("box-count").innerText();
-  await snap("query-done");
-  const runId = new URL(page.url()).searchParams.get("run");
-  const run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
-  check("card shows the final count", count.startsWith(`${run.box_count} `), `${count} / api ${run.box_count}`);
-  await sleep(1500);
-  check("history shows the same count", await visible(page.getByTestId("run-history").getByText(new RegExp(`${run.box_count} boxes`))));
+  // Runs one local detection with the model whose option matches `kind`; returns the run.
+  const detect = async (kind, shotName) => {
+    await page.getByRole("link", { name: "Query" }).click();
+    const again = page.getByRole("button", { name: "New query" });
+    if (await again.isVisible().catch(() => false)) await again.click();
+    const model = page.getByLabel("Model", { exact: true });
+    // The list loads after the screen: wait for the model before choosing it.
+    await model.locator("option", { hasText: kind }).first().waitFor({ state: "attached", timeout: 30_000 });
+    const label = (await model.locator("option").allInnerTexts()).find((o) => o.includes(kind));
+    await model.selectOption({ label });
+    await page.getByLabel("Confidence", { exact: true }).fill("0.01");
+    check("a local run explains that it is free", await visible(page.getByText(/Runs on this computer at no cost/)));
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await card.waitFor({ timeout: 30_000 });
+    await card.getByTestId("box-count").filter({ hasText: "found" }).waitFor({ timeout: 1_800_000 });
+    const count = await card.getByTestId("box-count").innerText();
+    await snap(shotName);
+    const id = new URL(page.url()).searchParams.get("run");
+    const found = await api("GET", `/projects/${projectId}/query-runs/${id}`);
+    check(`card shows the final count (${label})`, count.startsWith(`${found.box_count} `), `${count} / api ${found.box_count}`);
+    await sleep(1500);
+    check("history shows the same count", await visible(page.getByTestId("run-history").getByText(new RegExp(`${found.box_count} boxes`))));
+    return found;
+  };
+  let run = await detect("(Trained)", "query-trained-model");
   if (run.box_count === 0) {
+    // A model trained for a few epochs on a dozen images is rarely sure of anything.
     check("an empty run says why", await visible(page.getByTestId("no-boxes-advice")));
-    return;
+    run = await detect("(Imported)", "query-starter-model");
+    check("the starter model proposes something to review", run.box_count > 0, `${run.box_count} boxes`);
   }
+  const runId = run.id;
   await card.getByLabel("Minimum confidence").fill("0");
   await card.getByRole("button", { name: "Accept as labels…" }).click();
   const confirm = page.getByTestId("promote-confirm");
@@ -291,6 +354,12 @@ await step("8 run the trained model; review; accept as labels with a count; undo
   await snap("review-of-the-run");
   await page.getByTestId("image-table").getByText(/\.jpg$/).first().dblclick();
   await urlIs(/\/edit\//);
+  // A dense run is unreadable until the weak proposals are out of the way.
+  const shown = await page.getByTestId("proposal-count").innerText();
+  await page.getByLabel("Hide proposals below this confidence").fill("95");
+  check("the confidence floor hides weak proposals", /hidden/.test(await page.getByTestId("confidence-floor").innerText()), `${shown} -> ${await page.getByTestId("proposal-count").innerText()}`);
+  await snap("review-confidence-floor");
+  await page.getByLabel("Hide proposals below this confidence").fill("0");
   const back = page.getByRole("link", { name: "Back to the review queue" });
   check("the editor leads back to this review", (await back.getAttribute("href"))?.includes("ids="), await back.getAttribute("href"));
   await back.click();

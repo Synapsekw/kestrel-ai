@@ -74,6 +74,7 @@ export function TrainScreen() {
           modelsError={registry.error}
           busy={busy}
           onStart={(req) => void start(req)}
+          initialDatasetId={params.get("dataset") ?? undefined}
         />
       )}
       {unavailable && (

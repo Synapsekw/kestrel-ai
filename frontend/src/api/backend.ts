@@ -33,7 +33,9 @@ export async function resolveBackend(): Promise<BackendInfo> {
       mode: "env",
       logPath: null,
     };
-  return { baseUrl: "http://127.0.0.1:4010", token: "mock", mode: "mock", logPath: null };
+  // VITE_MOCK_URL moves the mock (e2e beside another checkout that holds the default port).
+  const mock = import.meta.env.VITE_MOCK_URL || "http://127.0.0.1:4010";
+  return { baseUrl: mock, token: "mock", mode: "mock", logPath: null };
 }
 
 /** Poll `GET /api/v1/health` until it answers or the timeout elapses. */
