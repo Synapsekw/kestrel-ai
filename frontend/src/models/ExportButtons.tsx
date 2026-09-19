@@ -7,8 +7,7 @@ import { pushLog } from "@/app/diagnostics";
 import { JobCard } from "@/jobs/JobCard";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
-
-const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+import { Alert, Button } from "@/ui";
 
 interface Props {
   projectId: string;
@@ -48,32 +47,40 @@ export function ExportButtons({ projectId, model, onFinished }: Props) {
 
   return (
     <div className="flex flex-col gap-2">
-      <h3 className="text-sm font-medium">Exports</h3>
+      <h3 className="text-sm font-semibold">Exports</h3>
       {exports.length > 0 ? (
-        <ul className="text-sm">
+        <ul className="flex flex-col text-[13px]">
           {exports.map(([format, path]) => (
-            <li key={format} className="flex gap-2">
-              <span className="w-16 uppercase text-slate-400">{format}</span>
-              <span className="font-mono text-xs">{path}</span>
+            <li key={format} className="flex h-8 items-center gap-3 border-b border-line last:border-b-0">
+              <span className="w-16 text-xs font-medium uppercase text-muted">{format}</span>
+              <span className="truncate font-mono">{path}</span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-slate-400">Not exported yet.</p>
+        <p className="text-sm text-muted">Not exported yet.</p>
       )}
-      <div className="flex gap-2">
-        <button type="button" className={btn} onClick={() => void start("onnx")} disabled={busy !== null}>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          size="sm"
+          icon="download"
+          loading={busy === "onnx"}
+          onClick={() => void start("onnx")}
+          disabled={busy !== null}
+        >
           Export ONNX
-        </button>
-        <button type="button" className={btn} onClick={() => void start("engine")} disabled={busy !== null}>
+        </Button>
+        <Button
+          size="sm"
+          icon="download"
+          loading={busy === "engine"}
+          onClick={() => void start("engine")}
+          disabled={busy !== null}
+        >
           Export TensorRT
-        </button>
+        </Button>
       </div>
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
       {job && <JobCard projectId={projectId} job={job} />}
     </div>
   );

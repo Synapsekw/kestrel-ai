@@ -8,6 +8,7 @@ import { ModelTable } from "@/models/ModelTable";
 import { StarterModels } from "@/models/StarterModels";
 import { useDatasetNames } from "@/models/useDatasetNames";
 import { useModels } from "@/models/useModels";
+import { Alert, Disclosure, Skeleton, SkeletonRows } from "@/ui";
 
 export function ModelsScreen() {
   const { projectId = "" } = useParams();
@@ -34,42 +35,28 @@ export function ModelsScreen() {
     [replace, select],
   );
 
+  const empty = !registry.loading && registry.models.length === 0;
+
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Models</h1>
-        <span className="text-xs text-slate-400">
-          {registry.loading ? "Loading…" : `${registry.models.length} in the registry`}
-        </span>
-        <button
-          type="button"
-          onClick={() => setImporting((v) => !v)}
-          disabled={registry.unavailable}
-          className="ml-auto rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
-        >
-          Import weights
-        </button>
+    <section className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-baseline gap-3">
+        <h1 className="text-xl font-semibold tracking-tight">Models</h1>
+        {registry.loading ? (
+          <Skeleton className="h-4 w-28 self-center" />
+        ) : (
+          !registry.unavailable && (
+            <span className="text-xs tabular-nums text-muted">{registry.models.length} in the registry</span>
+          )
+        )}
       </div>
-      {projectError && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {projectError}
-        </p>
-      )}
-      {registry.error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {registry.error}
-        </p>
-      )}
+      {projectError && <Alert tone="danger">{projectError}</Alert>}
+      {registry.error && <Alert tone="danger">{registry.error}</Alert>}
       {registry.unavailable && (
-        <p
-          role="note"
-          className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
-        >
-          The model registry is not available yet (it arrives with the training backend).
-        </p>
-      )}
-      {importing && (
-        <ImportModelForm projectId={projectId} onImported={onImported} onClose={() => setImporting(false)} />
+        <div role="note">
+          <Alert tone="info">
+            The model registry is not available yet (it arrives with the training backend).
+          </Alert>
+        </div>
       )}
       {!registry.unavailable && (
         <StarterModels
@@ -79,18 +66,24 @@ export function ModelsScreen() {
         />
       )}
       {!registry.unavailable && (
-        <ModelTable
-          models={registry.models}
-          datasetNames={datasetNames}
-          selectedId={selectedId}
-          onSelect={select}
-        />
+        <Disclosure label="Import weights from a file" open={importing} onOpenChange={setImporting}>
+          <ImportModelForm
+            projectId={projectId}
+            onImported={onImported}
+            onClose={() => setImporting(false)}
+          />
+        </Disclosure>
       )}
-      {!registry.loading && !registry.unavailable && registry.models.length === 0 && (
-        <p className="text-sm text-slate-400">
-          No models yet. Add a starter model above, or import your own weights.
-        </p>
-      )}
+      {!registry.unavailable &&
+        (registry.loading && registry.models.length === 0 ? (
+          <SkeletonRows rows={3} columns={5} />
+        ) : empty ? (
+          <p className="text-sm text-muted">
+            No models yet. Add a starter model above, or import your own weights.
+          </p>
+        ) : (
+          <ModelTable models={registry.models} selectedId={selectedId} onSelect={select} />
+        ))}
       {selected && project && (
         <ModelDetail
           key={selected.id}

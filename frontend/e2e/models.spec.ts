@@ -127,14 +127,14 @@ test("export, import, use as pre-annotation and delete send the contract request
   await page.getByRole("button", { name: "Use as pre-annotation model" }).click();
   expect((await patched).postDataJSON()).toEqual({ preannotation_model_id: TRAINED });
 
-  await page.getByRole("button", { name: "Import weights" }).click();
+  await page.getByRole("button", { name: "Import weights from a file" }).click();
   await page.getByLabel("Model name").fill("yolo11m-coco");
   await page.getByLabel("Weights path").fill("E:\\Dev\\Yolo\\models\\yolo11m.pt");
   await expect(page.getByLabel("Class aliases")).toHaveValue("truck=dump_truck");
   const importRequest = page.waitForRequest(
     (r) => r.method() === "POST" && r.url().endsWith("/models/import"),
   );
-  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page.getByRole("button", { name: "Import weights", exact: true }).click();
   expect((await importRequest).postDataJSON()).toEqual({
     name: "yolo11m-coco",
     weights_path: "E:\\Dev\\Yolo\\models\\yolo11m.pt",
@@ -143,9 +143,7 @@ test("export, import, use as pre-annotation and delete send the contract request
   await expect(page).toHaveURL(new RegExp(`model=${MODEL}`));
 
   await page.getByRole("button", { name: "Delete model" }).click();
-  const deleted = page.waitForRequest(
-    (r) => r.method() === "DELETE" && r.url().endsWith(`/models/${MODEL}`),
-  );
+  const deleted = page.waitForRequest((r) => r.method() === "DELETE" && r.url().endsWith(`/models/${MODEL}`));
   await page.getByRole("button", { name: "Delete permanently" }).click();
   await deleted;
   await expect(page.getByTestId("model-detail")).toHaveCount(0);
@@ -169,5 +167,6 @@ test("a 501 registry shows the note and keeps the screen usable", async ({ page 
   );
   await page.goto(`/p/${P}/models`);
   await expect(page.getByRole("note")).toContainText("The model registry is not available yet");
-  await expect(page.getByRole("button", { name: "Import weights" })).toBeDisabled();
+  // Nothing to import into: the import disclosure is not offered at all.
+  await expect(page.getByRole("button", { name: "Import weights from a file" })).toHaveCount(0);
 });

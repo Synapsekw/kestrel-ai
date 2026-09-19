@@ -4,6 +4,7 @@ import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { artifactUrl, fetchResultsCsv } from "@/api/models";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Skeleton } from "@/ui";
 import { parseResultsCsv, type CurvePoint } from "./resultsCsv";
 import { TrainingCurve } from "./TrainingCurve";
 
@@ -19,13 +20,18 @@ function ArtifactImage({ src, alt }: { src: string; alt: string }) {
   return (
     <figure className="flex flex-col gap-1">
       {failed ? (
-        <span className="rounded bg-slate-950 px-2 py-6 text-center text-xs text-slate-500">
+        <span className="rounded-md bg-well px-2 py-6 text-center text-xs text-muted">
           {alt} not available
         </span>
       ) : (
-        <img src={src} alt={alt} onError={() => setFailed(true)} className="w-full rounded bg-white" />
+        <img
+          src={src}
+          alt={alt}
+          onError={() => setFailed(true)}
+          className="w-full rounded-md border border-line bg-panel"
+        />
       )}
-      <figcaption className="text-xs text-slate-400">{alt}</figcaption>
+      <figcaption className="text-xs text-muted">{alt}</figcaption>
     </figure>
   );
 }
@@ -55,7 +61,7 @@ export function ModelArtifacts({ projectId, model }: { projectId: string; model:
 
   const { confusion_matrix, pr_curve } = model.artifacts;
   if (!hasCsv && !confusion_matrix && !pr_curve) {
-    return <p className="text-sm text-slate-400">No training artifacts (imported weights).</p>;
+    return <p className="text-sm text-muted">No training artifacts (imported weights).</p>;
   }
   const curve = csv && csv.modelId === model.id ? csv : null;
   const cmSrc = confusion_matrix
@@ -67,14 +73,16 @@ export function ModelArtifacts({ projectId, model }: { projectId: string; model:
       {hasCsv &&
         (curve ? (
           curve.error ? (
-            <p role="alert" className="text-xs text-red-300">
-              {curve.error}
-            </p>
+            <Alert tone="danger">{curve.error}</Alert>
           ) : (
-            <TrainingCurve points={curve.points} />
+            <div className="max-w-xl rounded-lg border border-line bg-panel p-3">
+              <TrainingCurve points={curve.points} />
+            </div>
           )
         ) : (
-          <p className="text-xs text-slate-400">Loading results.csv…</p>
+          <div role="status" aria-label="Loading results.csv" className="max-w-xl">
+            <Skeleton className="h-[200px] w-full rounded-lg" />
+          </div>
         ))}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         {cmSrc && <ArtifactImage key={cmSrc} src={cmSrc} alt="Confusion matrix" />}

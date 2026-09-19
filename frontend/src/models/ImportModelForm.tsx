@@ -1,9 +1,10 @@
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useId, useState, type FormEvent } from "react";
 import type { Model } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { importModel } from "@/api/models";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Button, Field, Input, Textarea } from "@/ui";
 import { DEFAULT_ALIASES, formatAliases, parseAliases } from "./aliases";
 
 interface Props {
@@ -11,10 +12,6 @@ interface Props {
   onImported: (model: Model) => void;
   onClose: () => void;
 }
-
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop()?.replace(/\.pt$/i, "") ?? "";
@@ -24,6 +21,7 @@ function baseName(path: string): string {
 export function ImportModelForm({ projectId, onImported, onClose }: Props) {
   const api = useApi();
   const { mode } = useBackend();
+  const id = useId();
   const [name, setName] = useState("");
   const [path, setPath] = useState("");
   const [aliases, setAliases] = useState(formatAliases(DEFAULT_ALIASES));
@@ -64,66 +62,57 @@ export function ImportModelForm({ projectId, onImported, onClose }: Props) {
 
   return (
     <form
-      role="dialog"
       aria-label="Import weights"
       onSubmit={(e) => void submit(e)}
-      className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-4"
+      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-panel p-4"
     >
-      <h2 className="text-lg font-medium">Import weights</h2>
-      <p className="text-sm text-slate-400">
+      <p className="max-w-prose text-sm leading-relaxed text-muted">
         The file is copied into the project&apos;s models folder. Aliases map the weights&apos; class names to
-        project classes, one per line (COCO weights: truck=dump_truck); unmapped classes are dropped.
+        project classes; classes without a match are dropped.
       </p>
-      <label className="flex flex-col gap-1 text-xs text-slate-400">
-        Name
-        <input
-          aria-label="Model name"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={input}
-        />
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-slate-400">
-        Weights path (.pt)
-        <div className="flex gap-2">
-          <input
-            aria-label="Weights path"
-            required
-            value={path}
-            onChange={(e) => setPath(e.target.value)}
-            placeholder="E:\Dev\Yolo\models\yolo11m.pt"
-            className={`${input} min-w-0 flex-1 font-mono`}
-          />
-          {mode === "tauri" && (
-            <button type="button" className={secondary} onClick={() => void browse()}>
-              Browse
-            </button>
-          )}
-        </div>
-      </label>
-      <label className="flex flex-col gap-1 text-xs text-slate-400">
-        Class aliases
-        <textarea
-          aria-label="Class aliases"
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Field label="Model name" htmlFor={`${id}-name`}>
+          <Input id={`${id}-name`} required value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Weights path" htmlFor={`${id}-path`} hint="A .pt file.">
+          <div className="flex gap-2">
+            <Input
+              id={`${id}-path`}
+              required
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              placeholder="E:\Dev\Yolo\models\yolo11m.pt"
+              className="min-w-0 flex-1 font-mono"
+            />
+            {mode === "tauri" && (
+              <Button icon="folder" onClick={() => void browse()}>
+                Browse
+              </Button>
+            )}
+          </div>
+        </Field>
+      </div>
+      <Field
+        label="Class aliases"
+        htmlFor={`${id}-aliases`}
+        hint="One per line, weights class=project class (COCO weights: truck=dump_truck)."
+      >
+        <Textarea
+          id={`${id}-aliases`}
           rows={3}
           value={aliases}
           onChange={(e) => setAliases(e.target.value)}
-          className={`${input} font-mono`}
+          className="font-mono"
         />
-      </label>
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      </Field>
+      {error && <Alert tone="danger">{error}</Alert>}
       <div className="flex gap-2">
-        <button type="submit" className={primary} disabled={busy}>
-          Import
-        </button>
-        <button type="button" className={secondary} onClick={onClose} disabled={busy}>
+        <Button type="submit" variant="primary" icon="import" loading={busy}>
+          Import weights
+        </Button>
+        <Button variant="ghost" onClick={onClose} disabled={busy}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

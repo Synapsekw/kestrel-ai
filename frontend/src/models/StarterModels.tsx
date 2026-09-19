@@ -4,6 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { importStarterModel, listStarterModels } from "@/api/starterModels";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Button, Pill } from "@/ui";
 
 interface Props {
   projectId: string;
@@ -59,48 +60,48 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
   if (starters.length === 0 && !error) return null;
 
   return (
-    <section className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/40 p-4">
-      <div>
-        <h2 className="text-lg font-medium">Starter models</h2>
-        <p className="text-sm text-slate-400">
+    <section className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">Starter models</h2>
+        <p className="max-w-prose text-sm leading-relaxed text-muted">
           General-purpose weights that ship with the app. Add one to use it as the base model for training; on
           aerial imagery they find little by themselves.
         </p>
       </div>
-      {error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         {starters.map((s) => {
           const inRegistry = existingNames.includes(registryName(s.key));
+          const adding = busyKey === s.key;
           return (
             <div
               key={s.key}
               data-testid={`starter-${s.key}`}
-              className="flex flex-col gap-2 rounded border border-slate-700 bg-slate-900/60 p-3"
+              className="flex flex-col gap-2 rounded-lg border border-line bg-panel p-4"
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium">{s.name}</span>
+                <span className="text-sm font-semibold">{s.name}</span>
                 {inRegistry && (
-                  <span className="rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
+                  <Pill tone="neutral" size="sm">
                     In the registry
-                  </span>
+                  </Pill>
                 )}
               </div>
-              <p className="text-xs text-slate-400">{s.description}</p>
-              <p className="text-xs text-slate-500">
+              <p className="text-[13px] leading-relaxed text-muted">{s.description}</p>
+              <p className="text-xs tabular-nums text-muted">
                 {s.available ? `${s.size_mb} MB` : "Not included in this copy of the app."}
               </p>
-              <button
-                type="button"
+              <Button
+                size="sm"
+                icon="plus"
+                loading={adding}
+                aria-label={adding ? undefined : `Add ${s.name}`}
                 onClick={() => void add(s.key)}
                 disabled={!s.available || busyKey !== null}
-                className="mt-auto rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
+                className="mt-auto self-start"
               >
-                {busyKey === s.key ? "Adding…" : `Add ${s.name}`}
-              </button>
+                {adding ? "Adding…" : "Add to project"}
+              </Button>
             </div>
           );
         })}
