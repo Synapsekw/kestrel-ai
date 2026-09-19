@@ -5,7 +5,7 @@ import { isNotImplemented, messageOf } from "@/api/errors";
 import { createSource, fetchAllSources, fetchSourceStats } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { formatDate } from "@/models/modelLabels";
+import { formatDate, formatLocalDate } from "@/models/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 
 const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
@@ -110,7 +110,7 @@ function SourceRow({
         <span className="truncate font-mono text-xs text-slate-400">{source.folder}</span>
         <span className="text-xs text-slate-300">
           {source.image_count} images, {source.duplicate_count} duplicates
-          {source.imported_at ? `, imported ${formatDate(source.imported_at)}` : ", not imported yet"}
+          {source.imported_at ? `, imported ${formatLocalDate(source.imported_at)}` : ", not imported yet"}
         </span>
         <button type="button" className={`${btn} ml-auto`} onClick={() => void loadStats()} disabled={busy}>
           Stats

@@ -6,7 +6,7 @@ import { isNotImplemented, messageOf } from "@/api/errors";
 import { trainModel } from "@/api/models";
 import { pushLog } from "@/app/diagnostics";
 import { jobTitle, stateLabel } from "@/jobs/jobLabels";
-import { formatDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/models/modelLabels";
 import { useModels } from "@/models/useModels";
 import { useJobsStore } from "@/store/jobs";
 import { TrainForm } from "@/train/TrainForm";
@@ -95,7 +95,7 @@ export function TrainScreen() {
               <li key={j.id} className="flex items-center gap-3">
                 <span className="font-medium">{jobTitle(j)}</span>
                 <span className="text-xs text-slate-400">
-                  {stateLabel(j.state)} · {formatDate(j.created_at)}
+                  {stateLabel(j.state)} · {formatLocalDate(j.created_at)}
                 </span>
                 {j.id !== jobId && (
                   <button type="button" className={btn} onClick={() => setParams({ job: j.id })}>

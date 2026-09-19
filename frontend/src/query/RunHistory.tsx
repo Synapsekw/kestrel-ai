@@ -1,5 +1,5 @@
 import type { QueryRun } from "@contract/client";
-import { formatDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/models/modelLabels";
 import { runTitle } from "./queryModel";
 
 interface Props {
@@ -25,7 +25,7 @@ export function RunHistory({ runs, selectedId, onSelect }: Props) {
             >
               <span className="font-medium">{title}</span>
               <span className="text-xs text-slate-400">
-                {formatDate(run.created_at)} · {run.image_ids.length} images · {run.box_count} boxes
+                {formatLocalDate(run.created_at)} · {run.image_ids.length} images · {run.box_count} boxes
                 {run.promoted_at ? " · promoted" : ""}
               </span>
             </button>

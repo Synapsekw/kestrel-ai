@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDate, formatMetric, kindLabel } from "./modelLabels";
+import { formatDate, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
 
 describe("model labels", () => {
   it("formats metrics as percentages and dates as UTC minutes", () => {
@@ -10,5 +10,17 @@ describe("model labels", () => {
     expect(formatDate("2026-09-17T10:10:00Z")).toBe("2026-09-17 10:10");
     expect(kindLabel("imported")).toBe("Imported");
     expect(kindLabel("trained")).toBe("Trained");
+  });
+
+  it("shows backend timestamps (UTC) in the machine's local time", () => {
+    const tz = process.env.TZ;
+    process.env.TZ = "Asia/Riyadh";
+    try {
+      expect(formatLocalDate("2026-09-19T05:06:00+00:00")).toBe("2026-09-19 08:06");
+      expect(formatLocalDate("2026-09-18T22:30:00Z")).toBe("2026-09-19 01:30");
+      expect(formatLocalDate("not a date")).toBe("not a date");
+    } finally {
+      process.env.TZ = tz;
+    }
   });
 });

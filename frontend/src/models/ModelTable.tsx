@@ -1,5 +1,5 @@
 import type { Model } from "@contract/client";
-import { formatDate, formatMetric, kindLabel } from "./modelLabels";
+import { formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
 
 interface Props {
   models: Model[];
@@ -51,7 +51,7 @@ export function ModelTable({ models, datasetNames, selectedId, onSelect }: Props
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.map50_95)}</td>
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.precision)}</td>
               <td className="px-2 py-1 tabular-nums">{formatMetric(m.metrics?.recall)}</td>
-              <td className="px-2 py-1 text-xs text-slate-400">{formatDate(m.created_at)}</td>
+              <td className="px-2 py-1 text-xs text-slate-400">{formatLocalDate(m.created_at)}</td>
             </tr>
           );
         })}

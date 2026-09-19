@@ -7,7 +7,7 @@ import { patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
-import { formatDate, formatMetric, kindLabel } from "./modelLabels";
+import { formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
 
 export interface ModelDetailProps {
   projectId: string;
@@ -86,7 +86,7 @@ export function ModelDetail({
       <header className="flex flex-wrap items-baseline gap-2">
         <h2 className="text-lg font-medium">{model.name}</h2>
         <span className="rounded bg-slate-700 px-2 py-0.5 text-xs">{kindLabel(model.kind)}</span>
-        <span className="text-xs text-slate-400">created {formatDate(model.created_at)}</span>
+        <span className="text-xs text-slate-400">created {formatLocalDate(model.created_at)}</span>
       </header>
 
       <dl className="grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-4">

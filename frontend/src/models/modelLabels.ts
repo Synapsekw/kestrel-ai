@@ -7,9 +7,17 @@ export function formatMetric(v: number | null | undefined): string {
   return typeof v === "number" ? `${(v * 100).toFixed(1)}%` : "–";
 }
 
-/** `YYYY-MM-DD HH:mm` in UTC, deterministic across locales (same shape as the Data Manager). */
+/** `YYYY-MM-DD HH:mm` as written, for EXIF capture times (camera clock, no zone; same shape as the Data Manager). */
 export function formatDate(iso: string): string {
   return `${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+
+/** `YYYY-MM-DD HH:mm` in the machine's local time, for timestamps the backend wrote (they are UTC). */
+export function formatLocalDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
 export function kindLabel(kind: Model["kind"]): string {

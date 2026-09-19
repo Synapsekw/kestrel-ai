@@ -5,7 +5,7 @@ import { messageOf } from "@/api/errors";
 import { promoteQueryRun, resumeQueryRun } from "@/api/queryRuns";
 import { pushLog } from "@/app/diagnostics";
 import { JobCard } from "@/jobs/JobCard";
-import { formatDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/models/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { REVIEW_LINK_MAX_IDS, reviewLink, runTitle } from "./queryModel";
 import { useTrackedRun } from "./useTrackedRun";
@@ -97,7 +97,7 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
             Promoted
           </span>
         )}
-        <span className="text-xs text-slate-400">started {formatDate(run.created_at)}</span>
+        <span className="text-xs text-slate-400">started {formatLocalDate(run.created_at)}</span>
       </header>
       <p className="text-xs text-slate-400">
         {run.image_ids.length} {run.image_ids.length === 1 ? "image" : "images"}, {tiling}, confidence{" "}
