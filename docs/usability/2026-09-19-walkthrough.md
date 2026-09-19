@@ -57,6 +57,7 @@ The "Closed by" column is filled with the commit that fixes the item.
 | Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | 95b6717 |
 | Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | abe0154 |
 | Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | 3a9f9fb |
+| Q10 | Any finished job (found on a detection run by the acceptance dry run on the packaged app) | "100 % · 9 / 10 images" after a run over 10 images: the newest progress message was not stored when it came within 0.25 s of the previous one | The final message of the job | confuses | 66eeb64 |
 | R1 | Review, empty queue | "0 images waiting" | How proposals get here (pre-annotation, Query) with links | confuses | dcb6002 |
 | R2 | Review from a run (ledger S5) | "Showing 40 images from a query run" counts the ids in the URL, not the images that still have proposals | Real count | annoys | dcb6002 |
 | M1 | Models -> Import with a wrong path | `no usable weights at 'E:\\nope\\x.pt'` (doubled backslashes) | The path as typed | annoys | 662e90b |
