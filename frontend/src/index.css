@@ -1,8 +1,39 @@
+@import "@fontsource-variable/instrument-sans";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Site office palette (DESIGN.md), RGB triplets so Tailwind opacity modifiers work. */
+    --ground: 245 245 241;
+    --side: 235 236 230;
+    --panel: 255 255 255;
+    --well: 230 231 225;
+    --hover: 30 32 26;
+    --ink: 31 34 29;
+    --muted: 106 111 102;
+    --dim: 169 173 164;
+    --line: 220 221 214;
+    --line-strong: 195 198 189;
+    --accent: 217 72 15;
+    --accent-hover: 194 63 11;
+    --accent-soft: 251 234 223;
+    --accent-ink: 138 47 8;
+    --accent-line: 240 205 184;
+    --ok: 47 125 79;
+    --ok-soft: 223 241 229;
+    --warn: 185 130 0;
+    --warn-strong: 224 164 0;
+    --warn-soft: 251 240 199;
+    --danger: 180 35 24;
+    --danger-soft: 253 232 230;
+    --inverse: 31 34 29;
+    --inverse-fg: 245 245 241;
+    --canvas: 35 39 34;
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  }
+
   html,
   body,
   #root {
@@ -10,6 +41,16 @@
   }
 
   body {
-    @apply bg-slate-900 text-slate-100 antialiased;
+    @apply bg-ground text-ink antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  ::selection {
+    @apply bg-accent-soft text-accent-ink;
+  }
+
+  /* Native form controls that are not wrapped by a ui component (date inputs, colour pickers). */
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    opacity: 0.6;
   }
 }
