@@ -143,7 +143,9 @@ test("export, import, use as pre-annotation and delete send the contract request
   await expect(page).toHaveURL(new RegExp(`model=${MODEL}`));
 
   await page.getByRole("button", { name: "Delete model" }).click();
-  const deleted = page.waitForRequest((r) => r.method() === "DELETE" && r.url().endsWith(`/models/${MODEL}`));
+  const deleted = page.waitForRequest(
+    (r) => r.method() === "DELETE" && r.url().endsWith(`/models/${MODEL}`),
+  );
   await page.getByRole("button", { name: "Delete permanently" }).click();
   await deleted;
   await expect(page.getByTestId("model-detail")).toHaveCount(0);
