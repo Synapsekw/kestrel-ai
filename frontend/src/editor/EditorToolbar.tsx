@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { HOTKEY_HELP } from "./hotkeys";
 
 export interface ToolbarProps {
@@ -18,10 +18,10 @@ export interface ToolbarProps {
 }
 
 const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-800 disabled:opacity-40";
-const KEYS_TITLE = HOTKEY_HELP.map((h) => `${h.keys}: ${h.does}`).join("\n");
 
 export function EditorToolbar(p: ToolbarProps) {
   const saving = p.pending > 0;
+  const [keysOpen, setKeysOpen] = useState(false);
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-3 py-1.5 text-sm">
       <button
@@ -67,14 +67,37 @@ export function EditorToolbar(p: ToolbarProps) {
         Redo
       </button>
       {p.extra}
-      <button
-        type="button"
-        className="cursor-help rounded px-1 text-xs text-slate-500 hover:text-slate-300 focus:ring-1 focus:ring-orange-500"
-        title={KEYS_TITLE}
-        aria-label="Keyboard shortcuts"
-      >
-        Keys
-      </button>
+      <div className="relative">
+        <button
+          type="button"
+          className={btn}
+          aria-label="Keyboard shortcuts"
+          aria-expanded={keysOpen}
+          onClick={() => setKeysOpen((v) => !v)}
+        >
+          Keys
+        </button>
+        {keysOpen && (
+          <div
+            role="dialog"
+            aria-label="Keyboard shortcuts"
+            onKeyDown={(e) => e.key === "Escape" && setKeysOpen(false)}
+            className="absolute left-0 top-full z-20 mt-1 w-80 rounded border border-slate-700 bg-slate-900 p-3 text-xs shadow-lg"
+          >
+            <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+              {HOTKEY_HELP.map((h) => (
+                <div key={h.keys} className="contents">
+                  <dt className="font-mono text-slate-200">{h.keys}</dt>
+                  <dd className="text-slate-400">{h.does}</dd>
+                </div>
+              ))}
+            </dl>
+            <button type="button" autoFocus className={`${btn} mt-2`} onClick={() => setKeysOpen(false)}>
+              Close
+            </button>
+          </div>
+        )}
+      </div>
       <span role="status" className={`ml-auto text-xs ${saving ? "text-amber-300" : "text-slate-500"}`}>
         {saving ? "Saving…" : "Saved"}
       </span>
