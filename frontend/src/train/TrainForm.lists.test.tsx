@@ -34,6 +34,7 @@ describe("TrainForm when the lists arrive late", () => {
   it("keeps the typed name and epochs and only fills the untouched pickers", () => {
     const { rerender } = mount([], []);
     fireEvent.change(screen.getByLabelText("Model name"), { target: { value: "cp3-model" } });
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
     fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "1" } });
     rerender([exampleDataset], [exampleModel]);
     expect(screen.getByLabelText("Model name")).toHaveValue("cp3-model");

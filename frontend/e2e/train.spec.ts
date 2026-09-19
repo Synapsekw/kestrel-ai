@@ -18,6 +18,7 @@ test("starts training with the chosen parameters and shows the live card with lo
     `/p/${P}/datasets`,
   );
   await page.getByLabel("Model name").fill("ahmadia-v1-n");
+  await page.getByRole("button", { name: "More options" }).click();
   await page.getByLabel("Epochs").fill("3");
   await page.getByLabel("Augmentation").selectOption("aerial");
   await page.getByLabel("Automatic batch size").uncheck();
@@ -44,11 +45,10 @@ test("starts training with the chosen parameters and shows the live card with lo
   await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
   await expect(card.getByTestId("epoch")).toHaveText("–");
   await expect(card.getByTestId("elapsed")).not.toHaveText("–");
+  await card.getByRole("button", { name: "Show log" }).click();
   await expect(card.getByTestId("jobcard-log")).toContainText("job started");
   await expect(page.getByText(/1 active job/)).toBeVisible();
-  const cancel = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`),
-  );
+  const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
   await card.getByRole("button", { name: "Cancel job" }).click();
   await cancel;
   await page.getByRole("button", { name: "New training" }).click();

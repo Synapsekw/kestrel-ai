@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen } from "@testing-library/react";
+import { screen, fireEvent } from "@testing-library/react";
 import { exampleJobLog, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
@@ -21,6 +21,8 @@ describe("TrainProgress", () => {
     expect(screen.getByTestId("map50")).toHaveTextContent("61.2%");
     expect(screen.getByTestId("elapsed")).not.toHaveTextContent("–");
     expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "6");
+    expect(screen.queryByTestId("jobcard-log")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show log" }));
     expect(await screen.findByTestId("jobcard-log")).toHaveTextContent("job started");
     expect(screen.getByRole("button", { name: "Cancel job" })).toBeInTheDocument();
   });

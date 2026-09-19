@@ -25,6 +25,7 @@ describe("TrainForm", () => {
     expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id);
     expect(screen.getByLabelText("Base model")).toHaveValue(exampleModel.id);
     expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
     expect(screen.getByLabelText("Image size")).toHaveValue(1280);
     expect(screen.getByLabelText("Automatic batch size")).toBeChecked();
     expect(screen.getByLabelText("Batch size")).toBeDisabled();
@@ -50,6 +51,35 @@ describe("TrainForm", () => {
       augmentation: "aerial",
       device: "0",
     });
+  });
+
+  it("folds the training settings under More options and names the changed ones when folded", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[exampleModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    const toggle = screen.getByRole("button", { name: "More options" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Epochs")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "0" } });
+    fireEvent.click(screen.getByRole("button", { name: /More options/ }));
+    expect(screen.getByRole("button", { name: /More options/ })).toHaveTextContent("Changed: epochs");
+    // An invalid folded setting opens the fold again next to the message.
+    fireEvent.click(screen.getByRole("button", { name: "Start training" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Epochs must be a whole number");
+    expect(screen.getByLabelText("Epochs")).toHaveValue(0);
   });
 
   it("preselects the dataset named by initialDatasetId over the newest one", () => {
@@ -213,6 +243,7 @@ describe("TrainForm", () => {
       { api },
     );
     expect(screen.getByTestId("train-advice")).toHaveTextContent("Only 8 training images");
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
     expect(screen.getByText(/Passes over the training images/)).toBeInTheDocument();
     expect(screen.getByText(/1280 keeps small machines visible/)).toBeInTheDocument();
     expect(screen.getByText(/Stops early after this many epochs without improvement/)).toBeInTheDocument();

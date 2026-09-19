@@ -23,7 +23,7 @@ describe("ImportModelForm", () => {
     fireEvent.change(screen.getByLabelText("Class aliases"), {
       target: { value: "truck=dump_truck\ncar=wheel_loader" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import weights" }));
     await waitFor(() => expect(onImported).toHaveBeenCalledWith(exampleModel));
     expect(requests[0].body).toEqual({
       name: "yolo11m-coco",
@@ -46,7 +46,7 @@ describe("ImportModelForm", () => {
     });
     fireEvent.change(screen.getByLabelText("Model name"), { target: { value: "x" } });
     fireEvent.change(screen.getByLabelText("Weights path"), { target: { value: "E:\\nope.pt" } });
-    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    fireEvent.click(screen.getByRole("button", { name: "Import weights" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("weights file not found"));
   });
 });

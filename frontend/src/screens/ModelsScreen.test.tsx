@@ -41,10 +41,11 @@ describe("ModelsScreen", () => {
     expect(row).toHaveTextContent("Trained");
     expect(row).toHaveTextContent("v1");
     expect(row).toHaveTextContent("71.0%");
-    expect(row).toHaveTextContent("44.0%");
     expect(row).toHaveAttribute("aria-current", "true");
     const detail = screen.getByTestId("model-detail");
     expect(detail).toHaveTextContent("yolo11n.pt");
+    // The table keeps mAP50 only; mAP50-95 lives in the detail's metrics.
+    expect(detail).toHaveTextContent("44.0%");
     const classMetrics = screen.getByTestId("class-metrics");
     expect(classMetrics).toHaveTextContent("excavator");
     expect(classMetrics).toHaveTextContent("80.0%");
@@ -64,6 +65,22 @@ describe("ModelsScreen", () => {
     expect(detail).toHaveTextContent("truck");
     expect(detail).toHaveTextContent("dump_truck");
     expect(detail).toHaveTextContent("No training artifacts (imported weights).");
+  });
+
+  it("keeps the import form folded until asked for", async () => {
+    const { api } = fakeClient(routes);
+    renderWithProviders(<ModelsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/models`,
+      path: "/p/:projectId/models",
+    });
+    const toggle = await screen.findByRole("button", { name: "Import weights from a file" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Weights path")).not.toBeInTheDocument();
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText("Weights path")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByLabelText("Weights path")).not.toBeInTheDocument();
   });
 
   it("offers a starter model above an empty registry and selects it once added", async () => {
