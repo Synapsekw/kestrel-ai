@@ -52,6 +52,11 @@ const DEFAULT_SELECTED: Record<ResultsExportFormat, boolean> = {
   html: true,
 };
 
+/** "1 image" / "3 images" — the app's usual inline pluralisation (see e.g. data/importNotice.ts). */
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
 const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
 
 export function ExportForm({
@@ -104,9 +109,11 @@ export function ExportForm({
       <h2 className="text-lg font-medium">Results</h2>
       {labeledCount !== null && boxCount !== null && imageCount !== null && (
         <p className="text-sm text-slate-300">
-          Exports {boxCount} accepted boxes on {labeledCount} of {imageCount} images
+          Exports all {plural(imageCount, "image", "images")}:{" "}
+          {plural(boxCount, "accepted box", "accepted boxes")} on the {labeledCount} checked{" "}
+          {labeledCount === 1 ? "image" : "images"}
           {includeUnreviewed && pendingReviewCount !== null
-            ? ` and ${pendingReviewCount} unreviewed proposals`
+            ? ` and ${plural(pendingReviewCount, "unreviewed proposal", "unreviewed proposals")}`
             : ""}
           .
         </p>

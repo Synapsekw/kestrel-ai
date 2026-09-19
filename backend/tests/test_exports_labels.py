@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 from app.exports import coco_out, yolo_out
 from app.exports.rows import ExportBox, ExportImage
 
@@ -100,6 +102,20 @@ def test_yolo_mirrors_the_site_so_same_named_images_never_collide(tmp_path):
     # Both images default to 4000x3000 (see `_image`); box (0,0,100,100) and (0,0,200,200).
     assert a == "0 0.012500 0.016667 0.025000 0.033333\n"
     assert b == "1 0.025000 0.033333 0.050000 0.066667\n"
+
+
+def test_yolo_refuses_two_images_with_the_same_stem_in_one_site(tmp_path):
+    """`x.jpg` and `x.jpeg` in one site would both write labels_yolo/siteA/x.txt (M4)."""
+    images = [
+        _image(id="i1", path="images/siteA/x.jpg", boxes=[]),
+        _image(id="i2", path="images/siteA/x.jpeg", boxes=[]),
+    ]
+    with pytest.raises(ValueError) as exc_info:
+        yolo_out.write(images, CLASSES, tmp_path)
+    message = str(exc_info.value)
+    assert "images/siteA/x.jpg" in message
+    assert "images/siteA/x.jpeg" in message
+    assert not (tmp_path / "labels_yolo").exists()  # nothing written before the check ran
 
 
 def test_coco_structure(tmp_path):

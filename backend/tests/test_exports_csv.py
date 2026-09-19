@@ -218,15 +218,20 @@ def test_image_ids_filters_the_selection(handle, two_images):
 def test_text_helper_prefixes_a_formula_looking_value_leaves_others_alone():
     assert csv_out._text("=1+1") == "'=1+1"
     assert csv_out._text("+1") == "'+1"
-    assert csv_out._text("-1") == "'-1"
     assert csv_out._text("@cmd") == "'@cmd"
     assert csv_out._text("\t=1") == "'\t=1"
+    assert csv_out._text("-=x") == "'-=x"  # a dash followed by a formula character is still risky
     assert csv_out._text("excavator") == "excavator"
     assert csv_out._text("") == ""
+    # A dash followed by a letter or digit round-trips: it is a plain word or number, not a formula.
+    assert csv_out._text("-flight") == "-flight"
+    assert csv_out._text("-0031") == "-0031"
+    assert csv_out._text("-1") == "-1"
 
 
 def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_dir, tmp_path):
-    """A class named `=1+1` and a site (file name) starting with `-` must never execute as a formula."""
+    """A class named `=1+1` must never execute as a formula; a site/group starting with `-` and a
+    letter or digit (`-evil`, `-flight`) must round-trip unescaped (M2)."""
     with handle.session() as s:
         source = Source(folder=str(project_dir), site="-evil")
         s.add(source)
@@ -258,18 +263,18 @@ def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_d
     csv_out.write(images, classes, folder)
 
     detections = _read(folder / "detections.csv")
-    assert ",'=1+1," in detections  # the class column
-    assert ",'-evil," in detections  # the source column
-    assert ",'-flight," in detections  # the group column
+    assert ",'=1+1," in detections  # the class column: a real formula start, still guarded
+    assert ",-evil," in detections  # the source column: round-trips unescaped
+    assert ",-flight," in detections  # the group column: round-trips unescaped
     assert "images/a.jpg" in detections  # a path starting with "images/" is left alone
 
     by_group = _read(folder / "counts_by_group.csv")
-    assert "'-flight" in by_group  # the group column
+    assert "-flight" in by_group and "'-flight" not in by_group  # the group column
     assert "'=1+1" in by_group  # the class column, now a header
 
     by_image = _read(folder / "counts_by_image.csv")
     assert "'=1+1" in by_image
-    assert "'-flight" in by_image
+    assert "-flight" in by_image and "'-flight" not in by_image
 
 
 def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(
