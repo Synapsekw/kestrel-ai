@@ -97,9 +97,10 @@ acceptance drivers use.
    powershell -ExecutionPolicy Bypass -File backend\scripts\fetch_starter_weights.ps1
    ```
 
-   Copies `yolo11n.pt` and `yolo11m.pt` from `E:\Dev\Yolo\models\` when present, downloads
-   `yolo11s.pt` (and anything else missing) from the Ultralytics GitHub release, and skips a file
-   already in `backend/starter_weights/` that is over 1 MB.
+   For each of the three sizes: copies it from `E:\Dev\Yolo\models\` when it exists there,
+   downloads it from the Ultralytics GitHub release otherwise, and skips a file already in
+   `backend/starter_weights/` that is over 1 MB. Whatever the source, every file's SHA-256 is
+   checked against a pinned value; a mismatch deletes the file and fails the script.
 
 1. Freeze the backend and copy it into the Tauri sidecar slot:
 
