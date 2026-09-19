@@ -39,6 +39,10 @@ def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[
                 "bbox": [box.x, box.y, box.w, box.h],
                 "area": box.w * box.h,
                 "iscrowd": 0,
+                # Present on every annotation (not only unreviewed ones): a reader must be able to
+                # tell an accepted/edited box from an unreviewed proposal without cross-referencing
+                # the CSV, especially once include_unreviewed mixes both into this one file.
+                "review_state": box.review_state,
             }
             if box.confidence is not None:
                 ann["score"] = box.confidence

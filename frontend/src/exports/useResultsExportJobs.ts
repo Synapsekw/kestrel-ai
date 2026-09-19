@@ -6,10 +6,10 @@ import { fetchJobs } from "@/api/jobs";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
 
-/** Every `results_export` job in the store, newest first; kept fresh by the jobs panel's websocket too. */
-function selectResultsExportJobs(jobs: Record<string, Job>): Job[] {
+/** This project's `results_export` jobs, newest first; kept fresh by the jobs panel's websocket too. */
+function selectResultsExportJobs(jobs: Record<string, Job>, projectId: string): Job[] {
   return Object.values(jobs)
-    .filter((j) => j.type === "results_export")
+    .filter((j) => j.type === "results_export" && j.project_id === projectId)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
@@ -24,7 +24,7 @@ export function useResultsExportJobs(projectId: string): {
   const key = `${projectId}|${attempt}`;
   const [status, setStatus] = useState<{ key: string; error: string | null }>({ key: "", error: null });
   const stored = useJobsStore((s) => s.jobs);
-  const jobs = useMemo(() => selectResultsExportJobs(stored), [stored]);
+  const jobs = useMemo(() => selectResultsExportJobs(stored, projectId), [stored, projectId]);
 
   useEffect(() => {
     if (!projectId) return;

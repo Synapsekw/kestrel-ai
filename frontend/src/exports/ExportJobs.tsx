@@ -1,9 +1,5 @@
-import { useState } from "react";
 import type { Job } from "@contract/client";
-import { useApi } from "@/api/client";
-import { messageOf } from "@/api/errors";
-import { revealInExplorer } from "@/api/exports";
-import { pushLog } from "@/app/diagnostics";
+import { RevealButton } from "@/exports/RevealButton";
 import { JobCard } from "@/jobs/JobCard";
 import { resultsExportFiles, resultsExportFolder, resultsExportSummary, stateLabel } from "@/jobs/jobLabels";
 import { formatLocalDate } from "@/models/modelLabels";
@@ -12,31 +8,19 @@ import { isActiveJob } from "@/store/jobs";
 interface Props {
   projectId: string;
   jobs: Job[];
+  loading: boolean;
+  error: string | null;
 }
 
-const btn = "rounded border border-slate-700 px-2 py-0.5 text-xs hover:bg-slate-800 disabled:opacity-50";
+/** More than this many files: the row names the first ones and counts the rest, instead of a wall of text. */
+const MAX_FILES_SHOWN = 8;
 
 function ExportJobRow({ projectId, job }: { projectId: string; job: Job }) {
-  const api = useApi();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const folder = resultsExportFolder(job);
   const files = resultsExportFiles(job);
   const summary = resultsExportSummary(job);
-
-  async function show() {
-    if (!folder) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await revealInExplorer(api, projectId, folder);
-    } catch (e) {
-      pushLog(`reveal ${folder} failed: ${messageOf(e, String(e))}`);
-      setError(messageOf(e, "could not open Explorer"));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const shown = files.slice(0, MAX_FILES_SHOWN);
+  const hidden = files.length - shown.length;
 
   if (isActiveJob(job)) return <JobCard projectId={projectId} job={job} />;
 
@@ -50,9 +34,9 @@ function ExportJobRow({ projectId, job }: { projectId: string; job: Job }) {
         <span className="text-xs text-slate-400">{formatLocalDate(job.created_at)}</span>
         {summary && <span className="text-xs text-slate-300">{summary}</span>}
         {folder && (
-          <button type="button" className={`${btn} ml-auto`} disabled={busy} onClick={() => void show()}>
-            Show in folder
-          </button>
+          <span className="ml-auto">
+            <RevealButton projectId={projectId} path={folder} />
+          </span>
         )}
       </div>
       {job.error && (
@@ -62,21 +46,25 @@ function ExportJobRow({ projectId, job }: { projectId: string; job: Job }) {
       )}
       {files.length > 0 && (
         <ul className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-xs text-slate-400">
-          {files.map((f) => (
+          {shown.map((f) => (
             <li key={f}>{f}</li>
           ))}
+          {hidden > 0 && <li>and {hidden} more</li>}
         </ul>
-      )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
       )}
     </li>
   );
 }
 
-export function ExportJobs({ projectId, jobs }: Props) {
+export function ExportJobs({ projectId, jobs, loading, error }: Props) {
+  if (loading) return <p className="text-sm text-slate-400">Loading…</p>;
+  if (error) {
+    return (
+      <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
+        {error}
+      </p>
+    );
+  }
   if (jobs.length === 0) return <p className="text-sm text-slate-400">No exports yet.</p>;
   return (
     <ul className="flex flex-col gap-2">

@@ -29,7 +29,7 @@ export async function createResultsExport(
   return r.job;
 }
 
-/** Starts Explorer on a project-relative file or folder; 404 missing, 422 outside the project. */
+/** Starts Explorer on a project-relative file or folder; 404 missing, 409 `conflict` outside the project. */
 export async function revealInExplorer(api: ApiClient, projectId: string, path: string): Promise<void> {
   await unwrap<unknown>(
     api.POST("/api/v1/projects/{projectId}/reveal", { params: { path: { projectId } }, body: { path } }),

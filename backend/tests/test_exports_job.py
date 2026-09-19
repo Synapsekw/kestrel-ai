@@ -67,13 +67,16 @@ def test_full_export_succeeds_with_every_format(client, project_id, with_boxes, 
         "detections.csv",
         "counts_by_group.csv",
         "counts_by_image.csv",
-        "labels_yolo/a.txt",
+        "labels_yolo",
         "labels_yolo/classes.txt",
         "labels_coco.json",
         "report.html",
     }
     for name in result["files"]:
-        assert (handle.folder / result["folder"] / name).is_file(), name
+        assert (handle.folder / result["folder"] / name).exists(), name
+    assert (handle.folder / result["folder"] / "labels_yolo" / "a.txt").is_file()
+    report = (handle.folder / result["folder"] / "report.html").read_text("utf-8")
+    assert "data:image/jpeg;base64," in report  # a real thumbnail, drawn from the real jpeg on disk
 
 
 def test_empty_formats_is_422(client, project_id):
@@ -122,3 +125,91 @@ def test_cancellation_between_formats_leaves_the_job_cancelled(
     client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
     job = wait_job(project_id, job_id)
     assert job["state"] == "cancelled", job
+
+
+def _no_stamp_or_partial_folders_left(handle) -> bool:
+    exports_dir = handle.exports_dir
+    if not exports_dir.is_dir():
+        return True
+    return list(exports_dir.iterdir()) == []
+
+
+def test_a_cancelled_export_leaves_no_partial_and_no_final_folder(
+    client, project_id, with_boxes, handle, monkeypatch, wait_job
+):
+    started = threading.Event()
+    real_write = __import__("app.exports.csv_out", fromlist=["write"]).write
+
+    def slow_write(images, classes, folder):
+        started.set()
+        time.sleep(0.5)
+        return real_write(images, classes, folder)
+
+    monkeypatch.setattr("app.exports.job.csv_out.write", slow_write)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "yolo"]})
+    job_id = r.json()["job"]["id"]
+    assert started.wait(2), "the csv writer never started"
+    client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "cancelled", job
+    assert _no_stamp_or_partial_folders_left(handle)
+
+
+def test_a_failed_export_leaves_no_partial_folder(
+    client, project_id, with_boxes, handle, monkeypatch, wait_job
+):
+    def boom(*a, **k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr("app.exports.job.html_out.write", boom)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv", "html"]})
+    job_id = r.json()["job"]["id"]
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "failed", job
+    assert _no_stamp_or_partial_folders_left(handle)
+
+
+def test_cancellation_inside_the_html_cards_leaves_the_job_cancelled(
+    client, project_id, handle, project_dir, make_jpeg, monkeypatch, wait_job
+):
+    """CARD_PROGRESS_EVERY normally checks every 50 cards; forced to 1 here so 3 images are enough."""
+    monkeypatch.setattr("app.exports.job.CARD_PROGRESS_EVERY", 1)
+    with handle.session() as s:
+        source = Source(folder=str(project_dir), site="siteA")
+        s.add(source)
+        s.flush()
+        class_id = handle.row(s).classes[0]["id"]
+        for i in range(3):
+            img = Image(path=f"images/{i}.jpg", width=200, height=200, source_id=source.id, group_key="g1")
+            s.add(img)
+            s.flush()
+            make_jpeg(project_dir / "images" / f"{i}.jpg", 200, 200, seed=i)
+            s.add(
+                Box(
+                    image_id=img.id,
+                    class_id=class_id,
+                    x=1,
+                    y=1,
+                    w=10,
+                    h=10,
+                    provenance_kind="person",
+                    review_state="accepted",
+                )
+            )
+
+    started = threading.Event()
+    real_draw = __import__("app.exports.html_out", fromlist=["draw_thumbnail"]).draw_thumbnail
+
+    def slow_draw(*a, **k):
+        started.set()
+        time.sleep(0.5)
+        return real_draw(*a, **k)
+
+    monkeypatch.setattr("app.exports.html_out.draw_thumbnail", slow_draw)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["html"]})
+    job_id = r.json()["job"]["id"]
+    assert started.wait(2), "the first thumbnail was never drawn"
+    client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
+    job = wait_job(project_id, job_id)
+    assert job["state"] == "cancelled", job
+    assert _no_stamp_or_partial_folders_left(handle)

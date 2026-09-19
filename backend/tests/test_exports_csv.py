@@ -1,5 +1,6 @@
 """Rows loading and the CSV writer (G2, plan Task 1)."""
 
+import csv
 from datetime import UTC, datetime
 
 import pytest
@@ -171,8 +172,20 @@ def test_counts_by_group_has_one_row_with_both_classes_and_the_zero_image(handle
     csv_out.write(images, classes, folder)
     text = _read(folder / "counts_by_group.csv")
     lines = [line for line in text.split("\r\n") if line]
-    assert lines[0] == "group,images,excavator,dump_truck,total"
-    assert lines[1] == "flight_1,2,1,1,2"
+    assert lines[0] == "group,images,excavator,dump_truck,unreviewed,total"
+    assert lines[1] == "flight_1,2,1,1,0,2"
+
+
+def test_counts_by_group_unreviewed_column_counts_them_while_classes_keep_counting_everything(
+    handle, two_images, tmp_path
+):
+    images, classes = rows.load(handle, include_unreviewed=True)
+    folder = tmp_path / "out"
+    csv_out.write(images, classes, folder)
+    text = _read(folder / "counts_by_group.csv")
+    lines = [line for line in text.split("\r\n") if line]
+    # 2 excavator (accepted + the unreviewed cloud one), 1 dump_truck, 1 of the 3 is unreviewed.
+    assert lines[1] == "flight_1,2,2,1,1,3"
 
 
 def test_counts_by_image_includes_the_zero_box_image_with_marked_empty(handle, two_images, tmp_path):
@@ -181,11 +194,123 @@ def test_counts_by_image_includes_the_zero_box_image_with_marked_empty(handle, t
     csv_out.write(images, classes, folder)
     text = _read(folder / "counts_by_image.csv")
     lines = [line for line in text.split("\r\n") if line]
-    assert lines[0] == "image,group,capture_time,image_lat,image_lon,marked_empty,excavator,dump_truck,total"
-    assert lines[1] == "images/a.jpg,flight_1,2026-09-18T12:00:00Z,37.7749,-122.4194,false,1,1,2"
-    assert lines[2] == "images/b.jpg,flight_1,,,,true,0,0,0"
+    assert lines[0] == (
+        "image,group,capture_time,image_lat,image_lon,marked_empty,excavator,dump_truck,unreviewed,total"
+    )
+    assert lines[1] == "images/a.jpg,flight_1,2026-09-18T12:00:00Z,37.7749,-122.4194,false,1,1,0,2"
+    assert lines[2] == "images/b.jpg,flight_1,,,,true,0,0,0,0"
+
+
+def test_counts_by_image_unreviewed_column_with_include_unreviewed(handle, two_images, tmp_path):
+    images, classes = rows.load(handle, include_unreviewed=True)
+    folder = tmp_path / "out"
+    csv_out.write(images, classes, folder)
+    text = _read(folder / "counts_by_image.csv")
+    lines = [line for line in text.split("\r\n") if line]
+    assert lines[1] == "images/a.jpg,flight_1,2026-09-18T12:00:00Z,37.7749,-122.4194,false,2,1,1,3"
 
 
 def test_image_ids_filters_the_selection(handle, two_images):
     images, _ = rows.load(handle, image_ids=[two_images["image1"]])
     assert [i.path for i in images] == ["images/b.jpg"]
+
+
+def test_text_helper_prefixes_a_formula_looking_value_leaves_others_alone():
+    assert csv_out._text("=1+1") == "'=1+1"
+    assert csv_out._text("+1") == "'+1"
+    assert csv_out._text("-1") == "'-1"
+    assert csv_out._text("@cmd") == "'@cmd"
+    assert csv_out._text("\t=1") == "'\t=1"
+    assert csv_out._text("excavator") == "excavator"
+    assert csv_out._text("") == ""
+
+
+def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_dir, tmp_path):
+    """A class named `=1+1` and a site (file name) starting with `-` must never execute as a formula."""
+    with handle.session() as s:
+        source = Source(folder=str(project_dir), site="-evil")
+        s.add(source)
+        s.flush()
+        img = Image(path="images/a.jpg", width=100, height=100, source_id=source.id, group_key="-flight")
+        s.add(img)
+        s.flush()
+        project = handle.row(s)
+        classes = list(project.classes)
+        classes[0] = {**classes[0], "name": "=1+1"}
+        project.classes = classes
+        s.add(project)
+        s.flush()
+        class_id = classes[0]["id"]
+        s.add(
+            Box(
+                image_id=img.id,
+                class_id=class_id,
+                x=1,
+                y=1,
+                w=10,
+                h=10,
+                provenance_kind="person",
+                review_state="accepted",
+            )
+        )
+    images, classes = rows.load(handle)
+    folder = tmp_path / "out"
+    csv_out.write(images, classes, folder)
+
+    detections = _read(folder / "detections.csv")
+    assert ",'=1+1," in detections  # the class column
+    assert ",'-evil," in detections  # the source column
+    assert ",'-flight," in detections  # the group column
+    assert "images/a.jpg" in detections  # a path starting with "images/" is left alone
+
+    by_group = _read(folder / "counts_by_group.csv")
+    assert "'-flight" in by_group  # the group column
+    assert "'=1+1" in by_group  # the class column, now a header
+
+    by_image = _read(folder / "counts_by_image.csv")
+    assert "'=1+1" in by_image
+    assert "'-flight" in by_image
+
+
+def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(
+    handle, project_dir, tmp_path
+):
+    """csv.writer's own quoting must survive a class name that itself looks like it could break a row."""
+    tricky = 'Wheel, "Loader"'
+    with handle.session() as s:
+        source = Source(folder=str(project_dir), site="siteA")
+        s.add(source)
+        s.flush()
+        img = Image(path="images/a.jpg", width=100, height=100, source_id=source.id, group_key="g1")
+        s.add(img)
+        s.flush()
+        project = handle.row(s)
+        classes = list(project.classes)
+        classes[0] = {**classes[0], "name": tricky}
+        project.classes = classes
+        s.add(project)
+        s.flush()
+        s.add(
+            Box(
+                image_id=img.id,
+                class_id=classes[0]["id"],
+                x=1,
+                y=1,
+                w=10,
+                h=10,
+                provenance_kind="person",
+                review_state="accepted",
+            )
+        )
+    images, classes = rows.load(handle)
+    folder = tmp_path / "out"
+    csv_out.write(images, classes, folder)
+
+    with open(folder / "detections.csv", encoding="utf-8-sig", newline="") as f:
+        rows_read = list(csv.reader(f))
+    class_col = rows_read[0].index("class")
+    assert rows_read[1][class_col] == tricky
+
+    with open(folder / "counts_by_group.csv", encoding="utf-8-sig", newline="") as f:
+        header = next(csv.reader(f))
+    assert tricky in header

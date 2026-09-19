@@ -1,7 +1,10 @@
 """CSV tables of a results export: detections and two count tables (spec G2).
 
 Excel-friendly: UTF-8 with a BOM, comma-separated, `\\r\\n` line endings (the `excel` dialect
-gives us both), a header row, ISO timestamps, `.` as the decimal separator.
+gives us both), a header row, ISO timestamps, `.` as the decimal separator. Every text value (never
+a number) is guarded against formula injection: a value starting with `=`, `+`, `-`, `@`, a tab or
+a carriage return is prefixed with `'`, which Excel/Sheets treat as "this is text" and drop from
+the display, so a class or file name can never execute as a formula when the sheet is opened.
 """
 
 from __future__ import annotations
@@ -9,7 +12,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from app.exports.rows import ExportImage
+from app.exports.rows import ExportImage, class_counts
 
 DETECTIONS_COLUMNS = [
     "image",
@@ -29,6 +32,13 @@ DETECTIONS_COLUMNS = [
     "review_state",
     "box_id",
 ]
+
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+
+
+def _text(v: str) -> str:
+    """A text-column value, guarded against formula injection (never applied to a number)."""
+    return f"'{v}" if v and v[0] in _FORMULA_PREFIXES else v
 
 
 def _num(v: float | int | None) -> str:
@@ -54,20 +64,20 @@ def _write_detections(images: list[ExportImage], folder: Path) -> str:
             for box in image.boxes:
                 w.writerow(
                     [
-                        image.path,
-                        image.source_site,
-                        image.group,
+                        _text(image.path),
+                        _text(image.source_site),
+                        _text(image.group),
                         _iso(image.capture_time),
                         _num(image.lat),
                         _num(image.lon),
-                        box.class_name,
+                        _text(box.class_name),
                         _num(box.x),
                         _num(box.y),
                         _num(box.w),
                         _num(box.h),
                         _num(box.confidence),
                         box.origin,
-                        box.origin_name,
+                        _text(box.origin_name),
                         box.review_state,
                         box.id,
                     ]
@@ -75,30 +85,38 @@ def _write_detections(images: list[ExportImage], folder: Path) -> str:
     return name
 
 
-def _class_counts(boxes, class_names: list[str]) -> dict[str, int]:
-    counts = dict.fromkeys(class_names, 0)
-    for b in boxes:
-        if b.class_name in counts:
-            counts[b.class_name] += 1
-    return counts
+def _unreviewed_count(boxes) -> int:
+    return sum(1 for b in boxes if b.review_state == "unreviewed")
 
 
 def _write_counts_by_group(images: list[ExportImage], class_names: list[str], folder: Path) -> str:
     name = "counts_by_group.csv"
     per_group: dict[str, dict[str, int]] = {}
     images_per_group: dict[str, int] = {}
+    unreviewed_per_group: dict[str, int] = {}
     for image in images:
         images_per_group[image.group] = images_per_group.get(image.group, 0) + 1
         counts = per_group.setdefault(image.group, dict.fromkeys(class_names, 0))
-        for cls, n in _class_counts(image.boxes, class_names).items():
+        for cls, n in class_counts(image.boxes, class_names).items():
             counts[cls] += n
+        unreviewed_per_group[image.group] = unreviewed_per_group.get(image.group, 0) + _unreviewed_count(
+            image.boxes
+        )
     with _open(folder / name) as f:
         w = csv.writer(f)
-        w.writerow(["group", "images", *class_names, "total"])
+        w.writerow(["group", "images", *(_text(c) for c in class_names), "unreviewed", "total"])
         for group in sorted(per_group):
             counts = per_group[group]
             total = sum(counts.values())
-            w.writerow([group, images_per_group[group], *(counts[c] for c in class_names), total])
+            w.writerow(
+                [
+                    _text(group),
+                    images_per_group[group],
+                    *(counts[c] for c in class_names),
+                    unreviewed_per_group[group],
+                    total,
+                ]
+            )
     return name
 
 
@@ -107,19 +125,20 @@ def _write_counts_by_image(images: list[ExportImage], class_names: list[str], fo
     with _open(folder / name) as f:
         w = csv.writer(f)
         header = ["image", "group", "capture_time", "image_lat", "image_lon", "marked_empty"]
-        w.writerow([*header, *class_names, "total"])
+        w.writerow([*header, *(_text(c) for c in class_names), "unreviewed", "total"])
         for image in images:
-            counts = _class_counts(image.boxes, class_names)
+            counts = class_counts(image.boxes, class_names)
             total = sum(counts.values())
             w.writerow(
                 [
-                    image.path,
-                    image.group,
+                    _text(image.path),
+                    _text(image.group),
                     _iso(image.capture_time),
                     _num(image.lat),
                     _num(image.lon),
                     "true" if image.marked_empty else "false",
                     *(counts[c] for c in class_names),
+                    _unreviewed_count(image.boxes),
                     total,
                 ]
             )

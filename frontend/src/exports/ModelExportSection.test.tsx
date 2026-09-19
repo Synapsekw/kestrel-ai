@@ -28,7 +28,13 @@ describe("ModelExportSection", () => {
     expect(screen.getByRole("button", { name: "Show in folder" })).toBeInTheDocument();
   });
 
-  it("starts an ONNX export for the selected model and reveals the finished path", async () => {
+  it("starts an ONNX export for the selected model, then reveals the finished path once it succeeds", async () => {
+    const finished = {
+      ...runningJob,
+      type: "export" as const,
+      state: "succeeded" as const,
+      result: { format: "onnx", path: "models/yolo11m-coco.onnx" },
+    };
     const { api, requests } = fakeClient([
       {
         method: "POST",
@@ -36,16 +42,21 @@ describe("ModelExportSection", () => {
         status: 202,
         body: { job: { ...runningJob, type: "export", state: "queued" } },
       },
-      { method: "GET", path: /\/jobs\//, body: { ...runningJob, type: "export", state: "queued" } },
+      { method: "GET", path: /\/jobs\//, body: finished },
       { method: "POST", path: /\/reveal$/, status: 204 },
     ]);
     renderWithProviders(<ModelExportSection projectId={PROJECT_ID} models={[exampleModel]} />, { api });
     fireEvent.click(screen.getByRole("button", { name: "Export ONNX" }));
-    await screen.findByTestId(`job-${runningJob.id}`);
+    expect(await screen.findByText("models/yolo11m-coco.onnx")).toBeInTheDocument();
     expect(requests[0]).toMatchObject({
       method: "POST",
       url: `/api/v1/projects/${PROJECT_ID}/models/${exampleModel.id}/export`,
       body: { format: "onnx" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Show in folder" }));
+    await screen.findByRole("button", { name: "Show in folder" });
+    expect(requests.find((r) => r.method === "POST" && r.url.endsWith("/reveal"))).toMatchObject({
+      body: { path: "models/yolo11m-coco.onnx" },
     });
   });
 });

@@ -17,7 +17,7 @@ export function ExportScreen() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsError, setStatsError] = useState<string | null>(null);
   const models = useModels(projectId);
-  const { jobs, error: jobsError } = useResultsExportJobs(projectId);
+  const { jobs, loading: jobsLoading, error: jobsError } = useResultsExportJobs(projectId);
 
   useEffect(() => {
     if (!projectId) return;
@@ -48,15 +48,12 @@ export function ExportScreen() {
         projectId={projectId}
         labeledCount={stats?.labeled_count ?? null}
         boxCount={stats?.box_count ?? null}
+        imageCount={stats?.image_count ?? null}
+        pendingReviewCount={stats?.pending_review_count ?? null}
       />
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Past exports</h2>
-        {jobsError && (
-          <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-            {jobsError}
-          </p>
-        )}
-        <ExportJobs projectId={projectId} jobs={jobs} />
+        <ExportJobs projectId={projectId} jobs={jobs} loading={jobsLoading} error={jobsError} />
       </section>
       {!models.unavailable && <ModelExportSection projectId={projectId} models={models.models} />}
     </section>

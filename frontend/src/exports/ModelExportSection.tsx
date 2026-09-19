@@ -2,9 +2,9 @@ import { useState } from "react";
 import type { Model } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { revealInExplorer } from "@/api/exports";
 import { exportModel } from "@/api/models";
 import { pushLog } from "@/app/diagnostics";
+import { RevealButton } from "@/exports/RevealButton";
 import { JobCard } from "@/jobs/JobCard";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
@@ -31,8 +31,6 @@ export function ModelExportSection({ projectId, models }: Props) {
   const { job } = useTrackedJob(projectId, jobId);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [revealBusy, setRevealBusy] = useState(false);
-  const [revealError, setRevealError] = useState<string | null>(null);
 
   const jobPath =
     job && job.type === "export" && job.state === "succeeded" && typeof job.result?.path === "string"
@@ -53,20 +51,6 @@ export function ModelExportSection({ projectId, models }: Props) {
       setError(messageOf(e, "could not start the export"));
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function show() {
-    if (!path) return;
-    setRevealBusy(true);
-    setRevealError(null);
-    try {
-      await revealInExplorer(api, projectId, path);
-    } catch (e) {
-      pushLog(`reveal ${path} failed: ${messageOf(e, String(e))}`);
-      setRevealError(messageOf(e, "could not open Explorer"));
-    } finally {
-      setRevealBusy(false);
     }
   }
 
@@ -114,15 +98,8 @@ export function ModelExportSection({ projectId, models }: Props) {
       {path && (
         <div className="flex items-center gap-2 text-sm">
           <span className="font-mono text-xs">{path}</span>
-          <button type="button" className={smallBtn} disabled={revealBusy} onClick={() => void show()}>
-            Show in folder
-          </button>
+          <RevealButton projectId={projectId} path={path} className={smallBtn} />
         </div>
-      )}
-      {revealError && (
-        <p role="alert" className="text-xs text-red-300">
-          {revealError}
-        </p>
       )}
     </section>
   );
