@@ -8,6 +8,8 @@ from app.jobs.router import router as jobs_router
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
 from app.training.router import router as training_router
+from app.training.starter_router import project_router as starter_project_router
+from app.training.starter_router import router as starter_router
 
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
 for r in (
@@ -16,6 +18,8 @@ for r in (
     jobs_router,
     datasets_router,
     training_router,
+    starter_router,
+    starter_project_router,
     providers_router,
     inference_router,
 ):

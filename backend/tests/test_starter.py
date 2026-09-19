@@ -52,3 +52,20 @@ def test_weights_dir_prefers_the_setting_then_the_frozen_bundle_then_the_checkou
     monkeypatch.setattr("sys.frozen", False, raising=False)
     assert starter.weights_dir(settings).name == "starter_weights"
     assert starter.weights_dir(settings).parent.name == "backend"
+
+
+def test_the_api_lists_and_imports(client, project_id, folder, monkeypatch):
+    monkeypatch.setattr(starter, "weights_dir", lambda settings: folder)
+    r = client.get("/api/v1/starter-models")
+    assert r.status_code == 200, r.text
+    assert [i["available"] for i in r.json()["items"]] == [True, False, False]
+    assert r.json()["next_cursor"] is None
+
+    r = client.post(f"/api/v1/projects/{project_id}/models/import-starter", json={"key": "yolo11n"})
+    assert r.status_code == 201, r.text
+    assert r.json()["kind"] == "imported" and r.json()["name"] == "yolo11n-coco"
+
+    r = client.post(f"/api/v1/projects/{project_id}/models/import-starter", json={"key": "yolo11m"})
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+    r = client.post(f"/api/v1/projects/{project_id}/models/import-starter", json={"key": "yolo99"})
+    assert r.status_code == 422
