@@ -771,6 +771,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write the project's detections to `exports/<timestamp>/` in the chosen formats (a `results_export` job). Accepted and edited boxes; unreviewed proposals only on request; rejected boxes never. */
+        post: operations["createResultsExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Show a file or folder of the project in Windows Explorer. The path is relative to the project folder; 422 when it leaves the folder, 404 when it does not exist. */
+        post: operations["revealInExplorer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/jobs": {
         parameters: {
             query?: never;
@@ -2162,7 +2200,58 @@ export interface components {
             reverted: number;
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export";
+        ResultsExportFormat: "csv" | "yolo" | "coco" | "html";
+        /**
+         * @example {
+         *       "formats": [
+         *         "csv",
+         *         "html"
+         *       ],
+         *       "include_unreviewed": false
+         *     }
+         */
+        ResultsExportRequest: {
+            formats: components["schemas"]["ResultsExportFormat"][];
+            /**
+             * @description also export proposals nobody has reviewed yet; every row carries its review state
+             * @default false
+             */
+            include_unreviewed: boolean;
+            /** @description defaults to every image of the project */
+            image_ids?: string[];
+        };
+        /**
+         * @description `result` of a succeeded `results_export` job
+         * @example {
+         *       "folder": "exports/2026-09-19_101500",
+         *       "files": [
+         *         "detections.csv",
+         *         "counts_by_group.csv",
+         *         "counts_by_image.csv",
+         *         "report.html"
+         *       ],
+         *       "image_count": 3299,
+         *       "box_count": 412
+         *     }
+         */
+        ResultsExportResult: {
+            /** @description project-relative, forward slashes: exports/<timestamp> */
+            folder: string;
+            files: string[];
+            image_count: number;
+            box_count: number;
+        };
+        /**
+         * @example {
+         *       "path": "exports/2026-09-19_101500"
+         *     }
+         */
+        RevealRequest: {
+            /** @description relative to the project folder */
+            path: string;
+        };
+        /** @enum {string} */
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -3565,6 +3654,58 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UnpromoteResult"];
                 };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createResultsExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResultsExportRequest"];
+            };
+        };
+        responses: {
+            /** @description the export job; its `result` is a ResultsExportResult */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    revealInExplorer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevealRequest"];
+            };
+        };
+        responses: {
+            /** @description Explorer was started */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             default: components["responses"]["Error"];
         };
