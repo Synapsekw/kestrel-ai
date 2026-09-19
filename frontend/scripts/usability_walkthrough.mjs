@@ -182,6 +182,8 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
     const cx = bb.x + bb.width / 2;
     const cy = bb.y + bb.height / 2;
     for (const [k, dx] of [["1", -120], ["4", 40]]) {
+      // A new box stays selected and a class key would re-class it: deselect first, as the help says.
+      await page.keyboard.press("Escape");
       await page.keyboard.press(k);
       await page.mouse.move(cx + dx, cy - 30);
       await page.mouse.down();

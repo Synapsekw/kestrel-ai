@@ -81,7 +81,10 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 export const HOTKEY_HELP: ReadonlyArray<{ keys: string; does: string }> = [
-  { keys: "1-9", does: "select class" },
+  {
+    keys: "1-9",
+    does: "class for the next box; with a box selected, changes that box's class (Esc first to keep it)",
+  },
   { keys: "drag", does: "draw a box with the active class" },
   { keys: "wheel", does: "zoom" },
   { keys: "space + drag", does: "pan" },
