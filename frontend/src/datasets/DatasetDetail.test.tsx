@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
-import { errorBody, exampleDataset, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { errorBody, exampleDataset, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
+import { useJobsStore } from "@/store/jobs";
 import { DatasetDetail } from "./DatasetDetail";
 
 const STATS = {
@@ -19,6 +20,8 @@ const STATS = {
 };
 
 describe("DatasetDetail", () => {
+  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+
   it("shows per-class and group stats, the folder, and a link to train on it", async () => {
     const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);
     renderWithProviders(
@@ -107,5 +110,31 @@ describe("DatasetDetail", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete dataset" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(exampleDataset.id));
+  });
+
+  it("shows 'being written…' while the materialise job is active, and hides the Train link (M5e)", async () => {
+    useJobsStore
+      .getState()
+      .upsert({ ...runningJob, id: exampleDataset.job_id!, type: "dataset", state: "running" });
+    const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);
+    renderWithProviders(
+      <DatasetDetail projectId={PROJECT_ID} dataset={exampleDataset} onDeleted={vi.fn()} />,
+      { api },
+    );
+    expect(await screen.findByText(/being written/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Train on this dataset" })).not.toBeInTheDocument();
+  });
+
+  it("shows 'incomplete' when the materialise job failed, and hides the Train link (M5e)", async () => {
+    useJobsStore
+      .getState()
+      .upsert({ ...runningJob, id: exampleDataset.job_id!, type: "dataset", state: "failed" });
+    const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);
+    renderWithProviders(
+      <DatasetDetail projectId={PROJECT_ID} dataset={exampleDataset} onDeleted={vi.fn()} />,
+      { api },
+    );
+    expect(await screen.findByText(/incomplete/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Train on this dataset" })).not.toBeInTheDocument();
   });
 });
