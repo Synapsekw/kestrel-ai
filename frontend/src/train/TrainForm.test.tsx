@@ -15,6 +15,8 @@ describe("TrainForm", () => {
         models={[exampleModel, exampleTrainedModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
         busy={false}
         onStart={onStart}
       />,
@@ -60,6 +62,8 @@ describe("TrainForm", () => {
         models={[exampleModel]}
         datasetsUnavailable={true}
         modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
         busy={false}
         onStart={onStart}
       />,
@@ -72,7 +76,7 @@ describe("TrainForm", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a dataset.");
   });
 
-  it("points to a starter model when the registry is empty", () => {
+  it("points to a starter model when the registry has loaded, is available and empty", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
@@ -81,6 +85,8 @@ describe("TrainForm", () => {
         models={[]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
         busy={false}
         onStart={() => {}}
       />,
@@ -100,12 +106,71 @@ describe("TrainForm", () => {
         models={[exampleModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
         busy={false}
         onStart={() => {}}
       />,
       { api },
     );
     expect(screen.getByText(/Any registry model, including imported COCO weights/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer a starter model while the registry is still loading", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={true}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer a starter model when the registry is unavailable", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[]}
+        datasetsUnavailable={false}
+        modelsUnavailable={true}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+  });
+
+  it("does not offer a starter model while the registry failed to load", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError="could not load the model registry"
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
   });
 
@@ -118,6 +183,8 @@ describe("TrainForm", () => {
         models={[exampleModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
         busy={false}
         onStart={() => {}}
       />,
