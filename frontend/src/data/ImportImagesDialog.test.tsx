@@ -5,6 +5,8 @@ import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { ImportImagesDialog } from "./ImportImagesDialog";
 
+const ADVANCED = "Advanced settings (the defaults suit most imports)";
+
 describe("ImportImagesDialog", () => {
   beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
 
@@ -17,6 +19,8 @@ describe("ImportImagesDialog", () => {
       <ImportImagesDialog project={exampleProject} onClose={() => {}} onStarted={onStarted} />,
       { api },
     );
+    expect(screen.getByRole("dialog", { name: "Import images" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: ADVANCED }));
     expect(screen.getByLabelText("Max side")).toHaveValue(4000);
     expect(screen.getByLabelText("JPEG quality")).toHaveValue(95);
     expect(screen.getByLabelText("Duplicate threshold")).toHaveValue(4);
@@ -38,7 +42,7 @@ describe("ImportImagesDialog", () => {
       },
     });
     expect(useJobsStore.getState().jobs[runningJob.id]).toBeDefined();
-    // The Data Manager reports the import in its own banner; the panel no longer covers the toolbar.
+    // The Images screen reports the import in its own banner; the panel no longer covers the toolbar.
     expect(useJobsStore.getState().panelOpen).toBe(false);
   });
 
@@ -71,12 +75,14 @@ describe("ImportImagesDialog", () => {
       <ImportImagesDialog project={exampleProject} onClose={() => {}} onStarted={() => {}} />,
       { api },
     );
-    const advanced = screen
-      .getByText("Advanced settings (the defaults suit most imports)")
-      .closest("details");
-    expect(advanced).not.toBeNull();
-    expect(advanced).not.toHaveAttribute("open");
-    expect(advanced).toContainElement(screen.getByLabelText("Group regex"));
+    const toggle = screen.getByRole("button", { name: ADVANCED });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByLabelText("Group regex")).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(document.getElementById(toggle.getAttribute("aria-controls") ?? "")).toContainElement(
+      screen.getByLabelText("Group regex"),
+    );
     expect(screen.getByText(/Longest side in pixels; larger images are scaled down/)).toBeInTheDocument();
     expect(screen.getByText(/How alike two images must be to count as duplicates/)).toBeInTheDocument();
     expect(screen.getByText(/Pattern that reads the flight number from the file name/)).toBeInTheDocument();

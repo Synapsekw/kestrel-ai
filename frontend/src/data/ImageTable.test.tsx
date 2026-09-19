@@ -25,8 +25,10 @@ describe("ImageTable", () => {
       />,
     );
     expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(
-      expect.arrayContaining(["File ▲", "Source", "Group", "Labeled", "Boxes", "Pending", "Captured"]),
+      expect.arrayContaining(["File", "Source", "Group", "Labeled", "Boxes", "Pending", "Captured"]),
     );
+    expect(screen.getByRole("columnheader", { name: "File" })).toHaveAttribute("aria-sort", "ascending");
+    expect(screen.getByRole("columnheader", { name: "Boxes" })).not.toHaveAttribute("aria-sort");
     fireEvent.click(screen.getByRole("columnheader", { name: "Boxes" }));
     expect(onSort).toHaveBeenCalledWith("box_count");
 

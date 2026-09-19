@@ -5,18 +5,20 @@ const IMG = "10000000-5555-4000-8000-000000000001";
 const IMG2 = "10000000-5555-4000-8000-000000000002";
 
 test("lists images with the default query and shows the seven columns in list view", async ({ page }) => {
-  const first = page.waitForRequest((r) => r.method() === "GET" && r.url().includes(`/api/v1/projects/${P}/images?`));
+  const first = page.waitForRequest(
+    (r) => r.method() === "GET" && r.url().includes(`/api/v1/projects/${P}/images?`),
+  );
   await page.goto(`/p/${P}/data`);
   const url = new URL((await first).url());
   expect(url.searchParams.get("sort")).toBe("path");
   expect(url.searchParams.get("order")).toBe("asc");
   expect(url.searchParams.get("limit")).toBe("200");
-  await expect(page.getByRole("heading", { name: "Data Manager" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible();
   await expect(page.getByTestId("image-grid")).toBeVisible();
   await expect(page.getByText("IX-12-02491_0031_0001.jpg")).toBeVisible();
   await expect(page.getByText("2 of 2 images")).toBeVisible();
 
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await expect(page.getByTestId("image-table")).toBeVisible();
   const headers = await page.getByRole("columnheader").allTextContents();
   for (const label of ["File", "Source", "Group", "Labeled", "Boxes", "Pending", "Captured"]) {
@@ -29,8 +31,10 @@ test("lists images with the default query and shows the seven columns in list vi
 
 test("sorting by a column header and filtering change the request", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "List" }).click();
-  const sorted = page.waitForRequest((r) => r.url().includes("sort=box_count") && r.url().includes("order=asc"));
+  await page.getByRole("radio", { name: "List" }).click();
+  const sorted = page.waitForRequest(
+    (r) => r.url().includes("sort=box_count") && r.url().includes("order=asc"),
+  );
   await page.getByRole("columnheader", { name: "Boxes" }).click();
   await sorted;
   const reversed = page.waitForRequest(
@@ -49,18 +53,20 @@ test("sorting by a column header and filtering change the request", async ({ pag
   await page.getByPlaceholder("Search file name").fill("0031");
   await searched;
   const grouped = page.waitForRequest((r) => r.url().includes("group_key=IX"));
-  await page.getByLabel("Group").fill("IX");
+  await page.getByLabel("Flight or tile").fill("IX");
   await grouped;
 });
 
 test("multi-select with checkboxes and bulk delete after confirmation", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
   await page.getByLabel("Select IX-12-02491_0031_0002.jpg").check();
   await expect(page.getByText("2 selected")).toBeVisible();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
-  const deleted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/images/bulk-delete"));
+  const deleted = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/images/bulk-delete"),
+  );
   await page.getByRole("button", { name: "Delete 2 images" }).click();
   expect((await deleted).postDataJSON()).toEqual({ image_ids: [IMG, IMG2] });
   // The mock answers with its example count of 1, hence the singular form.
@@ -69,7 +75,7 @@ test("multi-select with checkboxes and bulk delete after confirmation", async ({
 
 test("multi-select and mark as empty reports the result (E4)", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
   await page.getByLabel("Select IX-12-02491_0031_0002.jpg").check();
   await page.getByRole("button", { name: "Mark as empty" }).click();
@@ -87,7 +93,7 @@ test("run model opens the query screen with the selection; add to dataset posts 
   page,
 }) => {
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
   await page.getByRole("button", { name: "Run model" }).click();
   await page.waitForURL(`**/p/${P}/query`);
@@ -95,10 +101,11 @@ test("run model opens the query screen with the selection; add to dataset posts 
   await expect(page.getByTestId("image-count")).toHaveText("1 image selected");
 
   await page.goBack();
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
   await page.getByRole("button", { name: "Add to dataset" }).click();
   await page.getByLabel("Dataset name").fill("v1");
+  await page.getByRole("button", { name: "Split options" }).click();
   await page.getByLabel("Seed").fill("7");
   const dataset = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/datasets"));
   await page.getByRole("button", { name: "Create dataset" }).click();
@@ -129,7 +136,7 @@ test("J, K and Enter open the focused image with the list as navigation context"
 
 test("label selected opens the editor over the selection only", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0002.jpg").check();
   await page.getByRole("button", { name: "Label selected" }).click();
   await page.waitForURL(`**/p/${P}/edit/${IMG2}`);
@@ -138,7 +145,7 @@ test("label selected opens the editor over the selection only", async ({ page })
 
 test("double-click opens a list row even though the first click selects it", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: "List" }).click();
+  await page.getByRole("radio", { name: "List" }).click();
   const name = page.getByTestId("image-table").getByText("IX-12-02491_0031_0001.jpg");
   const before = await name.boundingBox();
   await name.click();

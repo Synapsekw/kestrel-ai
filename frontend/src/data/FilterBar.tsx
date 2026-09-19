@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
+import { Button, Field, Icon, Input, Segmented, Select } from "@/ui";
 import {
   DATA_COLUMNS,
   type ListQuery,
@@ -20,10 +21,23 @@ interface Props {
   onSelectAll?: () => void;
 }
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const label = "flex flex-col gap-0.5 text-xs text-slate-400";
+const VIEWS = [
+  { value: "grid" as const, label: "Grid", icon: "grid" as const },
+  { value: "list" as const, label: "List", icon: "list" as const },
+];
+
+function TriOptions() {
+  return (
+    <>
+      <option value="all">All</option>
+      <option value="yes">Yes</option>
+      <option value="no">No</option>
+    </>
+  );
+}
 
 export function FilterBar({ query, onChange, view, onView, sourceNames, total, loaded, onSelectAll }: Props) {
+  const id = useId();
   // The search box owns its text; the query only learns about it after the debounce.
   const [search, setSearch] = useState(query.filters.search);
   useEffect(() => {
@@ -34,151 +48,135 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
 
   const setFilter = <K extends keyof ListQuery["filters"]>(key: K, value: ListQuery["filters"][K]) =>
     onChange({ ...query, filters: { ...query.filters, [key]: value } });
+  const asc = query.order === "asc";
 
   return (
-    <div className="flex flex-wrap items-end gap-3 border-b border-slate-800 pb-3">
-      <label className={label}>
-        Search
-        <input
-          aria-label="Search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search file name"
-          className={input}
-        />
-      </label>
-      <label className={label}>
-        Source
-        <select
-          aria-label="Source"
+    <div className="flex flex-wrap items-end gap-x-3 gap-y-2 border-b border-line pb-3">
+      <Field label="Search" htmlFor={`${id}-search`} className="w-52">
+        <span className="relative flex">
+          <Icon
+            name="search"
+            size={14}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted"
+          />
+          <Input
+            id={`${id}-search`}
+            dense
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search file name"
+            className="pl-7"
+          />
+        </span>
+      </Field>
+      <Field label="Source" htmlFor={`${id}-source`} className="w-36">
+        <Select
+          id={`${id}-source`}
+          dense
           value={query.filters.sourceId}
           onChange={(e) => setFilter("sourceId", e.target.value)}
-          className={input}
         >
-          <option value="">all</option>
-          {Object.entries(sourceNames).map(([id, site]) => (
-            <option key={id} value={id}>
+          <option value="">All sources</option>
+          {Object.entries(sourceNames).map(([sid, site]) => (
+            <option key={sid} value={sid}>
               {site}
             </option>
           ))}
-        </select>
-      </label>
-      <label className={label}>
-        Group
-        <input
-          aria-label="Group"
+        </Select>
+      </Field>
+      <Field label="Flight or tile" htmlFor={`${id}-group`} className="w-36">
+        <Input
+          id={`${id}-group`}
+          dense
           value={query.filters.groupKey}
           onChange={(e) => setFilter("groupKey", e.target.value)}
-          placeholder="flight or tile"
-          className={`${input} w-32`}
+          className="font-mono"
         />
-      </label>
-      <label className={label}>
-        Labeled
-        <select
-          aria-label="Labeled"
+      </Field>
+      <Field label="Labeled" htmlFor={`${id}-labeled`} className="w-24">
+        <Select
+          id={`${id}-labeled`}
+          dense
           value={query.filters.labeled}
           onChange={(e) => setFilter("labeled", e.target.value as TriState)}
-          className={input}
         >
-          <option value="all">all</option>
-          <option value="yes">yes</option>
-          <option value="no">no</option>
-        </select>
-      </label>
-      <label className={label}>
-        Pending review
-        <select
-          aria-label="Pending review"
+          <TriOptions />
+        </Select>
+      </Field>
+      <Field label="Pending review" htmlFor={`${id}-pending`} className="w-28">
+        <Select
+          id={`${id}-pending`}
+          dense
           value={query.filters.pending}
           onChange={(e) => setFilter("pending", e.target.value as TriState)}
-          className={input}
         >
-          <option value="all">all</option>
-          <option value="yes">yes</option>
-          <option value="no">no</option>
-        </select>
-      </label>
-      <label className={label}>
-        Min boxes
-        <input
-          aria-label="Min boxes"
+          <TriOptions />
+        </Select>
+      </Field>
+      <Field label="Min boxes" htmlFor={`${id}-min`} className="w-20">
+        <Input
+          id={`${id}-min`}
+          dense
           type="number"
           min={0}
           value={query.filters.minBoxes ?? ""}
           onChange={(e) => setFilter("minBoxes", e.target.value === "" ? null : Number(e.target.value))}
-          className={`${input} w-20`}
+          className="tabular-nums"
         />
-      </label>
-      <label className={label}>
-        Captured from
-        <input
-          aria-label="Captured from"
+      </Field>
+      <Field label="Captured from" htmlFor={`${id}-from`} className="w-36">
+        <Input
+          id={`${id}-from`}
+          dense
           type="date"
           value={query.filters.captureFrom}
           onChange={(e) => setFilter("captureFrom", e.target.value)}
-          className={input}
         />
-      </label>
-      <label className={label}>
-        Captured to
-        <input
-          aria-label="Captured to"
+      </Field>
+      <Field label="Captured to" htmlFor={`${id}-to`} className="w-36">
+        <Input
+          id={`${id}-to`}
+          dense
           type="date"
           value={query.filters.captureTo}
           onChange={(e) => setFilter("captureTo", e.target.value)}
-          className={input}
         />
-      </label>
-      <label className={label}>
-        Sort by
-        <select
-          aria-label="Sort by"
-          value={query.sort}
-          onChange={(e) => onChange({ ...query, sort: e.target.value as SortKey, order: "asc" })}
-          className={input}
+      </Field>
+      <div className="flex items-end gap-1">
+        <Field label="Sort by" htmlFor={`${id}-sort`} className="w-32">
+          <Select
+            id={`${id}-sort`}
+            dense
+            value={query.sort}
+            onChange={(e) => onChange({ ...query, sort: e.target.value as SortKey, order: "asc" })}
+          >
+            {DATA_COLUMNS.filter((c) => c.sortKey).map((c) => (
+              <option key={c.key} value={c.sortKey}>
+                {c.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Button
+          size="sm"
+          aria-label="Sort order"
+          title={asc ? "Ascending" : "Descending"}
+          onClick={() => onChange({ ...query, order: (asc ? "desc" : "asc") as Order })}
+          className="w-7 px-0"
         >
-          {DATA_COLUMNS.filter((c) => c.sortKey).map((c) => (
-            <option key={c.key} value={c.sortKey}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-      </label>
-      <button
-        type="button"
-        aria-label="Sort order"
-        title={query.order === "asc" ? "ascending" : "descending"}
-        onClick={() => onChange({ ...query, order: (query.order === "asc" ? "desc" : "asc") as Order })}
-        className="rounded border border-slate-700 px-2 py-1 text-sm hover:bg-slate-800"
-      >
-        {query.order === "asc" ? "▲" : "▼"}
-      </button>
+          <Icon name="chevron-down" size={14} className={asc ? "rotate-180" : undefined} />
+        </Button>
+      </div>
       <div className="ml-auto flex items-center gap-2">
-        <span className="text-xs text-slate-400">
+        <span className="text-[13px] tabular-nums text-muted">
           {loaded} of {total} images
         </span>
         {onSelectAll && loaded > 0 && (
-          <button
-            type="button"
-            title="Ctrl+A"
-            onClick={onSelectAll}
-            className="rounded border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800"
-          >
+          <Button variant="ghost" size="sm" title="Ctrl+A" onClick={onSelectAll}>
             Select all {loaded}
-          </button>
+          </Button>
         )}
-        {(["grid", "list"] as ViewMode[]).map((v) => (
-          <button
-            key={v}
-            type="button"
-            onClick={() => onView(v)}
-            aria-pressed={view === v}
-            className={`rounded px-3 py-1 text-sm ${view === v ? "bg-slate-700 text-white" : "border border-slate-700 hover:bg-slate-800"}`}
-          >
-            {v === "grid" ? "Grid" : "List"}
-          </button>
-        ))}
+        <Segmented label="View" options={VIEWS} value={view} onChange={onView} />
       </div>
     </div>
   );

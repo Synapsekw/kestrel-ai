@@ -52,7 +52,7 @@ describe("SelectionBar", () => {
     expect(requests[0].body).toEqual({ image_ids: ["a", "b"] });
   });
 
-  it("confirms before marking, mentioning pending proposals, and reports skipped images (I2b)", async () => {
+  it("confirms before marking, mentioning pending suggestions, and reports skipped images (I2b)", async () => {
     const { api, requests } = fakeClient([
       { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 1, skipped: 1 } },
     ]);
@@ -60,7 +60,7 @@ describe("SelectionBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
     expect(requests).toHaveLength(0); // asks first, like Delete
     expect(
-      screen.getByText("Mark 2 images as empty? 3 pending proposals on them will be rejected."),
+      screen.getByText("Mark 2 images as empty? 3 pending suggestions on them will be rejected."),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Mark 2 as empty" }));
     await waitFor(() =>
@@ -71,7 +71,7 @@ describe("SelectionBar", () => {
     expect(requests[0]).toMatchObject({ body: { image_ids: ["a", "b"], marked_empty: true } });
   });
 
-  it("omits the pending-proposals sentence when nothing is pending, and can be cancelled", async () => {
+  it("omits the pending-suggestions sentence when nothing is pending, and can be cancelled", async () => {
     const { api } = fakeClient([
       { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 2, skipped: 0 } },
     ]);
