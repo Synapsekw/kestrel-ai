@@ -190,7 +190,11 @@ class JobRunner:
         except Exception as e:
             ctx.log.error("job failed\n%s", traceback.format_exc())
             log.warning("job %s failed: %s: %s", ctx.job_id, type(e).__name__, e)  # params may hold secrets
-            self._finish(ctx, state="failed", error=f"{type(e).__name__}: {e}")
+            # A ValueError is a job's own way of raising an already-complete, human-facing message
+            # (see e.g. app.exports.yolo_out); anything else is unexpected, so it keeps its class
+            # name as a clue for support instead of reading like a polished error it is not.
+            message = str(e) if isinstance(e, ValueError) else f"{type(e).__name__}: {e}"
+            self._finish(ctx, state="failed", error=message)
         finally:
             self._close_log(ctx)
             with self._lock:

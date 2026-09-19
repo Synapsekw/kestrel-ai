@@ -220,13 +220,18 @@ def test_text_helper_prefixes_a_formula_looking_value_leaves_others_alone():
     assert csv_out._text("+1") == "'+1"
     assert csv_out._text("@cmd") == "'@cmd"
     assert csv_out._text("\t=1") == "'\t=1"
-    assert csv_out._text("-=x") == "'-=x"  # a dash followed by a formula character is still risky
     assert csv_out._text("excavator") == "excavator"
     assert csv_out._text("") == ""
-    # A dash followed by a letter or digit round-trips: it is a plain word or number, not a formula.
+    # Only the whole value being a negative number or a plain word round-trips unescaped (I2).
     assert csv_out._text("-flight") == "-flight"
     assert csv_out._text("-0031") == "-0031"
+    assert csv_out._text("-1.5") == "-1.5"
     assert csv_out._text("-1") == "-1"
+    # Anything else starting with "-" is still a formula risk, even a plain word plus an operator.
+    assert csv_out._text("-=x") == "'-=x"
+    assert csv_out._text("-SUM(1,2)") == "'-SUM(1,2)"
+    assert csv_out._text("-A1+1") == "'-A1+1"
+    assert csv_out._text("-2+3+cmd|' /C calc'!A0") == "'-2+3+cmd|' /C calc'!A0"
 
 
 def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_dir, tmp_path):

@@ -109,7 +109,7 @@ export function ExportForm({
       <h2 className="text-lg font-medium">Results</h2>
       {labeledCount !== null && boxCount !== null && imageCount !== null && (
         <p className="text-sm text-slate-300">
-          Exports all {plural(imageCount, "image", "images")}:{" "}
+          {imageCount === 1 ? "Exports 1 image" : `Exports all ${plural(imageCount, "image", "images")}`}:{" "}
           {plural(boxCount, "accepted box", "accepted boxes")} on the {labeledCount} checked{" "}
           {labeledCount === 1 ? "image" : "images"}
           {includeUnreviewed && pendingReviewCount !== null

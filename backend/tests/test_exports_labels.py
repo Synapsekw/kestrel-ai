@@ -105,17 +105,28 @@ def test_yolo_mirrors_the_site_so_same_named_images_never_collide(tmp_path):
 
 
 def test_yolo_refuses_two_images_with_the_same_stem_in_one_site(tmp_path):
-    """`x.jpg` and `x.jpeg` in one site would both write labels_yolo/siteA/x.txt (M4)."""
+    """`x.jpg` and `x.jpeg` in one site would both write labels_yolo/siteA/x.txt (M4, m3)."""
     images = [
         _image(id="i1", path="images/siteA/x.jpg", boxes=[]),
         _image(id="i2", path="images/siteA/x.jpeg", boxes=[]),
     ]
     with pytest.raises(ValueError) as exc_info:
         yolo_out.write(images, CLASSES, tmp_path)
-    message = str(exc_info.value)
-    assert "images/siteA/x.jpg" in message
-    assert "images/siteA/x.jpeg" in message
+    assert str(exc_info.value) == (
+        "x.jpg and x.jpeg in siteA would get the same YOLO label file. Export without YOLO "
+        "labels, or delete one of the two images from the project."
+    )
     assert not (tmp_path / "labels_yolo").exists()  # nothing written before the check ran
+
+
+def test_yolo_collision_message_names_the_project_when_there_is_no_site_folder(tmp_path):
+    images = [
+        _image(id="i1", path="x.jpg", boxes=[]),
+        _image(id="i2", path="x.jpeg", boxes=[]),
+    ]
+    with pytest.raises(ValueError) as exc_info:
+        yolo_out.write(images, CLASSES, tmp_path)
+    assert "in the project would get the same YOLO label file" in str(exc_info.value)
 
 
 def test_coco_structure(tmp_path):
