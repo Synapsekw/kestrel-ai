@@ -11,6 +11,7 @@ typed directly into the grid) — a visible cost, but the value can never be eva
 from __future__ import annotations
 
 import csv
+import re
 from pathlib import Path
 
 from app.exports.rows import ExportImage, class_counts
@@ -34,25 +35,27 @@ DETECTIONS_COLUMNS = [
     "box_id",
 ]
 
-_FORMULA_PREFIXES = ("=", "+", "@", "\t", "\r")
+_FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+# The only two shapes a leading "-" is ever allowed to round-trip unescaped: a plain negative
+# number ("-0031", "-1.5") or a plain word ("-flight"). Anything else that merely starts with "-"
+# (an operator, a function call, punctuation) is still a formula risk and must be guarded.
+_NEGATIVE_NUMBER_RE = re.compile(r"^-\d+(\.\d+)?$")
+_DASH_WORD_RE = re.compile(r"^-[A-Za-z0-9_]+$")
 
 
 def _text(v: str) -> str:
     """A text-column value, guarded against formula injection (never applied to a number).
 
-    A leading `=`, `+`, `@`, tab or carriage return always risks a formula. A leading `-` only
-    does when it is not simply a negative number or a plain word that happens to start with a
-    dash — `-flight` and `-0031` (site names, group keys) must round-trip unescaped, so the guard
-    fires for `-` only when the character after it is neither a letter nor a digit (`-=x`, `-@x`, a
-    bare `-`).
+    A leading `=`, `+`, `@`, tab or carriage return always risks a formula. A leading `-` is safe
+    only when the *whole* value is a negative number or a plain word (`-flight`, `-0031`); anything
+    else that starts with `-` (`-=x`, `-SUM(1,2)`, `-A1+1`, a bare `-`) is guarded like the rest,
+    since Excel can still evaluate it as a formula.
     """
-    if not v:
+    if not v or v[0] not in _FORMULA_PREFIXES:
         return v
-    if v[0] in _FORMULA_PREFIXES:
-        return f"'{v}"
-    if v[0] == "-" and not (len(v) > 1 and v[1].isalnum()):
-        return f"'{v}"
-    return v
+    if v[0] == "-" and (_NEGATIVE_NUMBER_RE.match(v) or _DASH_WORD_RE.match(v)):
+        return v
+    return f"'{v}"
 
 
 def _num(v: float | int | None) -> str:
