@@ -11,6 +11,8 @@ interface Props {
   /** From project stats; null while it is still loading. */
   labeledCount: number | null;
   boxCount: number | null;
+  imageCount: number | null;
+  pendingReviewCount: number | null;
   onStarted?: (job: Job) => void;
 }
 
@@ -52,7 +54,14 @@ const DEFAULT_SELECTED: Record<ResultsExportFormat, boolean> = {
 
 const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
 
-export function ExportForm({ projectId, labeledCount, boxCount, onStarted }: Props) {
+export function ExportForm({
+  projectId,
+  labeledCount,
+  boxCount,
+  imageCount,
+  pendingReviewCount,
+  onStarted,
+}: Props) {
   const api = useApi();
   const [selected, setSelected] = useState(DEFAULT_SELECTED);
   const [includeUnreviewed, setIncludeUnreviewed] = useState(false);
@@ -93,10 +102,13 @@ export function ExportForm({ projectId, labeledCount, boxCount, onStarted }: Pro
       className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-800/30 p-4"
     >
       <h2 className="text-lg font-medium">Results</h2>
-      {labeledCount !== null && (
+      {labeledCount !== null && boxCount !== null && imageCount !== null && (
         <p className="text-sm text-slate-300">
-          Exports the accepted boxes of all {labeledCount} images
-          {boxCount !== null ? ` (${boxCount} boxes)` : ""}.
+          Exports {boxCount} accepted boxes on {labeledCount} of {imageCount} images
+          {includeUnreviewed && pendingReviewCount !== null
+            ? ` and ${pendingReviewCount} unreviewed proposals`
+            : ""}
+          .
         </p>
       )}
       <div className="flex flex-col gap-2">
@@ -122,7 +134,10 @@ export function ExportForm({ projectId, labeledCount, boxCount, onStarted }: Pro
           checked={includeUnreviewed}
           onChange={() => setIncludeUnreviewed((v) => !v)}
         />
-        <span>Include proposals nobody has reviewed yet (marked as such in the files)</span>
+        <span>
+          Include proposals nobody has reviewed yet (the tables, COCO and the report mark them; YOLO label
+          files cannot)
+        </span>
       </label>
       {error && (
         <p role="alert" className="text-xs text-red-300">

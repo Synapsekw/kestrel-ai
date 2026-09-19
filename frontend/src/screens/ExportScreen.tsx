@@ -48,6 +48,8 @@ export function ExportScreen() {
         projectId={projectId}
         labeledCount={stats?.labeled_count ?? null}
         boxCount={stats?.box_count ?? null}
+        imageCount={stats?.image_count ?? null}
+        pendingReviewCount={stats?.pending_review_count ?? null}
       />
       <section className="flex flex-col gap-2">
         <h2 className="text-lg font-medium">Past exports</h2>
