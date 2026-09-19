@@ -13,7 +13,7 @@ function dataset(overrides: Partial<SplitAdviceInput>): SplitAdviceInput {
 }
 
 describe("splitAdvice", () => {
-  it("warns when a group-preserving split badly misses the requested fraction (walk-through S3)", () => {
+  it("warns when a by_group split badly misses the requested fraction (walk-through S3)", () => {
     // 14 images in 4 groups, 0.2 requested, by_group -> 8 train / 6 val (43 %)
     const message = splitAdvice(
       dataset({
@@ -24,9 +24,28 @@ describe("splitAdvice", () => {
       }),
     );
     expect(message).toBe(
-      "6 of 14 images (43 %) went to validation although 20 % was asked: whole flights stay " +
-        "together, and this selection has few of them. With so few groups the random split gives " +
-        "a fairer measure.",
+      "6 of 14 images (43 %) went to validation although 20 % was requested: whole flights stay " +
+        "together, and this selection has few of them. Add labeled images from more flights, or " +
+        "accept the uneven split: a random split would hit the fraction, but it lets neighbouring " +
+        "frames of one flight into validation, which overstates accuracy.",
+    );
+  });
+
+  it("names map tiles (and 'more places') for a by_tile split (M2)", () => {
+    const message = splitAdvice(
+      dataset({
+        image_count: 14,
+        train_count: 8,
+        val_count: 6,
+        split_method: "by_tile",
+        split_params: { val_fraction: 0.2, seed: 42 },
+      }),
+    );
+    expect(message).toBe(
+      "6 of 14 images (43 %) went to validation although 20 % was requested: whole map tiles stay " +
+        "together, and this selection has few of them. Add labeled images from more places, or " +
+        "accept the uneven split: a random split would hit the fraction, but it lets neighbouring " +
+        "frames of one flight into validation, which overstates accuracy.",
     );
   });
 
