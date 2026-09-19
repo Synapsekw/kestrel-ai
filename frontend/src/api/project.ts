@@ -88,3 +88,30 @@ export function useSourceNames(projectId: string): Record<string, string> {
   }, [api, projectId, revision]);
   return names;
 }
+
+export type ProjectStats = components["schemas"]["Stats"];
+
+export function fetchProjectStats(api: ApiClient, projectId: string): Promise<ProjectStats> {
+  return unwrap(api.GET("/api/v1/projects/{projectId}/stats", { params: { path: { projectId } } }));
+}
+
+/** The project's groups (flights) with their image counts; empty while loading or when unavailable. */
+export function useGroups(projectId: string): ProjectStats["groups"] {
+  const api = useApi();
+  const [groups, setGroups] = useState<ProjectStats["groups"]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchProjectStats(api, projectId)
+      .then((stats) => {
+        if (!cancelled) setGroups(stats.groups);
+      })
+      .catch((e: unknown) => {
+        pushLog(`project stats unavailable: ${messageOf(e, String(e))}`);
+        if (!cancelled) setGroups([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId]);
+  return groups;
+}

@@ -10,10 +10,11 @@ import {
   CLASS_ID,
   SOURCE_ID,
   runningJob,
+  exampleStats,
 } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
-import { fetchModels, patchProject, saveClasses, useProject, useSourceNames } from "./project";
+import { fetchModels, patchProject, saveClasses, useGroups, useProject, useSourceNames } from "./project";
 
 describe("project api", () => {
   it("saves classes with PUT and patches the project", async () => {
@@ -79,5 +80,26 @@ describe("project api", () => {
     await waitFor(() =>
       expect(ok.requests.filter((r) => r.url.endsWith("/sources")).length).toBe(before + 1),
     );
+  });
+
+  it("useGroups lists the project's groups from the stats and is empty when they cannot be loaded", async () => {
+    const ok = fakeClient([{ method: "GET", path: /\/stats$/, body: exampleStats }]);
+    const groups = renderHook(() => useGroups(PROJECT_ID), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <TestApiProvider api={ok.api}>{children}</TestApiProvider>
+      ),
+    });
+    await waitFor(() => expect(groups.result.current).toEqual(exampleStats.groups));
+
+    const broken = fakeClient([
+      { method: "GET", path: /\/stats$/, status: 500, body: errorBody("internal", "boom") },
+    ]);
+    const none = renderHook(() => useGroups(PROJECT_ID), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <TestApiProvider api={broken.api}>{children}</TestApiProvider>
+      ),
+    });
+    await waitFor(() => expect(broken.requests.length).toBe(1));
+    expect(none.result.current).toEqual([]);
   });
 });

@@ -6,12 +6,14 @@ interface Props {
   preloadedCount: number;
   count: number;
   loading: boolean;
+  /** The project's groups (flights); empty when unknown, then the key is typed. */
+  groups: { group_key: string; image_count: number }[];
 }
 
 const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm disabled:opacity-50";
 const label = "flex flex-col gap-1 text-xs text-slate-400";
 
-export function ImagePicker({ form, onChange, preloadedCount, count, loading }: Props) {
+export function ImagePicker({ form, onChange, preloadedCount, count, loading, groups }: Props) {
   return (
     <fieldset className="flex flex-col gap-3">
       <legend className="text-sm font-medium">Images</legend>
@@ -35,12 +37,28 @@ export function ImagePicker({ form, onChange, preloadedCount, count, loading }: 
         {form.mode === "group" && (
           <label className={label}>
             Group key
-            <input
-              aria-label="Group key"
-              value={form.groupKey}
-              onChange={(e) => onChange({ groupKey: e.target.value })}
-              className={input}
-            />
+            {groups.length > 0 ? (
+              <select
+                aria-label="Group key"
+                value={form.groupKey}
+                onChange={(e) => onChange({ groupKey: e.target.value })}
+                className={input}
+              >
+                <option value="">Choose a group</option>
+                {groups.map((g) => (
+                  <option key={g.group_key} value={g.group_key}>
+                    {g.group_key} ({g.image_count} {g.image_count === 1 ? "image" : "images"})
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                aria-label="Group key"
+                value={form.groupKey}
+                onChange={(e) => onChange({ groupKey: e.target.value })}
+                className={input}
+              />
+            )}
           </label>
         )}
         {form.mode === "first_n" && (
@@ -54,6 +72,7 @@ export function ImagePicker({ form, onChange, preloadedCount, count, loading }: 
               onChange={(e) => onChange({ firstN: e.target.value })}
               className={`${input} w-24`}
             />
+            <span>In file-name order, labeled images included.</span>
           </label>
         )}
       </div>

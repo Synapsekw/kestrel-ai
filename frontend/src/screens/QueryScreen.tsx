@@ -3,7 +3,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { CostEstimate } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
-import { useProject } from "@/api/project";
+import { useGroups, useProject } from "@/api/project";
 import { useProviders } from "@/api/providers";
 import { createQueryRun, estimateQueryRun } from "@/api/queryRuns";
 import { pushLog } from "@/app/diagnostics";
@@ -39,6 +39,7 @@ export function QueryScreen() {
   const { project } = useProject(projectId);
   const registry = useModels(projectId);
   const providers = useProviders();
+  const groups = useGroups(projectId);
   const history = useQueryRuns(projectId);
   // The history row carries the run's box count: refresh it when a detection job ends.
   useOnJobsFinished("infer", history.reload);
@@ -163,6 +164,7 @@ export function QueryScreen() {
             form={effectiveForm}
             onChange={patch}
             preloadedCount={preloaded.length}
+            groups={groups}
             count={selection.ids.length}
             loading={selection.loading}
           />
