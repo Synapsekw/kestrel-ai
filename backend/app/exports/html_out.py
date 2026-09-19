@@ -224,11 +224,11 @@ def _group_table(images: list[ExportImage], class_names: list[str], has_unreview
         extra_cell = f"<td>{unreviewed_per_group[group]}</td>" if has_unreviewed else ""
         body.append(
             f"<tr><td>{_e(group)}</td><td>{images_per_group[group]}</td>{cells}"
-            f"{extra_cell}<td>{total}</td></tr>"
+            f"<td>{total}</td>{extra_cell}</tr>"
         )
     return (
         "<table><thead><tr><th>Group</th><th>Images</th>"
-        f"{class_head}{extra_head}<th>Total</th></tr></thead><tbody>{''.join(body)}</tbody></table>"
+        f"{class_head}<th>Total</th>{extra_head}</tr></thead><tbody>{''.join(body)}</tbody></table>"
     )
 
 

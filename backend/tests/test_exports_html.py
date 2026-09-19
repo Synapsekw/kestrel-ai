@@ -271,7 +271,8 @@ def test_totals_table_has_no_unreviewed_column_without_any(tmp_path):
     assert "of which unreviewed" not in text
 
 
-def test_group_table_gets_an_unreviewed_column(tmp_path):
+def test_group_table_gets_an_unreviewed_column_after_total(tmp_path):
+    """m6: "of which unreviewed" comes after Total, not before it."""
     images = [_image(boxes=[_box(id="b1"), _box(id="b2", review_state="unreviewed")])]
     text = _write(
         images,
@@ -279,7 +280,9 @@ def test_group_table_gets_an_unreviewed_column(tmp_path):
         settings={"formats": ["html"], "include_unreviewed": True},
         thumbnail_fn=lambda i: None,
     )
-    assert "<td>flight_1</td><td>1</td><td>2</td><td>1</td><td>2</td>" in text
+    assert "<th>Group</th><th>Images</th><th>excavator</th><th>Total</th><th>of which unreviewed</th>" in text
+    # Group(flight_1), Images(1), excavator(2), Total(2), of which unreviewed(1).
+    assert "<td>flight_1</td><td>1</td><td>2</td><td>2</td><td>1</td>" in text
 
 
 def test_card_counts_show_unreviewed_alongside_the_class_count(tmp_path):
