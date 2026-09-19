@@ -154,6 +154,8 @@ def _remove_quietly(folder: Path) -> None:
     """Remove a committed tombstone outside the lock; a failure is left for the next sweep."""
     try:
         shutil.rmtree(folder)  # unlinks hard links and nested junctions; never follows them
+    except FileNotFoundError:
+        pass  # a concurrent sweep got there first
     except OSError as e:
         log.warning("could not remove %s yet: %s", folder, e)
 
@@ -177,8 +179,12 @@ def discard(handle: ProjectHandle, dataset_id: str) -> None:
         if folder is not None and folder.is_dir():
             try:
                 tombstone = _move_aside(folder, dataset_id)
-            except OSError as e:  # a file is open: the rows go anyway, the folder is left in place
-                log.warning("could not move %s aside: %s", folder, e)
+            except OSError as e:
+                # A file is open. Removing the rows would leave a half-written folder under a free
+                # name that the next dataset of that name would write into; keep the dataset
+                # instead (its failed job marks it incomplete) so the ordinary delete removes it.
+                log.warning("could not move %s aside, the dataset is kept: %s", folder, e)
+                return
         s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
         s.delete(dataset)
     if tombstone is not None:
@@ -190,13 +196,19 @@ def _leftovers(handle: ProjectHandle) -> list[Path]:
     if not handle.datasets_dir.is_dir():
         return []
     found = []
+    root = handle.datasets_dir.resolve()
     for p in handle.datasets_dir.glob(f"{TOMBSTONE_PREFIX}*"):
+        suffix = p.name[len(TOMBSTONE_PREFIX) :]
         try:
-            uuid.UUID(p.name[len(TOMBSTONE_PREFIX) :])
-        except ValueError:
-            continue  # not written by delete_dataset or discard (a dataset from before the name rules)
-        if p.is_dir() and not p.is_symlink() and p.resolve().parent == handle.datasets_dir.resolve():
-            found.append(p)
+            # Only the exact form delete_dataset and discard write (str(uuid4())); anything else was
+            # made by someone else (a dataset from before the name rules, a person).
+            if str(uuid.UUID(suffix)) != suffix:
+                continue
+            if p.is_dir() and not p.is_symlink() and p.resolve().parent == root:
+                found.append(p)
+        except (ValueError, OSError) as e:
+            if not isinstance(e, ValueError):
+                log.warning("could not look at %s: %s", p, e)
     return found
 
 
@@ -380,6 +392,15 @@ def freeze(handle: ProjectHandle, body: DatasetCreate) -> str:
         taken = s.execute(select(Dataset.name)).scalars()
         if any(n.casefold() == body.name.casefold() for n in taken):
             raise AppError("already_exists", f"dataset {body.name!r} already exists", 409)
+        # A folder without a row (left by a failed build whose files were open) must never be
+        # written into: the new dataset would silently include the old images.
+        if (handle.datasets_dir / body.name).exists():
+            raise AppError(
+                "already_exists",
+                f"A folder named {body.name} is still in this project's datasets folder, left from an "
+                "earlier dataset. Choose another name, or delete that folder.",
+                409,
+            )
 
         keys = {i.id: _split_key(i, body.split_method) for i in selected}
         splits = assign_splits(

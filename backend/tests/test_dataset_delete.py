@@ -504,3 +504,84 @@ def test_a_sweep_waits_for_a_delete_in_progress(handle, labeled_dataset):
         assert not done.is_set()
     t.join(5)
     assert done.is_set()
+
+
+# --------------------------------------------- third review of the deletion (5f678af)
+
+
+def test_a_discard_that_cannot_move_the_folder_keeps_the_dataset(
+    client, project_id, handle, labeled_dataset, monkeypatch
+):
+    """The half-written folder must not stay behind under a free name: the dataset stays listed
+    (its failed job marks it incomplete) and the ordinary delete removes it later."""
+    from app.datasets import materialise
+
+    def locked(folder, dataset_id):
+        raise PermissionError(5, "Access is denied", str(folder))
+
+    monkeypatch.setattr(materialise, "_move_aside", locked)
+    materialise.discard(handle, labeled_dataset["id"])
+
+    assert client.get(f"{BASE}/{project_id}/datasets/{labeled_dataset['id']}").status_code == 200
+    assert any((handle.folder / labeled_dataset["path"]).rglob("*.jpg"))
+
+
+def test_a_name_whose_folder_is_still_on_disk_is_refused(client, project_id, handle, labeled_dataset):
+    stale = handle.datasets_dir / "v9"
+    stale.mkdir()
+    (stale / "old.txt").write_text("from an earlier dataset")
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": "V9"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "already_exists", r.text
+    assert "folder" in r.json()["error"]["message"]
+    assert (stale / "old.txt").exists()
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "{3c6f1e0a-1b2c-4d5e-8f90-a1b2c3d4e5f6}",
+        "urn:uuid:3c6f1e0a-1b2c-4d5e-8f90-a1b2c3d4e5f6".replace(":", "_"),
+        "3c6f1e0a1b2c4d5e8f90a1b2c3d4e5f6",
+        "3C6F1E0A-1B2C-4D5E-8F90-A1B2C3D4E5F6",
+    ],
+)
+def test_only_canonical_tombstone_names_are_swept(handle, labeled_dataset, suffix):
+    from app.datasets.materialise import reconcile_tombstones
+
+    folder = handle.datasets_dir / f".deleting-{suffix}"
+    folder.mkdir()
+    (folder / "keep.txt").write_text("keep")
+    reconcile_tombstones(handle)
+    assert (folder / "keep.txt").read_text() == "keep"
+
+
+def test_removing_a_tombstone_that_is_already_gone_is_silent(tmp_path, caplog):
+    import logging
+
+    from app.datasets.materialise import _remove_quietly
+
+    with caplog.at_level(logging.WARNING, logger="app.datasets.materialise"):
+        _remove_quietly(tmp_path / ".deleting-gone")
+    assert caplog.records == []
+
+
+def test_one_unreadable_entry_does_not_stop_the_sweep(handle, labeled_dataset, monkeypatch):
+    from pathlib import Path as P
+
+    from app.datasets.materialise import reconcile_tombstones
+
+    bad = handle.datasets_dir / f".deleting-{UUID_A}"
+    good = handle.datasets_dir / ".deleting-0b9f1d2e-8c1a-4a57-9d8e-2f4c6b7a1e30"
+    for f in (bad, good):
+        f.mkdir()
+    real_is_dir = P.is_dir
+
+    def flaky(self):
+        if self.name == bad.name:
+            raise PermissionError(5, "Access is denied")
+        return real_is_dir(self)
+
+    monkeypatch.setattr(P, "is_dir", flaky)
+    reconcile_tombstones(handle)
+    monkeypatch.undo()
+    assert not good.exists()
