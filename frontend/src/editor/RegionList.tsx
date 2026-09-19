@@ -93,13 +93,16 @@ export function RegionList({
                 </span>
               </div>
               <div className="flex items-center gap-1">
-                <span className="rounded bg-slate-800 px-1.5 py-0.5 text-slate-300">
+                <span
+                  title={provenanceLabel(b.provenance)}
+                  className="min-w-0 max-w-[7rem] truncate whitespace-nowrap rounded bg-slate-800 px-1.5 py-0.5 text-slate-300"
+                >
                   {provenanceLabel(b.provenance)}
                 </span>
-                <span className={`rounded px-1.5 py-0.5 ${REVIEW_CLASS[b.review_state]}`}>
+                <span className={`shrink-0 rounded px-1.5 py-0.5 ${REVIEW_CLASS[b.review_state]}`}>
                   {REVIEW_LABEL[b.review_state]}
                 </span>
-                <span className="ml-auto flex gap-1">
+                <span className="ml-auto flex shrink-0 gap-1">
                   {b.review_state === "unreviewed" && (
                     <>
                       <button

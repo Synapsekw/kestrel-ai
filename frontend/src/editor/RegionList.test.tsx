@@ -34,6 +34,10 @@ describe("RegionList", () => {
 
     fireEvent.click(rows[1]);
     expect(onSelect).toHaveBeenCalledWith(proposalBox.id);
+    // A long model name stays on one line (truncated); the full text is on hover.
+    const badge = screen.getByText("Model yolo11m-coco");
+    expect(badge).toHaveAttribute("title", "Model yolo11m-coco");
+    expect(badge.className).toContain("truncate");
     fireEvent.change(screen.getByLabelText("Class of box 1"), { target: { value: CLASS_ID(3) } });
     expect(onSetClass).toHaveBeenCalledWith(personBox.id, CLASS_ID(3));
     fireEvent.click(screen.getByRole("button", { name: "Delete box 1" }));
