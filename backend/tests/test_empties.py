@@ -9,6 +9,7 @@ import sqlite3
 import pytest
 from alembic import command
 from alembic.config import Config
+from sqlalchemy import create_engine, event, text
 from test_query_runs import FakeProvider, run_and_wait
 
 from app.db.models import Box, Image
@@ -152,6 +153,64 @@ def test_an_existing_database_gains_the_column_with_false(tmp_path):
     finally:
         conn.close()
     assert value == 0
+
+
+def test_downgrade_does_not_cascade_delete_boxes(tmp_path):
+    """The downgrade must ALTER the column away, not recreate the table (which would cascade).
+
+    `sqlite3.connect` does not enforce foreign keys by default, so the migration itself has to run
+    on a connection with `PRAGMA foreign_keys=ON` (as `app/db/session.py` always sets one) for a
+    naive `DROP TABLE image` to actually take `box` down with it and expose the bug.
+    """
+    db_path = tmp_path / "project.db"
+    url = f"sqlite:///{db_path.as_posix()}"
+    engine = create_engine(url, future=True)
+
+    @event.listens_for(engine, "connect")
+    def _pragmas(conn, _):
+        cur = conn.cursor()
+        cur.execute("PRAGMA foreign_keys=ON")
+        cur.close()
+
+    cfg = Config(str(MIGRATIONS / "alembic.ini"))
+    cfg.set_main_option("script_location", str(MIGRATIONS))
+    cfg.set_main_option("sqlalchemy.url", url)
+
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.upgrade(cfg, "head")
+        conn.execute(
+            text(
+                "INSERT INTO source (id, folder, site, settings, image_count, duplicate_count, "
+                "job_id, imported_at, created_at) VALUES "
+                "('s1', 'f', 'site', '{}', 0, 0, NULL, NULL, '2024-01-01 00:00:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO image (id, path, width, height, source_id, capture_time, lat, lon, "
+                "alt, phash, group_key, marked_empty, created_at) VALUES "
+                "('i1', 'images/a.jpg', 10, 10, 's1', NULL, NULL, NULL, NULL, NULL, '', 0, "
+                "'2024-01-01 00:00:00')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO box (id, image_id, class_id, x, y, w, h, confidence, provenance_kind, "
+                "model_id, provider, model_name, query_run_id, review_state, reviewed_at, created_at) "
+                "VALUES ('b1', 'i1', 'c1', 1, 2, 3, 4, NULL, 'person', NULL, NULL, NULL, NULL, "
+                "'accepted', NULL, '2024-01-01 00:00:00')"
+            )
+        )
+
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.downgrade(cfg, "0001")
+
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM box WHERE id = 'b1'")).scalar_one() == 1
+        cols = [r[1] for r in conn.exec_driver_sql("PRAGMA table_info(image)").fetchall()]
+        assert "marked_empty" not in cols
 
 
 def test_marking_rejects_the_pending_proposals_and_unmarking_keeps_them_rejected(
