@@ -1,0 +1,102 @@
+"""Marking images empty: no machinery here (spec section 6, walk-through item E4).
+
+Marking an image empty rejects its unreviewed proposals in the same transaction (there is nothing
+left for a person to review) and is refused while the image has ground-truth boxes. Unmarking only
+flips the flag back: it never resurrects the proposals a mark rejected.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable
+from datetime import UTC, datetime
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.datasets.images import ImageRow, get_image
+from app.db.models import Box, Image
+from app.errors import AppError, not_found
+from app.projects.service import ProjectHandle
+
+GROUND_TRUTH = ("accepted", "edited")
+
+
+def _ground_truth_count(s: Session, image_id: str) -> int:
+    return s.execute(
+        select(func.count())
+        .select_from(Box)
+        .where(Box.image_id == image_id, Box.review_state.in_(GROUND_TRUTH))
+    ).scalar_one()
+
+
+def _reject_pending(s: Session, image_id: str, now: datetime) -> bool:
+    """Reject the image's unreviewed proposals; return whether any were rejected."""
+    pending = list(
+        s.execute(select(Box).where(Box.image_id == image_id, Box.review_state == "unreviewed")).scalars()
+    )
+    for box in pending:
+        box.review_state, box.reviewed_at = "rejected", now
+    return bool(pending)
+
+
+def clear_mark_for_ground_truth(s: Session, image_ids: Iterable[str]) -> None:
+    """New ground truth on an image contradicts `marked_empty`; clear it in the same session."""
+    ids = list(image_ids)
+    if not ids:
+        return
+    s.execute(
+        Image.__table__.update()
+        .where(Image.id.in_(ids), Image.marked_empty.is_(True))
+        .values(marked_empty=False)
+    )
+
+
+def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple[ImageRow, list[str]]:
+    with handle.session() as s:
+        image = s.get(Image, image_id)
+        if image is None:
+            raise not_found("image", image_id)
+        rejected_ids: list[str] = []
+        if value:
+            gt = _ground_truth_count(s, image_id)
+            if gt:
+                raise AppError(
+                    "conflict",
+                    f"the image has {gt} accepted boxes; delete them first or leave it labeled",
+                    409,
+                )
+            if _reject_pending(s, image_id, datetime.now(UTC)):
+                rejected_ids.append(image_id)
+        image.marked_empty = value
+        s.flush()
+    return get_image(handle, image_id), rejected_ids
+
+
+def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) -> tuple[int, int, list[str]]:
+    """Updated, skipped (ground truth), and the ids whose pending proposals were rejected."""
+    updated = 0
+    skipped = 0
+    rejected_ids: list[str] = []
+    now = datetime.now(UTC)
+    with handle.session() as s:
+        images = {i.id: i for i in s.execute(select(Image).where(Image.id.in_(image_ids))).scalars()}
+        for image_id in image_ids:
+            image = images.get(image_id)
+            if image is None:  # unknown ids are ignored
+                continue
+            if value:
+                if image.marked_empty:  # already marked: nothing changed
+                    continue
+                if _ground_truth_count(s, image_id):
+                    skipped += 1
+                    continue
+                if _reject_pending(s, image_id, now):
+                    rejected_ids.append(image_id)
+                image.marked_empty = True
+            else:
+                if not image.marked_empty:
+                    continue
+                image.marked_empty = False
+            updated += 1
+        s.flush()
+    return updated, skipped, rejected_ids
