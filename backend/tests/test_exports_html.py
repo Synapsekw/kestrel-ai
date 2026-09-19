@@ -1,6 +1,6 @@
-"""Self-contained HTML report (G2, plan Task 3)."""
+"""Self-contained HTML report (G2, fix round 1 covers unreviewed markers, local time, thumbnails)."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 
 from PIL import Image as PILImage
 
@@ -10,6 +10,7 @@ from app.exports.rows import ExportBox, ExportImage
 CLASSES = [{"id": "c-exc", "name": "excavator", "colour": "#ff0000"}]
 SETTINGS = {"formats": ["csv", "html"], "include_unreviewed": False}
 EXPORT_TIME = datetime(2026, 9, 19, 10, 15, 0, tzinfo=UTC)
+_FIXED_TZ = timezone(timedelta(hours=3))
 
 
 def _box(**over) -> ExportBox:
@@ -104,13 +105,77 @@ def test_drawn_thumbnail_differs_from_the_undrawn_one(tmp_path, make_jpeg):
     make_jpeg(path, 200, 200, seed=1)
     undrawn = PILImage.open(path).convert("RGB")
     box = _box(x=50, y=50, w=60, h=60)
-    drawn_bytes = html_out.draw_thumbnail(path, [box], CLASSES)
+    drawn_bytes = html_out.draw_thumbnail(path, [box], CLASSES, 200, 200)
     import io
 
     drawn = PILImage.open(io.BytesIO(drawn_bytes)).convert("RGB")
     assert drawn.size == undrawn.size
     # The box's top edge, well inside the drawn stroke: must differ from the undrawn pixel there.
     assert drawn.getpixel((80, 50)) != undrawn.getpixel((80, 50))
+
+
+def test_unreviewed_dashed_box_differs_from_an_accepted_solid_box(tmp_path, make_jpeg):
+    path = tmp_path / "a.jpg"
+    make_jpeg(path, 200, 200, seed=1)
+    accepted = html_out.draw_thumbnail(path, [_box(review_state="accepted")], CLASSES, 200, 200)
+    unreviewed = html_out.draw_thumbnail(path, [_box(review_state="unreviewed")], CLASSES, 200, 200)
+    assert accepted != unreviewed
+
+
+def test_an_unreadable_image_gives_none_instead_of_raising(tmp_path):
+    path = tmp_path / "broken.jpg"
+    path.write_bytes(b"not actually a jpeg")
+    result = html_out.draw_thumbnail(path, [_box()], CLASSES, 200, 200)
+    assert result is None
+
+
+def test_draft_downscale_still_aligns_boxes(tmp_path, make_jpeg):
+    """A large JPEG decoded via `draft()` may come back smaller than its stored size; boxes must
+    still land in the right place, scaled from the stored size to whatever draft actually produced.
+    """
+    path = tmp_path / "big.jpg"
+    make_jpeg(path, 2000, 2000, seed=3)
+    # A box covering the exact centre quarter, regardless of what draft() decodes it to.
+    box = _box(x=500, y=500, w=1000, h=1000)
+    thumb = html_out.draw_thumbnail(path, [box], CLASSES, 2000, 2000, max_side=640)
+    import io
+
+    im = PILImage.open(io.BytesIO(thumb))
+    assert max(im.size) <= 640
+
+
+def test_legend_line_appears_only_when_unreviewed_boxes_are_present(tmp_path):
+    without = _write([_image(boxes=[_box(review_state="accepted")])], tmp_path, thumbnail_fn=lambda i: None)
+    assert "dashed" not in without.lower()
+
+    with_it = _write(
+        [_image(boxes=[_box(review_state="unreviewed")])],
+        tmp_path,
+        settings={"formats": ["html"], "include_unreviewed": True},
+        thumbnail_fn=lambda i: None,
+    )
+    assert "dashed" in with_it.lower()
+
+
+def test_an_image_with_only_unreviewed_boxes_is_not_checked(tmp_path):
+    images = [
+        _image(path="images/a.jpg", boxes=[_box(review_state="unreviewed")]),
+        _image(path="images/b.jpg", boxes=[_box(review_state="accepted")]),
+    ]
+    text = _write(
+        images,
+        tmp_path,
+        settings={"formats": ["html"], "include_unreviewed": True},
+        thumbnail_fn=lambda i: None,
+    )
+    # Only image b is "checked": image a has nothing but an unreviewed proposal.
+    assert "1 images checked, 2 with machinery." in text
+
+
+def test_export_time_is_local_with_the_offset(tmp_path):
+    local = datetime(2026, 9, 19, 17, 53, tzinfo=UTC).astimezone(_FIXED_TZ)
+    text = _write([_image()], tmp_path, export_time=local)
+    assert "Exported 2026-09-19 20:53 UTC+03:00" in text
 
 
 def test_on_card_callback_runs_once_per_card(tmp_path):
