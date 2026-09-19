@@ -23,6 +23,7 @@ const routes = [
   },
   { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset], next_cursor: null } },
   { method: "GET", path: /\/artifacts\/results_csv$/, body: RESULTS_CSV, raw: true },
+  { method: "GET", path: /\/starter-models$/, body: { items: [], next_cursor: null } },
 ];
 
 describe("ModelsScreen", () => {
@@ -63,6 +64,30 @@ describe("ModelsScreen", () => {
     expect(detail).toHaveTextContent("truck");
     expect(detail).toHaveTextContent("dump_truck");
     expect(detail).toHaveTextContent("No training artifacts (imported weights).");
+  });
+
+  it("offers a starter model above an empty registry and selects it once added", async () => {
+    const starters = [
+      { key: "yolo11n", name: "YOLO11 nano", description: "Fastest.", size_mb: 5.4, available: true },
+    ];
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
+      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/starter-models$/, body: { items: starters, next_cursor: null } },
+      { method: "POST", path: /\/models\/import-starter$/, status: 201, body: exampleModel },
+    ]);
+    renderWithProviders(<ModelsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/models`,
+      path: "/p/:projectId/models",
+    });
+    expect(await screen.findByRole("heading", { name: "Starter models" })).toBeInTheDocument();
+    expect(
+      screen.getByText("No models yet. Add a starter model above, or import your own weights."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Add YOLO11 nano" }));
+    await waitFor(() => expect(screen.getByTestId("model-detail")).toHaveTextContent(exampleModel.name));
   });
 
   it("shows the not-available note on 501 and keeps the heading", async () => {
