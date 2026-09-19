@@ -15,7 +15,8 @@ export default defineConfig({
     },
   },
   envPrefix: ["VITE_", "APP_"],
-  server: { port: 1420, strictPort: true, host: "127.0.0.1" },
+  // VITE_DEV_PORT moves the dev server (e2e beside another checkout that holds 1420).
+  server: { port: Number(process.env.VITE_DEV_PORT ?? 1420), strictPort: true, host: "127.0.0.1" },
   clearScreen: false,
   test: {
     environment: "jsdom",
