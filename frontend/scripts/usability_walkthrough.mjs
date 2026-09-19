@@ -203,6 +203,11 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
   const toggle = page.getByRole("button", { name: /Marked empty/ });
   check("N marks the image as empty", await visible(toggle));
   check("the toggle shows its state", (await toggle.getAttribute("aria-pressed")) === "true");
+  // The mark is on the undo history like any other edit.
+  await page.keyboard.press("Control+z");
+  check("Ctrl+Z takes the mark back", await visible(page.getByRole("button", { name: "No machinery (N)" })));
+  await page.keyboard.press("n");
+  check("N marks it again", await visible(toggle));
   await snap("editor-marked-empty");
   await sleep(1500);
   const stats = await api("GET", `/projects/${projectId}/stats`);
@@ -309,6 +314,12 @@ await step("8 run the trained model; review; accept as labels with a count; undo
   await snap("review-of-the-run");
   await page.getByTestId("image-table").getByText(/\.jpg$/).first().dblclick();
   await urlIs(/\/edit\//);
+  // A dense run is unreadable until the weak proposals are out of the way.
+  const shown = await page.getByTestId("proposal-count").innerText();
+  await page.getByLabel("Hide proposals below this confidence").fill("95");
+  check("the confidence floor hides weak proposals", /hidden/.test(await page.getByTestId("confidence-floor").innerText()), `${shown} -> ${await page.getByTestId("proposal-count").innerText()}`);
+  await snap("review-confidence-floor");
+  await page.getByLabel("Hide proposals below this confidence").fill("0");
   const back = page.getByRole("link", { name: "Back to the review queue" });
   check("the editor leads back to this review", (await back.getAttribute("href"))?.includes("ids="), await back.getAttribute("href"));
   await back.click();
