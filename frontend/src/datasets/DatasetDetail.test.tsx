@@ -137,4 +137,23 @@ describe("DatasetDetail", () => {
     expect(await screen.findByText(/incomplete/i)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Train on this dataset" })).not.toBeInTheDocument();
   });
+
+  it("fetches the materialise job once when it is not in the store, and shows 'incomplete' for a failed one", async () => {
+    const failedJob = {
+      ...runningJob,
+      id: exampleDataset.job_id!,
+      type: "dataset" as const,
+      state: "failed" as const,
+    };
+    const { api } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: STATS },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: failedJob },
+    ]);
+    renderWithProviders(
+      <DatasetDetail projectId={PROJECT_ID} dataset={exampleDataset} onDeleted={vi.fn()} />,
+      { api },
+    );
+    expect(await screen.findByText(/incomplete/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Train on this dataset" })).not.toBeInTheDocument();
+  });
 });
