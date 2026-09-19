@@ -10,6 +10,7 @@ import {
   updateProvider,
 } from "@/api/providers";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Button, Field, Input, Pill } from "@/ui";
 import { diffProvider, formOf, testFailureText } from "./providersModel";
 
 interface Props {
@@ -17,18 +18,15 @@ interface Props {
   onChanged: (p: Provider) => void;
 }
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const label = "flex flex-col gap-1 text-xs text-slate-400";
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
-
 /**
- * One cloud provider (spec section 8): model name, rate limit and cost estimate through PATCH; the API key
- * goes to Windows Credential Manager through PUT and is dropped from state right after the request.
+ * One cloud provider as a row (spec section 8): model name, rate limit and cost estimate through PATCH;
+ * the API key goes to Windows Credential Manager through PUT and is dropped from state right after the
+ * request.
  */
 export function ProviderCard({ provider, onChanged }: Props) {
   const api = useApi();
   const name = providerLabel(provider.name);
+  const id = `provider-${provider.name}`;
   // Keyed by provider name: the form keeps the user's edits and is refreshed from each PATCH answer.
   const [form, setForm] = useState(() => formOf(provider));
   const [apiKey, setApiKey] = useState("");
@@ -101,61 +99,20 @@ export function ProviderCard({ provider, onChanged }: Props) {
     });
 
   return (
-    <section
-      data-testid={`provider-${provider.name}`}
-      className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-800/30 p-4"
-    >
-      <header className="flex items-center gap-2">
-        <h3 className="text-base font-medium">{name}</h3>
-        <span
-          data-testid={`key-state-${provider.name}`}
-          className={`rounded px-2 py-0.5 text-xs ${provider.has_key ? "bg-emerald-800 text-emerald-100" : "bg-slate-700 text-slate-300"}`}
-        >
+    <div data-testid={`provider-${provider.name}`} className="flex flex-col gap-4 px-4 py-4">
+      <div className="flex items-center gap-3">
+        <h3 className="text-sm font-semibold">{name}</h3>
+        <Pill tone={provider.has_key ? "ok" : "neutral"} data-testid={`key-state-${provider.name}`}>
           {provider.has_key ? "Key stored" : "No key stored"}
-        </span>
-      </header>
-      <form onSubmit={saveSettings} className="flex flex-wrap items-end gap-3">
-        <label className={label}>
-          Model name
-          <input
-            aria-label={`${name} model name`}
-            value={form.model_name}
-            onChange={(e) => setForm({ ...form, model_name: e.target.value })}
-            className={input}
-          />
-        </label>
-        <label className={label}>
-          Requests per minute
-          <input
-            aria-label={`${name} requests per minute`}
-            type="number"
-            min={1}
-            max={10000}
-            value={form.requests_per_minute}
-            onChange={(e) => setForm({ ...form, requests_per_minute: e.target.value })}
-            className={`${input} w-24`}
-          />
-        </label>
-        <label className={label}>
-          Cost per request (USD)
-          <input
-            aria-label={`${name} cost per request`}
-            type="number"
-            min={0}
-            step={0.001}
-            value={form.cost_per_request}
-            onChange={(e) => setForm({ ...form, cost_per_request: e.target.value })}
-            className={`${input} w-24`}
-          />
-        </label>
-        <button type="submit" className={secondary} disabled={busy}>
-          Save {name} settings
-        </button>
-      </form>
-      <form onSubmit={saveKey} className="flex flex-wrap items-end gap-3">
-        <label className={label}>
-          API key
-          <input
+        </Pill>
+        <Button variant="ghost" size="sm" onClick={() => void test()} disabled={busy} className="ml-auto">
+          Test {name}
+        </Button>
+      </div>
+      <form onSubmit={saveKey} className="flex flex-wrap items-end gap-2" noValidate>
+        <Field label="API key" htmlFor={`${id}-key`} className="w-full max-w-sm">
+          <Input
+            id={`${id}-key`}
             aria-label={`${name} API key`}
             type="password"
             autoComplete="new-password"
@@ -163,34 +120,56 @@ export function ProviderCard({ provider, onChanged }: Props) {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder={provider.has_key ? "Paste a new key to replace the stored one" : "Paste the API key"}
-            className={`${input} w-72`}
           />
-        </label>
-        <button type="submit" className={primary} disabled={busy}>
+        </Field>
+        <Button type="submit" disabled={busy}>
           Save {name} key
-        </button>
-        <button
-          type="button"
-          className={secondary}
-          onClick={() => void removeKey()}
-          disabled={busy || !provider.has_key}
-        >
+        </Button>
+        <Button variant="danger" onClick={() => void removeKey()} disabled={busy || !provider.has_key}>
           Remove {name} key
-        </button>
-        <button type="button" className={secondary} onClick={() => void test()} disabled={busy}>
-          Test {name}
-        </button>
+        </Button>
+      </form>
+      <form onSubmit={saveSettings} className="flex flex-wrap items-end gap-2" noValidate>
+        <Field label="Model name" htmlFor={`${id}-model`} className="w-full max-w-[14rem]">
+          <Input
+            id={`${id}-model`}
+            aria-label={`${name} model name`}
+            value={form.model_name}
+            onChange={(e) => setForm({ ...form, model_name: e.target.value })}
+          />
+        </Field>
+        <Field label="Requests per minute" htmlFor={`${id}-rpm`} className="w-32">
+          <Input
+            id={`${id}-rpm`}
+            aria-label={`${name} requests per minute`}
+            type="number"
+            min={1}
+            max={10000}
+            value={form.requests_per_minute}
+            onChange={(e) => setForm({ ...form, requests_per_minute: e.target.value })}
+          />
+        </Field>
+        <Field label="Cost per request (USD)" htmlFor={`${id}-cost`} className="w-36">
+          <Input
+            id={`${id}-cost`}
+            aria-label={`${name} cost per request`}
+            type="number"
+            min={0}
+            step={0.001}
+            value={form.cost_per_request}
+            onChange={(e) => setForm({ ...form, cost_per_request: e.target.value })}
+          />
+        </Field>
+        <Button type="submit" disabled={busy}>
+          Save {name} settings
+        </Button>
       </form>
       {status && (
-        <p role="status" className="text-xs text-emerald-300">
+        <Alert tone="ok" role="status">
           {status}
-        </p>
+        </Alert>
       )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
-    </section>
+      {error && <Alert tone="danger">{error}</Alert>}
+    </div>
   );
 }

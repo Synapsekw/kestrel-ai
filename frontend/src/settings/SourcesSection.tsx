@@ -7,8 +7,7 @@ import { pushLog } from "@/app/diagnostics";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { formatDate, formatLocalDate } from "@/models/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
-
-const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+import { Alert, Button, Skeleton } from "@/ui";
 
 interface ListState {
   key: string;
@@ -25,7 +24,7 @@ function StatsSummary({ stats }: { stats: Stats }) {
     .map((r) => `${r.width}x${r.height} (${r.count})`)
     .join(", ");
   return (
-    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs text-slate-300 md:grid-cols-3">
+    <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs tabular-nums text-muted md:grid-cols-3">
       <div>
         {stats.labeled_count} labeled, {stats.unlabeled_count} unlabeled
       </div>
@@ -104,32 +103,34 @@ function SourceRow({
   }
 
   return (
-    <li className="flex flex-col gap-2 rounded border border-slate-800 bg-slate-800/40 px-3 py-2">
+    <li className="flex flex-col gap-2 px-4 py-3">
       <div className="flex flex-wrap items-center gap-3">
         <span className="font-medium">{source.site}</span>
-        <span className="truncate font-mono text-xs text-slate-400">{source.folder}</span>
-        <span className="text-xs text-slate-300">
+        <span className="truncate font-mono text-xs text-muted">{source.folder}</span>
+        <span className="text-xs tabular-nums text-muted">
           {source.image_count} images, {source.duplicate_count} duplicates
           {source.imported_at ? `, imported ${formatLocalDate(source.imported_at)}` : ", not imported yet"}
         </span>
-        <button type="button" className={`${btn} ml-auto`} onClick={() => void loadStats()} disabled={busy}>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="ml-auto"
+          onClick={() => void loadStats()}
+          disabled={busy}
+        >
           Stats
-        </button>
-        <button type="button" className={btn} onClick={() => void reimport()} disabled={busy}>
+        </Button>
+        <Button size="sm" icon="import" onClick={() => void reimport()} disabled={busy}>
           Re-import new files
-        </button>
+        </Button>
       </div>
       {stats && <StatsSummary stats={stats} />}
       {status && (
-        <p role="status" className="text-xs text-emerald-300">
+        <p role="status" className="text-xs text-ok">
           {status}
         </p>
       )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
     </li>
   );
 }
@@ -172,37 +173,41 @@ export function SourcesSection({ projectId }: { projectId: string }) {
 
   const loaded = state.key === key;
   return (
-    <section data-testid="sources-section" className="flex flex-col gap-3">
-      <h2 className="text-lg font-medium">Sources</h2>
-      <p className="text-sm text-slate-400">
-        Imported folders. Import a new folder from the Data Manager; re-import a folder to pick up files added
-        since.
-      </p>
-      {!loaded && <p className="text-xs text-slate-400">Loading sources…</p>}
+    <section data-testid="sources-section" className="flex flex-col gap-4 py-8 first:pt-0 last:pb-0">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">Sources</h2>
+        <p className="text-sm text-muted">
+          Imported folders. Import a new folder from Images; re-import a folder to pick up files added since.
+        </p>
+      </div>
+      {!loaded && state.sources.length === 0 && (
+        <div className="flex flex-col gap-2" role="status" aria-label="Loading">
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+        </div>
+      )}
       {loaded && state.unavailable && (
-        <p role="note" className="text-xs text-slate-400">
+        <p role="note" className="text-xs text-muted">
           Sources are not available yet (they arrive with the dataset backend).
         </p>
       )}
-      {loaded && state.error && (
-        <p role="alert" className="text-xs text-red-300">
-          {state.error}
-        </p>
-      )}
+      {loaded && state.error && <Alert tone="danger">{state.error}</Alert>}
       {loaded && !state.unavailable && !state.error && state.sources.length === 0 && (
-        <p className="text-sm text-slate-400">No sources yet.</p>
+        <p className="text-sm text-muted">No sources yet.</p>
       )}
-      <ul className="flex flex-col gap-2">
-        {state.sources.map((s) => (
-          <SourceRow
-            // Remounting on changed counts drops the row's cached statistics, which are now stale.
-            key={`${s.id}|${s.image_count}|${s.duplicate_count}|${s.imported_at ?? ""}`}
-            projectId={projectId}
-            source={s}
-            onReimported={reload}
-          />
-        ))}
-      </ul>
+      {state.sources.length > 0 && (
+        <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
+          {state.sources.map((s) => (
+            <SourceRow
+              // Remounting on changed counts drops the row's cached statistics, which are now stale.
+              key={`${s.id}|${s.image_count}|${s.duplicate_count}|${s.imported_at ?? ""}`}
+              projectId={projectId}
+              source={s}
+              onReimported={reload}
+            />
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

@@ -7,7 +7,7 @@ const MODEL = "m0000000-2222-4000-8000-000000000001";
 
 test("renames and rehotkeys a class and saves the full list with PUT", async ({ page }) => {
   await page.goto(`/p/${P}/settings`);
-  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Project settings" })).toBeVisible();
   await page.getByLabel("Name of class 1").fill("digger");
   await page.getByLabel("Hotkey of class 1").selectOption("9");
   const put = page.waitForRequest((r) => r.method() === "PUT" && r.url().endsWith(`/projects/${P}/classes`));
@@ -31,7 +31,11 @@ test("removing a class that still has boxes is refused with an explanation", asy
           contentType: "application/json",
           headers: { "Access-Control-Allow-Origin": "*" },
           body: JSON.stringify({
-            error: { code: "class_in_use", message: "class still has boxes", details: { class_id: CLASS4, box_count: 40 } },
+            error: {
+              code: "class_in_use",
+              message: "class still has boxes",
+              details: { class_id: CLASS4, box_count: 40 },
+            },
           }),
         })
       : route.continue(),
@@ -46,7 +50,9 @@ test("removing a class that still has boxes is refused with an explanation", asy
   await expect(page.getByLabel("Name of class 4")).toHaveValue("dump_truck");
 });
 
-test("pre-annotation model selection patches the project and tolerates a missing registry", async ({ page }) => {
+test("pre-annotation model selection patches the project and tolerates a missing registry", async ({
+  page,
+}) => {
   await page.goto(`/p/${P}/settings`);
   const select = page.getByLabel("Pre-annotation model");
   await expect(select).toHaveValue(MODEL);
@@ -60,7 +66,9 @@ test("pre-annotation model selection patches the project and tolerates a missing
       status: 501,
       contentType: "application/json",
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ error: { code: "not_implemented", message: "models arrive with S3", details: {} } }),
+      body: JSON.stringify({
+        error: { code: "not_implemented", message: "models arrive with S3", details: {} },
+      }),
     }),
   );
   await page.reload();

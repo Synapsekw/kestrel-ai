@@ -4,13 +4,12 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Button, Field, Input } from "@/ui";
 
 interface Props {
   project: Project;
   onSaved: (p: Project) => void;
 }
-
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
 
 /** The inputs own strings: an emptied number field must not silently become 0 (`Number("")`). */
 interface Form {
@@ -70,51 +69,58 @@ export function ImportDefaultsSection({ project, onSaved }: Props) {
   }
 
   const field = (key: keyof Form) => ({
+    id: `import-${key}`,
     value: form[key],
     onChange: (e: { target: { value: string } }) => setForm({ ...form, [key]: e.target.value }),
   });
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-3">
-      <h2 className="text-lg font-medium">Import defaults</h2>
-      <p className="text-sm text-slate-400">Applied to new sources unless overridden at import time.</p>
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <label className="flex flex-col gap-1 text-xs text-slate-400">
-          Max side
-          <input type="number" required min={512} max={12000} {...field("max_side")} className={input} />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-slate-400">
-          JPEG quality
-          <input type="number" required min={50} max={100} {...field("quality")} className={input} />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-slate-400">
-          Duplicate threshold
-          <input type="number" required min={0} max={32} {...field("dedupe_threshold")} className={input} />
-        </label>
-        <label className="flex flex-col gap-1 text-xs text-slate-400">
-          Group regex
-          <input required {...field("group_regex")} className={`${input} font-mono`} />
-        </label>
+    <form
+      onSubmit={(e) => void submit(e)}
+      className="flex flex-col gap-4 py-8 first:pt-0 last:pb-0"
+      noValidate
+    >
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">Import defaults</h2>
+        <p className="text-sm text-muted">Applied to new folders unless changed in the import dialog.</p>
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          disabled={busy}
-          className="rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <Field
+          label="Max side"
+          htmlFor="import-max_side"
+          hint="Longest edge in pixels; larger images are scaled down."
         >
+          <Input type="number" required min={512} max={12000} {...field("max_side")} />
+        </Field>
+        <Field label="JPEG quality" htmlFor="import-quality" hint="50 to 100.">
+          <Input type="number" required min={50} max={100} {...field("quality")} />
+        </Field>
+        <Field
+          label="Duplicate threshold"
+          htmlFor="import-dedupe_threshold"
+          hint="0 to 32; lower skips only near-identical frames."
+        >
+          <Input type="number" required min={0} max={32} {...field("dedupe_threshold")} />
+        </Field>
+        <Field
+          label="Group regex"
+          htmlFor="import-group_regex"
+          hint="Reads the camera, flight and frame from file names."
+        >
+          <Input required {...field("group_regex")} className="font-mono" />
+        </Field>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button type="submit" variant="primary" loading={busy}>
           Save import defaults
-        </button>
+        </Button>
         {status && (
-          <span role="status" className="text-xs text-emerald-300">
+          <span role="status" className="text-xs text-ok">
             {status}
           </span>
         )}
       </div>
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
     </form>
   );
 }
