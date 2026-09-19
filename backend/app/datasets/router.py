@@ -38,6 +38,7 @@ from app.datasets.schemas import (
 )
 from app.db.models import Dataset, DatasetImage, Source
 from app.errors import AppError, not_found
+from app.events_util import publish_image_ids_event
 from app.jobs.schemas import JobOut
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.schemas import ImportSettings, Stats
@@ -51,20 +52,6 @@ def _cursor_datetime(value) -> datetime:
         return datetime.fromisoformat(str(value))
     except ValueError:
         raise AppError("validation_error", "invalid cursor", 422) from None
-
-
-def _publish(request: Request, handle: ProjectHandle, event_type: str, image_ids: list[str]) -> None:
-    if image_ids:
-        request.app.state.events.publish(
-            {
-                "type": event_type,
-                "project_id": handle.id,
-                "job_id": None,
-                "progress": None,
-                "message": "",
-                "payload": {"image_ids": image_ids},
-            }
-        )
 
 
 def _set_job_id(handle: ProjectHandle, table, row_id: str, job_id: str) -> None:
@@ -205,8 +192,8 @@ def bulk_mark_empty_images(
     body: BulkMarkEmpty, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> BulkMarkEmptyResult:
     updated, skipped, rejected_ids = empties.bulk_mark_empty(handle, body.image_ids, body.marked_empty)
-    _publish(request, handle, "images.changed", body.image_ids)
-    _publish(request, handle, "boxes.changed", rejected_ids)
+    publish_image_ids_event(request, handle, "images.changed", body.image_ids)
+    publish_image_ids_event(request, handle, "boxes.changed", rejected_ids)
     return BulkMarkEmptyResult(updated=updated, skipped=skipped)
 
 
@@ -223,8 +210,8 @@ def update_image(
     handle: ProjectHandle = Depends(get_project),
 ) -> ImageOut:
     row, rejected_ids = empties.set_marked_empty(handle, imageId, body.marked_empty)
-    _publish(request, handle, "images.changed", [imageId])
-    _publish(request, handle, "boxes.changed", rejected_ids)
+    publish_image_ids_event(request, handle, "images.changed", [imageId])
+    publish_image_ids_event(request, handle, "boxes.changed", rejected_ids)
     return ImageOut.from_row(*row)
 
 
