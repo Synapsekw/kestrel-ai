@@ -31,3 +31,12 @@ export function markImagesEmpty(
 ): Promise<BulkMarkEmptyResult> {
   return bulkMarkEmpty(api, projectId, imageIds, true);
 }
+
+/** "Unmark empty": undo the mark on the selected images. Never refused; nothing to reject. */
+export function unmarkImagesEmpty(
+  api: ApiClient,
+  projectId: string,
+  imageIds: string[],
+): Promise<BulkMarkEmptyResult> {
+  return bulkMarkEmpty(api, projectId, imageIds, false);
+}

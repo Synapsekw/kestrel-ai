@@ -16,7 +16,14 @@ function renderBar(
     onClear: vi.fn(),
   };
   renderWithProviders(
-    <SelectionBar projectId={PROJECT_ID} selectedIds={["a", "b"]} emptyCount={0} {...handlers} {...props} />,
+    <SelectionBar
+      projectId={PROJECT_ID}
+      selectedIds={["a", "b"]}
+      emptyCount={0}
+      pendingCount={0}
+      {...handlers}
+      {...props}
+    />,
     { api },
   );
   return handlers;
@@ -43,12 +50,17 @@ describe("SelectionBar", () => {
     expect(requests[0].body).toEqual({ image_ids: ["a", "b"] });
   });
 
-  it("marks the selection empty and reports skipped images with accepted boxes", async () => {
+  it("confirms before marking, mentioning pending proposals, and reports skipped images (I2b)", async () => {
     const { api, requests } = fakeClient([
       { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 1, skipped: 1 } },
     ]);
-    const h = renderBar(api);
+    const h = renderBar(api, { pendingCount: 3 });
     fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
+    expect(requests).toHaveLength(0); // asks first, like Delete
+    expect(
+      screen.getByText("Mark 2 images as empty? 3 pending proposals on them will be rejected."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Mark 2 as empty" }));
     await waitFor(() =>
       expect(h.onMarked).toHaveBeenCalledWith(
         "1 marked as empty, 1 skipped because they have accepted boxes",
@@ -57,13 +69,45 @@ describe("SelectionBar", () => {
     expect(requests[0]).toMatchObject({ body: { image_ids: ["a", "b"], marked_empty: true } });
   });
 
-  it("marks the selection empty with no skipped note when nothing was skipped", async () => {
+  it("omits the pending-proposals sentence when nothing is pending, and can be cancelled", async () => {
     const { api } = fakeClient([
       { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 2, skipped: 0 } },
     ]);
-    const h = renderBar(api);
+    const h = renderBar(api, { pendingCount: 0 });
     fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
+    expect(screen.getByText("Mark 2 images as empty?")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText(/Mark 2 images as empty/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark 2 as empty" }));
     await waitFor(() => expect(h.onMarked).toHaveBeenCalledWith("2 marked as empty"));
+  });
+
+  it("mentions already-marked images in the result, computed from the selection (M10)", async () => {
+    const { api } = fakeClient([
+      { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 1, skipped: 0 } },
+    ]);
+    const h = renderBar(api, { emptyCount: 1 });
+    fireEvent.click(screen.getByRole("button", { name: "Mark as empty" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mark 2 as empty" }));
+    await waitFor(() => expect(h.onMarked).toHaveBeenCalledWith("1 marked as empty, 1 already marked"));
+  });
+
+  it("offers Unmark empty with no confirmation when the selection has marked images (I2b)", async () => {
+    const { api, requests } = fakeClient([
+      { method: "POST", path: /\/images\/bulk-mark-empty$/, body: { updated: 2, skipped: 0 } },
+    ]);
+    const h = renderBar(api, { emptyCount: 2 });
+    fireEvent.click(screen.getByRole("button", { name: "Unmark empty" }));
+    await waitFor(() => expect(h.onMarked).toHaveBeenCalledWith("2 no longer marked empty"));
+    expect(requests[0]).toMatchObject({ body: { image_ids: ["a", "b"], marked_empty: false } });
+  });
+
+  it("does not offer Unmark empty when nothing in the selection is marked", () => {
+    const { api } = fakeClient([]);
+    renderBar(api, { emptyCount: 0 });
+    expect(screen.queryByRole("button", { name: "Unmark empty" })).not.toBeInTheDocument();
   });
 
   it("shows the envelope message when a delete fails", async () => {

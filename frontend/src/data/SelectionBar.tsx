@@ -4,13 +4,15 @@ import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
 import { AddToDatasetDialog } from "./AddToDatasetDialog";
-import { deleteImages, markImagesEmpty } from "./bulkActions";
+import { deleteImages, markImagesEmpty, unmarkImagesEmpty } from "./bulkActions";
 
 interface Props {
   projectId: string;
   selectedIds: string[];
-  /** How many of the selection are already marked empty (E4): passed on to the dataset dialog. */
+  /** How many of the selection are already marked empty (E4): offers "Unmark empty" when > 0. */
   emptyCount: number;
+  /** Sum of pending_count over the selection: named in the "Mark as empty" confirmation. */
+  pendingCount: number;
   onLabel: () => void;
   /** Opens the query screen with the selection preloaded (S5). */
   onRunModel: () => void;
@@ -28,6 +30,7 @@ export function SelectionBar({
   projectId,
   selectedIds,
   emptyCount,
+  pendingCount,
   onLabel,
   onRunModel,
   onDeleted,
@@ -37,7 +40,7 @@ export function SelectionBar({
   const api = useApi();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<"idle" | "dataset" | "confirm-delete">("idle");
+  const [mode, setMode] = useState<"idle" | "dataset" | "confirm-delete" | "confirm-mark">("idle");
   const n = selectedIds.length;
 
   async function confirmDelete() {
@@ -56,17 +59,36 @@ export function SelectionBar({
     }
   }
 
-  async function markEmpty() {
+  async function confirmMark() {
     setBusy(true);
     setError(null);
     try {
       const { updated, skipped } = await markImagesEmpty(api, projectId, selectedIds);
       useChangesStore.getState().bumpImages();
       const skippedNote = skipped > 0 ? `, ${skipped} skipped because they have accepted boxes` : "";
-      onMarked(`${updated} marked as empty${skippedNote}`);
+      // `already` (already marked before this call) is computed from the loaded rows, not the
+      // response: the backend's `updated` counts neither the skipped nor the already-marked ones.
+      const alreadyNote = emptyCount > 0 ? `, ${emptyCount} already marked` : "";
+      onMarked(`${updated} marked as empty${skippedNote}${alreadyNote}`);
+      setMode("idle");
     } catch (e) {
       pushLog(`mark as empty failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "mark as empty failed"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function unmark() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { updated } = await unmarkImagesEmpty(api, projectId, selectedIds);
+      useChangesStore.getState().bumpImages();
+      onMarked(`${updated} no longer marked empty`);
+    } catch (e) {
+      pushLog(`unmark empty failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "unmark empty failed"));
     } finally {
       setBusy(false);
     }
@@ -96,9 +118,19 @@ export function SelectionBar({
         >
           Add to dataset
         </button>
-        <button type="button" className={btn} onClick={() => void markEmpty()} disabled={busy}>
+        <button
+          type="button"
+          className={btn}
+          onClick={() => setMode(mode === "confirm-mark" ? "idle" : "confirm-mark")}
+          disabled={busy}
+        >
           Mark as empty
         </button>
+        {emptyCount > 0 && (
+          <button type="button" className={btn} onClick={() => void unmark()} disabled={busy}>
+            Unmark empty
+          </button>
+        )}
         <button
           type="button"
           className={btn}
@@ -129,6 +161,21 @@ export function SelectionBar({
             disabled={busy}
           >
             Delete {n} images
+          </button>
+          <button type="button" className={btn} onClick={() => setMode("idle")}>
+            Cancel
+          </button>
+        </div>
+      )}
+      {mode === "confirm-mark" && (
+        <div className="flex items-center gap-2 text-sm">
+          <span>
+            Mark {n} {n === 1 ? "image" : "images"} as empty?
+            {pendingCount > 0 &&
+              ` ${pendingCount} pending ${pendingCount === 1 ? "proposal" : "proposals"} on them will be rejected.`}
+          </span>
+          <button type="button" className={primary} onClick={() => void confirmMark()} disabled={busy}>
+            Mark {n} as empty
           </button>
           <button type="button" className={btn} onClick={() => setMode("idle")}>
             Cancel

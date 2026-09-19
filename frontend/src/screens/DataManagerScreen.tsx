@@ -110,6 +110,10 @@ export function DataManagerScreen() {
     () => items.filter((i) => pruned.selected.has(i.id) && i.marked_empty).length,
     [items, pruned],
   );
+  const selectedPendingCount = useMemo(
+    () => items.filter((i) => pruned.selected.has(i.id)).reduce((sum, i) => sum + i.pending_count, 0),
+    [items, pruned],
+  );
   const labelSelected = () => {
     useNavigationStore.getState().setContext(selectedIds, "selection");
     void navigate(`/p/${projectId}/edit/${selectedIds[0]}`);
@@ -170,6 +174,7 @@ export function DataManagerScreen() {
             projectId={projectId}
             selectedIds={selectedIds}
             emptyCount={selectedEmptyCount}
+            pendingCount={selectedPendingCount}
             onLabel={labelSelected}
             onRunModel={() => {
               useNavigationStore.getState().setContext(selectedIds, "query");
