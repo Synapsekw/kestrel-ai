@@ -7,7 +7,11 @@ import { TrainForm } from "./TrainForm";
 
 // The dataset and model lists arrive after the form mounts (and change again when a training
 // job finishes). Whatever the user typed must survive; untouched fields take the new defaults.
-function mount(datasets: (typeof exampleDataset)[], models: (typeof exampleModel)[]) {
+function mount(
+  datasets: (typeof exampleDataset)[],
+  models: (typeof exampleModel)[],
+  initialDatasetId?: string,
+) {
   const { api } = fakeClient([]);
   const onStart = vi.fn();
   const props = {
@@ -18,6 +22,7 @@ function mount(datasets: (typeof exampleDataset)[], models: (typeof exampleModel
     modelsError: null,
     busy: false,
     onStart,
+    initialDatasetId,
   };
   const tree = (ds: typeof datasets, ms: typeof models) => (
     <TestApiProvider api={api}>
@@ -47,5 +52,19 @@ describe("TrainForm when the lists arrive late", () => {
     expect(screen.getByLabelText("Model name")).toHaveValue("");
     rerender([exampleDataset], [exampleModel]);
     expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
+  });
+
+  it("falls back to the first dataset once the list arrives and an unknown ?dataset= id is not in it (I5)", () => {
+    const { rerender } = mount([], [], "nope-not-a-real-dataset");
+    rerender([exampleDataset], [exampleModel]);
+    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id);
+    expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
+  });
+
+  it("keeps a valid initialDatasetId once a later list arrives, even when it is not the first one", () => {
+    const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
+    const { rerender } = mount([], [], older.id);
+    rerender([exampleDataset, older], [exampleModel]);
+    expect(screen.getByLabelText("Dataset")).toHaveValue(older.id);
   });
 });
