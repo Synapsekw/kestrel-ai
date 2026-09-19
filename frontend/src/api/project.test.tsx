@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { describe, it, expect } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import {
   exampleModel,
   exampleProject,
@@ -9,8 +9,10 @@ import {
   PROJECT_ID,
   CLASS_ID,
   SOURCE_ID,
+  runningJob,
 } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
+import { useJobsStore } from "@/store/jobs";
 import { fetchModels, patchProject, saveClasses, useProject, useSourceNames } from "./project";
 
 describe("project api", () => {
@@ -69,5 +71,13 @@ describe("project api", () => {
     );
     const names2 = renderHook(() => useSourceNames(PROJECT_ID), { wrapper: wrapper2 });
     await waitFor(() => expect(names2.result.current).toEqual({ [SOURCE_ID]: "ahmadia" }));
+
+    // A finished import brings a new source: the names are fetched again without leaving the screen.
+    const before = ok.requests.filter((r) => r.url.endsWith("/sources")).length;
+    act(() => useJobsStore.getState().upsert({ ...runningJob, type: "import" }));
+    act(() => useJobsStore.getState().upsert({ ...runningJob, type: "import", state: "succeeded" }));
+    await waitFor(() =>
+      expect(ok.requests.filter((r) => r.url.endsWith("/sources")).length).toBe(before + 1),
+    );
   });
 });

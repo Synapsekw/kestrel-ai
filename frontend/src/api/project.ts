@@ -3,6 +3,7 @@ import type { ApiClient, ClassDefInput, Model, Project, Source, components } fro
 import { useApi } from "./client";
 import { messageOf, unwrap } from "./errors";
 import { pushLog } from "@/app/diagnostics";
+import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 
 export type ProjectUpdate = components["schemas"]["ProjectUpdate"];
 
@@ -68,6 +69,9 @@ export function useProject(projectId: string): {
 export function useSourceNames(projectId: string): Record<string, string> {
   const api = useApi();
   const [names, setNames] = useState<Record<string, string>>({});
+  // An import creates or extends a source: fetch the names again when one ends.
+  const [revision, setRevision] = useState(0);
+  useOnJobsFinished("import", () => setRevision((r) => r + 1));
   useEffect(() => {
     let cancelled = false;
     fetchSources(api, projectId)
@@ -81,6 +85,6 @@ export function useSourceNames(projectId: string): Record<string, string> {
     return () => {
       cancelled = true;
     };
-  }, [api, projectId]);
+  }, [api, projectId, revision]);
   return names;
 }

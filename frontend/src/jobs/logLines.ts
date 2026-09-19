@@ -1,7 +1,7 @@
-interface EpochRecord {
-  kind: "epoch";
-  epoch: number;
-  epochs: number;
+interface ProgressRecord {
+  kind?: string;
+  epoch?: number;
+  epochs?: number;
   metrics?: Record<string, number>;
   loss?: Record<string, number>;
   eta_s?: number;
@@ -13,9 +13,9 @@ const pct = (v: number | undefined): string | null =>
 /** The trainer writes JSON progress records into the job log; show them as sentences, keep the rest. */
 export function readableLogLine(line: string): string {
   if (!line.startsWith("{")) return line;
-  let rec: { kind?: string; epochs?: number } & Partial<EpochRecord>;
+  let rec: ProgressRecord;
   try {
-    rec = JSON.parse(line) as typeof rec;
+    rec = JSON.parse(line) as ProgressRecord;
   } catch {
     return line;
   }
