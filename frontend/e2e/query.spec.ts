@@ -50,14 +50,15 @@ test("estimates and starts a cloud query, then reviews results, promotes and lis
   await expect(page.getByRole("heading", { name: "Query" })).toBeVisible();
   await expect(page.getByLabel("Model", { exact: true })).toHaveValue(MODEL);
   await expect(page.getByTestId("image-count")).toHaveText("2 images selected");
-  await expect(page.getByRole("button", { name: "Start" })).toBeDisabled();
-
   const grouped = page.waitForRequest((r) => r.url().includes("group_key=0031"));
   await page.getByLabel("Images", { exact: true }).selectOption("group");
-  await page.getByLabel("Group key").fill("0031");
+  // The project's flights come from the stats: a list, not a key to type.
+  await page.getByLabel("Group key").selectOption("0031");
   await grouped;
 
   await page.getByLabel("Cloud provider").check();
+  // A cloud run costs money: it cannot start before its estimate was shown.
+  await expect(page.getByRole("button", { name: "Start" })).toBeDisabled();
   await expect(page.getByLabel("Provider", { exact: true })).toHaveValue("anthropic");
   // Playwright's toBeDisabled does not treat <option disabled> as disabled; check the DOM property.
   await expect(page.getByRole("option", { name: /OpenAI/ })).toHaveJSProperty("disabled", true);

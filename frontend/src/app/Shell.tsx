@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, Outlet, useParams } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { pushLog } from "@/app/diagnostics";
+import { NextStepBar } from "@/app/NextStepBar";
 import { JobsButton } from "@/jobs/JobsButton";
 import { JobsPanel } from "@/jobs/JobsPanel";
 import { useInitialJobs } from "@/jobs/useJobList";
@@ -106,6 +107,7 @@ export function Shell() {
           <span className="truncate text-sm text-slate-300">{projectName ?? "No project open"}</span>
           <JobsButton />
         </header>
+        {projectId && !imageId && <NextStepBar projectId={projectId} />}
         <main className={imageId ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-6"}>
           <Outlet />
         </main>

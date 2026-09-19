@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { screen, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
-import { exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { exampleProject, exampleStats, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { Shell } from "./Shell";
 
@@ -9,6 +9,9 @@ function renderShell(route: string) {
   const { api } = fakeClient([
     { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
     { method: "GET", path: /\/jobs/, body: { items: [], next_cursor: null } },
+    { method: "GET", path: /\/stats$/, body: { ...exampleStats, pending_review_count: 2 } },
+    { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
+    { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
   ]);
   return renderWithProviders(
     <Routes>
@@ -42,5 +45,16 @@ describe("Shell navigation", () => {
     expect(within(nav).queryByText("Open or create a project to use these.")).toBeNull();
     expect(within(nav).getByRole("link", { name: "Data" })).toBeInTheDocument();
     expect(within(nav).getByText("Editor")).toHaveAttribute("title", "Open an image from Data or Review");
+  });
+
+  it("shows the project's next step on project screens and nothing on the Projects screen", async () => {
+    const first = renderShell(`/p/${PROJECT_ID}/data`);
+    expect(await screen.findByTestId("next-step")).toHaveTextContent(
+      "Next: Review the proposals on 2 images.",
+    );
+    first.unmount();
+    renderShell("/");
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByTestId("next-step")).toBeNull();
   });
 });
