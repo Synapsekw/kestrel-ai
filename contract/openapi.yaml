@@ -187,7 +187,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         "409":
-          description: a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`)
+          description: "a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`), or two classes share a name or a hotkey, or a name is blank (`code` is `conflict`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

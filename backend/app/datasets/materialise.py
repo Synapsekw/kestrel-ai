@@ -12,6 +12,7 @@ import logging
 import os
 import shutil
 import threading
+import uuid
 from pathlib import Path
 
 from sqlalchemy import delete, or_, select
@@ -142,8 +143,28 @@ def _dataset_folder_to_remove(handle: ProjectHandle, s, dataset: Dataset) -> Pat
     return folder
 
 
+def _move_aside(folder: Path, dataset_id: str) -> Path:
+    """Rename `folder` to its tombstone (atomic); the caller commits the row deletion after this."""
+    tombstone = folder.with_name(f"{TOMBSTONE_PREFIX}{dataset_id}")
+    os.replace(folder, tombstone)
+    return tombstone
+
+
+def _remove_quietly(folder: Path) -> None:
+    """Remove a committed tombstone outside the lock; a failure is left for the next sweep."""
+    try:
+        shutil.rmtree(folder)  # unlinks hard links and nested junctions; never follows them
+    except OSError as e:
+        log.warning("could not remove %s yet: %s", folder, e)
+
+
 def discard(handle: ProjectHandle, dataset_id: str) -> None:
-    """Drop a dataset that was never fully written, so its name is free again."""
+    """Drop a dataset that was never fully written, so its name is free again.
+
+    The folder is moved aside before the row goes, so a new dataset under the same name never
+    writes into a folder that is still being removed.
+    """
+    tombstone = None
     with _FOLDER_LOCK, handle.session() as s:
         dataset = s.get(Dataset, dataset_id)
         if dataset is None:
@@ -153,10 +174,30 @@ def discard(handle: ProjectHandle, dataset_id: str) -> None:
         except AppError:
             folder = None
             log.warning("dataset %s names %r; its folder is left alone", dataset_id, dataset.path)
+        if folder is not None and folder.is_dir():
+            try:
+                tombstone = _move_aside(folder, dataset_id)
+            except OSError as e:  # a file is open: the rows go anyway, the folder is left in place
+                log.warning("could not move %s aside: %s", folder, e)
         s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
         s.delete(dataset)
-    if folder is not None:
-        shutil.rmtree(folder, ignore_errors=True)
+    if tombstone is not None:
+        _remove_quietly(tombstone)
+
+
+def _leftovers(handle: ProjectHandle) -> list[Path]:
+    """Folders named like a tombstone of a real delete: `.deleting-<uuid>`, and not a symlink."""
+    if not handle.datasets_dir.is_dir():
+        return []
+    found = []
+    for p in handle.datasets_dir.glob(f"{TOMBSTONE_PREFIX}*"):
+        try:
+            uuid.UUID(p.name[len(TOMBSTONE_PREFIX) :])
+        except ValueError:
+            continue  # not written by delete_dataset or discard (a dataset from before the name rules)
+        if p.is_dir() and not p.is_symlink() and p.resolve().parent == handle.datasets_dir.resolve():
+            found.append(p)
+    return found
 
 
 def reconcile_tombstones(handle: ProjectHandle) -> None:
@@ -164,32 +205,42 @@ def reconcile_tombstones(handle: ProjectHandle) -> None:
 
     A tombstone whose dataset row still exists is the trace of a delete that never committed (the
     process was killed, the commit failed): the folder goes back to its dataset. Only a tombstone
-    without a row is removed.
+    without a row is removed, and that happens outside the lock.
     """
-    with _FOLDER_LOCK:
-        _reconcile_tombstones(handle)
+    try:
+        with _FOLDER_LOCK:
+            garbage = _restore_tombstones(handle)
+        for leftover in garbage:
+            _remove_quietly(leftover)
+    except Exception as e:  # a leftover must never break a delete or the opening of a project
+        log.warning("could not settle the tombstones of %s: %s", handle.folder, e)
 
 
-def _reconcile_tombstones(handle: ProjectHandle) -> None:
-    if not handle.datasets_dir.is_dir():
-        return
-    for leftover in handle.datasets_dir.glob(f"{TOMBSTONE_PREFIX}*"):
+def _restore_tombstones(handle: ProjectHandle) -> list[Path]:
+    """Give folders back to rows that still exist; return the tombstones that have no row."""
+    garbage = []
+    with handle.session() as s:
+        owned = {(handle.folder / (p or "")).resolve() for p in s.execute(select(Dataset.path)).scalars()}
+    for leftover in _leftovers(handle):
+        if leftover.resolve() in owned:
+            continue  # a dataset really lives there
         dataset_id = leftover.name[len(TOMBSTONE_PREFIX) :]
         try:
             with handle.session() as s:
                 row = s.get(Dataset, dataset_id)
                 path = row.path if row is not None else None
-            if row is not None:
-                target = _own_folder(handle, path or "")
-                if target is not None and not target.exists():
-                    os.replace(leftover, target)
-                    log.warning("restored the folder of dataset %s from %s", dataset_id, leftover)
-                else:
-                    log.warning("dataset %s still exists; %s is left for a person", dataset_id, leftover)
+            if row is None:
+                garbage.append(leftover)
                 continue
-            shutil.rmtree(leftover)  # unlinks hard links and nested junctions; never follows them
-        except Exception as e:  # a leftover must never break a delete or the opening of a project
+            target = _own_folder(handle, path or "")
+            if target is not None and not target.exists():
+                os.replace(leftover, target)
+                log.warning("restored the folder of dataset %s from %s", dataset_id, leftover)
+            else:
+                log.warning("dataset %s still exists; %s is left for a person", dataset_id, leftover)
+        except Exception as e:
             log.warning("could not settle %s yet: %s", leftover, e)
+    return garbage
 
 
 def delete_dataset(handle: ProjectHandle, dataset_id: str) -> None:
@@ -215,9 +266,8 @@ def delete_dataset(handle: ProjectHandle, dataset_id: str) -> None:
                         raise AppError("conflict", f"Dataset {dataset.name} is in use by a running job.", 409)
                 candidate = _dataset_folder_to_remove(handle, s, dataset)
                 if candidate.is_dir():
-                    moved_to = candidate.with_name(f"{TOMBSTONE_PREFIX}{dataset_id}")
                     try:
-                        os.replace(candidate, moved_to)
+                        moved_to = _move_aside(candidate, dataset_id)
                     except OSError as e:
                         raise AppError(
                             "conflict",
@@ -236,7 +286,11 @@ def delete_dataset(handle: ProjectHandle, dataset_id: str) -> None:
                 except OSError as e:  # never mask the real error; the next reconcile retries
                     log.warning("could not put %s back yet: %s", folder, e)
             raise
-        _reconcile_tombstones(handle)
+    # Committed, and out of the lock: removing thousands of files must not hold up other deletes
+    # or the opening of a project (the registry opens projects under its own lock, then takes ours).
+    if tombstone is not None:
+        _remove_quietly(tombstone)
+    reconcile_tombstones(handle)
 
 
 @register_job_type("dataset")

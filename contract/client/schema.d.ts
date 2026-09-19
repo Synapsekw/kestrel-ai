@@ -2547,7 +2547,7 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
-            /** @description a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`) */
+            /** @description a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`), or two classes share a name or a hotkey, or a name is blank (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
