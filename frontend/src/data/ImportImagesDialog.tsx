@@ -81,7 +81,6 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
         settings,
       });
       useJobsStore.getState().upsert(result.job);
-      useJobsStore.getState().setPanelOpen(true);
       onStarted(result);
     } catch (err) {
       pushLog(`import images failed: ${messageOf(err, String(err))}`);

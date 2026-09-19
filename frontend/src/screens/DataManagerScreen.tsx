@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useProject, useSourceNames } from "@/api/project";
+import { useJobsStore } from "@/store/jobs";
 import { EmptyImages } from "@/data/EmptyImages";
+import { importNotice } from "@/data/importNotice";
 import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
 import { ImageTable } from "@/data/ImageTable";
@@ -30,6 +32,13 @@ import { IMAGE_PAGE_SIZE } from "@/api/images";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useNavigationStore } from "@/store/navigation";
 
+const NOTICE_TONE = {
+  info: "text-slate-300",
+  ok: "text-emerald-300",
+  warn: "text-amber-300",
+  error: "text-red-300",
+} as const;
+
 export function DataManagerScreen() {
   const { projectId = "" } = useParams();
   const navigate = useNavigate();
@@ -44,6 +53,10 @@ export function DataManagerScreen() {
   const [selection, setSelection] = useState(EMPTY_SELECTION);
   const [notice, setNotice] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  // The import this screen started; its banner follows the job in the store until dismissed.
+  const [importRun, setImportRun] = useState<{ jobId: string; folder: string } | null>(null);
+  const importJob = useJobsStore((s) => (importRun ? s.jobs[importRun.jobId] : undefined));
+  const importBanner = importRun && importJob ? importNotice(importJob, importRun.folder) : null;
   const [rawFocus, setFocusIndex] = useState(0);
   // Derived, not synced with effects: the focus row is clamped to the list and the selection is
   // pruned to the ids currently listed (React Compiler rule `set-state-in-effect`).
@@ -123,7 +136,8 @@ export function DataManagerScreen() {
           onClose={() => setImporting(false)}
           onStarted={(result) => {
             setImporting(false);
-            setNotice(`Import started for ${result.source.folder} (job ${result.job.id.slice(0, 8)})`);
+            setNotice(null);
+            setImportRun({ jobId: result.job.id, folder: result.source.folder });
           }}
         />
       )}
@@ -156,6 +170,24 @@ export function DataManagerScreen() {
           }}
           onClear={() => setSelection(clearSelection())}
         />
+      )}
+      {importBanner && (
+        <p
+          data-testid="import-notice"
+          role={importBanner.tone === "error" ? "alert" : "status"}
+          className={`flex items-center gap-3 text-xs ${NOTICE_TONE[importBanner.tone]}`}
+        >
+          {importBanner.text}
+          {importBanner.tone !== "info" && (
+            <button
+              type="button"
+              className="text-slate-400 hover:underline"
+              onClick={() => setImportRun(null)}
+            >
+              Dismiss
+            </button>
+          )}
+        </p>
       )}
       {notice && selectedIds.length === 0 && (
         <p role="status" className="text-xs text-emerald-300">

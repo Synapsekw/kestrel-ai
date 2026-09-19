@@ -29,13 +29,15 @@ test("Import images posts the folder with the project's defaults and shows the j
     site: "ahmadia",
     settings: { max_side: 3000, quality: 95, dedupe_threshold: 4, group_regex: REGEX },
   });
+  // The banner reports the import; the jobs panel stays closed until the operator opens it.
+  await expect(page.getByTestId("import-notice")).toContainText("Importing");
   const panel = page.getByRole("dialog", { name: "Jobs" });
-  await expect(panel).toBeVisible();
+  await expect(panel).toBeHidden();
+  await page.getByRole("button", { name: "1 active job" }).click();
   await expect(panel.getByTestId(`job-${JOB}`).getByRole("progressbar")).toHaveAttribute(
     "aria-valuenow",
     "42",
   );
-  await expect(page.getByRole("status").filter({ hasText: "Import started for" })).toBeVisible();
   await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
 });
 
