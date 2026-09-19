@@ -27,7 +27,7 @@ const runWithMockJob = {
   created_at: "2026-09-17T13:00:00Z",
 };
 
-test("estimates and starts a cloud query, then reviews results, promotes and lists the run", async ({
+test("estimates and starts a cloud detection, then reviews results, accepts as labels and lists the run", async ({
   page,
 }) => {
   // The card re-polls the run while its job is active, so the route has to remember the promotion.
@@ -47,16 +47,16 @@ test("estimates and starts a cloud query, then reviews results, promotes and lis
   );
   await page.goto(`/p/${P}/query`);
   await unlabeled;
-  await expect(page.getByRole("heading", { name: "Query" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Detect" })).toBeVisible();
   await expect(page.getByLabel("Model", { exact: true })).toHaveValue(MODEL);
   await expect(page.getByTestId("image-count")).toHaveText("2 images selected");
   const grouped = page.waitForRequest((r) => r.url().includes("group_key=0031"));
   await page.getByLabel("Images", { exact: true }).selectOption("group");
   // The project's flights come from the stats: a list, not a key to type.
-  await page.getByLabel("Group key").selectOption("0031");
+  await page.getByLabel("Flight or tile").selectOption("0031");
   await grouped;
 
-  await page.getByLabel("Cloud provider").check();
+  await page.getByRole("radio", { name: "Cloud provider" }).click();
   // A cloud run costs money: it cannot start before its estimate was shown.
   await expect(page.getByRole("button", { name: "Start" })).toBeDisabled();
   await expect(page.getByLabel("Provider", { exact: true })).toHaveValue("anthropic");
@@ -108,7 +108,7 @@ test("estimates and starts a cloud query, then reviews results, promotes and lis
   const confirmed = page.waitForRequest(
     (r) => r.method() === "POST" && r.url().endsWith(`/query-runs/${RUN}/promote`),
   );
-  await page.getByRole("button", { name: "Accept 6 boxes" }).click();
+  await page.getByRole("button", { name: "Accept 6 boxes as labels" }).click();
   expect((await confirmed).postDataJSON()).toEqual({ min_confidence: 0.6, dry_run: false });
   promotedAt = "2026-09-17T13:30:00Z";
   await expect(page.getByRole("status").filter({ hasText: "6 boxes accepted" })).toBeVisible();
@@ -137,7 +137,8 @@ test("a local-model run over the first N images; a 501 estimate shows the note",
   await page.getByLabel("Images", { exact: true }).selectOption("first_n");
   await page.getByLabel("Number of images").fill("2");
   await firstN;
-  await page.getByLabel("Tiling").uncheck();
+  await page.getByRole("button", { name: /^Tiling/ }).click();
+  await page.getByLabel("Tile large images").uncheck();
   const estimated = page.waitForRequest(
     (r) => r.method() === "POST" && r.url().endsWith("/query-runs/estimate"),
   );
@@ -166,8 +167,8 @@ test("a local-model run over the first N images; a 501 estimate shows the note",
   await page.getByLabel("Confidence", { exact: true }).fill("0.4");
   await expect(page.getByTestId("estimate")).toHaveCount(0);
   await page.getByRole("button", { name: "Estimate" }).click();
-  await expect(page.getByRole("note")).toContainText("Query runs are not available yet");
-  await expect(page.getByRole("heading", { name: "Query" })).toBeVisible();
+  await expect(page.getByRole("note")).toContainText("Detection runs are not available yet");
+  await expect(page.getByRole("heading", { name: "Detect" })).toBeVisible();
 });
 
 test("an interrupted run offers Resume, which re-submits the run's job", async ({ page }) => {

@@ -52,7 +52,9 @@ describe("query form model", () => {
     expect(validateQueryForm({ ...cloud, query: " " }, 2, exampleProviders)).toBe(
       "Describe what to find, for example: dump trucks.",
     );
-    expect(validateQueryForm({ ...local, mode: "group" }, 2, exampleProviders)).toBe("Enter a group key.");
+    expect(validateQueryForm({ ...local, mode: "group" }, 2, exampleProviders)).toBe(
+      "Choose a flight or tile.",
+    );
     expect(validateQueryForm({ ...local, mode: "first_n", firstN: "0" }, 2, exampleProviders)).toBe(
       "Number of images must be a whole number of at least 1.",
     );

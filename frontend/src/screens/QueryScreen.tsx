@@ -26,10 +26,10 @@ import { useImageSelection } from "@/query/useImageSelection";
 import { useQueryRuns } from "@/query/useQueryRuns";
 import { useJobsStore } from "@/store/jobs";
 import { useNavigationStore } from "@/store/navigation";
+import { Alert, Button, SkeletonRows, cx, focusRing } from "@/ui";
 
 const EMPTY: string[] = [];
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+const link = cx("rounded-sm font-medium text-accent hover:underline", focusRing);
 
 export function QueryScreen() {
   const { projectId = "" } = useParams();
@@ -128,27 +128,28 @@ export function QueryScreen() {
   };
 
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Query</h1>
+    <section className="flex max-w-5xl flex-col gap-6">
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="flex min-w-0 flex-col gap-1">
+          <h1 className="text-xl font-semibold tracking-tight">Detect</h1>
+          <p data-testid="query-intro" className="text-sm text-muted">
+            Run a model over images; it suggests boxes for you to{" "}
+            <Link to={`/p/${projectId}/review`} className={link}>
+              review
+            </Link>
+            .
+          </p>
+        </div>
         {runId && (
-          <button type="button" className={`${secondary} ml-auto`} onClick={() => setParams({})}>
-            New query
-          </button>
+          <Button variant="primary" icon="plus" className="ml-auto" onClick={() => setParams({})}>
+            New detection
+          </Button>
         )}
       </div>
-      <p data-testid="query-intro" className="max-w-3xl text-sm text-slate-400">
-        Run a model over images to find machinery. What it finds arrives as proposals: dashed boxes that wait
-        in the{" "}
-        <Link to={`/p/${projectId}/review`} className="text-orange-300 hover:underline">
-          Review queue
-        </Link>{" "}
-        until a person accepts or rejects them.
-      </p>
       {runId ? (
         <RunCard projectId={projectId} runId={runId} />
       ) : (
-        <div className="flex max-w-3xl flex-col gap-5">
+        <div className="flex max-w-3xl flex-col gap-6 rounded-lg border border-line bg-panel p-5">
           <SourcePicker
             projectId={projectId}
             form={effectiveForm}
@@ -169,65 +170,55 @@ export function QueryScreen() {
             loading={selection.loading}
           />
           <TilingFields form={effectiveForm} onChange={patch} />
-          {selection.error && (
-            <p role="alert" className="text-xs text-red-300">
-              {selection.error}
-            </p>
-          )}
-          {currentEstimate && <EstimateCard estimate={currentEstimate} local={local} />}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className={secondary}
-              onClick={doEstimate}
-              disabled={busy || selection.loading}
-            >
-              Estimate
-            </button>
-            <button
-              type="button"
-              className={primary}
-              onClick={doStart}
-              disabled={busy || selection.loading || !(local || currentEstimate)}
-            >
-              Start
-            </button>
-            <span className="text-xs text-slate-400">
-              {local
-                ? "Runs on this computer at no cost; Estimate shows how many tiles it takes."
-                : "Estimate the cost first; Start then runs exactly that request."}
-            </span>
+          {selection.error && <Alert tone="danger">{selection.error}</Alert>}
+          <div className="flex flex-col gap-3 border-t border-line pt-5">
+            {currentEstimate && <EstimateCard estimate={currentEstimate} local={local} />}
+            <div className="flex flex-wrap items-center gap-2">
+              <Button onClick={doEstimate} disabled={busy || selection.loading}>
+                Estimate
+              </Button>
+              <Button
+                variant="primary"
+                icon="play"
+                onClick={doStart}
+                disabled={busy || selection.loading || !(local || currentEstimate)}
+              >
+                Start
+              </Button>
+              <span className="text-[13px] text-muted">
+                {local
+                  ? "Runs on this computer at no cost; Estimate shows how many tiles it takes."
+                  : "Estimate the cost first; Start then runs exactly that request."}
+              </span>
+            </div>
           </div>
         </div>
       )}
       {unavailable && (
-        <p
-          role="note"
-          className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
-        >
-          Query runs are not available yet (they arrive with the inference backend).
-        </p>
+        <div role="note" className="max-w-3xl">
+          <Alert tone="info" role="status">
+            Detection runs are not available yet (they arrive with the inference backend).
+          </Alert>
+        </div>
       )}
       {error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
+        <Alert tone="danger" className="max-w-3xl">
           {error}
-        </p>
+        </Alert>
       )}
-      <div className="flex max-w-3xl flex-col gap-2">
-        <h2 className="text-lg font-medium">Run history</h2>
-        {history.error && (
-          <p role="alert" className="text-xs text-red-300">
-            {history.error}
-          </p>
-        )}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-base font-semibold">Run history</h2>
+        {history.error && <Alert tone="danger">{history.error}</Alert>}
         {history.unavailable ? (
-          <p role="note" className="text-xs text-slate-400">
-            Query runs are not available yet (they arrive with the inference backend).
+          <p role="note" className="text-sm text-muted">
+            Detection runs are not available yet (they arrive with the inference backend).
           </p>
+        ) : history.loading && history.runs.length === 0 ? (
+          <SkeletonRows rows={3} columns={4} />
         ) : (
           <RunHistory runs={history.runs} selectedId={runId} onSelect={(id) => setParams({ run: id })} />
         )}
-      </div>
+      </section>
     </section>
   );
 }

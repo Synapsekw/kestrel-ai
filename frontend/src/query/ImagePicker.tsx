@@ -1,3 +1,5 @@
+import { useId } from "react";
+import { Field, Input, Select } from "@/ui";
 import type { ImageMode, QueryForm } from "./queryModel";
 
 interface Props {
@@ -10,75 +12,69 @@ interface Props {
   groups: { group_key: string; image_count: number }[];
 }
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm disabled:opacity-50";
-const label = "flex flex-col gap-1 text-xs text-slate-400";
-
 export function ImagePicker({ form, onChange, preloadedCount, count, loading, groups }: Props) {
+  const id = useId();
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="text-sm font-medium">Images</legend>
-      <div className="flex flex-wrap items-end gap-3">
-        <label className={label}>
-          Selection
-          <select
-            aria-label="Images"
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-start gap-4">
+        <Field label="Images" htmlFor={`${id}-mode`} className="w-64">
+          <Select
+            id={`${id}-mode`}
             value={form.mode}
             onChange={(e) => onChange({ mode: e.target.value as ImageMode })}
-            className={input}
           >
             <option value="selection" disabled={preloadedCount === 0}>
-              Data Manager selection ({preloadedCount})
+              Selection from Images ({preloadedCount})
             </option>
             <option value="unlabeled">All unlabeled images</option>
-            <option value="group">Images in a group</option>
+            <option value="group">Images in a flight or tile</option>
             <option value="first_n">First N images</option>
-          </select>
-        </label>
+          </Select>
+        </Field>
         {form.mode === "group" && (
-          <label className={label}>
-            Group key
+          <Field label="Flight or tile" htmlFor={`${id}-group`} className="w-64">
             {groups.length > 0 ? (
-              <select
-                aria-label="Group key"
+              <Select
+                id={`${id}-group`}
                 value={form.groupKey}
                 onChange={(e) => onChange({ groupKey: e.target.value })}
-                className={input}
               >
-                <option value="">Choose a group</option>
+                <option value="">Choose a flight or tile</option>
                 {groups.map((g) => (
                   <option key={g.group_key} value={g.group_key}>
                     {g.group_key} ({g.image_count} {g.image_count === 1 ? "image" : "images"})
                   </option>
                 ))}
-              </select>
+              </Select>
             ) : (
-              <input
-                aria-label="Group key"
+              <Input
+                id={`${id}-group`}
                 value={form.groupKey}
                 onChange={(e) => onChange({ groupKey: e.target.value })}
-                className={input}
               />
             )}
-          </label>
+          </Field>
         )}
         {form.mode === "first_n" && (
-          <label className={label}>
-            Number of images
-            <input
-              aria-label="Number of images"
+          <Field
+            label="Number of images"
+            htmlFor={`${id}-first-n`}
+            hint="In file-name order, labeled images included."
+          >
+            <Input
+              id={`${id}-first-n`}
               type="number"
               min={1}
               value={form.firstN}
               onChange={(e) => onChange({ firstN: e.target.value })}
-              className={`${input} w-24`}
+              className="w-28 tabular-nums"
             />
-            <span>In file-name order, labeled images included.</span>
-          </label>
+          </Field>
         )}
       </div>
-      <p data-testid="image-count" className="text-xs text-slate-300">
+      <p data-testid="image-count" className="text-[13px] tabular-nums text-muted">
         {loading ? "Counting images…" : `${count} ${count === 1 ? "image" : "images"} selected`}
       </p>
-    </fieldset>
+    </div>
   );
 }

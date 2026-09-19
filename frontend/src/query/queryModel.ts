@@ -57,7 +57,7 @@ export function validateQueryForm(f: QueryForm, imageCount: number, providers: P
     if (!p.has_key) return `No API key stored for ${providerLabel(p.name)}. Add one in Settings.`;
     if (!f.query.trim()) return "Describe what to find, for example: dump trucks.";
   }
-  if (f.mode === "group" && !f.groupKey.trim()) return "Enter a group key.";
+  if (f.mode === "group" && !f.groupKey.trim()) return "Choose a flight or tile.";
   if (f.mode === "first_n") {
     const n = whole(f.firstN);
     if (n === null || n < 1) return "Number of images must be a whole number of at least 1.";

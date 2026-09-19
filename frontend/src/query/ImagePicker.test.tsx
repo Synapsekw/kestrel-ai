@@ -21,7 +21,7 @@ describe("ImagePicker", () => {
         groups={groups}
       />,
     );
-    const select = screen.getByLabelText("Group key");
+    const select = screen.getByLabelText("Flight or tile");
     expect(select.tagName).toBe("SELECT");
     expect(screen.getByRole("option", { name: "0031 (697 images)" })).toBeInTheDocument();
     fireEvent.change(select, { target: { value: "0033" } });
@@ -39,7 +39,7 @@ describe("ImagePicker", () => {
         groups={[]}
       />,
     );
-    expect(screen.getByLabelText("Group key").tagName).toBe("INPUT");
+    expect(screen.getByLabelText("Flight or tile").tagName).toBe("INPUT");
   });
 
   it("explains that the first N images are taken in file order and may include labeled ones", () => {

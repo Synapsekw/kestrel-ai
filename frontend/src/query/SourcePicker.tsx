@@ -1,8 +1,10 @@
+import { useId } from "react";
 import { Link } from "react-router-dom";
 import type { Model, Provider, ProviderName } from "@contract/client";
 import { providerLabel } from "@/api/providers";
 import { kindLabel } from "@/models/modelLabels";
-import type { QueryForm } from "./queryModel";
+import { Alert, Field, Input, Segmented, Select, cx, focusRing } from "@/ui";
+import type { QueryForm, QueryKind } from "./queryModel";
 
 interface Props {
   projectId: string;
@@ -16,8 +18,12 @@ interface Props {
   providersUnavailable: boolean;
 }
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm disabled:opacity-50";
-const label = "flex flex-col gap-1 text-xs text-slate-400";
+const link = cx("rounded-sm font-medium text-accent hover:underline", focusRing);
+
+const SOURCES: { value: QueryKind; label: string }[] = [
+  { value: "local_model", label: "This project's models" },
+  { value: "cloud_provider", label: "Cloud provider" },
+];
 
 export function SourcePicker({
   projectId,
@@ -30,105 +36,102 @@ export function SourcePicker({
   providers,
   providersUnavailable,
 }: Props) {
+  const id = useId();
   const chosen = providers.find((p) => p.name === form.provider);
   return (
-    <fieldset className="flex flex-col gap-3">
-      <legend className="text-sm font-medium">Source</legend>
-      <div className="flex gap-4 text-sm">
-        <label className="flex items-center gap-1">
-          <input
-            type="radio"
-            name="kind"
-            aria-label="Local model"
-            checked={form.kind === "local_model"}
-            onChange={() => onChange({ kind: "local_model" })}
-          />
-          Local model
-        </label>
-        <label className="flex items-center gap-1">
-          <input
-            type="radio"
-            name="kind"
-            aria-label="Cloud provider"
-            checked={form.kind === "cloud_provider"}
-            onChange={() => onChange({ kind: "cloud_provider" })}
-          />
-          Cloud provider
-        </label>
-      </div>
+    <div className="flex flex-col gap-3">
+      <Segmented
+        label="Source"
+        options={SOURCES}
+        value={form.kind}
+        onChange={(kind) => onChange({ kind })}
+        className="w-fit"
+      />
       {form.kind === "local_model" ? (
-        <label className={label}>
-          Model
-          <select
-            aria-label="Model"
-            value={form.modelId}
-            onChange={(e) => onChange({ modelId: e.target.value })}
-            disabled={modelsUnavailable}
-            className={input}
+        <div className="flex flex-col gap-2">
+          <Field
+            label="Model"
+            htmlFor={`${id}-model`}
+            hint={
+              modelsUnavailable ? (
+                <span role="note">The model registry is not available yet.</span>
+              ) : !modelsLoading && !modelsError && models.length === 0 ? (
+                <span>
+                  No models yet.{" "}
+                  <Link to={`/p/${projectId}/models`} className={link}>
+                    Add a starter model
+                  </Link>{" "}
+                  to get started.
+                </span>
+              ) : undefined
+            }
+            className="max-w-md"
           >
-            <option value="">Choose a model</option>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({kindLabel(m.kind)})
-              </option>
-            ))}
-          </select>
-          {modelsUnavailable && <span role="note">The model registry is not available yet.</span>}
+            <Select
+              id={`${id}-model`}
+              value={form.modelId}
+              onChange={(e) => onChange({ modelId: e.target.value })}
+              disabled={modelsUnavailable}
+            >
+              <option value="">Choose a model</option>
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({kindLabel(m.kind)})
+                </option>
+              ))}
+            </Select>
+          </Field>
           {modelsError && (
-            <span role="alert" className="text-red-300">
+            <Alert tone="danger" className="max-w-md">
               The models could not be loaded: {modelsError}
-            </span>
+            </Alert>
           )}
-          {!modelsLoading && !modelsUnavailable && !modelsError && models.length === 0 && (
-            <span>
-              No models yet.{" "}
-              <Link to={`/p/${projectId}/models`} className="text-orange-300 hover:underline">
-                Add a starter model
-              </Link>{" "}
-              to get started.
-            </span>
-          )}
-        </label>
+        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-          <label className={label}>
-            Provider
-            <select
-              aria-label="Provider"
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <Field
+            label="Provider"
+            htmlFor={`${id}-provider`}
+            hint={
+              providersUnavailable ? (
+                <span role="note">Cloud providers are not available yet.</span>
+              ) : chosen && !chosen.has_key ? (
+                <span role="note">
+                  No API key stored for {providerLabel(chosen.name)}.{" "}
+                  <Link to="/settings" className={link}>
+                    Add the key in App settings
+                  </Link>
+                </span>
+              ) : undefined
+            }
+          >
+            <Select
+              id={`${id}-provider`}
               value={form.provider}
               onChange={(e) => onChange({ provider: e.target.value as ProviderName })}
               disabled={providersUnavailable}
-              className={input}
             >
               {providers.map((p) => (
                 <option key={p.name} value={p.name} disabled={!p.has_key}>
                   {providerLabel(p.name)} ({p.model_name}){p.has_key ? "" : " (no key stored)"}
                 </option>
               ))}
-            </select>
-            {providersUnavailable && <span role="note">Cloud providers are not available yet.</span>}
-            {chosen && !chosen.has_key && (
-              <span role="note">
-                No API key stored for {providerLabel(chosen.name)}.{" "}
-                <Link to="/settings" className="text-orange-300 hover:underline">
-                  Add the key in App settings
-                </Link>
-              </span>
-            )}
-          </label>
-          <label className={label}>
-            Query
-            <input
-              aria-label="Query"
+            </Select>
+          </Field>
+          <Field
+            label="Query"
+            htmlFor={`${id}-query`}
+            hint="Free text describing what to find; answers are constrained to the project classes."
+          >
+            <Input
+              id={`${id}-query`}
               value={form.query}
               onChange={(e) => onChange({ query: e.target.value })}
               placeholder="dump trucks"
-              className={input}
             />
-            <span>Free text describing what to find; answers are constrained to the project classes.</span>
-          </label>
+          </Field>
         </div>
       )}
-    </fieldset>
+    </div>
   );
 }
