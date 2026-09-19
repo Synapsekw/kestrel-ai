@@ -93,7 +93,7 @@ describe("DatasetsScreen", () => {
     );
   });
 
-  it("shows the not-available note on 501, with analyst copy (M5d)", async () => {
+  it("shows the not-available note on 501, with a real recovery step (M5d)", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/datasets$/, status: 501, body: errorBody("not_implemented", "later") },
     ]);
@@ -102,7 +102,22 @@ describe("DatasetsScreen", () => {
       route: `/p/${PROJECT_ID}/datasets`,
       path: "/p/:projectId/datasets",
     });
-    expect(await screen.findByRole("note")).toHaveTextContent("Datasets are not available.");
+    expect(await screen.findByRole("note")).toHaveTextContent(
+      "Datasets are not available. Restart the app; if it persists, use Copy diagnostics in the error dialog.",
+    );
+  });
+
+  it("shows only the empty state with zero datasets, even with an unknown ?dataset=", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
+    ]);
+    renderWithProviders(<DatasetsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/datasets?dataset=not-a-real-id`,
+      path: "/p/:projectId/datasets",
+    });
+    expect(await screen.findByText(/No datasets yet/)).toBeInTheDocument();
+    expect(screen.queryByText("That dataset no longer exists.")).not.toBeInTheDocument();
   });
 
   it("opens the new-dataset form", async () => {
