@@ -208,15 +208,16 @@ function EditorBody({
             {error}
           </p>
         )}
-        {notice && (
-          <p
-            role="status"
-            className="border-b border-slate-800 bg-slate-900 px-3 py-1 text-xs text-slate-300"
-          >
-            {notice}
-          </p>
-        )}
-        <div className="min-h-0 flex-1">
+        <div className="relative min-h-0 flex-1">
+          {/* Overlaid, so the image does not jump when a notice comes or goes. */}
+          {notice && (
+            <p
+              role="status"
+              className="absolute inset-x-0 top-0 z-10 border-b border-slate-800 bg-slate-900/90 px-3 py-1 text-xs text-slate-300"
+            >
+              {notice}
+            </p>
+          )}
           <EditorCanvas
             src={src}
             onBackgroundMouseDown={onBackgroundMouseDown}

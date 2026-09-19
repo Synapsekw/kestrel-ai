@@ -1,11 +1,26 @@
 import { useEffect, useState } from "react";
 import { fetchBoxes } from "@/api/boxes";
 import { useApi } from "@/api/client";
-import { isNotImplemented, messageOf } from "@/api/errors";
+import { ApiFailure, isNotImplemented, messageOf } from "@/api/errors";
 import { fetchImage, preannotateImage } from "@/api/images";
 import { pushLog } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
 import { useEditorStore } from "@/store/editor";
+
+const PREANNOTATING = "Pre-annotating with the project's model…";
+
+function proposalsNotice(n: number): string {
+  if (n === 0)
+    return "The pre-annotation model found nothing on this image. General-purpose weights rarely fire on aerial frames; a model trained on this project's labels will do better.";
+  return `${n} ${n === 1 ? "proposal" : "proposals"} from the pre-annotation model (dashed). A accepts all, R rejects all.`;
+}
+
+function failureNotice(e: unknown): string {
+  if (isNotImplemented(e)) return "Pre-annotation is not available yet";
+  if (e instanceof ApiFailure && e.status === 409)
+    return "The GPU is busy with a training or a detection run, so this image was not pre-annotated. Reopen it later.";
+  return `Pre-annotation failed: ${messageOf(e, "unknown error")}`;
+}
 
 /**
  * Loads the image record and its boxes into the editor store, runs pre-annotation on open when the
@@ -35,24 +50,17 @@ export function useEditorImage(
         setSettledId(imageId);
         const hasPending = boxes.some((b) => b.review_state === "unreviewed");
         if (hasPending || !preannotationModelId) return;
+        useEditorStore.getState().setNotice(PREANNOTATING);
         try {
           const result = await preannotateImage(api, projectId, imageId);
           if (cancelled) return;
           const store = useEditorStore.getState();
           result.items.forEach((b) => store.upsertBox(b));
-          const n = result.items.length;
-          if (!result.skipped)
-            store.setNotice(`${n} ${n === 1 ? "proposal" : "proposals"} from the pre-annotation model`);
+          store.setNotice(result.skipped ? null : proposalsNotice(result.items.length));
         } catch (e) {
           if (cancelled) return;
           pushLog(`preannotate failed: ${messageOf(e, String(e))}`);
-          useEditorStore
-            .getState()
-            .setNotice(
-              isNotImplemented(e)
-                ? "Pre-annotation is not available yet"
-                : `Pre-annotation failed: ${messageOf(e, "unknown error")}`,
-            );
+          useEditorStore.getState().setNotice(failureNotice(e));
         }
       } catch (e) {
         if (cancelled) return;
