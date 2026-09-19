@@ -46,12 +46,15 @@ def test_weights_dir_prefers_the_setting_then_the_frozen_bundle_then_the_checkou
     tmp_path, monkeypatch, settings
 ):
     assert starter.weights_dir(settings.model_copy(update={"starter_weights_dir": tmp_path})) == tmp_path
+    # The `settings` fixture pins starter_weights_dir (for hermeticity elsewhere); None here
+    # exercises the frozen-bundle and checkout fallbacks this function falls through to.
+    unset = settings.model_copy(update={"starter_weights_dir": None})
     monkeypatch.setattr("sys._MEIPASS", str(tmp_path / "bundle"), raising=False)
     monkeypatch.setattr("sys.frozen", True, raising=False)
-    assert starter.weights_dir(settings) == tmp_path / "bundle" / "starter_weights"
+    assert starter.weights_dir(unset) == tmp_path / "bundle" / "starter_weights"
     monkeypatch.setattr("sys.frozen", False, raising=False)
-    assert starter.weights_dir(settings).name == "starter_weights"
-    assert starter.weights_dir(settings).parent.name == "backend"
+    assert starter.weights_dir(unset).name == "starter_weights"
+    assert starter.weights_dir(unset).parent.name == "backend"
 
 
 def test_the_api_lists_and_imports(client, project_id, folder, monkeypatch):

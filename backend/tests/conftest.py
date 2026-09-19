@@ -31,7 +31,14 @@ COLOURS = ["#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#e
 
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
-    return Settings(token=TOKEN, data_dir=tmp_path / "appdata", port=0)
+    return Settings(
+        token=TOKEN,
+        data_dir=tmp_path / "appdata",
+        port=0,
+        # An absent folder: every starter is `available: False` and import-starter answers 404
+        # without ever loading a checkpoint, so the suite never imports torch through this path.
+        starter_weights_dir=tmp_path / "starter_weights",
+    )
 
 
 @pytest.fixture
