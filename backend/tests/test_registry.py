@@ -81,6 +81,8 @@ def test_import_rejects_bad_weights_paths(client, project_id, weights_path):
     r = client.post(f"{models_url(project_id)}/import", json={"name": "x", "weights_path": weights_path})
     assert r.status_code == 404, r.text
     assert r.json()["error"]["code"] == "not_found"
+    # The operator reads the path as typed: no Python repr (quotes, doubled backslashes).
+    assert f"no usable weights at {weights_path}:" in r.json()["error"]["message"]
 
 
 def test_import_rejects_an_empty_weights_path(client, project_id):

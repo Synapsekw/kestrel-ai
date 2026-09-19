@@ -57,7 +57,7 @@ def import_model(handle: ProjectHandle, name: str, weights_path: str, class_alia
     if not source.is_absolute() or source.suffix.lower() != ".pt" or not source.is_file():
         raise AppError(
             "not_found",
-            f"no usable weights at {weights_path!r}: an absolute path to an existing .pt file is required",
+            f"no usable weights at {weights_path}: an absolute path to an existing .pt file is required",
             404,
         )
 
