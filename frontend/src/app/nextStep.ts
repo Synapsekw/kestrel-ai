@@ -41,9 +41,9 @@ export function nextStep(projectId: string, p: ProjectProgress): NextStep | null
     return p.labeled < USEFUL_LABELED
       ? {
           text: `Keep labeling (${p.labeled} of ${p.images} labeled; a first useful model needs about ${USEFUL_LABELED}), or freeze a dataset and try a training.`,
-          to: at("data"),
+          to: at("datasets"),
         }
-      : { text: `Freeze the ${p.labeled} labeled images into a dataset.`, to: at("data") };
+      : { text: `Freeze the ${p.labeled} labeled images into a dataset.`, to: at("datasets") };
   if (p.models === 0)
     return { text: "Add a starter model: training needs one as its base.", to: at("models") };
   if (p.trainedModels === 0) return { text: "Train a model on the dataset.", to: at("train") };

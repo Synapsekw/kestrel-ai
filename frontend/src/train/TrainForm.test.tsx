@@ -52,6 +52,28 @@ describe("TrainForm", () => {
     });
   });
 
+  it("preselects the dataset named by initialDatasetId over the newest one", () => {
+    const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset, older]}
+        models={[exampleModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+        initialDatasetId={older.id}
+      />,
+      { api },
+    );
+    expect(screen.getByLabelText("Dataset")).toHaveValue(older.id);
+    expect(screen.getByLabelText("Model name")).toHaveValue("v0-yolo11m-coco");
+  });
+
   it("refuses an invalid form and explains missing datasets", () => {
     const { api } = fakeClient([]);
     const onStart = vi.fn();

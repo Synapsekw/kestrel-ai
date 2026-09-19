@@ -4,6 +4,7 @@ import { ProjectsScreen } from "@/screens/ProjectsScreen";
 import { DataManagerScreen } from "@/screens/DataManagerScreen";
 import { EditorScreen } from "@/screens/EditorScreen";
 import { ReviewScreen } from "@/screens/ReviewScreen";
+import { DatasetsScreen } from "@/screens/DatasetsScreen";
 import { ModelsScreen } from "@/screens/ModelsScreen";
 import { TrainScreen } from "@/screens/TrainScreen";
 import { QueryScreen } from "@/screens/QueryScreen";
@@ -20,6 +21,7 @@ export const router = createBrowserRouter([
       { path: "p/:projectId/data", element: <DataManagerScreen /> },
       { path: "p/:projectId/edit/:imageId", element: <EditorScreen /> },
       { path: "p/:projectId/review", element: <ReviewScreen /> },
+      { path: "p/:projectId/datasets", element: <DatasetsScreen /> },
       { path: "p/:projectId/models", element: <ModelsScreen /> },
       { path: "p/:projectId/train", element: <TrainScreen /> },
       { path: "p/:projectId/query", element: <QueryScreen /> },

@@ -64,6 +64,20 @@ describe("TrainScreen", () => {
     expect(screen.getByRole("button", { name: /Show/ })).toBeInTheDocument();
   });
 
+  it("preselects the dataset named by ?dataset=", async () => {
+    const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
+    const { api } = fakeClient([
+      { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset, older], next_cursor: null } },
+      { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
+    ]);
+    renderWithProviders(<TrainScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/train?dataset=${older.id}`,
+      path: "/p/:projectId/train",
+    });
+    await waitFor(() => expect(screen.getByLabelText("Dataset")).toHaveValue(older.id));
+  });
+
   it("shows the not-available note on 501 without breaking the form", async () => {
     const { api } = fakeClient([
       ...lists,
