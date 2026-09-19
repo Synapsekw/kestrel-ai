@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import time
 from datetime import datetime
@@ -24,9 +25,14 @@ from app.jobs.runner import JobContext
 
 CARD_PROGRESS_EVERY = 50
 PARTIAL_PREFIX = ".partial-"
+PARTIAL_NAME_RE = re.compile(r"^\.partial-\d{4}-\d{2}-\d{2}_\d{6}(_\d+)?$")
 RENAME_RETRIES = 5
 RENAME_RETRY_DELAY_S = 0.1
 ACTIVE_JOB_STATES = ("queued", "running")
+# Recorded once, when this module first loads (effectively "when this process started"): the sweep
+# on project open must never touch a partial folder younger than that, since it could belong to an
+# export this same process is still writing (m1).
+_PROCESS_STARTED_AT = time.time()
 
 FORMAT_LABEL = {
     "csv": "Tables",
@@ -112,31 +118,53 @@ def _has_active_results_export(handle) -> bool:
     return row is not None
 
 
+def _own_partial_folder(exports_dir: Path, entry: Path) -> bool:
+    """True only when `entry` is genuinely this project's own `.partial-<stamp>[_n]` folder.
+
+    Three independent guards, because a wrong answer here deletes a finished export: the name must
+    match exactly what `_reserve_partial_folder` writes (never a person's own `.partial-notes`);
+    `resolve()` must land back on a same-named direct child of `exports_dir`. `is_symlink()` alone
+    cannot be trusted for this: on Windows a directory junction is *not* reported as a symlink, yet
+    `resolve()` still follows it, so a junction `.partial-x` -> `2026-09-19_101500` would otherwise
+    slip through — its resolved name differs from `entry`'s own name, which this catches. The
+    caller still removes `entry` itself, never the resolved path, so even a reparse point that
+    somehow matched every check here only ever has itself, not its target, deleted.
+    """
+    if not PARTIAL_NAME_RE.match(entry.name):
+        return False
+    try:
+        resolved = entry.resolve()
+    except OSError:
+        return False
+    root = exports_dir.resolve()
+    return (
+        resolved.parent == root
+        and resolved.name.casefold() == entry.name.casefold()
+        and resolved.is_dir()
+    )
+
+
 def sweep_partial_exports(handle) -> None:
     """Removes `exports/.partial-<stamp>` folders a crash left behind (spec G2, N2).
 
-    Only ever removes an entry that is directly named `.partial-*`, is not a symlink, and really
-    resolves to a direct child of this project's `exports` folder (never a link pointing somewhere
-    else). Never runs while a `results_export` job for this project is queued or running — there
-    should be none at project-open time, when this is called, but the check costs nothing and
-    removes any doubt if that ever changes.
+    Never touches anything while a `results_export` job for this project is queued or running, nor
+    a folder younger than this process itself (m1: it could belong to an export this very process
+    is still writing, started the instant after this swept ran but before it returned).
     """
     exports_dir = handle.exports_dir
     if not exports_dir.is_dir():
         return
     if _has_active_results_export(handle):
         return
-    root = exports_dir.resolve()
     for entry in exports_dir.glob(f"{PARTIAL_PREFIX}*"):
-        if entry.is_symlink():
+        if not _own_partial_folder(exports_dir, entry):
             continue
         try:
-            resolved = entry.resolve()
+            if entry.stat().st_mtime >= _PROCESS_STARTED_AT:
+                continue
         except OSError:
             continue
-        if resolved.parent != root or not resolved.is_dir():
-            continue
-        shutil.rmtree(resolved, ignore_errors=True)
+        shutil.rmtree(entry, ignore_errors=True)
 
 
 def _box_count(images: list[ExportImage]) -> int:
