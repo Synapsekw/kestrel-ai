@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
@@ -218,7 +219,21 @@ def run_infer(ctx: JobContext) -> dict:
             ctx.publish("boxes.changed", {"image_ids": [image_id]})
         ctx.progress(done / len(image_ids), f"{done} / {len(image_ids)} images, {totals['boxes']} boxes")
     ctx.log.info("run %s finished: %s", run.id, totals)
+    _drop_local_tile_cache(ctx, run, totals)
     return {"query_run_id": run.id, "images": len(image_ids), **totals}
+
+
+def _drop_local_tile_cache(ctx: JobContext, run: QueryRun, totals: dict) -> None:
+    """A complete local run needs no resume and can be repeated for free, so its cache goes.
+
+    Cloud caches stay: those tiles were paid for and hold the provider's raw answers. A run with
+    failed tiles keeps its cache too, because a resume only repeats what is missing.
+    """
+    if run.kind != "local_model" or totals["failed_tiles"]:
+        return
+    run_dir = tiles_dir(ctx.project, run.id).parent
+    if run_dir.parent == ctx.project.runs_dir / "query-runs":
+        shutil.rmtree(run_dir, ignore_errors=True)
 
 
 def _count_boxes(ctx: JobContext, run: QueryRun, image_id: str) -> int:

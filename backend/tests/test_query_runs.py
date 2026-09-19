@@ -448,6 +448,23 @@ def test_a_local_run_writes_model_provenance(client, handle, job_context, use_pr
     assert {r.provenance_kind for r in rows} == {"local_model"}
     assert {r.model_id for r in rows} == {model_id}
     assert all(r.provider is None for r in rows)
+    # A finished local run can be reproduced for free: its tile cache is not kept.
+    from app.inference.service import tiles_dir
+
+    assert not tiles_dir(handle, run.id).exists()
+    assert not tiles_dir(handle, run.id).parent.exists()
+
+
+def test_a_finished_cloud_run_keeps_its_tile_cache(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep
+):
+    """Cloud tiles were paid for and hold the raw answers; only local caches are dropped."""
+    from app.inference.service import tiles_dir
+
+    use_provider(FakeProvider())
+    out = run_and_wait(client, wait_job, project_id, frames)
+    assert out["job"]["state"] == "succeeded"
+    assert any(tiles_dir(handle, out["run"]["id"]).rglob("*.json"))
 
 
 # ------------------------------------------------------------ list and promote
