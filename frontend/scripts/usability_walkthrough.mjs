@@ -195,9 +195,19 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
       await sleep(600);
     }
   }
+  // One more image, without machinery: N marks it empty and it counts as labeled.
+  await page.keyboard.press("Control+ArrowRight");
+  await sleep(1500);
+  const before = await api("GET", `/projects/${projectId}/stats`);
+  await page.keyboard.press("n");
+  const toggle = page.getByRole("button", { name: /Marked empty/ });
+  check("N marks the image as empty", await visible(toggle));
+  check("the toggle shows its state", (await toggle.getAttribute("aria-pressed")) === "true");
+  await snap("editor-marked-empty");
   await sleep(1500);
   const stats = await api("GET", `/projects/${projectId}/stats`);
-  check("labeled images are counted", stats.labeled_count >= cfg.label, `${stats.labeled_count} labeled`);
+  check("an empty image counts as labeled", stats.labeled_count === before.labeled_count + 1, `${before.labeled_count} -> ${stats.labeled_count}`);
+  check("labeled images are counted", stats.labeled_count >= cfg.label + 1, `${stats.labeled_count} labeled`);
   const back = page.getByRole("link", { name: "Back to the Data Manager" });
   check("the editor has a way back", await visible(back));
   await back.click();
@@ -210,6 +220,7 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await page.getByRole("button", { name: /^Select all \d+$/ }).click();
   await page.getByRole("button", { name: "Add to dataset" }).click();
   const dialog = page.getByRole("dialog", { name: "Add to dataset" });
+  check("the dialog counts the empty image as a negative example", /1 of them marked empty, used as negative examples/.test(await dialog.innerText()));
   await dialog.getByLabel("Dataset name").fill("first set");
   await dialog.getByRole("button", { name: "Create dataset" }).click();
   check("a name with a space is explained", await visible(page.getByRole("alert").filter({ hasText: "letters, digits, dot, dash and underscore" })));
