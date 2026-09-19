@@ -6,16 +6,12 @@ import { pushLog } from "@/app/diagnostics";
 import { JobCard } from "@/jobs/JobCard";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { useJobsStore } from "@/store/jobs";
+import { Alert, Button, Disclosure, Field, Input, Select } from "@/ui";
 
 interface Props {
   projectId: string;
   onClose: () => void;
 }
-
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const label = "flex flex-col gap-1 text-xs text-slate-400";
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-const secondary = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
 
 /**
  * Creates a dataset from every labeled image (accepted boxes or marked empty): the contract
@@ -71,87 +67,90 @@ export function NewDatasetForm({ projectId, onClose }: Props) {
     <form
       aria-label="New dataset"
       onSubmit={(e) => void submit(e)}
-      className="flex flex-col gap-3 rounded border border-slate-700 bg-slate-800/60 p-3"
+      noValidate
+      className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-5 animate-reveal motion-reduce:animate-none"
     >
-      <p className="text-sm">
-        Freeze every labeled image (accepted boxes and images marked empty) into a new dataset, immutable once
-        created.
-      </p>
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">New dataset</h2>
+        <p className="text-sm text-muted">
+          Freeze every labeled image (accepted boxes and images marked empty) into a new dataset, immutable
+          once created.
+        </p>
+      </div>
       {jobId === null ? (
-        <div className="flex flex-wrap items-end gap-2">
-          <label className={label}>
-            Name
-            <input
-              aria-label="Dataset name"
+        <>
+          <Field
+            label="Dataset name"
+            htmlFor="new-dataset-name"
+            hint="Letters, digits, dot, dash and underscore; no spaces."
+            className="max-w-sm"
+          >
+            <Input
+              id="new-dataset-name"
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className={input}
+              placeholder="v2"
             />
-            <span className="text-slate-500">Letters, digits, dot, dash and underscore; no spaces.</span>
-          </label>
-          <label className={label}>
-            Split
-            <select
-              aria-label="Split method"
-              value={split}
-              onChange={(e) => setSplit(e.target.value as SplitMethod)}
-              className={input}
-            >
-              <option value="by_group">by group</option>
-              <option value="by_tile">by tile</option>
-              <option value="random">random</option>
-            </select>
-          </label>
-          <label className={label}>
-            Validation fraction
-            <input
-              aria-label="Validation fraction"
-              type="number"
-              min={0.05}
-              max={0.5}
-              step={0.05}
-              value={valFraction}
-              onChange={(e) => setValFraction(e.target.value)}
-              className={`${input} w-20`}
-            />
-          </label>
-          <label className={label}>
-            Seed
-            <input
-              aria-label="Seed"
-              type="number"
-              value={seed}
-              onChange={(e) => setSeed(e.target.value)}
-              className={`${input} w-24`}
-            />
-          </label>
-          <button type="submit" className={primary} disabled={busy}>
-            Create dataset
-          </button>
-          <button type="button" className={secondary} onClick={onClose} disabled={busy}>
-            Cancel
-          </button>
-        </div>
+          </Field>
+          <Disclosure label="Split options">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Split method" htmlFor="new-dataset-split">
+                <Select
+                  id="new-dataset-split"
+                  value={split}
+                  onChange={(e) => setSplit(e.target.value as SplitMethod)}
+                >
+                  <option value="by_group">by group</option>
+                  <option value="by_tile">by tile</option>
+                  <option value="random">random</option>
+                </Select>
+              </Field>
+              <Field label="Validation fraction" htmlFor="new-dataset-fraction">
+                <Input
+                  id="new-dataset-fraction"
+                  type="number"
+                  min={0.05}
+                  max={0.5}
+                  step={0.05}
+                  value={valFraction}
+                  onChange={(e) => setValFraction(e.target.value)}
+                  className="tabular-nums"
+                />
+              </Field>
+              <Field label="Seed" htmlFor="new-dataset-seed">
+                <Input
+                  id="new-dataset-seed"
+                  type="number"
+                  value={seed}
+                  onChange={(e) => setSeed(e.target.value)}
+                  className="tabular-nums"
+                />
+              </Field>
+            </div>
+          </Disclosure>
+          <div className="flex items-center gap-2">
+            <Button type="submit" variant="primary" loading={busy}>
+              Create dataset
+            </Button>
+            <Button variant="ghost" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </>
       ) : (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
           {job ? (
             <JobCard projectId={projectId} job={job} />
           ) : (
-            <p className="text-xs text-slate-400">Job queued…</p>
+            <p className="text-sm text-muted">Job queued…</p>
           )}
-          <div className="flex items-center gap-3">
-            <button type="button" className={secondary} onClick={onClose}>
-              Close
-            </button>
-          </div>
+          <Button className="self-start" onClick={onClose}>
+            Close
+          </Button>
         </div>
       )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
     </form>
   );
 }

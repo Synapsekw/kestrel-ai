@@ -48,7 +48,7 @@ describe("DatasetsScreen", () => {
     expect(await screen.findByTestId("dataset-detail")).toBeInTheDocument();
   });
 
-  it("shows the empty state with links to the Data Manager when there are no datasets", async () => {
+  it("shows the empty state with links to the Images screen when there are no datasets", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
     ]);

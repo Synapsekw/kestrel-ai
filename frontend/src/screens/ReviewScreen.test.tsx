@@ -26,7 +26,7 @@ describe("ReviewScreen", () => {
     expect(url.searchParams.get("has_pending")).toBe("true");
     expect(url.searchParams.get("sort")).toBe("max_pending_confidence");
     expect(url.searchParams.get("order")).toBe("desc");
-    expect(screen.getByRole("heading", { name: "Review queue" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Review" })).toBeInTheDocument();
     expect(screen.getAllByRole("columnheader").map((h) => h.textContent)).toEqual(
       expect.arrayContaining(["File", "Group", "Pending", "Top confidence", "Boxes"]),
     );
@@ -38,7 +38,7 @@ describe("ReviewScreen", () => {
     expect(useNavigationStore.getState().ids[0]).toBe(IMAGE_ID);
   });
 
-  it("explains an empty queue and where proposals come from", async () => {
+  it("explains an empty queue and where suggestions come from", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
       { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
@@ -50,9 +50,9 @@ describe("ReviewScreen", () => {
       { api, route: `/p/${PROJECT_ID}/review` },
     );
     const empty = await screen.findByTestId("review-empty");
-    expect(empty).toHaveTextContent("Nothing to review.");
-    expect(empty).toHaveTextContent("Proposals appear here after a detection run on the Query screen");
-    expect(screen.getByRole("link", { name: "Query screen" })).toHaveAttribute(
+    expect(empty).toHaveTextContent("Nothing to review");
+    expect(empty).toHaveTextContent("Suggestions appear here after a detection run on the Detect screen");
+    expect(screen.getByRole("link", { name: "Detect screen" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/query`,
     );
@@ -75,7 +75,7 @@ describe("ReviewScreen", () => {
     );
     await waitFor(() =>
       expect(screen.getByTestId("run-filter")).toHaveTextContent(
-        "2 of the 5 images of this detection run still have proposals to review.",
+        "2 of the 5 images of this detection run still have suggestions to review.",
       ),
     );
   });
