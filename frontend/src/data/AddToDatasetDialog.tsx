@@ -94,8 +94,9 @@ export function AddToDatasetDialog({
       </p>
       {unlabeledCount > 0 && (
         <p className="text-xs text-amber-300">
-          {unlabeledCount} selected images are not labeled yet. They would be written without boxes, as if
-          they were empty. Deselect them unless they really show no machinery.
+          {unlabeledCount === 1
+            ? "1 selected image is not labeled yet. It would be written without boxes, as if it were empty. Deselect it unless it really shows no machinery."
+            : `${unlabeledCount} selected images are not labeled yet. They would be written without boxes, as if they were empty. Deselect them unless they really show no machinery.`}
         </p>
       )}
       {jobId === null ? (

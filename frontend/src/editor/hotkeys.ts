@@ -65,9 +65,9 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   if (e.shiftKey) return null;
   if (lower === "f") return { type: "fit" };
   if (lower === "0") return { type: "one-to-one" };
-  if (lower === "a") return { type: "accept-all" };
-  if (lower === "r") return { type: "reject-all" };
-  // A held N must not fire the request-bearing mark toggle once per auto-repeat tick.
+  // A held A, R or N must not fire its request once per auto-repeat tick.
+  if (lower === "a") return e.repeat ? null : { type: "accept-all" };
+  if (lower === "r") return e.repeat ? null : { type: "reject-all" };
   if (lower === "n") return e.repeat ? null : { type: "toggle-empty" };
   if (e.key.length === 1) return { type: "class-key", key: e.key };
   return null;

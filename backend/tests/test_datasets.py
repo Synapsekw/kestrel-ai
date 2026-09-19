@@ -177,6 +177,10 @@ def test_dataset_without_labelled_images_is_refused_as_nothing_to_train_on(
     assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
     assert "Nothing to train on" in r.json()["error"]["message"]
     assert _create_dataset(client, pid, image_ids=["no-such-image"]).status_code == 409
+    # Real images without any accepted box are nothing to train on either (they used to freeze
+    # into a dataset of empty label files).
+    bare = client.get(f"/api/v1/projects/{pid}/images").json()["items"][0]["id"]
+    assert _create_dataset(client, pid, image_ids=[bare]).status_code == 409
 
 
 def test_explicit_image_ids_are_used_verbatim(client, labelled_project, wait_job, project_dir):

@@ -262,7 +262,8 @@ def test_bulk_marks_the_empty_ones_and_skips_images_with_ground_truth(
     box_id = add_proposal(image_ids[0])
     r = client.post(
         f"{BASE}/{project_id}/images/bulk-mark-empty",
-        json={"image_ids": [image_ids[0], image_ids[1], "unknown"], "marked_empty": True},
+        # An id named twice is one image: the counters count images, not list entries.
+        json={"image_ids": [*image_ids[:2], *image_ids[:2], "unknown"], "marked_empty": True},
     )
     assert r.status_code == 200, r.text
     assert r.json() == {"updated": 1, "skipped": 1}

@@ -117,7 +117,8 @@ def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) ->
         existing: dict[str, bool] = {}
         for chunk in _chunks(image_ids):
             existing.update(s.execute(select(Image.id, Image.marked_empty).where(Image.id.in_(chunk))).all())
-        known_ids = [i for i in image_ids if i in existing]  # unknown ids are ignored
+        # Unknown ids are ignored and an id named twice is one image (order kept).
+        known_ids = list(dict.fromkeys(i for i in image_ids if i in existing))
 
         if not value:
             to_unmark = [i for i in known_ids if existing[i]]

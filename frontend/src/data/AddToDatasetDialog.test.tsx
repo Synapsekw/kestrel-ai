@@ -97,7 +97,7 @@ describe("AddToDatasetDialog", () => {
     );
     expect(
       screen.getByText(
-        "1 selected images are not labeled yet. They would be written without boxes, as if they were empty. Deselect them unless they really show no machinery.",
+        "1 selected image is not labeled yet. It would be written without boxes, as if it were empty. Deselect it unless it really shows no machinery.",
       ),
     ).toBeInTheDocument();
   });

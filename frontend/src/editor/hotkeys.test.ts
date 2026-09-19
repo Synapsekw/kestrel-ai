@@ -81,3 +81,11 @@ describe("N ignores key repeat (I5)", () => {
     expect(actionForKey(key("n"))).toEqual({ type: "toggle-empty" });
   });
 });
+
+describe("accept all and reject all ignore key repeat", () => {
+  it("fires one review request per key press, not one per auto-repeat tick", () => {
+    expect(actionForKey(key("a"))).toEqual({ type: "accept-all" });
+    expect(actionForKey(key("a", { repeat: true }))).toBeNull();
+    expect(actionForKey(key("r", { repeat: true }))).toBeNull();
+  });
+});

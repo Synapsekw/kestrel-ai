@@ -4,6 +4,7 @@ import { useProject, useSourceNames } from "@/api/project";
 import { useJobsStore } from "@/store/jobs";
 import { EmptyImages } from "@/data/EmptyImages";
 import { importNotice } from "@/data/importNotice";
+import { proposalsABulkMarkRejects } from "@/data/markEmptyCounts";
 import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
 import { ImageTable } from "@/data/ImageTable";
@@ -113,10 +114,7 @@ export function DataManagerScreen() {
     [selectedRows],
   );
   const selectedUnlabeledCount = useMemo(() => selectedRows.filter((i) => !i.labeled).length, [selectedRows]);
-  const selectedPendingCount = useMemo(
-    () => selectedRows.reduce((sum, i) => sum + i.pending_count, 0),
-    [selectedRows],
-  );
+  const selectedPendingCount = useMemo(() => proposalsABulkMarkRejects(selectedRows), [selectedRows]);
   const labelSelected = () => {
     useNavigationStore.getState().setContext(selectedIds, "selection");
     void navigate(`/p/${projectId}/edit/${selectedIds[0]}`);
