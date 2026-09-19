@@ -112,11 +112,24 @@ def test_a_marked_image_counts_as_labeled_everywhere(client, project_id, handle,
     labeled = client.get(f"{BASE}/{project_id}/images", params={"labeled": "true"}).json()
     assert [i["id"] for i in labeled["items"]] == [image_ids[0]]
     unlabeled = client.get(f"{BASE}/{project_id}/images", params={"labeled": "false"}).json()
-    assert image_ids[0] not in [i["id"] for i in unlabeled["items"]]
+    assert [i["id"] for i in unlabeled["items"]] == image_ids[1:]
 
     stats = client.get(f"{BASE}/{project_id}/stats").json()
     assert stats["labeled_count"] == 1
     assert stats["unlabeled_count"] == len(image_ids) - 1
+
+
+def test_sorting_by_labeled_puts_marked_and_boxed_images_first(
+    client, project_id, handle, image_ids, add_person_box
+):
+    add_person_box(image_ids[5])
+    _mark(handle, image_ids[10])
+    page = client.get(
+        f"{BASE}/{project_id}/images", params={"sort": "labeled", "order": "desc", "limit": 100}
+    ).json()
+    assert {i["id"] for i in page["items"][:2]} == {image_ids[5], image_ids[10]}
+    assert all(item["labeled"] for item in page["items"][:2])
+    assert all(not item["labeled"] for item in page["items"][2:])
 
 
 def test_an_existing_database_gains_the_column_with_false(tmp_path):
@@ -399,6 +412,28 @@ def test_dataset_creation_includes_marked_images_as_negatives(
         f"{BASE}/{project_id}/datasets", json={"name": "v2", "image_ids": [image_ids[0]]}
     ).json()
     assert only_labeled["dataset"]["image_count"] == 1
+
+
+def test_by_group_dataset_places_a_negative_in_its_own_groups_split(
+    client, project_id, handle, image_ids, add_person_box, wait_job
+):
+    """`by_group` keeps a whole group in one split; a negative image is no exception (E4)."""
+    add_person_box(image_ids[0])  # flight 0001: ground truth
+    _mark(handle, image_ids[1])  # flight 0001: negative, same group
+    add_person_box(image_ids[10])  # flight 0002: ground truth, so there is something to split off
+    r = client.post(
+        f"{BASE}/{project_id}/datasets",
+        json={"name": "v1", "split_method": "by_group", "val_fraction": 0.5, "seed": 1},
+    )
+    assert r.status_code == 202, r.text
+    body = r.json()
+    finished = wait_job(project_id, body["job"]["id"])
+    assert finished["state"] == "succeeded", finished
+
+    stats = client.get(f"{BASE}/{project_id}/datasets/{body['dataset']['id']}/stats").json()
+    flight_0001 = [g for g in stats["groups"] if g["group_key"] == "0001"]
+    assert len(flight_0001) == 1  # one split entry: the labeled and the negative image agree
+    assert flight_0001[0]["image_count"] == 2
 
 
 def test_default_selection_of_only_marked_images_has_nothing_to_train_on(
