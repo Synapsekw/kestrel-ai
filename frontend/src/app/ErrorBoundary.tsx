@@ -1,4 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { Button, Icon } from "@/ui";
 import { collectDiagnostics, pushLog } from "./diagnostics";
 
 interface Props {
@@ -24,17 +25,30 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.message === null) return this.props.children;
     return (
-      <div className="flex h-full w-full items-center justify-center bg-slate-900 p-8 text-slate-100">
-        <div className="max-w-xl rounded-lg bg-slate-800 p-6 shadow-xl">
-          <h1 className="mb-2 text-xl font-semibold text-orange-400">Something went wrong</h1>
-          <p className="mb-6 whitespace-pre-wrap text-sm text-slate-300">{this.state.message}</p>
-          <button
-            type="button"
-            onClick={() => void navigator.clipboard.writeText(collectDiagnostics())}
-            className="rounded bg-orange-600 px-4 py-2 font-medium hover:bg-orange-500"
-          >
-            Copy diagnostics
-          </button>
+      <div className="flex h-full w-full items-center justify-center bg-ground p-8 text-ink">
+        <div
+          role="alert"
+          className="flex max-w-xl flex-col gap-4 rounded-lg border border-line bg-panel p-6 shadow-float"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-full bg-danger-soft text-danger">
+              <Icon name="warning" size={16} />
+            </span>
+            <h1 className="text-base font-semibold">Something went wrong</h1>
+          </div>
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted">{this.state.message}</p>
+          <p className="text-sm text-muted">
+            Reloading brings the app back; nothing on disk is lost. Copy the diagnostics first if you want to
+            report the problem.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="primary" onClick={() => window.location.reload()}>
+              Reload the app
+            </Button>
+            <Button onClick={() => void navigator.clipboard.writeText(collectDiagnostics())}>
+              Copy diagnostics
+            </Button>
+          </div>
         </div>
       </div>
     );

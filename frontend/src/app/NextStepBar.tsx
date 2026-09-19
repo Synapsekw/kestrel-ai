@@ -1,68 +1,55 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
-import { useApi } from "@/api/client";
-import { fetchDatasets } from "@/api/datasets";
-import { messageOf } from "@/api/errors";
-import { fetchModels, fetchProjectStats } from "@/api/project";
-import { pushLog } from "@/app/diagnostics";
-import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
-import { nextStep, type ProjectProgress } from "./nextStep";
+import { Link } from "react-router-dom";
+import { Icon } from "@/ui";
+import { nextStep } from "./nextStep";
+import { stepStates } from "./pipeline";
+import { useProgress } from "./useProjectProgress";
 
-/** A slim "Next: ..." line for the open project; silent when the numbers cannot be loaded. */
+/** Six short bars, one per pipeline step: green done, orange current, grey otherwise. */
+export function StepTicks({ projectId }: { projectId: string }) {
+  const progress = useProgress(projectId);
+  if (!progress) return null;
+  const steps = stepStates(projectId, progress);
+  return (
+    <span className="flex items-center gap-1" aria-hidden="true">
+      {steps.map((s) => (
+        <span
+          key={s.id}
+          title={s.label}
+          className={`h-1.5 w-6 rounded-full transition-colors duration-220 ${
+            s.state === "done" ? "bg-ok" : s.state === "current" ? "bg-accent" : "bg-line-strong/60"
+          }`}
+        />
+      ))}
+    </span>
+  );
+}
+
+/**
+ * The banner under the header on project screens: "Next: ..." with one line of why, and the step
+ * ticks. Silent until the shell has loaded the project's counts, and when nothing is pending.
+ */
 export function NextStepBar({ projectId }: { projectId: string }) {
-  const api = useApi();
-  const { pathname } = useLocation();
-  const [tick, setTick] = useState(0);
-  const refresh = useCallback(() => setTick((t) => t + 1), []);
-  useOnJobsFinished("import", refresh);
-  useOnJobsFinished("dataset", refresh);
-  useOnJobsFinished("train", refresh);
-  useOnJobsFinished("infer", refresh);
-  const [progress, setProgress] = useState<{ projectId: string; value: ProjectProgress } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetchProjectStats(api, projectId),
-      fetchDatasets(api, projectId),
-      fetchModels(api, projectId),
-    ])
-      .then(([stats, datasets, models]) => {
-        if (cancelled) return;
-        setProgress({
-          projectId,
-          value: {
-            images: stats.image_count,
-            labeled: stats.labeled_count,
-            pendingReview: stats.pending_review_count,
-            datasets: datasets.length,
-            models: models.length,
-            trainedModels: models.filter((m) => m.kind === "trained").length,
-          },
-        });
-      })
-      .catch((e: unknown) => {
-        pushLog(`next step unavailable: ${messageOf(e, String(e))}`);
-        if (!cancelled) setProgress(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // The screen changed or a job ended: the numbers may have moved. Box events are ignored on
-    // purpose; a detection run publishes one per image.
-  }, [api, projectId, pathname, tick]);
-
-  const step = progress && progress.projectId === projectId ? nextStep(projectId, progress.value) : null;
+  const progress = useProgress(projectId);
+  const step = progress ? nextStep(projectId, progress) : null;
   if (!step) return null;
   return (
-    <p
+    <div
+      key={step.text}
       data-testid="next-step"
-      className="border-b border-slate-800 bg-slate-900/60 px-6 py-1.5 text-xs text-slate-400"
+      className="flex items-center gap-4 border-b border-accent-line bg-accent-soft px-6 py-2 text-sm text-accent-ink animate-reveal motion-reduce:animate-none"
     >
-      Next:{" "}
-      <Link to={step.to} className="text-orange-300 hover:underline">
-        {step.text}
-      </Link>
-    </p>
+      <Icon name="arrow-right" size={15} className="shrink-0" />
+      <p className="min-w-0 flex-1 truncate">
+        <span className="text-accent-ink/70">Next: </span>
+        <Link
+          to={step.to}
+          className="font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent rounded-sm"
+        >
+          {step.text}
+        </Link>
+        <span className="ml-2 text-accent-ink/80">{step.detail}</span>
+      </p>
+      <StepTicks projectId={projectId} />
+    </div>
   );
 }

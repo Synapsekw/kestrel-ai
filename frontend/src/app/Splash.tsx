@@ -1,12 +1,14 @@
-export function Splash({ message = "Starting backend" }: { message?: string }) {
+import { Brand } from "./Brand";
+import { Progress } from "@/ui";
+
+export function Splash({ message = "Starting the backend" }: { message?: string }) {
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-4 bg-slate-900 text-slate-100">
-      <div
-        className="h-10 w-10 animate-spin rounded-full border-4 border-slate-600 border-t-orange-500"
-        role="status"
-        aria-label="Loading"
-      />
-      <p className="text-lg">{message}</p>
+    <div className="flex h-full w-full flex-col items-center justify-center gap-5 bg-ground text-ink">
+      <Brand size="lg" />
+      <p role="status" className="text-sm text-muted">
+        {message}
+      </p>
+      <Progress thin label="Loading" className="w-40" />
     </div>
   );
 }

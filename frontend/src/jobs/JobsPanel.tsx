@@ -49,7 +49,7 @@ export function JobsPanel({ projectId }: { projectId: string }) {
       aria-label="Jobs"
       aria-modal="false"
       tabIndex={-1}
-      className="absolute inset-y-0 right-0 z-20 flex w-[28rem] max-w-full flex-col gap-3 overflow-y-auto border-l border-slate-800 bg-slate-950 p-4 shadow-xl"
+      className="absolute inset-y-0 right-0 z-20 flex w-[28rem] max-w-full flex-col gap-3 overflow-y-auto border-l border-line bg-panel p-4 shadow-float animate-slide-in motion-reduce:animate-none"
     >
       <header className="flex items-center gap-2">
         <h2 className="text-lg font-medium">Jobs</h2>

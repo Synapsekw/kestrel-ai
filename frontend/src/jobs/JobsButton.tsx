@@ -1,19 +1,27 @@
 import { selectActiveCount, useJobsStore } from "@/store/jobs";
+import { Button } from "@/ui";
 
-/** Top-bar toggle for the jobs panel; the text doubles as the active-job counter. */
+/** Header toggle for the jobs drawer; its accessible name doubles as the active-job counter. */
 export function JobsButton() {
   const count = useJobsStore(selectActiveCount);
   const open = useJobsStore((s) => s.panelOpen);
   const setPanelOpen = useJobsStore((s) => s.setPanelOpen);
   return (
-    <button
-      type="button"
+    <Button
+      size="sm"
+      variant={open ? "secondary" : "ghost"}
+      icon="jobs"
       aria-controls="jobs-panel"
       aria-expanded={open}
+      aria-label={`${count} active ${count === 1 ? "job" : "jobs"}`}
       onClick={() => setPanelOpen(!open)}
-      className={`rounded px-2 py-1 text-xs hover:bg-slate-700 ${count > 0 ? "bg-orange-700 text-orange-50" : "bg-slate-800 text-slate-300"}`}
     >
-      {count} active {count === 1 ? "job" : "jobs"}
-    </button>
+      Jobs
+      {count > 0 && (
+        <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
+          {count}
+        </span>
+      )}
+    </Button>
   );
 }
