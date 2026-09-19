@@ -1,0 +1,87 @@
+"""Starter weights that ship with the app (usability gap G1): COCO YOLO11 in three sizes."""
+
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+from app.config import Settings
+from app.db.models import Model
+from app.errors import AppError
+from app.projects.service import ProjectHandle
+from app.training import registry
+
+
+@dataclass(frozen=True)
+class StarterSpec:
+    key: str
+    name: str
+    description: str
+
+
+CATALOGUE = [
+    StarterSpec(
+        "yolo11n", "YOLO11 nano", "Fastest to train and run; the right first choice for a new project."
+    ),
+    StarterSpec(
+        "yolo11s",
+        "YOLO11 small",
+        "A little slower, usually more accurate once a few hundred images are labeled.",
+    ),
+    StarterSpec(
+        "yolo11m",
+        "YOLO11 medium",
+        "Slowest of the three; best accuracy with a large labeled set and for pre-annotation.",
+    ),
+]
+
+# COCO has no construction classes; its `truck` is the closest to a dump truck.
+DEFAULT_ALIASES = {"truck": "dump_truck"}
+
+
+def weights_dir(settings: Settings) -> Path:
+    if settings.starter_weights_dir is not None:
+        return settings.starter_weights_dir
+    checkout = Path(__file__).resolve().parents[2] / "starter_weights"
+    if getattr(sys, "frozen", False):
+        # PyInstaller always sets _MEIPASS on a real frozen run; the getattr only guards against
+        # a process that reports itself frozen without one, which falls back to the checkout path
+        # rather than a meaningless sys.executable-relative guess.
+        meipass = getattr(sys, "_MEIPASS", None)
+        return Path(meipass) / "starter_weights" if meipass else checkout
+    return checkout
+
+
+def list_starters(folder: Path) -> list[dict]:
+    items = []
+    for spec in CATALOGUE:
+        f = folder / f"{spec.key}.pt"
+        ok = f.is_file()
+        items.append(
+            {
+                "key": spec.key,
+                "name": spec.name,
+                "description": spec.description,
+                "size_mb": round(f.stat().st_size / 1_048_576, 1) if ok else 0,
+                "available": ok,
+            }
+        )
+    return items
+
+
+def project_class_names(handle: ProjectHandle) -> list[str]:
+    with handle.session() as s:
+        return [str(c.get("name")) for c in (handle.row(s).classes or [])]
+
+
+def import_starter(handle: ProjectHandle, folder: Path, key: str, name: str | None) -> Model:
+    f = folder / f"{key}.pt"
+    if key not in {s.key for s in CATALOGUE} or not f.is_file():
+        raise AppError(
+            "not_found",
+            f"starter weights {key} are not part of this build; "
+            "run backend/scripts/fetch_starter_weights.ps1",
+            404,
+        )
+    names = set(project_class_names(handle))
+    aliases = {src: dst for src, dst in DEFAULT_ALIASES.items() if dst in names}
+    return registry.import_model(handle, name or f"{key}-coco", str(f.resolve()), aliases)

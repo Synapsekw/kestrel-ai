@@ -9,8 +9,9 @@
   runs, the `worker` subcommand trains with DataLoader workers (freeze_support), ONNX export
   works, and keyring reaches Windows Credential Manager without setuptools entry points.
 
-  Prints `health ok`, `cuda True <gpu name>`, `predict ok <n> boxes` and `worker ok`, and exits
-  non-zero on any failure. Sample frames are copied out of the read-only source folder first.
+  Prints `health ok`, `cuda True <gpu name>`, `starter ok 3`, `predict ok <n> boxes` and
+  `worker ok`, and exits non-zero on any failure. Sample frames are copied out of the read-only
+  source folder first.
 
 .PARAMETER Keep
   Leave the generated work dir behind; it is deleted on the way out by default.
@@ -24,7 +25,6 @@
 [CmdletBinding()]
 param(
   [string] $Dist,  # defaults to <backend>/dist/machinery-backend once $PSScriptRoot is set
-  [string] $Weights = "E:\Dev\Yolo\models\yolo11n.pt",
   [string] $Source = "E:\Dev\Yolo\data\raw\ahmadia",
   [int] $Frames = 3,
   [int] $Imgsz = 640,
@@ -42,7 +42,6 @@ if ($generatedWorkDir) {
 }
 $exe = Join-Path $Dist "machinery-backend.exe"
 if (-not (Test-Path $exe)) { throw "no frozen build at $exe; run backend\scripts\build.ps1 first" }
-if (-not (Test-Path $Weights)) { throw "no weights at $Weights" }
 if (-not (Test-Path $Source)) { throw "no sample frames at $Source" }
 
 $script:Base = $null
@@ -144,7 +143,16 @@ try {
   Complete-Step "cuda"
   Write-Host "cuda $($health.gpu.available) $($health.gpu.name)"
 
-  # 4. project, import, weights
+  # 4. starter weights (usability gap G1): the three bundled sizes must be available
+  $starters = Invoke-Api GET "/starter-models"
+  $available = @($starters.items | Where-Object { $_.available })
+  if ($available.Count -ne 3) {
+    throw "expected 3 available starter models, found $($available.Count): $($starters.items | ConvertTo-Json -Compress)"
+  }
+  Complete-Step "starter_models"
+  Write-Host "starter ok $($available.Count)"
+
+  # 5. project, import, weights
   $names = @("excavator", "wheel_loader", "bulldozer", "dump_truck", "crane", "concrete_mixer", "roller", "backhoe")
   $colours = @("#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#ef4444")
   $classes = 0..7 | ForEach-Object { @{ name = $names[$_]; colour = $colours[$_]; hotkey = "$($_ + 1)" } }
@@ -160,11 +168,15 @@ try {
   Complete-Step "import"
   Write-Host "import ok $($stats.image_count) images"
 
-  $model = Invoke-Api POST "/projects/$pid1/models/import" @{ name = "yolo11n-coco"; weights_path = $Weights }
+  $model = Invoke-Api POST "/projects/$pid1/models/import-starter" @{ key = "yolo11n" }
+  if ($model.class_aliases.truck -ne "dump_truck") {
+    throw "expected truck aliased to dump_truck, got $($model.class_aliases | ConvertTo-Json -Compress)"
+  }
   Complete-Step "import_model"
   Write-Host "model ok $($model.name) $($model.class_names.Count) classes"
+  Write-Host "alias ok"
 
-  # 5. one prediction through the packaged torch/ultralytics stack
+  # 6. one prediction through the packaged torch/ultralytics stack
   $images = Invoke-Api GET "/projects/$pid1/images?limit=$Frames&sort=path"
   $first = $images.items[0]
   $predicted = Invoke-Api POST "/projects/$pid1/images/$($first.id)/preannotate" `
@@ -172,7 +184,7 @@ try {
   Complete-Step "predict"
   Write-Host "predict ok $($predicted.items.Count) boxes"
 
-  # 6. a dataset and a 1-epoch run: the `worker` subcommand with DataLoader workers
+  # 7. a dataset and a 1-epoch run: the `worker` subcommand with DataLoader workers
   foreach ($image in $images.items) {
     Invoke-Api POST "/projects/$pid1/images/$($image.id)/boxes" `
       @{ class_id = $project.classes[0].id; x = 400; y = 600; w = 180; h = 120 } | Out-Null
@@ -202,7 +214,7 @@ try {
   if (-not $fontSeeded) { throw "the worker did not seed Arial.ttf into the app data config dir" }
   Write-Host "font ok $($env:APP_DATA_DIR)\ultralytics\Arial.ttf"
 
-  # 7. ONNX export, again through the frozen worker
+  # 8. ONNX export, again through the frozen worker
   $export = Invoke-Api POST "/projects/$pid1/models/$($trained.id)/export" @{ format = "onnx"; imgsz = $Imgsz }
   $job = Wait-ApiJob $pid1 $export.job.id
   if ($job.state -ne "succeeded") { throw "export failed: $($job.error)" }
@@ -211,7 +223,7 @@ try {
   Complete-Step "export_onnx"
   Write-Host "export ok $onnx $([math]::Round((Get-Item $onnx).Length / 1MB, 1)) MB"
 
-  # 8. keyring: the frozen build has no entry points, so the Windows backend must be pinned.
+  # 9. keyring: the frozen build has no entry points, so the Windows backend must be pinned.
   #    A key that is already stored belongs to the operator and is never touched.
   $providers = (Invoke-Api GET "/providers").items
   $anthropic = $providers | Where-Object { $_.name -eq "anthropic" }

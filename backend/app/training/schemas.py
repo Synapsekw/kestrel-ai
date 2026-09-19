@@ -87,6 +87,24 @@ class TrainRequest(BaseModel):
     device: str = "0"
 
 
+class StarterModelOut(BaseModel):
+    key: Literal["yolo11n", "yolo11s", "yolo11m"]
+    name: str
+    description: str
+    size_mb: float
+    available: bool
+
+
+class StarterModelPage(BaseModel):
+    items: list[StarterModelOut]
+    next_cursor: str | None
+
+
+class StarterModelImport(BaseModel):
+    key: Literal["yolo11n", "yolo11s", "yolo11m"]
+    name: str | None = Field(None, min_length=1)
+
+
 class ExportRequest(BaseModel):
     format: Literal["onnx", "engine"]
     imgsz: int = Field(1280, ge=320, le=4096)

@@ -5,6 +5,7 @@ import { useProject } from "@/api/project";
 import { ImportModelForm } from "@/models/ImportModelForm";
 import { ModelDetail } from "@/models/ModelDetail";
 import { ModelTable } from "@/models/ModelTable";
+import { StarterModels } from "@/models/StarterModels";
 import { useDatasetNames } from "@/models/useDatasetNames";
 import { useModels } from "@/models/useModels";
 
@@ -71,6 +72,13 @@ export function ModelsScreen() {
         <ImportModelForm projectId={projectId} onImported={onImported} onClose={() => setImporting(false)} />
       )}
       {!registry.unavailable && (
+        <StarterModels
+          projectId={projectId}
+          existingNames={registry.models.map((m) => m.name)}
+          onImported={onImported}
+        />
+      )}
+      {!registry.unavailable && (
         <ModelTable
           models={registry.models}
           datasetNames={datasetNames}
@@ -80,7 +88,7 @@ export function ModelsScreen() {
       )}
       {!registry.loading && !registry.unavailable && registry.models.length === 0 && (
         <p className="text-sm text-slate-400">
-          No models yet. Import COCO weights or train one on a dataset.
+          No models yet. Add a starter model above, or import your own weights.
         </p>
       )}
       {selected && project && (

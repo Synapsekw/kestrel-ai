@@ -594,6 +594,25 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Model" }
         default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/import-starter:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [models]
+      operationId: importStarterModel
+      summary: Register one of the starter weights that ship with the app (COCO YOLO11). The file is copied under `models/`; `truck` is aliased to `dump_truck` when the project has that class.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StarterModelImport" }
+      responses:
+        "201":
+          description: registered
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/models/train:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -682,6 +701,19 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+
+  /api/v1/starter-models:
+    get:
+      tags: [models]
+      operationId: listStarterModels
+      summary: Starter weights bundled with this build of the app. `available` is false when the file is missing (a development checkout that has not fetched them).
+      responses:
+        "200":
+          description: the fixed catalogue, smallest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StarterModelPage" }
         default: { $ref: "#/components/responses/Error" }
 
   # ---------------------------------------------------------------- providers
@@ -1747,6 +1779,39 @@ components:
           type: object
           additionalProperties: { type: string }
       example: { name: yolo11m-coco, weights_path: "E:\\Dev\\Yolo\\models\\yolo11m.pt", class_aliases: { truck: dump_truck } }
+    StarterModelKey:
+      type: string
+      enum: [yolo11n, yolo11s, yolo11m]
+    StarterModel:
+      type: object
+      required: [key, name, description, size_mb, available]
+      properties:
+        key: { $ref: "#/components/schemas/StarterModelKey" }
+        name: { type: string }
+        description: { type: string, description: one sentence for the operator on when to pick this size }
+        size_mb: { type: number, description: size of the bundled file, 0 when it is not available }
+        available: { type: boolean }
+      example:
+        key: yolo11n
+        name: YOLO11 nano
+        description: Fastest to train and run; the right first choice for a new project.
+        size_mb: 5.4
+        available: true
+    StarterModelPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StarterModel" }
+        next_cursor: { type: [string, "null"], description: always null, the catalogue is one page }
+    StarterModelImport:
+      type: object
+      required: [key]
+      properties:
+        key: { $ref: "#/components/schemas/StarterModelKey" }
+        name: { type: string, minLength: 1, description: "registry name; defaults to `<key>-coco`" }
+      example: { key: yolo11n }
     ModelPage:
       type: object
       required: [items, next_cursor]

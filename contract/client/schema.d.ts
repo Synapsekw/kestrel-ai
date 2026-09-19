@@ -458,6 +458,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/models/import-starter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register one of the starter weights that ship with the app (COCO YOLO11). The file is copied under `models/`; `truck` is aliased to `dump_truck` when the project has that class. */
+        post: operations["importStarterModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/models/train": {
         parameters: {
             query?: never;
@@ -532,6 +551,23 @@ export interface paths {
         put?: never;
         /** Export to ONNX or TensorRT through a job; the path lands in `model.exports[format]`. */
         post: operations["exportModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/starter-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Starter weights bundled with this build of the app. `available` is false when the file is missing (a development checkout that has not fetched them). */
+        get: operations["listStarterModels"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1757,6 +1793,41 @@ export interface components {
             class_aliases?: {
                 [key: string]: string;
             };
+        };
+        /** @enum {string} */
+        StarterModelKey: "yolo11n" | "yolo11s" | "yolo11m";
+        /**
+         * @example {
+         *       "key": "yolo11n",
+         *       "name": "YOLO11 nano",
+         *       "description": "Fastest to train and run; the right first choice for a new project.",
+         *       "size_mb": 5.4,
+         *       "available": true
+         *     }
+         */
+        StarterModel: {
+            key: components["schemas"]["StarterModelKey"];
+            name: string;
+            /** @description one sentence for the operator on when to pick this size */
+            description: string;
+            /** @description size of the bundled file */
+            size_mb: number;
+            available: boolean;
+        };
+        StarterModelPage: {
+            items: components["schemas"]["StarterModel"][];
+            /** @description always null */
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "key": "yolo11n"
+         *     }
+         */
+        StarterModelImport: {
+            key: components["schemas"]["StarterModelKey"];
+            /** @description registry name; defaults to `<key>-coco` */
+            name?: string;
         };
         ModelPage: {
             items: components["schemas"]["Model"][];
@@ -3007,6 +3078,33 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    importStarterModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StarterModelImport"];
+            };
+        };
+        responses: {
+            /** @description registered */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Model"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     trainModel: {
         parameters: {
             query?: never;
@@ -3138,6 +3236,27 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listStarterModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the fixed catalogue, smallest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StarterModelPage"];
                 };
             };
             default: components["responses"]["Error"];

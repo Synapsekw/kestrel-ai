@@ -151,6 +151,16 @@ test("export, import, use as pre-annotation and delete send the contract request
   await expect(page.getByTestId("model-detail")).toHaveCount(0);
 });
 
+test("offers the bundled starter weights and imports one with a click", async ({ page }) => {
+  await page.goto(`/p/${P}/models`);
+  await expect(page.getByRole("heading", { name: "Starter models" })).toBeVisible();
+  const imported = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/models/import-starter"),
+  );
+  await page.getByRole("button", { name: "Add YOLO11 nano" }).click();
+  expect((await imported).postDataJSON()).toEqual({ key: "yolo11n" });
+});
+
 test("a 501 registry shows the note and keeps the screen usable", async ({ page }) => {
   await page.route(isModelsList, (route: Route) =>
     route.fulfill(

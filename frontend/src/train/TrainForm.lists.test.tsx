@@ -14,6 +14,8 @@ function mount(datasets: (typeof exampleDataset)[], models: (typeof exampleModel
     projectId: PROJECT_ID,
     datasetsUnavailable: false,
     modelsUnavailable: false,
+    modelsLoading: false,
+    modelsError: null,
     busy: false,
     onStart,
   };

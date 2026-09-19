@@ -2,6 +2,8 @@
 # One-folder freeze of the backend (spec section 10). The exe doubles as the training/export
 # worker (`machinery-backend.exe worker train <params.json>`), so torch, torchvision, ultralytics
 # and the ONNX stack all have to be inside the bundle: nothing is installed on the user's machine.
+from pathlib import Path
+
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
 
 hiddenimports = (
@@ -44,6 +46,9 @@ datas = (
     [("app/db/migrations", "app/db/migrations")]
     + collect_data_files("ultralytics")  # cfg/*.yaml, the default trackers and assets
     + collect_data_files("torch", include_py_files=False)
+    # Starter weights (usability gap G1): yolo11n/s/m.pt, fetched by scripts/fetch_starter_weights.ps1.
+    # Relative to this spec file (SPECPATH), not the cwd PyInstaller happens to be run from.
+    + [(str(p), "starter_weights") for p in sorted((Path(SPECPATH) / "starter_weights").glob("yolo11*.pt"))]
 )
 
 binaries = (

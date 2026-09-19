@@ -70,6 +70,8 @@ export function TrainScreen() {
           models={registry.models}
           datasetsUnavailable={datasets.unavailable}
           modelsUnavailable={registry.unavailable}
+          modelsLoading={registry.loading}
+          modelsError={registry.error}
           busy={busy}
           onStart={(req) => void start(req)}
         />

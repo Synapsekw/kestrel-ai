@@ -17,6 +17,8 @@ interface Props {
   models: Model[];
   datasetsUnavailable: boolean;
   modelsUnavailable: boolean;
+  modelsLoading: boolean;
+  modelsError: string | null;
   busy: boolean;
   onStart: (req: TrainRequest) => void;
 }
@@ -32,6 +34,8 @@ export function TrainForm({
   models,
   datasetsUnavailable,
   modelsUnavailable,
+  modelsLoading,
+  modelsError,
   busy,
   onStart,
 }: Props) {
@@ -154,7 +158,21 @@ export function TrainForm({
               </option>
             ))}
           </select>
-          <span>Any registry model, including imported COCO weights.</span>
+          <span>
+            {models.length > 0
+              ? "Any registry model, including imported COCO weights."
+              : !modelsLoading &&
+                !modelsUnavailable &&
+                !modelsError && (
+                  <>
+                    No models yet.{" "}
+                    <Link to={`/p/${projectId}/models`} className="text-orange-300 hover:underline">
+                      Add a starter model
+                    </Link>{" "}
+                    to get started.
+                  </>
+                )}
+          </span>
         </label>
       </div>
       {datasetsUnavailable && (
