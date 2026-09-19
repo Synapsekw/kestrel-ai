@@ -2,7 +2,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, Float, ForeignKey, Index, Integer, String
+import sqlalchemy as sa
+from sqlalchemy import JSON, Boolean, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, UTCDateTime, new_id, utcnow
@@ -45,6 +46,7 @@ class Image(Base):
     alt: Mapped[float | None] = mapped_column(Float, nullable=True)
     phash: Mapped[str | None] = mapped_column(String(16), nullable=True)
     group_key: Mapped[str] = mapped_column(String, default="")
+    marked_empty: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     __table_args__ = (
         Index("ix_image_source", "source_id"),
