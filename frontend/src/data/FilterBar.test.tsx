@@ -47,6 +47,7 @@ describe("FilterBar", () => {
       ...DEFAULT_QUERY,
       filters: { ...DEFAULT_QUERY.filters, pending: "no" },
     });
+    fireEvent.click(screen.getByRole("button", { name: /More filters/ }));
     fireEvent.change(screen.getByLabelText("Min boxes"), { target: { value: "3" } });
     expect(onChange).toHaveBeenLastCalledWith({
       ...DEFAULT_QUERY,
@@ -87,5 +88,33 @@ describe("FilterBar", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: /Select all/ })).toBeNull();
+  });
+
+  it("folds the rarely used filters and counts the ones in use", () => {
+    const props = {
+      onChange: vi.fn(),
+      view: "grid" as const,
+      onView: vi.fn(),
+      sourceNames: {},
+      total: 2,
+      loaded: 2,
+    };
+    const { unmount } = render(<FilterBar query={DEFAULT_QUERY} {...props} />);
+    expect(screen.queryByLabelText("Min boxes")).toBeNull();
+    expect(screen.getByRole("button", { name: "More filters" })).toHaveAttribute("aria-expanded", "false");
+    unmount();
+    render(
+      <FilterBar
+        query={{
+          ...DEFAULT_QUERY,
+          filters: { ...DEFAULT_QUERY.filters, minBoxes: 2, captureFrom: "2019-04-15" },
+        }}
+        {...props}
+      />,
+    );
+    const toggle = screen.getByRole("button", { name: /More filters/ });
+    expect(toggle).toHaveTextContent("2");
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByLabelText("Min boxes")).toHaveValue(2);
   });
 });

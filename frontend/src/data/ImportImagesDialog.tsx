@@ -94,7 +94,7 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
     <Dialog
       open
       title="Import images"
-      description="Originals are never modified: files are converted to JPEG, downscaled past the max side, de-duplicated by perceptual hash and grouped by flight. Re-importing a folder picks up new files only."
+      description="Choose a folder of drone photos. Your originals stay untouched: the project keeps its own copies, skips near-identical photos and groups them by flight. Importing the same folder again adds only new photos."
       onClose={() => {
         if (!busy) onClose();
       }}

@@ -77,4 +77,16 @@ describe("Sidebar", () => {
     expect(within(nav).getByRole("link", { name: /^Review/ })).toHaveTextContent("5");
     expect(within(nav).getByRole("link", { name: /^Detect/ })).not.toHaveAttribute("aria-disabled");
   });
+
+  it("keeps Label lit while an image is open in the editor", () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40, labeled: 14 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, {
+      api,
+      route: `/p/${PROJECT_ID}/edit/img-1`,
+    });
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).getByRole("link", { name: /^Label/ }).className).toContain("bg-panel");
+    expect(within(nav).getByRole("link", { name: /^Images/ }).className).not.toContain("bg-panel");
+  });
 });

@@ -1,5 +1,5 @@
 import type { MouseEvent, ReactNode } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { Icon, Tooltip, cx, focusRing, transition, type IconName } from "@/ui";
 import { Brand } from "./Brand";
 import { stepStates, type Step, type StepState } from "./pipeline";
@@ -38,6 +38,9 @@ function StepMark({ state, n }: { state: StepState; n: number }) {
 
 function StepEntry({ step, n }: { step: Step; n: number }) {
   const locked = step.state === "locked";
+  // The editor has its own route; it is where the Label step happens, so Label stays lit there.
+  const { pathname } = useLocation();
+  const inEditor = step.id === "label" && pathname.includes("/edit/");
   const link = (
     <NavLink
       to={step.path}
@@ -45,7 +48,7 @@ function StepEntry({ step, n }: { step: Step; n: number }) {
       onClick={(e: MouseEvent) => {
         if (locked) e.preventDefault();
       }}
-      className={({ isActive }) => entryClass(isActive && !locked, locked)}
+      className={({ isActive }) => entryClass((isActive || inEditor) && !locked, locked)}
     >
       <StepMark state={step.state} n={n} />
       <span className="truncate">{step.label}</span>
