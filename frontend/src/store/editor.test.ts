@@ -93,6 +93,25 @@ describe("editor store", () => {
     expect(useEditorStore.getState().image?.id).toBe(exampleImage.id);
   });
 
+  it("hides proposals below the confidence floor and keeps it across images; labels are never hidden", () => {
+    const s = useEditorStore.getState();
+    const weak = { ...proposalBox, id: "weak", confidence: 0.2 };
+    s.loadImage(exampleImage, [personBox, proposalBox, weak]);
+    expect(visibleProposalIds(useEditorStore.getState())).toEqual([proposalBox.id, "weak"]);
+    s.setMinConfidence(0.5);
+    expect(visibleBoxes(useEditorStore.getState()).map((b) => b.id)).toEqual([personBox.id, proposalBox.id]);
+    // Accept all (A) and Reject all (R) act on the visible proposals only.
+    expect(visibleProposalIds(useEditorStore.getState())).toEqual([proposalBox.id]);
+    // An accepted box with a low confidence is a label: it stays.
+    s.upsertBox({ ...weak, review_state: "accepted" });
+    expect(visibleBoxes(useEditorStore.getState()).map((b) => b.id)).toContain("weak");
+    // The floor survives the next image of the same review.
+    s.reset();
+    s.loadImage(exampleImage, [weak]);
+    expect(useEditorStore.getState().minConfidence).toBe(0.5);
+    expect(visibleBoxes(useEditorStore.getState())).toEqual([]);
+  });
+
   it("hides rejected boxes unless asked and lists visible proposals", () => {
     const s = useEditorStore.getState();
     s.loadImage(exampleImage, [personBox, proposalBox, rejected]);

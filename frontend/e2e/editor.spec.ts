@@ -421,3 +421,22 @@ test("a failed move reports the error envelope and keeps the box where it was", 
   await expect(page.getByRole("status").filter({ hasText: /Saved/ })).toBeVisible();
   await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
 });
+
+test("the confidence floor hides weak proposals from the image, the list and Accept all", async ({ page }) => {
+  await openEditor(page);
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+  // The mock's proposal scores 81%: a floor of 90% takes it out of sight.
+  await page.getByLabel("Hide proposals below this confidence").fill("90");
+  await expect(page.getByTestId("proposal-count")).toHaveText("0 proposals");
+  await expect(page.getByTestId("confidence-floor")).toContainText("below 90% · 1 hidden");
+  await expect(page.getByRole("button", { name: "Accept all (A)" })).toBeDisabled();
+  let reviewed = false;
+  page.on("request", (r) => {
+    if (r.url().endsWith("/boxes/review")) reviewed = true;
+  });
+  await page.keyboard.press("a");
+  await page.waitForTimeout(500);
+  expect(reviewed).toBe(false);
+  await page.getByLabel("Hide proposals below this confidence").fill("50");
+  await expect(page.getByTestId("proposal-count")).toHaveText("1 proposal");
+});

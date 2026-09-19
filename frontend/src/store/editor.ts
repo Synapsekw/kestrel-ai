@@ -33,6 +33,8 @@ export interface EditorState {
   error: string | null;
   notice: string | null;
   showRejected: boolean;
+  /** Unreviewed proposals below this confidence are hidden (0 = show all). Kept across images. */
+  minConfidence: number;
 
   loadImage: (image: ImageRow, boxes: Box[]) => void;
   setImage: (image: ImageRow) => void;
@@ -55,6 +57,7 @@ export interface EditorState {
   setError: (message: string | null) => void;
   setNotice: (message: string | null) => void;
   toggleShowRejected: () => void;
+  setMinConfidence: (value: number) => void;
   reset: () => void;
 }
 
@@ -103,6 +106,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeClassId: null,
   viewport: { width: 0, height: 0 },
   showRejected: false,
+  minConfidence: 0,
 
   loadImage: (image, boxes) =>
     set((s) => {
@@ -193,18 +197,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setError: (message) => set({ error: message }),
   setNotice: (message) => set({ notice: message }),
   toggleShowRejected: () => set((s) => ({ showRejected: !s.showRejected })),
+  setMinConfidence: (value) => set({ minConfidence: Math.min(1, Math.max(0, value)) }),
   reset: () => set({ ...EMPTY }),
 }));
 
 export type EditorStore = UseBoundStore<StoreApi<EditorState>>;
 
-export function visibleBoxes(s: Pick<EditorState, "boxes" | "order" | "showRejected">): Box[] {
+type Visibility = Pick<EditorState, "boxes" | "order" | "showRejected"> & { minConfidence?: number };
+
+/** Boxes drawn and listed: rejected ones only on request, weak proposals only above the floor. */
+export function visibleBoxes(s: Visibility): Box[] {
+  const floor = s.minConfidence ?? 0;
   return s.order
     .map((id) => s.boxes[id])
-    .filter((b) => b && (s.showRejected || b.review_state !== "rejected"));
+    .filter((b) => b && (s.showRejected || b.review_state !== "rejected"))
+    .filter((b) => b.review_state !== "unreviewed" || floor === 0 || (b.confidence ?? 1) >= floor);
 }
 
-export function visibleProposalIds(s: Pick<EditorState, "boxes" | "order" | "showRejected">): string[] {
+export function visibleProposalIds(s: Visibility): string[] {
   return visibleBoxes(s)
     .filter((b) => b.review_state === "unreviewed")
     .map((b) => b.id);
