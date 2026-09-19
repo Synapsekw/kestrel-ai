@@ -1,0 +1,466 @@
+{
+  "started": "2026-09-19T16:57:44.956Z",
+  "cfg": {
+    "projectFolder": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\244d1ea1-f337-4336-b57e-c040dd238eaf\\scratchpad\\walk-final-project",
+    "frames": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\244d1ea1-f337-4336-b57e-c040dd238eaf\\scratchpad\\frames",
+    "evidence": "E:\\Dev\\Yolo\\app\\.worktrees\\wave1\\docs\\evidence\\usability\\2026-09-19-after",
+    "label": 12,
+    "epochs": "3",
+    "port": 9222,
+    "projectId": null,
+    "fromStep": 1
+  },
+  "steps": [
+    {
+      "name": "1 projects screen explains itself; app settings work with no project",
+      "ok": true,
+      "checks": [
+        {
+          "what": "sidebar says why the project entries are disabled",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "disabled entry carries a tooltip",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "App settings opens without a project",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "provider cards are there",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "01-projects.png",
+        "02-app-settings.png"
+      ]
+    },
+    {
+      "name": "2 create a project; a missing folder is named",
+      "ok": true,
+      "checks": [
+        {
+          "what": "missing folder is named",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "empty Data Manager offers the import",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "03-empty-data-manager.png"
+      ]
+    },
+    {
+      "name": "3 import a folder; the banner ends with a summary",
+      "ok": true,
+      "checks": [
+        {
+          "what": "preparation settings sit under Advanced",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "jobs panel stays closed",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "summary names the images added",
+          "ok": true,
+          "detail": "Import finished: 40 images added.\nDismiss"
+        },
+        {
+          "what": "images are in the project",
+          "ok": true,
+          "detail": "40 images"
+        }
+      ],
+      "screenshots": [
+        "04-import-dialog.png",
+        "05-imported.png"
+      ]
+    },
+    {
+      "name": "4 add a starter model and use it for pre-annotation",
+      "ok": true,
+      "checks": [
+        {
+          "what": "starter models are offered",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the model is registered",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "truck is aliased to dump_truck",
+          "ok": true,
+          "detail": "{\"truck\":\"dump_truck\"}"
+        }
+      ],
+      "screenshots": [
+        "06-models-starters.png",
+        "07-model-added.png"
+      ]
+    },
+    {
+      "name": "5 label 12 images in the editor",
+      "ok": true,
+      "checks": [
+        {
+          "what": "pre-annotation reports what it did",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the shortcuts list opens on click",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "N marks the image as empty",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the toggle shows its state",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "Ctrl+Z takes the mark back",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "N marks it again",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "an empty image counts as labeled",
+          "ok": true,
+          "detail": "12 -> 13"
+        },
+        {
+          "what": "labeled images are counted",
+          "ok": true,
+          "detail": "13 labeled"
+        },
+        {
+          "what": "the editor has a way back",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "08-editor-shortcuts.png",
+        "09-editor-labeled.png",
+        "10-editor-marked-empty.png"
+      ]
+    },
+    {
+      "name": "6 dataset from the labeled images; a bad name is explained",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the dialog counts the empty image as a negative example",
+          "ok": true,
+          "detail": "Freeze 13 images into a new dataset (immutable after creation): 12 with accepted boxes, 1 marked empty (negative examples).\n\nName\nLetters, d"
+        },
+        {
+          "what": "a name with a space is explained",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the dataset job ends with a way to train",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "11-dataset-name-explained.png",
+        "12-dataset-created.png"
+      ]
+    },
+    {
+      "name": "6.5 the datasets screen lists, explains and deletes",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the dataset is listed",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "per-class counts are shown",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the detail leads to training",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "a name that differs only by case is refused",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the new dataset appears when its job ends",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the delete asks first and says what is kept",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the deleted dataset leaves the list",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the backend no longer has it",
+          "ok": true,
+          "detail": "status 404"
+        }
+      ],
+      "screenshots": [
+        "13-datasets-detail.png",
+        "14-datasets-delete-confirm.png",
+        "15-datasets-after-delete.png"
+      ]
+    },
+    {
+      "name": "7 train: guidance before, honest verdict after",
+      "ok": true,
+      "checks": [
+        {
+          "what": "a tiny dataset is called out",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "parameters are explained",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "training finished",
+          "ok": true,
+          "detail": "EPOCH\n3 / 3\nMAP50\n0.0%\nLOSS\nbox 3.518 cls 5.857 dfl 2.786\nETA\n0 s\nELAPSED\n16 s\n\nTraining finished: the model is register"
+        },
+        {
+          "what": "the log reads as sentences",
+          "ok": true,
+          "detail": "no raw JSON records"
+        },
+        {
+          "what": "a weak model is called out, a usable one is not",
+          "ok": true,
+          "detail": "mAP50 0, warned true"
+        }
+      ],
+      "screenshots": [
+        "16-train-form.png",
+        "17-train-done.png"
+      ]
+    },
+    {
+      "name": "8 run the trained model; review; accept as labels with a count; undo",
+      "ok": true,
+      "checks": [
+        {
+          "what": "a local run explains that it is free",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "card shows the final count (v1-yolo11n-coco (Trained))",
+          "ok": true,
+          "detail": "0 boxes found / api 0"
+        },
+        {
+          "what": "history shows the same count",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "an empty run says why",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "a local run explains that it is free",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "card shows the final count (yolo11n-coco (Imported))",
+          "ok": true,
+          "detail": "329 boxes found / api 329"
+        },
+        {
+          "what": "history shows the same count",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the starter model proposes something to review",
+          "ok": true,
+          "detail": "329 boxes"
+        },
+        {
+          "what": "the count is shown before anything is accepted",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "nothing accepted yet",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "accepted",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "undone",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the run is no longer promoted",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the review names how many images still wait",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the confidence floor hides weak proposals",
+          "ok": true,
+          "detail": "0 proposals -> 0 proposals"
+        },
+        {
+          "what": "the editor leads back to this review",
+          "ok": true,
+          "detail": "/p/cf85a70d-da5e-42db-adfd-5d1c216e1f67/review?ids=34e50e91-53d2-4245-ad3d-d17332a933ac,7b6698c4-b17b-4c4c-a284-0d2373e0b3b1,07aeca0a-9436-49d4-b480-f48594a36ada,191d6611-2563-4482-aabf-7972b81a667c,bd57095f-e0c2-447a-83b7-ec682db93db5,85e55158-1c55-43d4-a565-2f2462a6e827,b32a5309-9dab-4867-9090-a0635e36811e,9879c1b0-53d2-4bea-8fd2-b0020680eb2b,47886593-4208-4756-9bce-a8c2f3ba4a29,285f8194-cd81-427f-a271-1b08c0c8fce7,84be0da9-6e07-43ad-8569-4b0351682b25,9eddafcc-939c-42df-94fd-ed6edab8c66c,0068baab-4f2f-4f17-a474-964747bb3758,25d359eb-3f30-4203-a4a3-f859e4b0f7ea,4248eb61-e486-428b-839c-67e85b58cbbb,34f72783-a234-416e-bd31-e97ab7fba227,ead8e855-485a-4efb-a0ba-9108d3372e1e,62b2fddf-5465-478a-b910-1b9d4eb554a7,54768941-db10-4c20-8e6b-4c81e0c480e6,7b167268-3375-4125-bf7a-09a1df1b05ae,318b2ab0-0317-4e45-a6c6-ea0909be94c6,6f6b7bb8-65f5-4197-967f-28a671822381,825819e5-20ec-4693-becd-3c247d50ad8c,dd361884-8ebb-4b4b-9852-051b19129df2,05791a17-439f-44dd-b22e-7e7425313f8b,20d9910c-e1a8-4108-9ce4-7c64b4846b1b,d8c55232-ad66-4366-b603-fc2d74590282"
+        }
+      ],
+      "screenshots": [
+        "18-query-trained-model.png",
+        "19-query-starter-model.png",
+        "20-accept-confirm.png",
+        "21-accept-undone.png",
+        "22-review-of-the-run.png",
+        "23-review-confidence-floor.png"
+      ]
+    },
+    {
+      "name": "9 export the trained model to ONNX",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the ONNX file is listed",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "24-onnx-exported.png"
+      ]
+    },
+    {
+      "name": "9.5 export the results in every format; the model section shows the ONNX file",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the export says what it will contain",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the export job succeeded",
+          "ok": true,
+          "detail": "succeeded "
+        },
+        {
+          "what": "the past export is listed with Show in folder",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "every chosen format is on disk",
+          "ok": true,
+          "detail": "counts_by_group.csv, counts_by_image.csv, detections.csv, labels_coco.json, labels_yolo, report.html"
+        },
+        {
+          "what": "the CSV opens in Excel (UTF-8 with BOM)",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the report is self-contained with thumbnails",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "no partial folder is left behind",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the model section explains ONNX and shows the exported file",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "export folder exists",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "25-export-form.png",
+        "26-export-done.png",
+        "27-export-model-section.png"
+      ]
+    },
+    {
+      "name": "10 no IPC errors in the console",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the CSP lets Tauri's IPC through",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": []
+    }
+  ],
+  "imageCount": 40,
+  "map50": 0,
+  "finished": "2026-09-19T16:59:41.623Z",
+  "passed": true
+}

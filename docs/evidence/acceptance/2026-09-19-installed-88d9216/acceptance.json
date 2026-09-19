@@ -1,0 +1,117 @@
+{
+  "project_id": "c1eb5eb6-746e-4d1d-a747-f73dceec3788",
+  "steps": [
+    {
+      "name": "1. create project with the eight classes",
+      "ok": true,
+      "detail": "c1eb5eb6-746e-4d1d-a747-f73dceec3788 classes excavator,wheel_loader,bulldozer,dump_truck,crane,concrete_mixer,roller,backhoe",
+      "seconds": 0.2
+    },
+    {
+      "name": "2. import the source folder",
+      "ok": true,
+      "detail": "images 3299 duplicates 0 flights 0031,0033,0034,0035,0038,0040,0042",
+      "seconds": 144.1,
+      "image_count": 3299,
+      "flights": [
+        "0031",
+        "0033",
+        "0034",
+        "0035",
+        "0038",
+        "0040",
+        "0042"
+      ]
+    },
+    {
+      "name": "3. pre-annotation model proposes on at least one of the opened images",
+      "ok": true,
+      "detail": "yolo11m-coco (80 classes), 4 local_model proposals over 10 images (minimum 1)",
+      "seconds": 5.7,
+      "proposals": 4
+    },
+    {
+      "name": "4. label images and freeze dataset v1 by group",
+      "ok": true,
+      "detail": "labeled 30, train 24 val 6, split by_group, frozen images match the 30 labeled ones: true",
+      "seconds": 32.1,
+      "data_yaml": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\244d1ea1-f337-4336-b57e-c040dd238eaf\\scratchpad\\accept-final-project\\datasets\\v1\\data.yaml"
+    },
+    {
+      "name": "5. train for the requested epochs and register the model",
+      "ok": true,
+      "detail": "model ahmadia-v1 mAP50 0.0000 epoch card \"3 / 3\" job.progress events 3",
+      "seconds": 16.6,
+      "metrics": {
+        "map50": 0,
+        "map50_95": 0,
+        "precision": 0,
+        "recall": 0,
+        "per_class": [
+          {
+            "class_name": "excavator",
+            "map50": 0,
+            "map50_95": 0,
+            "precision": 0,
+            "recall": 0
+          }
+        ]
+      },
+      "progress_events": [
+        "epoch 1/3 mAP50 0.000 loss box 3.088 cls 12.512 dfl 3.053 ETA 6s",
+        "epoch 2/3 mAP50 0.000 loss box 3.288 cls 11.925 dfl 3.216 ETA 2s",
+        "epoch 3/3 mAP50 0.000 loss box 3.029 cls 11.366 dfl 3.000 ETA 0s"
+      ]
+    },
+    {
+      "name": "6. run the trained model over unlabeled images, review and promote",
+      "ok": true,
+      "detail": "50 images (the intended unlabelled ones: true), 54392 boxes (minimum 1), 50 rows in the review queue, promoted_at 2026-09-19T16:57:21.628640Z",
+      "seconds": 71.4,
+      "box_count": 54392
+    },
+    {
+      "name": "8. export the trained model to ONNX",
+      "ok": true,
+      "detail": "models/ahmadia-v1-844da77c.onnx",
+      "seconds": 5.3
+    }
+  ],
+  "skipped": [
+    "7. anthropic vision query: ANTHROPIC_API_KEY is not set in the environment"
+  ],
+  "failed_step": null,
+  "config": {
+    "projectFolder": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\244d1ea1-f337-4336-b57e-c040dd238eaf\\scratchpad\\accept-final-project",
+    "evidence": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\244d1ea1-f337-4336-b57e-c040dd238eaf\\scratchpad\\accept-final-evidence",
+    "projectName": "Ahmadia",
+    "source": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+    "site": "ahmadia",
+    "preannotateWeights": "E:\\Dev\\Yolo\\models\\yolo11m.pt",
+    "baseWeights": "E:\\Dev\\Yolo\\models\\yolo11n.pt",
+    "expectImages": 3299,
+    "expectDuplicates": 0,
+    "expectFlights": [
+      "0031",
+      "0033",
+      "0034",
+      "0035",
+      "0038",
+      "0040",
+      "0042"
+    ],
+    "preannotateImages": 10,
+    "minProposals": 1,
+    "labelCount": 30,
+    "epochs": 3,
+    "imgsz": 1280,
+    "batch": 4,
+    "queryImages": 50,
+    "minQueryBoxes": 1,
+    "cloudImages": 5,
+    "minCloudBoxes": 1,
+    "conf": "0.001",
+    "importTimeoutMin": 60,
+    "projectId": ""
+  }
+}
