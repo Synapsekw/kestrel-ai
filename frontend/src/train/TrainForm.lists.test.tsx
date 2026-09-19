@@ -61,6 +61,25 @@ describe("TrainForm when the lists arrive late", () => {
     expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
   });
 
+  it("explains the fallback next to the picker when the linked dataset is gone (I-B2)", () => {
+    const { rerender } = mount([], [], "nope-not-a-real-dataset");
+    expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
+    rerender([exampleDataset], [exampleModel]);
+    expect(
+      screen.getByText("The dataset from the link no longer exists; the newest one is selected instead."),
+    ).toBeInTheDocument();
+  });
+
+  it("says nothing when the ?dataset= id is valid, or when none was given", () => {
+    const { rerender } = mount([], [], exampleDataset.id);
+    rerender([exampleDataset], [exampleModel]);
+    expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
+
+    const noId = mount([], []);
+    noId.rerender([exampleDataset], [exampleModel]);
+    expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
+  });
+
   it("keeps a valid initialDatasetId once a later list arrives, even when it is not the first one", () => {
     const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
     const { rerender } = mount([], [], older.id);

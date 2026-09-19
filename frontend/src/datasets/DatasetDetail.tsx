@@ -5,7 +5,7 @@ import { useApi } from "@/api/client";
 import { deleteDataset, fetchDatasetStats } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
-import { useJobsStore } from "@/store/jobs";
+import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { splitAdvice } from "./splitAdvice";
 
 export interface DatasetDetailProps {
@@ -20,7 +20,6 @@ const dt = "text-xs uppercase tracking-wide text-slate-500";
 const dd = "text-sm";
 
 interface StatsState {
-  datasetId: string;
   stats: DatasetStats | null;
   error: string | null;
 }
@@ -32,18 +31,18 @@ interface StatsState {
  */
 function useDatasetStats(projectId: string, datasetId: string): StatsState {
   const api = useApi();
-  const [state, setState] = useState<StatsState>({ datasetId, stats: null, error: null });
+  const [state, setState] = useState<StatsState>({ stats: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
     fetchDatasetStats(api, projectId, datasetId)
       .then((stats) => {
-        if (!cancelled) setState({ datasetId, stats, error: null });
+        if (!cancelled) setState({ stats, error: null });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         pushLog(`load dataset stats ${datasetId} failed: ${messageOf(e, String(e))}`);
-        setState({ datasetId, stats: null, error: messageOf(e, "could not load dataset statistics") });
+        setState({ stats: null, error: messageOf(e, "could not load dataset statistics") });
       });
     return () => {
       cancelled = true;
@@ -60,10 +59,10 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // From the jobs store only (no fetch): recent jobs are already loaded project-wide (M5e). A
-  // dataset whose own materialise job never reached the store (long finished, or never seen this
-  // session) is treated as normal -- the common case for an established dataset.
-  const materialiseJob = useJobsStore((s) => (dataset.job_id ? s.jobs[dataset.job_id] : undefined));
+  // Recent jobs are usually already loaded project-wide, but a dataset survives a crash that left
+  // its materialise job "failed" at the next start (M5e), so a job not yet in the store is fetched
+  // once here (useTrackedJob checks the store first and only fetches when it must).
+  const { job: materialiseJob } = useTrackedJob(projectId, dataset.job_id);
   const jobState = materialiseJob?.state;
   const isWriting = jobState === "queued" || jobState === "running";
   const isIncomplete = jobState === "failed" || jobState === "cancelled";

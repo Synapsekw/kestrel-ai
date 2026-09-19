@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { describe, it, expect } from "vitest";
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { fetchDatasets } from "@/api/datasets";
 import { errorBody, exampleDataset, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { useDatasetNames } from "./useDatasetNames";
@@ -26,8 +27,11 @@ describe("useDatasetNames", () => {
       { method: "GET", path: /\/datasets$/, status: 501, body: errorBody("not_implemented", "later") },
     ]);
     const { result } = renderHook(() => useDatasetNames(PROJECT_ID), { wrapper: wrapperFor(api) });
-    // Give the failed fetch a tick to settle; loaded must remain false either way.
-    await new Promise((r) => setTimeout(r, 10));
+    // Flush the same rejected request the hook awaits internally (loaded must stay false either
+    // way, so there is no state change here to wait on with `waitFor`).
+    await act(async () => {
+      await fetchDatasets(api, PROJECT_ID).catch(() => {});
+    });
     expect(result.current.loaded).toBe(false);
     expect(result.current.names).toEqual({});
   });

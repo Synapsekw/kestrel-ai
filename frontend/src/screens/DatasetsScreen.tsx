@@ -63,7 +63,8 @@ export function DatasetsScreen() {
           role="note"
           className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
         >
-          Datasets are not available.
+          Datasets are not available. Restart the app; if it persists, use Copy diagnostics in the error
+          dialog.
         </p>
       )}
 
@@ -95,11 +96,15 @@ export function DatasetsScreen() {
         </p>
       )}
 
-      {selectedId && !selected && !datasets.loading && !datasets.unavailable && (
-        <p role="note" className="text-sm text-slate-400">
-          That dataset no longer exists.
-        </p>
-      )}
+      {selectedId &&
+        !selected &&
+        !datasets.loading &&
+        !datasets.unavailable &&
+        datasets.datasets.length > 0 && (
+          <p role="note" className="text-sm text-slate-400">
+            That dataset no longer exists.
+          </p>
+        )}
 
       {selected && (
         <DatasetDetail key={selected.id} projectId={projectId} dataset={selected} onDeleted={onDeleted} />

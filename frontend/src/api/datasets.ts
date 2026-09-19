@@ -21,14 +21,6 @@ export function fetchDatasets(api: ApiClient, projectId: string): Promise<Datase
   );
 }
 
-export function fetchDataset(api: ApiClient, projectId: string, datasetId: string): Promise<Dataset> {
-  return unwrap(
-    api.GET("/api/v1/projects/{projectId}/datasets/{datasetId}", {
-      params: { path: { projectId, datasetId } },
-    }),
-  );
-}
-
 export function fetchDatasetStats(
   api: ApiClient,
   projectId: string,

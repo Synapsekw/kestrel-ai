@@ -55,6 +55,10 @@ export function TrainForm({
   const [error, setError] = useState<string | null>(null);
   const dataset = datasets.find((d) => d.id === form.datasetId);
   const advice = trainAdvice(dataset, form);
+  // Purely derived from props: true once a non-empty dataset list has actually loaded and the
+  // linked dataset (a "Train on this dataset" link, or ?dataset=) is not in it (I-B2).
+  const initialDatasetMissing =
+    Boolean(initialDatasetId) && datasets.length > 0 && !datasets.some((d) => d.id === initialDatasetId);
 
   // The lists load after mount and change again when a training job registers a model. Fill only
   // the pickers that are still empty and a name the user has not edited; everything typed survives.
@@ -154,6 +158,11 @@ export function TrainForm({
             </Link>{" "}
             (or select images in the Data Manager and use Add to dataset).
           </span>
+          {initialDatasetMissing && (
+            <span role="note" className="text-amber-300">
+              The dataset from the link no longer exists; the newest one is selected instead.
+            </span>
+          )}
         </label>
         <label className={label}>
           Base model

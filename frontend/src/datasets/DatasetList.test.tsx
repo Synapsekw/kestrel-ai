@@ -15,10 +15,11 @@ describe("DatasetList", () => {
     expect(row).toHaveTextContent(formatLocalDate(exampleDataset.created_at));
   });
 
-  it("selects a dataset by clicking its name button (M9)", () => {
+  it("selects a dataset by clicking its name button, exactly once (not also via the row)", () => {
     const onSelect = vi.fn();
     render(<DatasetList datasets={[exampleDataset]} selectedId={null} onSelect={onSelect} />);
     fireEvent.click(screen.getByRole("button", { name: "Select dataset v1" }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
     expect(onSelect).toHaveBeenCalledWith(exampleDataset.id);
   });
 

@@ -74,7 +74,7 @@ export function AddToDatasetDialog({
     setError(null);
     try {
       const created = await addImagesToDataset(api, projectId, imageIds, {
-        name: name.trim(),
+        name,
         split_method: split,
         val_fraction: fraction,
         seed: seedValue,
@@ -181,7 +181,7 @@ export function AddToDatasetDialog({
           )}
           <div className="flex items-center gap-3">
             <Link
-              to={`/p/${projectId}/train${createdDataset ? `?dataset=${createdDataset.id}` : ""}`}
+              to={`/p/${projectId}/train${succeeded ? `?dataset=${succeeded.id}` : ""}`}
               className="text-sm text-orange-300 hover:underline"
             >
               Train on it
