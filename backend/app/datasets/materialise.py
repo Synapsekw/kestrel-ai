@@ -8,6 +8,7 @@ extra disk space.
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 from pathlib import Path
@@ -90,38 +91,103 @@ def discard(handle: ProjectHandle, dataset_id: str) -> None:
     shutil.rmtree(root, ignore_errors=True)
 
 
-def _remove_dataset_folder(handle: ProjectHandle, root: Path) -> None:
-    """Refuse to remove anything outside `<project>/datasets`, and never follow a link out of it."""
+log = logging.getLogger(__name__)
+
+TOMBSTONE_PREFIX = ".deleting-"
+# Windows device names: a folder called CON or NUL cannot be created or removed normally.
+_RESERVED = {"con", "prn", "aux", "nul"} | {f"{port}{i}" for port in ("com", "lpt") for i in range(1, 10)}
+
+
+def unusable_name(name: str) -> str | None:
+    """Why `name` cannot be a dataset folder on Windows, or None. Deleting relies on these rules."""
+    if name.startswith("."):
+        return "a dataset name cannot start with a dot"
+    if name.endswith((".", " ")):
+        return "a dataset name cannot end with a dot or a space"
+    if "/" in name or "\\" in name:
+        return "a dataset name cannot contain a slash"
+    if name.split(".")[0].casefold() in _RESERVED:
+        return f"{name} is a reserved name on Windows"
+    return None
+
+
+def _dataset_folder_to_remove(handle: ProjectHandle, s, dataset: Dataset) -> Path:
+    """The folder a dataset row names, proven safe to remove; 409 for anything else.
+
+    Safe means: a direct child of `<project>/datasets` spelled as the row spells it (so no `..`,
+    no `datasets` itself, no absolute path), not a link, and not the folder of another dataset
+    (`V1` and `v1` are one folder on Windows). The row is data, and a wrong row must never cost
+    the operator a folder.
+    """
+    relative_path = dataset.path or ""
     datasets_root = handle.datasets_dir.resolve()
+    root = handle.folder / relative_path
     resolved = root.resolve()
-    if resolved != datasets_root and datasets_root not in resolved.parents:
-        raise AppError("conflict", f"refusing to delete {resolved}: outside the datasets folder", 409)
-    if resolved.is_dir():
-        shutil.rmtree(resolved)
+    is_child = bool(relative_path.strip()) and resolved.parent == datasets_root
+    same_spelling = is_child and resolved.name.casefold() == Path(relative_path).name.casefold()
+    is_link = root.is_symlink() or (root.exists() and Path(os.path.abspath(root)) != resolved)
+    others = s.execute(select(Dataset.path).where(Dataset.id != dataset.id)).scalars()
+    shared = any((handle.folder / (o or "")).resolve() == resolved for o in others)
+    if not same_spelling or is_link or shared or resolved.name.startswith(TOMBSTONE_PREFIX):
+        raise AppError(
+            "conflict",
+            f"The folder of dataset {dataset.name} ({relative_path or 'empty path'}) is not its own folder "
+            "inside this project's datasets folder, so nothing was deleted.",
+            409,
+        )
+    return resolved
+
+
+def _sweep_tombstones(handle: ProjectHandle, log) -> None:
+    """Remove what earlier deletions could not (a file was open); never raises."""
+    if not handle.datasets_dir.is_dir():
+        return
+    for leftover in handle.datasets_dir.glob(f"{TOMBSTONE_PREFIX}*"):
+        try:
+            shutil.rmtree(leftover)  # unlinks hard links and nested junctions; never follows them
+        except OSError as e:
+            log.warning("could not remove %s yet: %s", leftover, e)
 
 
 def delete_dataset(handle: ProjectHandle, dataset_id: str) -> None:
     """Remove a dataset's row and frozen folder. Images, labels and trained models are kept.
 
     Refused while a job that depends on the dataset -- its own materialise job or a `train` job
-    reading it -- is queued or running.
+    reading it -- is queued or running. Order: prove the folder safe, move it aside (atomic, so a
+    folder in use refuses the delete with nothing changed), delete the rows, then remove the
+    moved folder; if that last step fails the name is free anyway and a later delete sweeps it.
     """
     with handle.session() as s:
         dataset = s.get(Dataset, dataset_id)
         if dataset is None:
             raise not_found("dataset", dataset_id)
-        active = list(s.execute(select(Job).where(Job.state.in_(ACTIVE_JOB_STATES))).scalars())
-        for job in active:
-            if job.id == dataset.job_id or (
-                job.type == "train" and (job.params or {}).get("dataset_id") == dataset_id
-            ):
+        for job in s.execute(select(Job).where(Job.state.in_(ACTIVE_JOB_STATES))).scalars():
+            uses_it = job.type in ("train", "dataset") and (job.params or {}).get("dataset_id") == dataset_id
+            if job.id == dataset.job_id or uses_it:
+                raise AppError("conflict", f"Dataset {dataset.name} is in use by a running job.", 409)
+        folder = _dataset_folder_to_remove(handle, s, dataset)
+        tombstone = folder.with_name(f"{TOMBSTONE_PREFIX}{dataset_id}")
+        moved = False
+        if folder.is_dir():
+            try:
+                os.replace(folder, tombstone)
+                moved = True
+            except OSError as e:
                 raise AppError(
-                    "conflict", f"dataset {dataset.name!r} is in use by a running job", 409
-                )
-        root = handle.folder / dataset.path
-        s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
-        s.delete(dataset)
-    _remove_dataset_folder(handle, root)
+                    "conflict",
+                    f"The folder of dataset {dataset.name} is in use ({e.strerror or e}). "
+                    "Close programs that have it open and try again.",
+                    409,
+                ) from e
+        try:
+            s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
+            s.delete(dataset)
+            s.flush()
+        except Exception:
+            if moved:
+                os.replace(tombstone, folder)  # the rows stay, so the folder comes back
+            raise
+    _sweep_tombstones(handle, log)
 
 
 @register_job_type("dataset")
@@ -203,9 +269,15 @@ def freeze(handle: ProjectHandle, body: DatasetCreate) -> str:
             # data, and the contract's positive-data-acceptance check forbids rejecting a
             # schema-valid body with 422 (see router.create_source for the same rule).
             raise AppError("conflict", NOTHING_TO_TRAIN_ON, 409)
-        if body.name in (".", "..") or "/" in body.name or "\\" in body.name:
+        if body.name in (".", ".."):
             raise AppError("validation_error", f"{body.name!r} is not a usable folder name", 422)
-        if s.execute(select(Dataset).where(Dataset.name == body.name)).scalar_one_or_none() is not None:
+        problem = unusable_name(body.name)
+        if problem:
+            # 409 for the same reason as above: the name is schema-valid.
+            raise AppError("conflict", f"{problem[0].upper()}{problem[1:]}.", 409)
+        # `V1` and `v1` are one folder on Windows, so names are unique without regard to case.
+        taken = s.execute(select(Dataset.name)).scalars()
+        if any(n.casefold() == body.name.casefold() for n in taken):
             raise AppError("already_exists", f"dataset {body.name!r} already exists", 409)
 
         keys = {i.id: _split_key(i, body.split_method) for i in selected}
