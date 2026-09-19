@@ -7,7 +7,7 @@ import { patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
-import { formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
+import { classMapping, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
 
 export interface ModelDetailProps {
   projectId: string;
@@ -36,6 +36,11 @@ export function ModelDetail({
   const api = useApi();
   const metrics = model.metrics;
   const aliases = Object.entries(model.class_aliases);
+  const mapping = classMapping(
+    model.class_names,
+    model.class_aliases,
+    (project?.classes ?? []).map((c) => c.name),
+  );
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -120,6 +125,15 @@ export function ModelDetail({
         {aliases.length > 0 && (
           <p className="text-xs text-slate-400">
             Aliases: {aliases.map(([from, to]) => `${from} → ${to}`).join(", ")}
+          </p>
+        )}
+        {project && (
+          <p data-testid="class-mapping" className="text-xs text-slate-400">
+            {mapping.mapped.length} of {model.class_names.length}{" "}
+            {mapping.mapped.length === 1 ? "classes maps" : "classes map"} to this project
+            {mapping.mapped.length > 0 &&
+              `: ${mapping.mapped.map((m) => (m.from === m.to ? m.to : `${m.from} → ${m.to}`)).join(", ")}`}
+            .{mapping.ignored > 0 && ` Detections of the other ${mapping.ignored} are dropped.`}
           </p>
         )}
       </div>

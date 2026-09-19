@@ -123,4 +123,23 @@ describe("ModelDetail actions", () => {
       url: `/api/v1/projects/${PROJECT_ID}/models/${TRAINED_MODEL_ID}`,
     });
   });
+
+  it("says how many of the model's classes produce proposals in this project", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleModel}
+        project={exampleProject}
+        datasetNames={{}}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    expect(screen.getByTestId("class-mapping")).toHaveTextContent(
+      "1 of 8 classes maps to this project: truck → dump_truck. Detections of the other 7 are dropped.",
+    );
+  });
 });
