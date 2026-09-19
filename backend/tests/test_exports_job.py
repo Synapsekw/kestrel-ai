@@ -169,6 +169,64 @@ def test_a_failed_export_leaves_no_partial_folder(
     assert _no_stamp_or_partial_folders_left(handle)
 
 
+def test_two_exports_in_the_same_frozen_second_get_stamp_and_stamp_2(
+    client, project_id, with_boxes, handle, monkeypatch, wait_job
+):
+    """N1 regression: the first export's folder must not be handed out again to the second."""
+    from datetime import UTC, datetime
+
+    frozen = datetime(2026, 9, 19, 10, 15, 0, tzinfo=UTC).astimezone()
+    monkeypatch.setattr("app.exports.job._now_local", lambda: frozen)
+
+    r1 = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv"]})
+    job1 = wait_job(project_id, r1.json()["job"]["id"])
+    assert job1["state"] == "succeeded", job1
+
+    r2 = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv"]})
+    job2 = wait_job(project_id, r2.json()["job"]["id"])
+    assert job2["state"] == "succeeded", job2
+
+    stamp = frozen.strftime("%Y-%m-%d_%H%M%S")
+    assert job1["result"]["folder"] == f"exports/{stamp}"
+    assert job2["result"]["folder"] == f"exports/{stamp}_2"
+    names = sorted(p.name for p in handle.exports_dir.iterdir())
+    assert names == [stamp, f"{stamp}_2"]  # no leftover .partial-* folder
+
+
+def test_a_rename_hit_by_permission_error_twice_then_succeeding_still_succeeds(
+    client, project_id, with_boxes, wait_job, monkeypatch
+):
+    real_replace = __import__("os").replace
+    calls = {"n": 0}
+
+    def flaky_replace(src, dst):
+        calls["n"] += 1
+        if calls["n"] <= 2:
+            raise PermissionError("Access is denied")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr("app.exports.job.os.replace", flaky_replace)
+    monkeypatch.setattr("app.exports.job.RENAME_RETRY_DELAY_S", 0.01)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv"]})
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "succeeded", job
+    assert calls["n"] == 3
+
+
+def test_a_rename_that_always_fails_leaves_no_partial_folder_and_the_job_failed(
+    client, project_id, with_boxes, handle, wait_job, monkeypatch
+):
+    def always_fails(src, dst):
+        raise PermissionError("Access is denied")
+
+    monkeypatch.setattr("app.exports.job.os.replace", always_fails)
+    monkeypatch.setattr("app.exports.job.RENAME_RETRY_DELAY_S", 0.01)
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["csv"]})
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "failed", job
+    assert _no_stamp_or_partial_folders_left(handle)
+
+
 def test_cancellation_inside_the_html_cards_leaves_the_job_cancelled(
     client, project_id, handle, project_dir, make_jpeg, monkeypatch, wait_job
 ):
