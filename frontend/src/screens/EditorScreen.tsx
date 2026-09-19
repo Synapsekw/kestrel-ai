@@ -9,7 +9,9 @@ import { BoxLayer } from "@/editor/BoxLayer";
 import { ClassSidebar } from "@/editor/ClassSidebar";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { BackLink } from "@/editor/BackLink";
+import { ConfidenceFloor } from "@/editor/ConfidenceFloor";
 import { EditorToolbar } from "@/editor/EditorToolbar";
+import { EmptyToggle } from "@/editor/EmptyToggle";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
 import { RegionList } from "@/editor/RegionList";
 import { useEditorActions } from "@/editor/useEditorActions";
@@ -17,7 +19,7 @@ import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
 import { useEditorImage } from "@/editor/useEditorImage";
 import { useEditorNavigation } from "@/editor/useEditorNavigation";
 import { useHistory } from "@/editor/useHistory";
-import { useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
+import { hasGroundTruth, useEditorStore, visibleBoxes, visibleProposalIds } from "@/store/editor";
 
 export function EditorScreen() {
   const { projectId = "", imageId = "" } = useParams();
@@ -68,16 +70,29 @@ function EditorBody({
   const drawAnchor = useRef<Point | null>(null);
   const drawStart = useRef<Point | null>(null);
   const drawEnd = useRef<Point | null>(null);
-  const visible = useMemo(() => visibleBoxes({ boxes, order, showRejected }), [boxes, order, showRejected]);
+  const minConfidence = useEditorStore((s) => s.minConfidence);
+  const setMinConfidence = useEditorStore((s) => s.setMinConfidence);
+  const visible = useMemo(
+    () => visibleBoxes({ boxes, order, showRejected, minConfidence }),
+    [boxes, order, showRejected, minConfidence],
+  );
+  // Proposals the confidence floor keeps out of sight on this image.
+  const hiddenByFloor = useMemo(
+    () =>
+      visibleProposalIds({ boxes, order, showRejected }).length -
+      visibleProposalIds({ boxes, order, showRejected, minConfidence }).length,
+    [boxes, order, showRejected, minConfidence],
+  );
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const b of visible) c[b.class_id] = (c[b.class_id] ?? 0) + 1;
     return c;
   }, [visible]);
   const proposalIds = useMemo(
-    () => visibleProposalIds({ boxes, order, showRejected }),
-    [boxes, order, showRejected],
+    () => visibleProposalIds({ boxes, order, showRejected, minConfidence }),
+    [boxes, order, showRejected, minConfidence],
   );
+  const groundTruth = useMemo(() => hasGroundTruth(boxes), [boxes]);
   const navigation = useEditorNavigation(projectId, imageId);
   const nav = useMemo(
     () => ({ next: navigation.next, prev: navigation.prev }),
@@ -175,6 +190,16 @@ function EditorBody({
       >
         Show rejected
       </button>
+      {(proposalIds.length > 0 || hiddenByFloor > 0 || minConfidence > 0) && (
+        <ConfidenceFloor value={minConfidence} hidden={hiddenByFloor} onChange={setMinConfidence} />
+      )}
+      <span className="mx-1 h-4 border-l border-slate-700" />
+      <EmptyToggle
+        image={image}
+        hasGroundTruth={groundTruth}
+        busy={pending > 0}
+        onToggle={() => void actions.toggleEmpty()}
+      />
     </>
   );
 
@@ -239,6 +264,7 @@ function EditorBody({
           classes={project.classes}
           selectedId={selectedId}
           hoveredId={hoveredId}
+          markedEmpty={image?.marked_empty ?? false}
           onSelect={select}
           onHover={hover}
           onSetClass={(id, classId) => void actions.setClass(id, classId)}

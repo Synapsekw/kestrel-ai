@@ -91,6 +91,7 @@ class ImageOut(BaseModel):
     pending_count: int
     max_pending_confidence: float | None
     labeled: bool
+    marked_empty: bool
     created_at: datetime
 
     @classmethod
@@ -113,7 +114,8 @@ class ImageOut(BaseModel):
             box_count=box_count,
             pending_count=pending_count,
             max_pending_confidence=max_pending_confidence,
-            labeled=box_count > 0,
+            labeled=box_count > 0 or image.marked_empty,
+            marked_empty=image.marked_empty,
             created_at=image.created_at,
         )
 
@@ -122,6 +124,20 @@ class ImagePage(BaseModel):
     items: list[ImageOut]
     next_cursor: str | None = None
     total: int
+
+
+class ImageUpdate(BaseModel):
+    marked_empty: bool
+
+
+class BulkMarkEmpty(BaseModel):
+    image_ids: list[str] = Field(min_length=1)
+    marked_empty: bool
+
+
+class BulkMarkEmptyResult(BaseModel):
+    updated: int
+    skipped: int
 
 
 class BulkDelete(BaseModel):

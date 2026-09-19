@@ -1,8 +1,9 @@
 import type { ApiClient, Box, BoxCreate, ReviewState } from "@contract/client";
 import { createBox, deleteBox, reviewBoxes, updateBox } from "@/api/boxes";
 import { messageOf } from "@/api/errors";
+import { setMarkedEmpty } from "@/api/images";
 import { pushLog } from "@/app/diagnostics";
-import type { EditorStore } from "@/store/editor";
+import { hasGroundTruth, type EditorStore } from "@/store/editor";
 import { duplicateOffset, rectEquals, rectOf, roundRect, type Rect } from "./geometry";
 import type { BoxRef, History } from "./history";
 
@@ -78,6 +79,8 @@ export async function cmdCreateBox(
   if (!created) return undefined;
   store.getState().upsertBox(created);
   store.getState().select(created.id);
+  // The store itself clears `marked_empty` when a ground-truth box lands (upsertBox), mirroring
+  // the backend's own transaction — no special case needed here.
   const ref: BoxRef = { id: created.id };
   history.push({
     label: "draw box",
@@ -218,6 +221,92 @@ export async function cmdReview(ctx: CommandContext, ids: string[], action: Revi
       store.getState().patchStates(ids, state);
     },
   });
+}
+
+/** The one wording used everywhere a mark is refused because of existing ground truth (M3). */
+export const GROUND_TRUTH_MESSAGE = "This image has accepted boxes. Delete or reject them first.";
+
+const MARK_NOTICE =
+  "Marked as empty: this image counts as labeled and enters datasets as a negative example.";
+const UNMARK_NOTICE = "No longer marked empty.";
+
+/** Marks `imageId` empty; returns the ids of the proposals it rejected (for undo). */
+async function markEmpty(ctx: CommandContext, imageId: string): Promise<string[]> {
+  const { api, projectId, store } = ctx;
+  // Captured before the await: a store whose image changes mid-flight must reject exactly the
+  // proposals that were visible when the command started, not whatever is loaded once it resolves.
+  const rejectIds = Object.values(store.getState().boxes)
+    .filter((b) => b.review_state === "unreviewed")
+    .map((b) => b.id);
+  const updated = await setMarkedEmpty(api, projectId, imageId, true);
+  if (store.getState().imageId !== imageId) return rejectIds; // navigated away meanwhile
+  store.getState().setImage(updated);
+  if (rejectIds.length) store.getState().patchStates(rejectIds, "rejected");
+  store.getState().setNotice(MARK_NOTICE);
+  return rejectIds;
+}
+
+/** Unmarks `imageId`; never touches boxes (unmarking never resurrects a rejected proposal). */
+async function unmarkEmpty(ctx: CommandContext, imageId: string): Promise<void> {
+  const { api, projectId, store } = ctx;
+  const updated = await setMarkedEmpty(api, projectId, imageId, false);
+  if (store.getState().imageId !== imageId) return;
+  store.getState().setImage(updated);
+  store.getState().setNotice(UNMARK_NOTICE);
+}
+
+/** Undo of a mark: unmark, then put back to `unreviewed` exactly the proposals it rejected. */
+async function undoMark(ctx: CommandContext, imageId: string, rejectedIds: string[]): Promise<void> {
+  await unmarkEmpty(ctx, imageId);
+  if (rejectedIds.length && ctx.store.getState().imageId === imageId) {
+    await reviewBoxes(ctx.api, ctx.projectId, rejectedIds, "unreview");
+    if (ctx.store.getState().imageId === imageId) ctx.store.getState().patchStates(rejectedIds, "unreviewed");
+  }
+}
+
+/**
+ * "No machinery on this image" (spec section 6, walk-through item E4). A mark is refused locally,
+ * without a request, when the store already has a ground-truth box (M3) — the store owns that
+ * invariant (I1), so this never races the backend's own 409. Both directions go on the undo stack
+ * (I2a): undoing a mark restores exactly the proposals it rejected; undoing an unmark marks again,
+ * rejecting whatever is unreviewed at that moment (kept simple, same as a fresh mark).
+ */
+export async function cmdToggleEmpty(ctx: CommandContext): Promise<void> {
+  const { store, history } = ctx;
+  const image = store.getState().image;
+  if (!image) return;
+  const imageId = image.id;
+  const next = !image.marked_empty;
+  if (next && hasGroundTruth(store.getState().boxes)) {
+    store.getState().setError(GROUND_TRUTH_MESSAGE);
+    return;
+  }
+  store.getState().beginRequest();
+  store.getState().setError(null);
+  try {
+    if (next) {
+      const rejectIds = await markEmpty(ctx, imageId);
+      history.push({
+        label: "mark empty",
+        undo: () => undoMark(ctx, imageId, rejectIds),
+        redo: () => markEmpty(ctx, imageId).then(() => undefined),
+      });
+    } else {
+      await unmarkEmpty(ctx, imageId);
+      history.push({
+        label: "unmark empty",
+        undo: () => markEmpty(ctx, imageId).then(() => undefined),
+        redo: () => unmarkEmpty(ctx, imageId),
+      });
+    }
+  } catch (e) {
+    if (store.getState().imageId === imageId) {
+      pushLog(`mark empty failed: ${messageOf(e, String(e))}`);
+      store.getState().setError(messageOf(e, "could not update the mark"));
+    }
+  } finally {
+    store.getState().endRequest();
+  }
 }
 
 export async function cmdUndo(ctx: CommandContext): Promise<void> {

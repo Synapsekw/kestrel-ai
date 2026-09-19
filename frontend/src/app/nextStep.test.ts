@@ -41,7 +41,7 @@ describe("nextStep", () => {
         trainedModels: 1,
         pendingReview: 37,
       }),
-    ).toMatchObject({ text: "Review the proposals on 37 images.", to: "/p/p/review" });
+    ).toMatchObject({ text: "Review the 37 proposals waiting in the queue.", to: "/p/p/review" });
   });
 
   it("has nothing to push when everything is labeled and reviewed", () => {

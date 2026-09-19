@@ -57,6 +57,61 @@ describe("editor store", () => {
     expect(useEditorStore.getState().selectedId).toBeNull();
   });
 
+  it("upsertBox clears marked_empty when the box is ground truth, but not otherwise (I1)", () => {
+    const s = useEditorStore.getState();
+    s.loadImage({ ...exampleImage, marked_empty: true }, []);
+    s.upsertBox(proposalBox); // unreviewed: not ground truth
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.upsertBox(personBox); // accepted: ground truth
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("patchStates to accepted clears marked_empty, but rejecting does not (I1)", () => {
+    const s = useEditorStore.getState();
+    s.loadImage({ ...exampleImage, marked_empty: true }, [proposalBox]);
+    s.patchStates([proposalBox.id], "rejected");
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.patchStates([proposalBox.id], "accepted");
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("setBoxes clears marked_empty exactly when the loaded boxes include ground truth (I1)", () => {
+    const s = useEditorStore.getState();
+    s.loadImage({ ...exampleImage, marked_empty: true }, []);
+    s.setBoxes([proposalBox]);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.setBoxes([proposalBox, personBox]);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("replaces the loaded image, but ignores a stale reply for another image", () => {
+    const s = useEditorStore.getState();
+    s.loadImage(exampleImage, []);
+    s.setImage({ ...exampleImage, marked_empty: true });
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    s.setImage({ ...exampleImage, id: "some-other-image", marked_empty: true });
+    expect(useEditorStore.getState().image?.id).toBe(exampleImage.id);
+  });
+
+  it("hides proposals below the confidence floor and keeps it across images; labels are never hidden", () => {
+    const s = useEditorStore.getState();
+    const weak = { ...proposalBox, id: "weak", confidence: 0.2 };
+    s.loadImage(exampleImage, [personBox, proposalBox, weak]);
+    expect(visibleProposalIds(useEditorStore.getState())).toEqual([proposalBox.id, "weak"]);
+    s.setMinConfidence(0.5);
+    expect(visibleBoxes(useEditorStore.getState()).map((b) => b.id)).toEqual([personBox.id, proposalBox.id]);
+    // Accept all (A) and Reject all (R) act on the visible proposals only.
+    expect(visibleProposalIds(useEditorStore.getState())).toEqual([proposalBox.id]);
+    // An accepted box with a low confidence is a label: it stays.
+    s.upsertBox({ ...weak, review_state: "accepted" });
+    expect(visibleBoxes(useEditorStore.getState()).map((b) => b.id)).toContain("weak");
+    // The floor survives the next image of the same review.
+    s.reset();
+    s.loadImage(exampleImage, [weak]);
+    expect(useEditorStore.getState().minConfidence).toBe(0.5);
+    expect(visibleBoxes(useEditorStore.getState())).toEqual([]);
+  });
+
   it("hides rejected boxes unless asked and lists visible proposals", () => {
     const s = useEditorStore.getState();
     s.loadImage(exampleImage, [personBox, proposalBox, rejected]);

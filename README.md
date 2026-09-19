@@ -203,6 +203,18 @@ node frontend\scripts\acceptance.mjs --project-folder <folder> --evidence docs\e
 the evidence file names; `acceptance.mjs` takes every expected value as a flag, so it can be
 dry-run against a small copy of the frames before the real run.
 
+`frontend/scripts/usability_walkthrough.mjs` replays the new-user flow (project, import, starter
+model, labeling, dataset, training, detection run, review, accept and undo, ONNX export) and checks
+the usability fixes of `docs/usability/2026-09-19-walkthrough.md`, one screenshot per step:
+
+```powershell
+node frontend\scripts\usability_walkthrough.mjs --project-folder <new folder> --frames <copy of sample frames> --evidence docs\evidence\usability\<run>
+```
+
+`--project-id <id> --from-step <n>` resumes on an existing project. To drive a second instance while
+the installed app is open, give it its own WebView2 profile: set `WEBVIEW2_USER_DATA_FOLDER` to a
+scratch folder next to the debugging-port variable.
+
 Cloud-provider steps read `ANTHROPIC_API_KEY` from the environment, store it through the providers
 key endpoint for the duration of the run, delete it afterwards and skip with a clear message when
 the variable is absent. No key is ever written to a file, a fixture or a log.

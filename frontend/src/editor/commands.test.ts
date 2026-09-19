@@ -17,9 +17,11 @@ import {
   cmdRedo,
   cmdReview,
   cmdSetClass,
+  cmdToggleEmpty,
   cmdUndo,
   cmdUpdateRect,
   enqueue,
+  GROUND_TRUTH_MESSAGE,
   type CommandContext,
 } from "./commands";
 import { History } from "./history";
@@ -39,6 +41,14 @@ const routes: FakeRoute[] = [
   },
   { method: "DELETE", path: /\/boxes\/[^/]+$/, status: 204 },
   { method: "POST", path: /\/boxes\/review$/, body: { updated: 1 } },
+  {
+    method: "PATCH",
+    path: /\/images\/[^/]+$/,
+    body: (req) => ({
+      ...exampleImage,
+      marked_empty: (req.body as { marked_empty: boolean }).marked_empty,
+    }),
+  },
 ];
 
 const REVIEW_URL = `/api/v1/projects/${PROJECT_ID}/boxes/review`;
@@ -238,6 +248,164 @@ describe("editor commands", () => {
     expect(useEditorStore.getState().error).toBe("draw box failed: disk full");
     expect(useEditorStore.getState().pending).toBe(0);
     expect(c.history.canUndo()).toBe(false);
+  });
+
+  it("clears the empty mark locally after drawing a box on a marked image", async () => {
+    useEditorStore.getState().setImage({ ...exampleImage, marked_empty: true });
+    const c = ctx();
+    await cmdCreateBox(c, exampleImage.id, { class_id: CLASS_ID(2), x: 10, y: 20, w: 30, h: 40 });
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+});
+
+describe("cmdToggleEmpty", () => {
+  beforeEach(() => {
+    counter = 0;
+    useEditorStore.getState().reset();
+    // No ground truth: this scenario is reachable against the real backend (marking an image that
+    // already has an accepted box is refused server-side, so a unit test must not load one).
+    useEditorStore.getState().loadImage(exampleImage, [proposalBox]);
+  });
+
+  it("marks the image empty, rejects unreviewed boxes locally, sets a notice, and undoes/redoes (I2a)", async () => {
+    const c = ctx();
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("rejected");
+    expect(useEditorStore.getState().notice).toBe(
+      "Marked as empty: this image counts as labeled and enters datasets as a negative example.",
+    );
+    expect(c.requests[0]).toMatchObject({ method: "PATCH", body: { marked_empty: true } });
+
+    await cmdUndo(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+    expect(useEditorStore.getState().boxes[proposalBox.id]).toMatchObject({
+      review_state: "unreviewed",
+      reviewed_at: null,
+    });
+    expect(c.requests[1]).toMatchObject({ method: "PATCH", body: { marked_empty: false } });
+    expect(c.requests[2]).toMatchObject({
+      method: "POST",
+      url: REVIEW_URL,
+      body: { box_ids: [proposalBox.id], action: "unreview" },
+    });
+
+    await cmdRedo(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("rejected");
+    expect(c.requests[3]).toMatchObject({ method: "PATCH", body: { marked_empty: true } });
+  });
+
+  it("N on a marked image (unmark) is also undoable/redoable, marking again on undo (I2a)", async () => {
+    const c = ctx();
+    await cmdToggleEmpty(c); // mark
+    await cmdToggleEmpty(c); // unmark
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+    expect(useEditorStore.getState().notice).toBe("No longer marked empty.");
+
+    await cmdUndo(c); // undo the unmark: marks again, rejecting whatever is unreviewed now
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("rejected");
+
+    await cmdRedo(c); // redo the unmark
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("refuses locally, without a request, while the store already has a ground-truth box (M3)", async () => {
+    useEditorStore.getState().loadImage(exampleImage, [proposalBox, personBox]);
+    const c = ctx();
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+    expect(useEditorStore.getState().error).toBe(GROUND_TRUTH_MESSAGE);
+    expect(c.requests).toHaveLength(0);
+  });
+
+  it("surfaces a 409 conflict as the editor error, verbatim (M3 wording)", async () => {
+    const { api } = fakeClient([
+      {
+        method: "PATCH",
+        path: /\/images\/[^/]+$/,
+        status: 409,
+        body: errorBody("conflict", "This image has 1 accepted box. Delete or reject them first."),
+      },
+    ]);
+    const c: CommandContext = { api, projectId: PROJECT_ID, store: useEditorStore, history: new History() };
+    await cmdToggleEmpty(c);
+    expect(useEditorStore.getState().error).toBe(
+      "This image has 1 accepted box. Delete or reject them first.",
+    );
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("bails out of every store write once the store has moved to another image (M2)", async () => {
+    let resolvePatch!: (v: { data: unknown; error: undefined; response: Response }) => void;
+    const deferred = new Promise((resolve) => {
+      resolvePatch = resolve;
+    });
+    const slowApi = { PATCH: () => deferred } as unknown as CommandContext["api"];
+    const c: CommandContext = {
+      api: slowApi,
+      projectId: PROJECT_ID,
+      store: useEditorStore,
+      history: new History(),
+    };
+    const promise = cmdToggleEmpty(c);
+    // The user navigates to a different image while the PATCH is still in flight.
+    useEditorStore.getState().loadImage({ ...exampleImage, id: "some-other-image" }, []);
+    resolvePatch({
+      data: { ...exampleImage, marked_empty: true },
+      error: undefined,
+      response: new Response(),
+    });
+    await promise;
+    expect(useEditorStore.getState().imageId).toBe("some-other-image");
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+    expect(useEditorStore.getState().notice).toBeNull();
+  });
+});
+
+/** The two reachable sequences where ground truth must clear a previously-set `marked_empty` (I1). */
+describe("the store's ground-truth invariant reached through commands", () => {
+  beforeEach(() => {
+    counter = 0;
+    useEditorStore.getState().reset();
+  });
+
+  it("(a) N, then accepting a rejected proposal, clears the mark", async () => {
+    useEditorStore.getState().loadImage(exampleImage, [proposalBox]);
+    const c = ctx();
+    await cmdToggleEmpty(c); // N: marks empty, rejects the proposal
+    expect(useEditorStore.getState().image?.marked_empty).toBe(true);
+    expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("rejected");
+
+    await cmdReview(c, [proposalBox.id], "accept"); // accept the (now rejected) row
+    expect(useEditorStore.getState().boxes[proposalBox.id].review_state).toBe("accepted");
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false); // toggle not pressed
+  });
+
+  it("(b) a box re-created by redo clears the mark, exercising cmdCreateBox's redo closure", async () => {
+    useEditorStore.getState().loadImage(exampleImage, []);
+    const c = ctx();
+    const created = await cmdCreateBox(c, exampleImage.id, {
+      class_id: CLASS_ID(2),
+      x: 10,
+      y: 20,
+      w: 30,
+      h: 40,
+    });
+    expect(created).toBeDefined();
+    await cmdUndo(c); // delete the drawn box: no ground truth left
+    expect(useEditorStore.getState().boxes).toEqual({});
+    // The image is (independently of this history) marked empty, the way it would be after N in
+    // an earlier, already-settled action; going through N here would itself push a new history
+    // entry and discard the pending "draw box" redo, which is a normal, expected property of a
+    // single shared per-image undo stack (any other command does the same), not a bug.
+    useEditorStore.getState().setImage({ ...useEditorStore.getState().image!, marked_empty: true });
+
+    await cmdRedo(c); // redo the draw: cmdCreateBox's redo closure recreates the ground-truth box
+    // The redo re-creates the box server-side with a fresh id ("new-2"), not the original.
+    expect(useEditorStore.getState().boxes[c.history.resolve(created!.id)]).toBeDefined();
+    expect(useEditorStore.getState().image?.marked_empty).toBe(false); // toggle not pressed
   });
 });
 

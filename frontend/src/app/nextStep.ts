@@ -1,7 +1,7 @@
 export interface ProjectProgress {
   images: number;
   labeled: number;
-  /** Images with proposals nobody has reviewed yet. */
+  /** Proposals (boxes, not images) nobody has reviewed yet: `Stats.pending_review_count`. */
   pendingReview: number;
   datasets: number;
   models: number;
@@ -25,7 +25,10 @@ export function nextStep(projectId: string, p: ProjectProgress): NextStep | null
   const at = (screen: string) => `/p/${projectId}/${screen}`;
   if (p.pendingReview > 0)
     return {
-      text: `Review the proposals on ${p.pendingReview} ${p.pendingReview === 1 ? "image" : "images"}.`,
+      text:
+        p.pendingReview === 1
+          ? "Review the proposal waiting in the queue."
+          : `Review the ${p.pendingReview} proposals waiting in the queue.`,
       to: at("review"),
     };
   if (p.images === 0) return { text: "Import a folder of images.", to: at("data") };

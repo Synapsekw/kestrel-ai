@@ -6,6 +6,7 @@ export type EditorAction =
   | { type: "duplicate" }
   | { type: "accept-all" }
   | { type: "reject-all" }
+  | { type: "toggle-empty" }
   | { type: "next" }
   | { type: "prev" }
   | { type: "undo" }
@@ -26,7 +27,8 @@ export interface KeyLike {
 
 /**
  * Spec section 6 lists both "1:1 (1)" and class hotkeys 1 to 9. Decision: digits select classes,
- * `0` and `Ctrl+1` are 1:1, `F` fits. Letters `a`, `r`, `f` are editor keys and cannot be class hotkeys.
+ * `0` and `Ctrl+1` are 1:1, `F` fits. Letters `a`, `r`, `f`, `n` are editor keys and cannot be
+ * class hotkeys.
  */
 export function actionForKey(e: KeyLike): EditorAction | null {
   const ctrl = e.ctrlKey || e.metaKey;
@@ -63,8 +65,10 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   if (e.shiftKey) return null;
   if (lower === "f") return { type: "fit" };
   if (lower === "0") return { type: "one-to-one" };
-  if (lower === "a") return { type: "accept-all" };
-  if (lower === "r") return { type: "reject-all" };
+  // A held A, R or N must not fire its request once per auto-repeat tick.
+  if (lower === "a") return e.repeat ? null : { type: "accept-all" };
+  if (lower === "r") return e.repeat ? null : { type: "reject-all" };
+  if (lower === "n") return e.repeat ? null : { type: "toggle-empty" };
   if (e.key.length === 1) return { type: "class-key", key: e.key };
   return null;
 }
@@ -87,6 +91,7 @@ export const HOTKEY_HELP: ReadonlyArray<{ keys: string; does: string }> = [
   { keys: "Ctrl+D", does: "duplicate selected box" },
   { keys: "A", does: "accept all visible proposals" },
   { keys: "R", does: "reject all visible proposals" },
+  { keys: "N", does: "no machinery on this image (mark empty / undo)" },
   { keys: "Ctrl+Z / Ctrl+Y", does: "undo / redo" },
   { keys: "Ctrl+Right / Ctrl+Left", does: "next / previous image" },
   { keys: "Esc", does: "deselect" },

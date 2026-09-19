@@ -67,6 +67,22 @@ test("multi-select with checkboxes and bulk delete after confirmation", async ({
   await expect(page.getByRole("status")).toContainText(/images? deleted/);
 });
 
+test("multi-select and mark as empty reports the result (E4)", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
+  await page.getByRole("button", { name: "List" }).click();
+  await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
+  await page.getByLabel("Select IX-12-02491_0031_0002.jpg").check();
+  await page.getByRole("button", { name: "Mark as empty" }).click();
+  await expect(page.getByText(/Mark 2 images as empty\?/)).toBeVisible();
+  const marked = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith("/images/bulk-mark-empty"),
+  );
+  await page.getByRole("button", { name: "Mark 2 as empty" }).click();
+  expect((await marked).postDataJSON()).toEqual({ image_ids: [IMG, IMG2], marked_empty: true });
+  // The mock answers its example {updated: 1, skipped: 0}.
+  await expect(page.getByRole("status")).toContainText("1 marked as empty");
+});
+
 test("run model opens the query screen with the selection; add to dataset posts the ids with the seed", async ({
   page,
 }) => {

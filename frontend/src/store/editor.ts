@@ -33,8 +33,11 @@ export interface EditorState {
   error: string | null;
   notice: string | null;
   showRejected: boolean;
+  /** Unreviewed proposals below this confidence are hidden (0 = show all). Kept across images. */
+  minConfidence: number;
 
   loadImage: (image: ImageRow, boxes: Box[]) => void;
+  setImage: (image: ImageRow) => void;
   setBoxes: (boxes: Box[]) => void;
   upsertBox: (box: Box) => void;
   removeBox: (id: string) => void;
@@ -54,6 +57,7 @@ export interface EditorState {
   setError: (message: string | null) => void;
   setNotice: (message: string | null) => void;
   toggleShowRejected: () => void;
+  setMinConfidence: (value: number) => void;
   reset: () => void;
 }
 
@@ -65,6 +69,20 @@ function sortedIds(boxes: Record<string, Box>): string[] {
 
 function keyed(boxes: Box[]): Record<string, Box> {
   return Object.fromEntries(boxes.map((b) => [b.id, b]));
+}
+
+/** An accepted or edited box is ground truth: ground truth and `marked_empty` can never coexist. */
+export function hasGroundTruth(boxes: Record<string, Box>): boolean {
+  return Object.values(boxes).some((b) => b.review_state === "accepted" || b.review_state === "edited");
+}
+
+function isGroundTruth(box: Box): boolean {
+  return box.review_state === "accepted" || box.review_state === "edited";
+}
+
+/** The store's own copy of the "ground truth clears the mark" invariant (E4 fix round 1, I1). */
+function clearMarkIfNeeded(image: ImageRow | null): Partial<EditorState> {
+  return image && image.marked_empty ? { image: { ...image, marked_empty: false } } : {};
 }
 
 const EMPTY = {
@@ -88,6 +106,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   activeClassId: null,
   viewport: { width: 0, height: 0 },
   showRejected: false,
+  minConfidence: 0,
 
   loadImage: (image, boxes) =>
     set((s) => {
@@ -103,6 +122,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         fitted: canFit,
       };
     }),
+  // A response for an image the editor has since navigated away from must not land here.
+  setImage: (image) => set((s) => (s.imageId === image.id ? { image } : s)),
   setBoxes: (boxes) =>
     set((s) => {
       const map = keyed(boxes);
@@ -110,6 +131,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         boxes: map,
         order: sortedIds(map),
         selectedId: s.selectedId && map[s.selectedId] ? s.selectedId : null,
+        ...(hasGroundTruth(map) ? clearMarkIfNeeded(s.image) : {}),
       };
     }),
   upsertBox: (box) =>
@@ -117,7 +139,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // A response that arrives after the editor moved to another image must not land here.
       if (s.imageId !== null && box.image_id !== s.imageId) return s;
       const boxes = { ...s.boxes, [box.id]: box };
-      return { boxes, order: sortedIds(boxes) };
+      return {
+        boxes,
+        order: sortedIds(boxes),
+        ...(isGroundTruth(box) ? clearMarkIfNeeded(s.image) : {}),
+      };
     }),
   removeBox: (id) =>
     set((s) => {
@@ -135,9 +161,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
       // `unreview` (undo) clears the decision time; every other state records one.
       const reviewedAt = state === "unreviewed" ? null : new Date().toISOString();
       const boxes = { ...s.boxes };
+      let touchedGroundTruth = false;
       for (const id of ids)
-        if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
-      return { boxes };
+        if (boxes[id]) {
+          boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
+          if (isGroundTruth(boxes[id])) touchedGroundTruth = true;
+        }
+      return { boxes, ...(touchedGroundTruth ? clearMarkIfNeeded(s.image) : {}) };
     }),
   select: (id) => set((s) => (id === null || s.boxes[id] ? { selectedId: id } : s)),
   hover: (id) => set({ hoveredId: id }),
@@ -167,18 +197,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setError: (message) => set({ error: message }),
   setNotice: (message) => set({ notice: message }),
   toggleShowRejected: () => set((s) => ({ showRejected: !s.showRejected })),
+  setMinConfidence: (value) => set({ minConfidence: Math.min(1, Math.max(0, value)) }),
   reset: () => set({ ...EMPTY }),
 }));
 
 export type EditorStore = UseBoundStore<StoreApi<EditorState>>;
 
-export function visibleBoxes(s: Pick<EditorState, "boxes" | "order" | "showRejected">): Box[] {
+type Visibility = Pick<EditorState, "boxes" | "order" | "showRejected"> & { minConfidence?: number };
+
+/** Boxes drawn and listed: rejected ones only on request, weak proposals only above the floor. */
+export function visibleBoxes(s: Visibility): Box[] {
+  const floor = s.minConfidence ?? 0;
   return s.order
     .map((id) => s.boxes[id])
-    .filter((b) => b && (s.showRejected || b.review_state !== "rejected"));
+    .filter((b) => b && (s.showRejected || b.review_state !== "rejected"))
+    .filter((b) => b.review_state !== "unreviewed" || floor === 0 || (b.confidence ?? 1) >= floor);
 }
 
-export function visibleProposalIds(s: Pick<EditorState, "boxes" | "order" | "showRejected">): string[] {
+export function visibleProposalIds(s: Visibility): string[] {
   return visibleBoxes(s)
     .filter((b) => b.review_state === "unreviewed")
     .map((b) => b.id);

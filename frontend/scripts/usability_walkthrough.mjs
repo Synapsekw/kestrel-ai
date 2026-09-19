@@ -195,9 +195,19 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
       await sleep(600);
     }
   }
+  // One more image, without machinery: N marks it empty and it counts as labeled.
+  await page.keyboard.press("Control+ArrowRight");
+  await sleep(1500);
+  const before = await api("GET", `/projects/${projectId}/stats`);
+  await page.keyboard.press("n");
+  const toggle = page.getByRole("button", { name: /Marked empty/ });
+  check("N marks the image as empty", await visible(toggle));
+  check("the toggle shows its state", (await toggle.getAttribute("aria-pressed")) === "true");
+  await snap("editor-marked-empty");
   await sleep(1500);
   const stats = await api("GET", `/projects/${projectId}/stats`);
-  check("labeled images are counted", stats.labeled_count >= cfg.label, `${stats.labeled_count} labeled`);
+  check("an empty image counts as labeled", stats.labeled_count === before.labeled_count + 1, `${before.labeled_count} -> ${stats.labeled_count}`);
+  check("labeled images are counted", stats.labeled_count >= cfg.label + 1, `${stats.labeled_count} labeled`);
   const back = page.getByRole("link", { name: "Back to the Data Manager" });
   check("the editor has a way back", await visible(back));
   await back.click();
@@ -210,6 +220,7 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await page.getByRole("button", { name: /^Select all \d+$/ }).click();
   await page.getByRole("button", { name: "Add to dataset" }).click();
   const dialog = page.getByRole("dialog", { name: "Add to dataset" });
+  check("the dialog counts the empty image as a negative example", /1 of them marked empty, used as negative examples/.test(await dialog.innerText()));
   await dialog.getByLabel("Dataset name").fill("first set");
   await dialog.getByRole("button", { name: "Create dataset" }).click();
   check("a name with a space is explained", await visible(page.getByRole("alert").filter({ hasText: "letters, digits, dot, dash and underscore" })));
@@ -246,32 +257,39 @@ await step("7 train: guidance before, honest verdict after", async (check, snap)
 });
 
 await step("8 run the trained model; review; accept as labels with a count; undo", async (check, snap) => {
-  await page.getByRole("link", { name: "Query" }).click();
-  const model = page.getByLabel("Model", { exact: true });
-  // The list loads after the screen: wait for the trained model before choosing it.
-  await model.locator("option", { hasText: "(Trained)" }).first().waitFor({ state: "attached", timeout: 30_000 });
-  const options = await model.locator("option").allInnerTexts();
-  const trained = options.find((o) => /Trained/.test(o));
-  await model.selectOption({ label: trained });
-  check("the trained model is the one that runs", Boolean(trained), trained);
-  await page.getByLabel("Confidence", { exact: true }).fill("0.01");
-  check("a local run explains that it is free", await visible(page.getByText(/Runs on this computer at no cost/)));
-  await snap("query-form");
-  await page.getByRole("button", { name: "Start", exact: true }).click();
   const card = page.getByTestId("run-card");
-  await card.waitFor({ timeout: 30_000 });
-  await card.getByTestId("box-count").filter({ hasText: "found" }).waitFor({ timeout: 1_800_000 });
-  const count = await card.getByTestId("box-count").innerText();
-  await snap("query-done");
-  const runId = new URL(page.url()).searchParams.get("run");
-  const run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
-  check("card shows the final count", count.startsWith(`${run.box_count} `), `${count} / api ${run.box_count}`);
-  await sleep(1500);
-  check("history shows the same count", await visible(page.getByTestId("run-history").getByText(new RegExp(`${run.box_count} boxes`))));
+  // Runs one local detection with the model whose option matches `kind`; returns the run.
+  const detect = async (kind, shotName) => {
+    await page.getByRole("link", { name: "Query" }).click();
+    const again = page.getByRole("button", { name: "New query" });
+    if (await again.isVisible().catch(() => false)) await again.click();
+    const model = page.getByLabel("Model", { exact: true });
+    // The list loads after the screen: wait for the model before choosing it.
+    await model.locator("option", { hasText: kind }).first().waitFor({ state: "attached", timeout: 30_000 });
+    const label = (await model.locator("option").allInnerTexts()).find((o) => o.includes(kind));
+    await model.selectOption({ label });
+    await page.getByLabel("Confidence", { exact: true }).fill("0.01");
+    check("a local run explains that it is free", await visible(page.getByText(/Runs on this computer at no cost/)));
+    await page.getByRole("button", { name: "Start", exact: true }).click();
+    await card.waitFor({ timeout: 30_000 });
+    await card.getByTestId("box-count").filter({ hasText: "found" }).waitFor({ timeout: 1_800_000 });
+    const count = await card.getByTestId("box-count").innerText();
+    await snap(shotName);
+    const id = new URL(page.url()).searchParams.get("run");
+    const found = await api("GET", `/projects/${projectId}/query-runs/${id}`);
+    check(`card shows the final count (${label})`, count.startsWith(`${found.box_count} `), `${count} / api ${found.box_count}`);
+    await sleep(1500);
+    check("history shows the same count", await visible(page.getByTestId("run-history").getByText(new RegExp(`${found.box_count} boxes`))));
+    return found;
+  };
+  let run = await detect("(Trained)", "query-trained-model");
   if (run.box_count === 0) {
+    // A model trained for a few epochs on a dozen images is rarely sure of anything.
     check("an empty run says why", await visible(page.getByTestId("no-boxes-advice")));
-    return;
+    run = await detect("(Imported)", "query-starter-model");
+    check("the starter model proposes something to review", run.box_count > 0, `${run.box_count} boxes`);
   }
+  const runId = run.id;
   await card.getByLabel("Minimum confidence").fill("0");
   await card.getByRole("button", { name: "Accept as labels…" }).click();
   const confirm = page.getByTestId("promote-confirm");

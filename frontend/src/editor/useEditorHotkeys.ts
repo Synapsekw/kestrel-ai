@@ -77,6 +77,9 @@ export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): v
         case "reject-all":
           void actions.rejectAll();
           return;
+        case "toggle-empty":
+          void actions.toggleEmpty();
+          return;
         case "undo":
           e.preventDefault();
           // Undo/redo only when nothing is saving: the compensating call must target settled state.

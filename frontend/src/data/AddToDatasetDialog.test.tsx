@@ -20,10 +20,20 @@ describe("AddToDatasetDialog", () => {
     ]);
     const onClose = vi.fn();
     renderWithProviders(
-      <AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a", "b"]} onClose={onClose} />,
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a", "b"]}
+        labeledCount={1}
+        emptyCount={1}
+        unlabeledCount={0}
+        onClose={onClose}
+      />,
       { api },
     );
-    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent("2 images");
+    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toHaveTextContent(
+      "Freeze 2 images into a new dataset (immutable after creation): 1 with accepted boxes, 1 marked empty (negative examples).",
+    );
+    expect(screen.queryByText(/not labeled yet/)).not.toBeInTheDocument();
     expect(screen.getByLabelText("Seed")).toHaveValue(42);
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v2" } });
     fireEvent.change(screen.getByLabelText("Split method"), { target: { value: "random" } });
@@ -56,19 +66,55 @@ describe("AddToDatasetDialog", () => {
         body: errorBody("already_exists", "dataset v1 exists"),
       },
     ]);
-    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
-      api,
-    });
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={() => {}}
+      />,
+      { api },
+    );
     fireEvent.change(screen.getByLabelText("Dataset name"), { target: { value: "v1" } });
     fireEvent.click(screen.getByRole("button", { name: "Create dataset" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("dataset v1 exists"));
   });
 
+  it("warns when part of the selection is not labeled yet", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a", "b", "c"]}
+        labeledCount={1}
+        emptyCount={1}
+        unlabeledCount={1}
+        onClose={() => {}}
+      />,
+      { api },
+    );
+    expect(
+      screen.getByText(
+        "1 selected image is not labeled yet. It would be written without boxes, as if it were empty. Deselect it unless it really shows no machinery.",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("refuses a name with a space before sending and says which characters are allowed", async () => {
     const { api, requests } = fakeClient([]);
-    renderWithProviders(<AddToDatasetDialog projectId={PROJECT_ID} imageIds={["a"]} onClose={() => {}} />, {
-      api,
-    });
+    renderWithProviders(
+      <AddToDatasetDialog
+        projectId={PROJECT_ID}
+        imageIds={["a"]}
+        labeledCount={1}
+        emptyCount={0}
+        unlabeledCount={0}
+        onClose={() => {}}
+      />,
+      { api },
+    );
     const nameInput = screen.getByLabelText("Dataset name");
     // `[A-Za-z0-9._-]+` is not a valid `pattern` under the v flag WebView2 compiles it with.
     expect(nameInput).not.toHaveAttribute("pattern");

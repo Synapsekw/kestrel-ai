@@ -16,6 +16,8 @@ describe("actionForKey", () => {
     expect(actionForKey(key("F"))).toEqual({ type: "fit" });
     expect(actionForKey(key("a"))).toEqual({ type: "accept-all" });
     expect(actionForKey(key("r"))).toEqual({ type: "reject-all" });
+    expect(actionForKey(key("n"))).toEqual({ type: "toggle-empty" });
+    expect(actionForKey(key("N"))).toEqual({ type: "toggle-empty" });
     expect(actionForKey(key("Delete"))).toEqual({ type: "delete" });
     expect(actionForKey(key("Backspace"))).toEqual({ type: "delete" });
     expect(actionForKey(key("Escape"))).toEqual({ type: "escape" });
@@ -69,5 +71,21 @@ describe("next and previous ignore key repeat", () => {
     expect(actionForKey(key("ArrowRight", { ctrlKey: true, repeat: true }))).toBeNull();
     expect(actionForKey(key("ArrowLeft", { metaKey: true, repeat: true }))).toBeNull();
     expect(actionForKey(key("ArrowRight", { ctrlKey: true }))).toEqual({ type: "next" });
+  });
+});
+
+describe("N ignores key repeat (I5)", () => {
+  it("returns null for a held N and the action for a single press", () => {
+    expect(actionForKey(key("n", { repeat: true }))).toBeNull();
+    expect(actionForKey(key("N", { repeat: true }))).toBeNull();
+    expect(actionForKey(key("n"))).toEqual({ type: "toggle-empty" });
+  });
+});
+
+describe("accept all and reject all ignore key repeat", () => {
+  it("fires one review request per key press, not one per auto-repeat tick", () => {
+    expect(actionForKey(key("a"))).toEqual({ type: "accept-all" });
+    expect(actionForKey(key("a", { repeat: true }))).toBeNull();
+    expect(actionForKey(key("r", { repeat: true }))).toBeNull();
   });
 });
