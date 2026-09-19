@@ -26,7 +26,9 @@ describe("ExportScreen", () => {
   it("shows the Export heading, the results form and the model export section", async () => {
     renderScreen([]);
     expect(screen.getByRole("heading", { name: "Export" })).toBeInTheDocument();
-    expect(await screen.findByText(/Exports \d+ accepted boxes on \d+ of \d+ images/)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/Exports all \d+ images?: \d+ accepted boxe?s? on the \d+ checked images?/),
+    ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Past exports" })).toBeInTheDocument();
     expect(screen.getByText("No exports yet.")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Model for other applications" })).toBeInTheDocument();

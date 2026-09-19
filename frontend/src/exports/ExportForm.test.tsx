@@ -42,7 +42,9 @@ describe("ExportForm", () => {
 
   it("shows the export summary and defaults to CSV + HTML", () => {
     renderForm();
-    expect(screen.getByText("Exports 9 accepted boxes on 5 of 10 images.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Exports all 10 images: 9 accepted boxes on the 5 checked images."),
+    ).toBeInTheDocument();
     expect(screen.getByRole("checkbox", { name: /Tables for Excel/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Report \(HTML/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Labels in YOLO/ })).not.toBeChecked();
@@ -54,7 +56,22 @@ describe("ExportForm", () => {
     renderForm();
     fireEvent.click(screen.getByRole("checkbox", { name: /Include proposals/ }));
     expect(
-      screen.getByText("Exports 9 accepted boxes on 5 of 10 images and 3 unreviewed proposals."),
+      screen.getByText(
+        "Exports all 10 images: 9 accepted boxes on the 5 checked images and 3 unreviewed proposals.",
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("pluralises every count down to the singular when it is exactly 1", () => {
+    renderForm({ labeledCount: 1, boxCount: 1, imageCount: 1, pendingReviewCount: 1 });
+    expect(
+      screen.getByText("Exports all 1 image: 1 accepted box on the 1 checked image."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include proposals/ }));
+    expect(
+      screen.getByText(
+        "Exports all 1 image: 1 accepted box on the 1 checked image and 1 unreviewed proposal.",
+      ),
     ).toBeInTheDocument();
   });
 
