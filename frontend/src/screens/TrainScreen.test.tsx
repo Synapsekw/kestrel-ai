@@ -39,6 +39,7 @@ describe("TrainScreen", () => {
       path: "/p/:projectId/train",
     });
     await waitFor(() => expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id));
+    fireEvent.click(screen.getByRole("button", { name: "More options" }));
     fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Start training" }));
     await waitFor(() => expect(screen.getByTestId("train-progress")).toBeInTheDocument());

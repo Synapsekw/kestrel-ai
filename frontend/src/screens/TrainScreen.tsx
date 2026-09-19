@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
-import type { TrainRequest } from "@contract/client";
+import type { Job, TrainRequest } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
 import { trainModel } from "@/api/models";
@@ -12,8 +12,15 @@ import { useJobsStore } from "@/store/jobs";
 import { TrainForm } from "@/train/TrainForm";
 import { TrainProgress } from "@/train/TrainProgress";
 import { useDatasets } from "@/train/useDatasets";
+import { Alert, Button, Pill, type PillTone } from "@/ui";
 
-const btn = "rounded border border-slate-700 px-3 py-1 text-sm hover:bg-slate-800 disabled:opacity-50";
+const STATE_TONE: Record<Job["state"], PillTone> = {
+  queued: "neutral",
+  running: "accent",
+  succeeded: "ok",
+  failed: "danger",
+  cancelled: "neutral",
+};
 
 export function TrainScreen() {
   const { projectId = "" } = useParams();
@@ -52,13 +59,13 @@ export function TrainScreen() {
   }
 
   return (
-    <section className="flex flex-col gap-4">
+    <section className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">Train</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Train</h1>
         {jobId && (
-          <button type="button" className={`${btn} ml-auto`} onClick={() => setParams({})}>
+          <Button icon="plus" className="ml-auto" onClick={() => setParams({})}>
             New training
-          </button>
+          </Button>
         )}
       </div>
       {jobId ? (
@@ -78,37 +85,45 @@ export function TrainScreen() {
         />
       )}
       {unavailable && (
-        <p
-          role="note"
-          className="rounded border border-slate-700 bg-slate-800/60 px-3 py-2 text-sm text-slate-300"
-        >
-          Training is not available yet (it arrives with the training backend).
-        </p>
+        <div role="note" className="max-w-3xl">
+          <Alert tone="info">Training is not available yet (it arrives with the training backend).</Alert>
+        </div>
       )}
       {(error || datasets.error || registry.error) && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
+        <Alert tone="danger" className="max-w-3xl">
           {error ?? datasets.error ?? registry.error}
-        </p>
+        </Alert>
       )}
       {trainJobs.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-medium">Recent training jobs</h2>
-          <ul className="flex flex-col gap-1 text-sm">
+        <section className="flex max-w-3xl flex-col gap-2">
+          <h2 className="text-base font-semibold">Recent training jobs</h2>
+          <ul className="flex flex-col">
             {trainJobs.map((j) => (
-              <li key={j.id} className="flex items-center gap-3">
-                <span className="font-medium">{jobTitle(j)}</span>
-                <span className="text-xs text-slate-400">
-                  {stateLabel(j.state)} · {formatLocalDate(j.created_at)}
-                </span>
-                {j.id !== jobId && (
-                  <button type="button" className={btn} onClick={() => setParams({ job: j.id })}>
+              <li
+                key={j.id}
+                className="flex h-10 items-center gap-3 border-b border-line text-sm last:border-b-0"
+              >
+                <span className="min-w-0 truncate font-medium">{jobTitle(j)}</span>
+                <Pill tone={STATE_TONE[j.state]} live={j.state === "running"} size="sm">
+                  {stateLabel(j.state)}
+                </Pill>
+                <span className="text-xs tabular-nums text-muted">{formatLocalDate(j.created_at)}</span>
+                {j.id === jobId ? (
+                  <span className="ml-auto text-xs text-muted">Shown above</span>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="ml-auto"
+                    onClick={() => setParams({ job: j.id })}
+                  >
                     Show {j.id.slice(0, 8)}
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
           </ul>
-        </div>
+        </section>
       )}
     </section>
   );
