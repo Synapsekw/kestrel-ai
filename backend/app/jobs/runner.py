@@ -30,6 +30,8 @@ class JobContext:
         self.runner, self.project, self.job_id, self.params, self.log = runner, project, job_id, params, log
         self.cancelled = threading.Event()
         self._last_db_write = 0.0
+        # The newest message, stored with the terminal state: the throttled write may have skipped it.
+        self.last_message: str | None = None
 
     def check_cancelled(self) -> None:
         if self.cancelled.is_set():
@@ -37,6 +39,7 @@ class JobContext:
 
     def progress(self, fraction: float, message: str = "") -> None:
         fraction = max(0.0, min(1.0, float(fraction)))
+        self.last_message = message
         now = time.monotonic()
         if now - self._last_db_write >= PROGRESS_DB_INTERVAL_S:
             self._last_db_write = now
@@ -178,7 +181,8 @@ class JobRunner:
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
             ctx.log.info("job %s started", ctx.job_id)
             result = fn(ctx)
-            self._finish(ctx, state="succeeded", progress=1.0, result=result)
+            final = {"message": ctx.last_message} if ctx.last_message is not None else {}
+            self._finish(ctx, state="succeeded", progress=1.0, result=result, **final)
             ctx.log.info("job succeeded")
         except JobCancelled:
             self._finish(ctx, state="cancelled")

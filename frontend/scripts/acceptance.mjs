@@ -443,14 +443,20 @@ try {
   // Open images spread evenly across the whole import (by path, so across the flights) rather
   // than the first N: the first frames of a flight are the take-off run-in with nothing on them.
   const everyImage = [];
-  for (let cursor = ""; ; ) {
-    const pageN = await api("GET", `/projects/${projectId}/images?limit=1000&sort=path${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`);
+  for (let cursor = ""; ;) {
+    const pageN = await api(
+      "GET",
+      `/projects/${projectId}/images?limit=1000&sort=path${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""}`,
+    );
     everyImage.push(...pageN.items);
     if (!pageN.next_cursor) break;
     cursor = pageN.next_cursor;
   }
   const stride = Math.max(1, Math.floor(everyImage.length / cfg.preannotateImages));
-  const toOpen = Array.from({ length: cfg.preannotateImages }, (_, i) => everyImage[Math.min(i * stride, everyImage.length - 1)]).filter(Boolean);
+  const toOpen = Array.from(
+    { length: cfg.preannotateImages },
+    (_, i) => everyImage[Math.min(i * stride, everyImage.length - 1)],
+  ).filter(Boolean);
   let proposals = 0;
   for (const image of toOpen) {
     const boxes = await openAndPreannotate(projectId, image.id);
@@ -571,9 +577,7 @@ try {
       trainJob = await waitJob(projectId, trainJobId);
       if (trainJob.state !== "succeeded") throw new Error(`training failed: ${trainJob.error}`);
       await sleep(1500); // the last events are still in flight when the job row goes terminal
-      progressEvents = stream.events.filter(
-        (e) => e.type === "job.progress" && e.job_id === trainJobId,
-      );
+      progressEvents = stream.events.filter((e) => e.type === "job.progress" && e.job_id === trainJobId);
     } finally {
       stream.close();
     }
@@ -583,9 +587,7 @@ try {
   // progress events arrived in the page. A resumed run is not on the Train screen, so there is
   // nothing to read.
   const epochText =
-    trainJob === null
-      ? ""
-      : (await page.getByTestId("epoch").innerText()).replace(/\s+/g, " ").trim();
+    trainJob === null ? "" : (await page.getByTestId("epoch").innerText()).replace(/\s+/g, " ").trim();
   await shot(page, "05-training");
   step(
     "5. train for the requested epochs and register the model",
@@ -633,42 +635,59 @@ try {
   run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
   await sleep(2000);
   await shot(page, "06-query-run");
-  // Review: open the run's images in the review queue, which is where a person accepts or rejects.
-  await page.getByRole("link", { name: "Review results" }).click();
-  await page.getByRole("heading", { name: "Review queue" }).waitFor({ timeout: 60_000 });
-  // The queue is virtualised, so its size is `aria-rowcount`, not the number of mounted rows;
-  // it is read only once the list has loaded (the grid reports 0 rows while "Loading...").
-  let reviewRows = 0;
-  for (let i = 0; i < 120; i++) {
-    reviewRows = await page
-      .getByRole("grid")
-      .getAttribute("aria-rowcount")
-      .then(Number)
-      .catch(() => 0);
-    if (reviewRows > 0 || run.box_count === 0) break;
-    await sleep(500);
-  }
-  await shot(page, "06-review");
-  await page.goBack();
-  await page.getByTestId("run-card").waitFor({ timeout: 60_000 });
-  await page.getByLabel("Minimum confidence").fill("0");
-  await page.getByRole("button", { name: "Accept as labels…" }).click();
-  // Two steps since the usability wave: the card counts first, then asks.
-  await page.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click({ timeout: 60_000 });
-  await sleep(2500);
-  run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
-  await shot(page, "06-promoted");
-  // Close the loop on the selection: these have to be the unlabelled images the driver picked,
-  // not just fifty of something.
-  const runsIntended =
+  const runsIntendedEarly =
     run.image_ids.length === intendedIds.size && run.image_ids.every((id) => intendedIds.has(id));
-  step(
-    "6. run the trained model over unlabeled images, review and promote",
-    runsIntended && run.box_count >= cfg.minQueryBoxes && Boolean(run.promoted_at),
-    `${run.image_ids.length} images (the intended unlabelled ones: ${runsIntended}), ${run.box_count} boxes (minimum ${cfg.minQueryBoxes}), ${reviewRows} rows in the review queue, promoted_at ${run.promoted_at}`,
-    { seconds: elapsed(), box_count: run.box_count },
-  );
-
+  if (run.box_count === 0) {
+    // Nothing to review or accept: the card says why instead (usability wave, Q2). A 3-epoch model
+    // on placeholder labels rarely scores above 0.002, so the real run passes --conf 0.001.
+    const advice = await page
+      .getByTestId("no-boxes-advice")
+      .waitFor({ timeout: 30_000 })
+      .then(() => true)
+      .catch(() => false);
+    step(
+      "6. run the trained model over unlabeled images, review and promote",
+      runsIntendedEarly && advice && cfg.minQueryBoxes === 0,
+      `${run.image_ids.length} images (the intended unlabelled ones: ${runsIntendedEarly}), 0 boxes at confidence ${cfg.conf} (minimum ${cfg.minQueryBoxes}); the run card explains an empty run: ${advice}; nothing to review or promote`,
+      { seconds: elapsed(), box_count: 0 },
+    );
+  } else {
+    // Review: open the run's images in the review queue, which is where a person accepts or rejects.
+    await page.getByRole("link", { name: "Review results" }).click();
+    await page.getByRole("heading", { name: "Review queue" }).waitFor({ timeout: 60_000 });
+    // The queue is virtualised, so its size is `aria-rowcount`, not the number of mounted rows;
+    // it is read only once the list has loaded (the grid reports 0 rows while "Loading...").
+    let reviewRows = 0;
+    for (let i = 0; i < 120; i++) {
+      reviewRows = await page
+        .getByRole("grid")
+        .getAttribute("aria-rowcount")
+        .then(Number)
+        .catch(() => 0);
+      if (reviewRows > 0 || run.box_count === 0) break;
+      await sleep(500);
+    }
+    await shot(page, "06-review");
+    await page.goBack();
+    await page.getByTestId("run-card").waitFor({ timeout: 60_000 });
+    await page.getByLabel("Minimum confidence").fill("0");
+    await page.getByRole("button", { name: "Accept as labels…" }).click();
+    // Two steps since the usability wave: the card counts first, then asks.
+    await page.getByRole("button", { name: /^Accept \d+ box(es)?$/ }).click({ timeout: 60_000 });
+    await sleep(2500);
+    run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
+    await shot(page, "06-promoted");
+    // Close the loop on the selection: these have to be the unlabelled images the driver picked,
+    // not just fifty of something.
+    const runsIntended =
+      run.image_ids.length === intendedIds.size && run.image_ids.every((id) => intendedIds.has(id));
+    step(
+      "6. run the trained model over unlabeled images, review and promote",
+      runsIntended && run.box_count >= cfg.minQueryBoxes && Boolean(run.promoted_at),
+      `${run.image_ids.length} images (the intended unlabelled ones: ${runsIntended}), ${run.box_count} boxes (minimum ${cfg.minQueryBoxes}), ${reviewRows} rows in the review queue, promoted_at ${run.promoted_at}`,
+      { seconds: elapsed(), box_count: run.box_count },
+    );
+  }
   // ----------------------------------------------- 7. anthropic vision query
   elapsed = begin("7. anthropic vision query with tiling");
   const providers = await api("GET", "/providers");

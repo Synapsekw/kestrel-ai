@@ -100,7 +100,9 @@ is the source of truth for what "passing" means and is what a person follows whe
 - **UI**: Data Manager -> `Labeled` = `no` -> **List** -> wait until the filter bar reads the
   unlabeled total -> select the first 50 rows (click the first, shift-click the last) -> **Run
   model**. On the Query screen `Model` = `ahmadia-v1`,
-  `Confidence` = `0.25` -> **Estimate** -> **Start**. **Review** when it finishes: follow
+  `Confidence` = `0.001` (driver: `--conf 0.001`; a 3-epoch model on 30 placeholder labels never
+  scores above about 0.002, so at 0.25 the run finds nothing and the card explains why instead of
+  offering a review) -> **Estimate** -> **Start**. **Review** when it finishes: follow
   **Review results** on the run card, which opens the Review queue narrowed to the run's images
   (that queue is where a person opens each image and accepts or rejects the proposals with A and
   R). Then back on the run card set `Minimum confidence` = `0`, press **Accept as labels…**, read the count and confirm with **Accept N boxes** (the card then offers **Undo acceptance**).

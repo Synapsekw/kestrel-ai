@@ -28,6 +28,14 @@ def _domain_event_job(ctx):
     return None
 
 
+@register_job_type("test_fast_progress")
+def _fast_progress_job(ctx):
+    # Three messages well inside the database write interval: only the first is stored at once.
+    for i in (1, 2, 3):
+        ctx.progress(i / 3, f"{i} / 3 images")
+    return None
+
+
 def _project(client, project_dir):
     return client.post(
         "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": []}
@@ -56,6 +64,14 @@ def test_job_runs_to_success_with_progress_and_log(client, project_dir, app):
     assert any("step 4" in line for line in log["lines"])
     assert log["path"] == job.log_path
     assert (project_dir / "runs" / job.id / "job.log").exists()
+
+
+def test_a_finished_job_keeps_its_last_progress_message(client, project_dir, app):
+    """The database write is throttled; the terminal write must carry the newest message."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fast_progress", {})
+    j = _wait(client, pid, job.id)
+    assert j["state"] == "succeeded" and j["message"] == "3 / 3 images"
 
 
 def test_log_tail_limits_lines(client, project_dir, app):
