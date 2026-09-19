@@ -4,6 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { fetchModels, patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Field, Select } from "@/ui";
 
 interface Props {
   project: Project;
@@ -57,19 +58,20 @@ export function PreannotationSection({ project, onSaved }: Props) {
   const current = project.preannotation_model_id ?? "";
   const known = models?.some((m) => m.id === current) ?? false;
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-medium">Pre-annotation</h2>
-      <p className="text-sm text-slate-400">
-        This model runs on an image when the editor opens it and its proposals appear dashed until reviewed.
-      </p>
-      <label className="flex items-center gap-2 text-sm">
-        Model
-        <select
+    <section className="flex flex-col gap-4 py-8 first:pt-0 last:pb-0">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">Pre-annotation</h2>
+        <p className="text-sm text-muted">
+          This model runs on an image when the editor opens it; its suggestions appear dashed until reviewed.
+        </p>
+      </div>
+      <Field label="Model" htmlFor="preannotation-model" className="max-w-sm">
+        <Select
+          id="preannotation-model"
           aria-label="Pre-annotation model"
           value={current}
           disabled={unavailable !== null || models === null || busy}
           onChange={(e) => void choose(e.target.value)}
-          className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm"
         >
           <option value="">None</option>
           {!known && current && <option value={current}>{current}</option>}
@@ -78,23 +80,19 @@ export function PreannotationSection({ project, onSaved }: Props) {
               {m.name} ({m.kind})
             </option>
           ))}
-        </select>
-      </label>
+        </Select>
+      </Field>
       {unavailable && (
-        <p role="note" className="text-xs text-slate-400">
+        <p role="note" className="text-xs text-muted">
           {unavailable}
         </p>
       )}
       {status && (
-        <p role="status" className="text-xs text-emerald-300">
+        <p role="status" className="text-xs text-ok">
           {status}
         </p>
       )}
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
     </section>
   );
 }

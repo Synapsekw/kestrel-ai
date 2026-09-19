@@ -4,6 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { saveClasses } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { Alert, Button, IconButton, Input, Select } from "@/ui";
 import {
   classInUseMessage,
   moveDraft,
@@ -19,9 +20,37 @@ interface Props {
   onSaved: (p: Project) => void;
 }
 
-const input = "rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm";
-const btn = "rounded border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800 disabled:opacity-40";
 const HOTKEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+/**
+ * The colour picker: a native `<input type="color">` (the one raw input outside `src/ui/`; the
+ * browser's own picker is the right control here) drawn as a 24px rounded square.
+ */
+function ColourSwatch({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (colour: string) => void;
+}) {
+  return (
+    <span
+      className="relative inline-block h-6 w-6 shrink-0 overflow-hidden rounded-md border border-line focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-ground"
+      style={{ backgroundColor: value }}
+      title={label}
+    >
+      <input
+        aria-label={label}
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+      />
+    </span>
+  );
+}
 
 export function ClassesSection({ project, onSaved }: Props) {
   const api = useApi();
@@ -58,35 +87,37 @@ export function ClassesSection({ project, onSaved }: Props) {
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <h2 className="text-lg font-medium">Classes</h2>
-      <p className="text-sm text-slate-400">
-        Rename, recolour, change hotkeys or reorder. Removing a class that still has boxes is refused until
-        those boxes are reassigned or deleted.
-      </p>
-      <div className="flex flex-col gap-2">
+    <section className="flex flex-col gap-4 py-8 first:pt-0 last:pb-0">
+      <div className="flex flex-col gap-1">
+        <h2 className="text-base font-semibold">Classes</h2>
+        <p className="text-sm text-muted">
+          Rename, recolour, change the number key or reorder. A class that still has boxes cannot be removed
+          until those boxes are reassigned or deleted.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
         {drafts.map((d, i) => {
           const n = i + 1;
           return (
             <div key={d.id ?? `new-${i}`} className="flex items-center gap-2">
-              <input
-                aria-label={`Colour of class ${n}`}
-                type="color"
+              <ColourSwatch
+                label={`Colour of class ${n}`}
                 value={d.colour}
-                onChange={(e) => update(i, { colour: e.target.value })}
-                className="h-8 w-10 rounded border border-slate-700 bg-slate-800"
+                onChange={(colour) => update(i, { colour })}
               />
-              <input
+              <Input
+                dense
                 aria-label={`Name of class ${n}`}
                 value={d.name}
                 onChange={(e) => update(i, { name: e.target.value })}
-                className={`${input} flex-1`}
+                className="flex-1"
               />
-              <select
+              <Select
+                dense
                 aria-label={`Hotkey of class ${n}`}
                 value={d.hotkey}
                 onChange={(e) => update(i, { hotkey: e.target.value })}
-                className={input}
+                wrapperClassName="w-[4.5rem]"
               >
                 <option value="">none</option>
                 {HOTKEYS.map((k) => (
@@ -94,64 +125,50 @@ export function ClassesSection({ project, onSaved }: Props) {
                     {k}
                   </option>
                 ))}
-              </select>
-              <button
-                type="button"
-                aria-label={`Move class ${n} up`}
-                className={btn}
+              </Select>
+              <IconButton
+                icon="chevron-down"
+                size="sm"
+                label={`Move class ${n} up`}
                 disabled={i === 0}
                 onClick={() => setDrafts((x) => moveDraft(x, i, -1))}
-              >
-                ↑
-              </button>
-              <button
-                type="button"
-                aria-label={`Move class ${n} down`}
-                className={btn}
+                className="[&_svg]:rotate-180"
+              />
+              <IconButton
+                icon="chevron-down"
+                size="sm"
+                label={`Move class ${n} down`}
                 disabled={i === drafts.length - 1}
                 onClick={() => setDrafts((x) => moveDraft(x, i, 1))}
-              >
-                ↓
-              </button>
-              <button
-                type="button"
-                aria-label={`Remove class ${n}`}
-                className={`${btn} text-red-300`}
+              />
+              <IconButton
+                icon="trash"
+                size="sm"
+                label={`Remove class ${n}`}
                 onClick={() => setDrafts((x) => x.filter((_, j) => j !== i))}
-              >
-                Remove
-              </button>
+                className="text-muted hover:text-danger"
+              />
             </div>
           );
         })}
       </div>
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          className={btn}
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          icon="plus"
           onClick={() => setDrafts((x) => [...x, { name: "", colour: nextColour(x), hotkey: "" }])}
         >
           Add class
-        </button>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void save()}
-          className="rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50"
-        >
+        </Button>
+        <Button variant="primary" loading={busy} onClick={() => void save()}>
           Save classes
-        </button>
+        </Button>
         {status && (
-          <span role="status" className="text-xs text-emerald-300">
+          <span role="status" className="text-xs text-ok">
             {status}
           </span>
         )}
       </div>
-      {error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {error}
-        </p>
-      )}
+      {error && <Alert tone="danger">{error}</Alert>}
     </section>
   );
 }

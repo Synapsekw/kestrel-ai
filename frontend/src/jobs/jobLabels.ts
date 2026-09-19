@@ -4,7 +4,7 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   import: "Import",
   dataset: "Dataset",
   train: "Training",
-  infer: "Query run",
+  infer: "Detection run",
   export: "Export",
 };
 
@@ -72,6 +72,6 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "dataset":
       return { label: "Train on it", to: `${p}/train` };
     case "import":
-      return { label: "Open Data Manager", to: `${p}/data` };
+      return { label: "Open images", to: `${p}/data` };
   }
 }

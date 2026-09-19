@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useJobsStore } from "@/store/jobs";
+import { Alert, IconButton, SkeletonRows } from "@/ui";
 import { JobCard } from "./JobCard";
 import { useJobList } from "./useJobList";
-
-const btn = "rounded border border-slate-700 px-2 py-1 text-xs hover:bg-slate-800 disabled:opacity-50";
 
 /** Global slide-over listing the project's jobs newest first; fed by the websocket and by polling while open. */
 export function JobsPanel({ projectId }: { projectId: string }) {
@@ -49,32 +48,31 @@ export function JobsPanel({ projectId }: { projectId: string }) {
       aria-label="Jobs"
       aria-modal="false"
       tabIndex={-1}
-      className="absolute inset-y-0 right-0 z-20 flex w-[28rem] max-w-full flex-col gap-3 overflow-y-auto border-l border-line bg-panel p-4 shadow-float animate-slide-in motion-reduce:animate-none"
+      className="absolute inset-y-0 right-0 z-20 flex w-[28rem] max-w-full flex-col border-l border-line bg-panel shadow-float animate-slide-in focus:outline-none motion-reduce:animate-none"
     >
-      <header className="flex items-center gap-2">
-        <h2 className="text-lg font-medium">Jobs</h2>
-        <button type="button" className={btn} onClick={list.reload} disabled={list.loading}>
-          Refresh
-        </button>
-        <button type="button" className={`${btn} ml-auto`} onClick={() => setPanelOpen(false)}>
-          Close jobs
-        </button>
+      <header className="flex h-12 shrink-0 items-center gap-1 border-b border-line pl-4 pr-2">
+        <h2 className="flex-1 text-base font-semibold">Jobs</h2>
+        <IconButton icon="refresh" label="Refresh" size="sm" onClick={list.reload} disabled={list.loading} />
+        <IconButton icon="x" label="Close jobs" size="sm" onClick={() => setPanelOpen(false)} />
       </header>
-      {list.error && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {list.error}
-        </p>
-      )}
-      {sorted.length === 0 && (
-        <p className="text-sm text-slate-400">{list.loading ? "Loading…" : "No jobs yet."}</p>
-      )}
-      <ul className="flex flex-col gap-2">
-        {sorted.map((job) => (
-          <li key={job.id}>
-            <JobCard projectId={projectId} job={job} />
-          </li>
-        ))}
-      </ul>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 py-3">
+        {list.error && <Alert tone="danger">{list.error}</Alert>}
+        {sorted.length === 0 &&
+          (list.loading ? (
+            <SkeletonRows rows={3} columns={3} className="py-2" />
+          ) : (
+            <p className="py-6 text-center text-sm text-muted">No jobs yet.</p>
+          ))}
+        {sorted.length > 0 && (
+          <ul className="flex flex-col divide-y divide-line">
+            {sorted.map((job) => (
+              <li key={job.id}>
+                <JobCard projectId={projectId} job={job} />
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </aside>
   );
 }
