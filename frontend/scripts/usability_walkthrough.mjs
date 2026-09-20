@@ -400,7 +400,7 @@ await step("9.5 export the results in every format; the model section shows the 
     const box = form.getByLabel(label);
     if (!(await box.isChecked())) await box.check();
   }
-  await form.getByLabel(/Include proposals nobody has reviewed yet/).check();
+  await form.getByLabel(/Include suggestions nobody has reviewed yet/).check();
   await snap("export-form");
   const before = await api("GET", `/projects/${projectId}/jobs?type=results_export`);
   await form.getByRole("button", { name: "Export", exact: true }).click();

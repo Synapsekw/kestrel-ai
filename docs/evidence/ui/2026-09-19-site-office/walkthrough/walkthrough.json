@@ -1,7 +1,7 @@
 {
-  "started": "2026-09-19T13:15:47.384Z",
+  "started": "2026-09-20T03:17:35.947Z",
   "cfg": {
-    "projectFolder": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\3d40edc0-c2f8-4556-98fe-5ba8a063177f\\scratchpad\\wt-project",
+    "projectFolder": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\3d40edc0-c2f8-4556-98fe-5ba8a063177f\\scratchpad\\wt4-project",
     "frames": "C:\\Users\\D\\AppData\\Local\\Temp\\claude\\E--Dev-Yolo-app\\3d40edc0-c2f8-4556-98fe-5ba8a063177f\\scratchpad\\frames",
     "evidence": "E:\\Dev\\Yolo\\app\\docs\\evidence\\ui\\2026-09-19-site-office\\walkthrough",
     "label": 12,
@@ -203,6 +203,57 @@
       ]
     },
     {
+      "name": "6.5 the datasets screen lists, explains and deletes",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the dataset is listed",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "per-class counts are shown",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the detail leads to training",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "a name that differs only by case is refused",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the new dataset appears when its job ends",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the delete asks first and says what is kept",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the deleted dataset leaves the list",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the backend no longer has it",
+          "ok": true,
+          "detail": "status 404"
+        }
+      ],
+      "screenshots": [
+        "14-datasets-detail.png",
+        "15-datasets-delete-confirm.png",
+        "16-datasets-after-delete.png"
+      ]
+    },
+    {
       "name": "7 train: guidance before, honest verdict after",
       "ok": true,
       "checks": [
@@ -219,7 +270,7 @@
         {
           "what": "training finished",
           "ok": true,
-          "detail": "Training: v1-yolo11n-coco\nSucceeded\n62e2bec6\nEpoch\n3 / 3\nmAP50\n0.0%\nElapsed\n18 s\nLoss\nbox 3.434 cls 5.785 dfl 2.819\nETA\n"
+          "detail": "Training: v1-yolo11n-coco\nSucceeded\nf3645e0c\nEpoch\n3 / 3\nmAP50\n0.0%\nElapsed\n11 s\nLoss\nbox 3.457 cls 5.974 dfl 2.808\nETA\n"
         },
         {
           "what": "the log reads as sentences",
@@ -233,8 +284,8 @@
         }
       ],
       "screenshots": [
-        "14-train-form.png",
-        "15-train-done.png"
+        "17-train-form.png",
+        "18-train-done.png"
       ]
     },
     {
@@ -319,16 +370,16 @@
         {
           "what": "the editor leads back to this review",
           "ok": true,
-          "detail": "/p/52117d10-b861-4b2f-863e-81c6362dbcd6/review?ids=abfc310d-cb38-40c5-8906-4b4fae8b6f02,fd36d1f4-6d19-4a18-b7d6-c3ce854927fe,031ed692-7dfd-4e5b-bba7-5187e6d356ec,52f28a6d-5584-4a45-9b4b-6cdd42155ffe,21622791-a377-4a64-9253-1bd635cbc22d,22f26fc8-4b0d-4648-ac01-373593864d28,bf929bfe-a53d-40c8-828f-027a45886683,1b83ba89-1a00-436e-ac69-40c87633ca95,bbb8d67a-be2b-47cd-8694-87007e471f34,99088294-7c2c-4e8b-915b-950f46e4090f,9d646b72-d289-4ca9-a547-72ee16e548ee,7bc1eaa3-52a9-46d1-a157-4605c88ea8a0,4d2cad51-5383-49fb-b1f5-a0b51574172d,421c1e90-f993-459c-8f13-8933841d2bd9,37c8189c-3bdd-40b5-9a39-f59a5e5321cb,6503c7b9-6ae2-4d9f-93e9-bb7c2fcb34ea,6fc09c14-fd19-4e1e-b8b8-4563394794eb,222c3ed1-8aa2-4e58-bd79-5cac4ec43e5e,ba51d46d-4642-47e2-b793-afdad6a0aec2,98c3e61a-3025-40be-9c08-8c41b9fb241c,1b9a39a2-7aa3-4dee-a08a-2052eab5e60f,6d0d8115-ce35-4673-9e67-cafbcea114d9,8632e2c7-ee50-43f4-9edd-2f107c483c81,5b20097b-04bd-45ae-8adc-ac307b799b36,9d37ce9d-71ce-4e2a-a2c2-30b822ec98b5,c9c84cec-cb75-4041-83c8-78eebaf82260,3fee17f6-e643-4fc1-be9d-e1bd150909a8"
+          "detail": "/p/540da655-331d-46b5-bb8f-c473f7d891c7/review?ids=1a1fae48-5b9c-4df7-b3d4-135c537b5237,c3a8c51e-fd6b-4db9-ad21-b61d02bcfb5b,8af9e479-1b14-4450-a106-69071bc7f682,e76bae4a-2502-4d80-ac40-a53dd723126a,5a138416-aa9e-411f-a760-fee36b3881b3,2df785bc-9078-4251-bf4b-77f80ad18d8b,24505208-0b18-4175-8fad-3e493cb29274,fd539673-f57c-4d07-9799-7d72799dd911,8c14c617-7a6f-464c-a0b5-adb13844420e,564e17fe-b283-48fe-804e-4a8dbe7e1c39,9742d3de-287b-44b1-832a-889f58d94eb5,b26849d7-6e16-489e-9a90-44e5da4e4138,144b1bd3-cc3c-4086-9873-0174aaf64cdc,e2426522-9622-4b13-ab23-94f4c3f9b401,cf64b896-bfab-401b-97d7-d45f9e451e01,60ad74df-f0f7-4716-95b4-47e644a2bc88,e4c60973-5957-4c0a-a7a5-36c5fda57e94,0cce849d-5b6c-4cf3-be6a-3594a80a19db,51bacc02-46b8-48fa-9408-13a4a7551710,ccb25c93-434e-4604-a4d2-7efa9b812c99,0d392d9c-e881-402f-93ab-ea8b83d7f39a,245e2a3f-994e-4b02-95f2-f420a42e6fd4,2b2b26d3-cd8d-40ba-81d5-df5803053881,7b44f0d1-c4b0-46e1-8f7f-2d39b4d8c159,e30b2d9f-ecd2-4d8d-bd9e-d633186b101c,6aee5966-2262-42be-87fd-d83bd8477443,99ddab03-05f2-4584-a6f5-9932266107ec"
         }
       ],
       "screenshots": [
-        "16-query-trained-model.png",
-        "17-query-starter-model.png",
-        "18-accept-confirm.png",
-        "19-accept-undone.png",
-        "20-review-of-the-run.png",
-        "21-review-confidence-floor.png"
+        "19-query-trained-model.png",
+        "20-query-starter-model.png",
+        "21-accept-confirm.png",
+        "22-accept-undone.png",
+        "23-review-of-the-run.png",
+        "24-review-confidence-floor.png"
       ]
     },
     {
@@ -342,7 +393,63 @@
         }
       ],
       "screenshots": [
-        "22-onnx-exported.png"
+        "25-onnx-exported.png"
+      ]
+    },
+    {
+      "name": "9.5 export the results in every format; the model section shows the ONNX file",
+      "ok": true,
+      "checks": [
+        {
+          "what": "the export says what it will contain",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the export job succeeded",
+          "ok": true,
+          "detail": "succeeded "
+        },
+        {
+          "what": "the past export is listed with Show in folder",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "every chosen format is on disk",
+          "ok": true,
+          "detail": "counts_by_group.csv, counts_by_image.csv, detections.csv, labels_coco.json, labels_yolo, report.html"
+        },
+        {
+          "what": "the CSV opens in Excel (UTF-8 with BOM)",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the report is self-contained with thumbnails",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "no partial folder is left behind",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "the model section explains ONNX and shows the exported file",
+          "ok": true,
+          "detail": ""
+        },
+        {
+          "what": "export folder exists",
+          "ok": true,
+          "detail": ""
+        }
+      ],
+      "screenshots": [
+        "26-export-form.png",
+        "27-export-done.png",
+        "28-export-model-section.png"
       ]
     },
     {
@@ -360,6 +467,6 @@
   ],
   "imageCount": 40,
   "map50": 0,
-  "finished": "2026-09-19T13:17:57.156Z",
+  "finished": "2026-09-20T03:20:34.589Z",
   "passed": true
 }
