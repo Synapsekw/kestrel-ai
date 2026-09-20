@@ -137,7 +137,9 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
             listening={!spaceHeld}
             draggable={!spaceHeld}
             onMouseDown={(e) => {
-              if (spaceHeld) return;
+              // Left button only: a middle press is the pan gesture, and starting it over a box
+              // must not also select that box. Konva's own drag is left-only already.
+              if (spaceHeld || e.evt.button !== 0) return;
               e.cancelBubble = true;
               select(b.id);
             }}
