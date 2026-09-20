@@ -23,7 +23,7 @@ $repo = Split-Path -Parent $repo
 if ((& git status --porcelain)) { throw "working tree is dirty - commit or discard first" }
 
 Write-Host "rebasing $branch onto main so the gate runs against the merged state..."
-& git fetch origin main 2>&1 | Out-Null
+if ((& git branch -r) -match 'origin/main') { & git fetch origin main | Out-Null }
 & git rebase main
 if ($LASTEXITCODE -ne 0) {
   throw "rebase conflict - resolve it, then re-run this script"
