@@ -78,6 +78,33 @@ statements in the vault itself that had gone stale as the vault filled in around
   `vault/decisions/2026-09-20-gotcha-cargo-test-needs-the-frozen-sidecar.md`. The `task/smoke-check`
   worktree itself is left as-is for the controller to finish that round trip.
 
+### Update — later the same day: publish landed, round trip paused
+
+The items above were true when this note was first written. Since then:
+
+- **Task 11 shipped: the repo is published.** This supersedes the "repo is NOT yet published"
+  bullet above. It is now `https://github.com/Synapsekw/kestrel-ai`, public, default branch `main`,
+  MIT licensed, with `main`, `s6-packaging-acceptance`, `usability-wave1` and `wave1-s2-trial`
+  pushed.
+- **The fresh-clone test (Task 12 Steps 1-3) passed for real.** A scratch clone from GitHub had
+  every required path — vault, 19 ADRs, vendored Dataview, all six SDD wave directories,
+  `AGENTS.md`/`CLAUDE.md`/`CONTRIBUTING.md`/`LICENSE`, both worktree scripts, `/wrapup` — and leaked
+  nothing that should be excluded: no venv, no `node_modules`, no `.env`. `.git` came out at 28 MB.
+- **The round trip is paused, not complete.** After the `cargo test` failure and fix recorded above,
+  the operator paused before Task 12 Step 4 could merge or push. Worktree
+  `.claude/worktrees/smoke-check` and branch `task/smoke-check` (at `ad3633e`) are intentionally
+  left in place, ready to resume — do not remove them. The pause is deliberate: finishing the round
+  trip would push `main`, and a parallel session's in-flight OBB spec is also sitting on local
+  `main`; the operator chose to wait rather than carry that spec to the public remote before the
+  parallel session is ready. `start-task.ps1` and the gate were exercised for real; the merge, the
+  push and the junction-safe teardown were not.
+- **Unpushed commits on local `main`.** At minimum `59b28a4` (the parallel session's OBB spec, not
+  this plan's work) and `4807473` (this plan's `cargo test` gate fix) are unpushed. As of this
+  update, two further parallel-session commits (`8bf1add`, `c739d7e`) have also landed on local
+  `main` and are likewise unpushed. `origin/main` is still at `0ce41f5` — behind local `main` by all
+  four commits. A clone from GitHub right now would not have the conditional-gate fix.
+- The Obsidian GUI verification bullet below is still owed, unchanged.
+
 ## How to test
 
 This session's changes are documentation, vault content and PowerShell scripts — nothing in
@@ -110,3 +137,10 @@ first real exercise of `scripts/start-task.ps1` / `scripts/finish-task.ps1` agai
 are next. After Task 12, re-run acceptance against the renamed, installed Kestrel AI build
 (`vault/00-north-star.md` §5) — that is unrelated to this vault work but is the other open item
 blocking a clean "current state" claim.
+
+**Update — as of the "round trip paused" note above:** Task 11 is done. Task 12 is partway done and
+paused (fresh-clone test passed; the live round trip failed once at `cargo test`, was fixed, then
+paused by operator decision before merge/push — see above and `vault/00-north-star.md` §5). The
+actual next session entry point is to resume from worktree `.claude/worktrees/smoke-check` /
+branch `task/smoke-check` (`ad3633e`) once it's time to push, then continue with the acceptance
+re-run this paragraph already names.

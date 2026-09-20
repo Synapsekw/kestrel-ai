@@ -71,18 +71,64 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** acceptance step 7 (H2) closed 8/8 on the installed app at `177f68b`
-(2026-09-20), following the usability wave and the site-office UI redesign merging to `main`
-(`2bc15a4`).
+**Shipped last:** the repo is published —
+[`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai), public, default
+branch `main`, MIT licensed, with `main`, `s6-packaging-acceptance`, `usability-wave1` and
+`wave1-s2-trial` pushed — and the fresh-clone verification (Task 12 Steps 1-3 of
+`docs/superpowers/plans/2026-09-20-repo-and-dev-memory.md`) passed: a scratch clone from GitHub had
+every required path (vault, 19 ADRs, vendored Dataview, all six SDD wave directories,
+`AGENTS.md`/`CLAUDE.md`/`CONTRIBUTING.md`/`LICENSE`, both worktree scripts, `/wrapup`) and leaked
+nothing that should be excluded (no venv, no `node_modules`, no `.env`). Before that: acceptance
+step 7 (H2) closed 8/8 on the installed app at `177f68b` (2026-09-20), following the usability wave
+and the site-office UI redesign merging to `main` (`2bc15a4`).
 
-**In flight:** the product and app code carry the Kestrel AI name (renamed 2026-09-20); this vault
-and the public-repo preparation it belongs to are being built now (plan
-`docs/superpowers/plans/2026-09-20-repo-and-dev-memory.md`).
+**In flight:** the `start-task.ps1` → `finish-task.ps1` round trip (Task 12 Step 4) — started for
+real, failed once, fixed, and now **paused by operator decision** before merge/push. See §5 for the
+full state and why.
 
-**Next:** re-run acceptance against the renamed, installed Kestrel AI build (§5); close the
-outstanding friction-list minors G3 and G2/M3 (§5).
+**Next:** resume and complete the paused round trip (§5); re-run acceptance against the renamed,
+installed Kestrel AI build (§5); close the outstanding friction-list minors G3 and G2/M3 (§5); do
+the Obsidian GUI verification (§5).
 
 ## 5. Owed
+
+### Round trip incomplete — `start-task.ps1` → `finish-task.ps1` (spec §7.5 unmet, blocking)
+
+Task 12 of `docs/superpowers/plans/2026-09-20-repo-and-dev-memory.md` is only partly done. The
+fresh-clone test (Steps 1-3) passed. The first live gate run (Step 4, worktree `task/smoke-check`)
+exercised six of seven gate steps for real and they passed — contract check, ruff, 583 pytest,
+frontend lint, frontend test, frontend build — then `cargo test` failed: Tauri's build script
+resolves the frozen-sidecar `externalBin` resource at compile time, and
+`frontend/src-tauri/binaries/kestrel-backend-*.exe` is git-ignored (`.gitignore:19`), so no fresh
+worktree or clone has it. `finish-task.ps1` was fixed to make that step conditional on the sidecar's
+presence (commit `4807473`; see
+`vault/decisions/2026-09-20-gotcha-cargo-test-needs-the-frozen-sidecar.md`) and correctly stopped
+**before** merging or pushing.
+
+The round trip is now **paused by operator decision**, not complete: spec §7.5 (a proven
+`start-task.ps1`/`finish-task.ps1` round trip against a live `origin`) is still unmet. The merge,
+the push and the junction-safe teardown were never reached. Worktree
+`.claude/worktrees/smoke-check` and branch `task/smoke-check` (at `ad3633e`) are deliberately left
+in place, ready to resume. Reason for the pause: finishing the round trip pushes `main`, and a
+parallel session's in-flight OBB spec is also on local `main` — the operator chose to wait so that
+work isn't carried to the public remote before the parallel session is ready. Do not treat
+`start-task.ps1`/`finish-task.ps1` as proven end-to-end until this resumes and completes.
+
+### Unpushed commits on local `main` — `origin/main` is behind
+
+Local `main` is ahead of `origin/main` (`0ce41f5`). At minimum this includes `59b28a4` (a parallel
+session's OBB spec — not this plan's work) and `4807473` (this plan's `cargo test` gate fix). As of
+this note, two further parallel-session commits (`8bf1add`, `c739d7e`) have also landed on local
+`main` and are likewise unpushed — none of the four have been pushed. A second machine cloning from
+GitHub right now gets `origin/main` at `0ce41f5` and will **not** have the conditional-gate fix; it
+would hit the same `cargo test` failure Task 12 Step 4 hit.
+
+### Obsidian GUI verification owed (spec §7.3)
+
+Nobody has opened this vault in the Obsidian app to confirm Dataview queries render, Templater
+expands `vault/templates/session.md` without error, and the Homepage plugin opens
+`vault/00-north-star.md` on startup. Carried over from the seed session note's open threads,
+unresolved.
 
 ### Stale acceptance run (blocking claim of a current PASS)
 
