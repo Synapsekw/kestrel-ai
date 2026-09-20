@@ -1,4 +1,4 @@
-; Inno Setup script for the Machinery Detection installer (spec section 10).
+; Inno Setup script for the Kestrel AI installer (spec section 10).
 ;
 ; Tauri's own bundlers cannot carry this app: the frozen backend is a 3.4 GB one-folder PyInstaller
 ; build, and both NSIS (32-bit payload offsets) and the WiX template (one embedded cabinet) stop at
@@ -7,14 +7,14 @@
 ; Compiled by frontend/scripts/build-installer.ps1, which passes the version in with /DAppVersion.
 ; Every path below is relative to this file's folder, which is Inno's default SourceDir.
 
-#define AppName "Machinery Detection"
+#define AppName "Kestrel AI"
 #define AppPublisher "Synapse Solutions"
 #ifndef AppVersion
   #define AppVersion "0.0.0"
 #endif
 
-#define AppExe "..\src-tauri\target\release\machinery-app.exe"
-#define SidecarExe "..\src-tauri\binaries\machinery-backend-x86_64-pc-windows-msvc.exe"
+#define AppExe "..\src-tauri\target\release\kestrel-ai.exe"
+#define SidecarExe "..\src-tauri\binaries\kestrel-backend-x86_64-pc-windows-msvc.exe"
 #define InternalDir "..\src-tauri\binaries\_internal"
 #define IconFile "..\src-tauri\icons\icon.ico"
 #define OutputDir "..\src-tauri\target\release\bundle\inno"
@@ -31,7 +31,7 @@ AppPublisher={#AppPublisher}
 VersionInfoVersion={#AppVersion}
 ; Per user: no administrator rights and no shared install directory.
 PrivilegesRequired=lowest
-DefaultDirName={localappdata}\Programs\Machinery Detection
+DefaultDirName={localappdata}\Programs\Kestrel AI
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
 ; The install location is fixed because uninstall removes {app} whole: an operator who pointed
@@ -43,29 +43,29 @@ UsePreviousAppDir=yes
 ArchitecturesAllowed=x64os
 ArchitecturesInstallIn64BitMode=x64os
 OutputDir={#OutputDir}
-OutputBaseFilename=Machinery Detection_{#AppVersion}_x64-setup
+OutputBaseFilename=Kestrel AI_{#AppVersion}_x64-setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 SetupIconFile={#IconFile}
 UninstallDisplayName={#AppName}
-UninstallDisplayIcon={app}\machinery-app.exe
+UninstallDisplayIcon={app}\kestrel-ai.exe
 
 [Files]
-; The sidecar exe and its `_internal` folder must land beside machinery-app.exe: the shell plugin
+; The sidecar exe and its `_internal` folder must land beside kestrel-ai.exe: the shell plugin
 ; resolves a sidecar as `<folder of the running exe>\<name>.exe`, and a PyInstaller one-folder
 ; build loads `_internal` from beside its own exe. The target triple is only part of the file name
 ; in the source slot, which is why the sidecar is renamed on the way in - exactly what the Tauri
-; CLI does when it stages `target\release\machinery-backend.exe`.
+; CLI does when it stages `target\release\kestrel-backend.exe`.
 Source: "{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
-Source: "{#SidecarExe}"; DestDir: "{app}"; DestName: "machinery-backend.exe"; Flags: ignoreversion
+Source: "{#SidecarExe}"; DestDir: "{app}"; DestName: "kestrel-backend.exe"; Flags: ignoreversion
 Source: "{#InternalDir}\*"; DestDir: "{app}\_internal"; Flags: ignoreversion recursesubdirs createallsubdirs
 #if HaveWebView2Setup
 Source: "{#WebView2Setup}"; DestDir: "{tmp}"; Flags: deleteafterinstall
 #endif
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\machinery-app.exe"
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\kestrel-ai.exe"
 
 #if HaveWebView2Setup
 [Run]
