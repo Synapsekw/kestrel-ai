@@ -40,14 +40,21 @@ describe("NextStepBar", () => {
     );
   });
 
-  it("renders nothing before the counts are known and when nothing is pending", () => {
+  it("renders nothing before the counts are known", () => {
     const { api } = fakeClient([]);
-    const { container, rerender } = renderWithProviders(<NextStepBar projectId={PROJECT_ID} />, { api });
+    const { container } = renderWithProviders(<NextStepBar projectId={PROJECT_ID} />, { api });
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it("points at the export once everything is labeled and reviewed", () => {
     useProgressStore
       .getState()
       .set(PROJECT_ID, { ...base, images: 10, labeled: 10, datasets: 1, models: 2, trainedModels: 1 });
-    rerender(<NextStepBar projectId={PROJECT_ID} />);
-    expect(container).toBeEmptyDOMElement();
+    const { api } = fakeClient([]);
+    renderWithProviders(<NextStepBar projectId={PROJECT_ID} />, { api });
+    expect(screen.getByRole("link", { name: "Export the results" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/export`,
+    );
   });
 });

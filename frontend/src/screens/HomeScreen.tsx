@@ -13,6 +13,7 @@ const TYPE_VERB: Record<Job["type"], string> = {
   train: "Training",
   infer: "Detecting",
   export: "Exporting",
+  results_export: "Exporting results",
 };
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -66,17 +67,7 @@ export function HomeScreen() {
             <Icon name="arrow-right" size={15} />
           </Link>
         </div>
-      ) : (
-        <div className="flex items-center gap-3 rounded-lg border border-ok/25 bg-ok-soft p-5 text-sm text-ink">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-ok text-white">
-            <Icon name="check" size={16} className="[stroke-width:2.5]" />
-          </span>
-          <div>
-            <p className="font-semibold">Everything is labeled and reviewed.</p>
-            <p className="text-muted">Import more images, or run a detection over another folder.</p>
-          </div>
-        </div>
-      )}
+      ) : null}
 
       <div className="grid gap-8 md:grid-cols-2">
         <section className="flex flex-col gap-2">

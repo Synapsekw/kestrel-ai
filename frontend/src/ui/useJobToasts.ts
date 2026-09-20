@@ -9,6 +9,7 @@ const TYPE_NAME: Record<Job["type"], string> = {
   train: "Training",
   infer: "Detection",
   export: "Export",
+  results_export: "Results export",
 };
 
 function num(v: unknown): number | null {
@@ -44,6 +45,8 @@ export function jobToastText(job: Job): string {
       return "Dataset ready";
     case "export":
       return "Export finished";
+    case "results_export":
+      return "Results export finished";
   }
 }
 

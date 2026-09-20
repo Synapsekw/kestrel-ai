@@ -10,7 +10,7 @@ test("lists the example dataset, opens its detail with per-class stats, and dele
   await expect(table).toContainText("v1");
   await expect(table).toContainText("24 / 6");
 
-  await page.getByRole("row").filter({ hasText: "v1" }).click();
+  await page.getByRole("button", { name: "Select dataset v1" }).click();
   await expect(page).toHaveURL(new RegExp(`dataset=${DATASET}`));
   const detail = page.getByTestId("dataset-detail");
   await expect(detail).toBeVisible();

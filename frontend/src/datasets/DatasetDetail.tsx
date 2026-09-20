@@ -149,7 +149,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
             <Skeleton className="h-4 w-2/3" />
           </div>
         )}
-        {!stats && !statsError && <p className="text-sm text-slate-400">Loading…</p>}
+        {!stats && !statsError && <Skeleton className="h-4 w-56" />}
         {stats && (
           <table data-testid="dataset-class-stats" className="w-full text-left text-[13px]">
             <thead>

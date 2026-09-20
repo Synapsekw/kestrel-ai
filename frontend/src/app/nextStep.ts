@@ -79,5 +79,9 @@ export function nextStep(projectId: string, p: ProjectProgress): NextStep | null
       detail: "The trained model suggests boxes; you review them instead of drawing from scratch.",
       to: at("query"),
     };
-  return null;
+  return {
+    text: "Export the results",
+    detail: "Take the counts, the labels and the model out of the app as tables, label files or a report.",
+    to: at("export"),
+  };
 }

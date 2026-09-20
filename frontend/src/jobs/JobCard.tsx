@@ -24,6 +24,7 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   infer: "detect",
   dataset: "datasets",
   export: "download",
+  results_export: "download",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

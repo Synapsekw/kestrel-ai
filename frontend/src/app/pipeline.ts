@@ -1,6 +1,6 @@
 import type { ProjectProgress } from "./nextStep";
 
-export type StepId = "images" | "label" | "datasets" | "train" | "detect" | "review";
+export type StepId = "images" | "label" | "datasets" | "train" | "detect" | "review" | "export";
 export type StepState = "done" | "current" | "upcoming" | "locked";
 
 export interface Step {
@@ -15,7 +15,15 @@ export interface Step {
   lockedReason: string | null;
 }
 
-export const STEP_ORDER: readonly StepId[] = ["images", "label", "datasets", "train", "detect", "review"];
+export const STEP_ORDER: readonly StepId[] = [
+  "images",
+  "label",
+  "datasets",
+  "train",
+  "detect",
+  "review",
+  "export",
+];
 
 const LABEL: Record<StepId, string> = {
   images: "Images",
@@ -24,6 +32,7 @@ const LABEL: Record<StepId, string> = {
   train: "Train",
   detect: "Detect",
   review: "Review",
+  export: "Export",
 };
 
 const PATH: Record<StepId, string> = {
@@ -33,10 +42,11 @@ const PATH: Record<StepId, string> = {
   train: "train",
   detect: "query",
   review: "review",
+  export: "export",
 };
 
 /**
- * The six pipeline steps of a project with their state, from the same numbers `nextStep` uses.
+ * The seven pipeline steps of a project with their state, from the same numbers `nextStep` uses.
  * Done and locked come from the counts; the current step is the first one that is neither,
  * except that Review is current whenever suggestions are waiting.
  */
@@ -48,6 +58,8 @@ export function stepStates(projectId: string, p: ProjectProgress): Step[] {
     train: p.trainedModels > 0,
     detect: p.queryRuns > 0,
     review: p.queryRuns > 0 && p.pendingReview === 0,
+    // Exporting is never "done": results can be taken out again whenever they change.
+    export: false,
   };
   const locked: Record<StepId, string | null> = {
     images: null,
@@ -56,6 +68,7 @@ export function stepStates(projectId: string, p: ProjectProgress): Step[] {
     train: p.datasets === 0 ? "Create a dataset first" : null,
     detect: p.models === 0 ? "Train a model or add a starter model first" : null,
     review: p.queryRuns === 0 && p.pendingReview === 0 ? "Run a detection first" : null,
+    export: p.labeled === 0 ? "Label some images first" : null,
   };
   const count: Record<StepId, string | null> = {
     images: String(p.images),
@@ -64,6 +77,7 @@ export function stepStates(projectId: string, p: ProjectProgress): Step[] {
     train: String(p.trainedModels),
     detect: null,
     review: p.pendingReview > 0 ? String(p.pendingReview) : null,
+    export: null,
   };
 
   let current: StepId | null = p.pendingReview > 0 ? "review" : null;

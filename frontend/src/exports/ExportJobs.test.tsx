@@ -34,9 +34,9 @@ function render(jobs: Job[], opts: { loading?: boolean; error?: string | null } 
 }
 
 describe("ExportJobs", () => {
-  it("shows Loading… while the list is loading", () => {
+  it("shows placeholder rows while the list is loading", () => {
     render([], { loading: true });
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
     expect(screen.queryByText("No exports yet.")).not.toBeInTheDocument();
   });
 
@@ -48,7 +48,7 @@ describe("ExportJobs", () => {
 
   it("shows the empty state once loaded with nothing", () => {
     render([]);
-    expect(screen.getByText("No exports yet.")).toBeInTheDocument();
+    expect(screen.getByText("No exports yet")).toBeInTheDocument();
   });
 
   it("renders a finished export's summary and files, and reveals its folder", async () => {

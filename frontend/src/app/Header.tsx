@@ -33,6 +33,7 @@ const TYPE_VERB: Record<Job["type"], string> = {
   train: "Training",
   infer: "Detecting",
   export: "Exporting",
+  results_export: "Exporting results",
 };
 
 /** The newest active job as a live pill; nothing when the project is idle. */

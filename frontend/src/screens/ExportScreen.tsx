@@ -10,6 +10,7 @@ import { ExportJobs } from "@/exports/ExportJobs";
 import { ModelExportSection } from "@/exports/ModelExportSection";
 import { useResultsExportJobs } from "@/exports/useResultsExportJobs";
 import { useModels } from "@/models/useModels";
+import { Alert } from "@/ui";
 
 export function ExportScreen() {
   const { projectId = "" } = useParams();
@@ -38,12 +39,14 @@ export function ExportScreen() {
 
   return (
     <section className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold">Export</h1>
-      {statsError && (
-        <p role="alert" className="rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
-          {statsError}
+      <div className="flex flex-col gap-1">
+        <h1 className="text-xl font-semibold tracking-tight">Export</h1>
+        <p className="text-sm text-muted">
+          Take the counts, the labels and the trained model out of the app. Everything is written into the
+          project folder.
         </p>
-      )}
+      </div>
+      {statsError && <Alert tone="danger">{statsError}</Alert>}
       <ExportForm
         projectId={projectId}
         labeledCount={stats?.labeled_count ?? null}
@@ -52,7 +55,7 @@ export function ExportScreen() {
         pendingReviewCount={stats?.pending_review_count ?? null}
       />
       <section className="flex flex-col gap-2">
-        <h2 className="text-lg font-medium">Past exports</h2>
+        <h2 className="text-base font-semibold">Past exports</h2>
         <ExportJobs projectId={projectId} jobs={jobs} loading={jobsLoading} error={jobsError} />
       </section>
       {!models.unavailable && <ModelExportSection projectId={projectId} models={models.models} />}

@@ -49,15 +49,15 @@ describe("ExportForm", () => {
     expect(screen.getByRole("checkbox", { name: /Report \(HTML/ })).toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Labels in YOLO/ })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: /Labels in COCO/ })).not.toBeChecked();
-    expect(screen.getByRole("checkbox", { name: /Include proposals/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /Include suggestions/ })).not.toBeChecked();
   });
 
-  it("adds the unreviewed-proposals clause to the summary once the checkbox is ticked", () => {
+  it("adds the unreviewed-suggestions clause to the summary once the checkbox is ticked", () => {
     renderForm();
-    fireEvent.click(screen.getByRole("checkbox", { name: /Include proposals/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include suggestions/ }));
     expect(
       screen.getByText(
-        "Exports all 10 images: 9 accepted boxes on the 5 checked images and 3 unreviewed proposals.",
+        "Exports all 10 images: 9 accepted boxes on the 5 checked images and 3 unreviewed suggestions.",
       ),
     ).toBeInTheDocument();
   });
@@ -65,9 +65,9 @@ describe("ExportForm", () => {
   it("pluralises every count down to the singular when it is exactly 1", () => {
     renderForm({ labeledCount: 1, boxCount: 1, imageCount: 1, pendingReviewCount: 1 });
     expect(screen.getByText("Exports 1 image: 1 accepted box on the 1 checked image.")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("checkbox", { name: /Include proposals/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include suggestions/ }));
     expect(
-      screen.getByText("Exports 1 image: 1 accepted box on the 1 checked image and 1 unreviewed proposal."),
+      screen.getByText("Exports 1 image: 1 accepted box on the 1 checked image and 1 unreviewed suggestion."),
     ).toBeInTheDocument();
   });
 
@@ -81,7 +81,7 @@ describe("ExportForm", () => {
   it("labels the checkbox with what each format can and cannot mark", () => {
     renderForm();
     expect(
-      screen.getByText(/the tables, COCO and the report mark them; YOLO label files cannot/),
+      screen.getByText(/The tables, COCO and the report mark them; YOLO label files cannot/),
     ).toBeInTheDocument();
   });
 
@@ -101,7 +101,7 @@ describe("ExportForm", () => {
       },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: /Labels in YOLO/ }));
-    fireEvent.click(screen.getByRole("checkbox", { name: /Include proposals/ }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /Include suggestions/ }));
     fireEvent.click(screen.getByRole("button", { name: "Export" }));
     await screen.findByRole("button", { name: "Export" }); // settles
     expect(requests[0]).toMatchObject({

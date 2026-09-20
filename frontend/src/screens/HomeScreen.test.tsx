@@ -55,7 +55,7 @@ describe("HomeScreen", () => {
     expect(screen.getByRole("progressbar", { name: "Training" })).toHaveAttribute("aria-valuenow", "40");
   });
 
-  it("says so when nothing is left to do", async () => {
+  it("ends the pipeline on the export once everything is labeled and reviewed", async () => {
     useProgressStore.getState().set(PROJECT_ID, {
       ...base,
       images: 10,
@@ -66,7 +66,9 @@ describe("HomeScreen", () => {
       queryRuns: 1,
     });
     renderHome();
-    expect(await screen.findByText("Everything is labeled and reviewed.")).toBeInTheDocument();
-    expect(screen.queryByTestId("home-next-step")).toBeNull();
+    expect(await screen.findByRole("link", { name: /Export the results/ })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/export`,
+    );
   });
 });

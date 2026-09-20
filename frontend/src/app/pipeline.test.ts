@@ -25,6 +25,7 @@ describe("stepStates", () => {
       train: "locked",
       detect: "locked",
       review: "locked",
+      export: "locked",
     });
     expect(steps[1].lockedReason).toBe("Import images first");
     expect(steps[0].path).toBe("/p/p1/data");
@@ -51,6 +52,7 @@ describe("stepStates", () => {
       train: "done",
       detect: "current",
       review: "locked",
+      export: "upcoming",
     });
   });
 
@@ -67,8 +69,16 @@ describe("stepStates", () => {
     expect(steps.find((s) => s.id === "label")?.state).toBe("done");
   });
 
-  it("everything done: no current step", () => {
+  it("with every other step done, Export is the current one and never done itself", () => {
     const all = states({ images: 40, labeled: 40, datasets: 1, models: 1, trainedModels: 1, queryRuns: 1 });
-    expect(Object.values(all).every((s) => s === "done")).toBe(true);
+    expect(all).toEqual({
+      images: "done",
+      label: "done",
+      datasets: "done",
+      train: "done",
+      detect: "done",
+      review: "done",
+      export: "current",
+    });
   });
 });

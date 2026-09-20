@@ -5,6 +5,7 @@ import { messageOf } from "@/api/errors";
 import { createResultsExport, type ResultsExportFormat } from "@/api/exports";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
+import { Alert, Button, Checkbox } from "@/ui";
 
 interface Props {
   projectId: string;
@@ -57,8 +58,6 @@ function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
 }
 
-const primary = "rounded bg-orange-600 px-3 py-1 text-sm font-medium hover:bg-orange-500 disabled:opacity-50";
-
 export function ExportForm({
   projectId,
   labeledCount,
@@ -102,60 +101,56 @@ export function ExportForm({
   }
 
   return (
-    <section
-      aria-label="Results"
-      className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-800/30 p-4"
-    >
-      <h2 className="text-lg font-medium">Results</h2>
+    <section aria-label="Results" className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-5">
+      <h2 className="text-base font-semibold">Results</h2>
       {labeledCount !== null && boxCount !== null && imageCount !== null && (
-        <p className="text-sm text-slate-300">
+        <p className="text-sm text-muted">
           {imageCount === 1 ? "Exports 1 image" : `Exports all ${plural(imageCount, "image", "images")}`}:{" "}
           {plural(boxCount, "accepted box", "accepted boxes")} on the {labeledCount} checked{" "}
           {labeledCount === 1 ? "image" : "images"}
           {includeUnreviewed && pendingReviewCount !== null
-            ? ` and ${plural(pendingReviewCount, "unreviewed proposal", "unreviewed proposals")}`
+            ? ` and ${plural(pendingReviewCount, "unreviewed suggestion", "unreviewed suggestions")}`
             : ""}
           .
         </p>
       )}
       <div className="flex flex-col gap-2">
         {OPTIONS.map((o) => (
-          <label key={o.key} className="flex items-start gap-2 text-sm">
-            <input
-              type="checkbox"
-              className="mt-1"
-              checked={selected[o.key]}
-              onChange={() => toggle(o.key)}
-            />
-            <span>
-              <span className="block font-medium">{o.label}</span>
-              <span className="block text-xs text-slate-400">{o.hint}</span>
-            </span>
-          </label>
+          <Checkbox
+            key={o.key}
+            checked={selected[o.key]}
+            onChange={() => toggle(o.key)}
+            className="items-start [&>span:first-of-type]:mt-0.5"
+            label={
+              <span>
+                <span className="block font-medium">{o.label}</span>
+                <span className="block text-xs leading-relaxed text-muted">{o.hint}</span>
+              </span>
+            }
+          />
         ))}
       </div>
-      <label className="flex items-start gap-2 text-sm">
-        <input
-          type="checkbox"
-          className="mt-1"
-          checked={includeUnreviewed}
-          onChange={() => setIncludeUnreviewed((v) => !v)}
-        />
-        <span>
-          Include proposals nobody has reviewed yet (the tables, COCO and the report mark them; YOLO label
-          files cannot)
-        </span>
-      </label>
-      {error && (
-        <p role="alert" className="text-xs text-red-300">
-          {error}
-        </p>
-      )}
-      <div>
-        <button type="button" className={primary} onClick={() => void submit()} disabled={busy}>
-          Export
-        </button>
-      </div>
+      <Checkbox
+        checked={includeUnreviewed}
+        onChange={() => setIncludeUnreviewed((v) => !v)}
+        className="items-start [&>span:first-of-type]:mt-0.5"
+        label={
+          <span className="leading-relaxed">
+            Include suggestions nobody has reviewed yet. The tables, COCO and the report mark them; YOLO label
+            files cannot.
+          </span>
+        }
+      />
+      {error && <Alert tone="danger">{error}</Alert>}
+      <Button
+        variant="primary"
+        icon="download"
+        loading={busy}
+        onClick={() => void submit()}
+        className="self-start"
+      >
+        Export
+      </Button>
     </section>
   );
 }

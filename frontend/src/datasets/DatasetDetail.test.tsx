@@ -55,13 +55,13 @@ describe("DatasetDetail", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("shows Loading… before the stats arrive (M4)", async () => {
+  it("shows a placeholder before the stats arrive (M4)", async () => {
     const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);
     renderWithProviders(
       <DatasetDetail projectId={PROJECT_ID} dataset={exampleDataset} onDeleted={vi.fn()} />,
       { api },
     );
-    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.getByTestId("dataset-detail").querySelector(".animate-shimmer")).toBeInTheDocument();
     await screen.findByTestId("dataset-class-stats");
     expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
   });

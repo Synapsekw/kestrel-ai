@@ -30,7 +30,7 @@ describe("ExportScreen", () => {
       await screen.findByText(/Exports all \d+ images?: \d+ accepted boxe?s? on the \d+ checked images?/),
     ).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Past exports" })).toBeInTheDocument();
-    expect(screen.getByText("No exports yet.")).toBeInTheDocument();
+    expect(screen.getByText("No exports yet")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Model for other applications" })).toBeInTheDocument();
   });
 
@@ -62,7 +62,7 @@ describe("ExportScreen", () => {
     };
     useJobsStore.getState().upsert(otherProjectsJob);
     renderScreen([]);
-    expect(await screen.findByText("No exports yet.")).toBeInTheDocument();
+    expect(await screen.findByText("No exports yet")).toBeInTheDocument();
     expect(screen.queryByTestId(`export-job-${otherProjectsJob.id}`)).not.toBeInTheDocument();
   });
 });

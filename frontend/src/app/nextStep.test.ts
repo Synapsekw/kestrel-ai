@@ -57,9 +57,9 @@ describe("nextStep", () => {
     expect(nextStep("p", { ...base, images: 4, pendingReview: 1 })?.text).toBe("Review 1 suggestion");
   });
 
-  it("has nothing to push when everything is labeled and reviewed", () => {
+  it("ends on the export once everything is labeled and reviewed", () => {
     expect(
       nextStep("p", { ...base, images: 10, labeled: 10, datasets: 1, models: 2, trainedModels: 1 }),
-    ).toBeNull();
+    ).toMatchObject({ text: "Export the results", to: "/p/p/export" });
   });
 });

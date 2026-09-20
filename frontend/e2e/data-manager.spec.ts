@@ -149,13 +149,9 @@ test("label selected opens the editor over the selection only", async ({ page })
 
 test("double-click opens a list row even though the first click selects it", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
-<<<<<<< HEAD
   await page.getByRole("radio", { name: "List" }).click();
-=======
-  await page.getByRole("button", { name: "List" }).click();
   // The "Next:" line loads after the screen and moves the list down once; measure after it.
   await expect(page.getByTestId("next-step")).toBeVisible();
->>>>>>> wave1-s2-trial
   const name = page.getByTestId("image-table").getByText("IX-12-02491_0031_0001.jpg");
   const before = await name.boundingBox();
   await name.click();
