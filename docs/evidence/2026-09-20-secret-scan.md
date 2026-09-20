@@ -19,8 +19,16 @@ df39048 test(drivers): acceptance run 8/8 on the redesigned installed app       
 df39048 test(drivers): acceptance run 8/8 on the redesigned installed app       (wave1-s2-trial)
 ```
 
-All four branch tips exist and are real refs, so `git log --all` / `git log -p --all` (used below)
-walk history from all of them, not just `main`.
+All four branch tips exist and are real refs. Which steps below actually walk that multi-branch
+history and which only read the current tree at HEAD:
+
+- **Step 1** reads the tracked tree at HEAD only (`git ls-files`, no `--all`). It is a
+  current-tree-only check.
+- **Step 2** and **Step 3** use `git log --all` / `git log -p --all`, which walk every commit
+  reachable from every ref, so they genuinely cover history on all four branches.
+- **Step 4** (below) uses `git ls-files` against `docs/evidence/*` and `.superpowers/sdd/*`, which
+  is current-tree-only, same as Step 1. This is addressed explicitly, with a demonstrated
+  equivalence rather than an assertion, in "Step 4 branch coverage" just before 4a.
 
 ## Step 1: Scan every tracked file (working tree, all branches' checked-out content is HEAD only,
 but this checks the current tree)
@@ -92,6 +100,37 @@ Output: **(empty — no matches).** No `.env` (or `**/.env`) file has ever been 
 of any of the four branches.
 
 ## Step 4: Evidence and diff payloads
+
+### Step 4 branch coverage — demonstrated, not just asserted
+
+Step 4's own commands (4a, 4b below) use `git ls-files`, which reads only the tree checked out at
+HEAD on `main` — not `--all`. That is sufficient here, but only because every file that was ever
+*added* under `docs/evidence/*` or `.superpowers/sdd/*` on any of the four branches is also present
+in `main`'s current tree at `f6dbd41`, so scanning that tree is equivalent to scanning the union of
+everything those paths have ever held across all four branches' history. This is demonstrated
+below rather than assumed:
+
+```
+$ git log --all --diff-filter=ARC --name-only --format= -- 'docs/evidence/*' '.superpowers/sdd/*' | sort -u | wc -l
+209
+
+$ git ls-files 'docs/evidence/*' '.superpowers/sdd/*' | sort -u | wc -l
+209
+
+$ comm -23 \
+    <(git log --all --diff-filter=ARC --name-only --format= -- 'docs/evidence/*' '.superpowers/sdd/*' | sort -u) \
+    <(git ls-files 'docs/evidence/*' '.superpowers/sdd/*' | sort -u)
+(no output)
+```
+
+`--diff-filter=ARC` counts files added, renamed-into, or copied-into on any commit reachable from
+any ref (i.e. on any of the four branches), so this is not limited to `main`. The first two counts
+are equal (209 = 209), and the `comm -23` line — files in the "ever added, any branch" set that are
+*not* in the "currently tracked at HEAD" set — prints nothing. That proves the ever-added set is a
+subset of (here, exactly equal to) the current tree, so a `git ls-files` sweep of the current tree
+at HEAD misses nothing that Steps 4a/4b would have found by walking `--all` history directly. This
+holds specifically for these two path prefixes; it is not a general claim about the whole repo
+(which Steps 2 and 3 already cover with true `--all` history walks).
 
 ### 4a. Text sweep
 
@@ -228,7 +267,7 @@ Step 3's empty result. **CLEAN.**
 
 ### 4b. Screenshot sweep
 
-Command (exact):
+Command from the brief (exact):
 
 ```
 git ls-files 'docs/evidence/**/*.png' | head -40
@@ -236,61 +275,112 @@ git ls-files 'docs/evidence/**/*.png' | head -40
 
 146 PNGs are tracked under `docs/evidence/` in total (the `head -40` in the brief only shows the
 first 40; the full count was checked with `git ls-files 'docs/evidence/**/*.png' | wc -l` → 146).
-Per the task's extra guidance, every PNG whose name plausibly indicates a settings, provider, key,
-detect, or query/inference screen was actually opened and viewed with the image-reading tool (not
-inferred from filename). Viewed (11 images):
 
-- `docs/evidence/ui/2026-09-19-site-office/14-app-settings.png` — App settings, Provider keys
-  card. OpenAI "No key stored" (empty `Paste the API key` placeholder), Anthropic "Key stored"
-  badge with the API key input showing only the placeholder `Paste a new key to replace the stored
-  one` — the actual stored key is never rendered into the input. **CLEAN.**
-- `docs/evidence/ui/2026-09-19-site-office/13-project-settings.png` — Project settings (classes,
-  pre-annotation model, import defaults). No provider-key UI on this screen. **CLEAN.**
-- `docs/evidence/ui/2026-09-19-site-office/walkthrough/02-app-settings.png` — Same App settings
-  screen, both providers "No key stored", both key inputs show only placeholder text. **CLEAN.**
-- `docs/evidence/usability/2026-09-19-after/02-app-settings.png` — Same screen (dark theme), both
-  providers "No key stored", placeholder-only inputs. **CLEAN.**
-- `docs/evidence/usability/2026-09-19-before/16b-provider-test-bogus.png` — "Walkthrough" Settings
-  screen exercising a deliberately bogus/invalid key: Anthropic shows "Key stored" and a failed
-  test result `Failed: ProviderError: anthropic returned 401: Error code: 401 -
-  {'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id':
-  None}`. This is an error message confirming the key was rejected — the actual key value is never
-  displayed anywhere in the screenshot. **CLEAN.**
-- `docs/evidence/ui/2026-09-19-site-office/12-detect.png` — Detect screen (model/images/confidence
-  picker, run history row "Anthropic: 'dump trucks'"). No key or token visible. **CLEAN.**
-- `docs/evidence/acceptance/2026-09-20-installed-177f68b/acceptance-07-cloud-run.png` — Detect
-  screen showing a completed cloud (Anthropic) detection run and its run history. No key/token
-  visible. **CLEAN.**
-- `docs/evidence/acceptance/acceptance-06-query-run.png` — Query screen, local-model run only. No
-  provider key UI. **CLEAN.**
-- `docs/evidence/acceptance/2026-09-19-installed-88d9216/acceptance-06-query-run.png` — Same Query
-  screen, different run. No key visible. **CLEAN.**
-- `docs/evidence/ui/2026-09-19-site-office/walkthrough/16-query-trained-model.png` — Detect screen,
-  local model run, 0 boxes found. No key visible. **CLEAN.**
-- `docs/evidence/ui/2026-09-19-site-office/walkthrough/17-query-starter-model.png` — Same, 230
-  boxes found. No key visible. **CLEAN.**
-- `docs/evidence/ui/2026-09-19-site-office/walkthrough/20-query-starter-model.png` — Detect screen,
-  local model run. No key visible. **CLEAN.**
-- `docs/evidence/usability/2026-09-19-before/14d-query-done.png` — Query screen, local model run
-  only. No key visible. **CLEAN.**
+**Selection rule, applied mechanically, not by recall.** "Every PNG whose name plausibly indicates
+a settings, provider, key, detect, or query/inference screen" was turned into a concrete filter
+run once against the full list, and that output — not a hand-picked subset — is the candidate set
+that was opened:
 
-(That is 13 distinct images actually opened; the list above enumerates each. All are CLEAN — no
-provider key, token, or other credential value is visible in any pixel of any image reviewed.)
+```
+$ git ls-files 'docs/evidence/**/*.png' | grep -Ei 'setting|provider|key|token|detect|query|cloud|infer|run'
+docs/evidence/acceptance/2026-09-19-installed-88d9216/acceptance-06-query-run.png
+docs/evidence/acceptance/2026-09-20-installed-177f68b/acceptance-06-query-run.png
+docs/evidence/acceptance/2026-09-20-installed-177f68b/acceptance-07-cloud-run.png
+docs/evidence/acceptance/acceptance-06-query-run.png
+docs/evidence/checkpoint3/checkpoint3-08-query-run.png
+docs/evidence/ui/2026-09-19-site-office/12-detect.png
+docs/evidence/ui/2026-09-19-site-office/13-project-settings.png
+docs/evidence/ui/2026-09-19-site-office/14-app-settings.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/02-app-settings.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/16-query-trained-model.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/17-query-starter-model.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/19-query-trained-model.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/20-query-starter-model.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/20-review-of-the-run.png
+docs/evidence/ui/2026-09-19-site-office/walkthrough/23-review-of-the-run.png
+docs/evidence/usability/2026-09-19-after/02-app-settings.png
+docs/evidence/usability/2026-09-19-after/18-query-trained-model.png
+docs/evidence/usability/2026-09-19-after/19-query-starter-model.png
+docs/evidence/usability/2026-09-19-after/22-review-of-the-run.png
+docs/evidence/usability/2026-09-19-before/04a-import-running.png
+docs/evidence/usability/2026-09-19-before/14d-query-done.png
+docs/evidence/usability/2026-09-19-before/16b-provider-test-bogus.png
+```
 
-Skipped (not opened): the remaining ~133 PNGs under `docs/evidence/checkpoint*/`,
-`docs/evidence/acceptance/**` (project/import/preannotation/dataset/training/review/export/
-promoted steps), `docs/evidence/ui/2026-09-19-site-office/**` (projects, home, images grid/list,
-import dialog, label, review, datasets, models, train, jobs drawer, and the rest of the
-walkthrough sequence), and `docs/evidence/usability/**` (the remaining before/after walkthrough
-steps). These names indicate project/image/label/review/dataset/train/export/data-manager screens
-with no provider-settings or key-entry surface in this app's UI (confirmed by the settings screens
-above, where the *only* place a key could appear is the App settings "Provider keys" card, and
-that card is masked/placeholder in every instance checked). Given the consistent masking behavior
-across every settings/provider/detect/query screen actually opened, and that this app's design
-(confirmed via the code review in `.superpowers/sdd/wave3/s6-review.md`) treats key values as
-things that are deliberately never echoed back to the UI, it was judged unnecessary to open every
-remaining screenshot of unrelated screens (import dialogs, label editor, dataset tables, etc.)
-that have no code path to display a provider key at all.
+That is 22 candidates. **All 22 were opened and viewed with the image-reading tool** (not inferred
+from filename); none were taken on faith. Adjudication of each:
+
+1. `docs/evidence/acceptance/2026-09-19-installed-88d9216/acceptance-06-query-run.png` — Query
+   screen, local-model run only. No provider key UI. **CLEAN.**
+2. `docs/evidence/acceptance/2026-09-20-installed-177f68b/acceptance-06-query-run.png` — Detect
+   screen, local model run history (`Local model ahmadia-v1`, two rows). No key/token visible.
+   **CLEAN.**
+3. `docs/evidence/acceptance/2026-09-20-installed-177f68b/acceptance-07-cloud-run.png` — Detect
+   screen showing a completed cloud (Anthropic) detection run and its run history. No key/token
+   visible. **CLEAN.**
+4. `docs/evidence/acceptance/acceptance-06-query-run.png` — Query screen, local-model run only. No
+   provider key UI. **CLEAN.**
+5. `docs/evidence/checkpoint3/checkpoint3-08-query-run.png` — Query screen, local model run, run
+   ID `68962af9` shown (an internal run identifier, not a credential). No key visible. **CLEAN.**
+6. `docs/evidence/ui/2026-09-19-site-office/12-detect.png` — Detect screen (model/images/confidence
+   picker, run history row "Anthropic: 'dump trucks'"). No key or token visible. **CLEAN.**
+7. `docs/evidence/ui/2026-09-19-site-office/13-project-settings.png` — Project settings (classes,
+   pre-annotation model, import defaults). No provider-key UI on this screen. **CLEAN.**
+8. `docs/evidence/ui/2026-09-19-site-office/14-app-settings.png` — App settings, Provider keys
+   card. OpenAI "No key stored" (empty `Paste the API key` placeholder), Anthropic "Key stored"
+   badge with the API key input showing only the placeholder `Paste a new key to replace the stored
+   one` — the actual stored key is never rendered into the input. **CLEAN.**
+9. `docs/evidence/ui/2026-09-19-site-office/walkthrough/02-app-settings.png` — Same App settings
+   screen, both providers "No key stored", both key inputs show only placeholder text. **CLEAN.**
+10. `docs/evidence/ui/2026-09-19-site-office/walkthrough/16-query-trained-model.png` — Detect
+    screen, local model run, 0 boxes found. No key visible. **CLEAN.**
+11. `docs/evidence/ui/2026-09-19-site-office/walkthrough/17-query-starter-model.png` — Same, 230
+    boxes found. No key visible. **CLEAN.**
+12. `docs/evidence/ui/2026-09-19-site-office/walkthrough/19-query-trained-model.png` — Detect
+    screen, local model run (`ahmadia-v1`), 51686 boxes found, run history table. No key/token
+    visible. **CLEAN.**
+13. `docs/evidence/ui/2026-09-19-site-office/walkthrough/20-query-starter-model.png` — Detect
+    screen, local model run. No key visible. **CLEAN.**
+14. `docs/evidence/ui/2026-09-19-site-office/walkthrough/20-review-of-the-run.png` — Review queue
+    table (filenames, group codes, confidence percentages, pending/box counts). No key/token
+    visible. **CLEAN.**
+15. `docs/evidence/ui/2026-09-19-site-office/walkthrough/23-review-of-the-run.png` — Same Review
+    queue screen, same shape of content. No key/token visible. **CLEAN.**
+16. `docs/evidence/usability/2026-09-19-after/02-app-settings.png` — Same screen (dark theme), both
+    providers "No key stored", placeholder-only inputs. **CLEAN.**
+17. `docs/evidence/usability/2026-09-19-after/18-query-trained-model.png` — Query screen, local
+    model run, 0 boxes found ("Nothing scored at or above confidence 0.01" notice). No key visible.
+    **CLEAN.**
+18. `docs/evidence/usability/2026-09-19-after/19-query-starter-model.png` — Query screen, local
+    model run, 329 boxes found, run history. No key visible. **CLEAN.**
+19. `docs/evidence/usability/2026-09-19-after/22-review-of-the-run.png` — Review queue table,
+    same shape as #14/#15. No key/token visible. **CLEAN.**
+20. `docs/evidence/usability/2026-09-19-before/04a-import-running.png` — Data Manager screen with
+    an in-progress import job; log line shows a local temp filesystem path
+    (`C:\Users\D\AppData\Local\Temp\claude\...\scratchpad\frames`), which is a local machine path,
+    not a credential. No key/token visible. **CLEAN.**
+21. `docs/evidence/usability/2026-09-19-before/14d-query-done.png` — Query screen, local model run
+    only. No key visible. **CLEAN.**
+22. `docs/evidence/usability/2026-09-19-before/16b-provider-test-bogus.png` — "Walkthrough"
+    Settings screen exercising a deliberately bogus/invalid key: Anthropic shows "Key stored" and a
+    failed test result `Failed: ProviderError: anthropic returned 401: Error code: 401 -
+    {'error': {'type': 'authentication_error', 'message': 'API key is invalid.'}, 'request_id':
+    None}`. This is an error message confirming the key was rejected — the actual key value is
+    never displayed anywhere in the screenshot. **CLEAN.**
+
+All 22 candidates from the mechanical filter were opened; all 22 are CLEAN. No provider key,
+token, or other credential value is visible in any pixel of any image reviewed.
+
+Not opened: the remaining 124 PNGs (146 total − 22 matched). These did not match the selection
+regex above — their filenames indicate project/home/images-grid/import-dialog/label-editor/
+dataset/train/export/jobs-drawer/data-manager screens (e.g. `01-projects.png`, `05-import-
+dialog.png`, `09-datasets.png`, `15-jobs-drawer.png`, and their `checkpoint*`/`acceptance`/
+`usability` equivalents). This is a per-group, rule-based exclusion, not an unstated one: they were
+excluded because the mechanical filter — the same one whose matches were all opened above — did not
+select them, and this app's only UI surface that can display a provider key is the App settings
+"Provider keys" card (confirmed masked/placeholder in every instance opened above, items 8, 9, 16,
+22), corroborated by the code-review finding in `.superpowers/sdd/wave3/s6-review.md` that the app
+is designed to never echo key values back to the UI or logs.
 
 ## Step 5: Verdict
 
@@ -303,12 +393,14 @@ that have no code path to display a provider key at all.
 - Step 2 (full-history sweep, all four branches, stricter patterns): no output at all.
 - Step 3 (`.env` file ever committed, all four branches): no output at all.
 - Step 4 (evidence + `.superpowers/sdd` diff/report payloads for key/auth/token language, plus
-  screenshot review of every plausible settings/provider/detect/query screen): all 19 flagged text
-  files individually adjudicated as field names, header names, test/dev/local placeholder or
+  screenshot review of every plausible settings/provider/detect/query screen; branch coverage for
+  this step is demonstrated, not asserted — see "Step 4 branch coverage" above): all 19 flagged
+  text files individually adjudicated as field names, header names, test/dev/local placeholder or
   ephemeral values, or hardening-review prose about a hypothetical (and today-unreachable) risk —
-  none contain a live external credential. All 13 screenshots opened and visually inspected show
-  masked/placeholder key inputs, "No key stored"/"Key stored" badges, or run-history rows with no
-  key/token pixels — none show a live credential.
+  none contain a live external credential. All 22 screenshots matched by the mechanical
+  settings/provider/key/token/detect/query/cloud/infer/run filter were opened and visually
+  inspected; all show masked/placeholder key inputs, "No key stored"/"Key stored" badges, or
+  run-history/review-queue rows with no key/token pixels — none show a live credential.
 
 No item in this scan was classified as UNCERTAIN. Nothing here blocks the repo from going public
 on secret-exposure grounds.
@@ -324,6 +416,12 @@ git log --all --diff-filter=A --name-only --format="%H" | grep -E "^\.env|/\.env
 git ls-files -z 'docs/evidence/*' '.superpowers/sdd/*' | xargs -0 grep -l -I -E "api[_-]?key|authorization|bearer |token" 2>/dev/null
 git ls-files 'docs/evidence/**/*.png' | head -40
 git ls-files 'docs/evidence/**/*.png' | wc -l
+git ls-files 'docs/evidence/**/*.png' | grep -Ei 'setting|provider|key|token|detect|query|cloud|infer|run'
 git ls-files -z '.superpowers/sdd/*' | xargs -0 grep -l -I -E "\.env" 2>/dev/null
 for b in main s6-packaging-acceptance usability-wave1 wave1-s2-trial; do git log --oneline -1 "$b"; done
+git log --all --diff-filter=ARC --name-only --format= -- 'docs/evidence/*' '.superpowers/sdd/*' | sort -u | wc -l
+git ls-files 'docs/evidence/*' '.superpowers/sdd/*' | sort -u | wc -l
+comm -23 \
+  <(git log --all --diff-filter=ARC --name-only --format= -- 'docs/evidence/*' '.superpowers/sdd/*' | sort -u) \
+  <(git ls-files 'docs/evidence/*' '.superpowers/sdd/*' | sort -u)
 ```
