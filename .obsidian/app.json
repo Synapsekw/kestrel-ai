@@ -1,0 +1,11 @@
+{
+  "showInlineTitle": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "vault/sessions",
+  "defaultViewMode": "source",
+  "promptDelete": true,
+  "alwaysUpdateLinks": true,
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "attachmentFolderPath": "vault/_attachments"
+}
