@@ -1,4 +1,6 @@
+import json
 import math
+from pathlib import Path
 
 import pytest
 from hypothesis import given
@@ -102,3 +104,19 @@ def test_the_top_edge_tilts_downward_to_the_right(w, h, angle):
     """
     c = corners_of(0, 0, w, h, angle)
     assert c[1][1] > c[0][1]
+
+
+FIXTURES = Path(__file__).resolve().parents[2] / "contract" / "fixtures" / "oriented-boxes.json"
+
+
+@pytest.mark.parametrize("case", json.loads(FIXTURES.read_text("utf-8"))["cases"], ids=lambda c: c["name"])
+def test_agrees_with_the_typescript_implementation(case):
+    b = case["box"]
+    got = corners_of(b["x"], b["y"], b["w"], b["h"], b["angle"])
+    for (gx, gy), (ex, ey) in zip(got, case["corners"], strict=True):
+        assert gx == pytest.approx(ex, abs=1e-9)
+        assert gy == pytest.approx(ey, abs=1e-9)
+    a = case["aabb"]
+    assert aabb_of(b["x"], b["y"], b["w"], b["h"], b["angle"]) == pytest.approx(
+        (a["x"], a["y"], a["w"], a["h"]), abs=1e-9
+    )
