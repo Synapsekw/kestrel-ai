@@ -77,7 +77,8 @@ behavior to click through. To verify by hand:
 1. Open `E:\Dev\Yolo\app` as an Obsidian vault (or reload it if already open) and confirm
    `vault/00-north-star.md` opens automatically (Homepage plugin) with no console errors.
 2. Confirm Dataview queries render as tables, not code blocks — e.g. the "Gotcha decisions" query in
-   `vault/moc/memory.md` should list 5 rows.
+   `vault/moc/memory.md` should list 6 rows (5 before this session's wave, plus the new ADR this
+   wave itself added: `2026-09-20-gotcha-powershell-native-stderr-under-stop.md`).
 3. In Obsidian, create a note from `vault/templates/session.md` via Templater (folder template or the
    "Insert Template" command) and confirm it expands without a `tp.user.git_branch` error, filling
    `date:` and leaving `branch:` as the plain placeholder.
