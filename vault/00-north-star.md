@@ -44,7 +44,8 @@ All of the core-pipeline waves (S0–S6) are merged to `main`:
   checkpoint 3 passed.
 - Wave 3 (S6 packaging and acceptance) — merged after 2 fix rounds, checkpoint 4 passed.
 
-Last verified checkpoint: 4 (after Wave 3) on main `826a3bf` (installed app), 2026-09-18.
+Last verified checkpoint: 4, re-verified after usability wave 1 on main `88d9216` (installed app),
+2026-09-19 (`docs/progress.md:59`).
 
 On top of that, the Phase 2 usability wave and the site-office UI redesign are also merged to
 `main`, and acceptance step 7 has since closed 8/8 on the installed app at `177f68b` (2026-09-20) —
@@ -93,8 +94,9 @@ Do not read the 8/8 as a current PASS. This is tracked as **Task 11 Step 5** of
 `docs/superpowers/plans/2026-09-20-kestrel-ai-rename.md` ("Re-run acceptance ... The previous 8/8
 was measured on the old build and is stale until this passes").
 
-(The earlier run at commit `9f3aa01`, 2026-09-18, is a different, earlier result: 7/8, step 7
-skipped for lack of a provider key — not the run the 8/8 figure belongs to.)
+(The earlier run at main `9a2e20d` (installer built at `9f3aa01`), 2026-09-18, is a different,
+earlier result: 7/8, step 7 skipped for lack of a provider key — not the run the 8/8 figure
+belongs to.)
 
 ### Other open items found while reading `docs/progress.md`
 

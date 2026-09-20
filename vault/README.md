@@ -49,7 +49,7 @@ When you hit a non-obvious trap, write a short ADR in `vault/decisions/` from
 ### 4. Frontmatter-or-die
 
 Every note starts with a YAML frontmatter block at line 1 with at least a `type`:
-`session | adr | moc | north-star | product-context | report`.
+`session | adr | moc | north-star | product-context | report | spec`.
 
 ## Required Obsidian community plugins
 

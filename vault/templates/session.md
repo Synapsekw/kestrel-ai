@@ -1,7 +1,7 @@
 ---
 type: session
 date: <% tp.date.now("YYYY-MM-DD-HHmm") %>
-branch: <% tp.user.git_branch() %>
+branch: (git branch --show-current)
 trigger: wrapup
 status: complete
 tags: [session]
