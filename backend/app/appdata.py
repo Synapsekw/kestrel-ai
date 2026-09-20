@@ -1,4 +1,4 @@
-"""Per-user app data under %APPDATA%/machinery-app: recent projects and settings. Never keys."""
+"""Per-user app data under %APPDATA%/kestrel-ai: recent projects and settings. Never keys."""
 
 import json
 import os

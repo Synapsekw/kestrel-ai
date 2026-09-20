@@ -67,7 +67,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.projects.close_all()
 
     app = FastAPI(
-        title="machinery-backend",
+        title="kestrel-backend",
         version=settings.version,
         lifespan=lifespan,
         docs_url=None,

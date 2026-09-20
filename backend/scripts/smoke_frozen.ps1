@@ -3,7 +3,7 @@
   Smoke test for the frozen backend (spec section 10).
 
 .DESCRIPTION
-  Starts dist/machinery-backend/machinery-backend.exe exactly as the Tauri sidecar does
+  Starts dist/kestrel-backend/kestrel-backend.exe exactly as the Tauri sidecar does
   (APP_TOKEN / APP_PORT / APP_DATA_DIR, stdio on a pipe), then proves in one run that the bundle
   carries everything the app needs: the API answers, CUDA torch is inside, one YOLO prediction
   runs, the `worker` subcommand trains with DataLoader workers (freeze_support), ONNX export
@@ -24,7 +24,7 @@
 #>
 [CmdletBinding()]
 param(
-  [string] $Dist,  # defaults to <backend>/dist/machinery-backend once $PSScriptRoot is set
+  [string] $Dist,  # defaults to <backend>/dist/kestrel-backend once $PSScriptRoot is set
   [string] $Source = "E:\Dev\Yolo\data\raw\ahmadia",
   [int] $Frames = 3,
   [int] $Imgsz = 640,
@@ -34,13 +34,13 @@ param(
 
 $ErrorActionPreference = "Stop"
 # $PSScriptRoot is not set yet while parameter defaults are evaluated on PowerShell 5.1.
-if (-not $Dist) { $Dist = Join-Path (Split-Path $PSScriptRoot -Parent) "dist\machinery-backend" }
+if (-not $Dist) { $Dist = Join-Path (Split-Path $PSScriptRoot -Parent) "dist\kestrel-backend" }
 # Only a work dir this run generated is ever deleted; one the caller named is left alone.
 $generatedWorkDir = -not $WorkDir
 if ($generatedWorkDir) {
   $WorkDir = Join-Path $env:TEMP ("machinery-smoke-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 }
-$exe = Join-Path $Dist "machinery-backend.exe"
+$exe = Join-Path $Dist "kestrel-backend.exe"
 if (-not (Test-Path $exe)) { throw "no frozen build at $exe; run backend\scripts\build.ps1 first" }
 if (-not (Test-Path $Source)) { throw "no sample frames at $Source" }
 

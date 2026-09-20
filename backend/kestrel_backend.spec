@@ -1,6 +1,6 @@
 # -*- mode: python -*-
 # One-folder freeze of the backend (spec section 10). The exe doubles as the training/export
-# worker (`machinery-backend.exe worker train <params.json>`), so torch, torchvision, ultralytics
+# worker (`kestrel-backend.exe worker train <params.json>`), so torch, torchvision, ultralytics
 # and the ONNX stack all have to be inside the bundle: nothing is installed on the user's machine.
 from pathlib import Path
 
@@ -70,5 +70,5 @@ pyz = PYZ(a.pure)
 # redirected to a file and parses the port out of it, which is the same pipe the shell plugin
 # hands the sidecar. Windowed also keeps the training worker subprocess (which the frozen exe
 # spawns for every run) from flashing a console window.
-exe = EXE(pyz, a.scripts, exclude_binaries=True, name="machinery-backend", console=False)
-coll = COLLECT(exe, a.binaries, a.datas, name="machinery-backend")
+exe = EXE(pyz, a.scripts, exclude_binaries=True, name="kestrel-backend", console=False)
+coll = COLLECT(exe, a.binaries, a.datas, name="kestrel-backend")

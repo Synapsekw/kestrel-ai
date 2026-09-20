@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     host: str = "127.0.0.1"
     port: int = 8765  # 0 = pick a free port and print it on stdout as a JSON line
     token: str  # required; the launcher generates it per run
-    data_dir: Path = Path.home() / "AppData" / "Roaming" / "machinery-app"
+    data_dir: Path = Path.home() / "AppData" / "Roaming" / "kestrel-ai"
     log_level: str = "INFO"
     version: str = "0.1.0"
     # Browser origins allowed to call the API: the packaged WebView2 origin and the Vite dev server.
