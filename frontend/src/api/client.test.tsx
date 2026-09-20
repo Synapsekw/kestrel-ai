@@ -35,13 +35,13 @@ describe("ApiProvider backend failure dialog", () => {
     await renderFailing({
       base_url: "http://127.0.0.1:5555",
       token: "t",
-      log_path: "C:\\Users\\D\\AppData\\Roaming\\machinery-app\\logs\\sidecar.log",
+      log_path: "C:\\Users\\D\\AppData\\Roaming\\kestrel-ai\\logs\\sidecar.log",
     });
 
     expect(screen.getByText("backend not healthy")).toBeInTheDocument();
     expect(screen.getByText("Log")).toBeInTheDocument();
     expect(
-      screen.getByText("C:\\Users\\D\\AppData\\Roaming\\machinery-app\\logs\\sidecar.log"),
+      screen.getByText("C:\\Users\\D\\AppData\\Roaming\\kestrel-ai\\logs\\sidecar.log"),
     ).toBeInTheDocument();
   });
 

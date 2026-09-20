@@ -49,12 +49,12 @@ step("create project via UI", dbExists, `${page.url()} project.db=${dbExists}`);
 await page.screenshot({ path: join(evidenceDir, "checkpoint1-02-data-manager.png") });
 
 // Kill the sidecar behind the app's back: the UI must show the blocking dialog (spec section 11).
-// In `tauri dev` the sidecar runs as machinery-backend.exe; the bundle keeps the target-triple suffix.
-const psList = "(Get-Process machinery-backend* -ErrorAction SilentlyContinue | ForEach-Object { $_.ProcessName + ':' + $_.Id }) -join ','";
+// In `tauri dev` the sidecar runs as kestrel-backend.exe; the bundle keeps the target-triple suffix.
+const psList = "(Get-Process kestrel-backend* -ErrorAction SilentlyContinue | ForEach-Object { $_.ProcessName + ':' + $_.Id }) -join ','";
 const sidecars = () => execSync(`powershell -NoProfile -Command "${psList}"`).toString().trim();
 const before = sidecars();
-step("sidecar process running", before.includes("machinery-backend"), before);
-execSync('powershell -NoProfile -Command "Get-Process machinery-backend* | Stop-Process -Force"');
+step("sidecar process running", before.includes("kestrel-backend"), before);
+execSync('powershell -NoProfile -Command "Get-Process kestrel-backend* | Stop-Process -Force"');
 const dialog = page.getByRole("alertdialog");
 await dialog.waitFor({ timeout: 15_000 });
 const dialogText = await dialog.innerText();
@@ -65,7 +65,7 @@ await page.getByRole("button", { name: "Restart" }).click();
 await dialog.waitFor({ state: "detached", timeout: 60_000 });
 await page.getByRole("heading").first().waitFor({ timeout: 60_000 });
 const after = sidecars();
-step("restart respawns sidecar", after.includes("machinery-backend") && after !== before, `${after}; heading: ${(await page.getByRole("heading").first().innerText()).trim()}`);
+step("restart respawns sidecar", after.includes("kestrel-backend") && after !== before, `${after}; heading: ${(await page.getByRole("heading").first().innerText()).trim()}`);
 await page.screenshot({ path: join(evidenceDir, "checkpoint1-04-after-restart.png") });
 
 writeFileSync(join(evidenceDir, "checkpoint1-result.json"), JSON.stringify(result, null, 2));

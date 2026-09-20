@@ -30,7 +30,7 @@ Set-Location $frontend
 $started = Get-Date
 
 $binaries = Join-Path $frontend "src-tauri\binaries"
-$sidecar = Join-Path $binaries "machinery-backend-x86_64-pc-windows-msvc.exe"
+$sidecar = Join-Path $binaries "kestrel-backend-x86_64-pc-windows-msvc.exe"
 $internal = Join-Path $binaries "_internal"
 if (-not (Test-Path $sidecar) -or -not (Test-Path $internal)) {
   throw "the frozen backend is missing from $binaries. Run backend\scripts\build.ps1 first; it freezes the backend with PyInstaller and copies the exe and its _internal folder into the sidecar slot."
@@ -59,7 +59,7 @@ if (-not $SkipTauriBuild) {
   if ($code -ne 0) { throw "pnpm tauri build --no-bundle failed with exit code $code" }
 }
 
-$appExe = Join-Path $frontend "src-tauri\target\release\machinery-app.exe"
+$appExe = Join-Path $frontend "src-tauri\target\release\kestrel-ai.exe"
 if (-not (Test-Path $appExe)) { throw "no release binary at $appExe; run without -SkipTauriBuild" }
 
 # The WebView2 bootstrapper is Microsoft's redistributable, never committed. It is shipped only
@@ -87,13 +87,13 @@ $output = Join-Path $frontend "src-tauri\target\release\bundle\inno"
 New-Item -ItemType Directory -Force $output | Out-Null
 
 $ErrorActionPreference = "Continue"
-& $iscc "/DAppVersion=$version" (Join-Path $installerDir "machinery-detection.iss") 2>&1 |
+& $iscc "/DAppVersion=$version" (Join-Path $installerDir "kestrel-ai.iss") 2>&1 |
   ForEach-Object { "$_" }
 $code = $LASTEXITCODE
 $ErrorActionPreference = "Stop"
 if ($code -ne 0) { throw "ISCC failed with exit code $code" }
 
-$setup = Join-Path $output "Machinery Detection_${version}_x64-setup.exe"
+$setup = Join-Path $output "Kestrel AI_${version}_x64-setup.exe"
 if (-not (Test-Path $setup)) { throw "ISCC reported success but $setup is missing" }
 $elapsed = (Get-Date) - $started
 $webview2 = if (Test-Path $bootstrapper) { "with the WebView2 bootstrapper" } else { "without a WebView2 bootstrapper" }

@@ -19,7 +19,7 @@ const step = (name, ok, detail = "") => {
   if (!ok) throw new Error(`step failed: ${name}`);
 };
 const ps = (script) => execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { encoding: "utf8" }).trim();
-const sidecarPids = () => ps("(Get-Process machinery-backend -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','");
+const sidecarPids = () => ps("(Get-Process kestrel-backend -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','");
 
 async function attach() {
   for (let i = 0; i < 120; i++) {

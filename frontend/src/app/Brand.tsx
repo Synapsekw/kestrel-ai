@@ -14,7 +14,7 @@ export function Brand({ size = "md", className }: { size?: "md" | "lg"; classNam
       >
         <Icon name="hard-hat" size={big ? 22 : 15} className="[stroke-width:2]" />
       </span>
-      <span className={big ? "text-lg" : "text-sm"}>Machinery</span>
+      <span className={big ? "text-lg" : "text-sm"}>Kestrel AI</span>
     </span>
   );
 }
