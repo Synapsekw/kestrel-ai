@@ -44,7 +44,7 @@ async function launch(label) {
   });
   child.unref();
   const { browser, page } = await attach();
-  await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 60_000 });
+  await page.getByRole("heading", { name: "Projects", exact: true }).waitFor({ timeout: 60_000 });
   const tProjects = Date.now() - t0;
   let info = null;
   for (let i = 0; i < 240; i++) {

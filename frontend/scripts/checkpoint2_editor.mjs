@@ -31,7 +31,7 @@ async function connect() {
 
 const { browser, page } = await connect();
 await page.goto("http://127.0.0.1:1420/");
-await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 60_000 });
+await page.getByRole("heading", { name: "Projects", exact: true }).waitFor({ timeout: 60_000 });
 const info = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("backend_info"));
 step("attach and read backend info", Boolean(info.base_url && info.token), info.base_url);
 

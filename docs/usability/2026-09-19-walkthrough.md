@@ -70,7 +70,7 @@ The "Closed by" column is filled with the commit that fixes the item.
 | X1 | Settings -> Test provider, failing | Green text: "Failed: ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', ...}" | Red, "The key was rejected by Anthropic (401)." | confuses | 3d039eb |
 | X2 | Every timestamp in the UI | UTC without a label (05:06 when the clock says 08:06) while job logs use local time | Local time everywhere | confuses | 9e31da3 |
 | H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | adf9b09 |
-| H2 | Providers | No live request with a valid key has run here; the invalid-key test did reach Anthropic (401). Acceptance step 7 pending an operator key | Step 7 run once with a real key | pending key | not closed: the acceptance run on the installed 88d9216 skipped step 7 (no key stored) |
+| H2 | Providers | No live request with a valid key has run here; the invalid-key test did reach Anthropic (401). Acceptance step 7 pending an operator key | Step 7 run once with a real key | closed | 2026-09-20: the owner stored Anthropic and OpenAI keys in App settings; acceptance step 7 PASSED on the installed app (177f68b): 1 box with anthropic provenance, tiling 1280 px, stored key used and left in place. Both providers answer the live test (claude-opus-5 1.6 s, gpt-5 3.8 s) |
 | G2 | Results | Reviewed detections cannot leave the app: no export of boxes or counts (per image, flight, class) | CSV / report export | open question for the owner | efa614a + 13eb4d3 |
 
 Verified as already fine: the Data Manager refreshes by itself after an import; grid thumbnails

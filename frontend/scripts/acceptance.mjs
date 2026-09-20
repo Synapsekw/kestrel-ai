@@ -382,8 +382,10 @@ try {
     await page.fill("#project-name", cfg.projectName);
     await page.fill("#project-folder", cfg.projectFolder);
     await page.getByRole("button", { name: "Create project" }).click();
-    await page.waitForURL(/\/p\/[0-9a-f-]+\/data/, { timeout: 60_000 });
+    // Creating a project opens the project Home screen (`/p/<id>`); the run continues on Images.
+    await page.waitForURL(/\/p\/[0-9a-f-]+/, { timeout: 60_000 });
     projectId = page.url().split("/p/")[1].split("/")[0];
+    await go(`/p/${projectId}/data`);
     const project = await api("GET", `/projects/${projectId}`);
     await shot(page, "01-project");
     step(
@@ -511,6 +513,13 @@ try {
     const jobs = await api("GET", `/projects/${projectId}/jobs?type=dataset`);
     const job = await waitJob(projectId, jobs.items[0].id);
     if (job.state !== "succeeded") throw new Error(`dataset failed: ${job.error}`);
+    // The dialog stays open on the result (it offers "Train on it"); close it so the modal
+    // backdrop stops swallowing the clicks of the next step.
+    await dialog
+      .getByRole("button", { name: "Close" })
+      .click({ timeout: 5000 })
+      .catch(() => page.keyboard.press("Escape"));
+    await dialog.waitFor({ state: "hidden", timeout: 10_000 }).catch(() => {});
     datasets = await api("GET", `/projects/${projectId}/datasets`);
   }
   const dataset = datasets.items[0];
@@ -686,8 +695,18 @@ try {
     await page.getByRole("button", { name: "Accept as labels…" }).click();
     // Two steps since the usability wave: the card counts first, then asks.
     await page.getByRole("button", { name: /^Accept \d+ box(es)? as labels$/ }).click({ timeout: 60_000 });
-    await sleep(2500);
-    run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
+    // Accepting tens of thousands of boxes takes a while; wait for the card to confirm it rather
+    // than for a fixed pause.
+    await page
+      .getByText("Accepted as labels")
+      .first()
+      .waitFor({ timeout: 180_000 })
+      .catch(() => {});
+    for (let i = 0; i < 60; i++) {
+      run = await api("GET", `/projects/${projectId}/query-runs/${runId}`);
+      if (run.promoted_at) break;
+      await sleep(2000);
+    }
     await shot(page, "06-promoted");
     // Close the loop on the selection: these have to be the unlabelled images the driver picked,
     // not just fifty of something.

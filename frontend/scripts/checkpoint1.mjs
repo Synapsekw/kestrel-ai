@@ -33,7 +33,7 @@ const { browser, page } = await connect();
 step("attach webview", true, page.url());
 await page.goto("http://127.0.0.1:1420/");
 
-await page.getByRole("heading", { name: "Projects" }).waitFor({ timeout: 60_000 });
+await page.getByRole("heading", { name: "Projects", exact: true }).waitFor({ timeout: 60_000 });
 const bootMs = Date.now() - t0;
 step("projects screen after health", true, `${bootMs} ms since launch`);
 result.boot_ms = bootMs;
