@@ -66,7 +66,7 @@ box-shadow, opacity` only, 140 ms, `--ease-out`.
 
 ## 2. Shell and navigation
 
-- Sidebar 224px on `bg-side`. Top: the mark (orange square, hard-hat line icon) and "Machinery".
+- Sidebar 224px on `bg-side`. Top: the mark (orange square, hard-hat line icon) and "Kestrel AI".
   Then "Projects" (folder icon). Then, when a project is open, its name as the group title, and the
   entries in pipeline order, each with a step indicator on the left and a count on the right:
 
