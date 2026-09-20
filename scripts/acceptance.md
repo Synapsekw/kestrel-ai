@@ -1,6 +1,6 @@
 # Acceptance run (spec 13.5)
 
-The acceptance run is performed **on the installed app** (`Machinery Detection` from the Inno
+The acceptance run is performed **on the installed app** (`Kestrel AI` from the Inno
 Setup installer, `pnpm build:installer`), not on a dev build. Every step below names the exact UI
 action, what to expect, and the evidence file it produces under `docs/evidence/acceptance/`.
 
@@ -9,14 +9,14 @@ is the source of truth for what "passing" means and is what a person follows whe
 
 ## Preparation
 
-1. Install the app (`Machinery Detection_0.1.0_x64-setup.exe`, per-user install, no admin needed).
-   It writes `machinery-app.exe`, `machinery-backend.exe` and the sidecar's `_internal/` folder
-   into `%LOCALAPPDATA%\Programs\Machinery Detection`; those three stay together.
+1. Install the app (`Kestrel AI_0.1.0_x64-setup.exe`, per-user install, no admin needed).
+   It writes `kestrel-ai.exe`, `kestrel-backend.exe` and the sidecar's `_internal/` folder
+   into `%LOCALAPPDATA%\Programs\Kestrel AI`; those three stay together.
 2. Launch it with the WebView2 debugging port so the driver can attach:
 
    ```powershell
    $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
-   Start-Process "$env:LOCALAPPDATA\Programs\Machinery Detection\machinery-app.exe"
+   Start-Process "$env:LOCALAPPDATA\Programs\Kestrel AI\kestrel-ai.exe"
    ```
 
 3. Choose an empty project folder on a disk with room for 3299 imported frames (about 20 GB).

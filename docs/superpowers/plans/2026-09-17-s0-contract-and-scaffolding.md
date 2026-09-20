@@ -8,7 +8,7 @@
 
 **Tech Stack:** Python 3.11.15 (uv-managed), FastAPI, uvicorn, pydantic 2, SQLAlchemy 2, Alembic, pytest, schemathesis; Node 24, pnpm, Vite 6, React 18, TypeScript 5, Tailwind 3, react-router 6, zustand, openapi-typescript + openapi-fetch, Vitest, Playwright; Stoplight Prism (mock) and Spectral (lint); Tauri 2 with tauri-plugin-shell and tauri-plugin-dialog; Rust stable MSVC.
 
-**Spec:** `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md` sections 2, 3, 4, 9, 10, 11, 12, 13. This plan owns S0 from section 13.1.
+**Spec:** `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md` sections 2, 3, 4, 9, 10, 11, 12, 13. This plan owns S0 from section 13.1.
 
 ## Global Constraints
 
@@ -159,7 +159,7 @@ Windows desktop app for aerial construction-machinery detection: dataset prepara
 bounding-box annotation, YOLO training with a model registry, and inference with local
 models or OpenAI / Anthropic vision models.
 
-Design: `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md`.
+Design: `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md`.
 Progress and resume instructions: `docs/progress.md`.
 
 Sections "Build", "Run in development" and "Run the tests" are filled in by S0 Task 12.

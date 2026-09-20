@@ -5,6 +5,10 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 
 ## Current state
 
+Renamed from "Machinery Detection" / `machinery-app` to **Kestrel AI** / `kestrel-ai` on 2026-09-20
+(`docs/superpowers/specs/2026-09-20-kestrel-ai-rename-design.md` §2.1 has the full name map).
+Evidence and checkpoints below predate the rename and keep the old names on purpose.
+
 | Wave | Sub-project | Branch | Worktree | State | Blockers |
 |---|---|---|---|---|---|
 | 0 | S0 contract and scaffolding | main (merged from s0-backend, s0-frontend) | - | merged, checkpoint 1 passed | none |
@@ -89,7 +93,7 @@ Wave 1 mechanics: each worktree's `backend/.venv` is a directory junction to `ba
 8. Python dependency management: `uv venv --python 3.11.15` under `backend/.venv` and
    `uv pip install -r requirements-dev.txt`. The ML stack is pinned to the reference machine;
    app libraries are pinned by `requirements-lock.txt` produced after the first install.
-9. Tauri identifier `ai.synapse-solutions.machinery-app`, product name "Machinery Detection".
+9. Tauri identifier `ai.synapse-solutions.kestrel-ai`, product name "Kestrel AI".
 10. Contract additions during Wave 1 (goal owner): `ModelImport.weights_path` minLength 1 (S3 can answer 422);
     `ExportRequest.half` documented (onnx on CPU, engine on GPU 0); `BoxReview.action` gains `unreview`
     (undo of accept/reject; person boxes ignored). In the editor, Delete on a proposal means reject.

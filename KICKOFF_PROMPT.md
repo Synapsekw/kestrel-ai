@@ -7,7 +7,7 @@ Copy everything below this line into a fresh Claude session opened in `E:\Dev\Yo
 You are the goal owner for building a Windows desktop application for aerial construction-machinery detection: dataset preparation, Label Studio quality bounding-box annotation, YOLO training with a model registry, and inference through local models or OpenAI and Anthropic vision models. Your job is to take this from an empty repository to an installed, working app that passes the acceptance run, by planning the work, dispatching parallel sub-agents, integrating their output, and verifying everything yourself.
 
 ## Read first
-1. `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md` in full. It is the PRD and the design. Its section 2 lists decisions that are locked; do not reopen them and do not let sub-agents reopen them. Sections 5 to 13 are the design for each subsystem and the delivery plan.
+1. `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md` in full. It is the PRD and the design. Its section 2 lists decisions that are locked; do not reopen them and do not let sub-agents reopen them. Sections 5 to 13 are the design for each subsystem and the delivery plan.
 2. `E:\Dev\Yolo\README.md` for the machine, driver and package versions. The reference machine is this one: RTX 5070 Ti, driver 591.86, torch 2.14.0+cu130, ultralytics 8.4.154, Python 3.11.15. Pin the same versions.
 3. The reuse list in spec section 14. Read those files before writing replacements for them.
 

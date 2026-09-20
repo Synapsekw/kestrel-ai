@@ -1,4 +1,4 @@
-# Machinery Detection App: PRD and Design
+# Kestrel AI App: PRD and Design
 
 Date: 2026-09-17
 Status: approved for implementation (sections 1 to 4 reviewed with the owner; sections 5 to 13 decided by the design session under the approved constraints)

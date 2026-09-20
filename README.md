@@ -1,10 +1,10 @@
-# Machinery Detection (working name `machinery-app`)
+# Kestrel AI (working name `kestrel-ai`)
 
 Windows desktop app for aerial construction-machinery detection: dataset preparation,
 bounding-box annotation, YOLO training with a model registry, and inference with local
 models or OpenAI / Anthropic vision models.
 
-- Design and PRD: `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md`
+- Design and PRD: `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md`
 - Progress, decisions and resume instructions: `docs/progress.md`
 - API contract (source of truth): `contract/openapi.yaml`
 - Acceptance run (spec 13.5): `scripts/acceptance.md`
@@ -113,9 +113,9 @@ acceptance drivers use.
    environment explicitly: `.\scripts\build.ps1 -Venv E:\Dev\Yolo\app\backend\.venv`. The worktree
    also needs its own `backend\starter_weights` (step 0 fetches them).
 
-   On the reference machine: about 2 minutes, `dist/machinery-backend` is 3.4 GB in ~14,100 files.
+   On the reference machine: about 2 minutes, `dist/kestrel-backend` is 3.4 GB in ~14,100 files.
    The bundle carries CUDA torch, torchvision, Ultralytics, OpenCV and the ONNX stack, because the
-   same exe is also the training and export worker (`machinery-backend.exe worker train <params>`).
+   same exe is also the training and export worker (`kestrel-backend.exe worker train <params>`).
 
 2. Prove the frozen build before wrapping it in an installer:
 
@@ -135,11 +135,11 @@ acceptance drivers use.
 
    ```powershell
    cd frontend
-   pnpm build:installer    # -> src-tauri/target/release/bundle/inno/Machinery Detection_<version>_x64-setup.exe
+   pnpm build:installer    # -> src-tauri/target/release/bundle/inno/Kestrel AI_<version>_x64-setup.exe
    ```
 
    `frontend/scripts/build-installer.ps1` runs `pnpm tauri build --no-bundle` and then compiles
-   `frontend/installer/machinery-detection.iss` with the Inno Setup 6 compiler that ships inside
+   `frontend/installer/kestrel-ai.iss` with the Inno Setup 6 compiler that ships inside
    `node_modules/innosetup-compiler` - nothing is installed system-wide, and the version comes from
    `tauri.conf.json`. Pass `-SkipTauriBuild` to repackage the release binary that is already built.
 
@@ -159,19 +159,19 @@ acceptance drivers use.
 ## Install and run the packaged app
 
 - Run the generated setup exe (`/VERYSILENT /SUPPRESSMSGBOXES` for an unattended install). The
-  install is per user into `%LOCALAPPDATA%\Programs\Machinery Detection`: no administrator rights,
+  install is per user into `%LOCALAPPDATA%\Programs\Kestrel AI`: no administrator rights,
   no shared install directory.
 - WebView2: the installer runs Microsoft's bootstrapper only when the runtime is missing, and only
   when a copy of `MicrosoftEdgeWebview2Setup.exe` was present at build time (see troubleshooting).
   Windows 11 ships the runtime.
-- The app installs next to the sidecar: `machinery-app.exe`, `machinery-backend.exe` and the
+- The app installs next to the sidecar: `kestrel-ai.exe`, `kestrel-backend.exe` and the
   sidecar's `_internal/` folder, all in the install directory. The names matter: the shell plugin
-  resolves a sidecar as `<folder of the running exe>\machinery-backend.exe`, and the frozen
+  resolves a sidecar as `<folder of the running exe>\kestrel-backend.exe`, and the frozen
   backend loads `_internal/` from beside its own exe. The target triple
-  (`machinery-backend-x86_64-pc-windows-msvc.exe`) is only how the file is named in the build
+  (`kestrel-backend-x86_64-pc-windows-msvc.exe`) is only how the file is named in the build
   slot, `frontend/src-tauri/binaries/`; the installer renames it on the way in. Do not rename or
   separate them.
-- Per-user data lives in `%APPDATA%\ai.synapse-solutions.machinery-app`: `logs/`,
+- Per-user data lives in `%APPDATA%\ai.synapse-solutions.kestrel-ai`: `logs/`,
   `recent_projects.json`, `settings.json` and `ultralytics/` (the pre-seeded plot font). Uninstall
   removes the program directory and leaves that data alone.
 - Project data (images, labels, datasets, runs, models, `project.db`) lives in the project folder
@@ -226,7 +226,7 @@ the variable is absent. No key is ever written to a file, a fixture or a log.
 ## Troubleshooting
 
 - **The app opens with "The backend is not responding".** The dialog names the sidecar log,
-  `%APPDATA%\ai.synapse-solutions.machinery-app\logs\sidecar.log` (rolled over once at 5 MB); the
+  `%APPDATA%\ai.synapse-solutions.kestrel-ai\logs\sidecar.log` (rolled over once at 5 MB); the
   backend's own log with timestamps is `backend.log` next to it. **Restart** in the dialog respawns
   the sidecar without restarting the app.
 - **`torch.cuda.is_available()` is false / the GPU is not detected.** `GET /api/v1/health` reports
@@ -241,7 +241,7 @@ the variable is absent. No key is ever written to a file, a fixture or a log.
   not fetched them: run `backend\scripts\fetch_starter_weights.ps1` (dev) or rebuild the installer
   after that script has populated `backend/starter_weights/` (packaged app).
 - **Re-running the installer** upgrades in place and keeps app data and project folders. Uninstall
-  removes `%LOCALAPPDATA%\Programs\Machinery Detection` and leaves app data and projects alone.
+  removes `%LOCALAPPDATA%\Programs\Kestrel AI` and leaves app data and projects alone.
 - **"The WebView2 runtime is missing" on a fresh machine.** The installer only carries Microsoft's
   bootstrapper when `frontend/installer/MicrosoftEdgeWebview2Setup.exe` exists at build time; the
   redistributable is never committed. Drop a copy there (or leave one in the Tauri bundler cache,

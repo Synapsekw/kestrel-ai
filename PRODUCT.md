@@ -1,4 +1,4 @@
-# Machinery Detection
+# Kestrel AI
 
 register: product
 

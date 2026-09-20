@@ -1,11 +1,11 @@
-# Kickoff: make Machinery Detection fully usable (goal 2)
+# Kickoff: make Kestrel AI fully usable (goal 2)
 
 You are the goal owner for the second phase of the Windows desktop app in `E:\Dev\Yolo\app`: turn the delivered, installable app into one a person can use day to day without reading the code. Phase 1 (spec, six sub-projects, installer, acceptance run) is complete and documented; do not rebuild it. Read this file, then the state of the project, then start.
 
 ## Read first
 
 1. `docs/progress.md`: the state table, decisions 1–13, checkpoints 1–4, the acceptance run, the two venv incidents and the rules they produced. The last verified commit is named there.
-2. `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md`: the design the app implements (section 2 decisions are still locked; sections 5–13 describe every subsystem).
+2. `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md`: the design the app implements (section 2 decisions are still locked; sections 5–13 describe every subsystem).
 3. `README.md`: build, install, dev against the mock and the real backend, every test suite, the checkpoint and acceptance drivers.
 4. The three wave ledgers `docs/superpowers/plans/2026-09-18-wave{1,2,3}-ledger.md`: every ruling and every deferred minor. Some of those minors are usability problems; most are not.
 5. `KICKOFF_PROMPT.md`: the phase-1 mandate. Every guardrail in it still applies (repeated below).
@@ -49,7 +49,7 @@ Known items to put on the list (found already; verify each on the app before ran
 ## Reference facts
 
 - Reference machine: RTX 5070 Ti, driver 591.86, torch 2.14.0+cu130, ultralytics 8.4.154, Python 3.11.15 (uv-managed), Node 24, pnpm 10, Tauri CLI 2.11.4, PyInstaller 6.22.3. Pins stay.
-- Installed app: `%LOCALAPPDATA%\Programs\Machinery Detection\machinery-app.exe`; installer `dist/Machinery Detection_0.1.0_x64-setup.exe` (`pnpm build:installer` in `frontend/` after `backend/scripts/build.ps1`; `%USERPROFILE%\.cargo\bin` must be on PATH). App data and the sidecar log: `%APPDATA%\ai.synapse-solutions.machinery-app`.
+- Installed app: `%LOCALAPPDATA%\Programs\Kestrel AI\kestrel-ai.exe`; installer `dist/Kestrel AI_0.1.0_x64-setup.exe` (`pnpm build:installer` in `frontend/` after `backend/scripts/build.ps1`; `%USERPROFILE%\.cargo\bin` must be on PATH). App data and the sidecar log: `%APPDATA%\ai.synapse-solutions.kestrel-ai`.
 - Existing projects: the acceptance project (3299 frames, folder `%TEMP%\acceptance-project`, id `eb32cbef-7d64-4b1e-8bfb-fd25cc956ba7`) is a good large test bed; it may be deleted when no longer needed.
 - Drivers: `frontend/scripts/checkpoint4.mjs` (installed app, cold start, health, sidecar exit), `frontend/scripts/acceptance.mjs` (spec 13.5, parametrised, resumable), `scripts/acceptance.md`.
 
