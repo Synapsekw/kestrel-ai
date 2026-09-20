@@ -129,6 +129,11 @@ export function NewDatasetForm({ projectId, onClose }: Props) {
               </Field>
             </div>
           </Disclosure>
+          <Alert tone="info">
+            Box rotation is saved with your labels, but a frozen dataset still trains on upright boxes: a
+            rotated box is widened to the smallest upright box that contains it. Training on the rotated shape
+            arrives with oriented-box support.
+          </Alert>
           <div className="flex items-center gap-2">
             <Button type="submit" variant="primary" loading={busy}>
               Create dataset

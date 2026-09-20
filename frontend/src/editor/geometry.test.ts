@@ -1,13 +1,19 @@
 import { describe, it, expect } from "vitest";
 import {
+  aabbOf,
+  centreOf,
+  clampOriented,
   clampRect,
+  cornersOf,
   displayMaxSide,
   dragRect,
   duplicateOffset,
   fitView,
   isDrawable,
+  normaliseAngle,
   normalizeRect,
   oneToOneView,
+  orientedEquals,
   rectEquals,
   roundRect,
   toDisplay,
@@ -16,6 +22,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
 } from "./geometry";
+import fixtures from "../../../contract/fixtures/oriented-boxes.json";
 
 const image = { width: 4000, height: 2667 };
 const viewport = { width: 1000, height: 700 };
@@ -119,5 +126,87 @@ describe("dragRect", () => {
     const zoomed = { scale: 0.5, x: -300, y: -300 }; // display (100,100) is now image (800, 800)
     const rect = dragRect(a, start, { x: 150, y: 140 }, zoomed, image);
     expect(rect).toEqual({ x: 400, y: 400, w: 500, h: 480 });
+  });
+});
+
+describe("oriented boxes", () => {
+  const box = { x: 10, y: 20, w: 30, h: 40, angle: 0 };
+
+  it("normalises degrees into [0, 180)", () => {
+    expect(normaliseAngle(0)).toBe(0);
+    expect(normaliseAngle(190)).toBeCloseTo(10, 9);
+    expect(normaliseAngle(-10)).toBeCloseTo(170, 9);
+    expect(normaliseAngle(180)).toBe(0);
+    expect(normaliseAngle(360)).toBe(0);
+  });
+
+  it("takes the centre of the unrotated box", () => {
+    expect(centreOf(box)).toEqual({ x: 25, y: 40 });
+  });
+
+  it("gives the plain rectangle's corners at angle 0", () => {
+    expect(cornersOf(box)).toEqual([
+      { x: 10, y: 20 },
+      { x: 40, y: 20 },
+      { x: 40, y: 60 },
+      { x: 10, y: 60 },
+    ]);
+  });
+
+  it("swaps the footprint at 90 degrees", () => {
+    const a = aabbOf({ ...box, angle: 90 });
+    expect(a.x).toBeCloseTo(5, 6);
+    expect(a.y).toBeCloseTo(25, 6);
+    expect(a.w).toBeCloseTo(40, 6);
+    expect(a.h).toBeCloseTo(30, 6);
+  });
+
+  it("keeps the centre and the side lengths under rotation", () => {
+    const c = cornersOf({ ...box, angle: 37 });
+    const mx = c.reduce((s, p) => s + p.x, 0) / 4;
+    const my = c.reduce((s, p) => s + p.y, 0) / 4;
+    expect(mx).toBeCloseTo(25, 6);
+    expect(my).toBeCloseTo(40, 6);
+    expect(Math.hypot(c[1].x - c[0].x, c[1].y - c[0].y)).toBeCloseTo(30, 6);
+    expect(Math.hypot(c[2].x - c[1].x, c[2].y - c[1].y)).toBeCloseTo(40, 6);
+  });
+
+  it("clamps a rotated box by its centre, not its corners", () => {
+    const image = { width: 320, height: 240 };
+    // Hangs 20px off the right edge; the centre is well inside, so it stays put.
+    const kept = clampOriented({ x: 280, y: 10, w: 60, h: 20, angle: 30 }, image);
+    expect(kept.x).toBe(280);
+    // Centre at 430 is outside; it is pulled back so the centre lands on the edge.
+    const pulled = clampOriented({ x: 400, y: 10, w: 60, h: 20, angle: 30 }, image);
+    expect(pulled.x + pulled.w / 2).toBeCloseTo(320, 6);
+  });
+
+  it("clamps an angle-0 box exactly as clampRect does", () => {
+    const image = { width: 320, height: 240 };
+    const r = { x: 300, y: 10, w: 60, h: 20, angle: 0 };
+    const { angle, ...plain } = clampOriented(r, image);
+    expect(angle).toBe(0);
+    expect(plain).toEqual(clampRect({ x: 300, y: 10, w: 60, h: 20 }, image));
+  });
+
+  it("compares angle as well as geometry", () => {
+    expect(orientedEquals({ ...box, angle: 30 }, { ...box, angle: 30 })).toBe(true);
+    expect(orientedEquals({ ...box, angle: 30 }, { ...box, angle: 31 })).toBe(false);
+    expect(orientedEquals({ ...box, angle: 30 }, { ...box, angle: 30.01 })).toBe(true);
+  });
+});
+
+describe("shared corner fixtures", () => {
+  it.each(fixtures.cases)("agrees with the Python implementation for $name", (c) => {
+    const got = cornersOf(c.box);
+    c.corners.forEach(([x, y], i) => {
+      expect(got[i].x).toBeCloseTo(x, 9);
+      expect(got[i].y).toBeCloseTo(y, 9);
+    });
+    const a = aabbOf(c.box);
+    expect(a.x).toBeCloseTo(c.aabb.x, 9);
+    expect(a.y).toBeCloseTo(c.aabb.y, 9);
+    expect(a.w).toBeCloseTo(c.aabb.w, 9);
+    expect(a.h).toBeCloseTo(c.aabb.h, 9);
   });
 });

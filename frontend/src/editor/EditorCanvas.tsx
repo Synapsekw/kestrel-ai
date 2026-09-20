@@ -1,12 +1,15 @@
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import { Stage, Layer, Image as KonvaImage, Rect } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import { useEditorStore } from "@/store/editor";
-import { ZOOM_STEP } from "./geometry";
+import { ZOOM_STEP, type ViewTransform } from "./geometry";
 import { useKonvaImage } from "./useKonvaImage";
 
 export const BACKGROUND_NAME = "background";
+
+/** `MouseEvent.button` for the middle button; left is 0. */
+const MIDDLE_BUTTON = 1;
 
 interface Props {
   src: string | null;
@@ -28,6 +31,47 @@ export function EditorCanvas({ src, children, onBackgroundMouseDown, onMouseMove
   const setView = useEditorStore((s) => s.setView);
   const zoomAt = useEditorStore((s) => s.zoomAt);
   const bitmap = useKonvaImage(src);
+
+  /**
+   * Middle-button panning, deliberately not routed through Konva's `draggable`: Konva decides
+   * whether a node is draggable at mousedown, so flipping a React flag in that same event lands
+   * a render too late and the first drag is always dead. Space + left drag still pans the stage.
+   */
+  const panStart = useRef<{ x: number; y: number; view: ViewTransform } | null>(null);
+  const [panning, setPanning] = useState(false);
+
+  const startPan = (e: ReactMouseEvent<HTMLDivElement>) => {
+    if (e.button !== MIDDLE_BUTTON || !image) return;
+    // Chromium - and so WebView2 in the packaged app - starts autoscroll on a middle press.
+    e.preventDefault();
+    panStart.current = { x: e.clientX, y: e.clientY, view: useEditorStore.getState().view };
+    setPanning(true);
+  };
+
+  // The listeners live on `window` for the length of the drag, so a pan that wanders off the
+  // canvas keeps tracking and one released outside it still ends.
+  useEffect(() => {
+    if (!panning) return;
+    const move = (e: MouseEvent) => {
+      const start = panStart.current;
+      if (!start) return;
+      setView({
+        ...start.view,
+        x: start.view.x + (e.clientX - start.x),
+        y: start.view.y + (e.clientY - start.y),
+      });
+    };
+    const stop = () => {
+      panStart.current = null;
+      setPanning(false);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", stop);
+    return () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", stop);
+    };
+  }, [panning, setView]);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -51,6 +95,8 @@ export function EditorCanvas({ src, children, onBackgroundMouseDown, onMouseMove
     if (e.target === stageRef.current) setView({ ...view, x: e.target.x(), y: e.target.y() });
   };
 
+  const cursor = panning ? "cursor-grabbing" : spaceHeld ? "cursor-grab" : "cursor-crosshair";
+
   return (
     <div
       ref={containerRef}
@@ -59,7 +105,8 @@ export function EditorCanvas({ src, children, onBackgroundMouseDown, onMouseMove
       data-view-scale={view.scale.toFixed(4)}
       data-view-x={view.x.toFixed(1)}
       data-view-y={view.y.toFixed(1)}
-      className={`relative h-full w-full overflow-hidden bg-canvas ${spaceHeld ? "cursor-grab" : "cursor-crosshair"}`}
+      onMouseDown={startPan}
+      className={`relative h-full w-full overflow-hidden bg-canvas ${cursor}`}
     >
       {image && viewport.width > 0 && viewport.height > 0 && (
         <Stage

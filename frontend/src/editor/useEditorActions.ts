@@ -15,15 +15,16 @@ import {
   type CommandContext,
   type ReviewDecision,
 } from "./commands";
-import type { Rect } from "./geometry";
+import { clampOriented, orientedRectOf, roundOriented, type OrientedRect, type Rect } from "./geometry";
 import type { History } from "./history";
 
 export interface EditorActions {
   drawBox: (rect: Rect, classId: string) => Promise<void>;
-  commitRect: (id: string, before: Rect, after: Rect) => Promise<void>;
+  commitRect: (id: string, before: OrientedRect, after: OrientedRect) => Promise<void>;
   deleteBox: (id: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
   duplicateSelected: () => Promise<void>;
+  rotateSelected: (delta: number) => Promise<void>;
   setClass: (id: string, classId: string) => Promise<void>;
   review: (ids: string[], action: ReviewDecision) => Promise<void>;
   acceptAll: () => Promise<void>;
@@ -71,6 +72,20 @@ export function useEditorActions(
         queued(async () => {
           const id = state().selectedId;
           if (id) await cmdDuplicate(ctx, id);
+        }),
+      rotateSelected: (delta) =>
+        queued(async () => {
+          const st = state();
+          const id = st.selectedId;
+          const box = id ? st.boxes[id] : undefined;
+          const image = st.image;
+          if (!id || !box || !image) return;
+          const before = orientedRectOf(box);
+          // Clamped like every other write path. Nudging a legitimately overhanging box back to
+          // angle 0 puts it under the upright "fully inside" rule, which the server rejects — the
+          // box would be stuck at 1 degree with no way home. The clamp pulls it in instead.
+          const after = clampOriented({ ...before, angle: before.angle + delta }, image);
+          await cmdUpdateRect(ctx, id, before, roundOriented(after));
         }),
       setClass: (id, classId) => queued(() => cmdSetClass(ctx, id, classId)),
       review: (ids, action) => queued(() => cmdReview(ctx, ids, action)),

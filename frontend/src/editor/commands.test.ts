@@ -99,8 +99,8 @@ describe("editor commands", () => {
 
   it("patches a proposal's rect (it becomes edited) and undoes by patching back and unreviewing", async () => {
     const c = ctx();
-    const before = { x: 1210.5, y: 802, w: 96, h: 61 };
-    const after = { x: 1300, y: 810, w: 96, h: 61 };
+    const before = { x: 1210.5, y: 802, w: 96, h: 61, angle: 0 };
+    const after = { x: 1300, y: 810, w: 96, h: 61, angle: 0 };
     await cmdUpdateRect(c, proposalBox.id, before, after);
     expect(c.requests[0]).toMatchObject({ method: "PATCH", body: after });
     expect(useEditorStore.getState().boxes[proposalBox.id]).toMatchObject({
@@ -128,8 +128,8 @@ describe("editor commands", () => {
 
   it("patches a person box's rect and undoes with a single PATCH", async () => {
     const c = ctx();
-    const before = { x: 512, y: 300, w: 140, h: 90 };
-    const after = { x: 520, y: 305, w: 140, h: 90 };
+    const before = { x: 512, y: 300, w: 140, h: 90, angle: 0 };
+    const after = { x: 520, y: 305, w: 140, h: 90, angle: 0 };
     await cmdUpdateRect(c, personBox.id, before, after);
     await cmdUndo(c);
     expect(c.requests.map((r) => r.method)).toEqual(["PATCH", "PATCH"]);
@@ -255,6 +255,50 @@ describe("editor commands", () => {
     const c = ctx();
     await cmdCreateBox(c, exampleImage.id, { class_id: CLASS_ID(2), x: 10, y: 20, w: 30, h: 40 });
     expect(useEditorStore.getState().image?.marked_empty).toBe(false);
+  });
+
+  it("sends the angle in the patch body and restores it on undo", async () => {
+    const c = ctx();
+    const before = { x: 1210.5, y: 802, w: 96, h: 61, angle: 0 };
+    const after = { x: 1210.5, y: 802, w: 96, h: 61, angle: 45 };
+    await cmdUpdateRect(c, proposalBox.id, before, after);
+    expect(c.requests[0]).toMatchObject({ method: "PATCH", body: after });
+    expect(useEditorStore.getState().boxes[proposalBox.id]).toMatchObject({ angle: 45 });
+    await cmdUndo(c);
+    expect(c.requests[1]).toMatchObject({ method: "PATCH", body: before });
+    expect(useEditorStore.getState().boxes[proposalBox.id]).toMatchObject({ angle: 0 });
+  });
+
+  it("ignores an angle change smaller than the epsilon", async () => {
+    const c = ctx();
+    await cmdUpdateRect(
+      c,
+      proposalBox.id,
+      { x: 1210.5, y: 802, w: 96, h: 61, angle: 45 },
+      { x: 1210.5, y: 802, w: 96, h: 61, angle: 45.01 },
+    );
+    expect(c.requests).toHaveLength(0);
+  });
+
+  it("saves an angle change on a box whose geometry did not move", async () => {
+    const c = ctx();
+    await cmdUpdateRect(
+      c,
+      proposalBox.id,
+      { x: 1210.5, y: 802, w: 96, h: 61, angle: 45 },
+      { x: 1210.5, y: 802, w: 96, h: 61, angle: 46 },
+    );
+    expect(c.requests[0]).toMatchObject({ method: "PATCH", body: { angle: 46 } });
+  });
+
+  it("duplicate keeps the original's angle", async () => {
+    const c = ctx();
+    useEditorStore.getState().upsertBox({ ...personBox, angle: 45 });
+    await cmdDuplicate(c, personBox.id);
+    expect(c.requests[0]).toMatchObject({
+      method: "POST",
+      body: { class_id: personBox.class_id, x: 524, y: 312, w: 140, h: 90, angle: 45 },
+    });
   });
 });
 
@@ -441,8 +485,8 @@ describe("editor commands: redo chain and ordering", () => {
       w: 30,
       h: 40,
     });
-    const before = { x: 10, y: 20, w: 30, h: 40 };
-    const after = { x: 50, y: 60, w: 30, h: 40 };
+    const before = { x: 10, y: 20, w: 30, h: 40, angle: 0 };
+    const after = { x: 50, y: 60, w: 30, h: 40, angle: 0 };
     await cmdUpdateRect(c, created!.id, before, after);
     await cmdUndo(c); // move back
     await cmdUndo(c); // delete new-1
@@ -481,9 +525,9 @@ describe("editor commands: redo chain and ordering", () => {
       store: useEditorStore,
       history: new History(),
     };
-    const first = { x: 512, y: 300, w: 140, h: 90 };
-    const second = { x: 600, y: 300, w: 140, h: 90 };
-    const third = { x: 700, y: 300, w: 140, h: 90 };
+    const first = { x: 512, y: 300, w: 140, h: 90, angle: 0 };
+    const second = { x: 600, y: 300, w: 140, h: 90, angle: 0 };
+    const third = { x: 700, y: 300, w: 140, h: 90, angle: 0 };
     const p1 = enqueue(c, async () => {
       calls += 1;
       await new Promise((r) => setTimeout(r, 30));

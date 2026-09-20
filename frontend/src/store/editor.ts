@@ -28,6 +28,8 @@ export interface EditorState {
   viewport: Size;
   fitted: boolean;
   spaceHeld: boolean;
+  /** Gates the canvas rotation snaps; tracked exactly as `spaceHeld` is. */
+  shiftHeld: boolean;
   draft: Draft | null;
   pending: number;
   error: string | null;
@@ -51,6 +53,7 @@ export interface EditorState {
   oneToOne: () => void;
   zoomAt: (displayPoint: Point, factor: number) => void;
   setSpaceHeld: (held: boolean) => void;
+  setShiftHeld: (held: boolean) => void;
   setDraft: (draft: Draft | null) => void;
   beginRequest: () => void;
   endRequest: () => void;
@@ -95,6 +98,7 @@ const EMPTY = {
   view: INITIAL_VIEW,
   fitted: false,
   spaceHeld: false,
+  shiftHeld: false,
   draft: null,
   pending: 0,
   error: null,
@@ -191,6 +195,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   zoomAt: (displayPoint, factor) => set((s) => ({ view: zoomAround(s.view, displayPoint, factor) })),
   setSpaceHeld: (held) => set({ spaceHeld: held }),
+  setShiftHeld: (held) => set({ shiftHeld: held }),
   setDraft: (draft) => set({ draft }),
   beginRequest: () => set((s) => ({ pending: s.pending + 1 })),
   endRequest: () => set((s) => ({ pending: Math.max(0, s.pending - 1) })),

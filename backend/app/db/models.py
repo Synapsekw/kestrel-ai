@@ -64,6 +64,8 @@ class Box(Base):
     y: Mapped[float] = mapped_column(Float)
     w: Mapped[float] = mapped_column(Float)
     h: Mapped[float] = mapped_column(Float)
+    # Degrees about the box centre; x/y/w/h always describe the unrotated box (spec 3.1).
+    angle: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
     provenance_kind: Mapped[str] = mapped_column(String)  # person | local_model | cloud_provider
     model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

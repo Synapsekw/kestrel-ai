@@ -1481,6 +1481,7 @@ export interface components {
          *           "y": 802,
          *           "w": 96,
          *           "h": 61,
+         *           "angle": 0,
          *           "confidence": 0.81,
          *           "provenance": {
          *             "kind": "local_model",
@@ -1531,6 +1532,7 @@ export interface components {
          *       "y": 300,
          *       "w": 140,
          *       "h": 90,
+         *       "angle": 0,
          *       "confidence": null,
          *       "provenance": {
          *         "kind": "person",
@@ -1552,6 +1554,8 @@ export interface components {
             y: number;
             w: number;
             h: number;
+            /** @description Rotation in degrees about the box's own centre, clockwise in image coordinates. `x`, `y`, `w`, `h` always describe the unrotated box. A rectangle has 180 degree symmetry, so the range is [0, 180) and 190 is stored as 10. */
+            angle: number;
             confidence: number | null;
             provenance: components["schemas"]["Provenance"];
             review_state: components["schemas"]["ReviewState"];
@@ -1571,6 +1575,7 @@ export interface components {
          *           "y": 300,
          *           "w": 140,
          *           "h": 90,
+         *           "angle": 0,
          *           "confidence": null,
          *           "provenance": {
          *             "kind": "person",
@@ -1591,6 +1596,7 @@ export interface components {
          *           "y": 802,
          *           "w": 96,
          *           "h": 61,
+         *           "angle": 0,
          *           "confidence": 0.81,
          *           "provenance": {
          *             "kind": "local_model",
@@ -1610,6 +1616,7 @@ export interface components {
             items: components["schemas"]["Box"][];
         };
         /**
+         * @description `x`/`y` have no minimum: they describe the *unrotated* box, so a box rotated near the left or top edge has a negative one while its centre is still inside the image. The server is the single judge of bounds — a box at angle 0 must still lie fully inside, and a rotated one needs its centre inside (see Box.angle) — and it answers with a message saying so.
          * @example {
          *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
          *       "x": 512,
@@ -1624,8 +1631,11 @@ export interface components {
             y: number;
             w: number;
             h: number;
+            /** @description Rotation in degrees about the box's own centre. Optional; omitting it means 0. Any value is accepted and normalised into [0, 180) on write, because a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore guaranteed on the way out (see Box.angle), not demanded on the way in. */
+            angle?: number;
         };
         /**
+         * @description Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason given on BoxCreate.
          * @example {
          *       "x": 520,
          *       "y": 305
@@ -1637,6 +1647,8 @@ export interface components {
             y?: number;
             w?: number;
             h?: number;
+            /** @description Rotation in degrees about the box's own centre. Optional; omitting it leaves the angle unchanged. Any value is accepted and normalised into [0, 180) on write, because a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore guaranteed on the way out (see Box.angle), not demanded on the way in. */
+            angle?: number;
         };
         /**
          * @example {

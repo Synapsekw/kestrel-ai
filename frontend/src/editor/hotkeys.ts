@@ -13,7 +13,10 @@ export type EditorAction =
   | { type: "redo" }
   | { type: "escape" }
   | { type: "space-down" }
-  | { type: "space-up" };
+  | { type: "space-up" }
+  | { type: "rotate"; delta: number }
+  | { type: "shift-down" }
+  | { type: "shift-up" };
 
 export interface KeyLike {
   type: "keydown" | "keyup";
@@ -35,6 +38,10 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   if (e.key === " ") {
     if (e.type === "keyup") return { type: "space-up" };
     return e.repeat ? null : { type: "space-down" };
+  }
+  if (e.key === "Shift") {
+    if (e.type === "keyup") return { type: "shift-up" };
+    return e.repeat ? null : { type: "shift-down" };
   }
   if (e.type !== "keydown") return null;
   const lower = e.key.toLowerCase();
@@ -62,7 +69,12 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   if (ctrl || e.altKey) return null;
   if (e.key === "Escape") return { type: "escape" };
   if (e.key === "Delete" || e.key === "Backspace") return { type: "delete" };
-  if (e.shiftKey) return null;
+  if (e.shiftKey) {
+    // Rotation nudges. A bare letter is a class hotkey (see below), so these need a modifier.
+    if (e.key === "ArrowRight") return { type: "rotate", delta: 1 };
+    if (e.key === "ArrowLeft") return { type: "rotate", delta: -1 };
+    return null;
+  }
   if (lower === "f") return { type: "fit" };
   if (lower === "0") return { type: "one-to-one" };
   // A held A, R or N must not fire its request once per auto-repeat tick.
@@ -92,6 +104,8 @@ export const HOTKEY_HELP: ReadonlyArray<{ keys: string; does: string }> = [
   { keys: "0 / Ctrl+1", does: "1:1" },
   { keys: "Delete", does: "delete selected box" },
   { keys: "Ctrl+D", does: "duplicate selected box" },
+  { keys: "rotate handle", does: "rotate the selected box; hold Shift to snap to 15°" },
+  { keys: "Shift+Right / Shift+Left", does: "rotate the selected box by 1°" },
   { keys: "A", does: "accept all visible suggestions" },
   { keys: "R", does: "reject all visible suggestions" },
   { keys: "N", does: "no machinery on this image (mark empty / undo)" },

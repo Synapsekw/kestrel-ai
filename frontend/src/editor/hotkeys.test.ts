@@ -89,3 +89,31 @@ describe("accept all and reject all ignore key repeat", () => {
     expect(actionForKey(key("r", { repeat: true }))).toBeNull();
   });
 });
+
+describe("rotation keys", () => {
+  it("Shift+Right nudges one degree clockwise", () => {
+    expect(actionForKey(key("ArrowRight", { shiftKey: true }))).toEqual({ type: "rotate", delta: 1 });
+  });
+
+  it("Shift+Left nudges one degree anticlockwise", () => {
+    expect(actionForKey(key("ArrowLeft", { shiftKey: true }))).toEqual({ type: "rotate", delta: -1 });
+  });
+
+  it("tracks Shift down and up so the canvas can gate its snaps", () => {
+    expect(actionForKey(key("Shift", { shiftKey: true }))).toEqual({ type: "shift-down" });
+    expect(actionForKey({ ...key("Shift"), type: "keyup" })).toEqual({ type: "shift-up" });
+  });
+
+  it("does not fire shift-down once per auto-repeat tick", () => {
+    expect(actionForKey(key("Shift", { shiftKey: true, repeat: true }))).toBeNull();
+  });
+
+  it("leaves Ctrl+Left/Right as image navigation", () => {
+    expect(actionForKey(key("ArrowRight", { ctrlKey: true }))).toEqual({ type: "next" });
+    expect(actionForKey(key("ArrowLeft", { ctrlKey: true }))).toEqual({ type: "prev" });
+  });
+
+  it("still treats a bare letter as a class hotkey", () => {
+    expect(actionForKey(key("3"))).toEqual({ type: "class-key", key: "3" });
+  });
+});

@@ -128,3 +128,86 @@ export function dragRect(
   if (!isDrawable(raw)) return null;
   return roundRect(clampRect(raw, image));
 }
+
+/** A box plus its rotation. `x, y, w, h` always describe the *unrotated* box. */
+export interface OrientedRect extends Rect {
+  /** Degrees about the box centre, clockwise in image coordinates, in [0, 180). */
+  angle: number;
+}
+
+/** Smallest angle change worth saving, in degrees. */
+export const ANGLE_EPSILON = 0.05;
+
+/** Degrees into [0, 180). A rectangle has 180 degree symmetry, so 190 and 10 are one shape. */
+export function normaliseAngle(deg: number): number {
+  const m = deg % 180;
+  return m < 0 ? m + 180 : m;
+}
+
+export function centreOf(r: Rect): Point {
+  return { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+}
+
+/** The four corners in image pixels, clockwise from the rotated top-left. */
+export function cornersOf(r: OrientedRect): [Point, Point, Point, Point] {
+  const c = centreOf(r);
+  const rad = (r.angle * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const at = (dx: number, dy: number): Point => ({
+    x: c.x + dx * cos - dy * sin,
+    y: c.y + dx * sin + dy * cos,
+  });
+  const hw = r.w / 2;
+  const hh = r.h / 2;
+  return [at(-hw, -hh), at(hw, -hh), at(hw, hh), at(-hw, hh)];
+}
+
+/** The axis-aligned envelope of the rotated box. */
+export function aabbOf(r: OrientedRect): Rect {
+  if (r.angle === 0) return { x: r.x, y: r.y, w: r.w, h: r.h };
+  const pts = cornersOf(r);
+  const xs = pts.map((p) => p.x);
+  const ys = pts.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y };
+}
+
+/**
+ * Angle 0 clamps exactly as `clampRect` does; a rotated box only has its centre pulled into the
+ * image. Forcing a rotated box's corners inside would shrink or shove it whenever the annotator
+ * rotated near an edge, and an object half out of frame is the case aerial frames are full of.
+ */
+export function clampOriented(r: OrientedRect, image: Size): OrientedRect {
+  if (r.angle === 0) return { ...clampRect(rectOf(r), image), angle: 0 };
+  const w = Math.min(Math.max(r.w, MIN_BOX_SIDE), image.width);
+  const h = Math.min(Math.max(r.h, MIN_BOX_SIDE), image.height);
+  const c = centreOf({ ...r, w, h });
+  const cx = Math.min(Math.max(c.x, 0), image.width);
+  const cy = Math.min(Math.max(c.y, 0), image.height);
+  return { x: cx - w / 2, y: cy - h / 2, w, h, angle: normaliseAngle(r.angle) };
+}
+
+/**
+ * `eps` is the tolerance in image pixels for x/y/w/h; the angle always uses `ANGLE_EPSILON`,
+ * because degrees and pixels are not the same unit and one number cannot serve both.
+ */
+export function orientedEquals(a: OrientedRect, b: OrientedRect, eps = 0.05): boolean {
+  return rectEquals(rectOf(a), rectOf(b), eps) && Math.abs(a.angle - b.angle) < ANGLE_EPSILON;
+}
+
+export function orientedRectOf(b: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  angle: number;
+}): OrientedRect {
+  return { x: b.x, y: b.y, w: b.w, h: b.h, angle: b.angle };
+}
+
+export function roundOriented(r: OrientedRect, decimals = 1): OrientedRect {
+  const f = 10 ** decimals;
+  return { ...roundRect(rectOf(r), decimals), angle: Math.round(normaliseAngle(r.angle) * f) / f };
+}

@@ -111,6 +111,7 @@ export const personBox: Box = {
   y: 300,
   w: 140,
   h: 90,
+  angle: 0,
   confidence: null,
   provenance: { kind: "person", model_id: null, provider: null, model_name: null, query_run_id: null },
   review_state: "accepted",
@@ -126,6 +127,7 @@ export const proposalBox: Box = {
   y: 802,
   w: 96,
   h: 61,
+  angle: 0,
   confidence: 0.81,
   provenance: {
     kind: "local_model",

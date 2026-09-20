@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.datasets.materialise import _label_text
+from app.datasets.materialise import _label_text, detect_boxes
 from app.exports.rows import ExportImage
 from app.jobs.cancellation import JobFailure
 
@@ -24,7 +24,22 @@ def _label_path(image_path: str) -> Path:
 
 
 def _as_box_dicts(image: ExportImage) -> list[dict]:
-    return [{"class_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h} for b in image.boxes]
+    """Rotated boxes export as their axis-aligned envelope.
+
+    Wave 1 keeps the 5-number detect format, and the envelope is the honest value for it: it is a
+    loose label, but it still contains the object. Writing the *unrotated* x/y/w/h instead would
+    write a rectangle that does not — a wrong label, not merely a loose one. Wave 2 replaces this
+    with the 8-corner OBB format and the looseness goes away.
+
+    `datasets.materialise.detect_boxes` does the flattening, so an exported label and a frozen
+    dataset's label are the same decision made once rather than twice.
+    """
+    return detect_boxes(
+        [
+            {"class_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h, "angle": b.angle}
+            for b in image.boxes
+        ]
+    )
 
 
 def check_no_stem_collisions(images: list[ExportImage]) -> None:
