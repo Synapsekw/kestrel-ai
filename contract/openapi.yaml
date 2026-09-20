@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info:
-  title: Machinery Detection backend API
+  title: Kestrel AI backend API
   version: 1.0.0
   description: |
     Contract between the Tauri/React frontend and the FastAPI sidecar. This file is the

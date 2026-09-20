@@ -1,5 +1,5 @@
 {
-  "name": "@machinery-app/contract",
+  "name": "@kestrel-ai/contract",
   "private": true,
   "scripts": {
     "lint": "spectral lint openapi.yaml",
