@@ -20,6 +20,7 @@ def _box(**over) -> ExportBox:
         y=0,
         w=10,
         h=10,
+        angle=0,
         confidence=None,
         origin="person",
         origin_name="",
@@ -194,3 +195,38 @@ def test_coco_category_ids_are_stable_across_calls(tmp_path):
     d1 = json.loads((tmp_path / "run1" / "labels_coco.json").read_text("utf-8"))
     d2 = json.loads((tmp_path / "run2" / "labels_coco.json").read_text("utf-8"))
     assert d1["categories"] == d2["categories"]
+
+
+def test_coco_bbox_is_the_envelope_and_segmentation_is_the_quad(tmp_path):
+    """COCO has no rotated-box standard: `bbox` stays axis-aligned for every existing reader,
+    and `segmentation` carries the exact rotated shape for anything that understands it."""
+    images = [_image(boxes=[_box(x=10, y=20, w=30, h=40, angle=90)])]
+    coco_out.write(images, CLASSES, tmp_path)
+    ann = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))["annotations"][0]
+    # A 30x40 box about centre (25, 40), turned 90 degrees, occupies a 40x30 footprint at (5, 25).
+    assert ann["bbox"] == pytest.approx([5.0, 25.0, 40.0, 30.0])
+    assert ann["area"] == pytest.approx(30 * 40)  # rotation does not change area
+    assert len(ann["segmentation"]) == 1
+    assert len(ann["segmentation"][0]) == 8
+
+
+def test_coco_leaves_an_unrotated_annotation_exactly_as_it_was(tmp_path):
+    images = [_image(boxes=[_box(x=10, y=20, w=30, h=40)])]
+    coco_out.write(images, CLASSES, tmp_path)
+    ann = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))["annotations"][0]
+    assert ann["bbox"] == [10.0, 20.0, 30.0, 40.0]
+    assert "segmentation" not in ann
+
+
+def test_yolo_results_export_writes_the_envelope_of_a_rotated_box(tmp_path):
+    """Wave 1 keeps the 5-number detect format, so a rotated box exports as its envelope —
+    a loose label that still contains the object, never the unrotated box, which would not."""
+    images = [_image(width=100, height=100, boxes=[_box(x=10, y=20, w=30, h=40, angle=90)])]
+    yolo_out.write(images, CLASSES, tmp_path)
+    line = (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8").strip()
+    index, cx, cy, w, h = line.split()
+    assert index == "0"
+    assert float(cx) == pytest.approx(0.25)  # centre is unchanged by rotation
+    assert float(cy) == pytest.approx(0.40)
+    assert float(w) == pytest.approx(0.40)  # 40 wide after the turn, not 30
+    assert float(h) == pytest.approx(0.30)

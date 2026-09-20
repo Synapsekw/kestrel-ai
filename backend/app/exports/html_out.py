@@ -17,6 +17,7 @@ import base64
 import html
 import io
 import logging
+import math
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -25,6 +26,7 @@ from PIL import Image as PILImage
 from PIL import ImageDraw
 
 from app.exports.rows import ExportBox, ExportImage, class_counts
+from app.geometry import corners_of
 
 MAX_SIDE = 640
 MAX_CARDS = 300
@@ -44,29 +46,28 @@ def _hex_to_rgb(colour: str) -> tuple[int, int, int]:
     return (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
 
 
-def _dashed_rectangle(
+def _dashed_polygon(
     draw: ImageDraw.ImageDraw,
-    box: tuple[float, float, float, float],
+    points: list[tuple[float, float]],
     colour: tuple[int, int, int],
     width: int = 2,
     dash: float = 6,
     gap: float = 4,
 ) -> None:
-    """An unreviewed proposal's outline: a solid `rectangle()` would look identical to ground truth."""
-    x0, x1 = sorted((box[0], box[2]))
-    y0, y1 = sorted((box[1], box[3]))
-    x = x0
-    while x < x1:
-        end = min(x + dash, x1)
-        draw.line([(x, y0), (end, y0)], fill=colour, width=width)
-        draw.line([(x, y1), (end, y1)], fill=colour, width=width)
-        x += dash + gap
-    y = y0
-    while y < y1:
-        end = min(y + dash, y1)
-        draw.line([(x0, y), (x0, end)], fill=colour, width=width)
-        draw.line([(x1, y), (x1, end)], fill=colour, width=width)
-        y += dash + gap
+    """An unreviewed proposal's outline: a solid polygon would look identical to ground truth."""
+    for i, start in enumerate(points):
+        end = points[(i + 1) % len(points)]
+        span = math.dist(start, end)
+        if span == 0:
+            continue
+        ux, uy = (end[0] - start[0]) / span, (end[1] - start[1]) / span
+        travelled = 0.0
+        while travelled < span:
+            seg = min(dash, span - travelled)
+            a = (start[0] + ux * travelled, start[1] + uy * travelled)
+            b = (start[0] + ux * (travelled + seg), start[1] + uy * (travelled + seg))
+            draw.line([a, b], fill=colour, width=width)
+            travelled += dash + gap
 
 
 def draw_thumbnail(
@@ -109,15 +110,18 @@ def draw_thumbnail(
     draw = ImageDraw.Draw(im)
     for box in boxes:
         colour = colour_by_id.get(box.class_id, (255, 0, 0))
-        x0, y0 = box.x * total_x, box.y * total_y
-        x1, y1 = (box.x + box.w) * total_x, (box.y + box.h) * total_y
+        pts = [
+            (px * total_x, py * total_y)
+            for px, py in corners_of(box.x, box.y, box.w, box.h, box.angle)
+        ]
         label = name_by_id.get(box.class_id, box.class_id)
         if box.review_state == "unreviewed":
-            _dashed_rectangle(draw, (x0, y0, x1, y1), colour)
+            _dashed_polygon(draw, pts, colour)
             label = f"{label} ?"
         else:
-            draw.rectangle([x0, y0, x1, y1], outline=colour, width=2)
-        draw.text((x0 + 2, max(0, y0 - 11)), label, fill=colour)
+            draw.polygon(pts, outline=colour, width=2)
+        anchor = min(pts, key=lambda p: p[1])
+        draw.text((anchor[0] + 2, max(0, anchor[1] - 11)), label, fill=colour)
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=85)
     return buf.getvalue()

@@ -4,6 +4,7 @@ import csv
 from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
 from app.db.models import Box, Image, Source
 from app.exports import csv_out, rows
@@ -141,7 +142,7 @@ def test_detections_csv_exact_text(handle, two_images, tmp_path):
     text = _read(folder / "detections.csv")
     lines = text.split("\r\n")
     assert lines[0] == (
-        "image,source,group,capture_time,image_lat,image_lon,class,x,y,w,h,confidence,"
+        "image,source,group,capture_time,image_lat,image_lon,class,x,y,w,h,angle,confidence,"
         "origin,origin_name,review_state,box_id"
     )
     # Only the person (accepted) and local_model (edited) boxes of image a; rejected is never present.
@@ -149,7 +150,7 @@ def test_detections_csv_exact_text(handle, two_images, tmp_path):
     assert len(body) == 2
     prefix = "images/a.jpg,siteA,flight_1,2026-09-18T12:00:00Z,37.7749,-122.4194,"
     person_id = next(b.id for b in images[0].boxes if b.origin == "person")
-    assert body[0] == f"{prefix}excavator,100.0,200.0,50.0,60.0,,person,,accepted,{person_id}"
+    assert body[0] == f"{prefix}excavator,100.0,200.0,50.0,60.0,0.0,,person,,accepted,{person_id}"
     assert body[1].startswith(f"{prefix}dump_truck,")
     assert ",0.8,local_model,v1-yolo,edited," in body[1]
 
@@ -324,3 +325,24 @@ def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(
     with open(folder / "counts_by_group.csv", encoding="utf-8-sig", newline="") as f:
         header = next(csv.reader(f))
     assert tricky in header
+
+
+def test_detections_csv_has_an_angle_column_after_h(handle, two_images, tmp_path):
+    """`angle` sits directly after `h` so a reader meets the whole geometry as one block."""
+    assert csv_out.DETECTIONS_COLUMNS.index("angle") == csv_out.DETECTIONS_COLUMNS.index("h") + 1
+    images, classes = rows.load(handle)
+    csv_out.write(images, classes, tmp_path)
+    table = list(csv.reader(_read(tmp_path / "detections.csv").splitlines()))
+    assert table[0].index("angle") == table[0].index("h") + 1
+    # Every box in the fixture is unrotated, so every row reports 0.0.
+    assert {r[table[0].index("angle")] for r in table[1:]} == {"0.0"}
+
+
+def test_detections_csv_reports_a_rotated_angle(handle, two_images, tmp_path):
+    with handle.session() as s:
+        box = s.execute(select(Box).order_by(Box.created_at)).scalars().first()
+        box.angle = 37.5
+    images, classes = rows.load(handle)
+    csv_out.write(images, classes, tmp_path)
+    table = list(csv.reader(_read(tmp_path / "detections.csv").splitlines()))
+    assert "37.5" in {r[table[0].index("angle")] for r in table[1:]}

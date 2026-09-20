@@ -26,6 +26,7 @@ class ExportBox:
     y: float
     w: float
     h: float
+    angle: float
     confidence: float | None
     origin: str  # person | local_model | cloud_provider
     origin_name: str  # "" for a person-drawn box
@@ -107,6 +108,7 @@ def load(
                     y=b.y,
                     w=b.w,
                     h=b.h,
+                    angle=b.angle,
                     confidence=b.confidence,
                     origin=b.provenance_kind,
                     origin_name=_origin_name(b.provenance_kind, b.provider, b.model_name),

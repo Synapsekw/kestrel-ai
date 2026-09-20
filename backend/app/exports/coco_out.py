@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from app.exports.rows import ExportImage
+from app.geometry import aabb_of, corners_of
 
 FILE_NAME = "labels_coco.json"
 
@@ -32,11 +33,16 @@ def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[
             cat_id = category_id.get(box.class_id)
             if cat_id is None:
                 continue
+            bx, by, bw, bh = aabb_of(box.x, box.y, box.w, box.h, box.angle)
             ann = {
                 "id": ann_id,
                 "image_id": image_id,
                 "category_id": cat_id,
-                "bbox": [box.x, box.y, box.w, box.h],
+                # COCO has no rotated-box standard. `bbox` stays the axis-aligned envelope so every
+                # existing reader keeps working; `segmentation` carries the exact rotated quad for
+                # anything that understands it. Nothing is lost and nothing breaks.
+                "bbox": [bx, by, bw, bh],
+                # Rotation does not change area, so this stays the true box area, not the envelope's.
                 "area": box.w * box.h,
                 "iscrowd": 0,
                 # Present on every annotation (not only unreviewed ones): a reader must be able to
@@ -46,6 +52,10 @@ def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[
             }
             if box.confidence is not None:
                 ann["score"] = box.confidence
+            if box.angle:
+                ann["segmentation"] = [
+                    [c for pt in corners_of(box.x, box.y, box.w, box.h, box.angle) for c in pt]
+                ]
             annotations.append(ann)
             ann_id += 1
 

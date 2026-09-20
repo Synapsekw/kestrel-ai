@@ -22,6 +22,7 @@ def _box(**over) -> ExportBox:
         y=10,
         w=20,
         h=20,
+        angle=0,
         confidence=0.9,
         origin="person",
         origin_name="",
