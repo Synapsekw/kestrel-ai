@@ -255,3 +255,7 @@ the variable is absent. No key is ever written to a file, a fixture or a log.
 
 Only the goal owner edits `contract/openapi.yaml`. After a change: `cd contract; pnpm check`
 (regenerates `client/schema.d.ts`), then run the backend contract tests.
+
+## License
+
+MIT — see `LICENSE`.
