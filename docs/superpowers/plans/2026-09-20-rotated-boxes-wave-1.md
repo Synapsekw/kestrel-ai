@@ -16,7 +16,13 @@
 - `angle` is **degrees**, rotation about the box **centre**, normalised to **`[0, 180)`**. Never radians, never about a corner, never `[0, 360)` in storage.
 - `x, y, w, h` always describe the **unrotated** box. No task may redefine them.
 - Stage by path. **Never `git add -A`.**
-- Backend commands run from `backend/` using `.\.venv\Scripts\python.exe`, not a bare `python`.
+- **A worktree has no venv of its own** (`CONTRIBUTING.md` -> Testing). Backend commands run against
+  the *main checkout's* interpreter, by absolute path:
+  `E:\Dev\Yoloppackend\.venv\Scripts\python.exe`. Never `uv venv` a fresh one inside a
+  worktree, and never rely on a bare `python`. Every `.\.venv\Scripts\python.exe` below means that
+  absolute path when you are working in a worktree.
+- `cargo` is not on PATH in every shell; if it fails to resolve, call
+  `%USERPROFILE%\.cargoin\cargo.exe` directly.
 - The app must start even when startup work fails — migration `0003` must not be able to fail on user data.
 - Wave 1 does **not** change dataset materialisation. `_label_text` stays 5-number detect format; that is Wave 2.
 
