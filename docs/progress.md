@@ -1,3 +1,9 @@
+---
+type: report
+status: active
+tags: [operations, evidence]
+---
+
 # Progress log
 
 Resume instructions for a new session: read this file top to bottom, then the plan for the

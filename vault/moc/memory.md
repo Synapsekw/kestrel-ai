@@ -1,0 +1,34 @@
+---
+type: moc
+status: active
+tags: [moc, memory]
+---
+
+# Memory map
+
+How Kestrel AI's memory is layered, modelled on Monolith's vault.
+
+## Layers
+
+1. **This vault** (`vault/`) — project state: north star, product context, decisions, sessions.
+   Shared with anyone who clones the repo. Start at [[00-north-star]].
+2. **`.superpowers/sdd/`** — per-plan SDD workspaces (progress ledgers, sub-agent reports).
+   Git-ignored scratch, one folder per plan.
+3. **Machine-local Claude auto-memory** — `C:\Users\D\.claude\projects\E--Dev-Yolo-app\memory\` —
+   user behaviour (how Claude Code should act on this machine), saved outside the repo, not shared.
+
+## Gotcha decisions
+
+```dataview
+TABLE status, file.cday as "Recorded"
+FROM "vault/decisions"
+WHERE contains(tags, "gotcha")
+SORT file.cday DESC
+```
+
+Empty until [[roadmap|Task 7]] adds ADRs to `vault/decisions/` — that is expected, not a bug.
+
+## Related
+
+- [[00-north-star]]
+- [[operations]]
