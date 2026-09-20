@@ -272,3 +272,30 @@ def test_unrotated_box_still_must_lie_fully_inside(client, labelled):
     r = _create(client, labelled, x=280, y=10, w=60, h=20, angle=0.0)
     assert r.status_code == 422, r.text
     assert "does not lie inside" in r.json()["error"]["message"]
+
+
+def test_patch_may_rotate_a_box_that_then_overhangs_the_edge(client, labelled):
+    """The main flow: draw upright, then rotate. The rotate is a PATCH, not a create."""
+    rejected = _create(client, labelled, x=280, y=10, w=60, h=20, angle=0.0)
+    assert rejected.status_code == 422, "a 60-wide box at x=280 must not fit upright on a 320px image"
+    box_id = _create(client, labelled, x=200, y=10, w=60, h=20).json()["id"]
+    r = client.patch(
+        f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"x": 280, "angle": 30.0}
+    )
+    assert r.status_code == 200, r.text
+    assert (r.json()["x"], r.json()["angle"]) == (280, 30.0)
+
+
+def test_patch_rechecks_bounds_against_the_rows_existing_angle(client, labelled):
+    """An x-only PATCH on an already-rotated row must validate against the stored angle,
+    not against angle 0 — otherwise moving a rotated box would hit the upright rule."""
+    box_id = _create(client, labelled, x=200, y=10, w=60, h=20, angle=30.0).json()["id"]
+    r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"x": 280})
+    assert r.status_code == 200, r.text
+
+
+def test_patch_still_rejects_a_move_that_puts_the_centre_outside(client, labelled):
+    box_id = _create(client, labelled, x=200, y=10, w=60, h=20, angle=30.0).json()["id"]
+    r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"x": 400})
+    assert r.status_code == 422, r.text
+    assert "centre" in r.json()["error"]["message"]

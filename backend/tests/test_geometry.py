@@ -34,6 +34,21 @@ def test_corners_at_ninety_degrees_swap_the_sides():
     assert (round(x, 6), round(y, 6), round(w, 6), round(h, 6)) == (5.0, 25.0, 40.0, 30.0)
 
 
+def test_corners_at_ninety_degrees_pin_the_rotation_direction():
+    """Clockwise in a y-down image: the unrotated top-left lands at the top-RIGHT.
+
+    A sign-flipped (anticlockwise) implementation produces the same AABB at 90 degrees and the
+    same centroid and side lengths at every angle, so the ordered corners are the only thing
+    that pins the direction.
+    """
+    assert corners_of(10, 20, 30, 40, 90.0) == [
+        pytest.approx((45.0, 25.0)),
+        pytest.approx((45.0, 55.0)),
+        pytest.approx((5.0, 55.0)),
+        pytest.approx((5.0, 25.0)),
+    ]
+
+
 def test_aabb_at_zero_angle_is_the_box_itself():
     assert aabb_of(10, 20, 30, 40, 0.0) == (10.0, 20.0, 30.0, 40.0)
 
@@ -64,8 +79,26 @@ def test_corners_always_keep_the_centre_and_the_side_lengths(x, y, w, h, angle):
     h=st.floats(0.1, 500),
     angle=st.floats(0, 179.999),
 )
-def test_aabb_always_contains_every_corner(w, h, angle):
-    ax, ay, aw, ah = aabb_of(0, 0, w, h, angle)
-    for px, py in corners_of(0, 0, w, h, angle):
-        assert ax - 1e-6 <= px <= ax + aw + 1e-6
-        assert ay - 1e-6 <= py <= ay + ah + 1e-6
+def test_aabb_matches_the_closed_form_for_a_rotated_rectangle(w, h, angle):
+    """W = w|cos a| + h|sin a|, H = w|sin a| + h|cos a| — derived independently of corners_of,
+    so unlike a min/max-over-corners check this can actually fail."""
+    rad = math.radians(angle)
+    cos, sin = abs(math.cos(rad)), abs(math.sin(rad))
+    _, _, aw, ah = aabb_of(0, 0, w, h, angle)
+    assert aw == pytest.approx(w * cos + h * sin, rel=1e-9)
+    assert ah == pytest.approx(w * sin + h * cos, rel=1e-9)
+
+
+@given(
+    w=st.floats(1.0, 500),
+    h=st.floats(1.0, 500),
+    angle=st.floats(0.5, 179.5),
+)
+def test_the_top_edge_tilts_downward_to_the_right(w, h, angle):
+    """The top edge vector is (w cos a, w sin a); in [0, 180) its y component is positive.
+
+    y grows downward, so a positive dy means the edge tilts down to the right — clockwise.
+    This is the property a mirrored implementation fails.
+    """
+    c = corners_of(0, 0, w, h, angle)
+    assert c[1][1] > c[0][1]
