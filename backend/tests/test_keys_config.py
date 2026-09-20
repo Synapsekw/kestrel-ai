@@ -117,3 +117,78 @@ def test_the_windows_credential_manager_backend_is_pinned_explicitly():
         from keyring.backends.Windows import WinVaultKeyring
 
         assert isinstance(keyring.get_keyring(), WinVaultKeyring)
+
+
+class _FakeKeyringErrors:
+    class PasswordDeleteError(Exception):
+        pass
+
+
+class FakeKeyring:
+    """Stands in for the `keyring` module so no test touches the real Credential Manager."""
+
+    def __init__(self):
+        self.store: dict[tuple[str, str], str] = {}
+        self.errors = _FakeKeyringErrors
+
+    def get_password(self, service, user):
+        return self.store.get((service, user))
+
+    def set_password(self, service, user, password):
+        self.store[(service, user)] = password
+
+    def delete_password(self, service, user):
+        if (service, user) not in self.store:
+            raise self.errors.PasswordDeleteError(service)
+        del self.store[(service, user)]
+
+
+def _store_with(fake):
+    from app.providers.keys import KeyringKeyStore
+
+    store = KeyringKeyStore()
+    store._keyring = lambda: fake
+    return store
+
+
+def test_a_key_stored_under_the_old_service_name_is_migrated_on_read():
+    from app.providers.keys import LEGACY_SERVICE, SERVICE
+
+    fake = FakeKeyring()
+    fake.store[(LEGACY_SERVICE, "openai")] = SECRET
+    store = _store_with(fake)
+
+    assert store.get("openai") == SECRET
+    assert fake.store[(SERVICE, "openai")] == SECRET
+    assert (LEGACY_SERVICE, "openai") not in fake.store  # moved, not copied
+
+
+def test_migration_is_idempotent_and_does_not_consult_the_legacy_service_again():
+    from app.providers.keys import LEGACY_SERVICE, SERVICE
+
+    fake = FakeKeyring()
+    fake.store[(LEGACY_SERVICE, "anthropic")] = SECRET
+    store = _store_with(fake)
+
+    assert store.get("anthropic") == SECRET
+    fake.store[(LEGACY_SERVICE, "anthropic")] = "stale-value-that-must-not-win"
+    assert store.get("anthropic") == SECRET
+    assert fake.store[(SERVICE, "anthropic")] == SECRET
+
+
+def test_a_deleted_key_cannot_resurrect_from_the_legacy_service():
+    from app.providers.keys import LEGACY_SERVICE
+
+    fake = FakeKeyring()
+    fake.store[(LEGACY_SERVICE, "openai")] = SECRET
+    store = _store_with(fake)
+
+    store.delete("openai")
+    assert store.get("openai") is None
+    assert fake.store == {}
+    store.delete("openai")  # still idempotent
+
+
+def test_no_key_anywhere_reads_as_none():
+    fake = FakeKeyring()
+    assert _store_with(fake).get("openai") is None
