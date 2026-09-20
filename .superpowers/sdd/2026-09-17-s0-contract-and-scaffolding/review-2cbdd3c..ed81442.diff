@@ -1,0 +1,221 @@
+# Review package: 2cbdd3c..HEAD
+
+## Commits
+ed81442 fix(backend): ci cpu index with override, shutdown error path, no params in app log, lock in close_all, unique temp file
+
+## Files changed
+ .github/workflows/ci.yml        |  4 ++--
+ backend/app/appdata.py          |  3 ++-
+ backend/app/jobs/runner.py      | 18 +++++++++++-------
+ backend/app/projects/service.py |  7 ++++---
+ backend/tests/test_projects.py  |  3 ++-
+ 5 files changed, 21 insertions(+), 14 deletions(-)
+
+## Diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index a7057cb..8ee1cf3 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -21,21 +21,21 @@ jobs:
+         working-directory: contract
+ 
+   backend:
+     runs-on: windows-latest
+     steps:
+       - uses: actions/checkout@v4
+       - uses: astral-sh/setup-uv@v6
+       - run: uv venv --python 3.11.15 .venv
+         working-directory: backend
+       # CPU wheels on the runner; the reference machine uses the cu130 pins from requirements.txt.
+-      - run: uv pip install --python .venv/Scripts/python.exe --override ci-overrides-cpu.txt -r requirements-dev.txt
++      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
+         working-directory: backend
+         shell: bash
+       - run: .venv/Scripts/ruff check . && .venv/Scripts/ruff format --check .
+         working-directory: backend
+         shell: bash
+       - run: .venv/Scripts/python -m pytest -q
+         working-directory: backend
+         shell: bash
+ 
+   frontend:
+@@ -59,21 +59,21 @@ jobs:
+         working-directory: frontend
+ 
+   sidecar-smoke:
+     if: github.event_name == 'workflow_dispatch'
+     runs-on: windows-latest
+     steps:
+       - uses: actions/checkout@v4
+       - uses: astral-sh/setup-uv@v6
+       - run: uv venv --python 3.11.15 .venv
+         working-directory: backend
+-      - run: uv pip install --python .venv/Scripts/python.exe --override ci-overrides-cpu.txt -r requirements-dev.txt
++      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
+         working-directory: backend
+         shell: bash
+       - run: .\scripts\build.ps1
+         working-directory: backend
+       - run: |
+           $env:APP_TOKEN = "ci"; $env:APP_PORT = "8765"
+           $p = Start-Process -PassThru -FilePath .\dist\machinery-backend\machinery-backend.exe
+           Start-Sleep -Seconds 10
+           $r = Invoke-WebRequest -Headers @{ Authorization = "Bearer ci" } http://127.0.0.1:8765/api/v1/health
+           if ($r.StatusCode -ne 200) { throw "health returned $($r.StatusCode)" }
+diff --git a/backend/app/appdata.py b/backend/app/appdata.py
+index 691a11a..ae64a61 100644
+--- a/backend/app/appdata.py
++++ b/backend/app/appdata.py
+@@ -1,14 +1,15 @@
+ """Per-user app data under %APPDATA%/machinery-app: recent projects and settings. Never keys."""
+ 
+ import json
+ import os
++import uuid
+ from datetime import UTC, datetime
+ from pathlib import Path
+ 
+ MAX_RECENT = 20
+ 
+ 
+ class AppData:
+     def __init__(self, data_dir: Path):
+         self.data_dir = data_dir
+         self.data_dir.mkdir(parents=True, exist_ok=True)
+@@ -46,13 +47,13 @@ class AppData:
+     def read_settings(self) -> dict:
+         if not self._settings.exists():
+             return {}
+         return json.loads(self._settings.read_text("utf-8"))
+ 
+     def write_settings(self, values: dict) -> None:
+         self._write(self._settings, values)
+ 
+     @staticmethod
+     def _write(path: Path, value) -> None:
+-        tmp = path.with_suffix(".tmp")
++        tmp = path.with_name(f"{path.name}.{os.getpid()}.{uuid.uuid4().hex[:8]}.tmp")
+         tmp.write_text(json.dumps(value, indent=2), "utf-8")
+         os.replace(tmp, path)
+diff --git a/backend/app/jobs/runner.py b/backend/app/jobs/runner.py
+index 9246e80..a0abb62 100644
+--- a/backend/app/jobs/runner.py
++++ b/backend/app/jobs/runner.py
+@@ -79,25 +79,29 @@ class JobRunner:
+ 
+     def stop(self) -> None:
+         with self._lock:
+             contexts = list(self._contexts.values())
+         for ctx in contexts:
+             ctx.cancelled.set()
+         if self._pool:
+             self._pool.shutdown(wait=True, cancel_futures=True)
+             self._pool = None
+         for ctx in contexts:  # jobs that were still queued never ran; mark them cancelled
+-            job = self.get(ctx.project, ctx.job_id)
+-            if job.state == "queued":
+-                self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
+-                ctx.log.info("job cancelled before it started")
+-            self._close_log(ctx)
++            try:
++                job = self.get(ctx.project, ctx.job_id)
++                if job.state == "queued":
++                    self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
++                    ctx.log.info("job cancelled before it started")
++            except Exception:
++                log.exception("could not mark queued job %s cancelled at shutdown", ctx.job_id)
++            finally:
++                self._close_log(ctx)
+         with self._lock:
+             self._contexts.clear()
+ 
+     @staticmethod
+     def _close_log(ctx: "JobContext") -> None:
+         for h in list(ctx.log.handlers):
+             ctx.log.removeHandler(h)
+             h.close()
+ 
+     def submit(self, project: ProjectHandle, type: str, params: dict) -> Job:
+@@ -160,30 +164,30 @@ class JobRunner:
+                     "payload": {"state": job.state, "result": job.result, "error": job.error},
+                 }
+             )
+         return job
+ 
+     def _run(self, ctx: JobContext, fn) -> None:
+         try:
+             if ctx.cancelled.is_set():
+                 raise JobCancelled()
+             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
+-            ctx.log.info("job %s started with %s", ctx.job_id, ctx.params)
++            ctx.log.info("job %s started", ctx.job_id)
+             result = fn(ctx)
+             self._finish(ctx, state="succeeded", progress=1.0, result=result)
+             ctx.log.info("job succeeded")
+         except JobCancelled:
+             self._finish(ctx, state="cancelled")
+             ctx.log.info("job cancelled")
+         except Exception as e:
+             ctx.log.error("job failed\n%s", traceback.format_exc())
+-            log.warning("job %s (%s) failed: %s: %s", ctx.job_id, ctx.params, type(e).__name__, e)
++            log.warning("job %s failed: %s: %s", ctx.job_id, type(e).__name__, e)  # params may hold secrets
+             self._finish(ctx, state="failed", error=f"{type(e).__name__}: {e}")
+         finally:
+             self._close_log(ctx)
+             with self._lock:
+                 self._contexts.pop(ctx.job_id, None)
+ 
+     def _finish(self, ctx: JobContext, **fields) -> None:
+         """Terminal state write; a DB failure here is logged and never escapes into the executor future."""
+         try:
+             self.update(ctx.project, ctx.job_id, finished_at=datetime.now(UTC), **fields)
+diff --git a/backend/app/projects/service.py b/backend/app/projects/service.py
+index 22e3ba1..b2a88a4 100644
+--- a/backend/app/projects/service.py
++++ b/backend/app/projects/service.py
+@@ -151,17 +151,18 @@ class ProjectRegistry:
+             return self._handles[project_id]
+         for r in self.appdata.recent():
+             if r["id"] == project_id and (Path(r["folder"]) / "project.db").exists():
+                 return self.open(Path(r["folder"]), remember=False)
+         raise not_found("project", project_id)
+ 
+     def recent(self) -> list[dict]:
+         return self.appdata.recent()
+ 
+     def close_all(self) -> None:
+-        for h in self._handles.values():
+-            h.engine.dispose()
+-        self._handles.clear()
++        with self._lock:
++            for h in self._handles.values():
++                h.engine.dispose()
++            self._handles.clear()
+ 
+ 
+ def get_project(projectId: str, request: Request) -> ProjectHandle:  # noqa: N803 - path param from the contract
+     return request.app.state.projects.get(projectId)
+diff --git a/backend/tests/test_projects.py b/backend/tests/test_projects.py
+index 4aa4fbe..329aa5f 100644
+--- a/backend/tests/test_projects.py
++++ b/backend/tests/test_projects.py
+@@ -154,17 +154,18 @@ def test_recent_order_is_stable_across_listings_and_restarts(settings, tmp_path)
+             f.mkdir()
+             _create(c, f, f.name)
+     with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
+         first = [p["name"] for p in c.get("/api/v1/projects").json()["items"]]
+         second = [p["name"] for p in c.get("/api/v1/projects").json()["items"]]
+     assert first == ["c", "b", "a"] and second == first
+ 
+ 
+ def test_folder_spellings_resolve_to_one_project(client, project_dir):
+     p = _create(client, project_dir, "A")
+-    variants = [str(project_dir) + "\.", str(project_dir).replace("\\", "/"), str(project_dir).upper()]
++    # Windows-only spellings (dot segment, forward slashes, case); the product is Windows-only.
++    variants = [str(project_dir) + "\\.", str(project_dir).replace("\\", "/"), str(project_dir).upper()]
+     for v in variants:
+         r = client.post("/api/v1/projects/open", json={"folder": v})
+         assert r.status_code == 200 and r.json()["id"] == p["id"], v
+         assert r.json()["folder"] == str(project_dir)
+     assert len(client.get("/api/v1/projects").json()["items"]) == 1
+     assert len(client.app.state.projects._handles) == 1

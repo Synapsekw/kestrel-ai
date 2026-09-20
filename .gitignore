@@ -20,6 +20,8 @@ frontend/src-tauri/binaries/*
 !frontend/src-tauri/binaries/.gitkeep
 # worktrees and local data
 .worktrees/
+.claude/worktrees/
+.playwright-mcp/
 *.db
 *.db-journal
 *.db-wal
@@ -32,7 +34,9 @@ frontend/src-tauri/binaries/*
 # os
 Thumbs.db
 .DS_Store
-.superpowers/
+
+# SDD wave state travels with the repo; only its installs do not
+.superpowers/**/node_modules/
 
 # built installers (copied out of the build tree)
 dist/

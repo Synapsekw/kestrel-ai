@@ -1,0 +1,1257 @@
+# Review package: ba8728c..HEAD
+
+## Commits
+2cbdd3c fix(backend): stable recent-project order, folder resolution, registry lock, safer job shutdown, cursor validation, ci torch override
+fb2e4d9 fix(backend): require absolute project folders; pin generated folders in contract tests
+af4b027 docs: readme build, run and test instructions
+71fb34e docs: progress after S0 tasks 4-10
+
+## Files changed
+ .github/workflows/ci.yml         |   4 +-
+ README.md                        | 110 +++++++++++++++++++++++++++++++++++++--
+ backend/app/appdata.py           |  18 +++++--
+ backend/app/auth.py              |   8 ++-
+ backend/app/db/migrations/env.py |   4 +-
+ backend/app/errors.py            |   7 ++-
+ backend/app/jobs/router.py       |   9 +++-
+ backend/app/jobs/runner.py       |  45 +++++++++-------
+ backend/app/logging_setup.py     |  11 ++--
+ backend/app/pagination.py        |   8 ++-
+ backend/app/projects/router.py   |   2 +-
+ backend/app/projects/schemas.py  |  12 ++++-
+ backend/app/projects/service.py  |  69 ++++++++++++++----------
+ backend/ci-overrides-cpu.txt     |   3 ++
+ backend/machinery_backend.spec   |  16 ++++++
+ backend/scripts/build.ps1        |  10 ++++
+ backend/tests/test_auth.py       |   5 ++
+ backend/tests/test_contract.py   |  62 +++++++++++++++++++++-
+ backend/tests/test_jobs.py       |  31 +++++++++--
+ backend/tests/test_projects.py   |  38 ++++++++++++--
+ docs/progress.md                 |  27 +++++++++-
+ scripts/dev.ps1                  |   5 +-
+ 22 files changed, 423 insertions(+), 81 deletions(-)
+
+## Diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 29fbf78..a7057cb 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -21,21 +21,21 @@ jobs:
+         working-directory: contract
+ 
+   backend:
+     runs-on: windows-latest
+     steps:
+       - uses: actions/checkout@v4
+       - uses: astral-sh/setup-uv@v6
+       - run: uv venv --python 3.11.15 .venv
+         working-directory: backend
+       # CPU wheels on the runner; the reference machine uses the cu130 pins from requirements.txt.
+-      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "torch==2.14.0" "torchvision==0.29.0" && uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
++      - run: uv pip install --python .venv/Scripts/python.exe --override ci-overrides-cpu.txt -r requirements-dev.txt
+         working-directory: backend
+         shell: bash
+       - run: .venv/Scripts/ruff check . && .venv/Scripts/ruff format --check .
+         working-directory: backend
+         shell: bash
+       - run: .venv/Scripts/python -m pytest -q
+         working-directory: backend
+         shell: bash
+ 
+   frontend:
+@@ -59,21 +59,21 @@ jobs:
+         working-directory: frontend
+ 
+   sidecar-smoke:
+     if: github.event_name == 'workflow_dispatch'
+     runs-on: windows-latest
+     steps:
+       - uses: actions/checkout@v4
+       - uses: astral-sh/setup-uv@v6
+       - run: uv venv --python 3.11.15 .venv
+         working-directory: backend
+-      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "torch==2.14.0" "torchvision==0.29.0" && uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
++      - run: uv pip install --python .venv/Scripts/python.exe --override ci-overrides-cpu.txt -r requirements-dev.txt
+         working-directory: backend
+         shell: bash
+       - run: .\scripts\build.ps1
+         working-directory: backend
+       - run: |
+           $env:APP_TOKEN = "ci"; $env:APP_PORT = "8765"
+           $p = Start-Process -PassThru -FilePath .\dist\machinery-backend\machinery-backend.exe
+           Start-Sleep -Seconds 10
+           $r = Invoke-WebRequest -Headers @{ Authorization = "Bearer ci" } http://127.0.0.1:8765/api/v1/health
+           if ($r.StatusCode -ne 200) { throw "health returned $($r.StatusCode)" }
+diff --git a/README.md b/README.md
+index fb64139..1a37dce 100644
+--- a/README.md
++++ b/README.md
+@@ -1,10 +1,114 @@
+ # Machinery Detection (working name `machinery-app`)
+ 
+ Windows desktop app for aerial construction-machinery detection: dataset preparation,
+ bounding-box annotation, YOLO training with a model registry, and inference with local
+ models or OpenAI / Anthropic vision models.
+ 
+-Design: `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md`.
+-Progress and resume instructions: `docs/progress.md`.
++- Design and PRD: `docs/superpowers/specs/2026-09-17-machinery-detection-app-design.md`
++- Progress, decisions and resume instructions: `docs/progress.md`
++- API contract (source of truth): `contract/openapi.yaml`
+ 
+-Sections "Build", "Run in development" and "Run the tests" are filled in by S0 Task 12.
++## Layout
++
++| Part | What | Tooling |
++|---|---|---|
++| `backend/` | FastAPI sidecar: projects, datasets, annotation storage, jobs, training, inference | Python 3.11.15 in `backend/.venv` (uv), pytest, ruff, PyInstaller |
++| `frontend/` | Tauri 2 shell with the React/TypeScript/Vite UI | pnpm, Vitest, Playwright, Rust stable MSVC |
++| `contract/` | `openapi.yaml`, generated TypeScript client, Prism mock server, Spectral lint | pnpm |
++
++## Prerequisites (reference machine)
++
++- Windows 11, NVIDIA GPU with driver 591.86 or newer (CUDA 13 runtime is bundled by the torch wheels).
++- Node 24 and pnpm 10.
++- uv 0.11 or newer (it fetches CPython 3.11.15 on demand).
++- Rust stable for `x86_64-pc-windows-msvc` (`winget install Rustlang.Rustup`) and the MSVC C++
++  build tools with a Windows 10 SDK. WebView2 runtime (present on Windows 11).
++
++Nothing is installed system-wide except Rust. Ports 8080 and 9090 are left alone; the app uses
++8765 (dev backend), 4010 (mock), 1420 (Vite) and a random free port when packaged.
++
++## Set up once
++
++```powershell
++cd backend
++uv venv --python 3.11.15 .venv
++uv pip install --python .venv\Scripts\python.exe -r requirements-dev.txt   # ~4 GB with CUDA torch
++
++cd ..\contract
++pnpm install
++
++cd ..\frontend
++pnpm install
++pnpm exec playwright install chromium
++```
++
++`backend/requirements.txt` pins the ML stack to the reference machine (torch 2.14.0+cu130,
++ultralytics 8.4.154, ...); `requirements-lock.txt` freezes everything else.
++
++## Run in development
++
++Against the mock server (UI work, no Python needed):
++
++```powershell
++.\scripts\dev.ps1 -Mode mock      # Prism on 127.0.0.1:4010 + Vite on 127.0.0.1:1420
++```
++
++Against the real backend:
++
++```powershell
++.\scripts\dev.ps1 -Mode backend   # backend on 127.0.0.1:8765 with a generated token + Vite
++```
++
++The script exports `APP_BACKEND_URL` and `APP_BACKEND_TOKEN` for Vite; without them the UI falls
++back to the mock server. To run the backend by hand:
++
++```powershell
++cd backend
++$env:APP_TOKEN = "dev"; $env:APP_PORT = "8765"; .\.venv\Scripts\python -m app
++```
++
++`APP_PORT=0` picks a free port and prints `{"event": "starting", "port": ..., "pid": ...}` on
++stdout, which is how the Tauri launcher learns the port. Every request needs
++`Authorization: Bearer <token>` or `?token=<token>`.
++
++The desktop shell in development (spawns the sidecar built below, or targets `APP_BACKEND_URL`
++when that variable is set in the environment):
++
++```powershell
++cd frontend
++pnpm tauri dev
++```
++
++## Build
++
++1. Freeze the backend and copy it into the Tauri sidecar slot:
++
++   ```powershell
++   cd backend
++   .\scripts\build.ps1     # PyInstaller one-folder -> frontend/src-tauri/binaries/
++   ```
++
++2. Build the installer:
++
++   ```powershell
++   cd frontend
++   pnpm tauri build        # NSIS installer under frontend/src-tauri/target/release/bundle/nsis/
++   ```
++
++## Run the tests
++
++```powershell
++cd backend;  .\.venv\Scripts\python -m pytest -q; .\.venv\Scripts\ruff check .
++cd contract; pnpm check                    # lint + regenerate client, fails on a stale client
++cd frontend; pnpm lint; pnpm test; pnpm build; pnpm e2e   # e2e starts the mock server itself
++```
++
++Backend markers: `-m gpu` runs the GPU training test, `-m live` runs cloud-provider tests
++(they read API keys from environment variables and skip when absent). Both are excluded by default.
++`tests/test_contract.py` validates every response against `contract/openapi.yaml` with
++schemathesis.
++
++## Changing the API
++
++Only the goal owner edits `contract/openapi.yaml`. After a change: `cd contract; pnpm check`
++(regenerates `client/schema.d.ts`), then run the backend contract tests.
+diff --git a/backend/app/appdata.py b/backend/app/appdata.py
+index dd379d1..691a11a 100644
+--- a/backend/app/appdata.py
++++ b/backend/app/appdata.py
+@@ -1,48 +1,58 @@
+ """Per-user app data under %APPDATA%/machinery-app: recent projects and settings. Never keys."""
+ 
+ import json
++import os
+ from datetime import UTC, datetime
+ from pathlib import Path
+ 
+ MAX_RECENT = 20
+ 
+ 
+ class AppData:
+     def __init__(self, data_dir: Path):
+         self.data_dir = data_dir
+         self.data_dir.mkdir(parents=True, exist_ok=True)
+         self._recent = self.data_dir / "recent_projects.json"
+         self._settings = self.data_dir / "settings.json"
+ 
+     def recent(self) -> list[dict]:
+         if not self._recent.exists():
+             return []
+         try:
+-            return json.loads(self._recent.read_text("utf-8"))
++            items = json.loads(self._recent.read_text("utf-8"))
+         except json.JSONDecodeError:
+             return []
++        if not isinstance(items, list):
++            return []
++        return [r for r in items if isinstance(r, dict) and {"id", "name", "folder"} <= set(r)]
+ 
+     def remember(self, project_id: str, name: str, folder: str) -> None:
+         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
+         items.insert(
+             0,
+             {
+                 "id": project_id,
+                 "name": name,
+                 "folder": folder,
+                 "last_opened_at": datetime.now(UTC).isoformat(),
+             },
+         )
+-        self._recent.write_text(json.dumps(items[:MAX_RECENT], indent=2), "utf-8")
++        self._write(self._recent, items[:MAX_RECENT])
+ 
+     def forget(self, folder: str) -> None:
+         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
+-        self._recent.write_text(json.dumps(items, indent=2), "utf-8")
++        self._write(self._recent, items)
+ 
+     def read_settings(self) -> dict:
+         if not self._settings.exists():
+             return {}
+         return json.loads(self._settings.read_text("utf-8"))
+ 
+     def write_settings(self, values: dict) -> None:
+-        self._settings.write_text(json.dumps(values, indent=2), "utf-8")
++        self._write(self._settings, values)
++
++    @staticmethod
++    def _write(path: Path, value) -> None:
++        tmp = path.with_suffix(".tmp")
++        tmp.write_text(json.dumps(value, indent=2), "utf-8")
++        os.replace(tmp, path)
+diff --git a/backend/app/auth.py b/backend/app/auth.py
+index 3a85e3d..c0fa208 100644
+--- a/backend/app/auth.py
++++ b/backend/app/auth.py
+@@ -5,19 +5,23 @@ from fastapi import Request, WebSocket
+ from app.errors import AppError
+ 
+ 
+ def _presented(headers, query_params) -> str:
+     header = headers.get("authorization", "")
+     if header.startswith("Bearer "):
+         return header[7:]
+     return query_params.get("token", "")
+ 
+ 
++def _matches(presented: str, expected: str) -> bool:
++    return secrets.compare_digest(presented.encode("utf-8"), expected.encode("utf-8"))
++
++
+ def require_token(request: Request) -> None:
+     """Accept the per-launch token as a bearer header or as a token query parameter."""
+     expected = request.app.state.settings.token
+-    if not secrets.compare_digest(_presented(request.headers, request.query_params), expected):
++    if not _matches(_presented(request.headers, request.query_params), expected):
+         raise AppError("unauthorized", "missing or invalid bearer token", 401)
+ 
+ 
+ def ws_token_ok(ws: WebSocket) -> bool:
+-    return secrets.compare_digest(_presented(ws.headers, ws.query_params), ws.app.state.settings.token)
++    return _matches(_presented(ws.headers, ws.query_params), ws.app.state.settings.token)
+diff --git a/backend/app/db/migrations/env.py b/backend/app/db/migrations/env.py
+index 3a3e1fd..4393b9d 100644
+--- a/backend/app/db/migrations/env.py
++++ b/backend/app/db/migrations/env.py
+@@ -1,17 +1,19 @@
+ import sys
+ from pathlib import Path
+ 
+ from alembic import context
+ from sqlalchemy import engine_from_config, pool
+ 
+-sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
++_ROOT = str(Path(__file__).resolve().parents[3])
++if _ROOT not in sys.path:
++    sys.path.insert(0, _ROOT)
+ 
+ from app.db import models  # noqa: E402, F401
+ from app.db.base import Base  # noqa: E402
+ 
+ config = context.config
+ target_metadata = Base.metadata
+ 
+ 
+ def run_migrations_offline() -> None:
+     context.configure(
+diff --git a/backend/app/errors.py b/backend/app/errors.py
+index 87c9104..b537f3c 100644
+--- a/backend/app/errors.py
++++ b/backend/app/errors.py
+@@ -1,10 +1,12 @@
++import logging
++
+ from fastapi import FastAPI, Request
+ from fastapi.encoders import jsonable_encoder
+ from fastapi.exceptions import RequestValidationError
+ from fastapi.responses import JSONResponse
+ from starlette.exceptions import HTTPException as StarletteHTTPException
+ 
+ 
+ class AppError(Exception):
+     def __init__(self, code: str, message: str, status: int = 400, details: dict | None = None):
+         super().__init__(message)
+@@ -16,31 +18,34 @@ def not_found(what: str, id_: str) -> AppError:
+ 
+ 
+ def not_implemented(what: str) -> AppError:
+     return AppError("not_implemented", f"{what} is not implemented yet", 501)
+ 
+ 
+ def envelope(code: str, message: str, details: dict | None = None) -> dict:
+     return {"error": {"code": code, "message": message, "details": details or {}}}
+ 
+ 
++log = logging.getLogger(__name__)
++
+ _HTTP_CODES = {401: "unauthorized", 404: "not_found", 405: "method_not_allowed"}
+ 
+ 
+ def install_error_handlers(app: FastAPI) -> None:
+     @app.exception_handler(AppError)
+     async def _app_error(_: Request, exc: AppError):
+         return JSONResponse(envelope(exc.code, exc.message, exc.details), status_code=exc.status)
+ 
+     @app.exception_handler(RequestValidationError)
+     async def _validation(_: Request, exc: RequestValidationError):
+         details = {"errors": jsonable_encoder(exc.errors())}
+         return JSONResponse(envelope("validation_error", "request validation failed", details), 422)
+ 
+     @app.exception_handler(StarletteHTTPException)
+     async def _http(_: Request, exc: StarletteHTTPException):
+         code = _HTTP_CODES.get(exc.status_code, "http_error")
+         return JSONResponse(envelope(code, str(exc.detail)), exc.status_code, headers=exc.headers)
+ 
+     @app.exception_handler(Exception)
+-    async def _unhandled(_: Request, exc: Exception):
++    async def _unhandled(request: Request, exc: Exception):
++        log.exception("unhandled error on %s %s", request.method, request.url.path)
+         return JSONResponse(envelope("internal_error", f"{type(exc).__name__}: {exc}"), 500)
+diff --git a/backend/app/jobs/router.py b/backend/app/jobs/router.py
+index 6c20f39..594bb3f 100644
+--- a/backend/app/jobs/router.py
++++ b/backend/app/jobs/router.py
+@@ -1,17 +1,18 @@
+ from collections import deque
+ from datetime import datetime
+ 
+ from fastapi import APIRouter, Depends, Query, Request
+ from sqlalchemy import select, tuple_
+ 
+ from app.db.models import Job
++from app.errors import AppError
+ from app.jobs.schemas import JobLog, JobOut, JobPage
+ from app.pagination import clamp_limit, decode_cursor, encode_cursor
+ from app.projects.service import ProjectHandle, get_project
+ 
+ router = APIRouter(prefix="/projects/{projectId}/jobs", tags=["jobs"])
+ 
+ 
+ def _runner(request: Request):
+     return request.app.state.jobs
+ 
+@@ -24,23 +25,27 @@ def list_jobs(
+     type: str | None = None,
+     limit: int | None = Query(None, ge=1, le=1000),
+     cursor: str | None = None,
+ ) -> JobPage:
+     n = clamp_limit(limit)
+     q = select(Job).order_by(Job.created_at.desc(), Job.id.desc())
+     if state:
+         q = q.where(Job.state == state)
+     if type:
+         q = q.where(Job.type == type)
+-    c = decode_cursor(cursor)
++    c = decode_cursor(cursor, "created_at", "id")
+     if c:
+-        q = q.where(tuple_(Job.created_at, Job.id) < (datetime.fromisoformat(c["created_at"]), c["id"]))
++        try:
++            after = datetime.fromisoformat(str(c["created_at"]))
++        except ValueError:
++            raise AppError("validation_error", "invalid cursor", 422) from None
++        q = q.where(tuple_(Job.created_at, Job.id) < (after, str(c["id"])))
+     with handle.session() as s:
+         rows = list(s.execute(q.limit(n + 1)).scalars())
+         for r in rows:
+             s.expunge(r)
+     next_cursor = None
+     if len(rows) > n:
+         rows = rows[:n]
+         last = rows[-1]
+         next_cursor = encode_cursor(created_at=last.created_at.isoformat(), id=last.id)
+     return JobPage(items=[JobOut.from_row(r, handle.id) for r in rows], next_cursor=next_cursor)
+diff --git a/backend/app/jobs/runner.py b/backend/app/jobs/runner.py
+index ea99935..9246e80 100644
+--- a/backend/app/jobs/runner.py
++++ b/backend/app/jobs/runner.py
+@@ -7,20 +7,21 @@ import traceback
+ from concurrent.futures import ThreadPoolExecutor
+ from datetime import UTC, datetime
+ 
+ from app.db.models import Job
+ from app.errors import not_found
+ from app.jobs.events import EventBus
+ from app.jobs.registry import get_job_type
+ from app.projects.service import ProjectHandle
+ 
+ PROGRESS_DB_INTERVAL_S = 0.25
++log = logging.getLogger(__name__)
+ 
+ 
+ class JobCancelled(Exception):
+     pass
+ 
+ 
+ class JobContext:
+     """What a job function receives: project handle, params, a logger, progress and cancellation."""
+ 
+     def __init__(
+@@ -81,20 +82,30 @@ class JobRunner:
+             contexts = list(self._contexts.values())
+         for ctx in contexts:
+             ctx.cancelled.set()
+         if self._pool:
+             self._pool.shutdown(wait=True, cancel_futures=True)
+             self._pool = None
+         for ctx in contexts:  # jobs that were still queued never ran; mark them cancelled
+             job = self.get(ctx.project, ctx.job_id)
+             if job.state == "queued":
+                 self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
++                ctx.log.info("job cancelled before it started")
++            self._close_log(ctx)
++        with self._lock:
++            self._contexts.clear()
++
++    @staticmethod
++    def _close_log(ctx: "JobContext") -> None:
++        for h in list(ctx.log.handlers):
++            ctx.log.removeHandler(h)
++            h.close()
+ 
+     def submit(self, project: ProjectHandle, type: str, params: dict) -> Job:
+         fn = get_job_type(type)
+         with project.session() as s:
+             job = Job(type=type, params=params)
+             s.add(job)
+             s.flush()
+             job.log_path = f"runs/{job.id}/job.log"
+             s.flush()
+             s.expunge(job)
+@@ -102,21 +113,21 @@ class JobRunner:
+         log_dir.mkdir(parents=True, exist_ok=True)
+         logger = logging.getLogger(f"job.{job.id}")
+         logger.setLevel(logging.INFO)
+         logger.propagate = False
+         handler = logging.FileHandler(log_dir / "job.log", encoding="utf-8")
+         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+         logger.addHandler(handler)
+         ctx = JobContext(self, project, job.id, params, logger)
+         with self._lock:
+             self._contexts[job.id] = ctx
+-        self._pool.submit(self._run, ctx, fn, handler)
++        self._pool.submit(self._run, ctx, fn)
+         return job
+ 
+     def cancel(self, project: ProjectHandle, job_id: str) -> Job:
+         with self._lock:
+             ctx = self._contexts.get(job_id)
+         if ctx is not None:
+             ctx.cancelled.set()
+             return self.get(project, job_id)
+         job = self.get(project, job_id)
+         if job.state == "queued":  # left over from a previous process
+@@ -144,43 +155,37 @@ class JobRunner:
+                     "type": "job.state",
+                     "project_id": project.id,
+                     "job_id": job_id,
+                     "progress": job.progress,
+                     "message": job.message,
+                     "payload": {"state": job.state, "result": job.result, "error": job.error},
+                 }
+             )
+         return job
+ 
+-    def _run(self, ctx: JobContext, fn, handler: logging.Handler) -> None:
++    def _run(self, ctx: JobContext, fn) -> None:
+         try:
+             if ctx.cancelled.is_set():
+                 raise JobCancelled()
+             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
+             ctx.log.info("job %s started with %s", ctx.job_id, ctx.params)
+             result = fn(ctx)
+-            self.update(
+-                ctx.project,
+-                ctx.job_id,
+-                state="succeeded",
+-                progress=1.0,
+-                result=result,
+-                finished_at=datetime.now(UTC),
+-            )
++            self._finish(ctx, state="succeeded", progress=1.0, result=result)
+             ctx.log.info("job succeeded")
+         except JobCancelled:
+-            self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
++            self._finish(ctx, state="cancelled")
+             ctx.log.info("job cancelled")
+         except Exception as e:
+             ctx.log.error("job failed\n%s", traceback.format_exc())
+-            self.update(
+-                ctx.project,
+-                ctx.job_id,
+-                state="failed",
+-                error=f"{type(e).__name__}: {e}",
+-                finished_at=datetime.now(UTC),
+-            )
++            log.warning("job %s (%s) failed: %s: %s", ctx.job_id, ctx.params, type(e).__name__, e)
++            self._finish(ctx, state="failed", error=f"{type(e).__name__}: {e}")
+         finally:
+-            ctx.log.removeHandler(handler)
+-            handler.close()
++            self._close_log(ctx)
+             with self._lock:
+                 self._contexts.pop(ctx.job_id, None)
++
++    def _finish(self, ctx: JobContext, **fields) -> None:
++        """Terminal state write; a DB failure here is logged and never escapes into the executor future."""
++        try:
++            self.update(ctx.project, ctx.job_id, finished_at=datetime.now(UTC), **fields)
++        except Exception:
++            log.exception("could not record terminal state %s for job %s", fields.get("state"), ctx.job_id)
+diff --git a/backend/app/logging_setup.py b/backend/app/logging_setup.py
+index f620ecf..77e626a 100644
+--- a/backend/app/logging_setup.py
++++ b/backend/app/logging_setup.py
+@@ -8,22 +8,27 @@ FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
+ 
+ def configure_logging(data_dir: Path, level: str) -> Path:
+     """Rotating app log under data_dir/logs plus stderr. Idempotent per log file."""
+     log_dir = data_dir / "logs"
+     log_dir.mkdir(parents=True, exist_ok=True)
+     log_file = log_dir / "backend.log"
+     root = logging.getLogger()
+     root.setLevel(level.upper())
+     logging.getLogger("alembic").setLevel(logging.WARNING)
+     logging.getLogger("httpx").setLevel(logging.WARNING)
+-    already = any(
+-        isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == log_file for h in root.handlers
+-    )
++    already = False
++    for h in list(root.handlers):
++        if isinstance(h, RotatingFileHandler):
++            if Path(h.baseFilename) == log_file:
++                already = True
++            else:  # a previous create_app pointed at another data dir (tests); do not keep both
++                root.removeHandler(h)
++                h.close()
+     if not already:
+         fh = RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
+         fh.setFormatter(logging.Formatter(FORMAT))
+         root.addHandler(fh)
+         if not any(isinstance(h, logging.StreamHandler) and h.stream is sys.stderr for h in root.handlers):
+             sh = logging.StreamHandler(sys.stderr)
+             sh.setFormatter(logging.Formatter(FORMAT))
+             root.addHandler(sh)
+     return log_file
+diff --git a/backend/app/pagination.py b/backend/app/pagination.py
+index 1cf7fc1..1a1cd26 100644
+--- a/backend/app/pagination.py
++++ b/backend/app/pagination.py
+@@ -4,23 +4,27 @@ import base64
+ import json
+ 
+ DEFAULT_LIMIT = 100
+ MAX_LIMIT = 1000
+ 
+ 
+ def encode_cursor(**kv) -> str:
+     return base64.urlsafe_b64encode(json.dumps(kv, default=str).encode()).decode()
+ 
+ 
+-def decode_cursor(s: str | None) -> dict:
++def decode_cursor(s: str | None, *required: str) -> dict:
++    """Decode an opaque cursor; `required` names the keys it must carry (422 otherwise)."""
+     if not s:
+         return {}
+     try:
+-        return json.loads(base64.urlsafe_b64decode(s.encode()).decode())
++        value = json.loads(base64.urlsafe_b64decode(s.encode()).decode())
++        if not isinstance(value, dict) or any(k not in value for k in required):
++            raise ValueError("missing cursor keys")
++        return value
+     except Exception:
+         from app.errors import AppError
+ 
+         raise AppError("validation_error", "invalid cursor", 422) from None
+ 
+ 
+ def clamp_limit(limit: int | None) -> int:
+     return max(1, min(MAX_LIMIT, limit or DEFAULT_LIMIT))
+diff --git a/backend/app/projects/router.py b/backend/app/projects/router.py
+index 35de1aa..e88a010 100644
+--- a/backend/app/projects/router.py
++++ b/backend/app/projects/router.py
+@@ -32,21 +32,21 @@ def _out(handle: ProjectHandle) -> ProjectOut:
+ 
+ 
+ @router.get("", response_model=ProjectPage)
+ def list_projects(request: Request) -> ProjectPage:
+     reg = _registry(request)
+     items: list[ProjectOut] = []
+     for r in reg.recent():
+         folder = Path(r["folder"])
+         if not (folder / "project.db").exists():
+             continue
+-        items.append(_out(reg.open(folder)))
++        items.append(_out(reg.open(folder, remember=False)))
+     return ProjectPage(items=items, next_cursor=None)
+ 
+ 
+ @router.post("", response_model=ProjectOut, status_code=201)
+ def create_project(body: ProjectCreate, request: Request) -> ProjectOut:
+     handle = _registry(request).create(body.name, Path(body.folder), [c.model_dump() for c in body.classes])
+     return _out(handle)
+ 
+ 
+ @router.post("/open", response_model=ProjectOut)
+diff --git a/backend/app/projects/schemas.py b/backend/app/projects/schemas.py
+index 0365050..c70272e 100644
+--- a/backend/app/projects/schemas.py
++++ b/backend/app/projects/schemas.py
+@@ -1,16 +1,16 @@
+ """Pydantic models for the projects resource, matching contract/openapi.yaml exactly."""
+ 
+ from datetime import datetime
+ from pathlib import Path
+ 
+-from pydantic import BaseModel, Field
++from pydantic import BaseModel, Field, field_validator
+ 
+ from app.db.models import Project
+ 
+ 
+ class ImportSettings(BaseModel):
+     max_side: int = Field(4000, ge=512, le=12000)
+     quality: int = Field(95, ge=50, le=100)
+     dedupe_threshold: int = Field(4, ge=0, le=32)
+     group_regex: str = r"^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)"
+ 
+@@ -30,29 +30,39 @@ class ClassDefInput(BaseModel):
+ 
+ 
+ class ClassDef(BaseModel):
+     id: str
+     name: str
+     colour: str
+     hotkey: str | None
+     order: int
+ 
+ 
++def _absolute(v: str) -> str:
++    if not Path(v).is_absolute():
++        raise ValueError("folder must be an absolute path")
++    return v
++
++
+ class ProjectCreate(BaseModel):
+     name: str = Field(min_length=1)
+     folder: str
+     classes: list[ClassDefInput]
+ 
++    _folder_abs = field_validator("folder")(_absolute)
++
+ 
+ class ProjectOpen(BaseModel):
+     folder: str
+ 
++    _folder_abs = field_validator("folder")(_absolute)
++
+ 
+ class ProjectUpdate(BaseModel):
+     name: str | None = Field(None, min_length=1)
+     preannotation_model_id: str | None = None
+     import_defaults: ImportSettingsPatch | None = None
+ 
+ 
+ class ProjectOut(BaseModel):
+     id: str
+     name: str
+diff --git a/backend/app/projects/service.py b/backend/app/projects/service.py
+index fcc366e..22e3ba1 100644
+--- a/backend/app/projects/service.py
++++ b/backend/app/projects/service.py
+@@ -1,12 +1,13 @@
+ """Project registry: opens project folders, owns their engines, tracks recent projects."""
+ 
++import threading
+ from collections.abc import Iterator
+ from contextlib import contextmanager
+ from pathlib import Path
+ 
+ from fastapi import Request
+ from sqlalchemy import func, select
+ from sqlalchemy.orm import Session
+ 
+ from app.appdata import AppData
+ from app.db.base import new_id
+@@ -90,60 +91,74 @@ def check_removed_classes_unused(s: Session, before: list[dict], after: list[dic
+                 f"class {c['name']!r} still has {n} boxes; reassign or delete them first",
+                 409,
+                 {"class_id": c["id"], "box_count": n},
+             )
+ 
+ 
+ class ProjectRegistry:
+     def __init__(self, data_dir: Path):
+         self.appdata = AppData(data_dir)
+         self._handles: dict[str, ProjectHandle] = {}
++        self._lock = threading.Lock()
+ 
+     def create(self, name: str, folder: Path, classes: list[dict]) -> ProjectHandle:
+-        if (folder / "project.db").exists():
+-            raise AppError("already_exists", f"{folder} already contains a project", 409)
+-        for sub in SUBDIRS:
+-            (folder / sub).mkdir(parents=True, exist_ok=True)
+-        engine = open_project_db(folder)
+-        row = Project(
+-            name=name, classes=normalise_classes(classes), import_defaults=dict(DEFAULT_IMPORT_SETTINGS)
+-        )
+-        with make_session_factory(engine)() as s:
+-            s.add(row)
+-            s.commit()
+-            pid = row.id
+-        return self._cache(pid, folder, engine, name)
+-
+-    def open(self, folder: Path) -> ProjectHandle:
++        folder = folder.resolve()
++        with self._lock:
++            if (folder / "project.db").exists():
++                raise AppError("already_exists", f"{folder} already contains a project", 409)
++            for sub in SUBDIRS:
++                (folder / sub).mkdir(parents=True, exist_ok=True)
++            engine = open_project_db(folder)
++            row = Project(
++                name=name, classes=normalise_classes(classes), import_defaults=dict(DEFAULT_IMPORT_SETTINGS)
++            )
++            with make_session_factory(engine)() as s:
++                s.add(row)
++                s.commit()
++                pid = row.id
++            return self._cache(pid, folder, engine, name, remember=True)
++
++    def open(self, folder: Path, remember: bool = True) -> ProjectHandle:
++        """Open a project folder. `remember` moves it to the top of the recent list (a user action)."""
++        folder = folder.resolve()
+         if not (folder / "project.db").exists():
+             raise not_found("project folder", str(folder))
+-        for h in self._handles.values():
+-            if h.folder == folder:
+-                return h
+-        engine = open_project_db(folder)
+-        with make_session_factory(engine)() as s:
+-            row = s.execute(select(Project)).scalar_one()
+-            pid, name = row.id, row.name
+-        return self._cache(pid, folder, engine, name)
+-
+-    def _cache(self, pid: str, folder: Path, engine, name: str) -> ProjectHandle:
++        with self._lock:
++            for h in self._handles.values():
++                if h.folder == folder:
++                    if remember:
++                        self.appdata.remember(h.id, self._name(h), str(folder))
++                    return h
++            engine = open_project_db(folder)
++            with make_session_factory(engine)() as s:
++                row = s.execute(select(Project)).scalar_one()
++                pid, name = row.id, row.name
++            return self._cache(pid, folder, engine, name, remember)
++
++    @staticmethod
++    def _name(h: ProjectHandle) -> str:
++        with h.session() as s:
++            return h.row(s).name
++
++    def _cache(self, pid: str, folder: Path, engine, name: str, remember: bool) -> ProjectHandle:
+         h = ProjectHandle(pid, folder, engine)
+         self._handles[pid] = h
+-        self.appdata.remember(pid, name, str(folder))
++        if remember:
++            self.appdata.remember(pid, name, str(folder))
+         return h
+ 
+     def get(self, project_id: str) -> ProjectHandle:
+         if project_id in self._handles:
+             return self._handles[project_id]
+         for r in self.appdata.recent():
+             if r["id"] == project_id and (Path(r["folder"]) / "project.db").exists():
+-                return self.open(Path(r["folder"]))
++                return self.open(Path(r["folder"]), remember=False)
+         raise not_found("project", project_id)
+ 
+     def recent(self) -> list[dict]:
+         return self.appdata.recent()
+ 
+     def close_all(self) -> None:
+         for h in self._handles.values():
+             h.engine.dispose()
+         self._handles.clear()
+ 
+diff --git a/backend/ci-overrides-cpu.txt b/backend/ci-overrides-cpu.txt
+new file mode 100644
+index 0000000..19120ec
+--- /dev/null
++++ b/backend/ci-overrides-cpu.txt
+@@ -0,0 +1,3 @@
++# CI runners have no GPU: override the cu130 pins with the CPU wheels from PyPI.
++torch==2.14.0
++torchvision==0.29.0
+diff --git a/backend/machinery_backend.spec b/backend/machinery_backend.spec
+new file mode 100644
+index 0000000..4921228
+--- /dev/null
++++ b/backend/machinery_backend.spec
+@@ -0,0 +1,16 @@
++# -*- mode: python -*-
++from PyInstaller.utils.hooks import collect_submodules
++
++a = Analysis(
++    ["app/__main__.py"],
++    pathex=["."],
++    hiddenimports=collect_submodules("app") + [
++        "uvicorn.logging", "uvicorn.loops.auto", "uvicorn.protocols.http.auto",
++        "uvicorn.protocols.websockets.auto", "uvicorn.lifespan.on", "websockets.legacy",
++    ],
++    datas=[("app/db/migrations", "app/db/migrations")],
++    excludes=["torch", "torchvision", "ultralytics", "cv2", "sahi"],  # S0 only; S6 removes this line
++)
++pyz = PYZ(a.pure)
++exe = EXE(pyz, a.scripts, exclude_binaries=True, name="machinery-backend", console=True)
++coll = COLLECT(exe, a.binaries, a.datas, name="machinery-backend")
+diff --git a/backend/scripts/build.ps1 b/backend/scripts/build.ps1
+new file mode 100644
+index 0000000..3dd1e51
+--- /dev/null
++++ b/backend/scripts/build.ps1
+@@ -0,0 +1,10 @@
++$ErrorActionPreference = "Stop"
++$backend = Split-Path $PSScriptRoot -Parent
++Set-Location $backend
++& .\.venv\Scripts\pyinstaller.exe machinery_backend.spec --noconfirm
++$bin = Join-Path $backend "..\frontend\src-tauri\binaries"
++New-Item -ItemType Directory -Force $bin | Out-Null
++Copy-Item "dist\machinery-backend\machinery-backend.exe" (Join-Path $bin "machinery-backend-x86_64-pc-windows-msvc.exe") -Force
++if (Test-Path (Join-Path $bin "_internal")) { Remove-Item (Join-Path $bin "_internal") -Recurse -Force }
++Copy-Item "dist\machinery-backend\_internal" (Join-Path $bin "_internal") -Recurse
++Write-Host "sidecar copied to $bin"
+diff --git a/backend/tests/test_auth.py b/backend/tests/test_auth.py
+index da0ac98..77f5579 100644
+--- a/backend/tests/test_auth.py
++++ b/backend/tests/test_auth.py
+@@ -5,10 +5,15 @@ def test_missing_token_is_401(anon):
+ 
+ 
+ def test_wrong_token_is_401(anon):
+     r = anon.get("/api/v1/health", headers={"Authorization": "Bearer nope"})
+     assert r.status_code == 401
+ 
+ 
+ def test_token_as_query_parameter_is_accepted(anon):
+     r = anon.get("/api/v1/health", params={"token": "test-token"})
+     assert r.status_code == 200
++
++
++def test_non_ascii_token_is_401_not_500(anon):
++    r = anon.get("/api/v1/health", params={"token": "café"})
++    assert r.status_code == 401
+diff --git a/backend/tests/test_contract.py b/backend/tests/test_contract.py
+index a9eaaad..12698ce 100644
+--- a/backend/tests/test_contract.py
++++ b/backend/tests/test_contract.py
+@@ -17,49 +17,109 @@ from schemathesis.specs.openapi.checks import (
+ 
+ SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
+ METHODS = ("get", "post", "put", "patch", "delete")
+ AUTH = {"Authorization": "Bearer test-token"}
+ 
+ 
+ def _operations(paths: dict) -> set[tuple[str, str]]:
+     return {(m.upper(), p) for p, ops in paths.items() for m in ops if m in METHODS}
+ 
+ 
++def test_stub_list_matches_routers(app):
++    """Every EXPECTED_STUBS entry is a real operationId, so the set cannot drift from the contract."""
++    ids = {
++        op["operationId"]
++        for ops in yaml.safe_load(SPEC.read_text("utf-8"))["paths"].values()
++        for m, op in ops.items()
++        if m in METHODS
++    }
++    assert EXPECTED_STUBS <= ids, sorted(EXPECTED_STUBS - ids)
++
++
+ def test_every_spec_path_is_routed(app):
+     wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
+     have = _operations(app.openapi()["paths"])
+     assert wanted <= have, sorted(wanted - have)
+ 
+ 
+ def test_no_extra_api_routes(app):
+     wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
+     have = _operations(app.openapi()["paths"])
+     assert have <= wanted, sorted(have - wanted)
+ 
+ 
+ schema = schemathesis.openapi.from_path(str(SPEC))
+ 
++# Operations still served by S0 stubs (501). Shrinks as S1, S3 and S4 land; a stale entry here
++# or a stub left behind by a sub-project both fail this test.
++EXPECTED_STUBS = {
++    "listSources",
++    "createSource",
++    "getSource",
++    "getSourceStats",
++    "listImages",
++    "bulkDeleteImages",
++    "getImage",
++    "getImageFile",
++    "getImageThumbnail",
++    "preannotateImage",
++    "listBoxes",
++    "createBox",
++    "updateBox",
++    "deleteBox",
++    "reviewBoxes",
++    "listDatasets",
++    "createDataset",
++    "getDataset",
++    "getDatasetStats",
++    "listModels",
++    "importModel",
++    "trainModel",
++    "getModel",
++    "deleteModel",
++    "exportModel",
++    "listProviders",
++    "updateProvider",
++    "setProviderKey",
++    "deleteProviderKey",
++    "testProvider",
++    "estimateQueryRun",
++    "listQueryRuns",
++    "createQueryRun",
++    "getQueryRun",
++    "promoteQueryRun",
++}
++
+ 
+ @pytest.fixture
+ def project_id(client, project_dir) -> str:
+     body = {"name": "A", "folder": str(project_dir), "classes": [{"name": "excavator", "colour": "#ff0000"}]}
+     return client.post("/api/v1/projects", json=body).json()["id"]
+ 
+ 
+ @schema.parametrize()
+ @settings(max_examples=3, deadline=None, suppress_health_check=list(HealthCheck))
+-def test_responses_conform(case, app, project_id):
++def test_responses_conform(case, app, project_id, tmp_path):
+     if "projectId" in (case.path_parameters or {}):
+         case.path_parameters["projectId"] = project_id
++    if isinstance(case.body, dict) and "folder" in case.body:
++        # Never let generated data create folders outside the test's temp dir.
++        case.body["folder"] = str(tmp_path / "generated")
++    if isinstance(case.query, dict) and "cursor" in case.query:
++        # Cursors are opaque; a generated string is a malformed cursor (422 by design, tested in test_jobs).
++        del case.query["cursor"]
+     case.operation.schema.app = app  # in-process ASGI transport, no sockets
+     case.operation.app = app
+     response = case.call(headers=AUTH)
+     if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
+         # S0 stub: the operation is routed but not built yet; it must still answer in the error envelope.
++        op_id = case.operation.definition.raw.get("operationId")
++        assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"
+         checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
+         case.validate_response(response, checks=checks)
+         return
++    assert response.status_code < 500, response.text
+     # negative_data_rejection: FastAPI ignores unknown query parameters by design.
+     # unsupported_method / allow_header_conformance: literal segments such as /projects/open share
+     # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.
+     excluded = [negative_data_rejection, unsupported_method, allow_header_conformance]
+     case.validate_response(response, excluded_checks=excluded)
+diff --git a/backend/tests/test_jobs.py b/backend/tests/test_jobs.py
+index afd2e82..507ace3 100644
+--- a/backend/tests/test_jobs.py
++++ b/backend/tests/test_jobs.py
+@@ -158,23 +158,44 @@ def test_websocket_receives_domain_events(client, project_dir, app):
+         else:
+             raise AssertionError("images.changed not received")
+ 
+ 
+ def test_websocket_rejects_bad_token(anon):
+     with pytest.raises(WebSocketDisconnect):
+         with anon.websocket_connect("/api/v1/events?token=wrong"):
+             pass
+ 
+ 
+-def test_stop_cancels_running_jobs(settings, project_dir):
++@register_job_type("test_block")
++def _block_job(ctx):
++    ctx.cancelled.wait(10)
++    ctx.check_cancelled()
++    return {"unexpected": True}
++
++
++def test_stop_cancels_running_and_queued_jobs(settings, project_dir):
+     from fastapi.testclient import TestClient
+ 
+     from app.main import create_app
+ 
+     app = create_app(settings)
+     with TestClient(app, headers={"Authorization": "Bearer test-token"}) as c:
+         pid = _project(c, project_dir)
+-        job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
+-        time.sleep(0.1)
++        h = app.state.projects.get(pid)
++        running = [app.state.jobs.submit(h, "test_block", {}) for _ in range(2)]  # fills both workers
++        queued = app.state.jobs.submit(h, "test_block", {})
++        time.sleep(0.2)
+     with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
+-        j = c.get(f"/api/v1/projects/{pid}/jobs/{job.id}").json()
+-        assert j["state"] in ("cancelled", "succeeded")
++        for job in running + [queued]:
++            assert c.get(f"/api/v1/projects/{pid}/jobs/{job.id}").json()["state"] == "cancelled"
++    assert not app.state.jobs._contexts
++
++
++def test_malformed_cursor_is_422(client, project_dir):
++    pid = _project(client, project_dir)
++    import base64
++
++    bad = base64.urlsafe_b64encode(b'{"nope": 1}').decode()
++    r = client.get(f"/api/v1/projects/{pid}/jobs", params={"cursor": bad})
++    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
++    r = client.get(f"/api/v1/projects/{pid}/jobs", params={"cursor": "%%%"})
++    assert r.status_code == 422
+diff --git a/backend/tests/test_projects.py b/backend/tests/test_projects.py
+index 006b345..4aa4fbe 100644
+--- a/backend/tests/test_projects.py
++++ b/backend/tests/test_projects.py
+@@ -53,23 +53,21 @@ def test_recent_projects_listed(client, project_dir):
+     assert r.json()["next_cursor"] is None
+ 
+ 
+ def test_recent_skips_deleted_folders(client, project_dir, tmp_path):
+     import shutil
+ 
+     gone = tmp_path / "gone"
+     gone.mkdir()
+     _create(client, gone, "Gone")
+     _create(client, project_dir, "A")
+-    from app.projects.service import ProjectRegistry  # noqa: F401  (close handles before deleting)
+-
+-    client.app.state.projects.close_all()
++    client.app.state.projects.close_all()  # release the SQLite handles before deleting the folder
+     shutil.rmtree(gone)
+     r = client.get("/api/v1/projects")
+     assert [p["name"] for p in r.json()["items"]] == ["A"]
+ 
+ 
+ def test_get_project_survives_registry_restart(settings, project_dir):
+     from fastapi.testclient import TestClient
+ 
+     from app.main import create_app
+ 
+@@ -129,10 +127,44 @@ def test_patch_project_name_and_import_defaults(client, project_dir):
+     assert r.status_code == 200
+     assert r.json()["name"] == "B" and r.json()["import_defaults"]["max_side"] == 3000
+     assert r.json()["import_defaults"]["quality"] == 95
+ 
+ 
+ def test_project_stats_shape(client, project_dir):
+     p = _create(client, project_dir, "A")
+     r = client.get(f"/api/v1/projects/{p['id']}/stats")
+     assert r.status_code == 200
+     assert r.json()["image_count"] == 0 and r.json()["capture_time_range"] is None
++
++
++def test_relative_folder_is_422(client):
++    r = client.post("/api/v1/projects", json={"name": "A", "folder": "relative/dir", "classes": []})
++    assert r.status_code == 422
++    r = client.post("/api/v1/projects/open", json={"folder": "."})
++    assert r.status_code == 422
++
++
++def test_recent_order_is_stable_across_listings_and_restarts(settings, tmp_path):
++    from fastapi.testclient import TestClient
++
++    from app.main import create_app
++
++    folders = [tmp_path / n for n in ("a", "b", "c")]
++    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
++        for f in folders:
++            f.mkdir()
++            _create(c, f, f.name)
++    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
++        first = [p["name"] for p in c.get("/api/v1/projects").json()["items"]]
++        second = [p["name"] for p in c.get("/api/v1/projects").json()["items"]]
++    assert first == ["c", "b", "a"] and second == first
++
++
++def test_folder_spellings_resolve_to_one_project(client, project_dir):
++    p = _create(client, project_dir, "A")
++    variants = [str(project_dir) + "\.", str(project_dir).replace("\\", "/"), str(project_dir).upper()]
++    for v in variants:
++        r = client.post("/api/v1/projects/open", json={"folder": v})
++        assert r.status_code == 200 and r.json()["id"] == p["id"], v
++        assert r.json()["folder"] == str(project_dir)
++    assert len(client.get("/api/v1/projects").json()["items"]) == 1
++    assert len(client.app.state.projects._handles) == 1
+diff --git a/docs/progress.md b/docs/progress.md
+index 90b6ced..223a5cd 100644
+--- a/docs/progress.md
++++ b/docs/progress.md
+@@ -1,20 +1,20 @@
+ # Progress log
+ 
+ Resume instructions for a new session: read this file top to bottom, then the plan for the
+ sub-project whose state is not `merged`, then continue from its first unchecked task.
+ 
+ ## Current state
+ 
+ | Wave | Sub-project | Branch | Worktree | State | Blockers |
+ |---|---|---|---|---|---|
+-| 0 | S0 contract and scaffolding | main | (root) | in progress | none |
++| 0 | S0 contract and scaffolding | s0-backend (root checkout), s0-frontend (.worktrees/s0-frontend) | see branches | in review | none |
+ | 1 | S1 dataset backend | - | - | not started | S0 |
+ | 1 | S2 annotation UI | - | - | not started | S0 |
+ | 1 | S3 training backend and registry | - | - | not started | S0 |
+ | 2 | S4 inference and providers | - | - | not started | wave 1 checkpoint |
+ | 2 | S5 training and inference UI | - | - | not started | wave 1 checkpoint |
+ | 3 | S6 packaging and acceptance | - | - | not started | wave 2 checkpoint |
+ 
+ Last verified checkpoint: none.
+ 
+ ## Plans
+@@ -41,22 +41,45 @@ Last verified checkpoint: none.
+    `GET /projects/{p}/stats`. Recorded in the S0 plan.
+ 7. The S0 sidecar is a PyInstaller build that excludes torch so checkpoint 1 can prove the
+    boot mechanism quickly; S6 produces the full CUDA build.
+ 8. Python dependency management: `uv venv --python 3.11.15` under `backend/.venv` and
+    `uv pip install -r requirements-dev.txt`. The ML stack is pinned to the reference machine;
+    app libraries are pinned by `requirements-lock.txt` produced after the first install.
+ 9. Tauri identifier `ai.synapse-solutions.machinery-app`, product name "Machinery Detection".
+ 
+ ## System installs (the single allowed exception)
+ 
+-- (none yet)
++- 2026-09-17: rustup 1.29.1 via `winget install Rustlang.Rustup`; toolchain stable-x86_64-pc-windows-msvc (rustc 1.98.1, cargo 1.98.1). MSVC 14.29 and Windows SDK 10.0.19041 were already present. Playwright downloaded Chromium into the user profile (not a system install).
+ 
+ ## Checkpoints
+ 
+ ### Checkpoint 1 (after Wave 0)
+ Not run yet.
+ 
++## S0 status detail
++
++| Task | Owner | State | Commit |
++|---|---|---|---|
++| 1 skeleton | goal owner | done | c5b5722 |
++| 2 contract + mock | goal owner | done, mock verified | 4d71fcd |
++| 3 TS client | goal owner | done | 4d71fcd |
++| 4 backend shell | goal owner | done | 715e772 (s0-backend) |
++| 5 DB + projects | goal owner | done | f74ba9a |
++| 6 jobs + events | goal owner | done | ebe00de |
++| 7 stubs + conformance | goal owner | done, 85 backend tests | 88c7160 |
++| 8 frontend shell | sub-agent | done, fix round 1 in progress | be0b87c (s0-frontend) |
++| 9 tauri shell | sub-agent | done in env mode; real sidecar boot unverified | 845e149 |
++| 10 dev script + CI | goal owner | done | ba8728c |
++| 11 checkpoint 1 | goal owner | pending merge | |
++| 12 README | goal owner | pending | |
++
++Contract facts sub-projects must know: every path in `openapi.yaml` carries `/api/v1` (Prism 5 does not route by server base path); the token is accepted as a bearer header or a `token` query parameter; 501 `not_implemented` stubs mark the endpoints S1, S3 and S4 own.
++
++SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-and-scaffolding/progress.md` (git-ignored; if lost, the git log is the record).
++
+ ## Log
+ 
+ - 2026-09-17: session 1 started. Read spec, README, reuse files. Toolchain: node 24.11, pnpm 10.24,
+   uv 0.11.32 with CPython 3.11.15 available, MSVC 14.29 (VS 2019 Build Tools) and Windows SDK
+   10.0.19041 present, WebView2 153 present, Rust missing. Wrote the S0 plan.
++- 2026-09-17: contract written and mock verified; backend tasks 4-7 and 10 implemented test-first (85 tests); Rust installed;
++  frontend+tauri shell implemented by a sub-agent and reviewed (needs fixes, round 1 running); backend review running.
+diff --git a/scripts/dev.ps1 b/scripts/dev.ps1
+index 5f65b34..033a686 100644
+--- a/scripts/dev.ps1
++++ b/scripts/dev.ps1
+@@ -1,16 +1,19 @@
+ # Start the UI in development. -Mode mock: Prism mock server + Vite. -Mode backend: real backend + Vite.
+ param([ValidateSet("mock", "backend")] [string] $Mode = "mock")
+ $ErrorActionPreference = "Stop"
+ $root = Split-Path $PSScriptRoot -Parent
+ if ($Mode -eq "mock") {
+   Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\contract'; pnpm mock"
+   Set-Location "$root\frontend"
+   pnpm dev
+ } else {
+   $token = -join ((48..57 + 65..90 + 97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+-  Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\backend'; `$env:APP_TOKEN='$token'; `$env:APP_PORT='8765'; .\.venv\Scripts\python -m app"
++  # Children inherit the environment, so the token never appears on a command line.
++  $env:APP_TOKEN = $token
++  $env:APP_PORT = "8765"
++  Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\backend'; .\.venv\Scripts\python -m app"
+   $env:APP_BACKEND_URL = "http://127.0.0.1:8765"
+   $env:APP_BACKEND_TOKEN = $token
+   Set-Location "$root\frontend"
+   pnpm dev
+ }

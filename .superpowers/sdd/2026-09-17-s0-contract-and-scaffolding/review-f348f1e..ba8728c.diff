@@ -1,0 +1,2614 @@
+# Review package: f348f1e..ba8728c
+
+## Commits
+ba8728c chore: dev script, ci workflow, uvicorn ws auto
+88c7160 test(backend): contract conformance with schemathesis and 501 stub routers
+ebe00de feat(backend): job runner, jobs api and websocket events
+f74ba9a feat(backend): project store, sqlite models and alembic migration
+715e772 feat(backend): app shell with settings, auth and error envelope
+
+## Files changed
+ .github/workflows/ci.yml                           |  81 +++++++++
+ backend/app/__init__.py                            |   0
+ backend/app/__main__.py                            |   3 +
+ backend/app/api.py                                 |  22 +++
+ backend/app/appdata.py                             |  48 +++++
+ backend/app/auth.py                                |  23 +++
+ backend/app/config.py                              |  15 ++
+ backend/app/datasets/__init__.py                   |   0
+ backend/app/datasets/router.py                     |  31 ++++
+ backend/app/db/__init__.py                         |   0
+ backend/app/db/base.py                             |  36 ++++
+ backend/app/db/migrations/alembic.ini              |   2 +
+ backend/app/db/migrations/env.py                   |  48 +++++
+ backend/app/db/migrations/script.py.mako           |  22 +++
+ backend/app/db/migrations/versions/0001_initial.py | 202 +++++++++++++++++++++
+ backend/app/db/models.py                           | 151 +++++++++++++++
+ backend/app/db/session.py                          |  36 ++++
+ backend/app/errors.py                              |  46 +++++
+ backend/app/health.py                              |  16 ++
+ backend/app/inference/__init__.py                  |   0
+ backend/app/inference/router.py                    |  19 ++
+ backend/app/jobs/__init__.py                       |   0
+ backend/app/jobs/events.py                         |  60 ++++++
+ backend/app/jobs/registry.py                       |  24 +++
+ backend/app/jobs/router.py                         |  72 ++++++++
+ backend/app/jobs/runner.py                         | 186 +++++++++++++++++++
+ backend/app/jobs/schemas.py                        |  50 +++++
+ backend/app/logging_setup.py                       |  29 +++
+ backend/app/main.py                                |  76 ++++++++
+ backend/app/pagination.py                          |  26 +++
+ backend/app/projects/__init__.py                   |   0
+ backend/app/projects/router.py                     |  91 ++++++++++
+ backend/app/projects/schemas.py                    | 132 ++++++++++++++
+ backend/app/projects/service.py                    | 152 ++++++++++++++++
+ backend/app/providers/__init__.py                  |   0
+ backend/app/providers/router.py                    |  19 ++
+ backend/app/stubs.py                               |  27 +++
+ backend/app/training/__init__.py                   |   0
+ backend/app/training/router.py                     |  19 ++
+ backend/pyproject.toml                             |  24 +++
+ backend/tests/conftest.py                          |  38 ++++
+ backend/tests/test_auth.py                         |  14 ++
+ backend/tests/test_contract.py                     |  65 +++++++
+ backend/tests/test_db.py                           |  16 ++
+ backend/tests/test_errors.py                       |  19 ++
+ backend/tests/test_health.py                       |   8 +
+ backend/tests/test_jobs.py                         | 180 ++++++++++++++++++
+ backend/tests/test_projects.py                     | 138 ++++++++++++++
+ scripts/dev.ps1                                    |  16 ++
+ 49 files changed, 2282 insertions(+)
+
+## Diff
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+new file mode 100644
+index 0000000..29fbf78
+--- /dev/null
++++ b/.github/workflows/ci.yml
+@@ -0,0 +1,81 @@
++name: ci
++
++on:
++  push:
++    branches: [main]
++  pull_request:
++  workflow_dispatch:
++
++jobs:
++  contract:
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: pnpm/action-setup@v4
++        with: { version: 10 }
++      - uses: actions/setup-node@v4
++        with: { node-version: 24, cache: pnpm, cache-dependency-path: contract/pnpm-lock.yaml }
++      - run: pnpm install --frozen-lockfile
++        working-directory: contract
++      - run: pnpm check
++        working-directory: contract
++
++  backend:
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: astral-sh/setup-uv@v6
++      - run: uv venv --python 3.11.15 .venv
++        working-directory: backend
++      # CPU wheels on the runner; the reference machine uses the cu130 pins from requirements.txt.
++      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "torch==2.14.0" "torchvision==0.29.0" && uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
++        working-directory: backend
++        shell: bash
++      - run: .venv/Scripts/ruff check . && .venv/Scripts/ruff format --check .
++        working-directory: backend
++        shell: bash
++      - run: .venv/Scripts/python -m pytest -q
++        working-directory: backend
++        shell: bash
++
++  frontend:
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: pnpm/action-setup@v4
++        with: { version: 10 }
++      - uses: actions/setup-node@v4
++        with: { node-version: 24, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
++      - run: pnpm install --frozen-lockfile
++        working-directory: contract
++      - run: pnpm install --frozen-lockfile
++        working-directory: frontend
++      - run: pnpm lint && pnpm test && pnpm build
++        working-directory: frontend
++        shell: bash
++      - run: pnpm exec playwright install chromium
++        working-directory: frontend
++      - run: pnpm e2e
++        working-directory: frontend
++
++  sidecar-smoke:
++    if: github.event_name == 'workflow_dispatch'
++    runs-on: windows-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: astral-sh/setup-uv@v6
++      - run: uv venv --python 3.11.15 .venv
++        working-directory: backend
++      - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple "torch==2.14.0" "torchvision==0.29.0" && uv pip install --python .venv/Scripts/python.exe -r requirements-dev.txt
++        working-directory: backend
++        shell: bash
++      - run: .\scripts\build.ps1
++        working-directory: backend
++      - run: |
++          $env:APP_TOKEN = "ci"; $env:APP_PORT = "8765"
++          $p = Start-Process -PassThru -FilePath .\dist\machinery-backend\machinery-backend.exe
++          Start-Sleep -Seconds 10
++          $r = Invoke-WebRequest -Headers @{ Authorization = "Bearer ci" } http://127.0.0.1:8765/api/v1/health
++          if ($r.StatusCode -ne 200) { throw "health returned $($r.StatusCode)" }
++          Stop-Process -Id $p.Id
++        working-directory: backend
+diff --git a/backend/app/__init__.py b/backend/app/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/__main__.py b/backend/app/__main__.py
+new file mode 100644
+index 0000000..6b32cd2
+--- /dev/null
++++ b/backend/app/__main__.py
+@@ -0,0 +1,3 @@
++from app.main import main
++
++main()
+diff --git a/backend/app/api.py b/backend/app/api.py
+new file mode 100644
+index 0000000..7601b48
+--- /dev/null
++++ b/backend/app/api.py
+@@ -0,0 +1,22 @@
++from fastapi import APIRouter, Depends
++
++from app.auth import require_token
++from app.datasets.router import router as datasets_router
++from app.health import router as health_router
++from app.inference.router import router as inference_router
++from app.jobs.router import router as jobs_router
++from app.projects.router import router as projects_router
++from app.providers.router import router as providers_router
++from app.training.router import router as training_router
++
++api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
++for r in (
++    health_router,
++    projects_router,
++    jobs_router,
++    datasets_router,
++    training_router,
++    providers_router,
++    inference_router,
++):
++    api_router.include_router(r)
+diff --git a/backend/app/appdata.py b/backend/app/appdata.py
+new file mode 100644
+index 0000000..dd379d1
+--- /dev/null
++++ b/backend/app/appdata.py
+@@ -0,0 +1,48 @@
++"""Per-user app data under %APPDATA%/machinery-app: recent projects and settings. Never keys."""
++
++import json
++from datetime import UTC, datetime
++from pathlib import Path
++
++MAX_RECENT = 20
++
++
++class AppData:
++    def __init__(self, data_dir: Path):
++        self.data_dir = data_dir
++        self.data_dir.mkdir(parents=True, exist_ok=True)
++        self._recent = self.data_dir / "recent_projects.json"
++        self._settings = self.data_dir / "settings.json"
++
++    def recent(self) -> list[dict]:
++        if not self._recent.exists():
++            return []
++        try:
++            return json.loads(self._recent.read_text("utf-8"))
++        except json.JSONDecodeError:
++            return []
++
++    def remember(self, project_id: str, name: str, folder: str) -> None:
++        items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
++        items.insert(
++            0,
++            {
++                "id": project_id,
++                "name": name,
++                "folder": folder,
++                "last_opened_at": datetime.now(UTC).isoformat(),
++            },
++        )
++        self._recent.write_text(json.dumps(items[:MAX_RECENT], indent=2), "utf-8")
++
++    def forget(self, folder: str) -> None:
++        items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
++        self._recent.write_text(json.dumps(items, indent=2), "utf-8")
++
++    def read_settings(self) -> dict:
++        if not self._settings.exists():
++            return {}
++        return json.loads(self._settings.read_text("utf-8"))
++
++    def write_settings(self, values: dict) -> None:
++        self._settings.write_text(json.dumps(values, indent=2), "utf-8")
+diff --git a/backend/app/auth.py b/backend/app/auth.py
+new file mode 100644
+index 0000000..3a85e3d
+--- /dev/null
++++ b/backend/app/auth.py
+@@ -0,0 +1,23 @@
++import secrets
++
++from fastapi import Request, WebSocket
++
++from app.errors import AppError
++
++
++def _presented(headers, query_params) -> str:
++    header = headers.get("authorization", "")
++    if header.startswith("Bearer "):
++        return header[7:]
++    return query_params.get("token", "")
++
++
++def require_token(request: Request) -> None:
++    """Accept the per-launch token as a bearer header or as a token query parameter."""
++    expected = request.app.state.settings.token
++    if not secrets.compare_digest(_presented(request.headers, request.query_params), expected):
++        raise AppError("unauthorized", "missing or invalid bearer token", 401)
++
++
++def ws_token_ok(ws: WebSocket) -> bool:
++    return secrets.compare_digest(_presented(ws.headers, ws.query_params), ws.app.state.settings.token)
+diff --git a/backend/app/config.py b/backend/app/config.py
+new file mode 100644
+index 0000000..e260f2d
+--- /dev/null
++++ b/backend/app/config.py
+@@ -0,0 +1,15 @@
++from pathlib import Path
++
++from pydantic_settings import BaseSettings, SettingsConfigDict
++
++
++class Settings(BaseSettings):
++    """Runtime configuration, read from APP_* environment variables by the launcher."""
++
++    model_config = SettingsConfigDict(env_prefix="APP_", extra="ignore")
++    host: str = "127.0.0.1"
++    port: int = 8765  # 0 = pick a free port and print it on stdout as a JSON line
++    token: str  # required; the launcher generates it per run
++    data_dir: Path = Path.home() / "AppData" / "Roaming" / "machinery-app"
++    log_level: str = "INFO"
++    version: str = "0.1.0"
+diff --git a/backend/app/datasets/__init__.py b/backend/app/datasets/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/datasets/router.py b/backend/app/datasets/router.py
+new file mode 100644
+index 0000000..38c0c90
+--- /dev/null
++++ b/backend/app/datasets/router.py
+@@ -0,0 +1,31 @@
++"""S0 stubs for sources, images, boxes and datasets (spec sections 5 and 6). S1 replaces them."""
++
++from fastapi import APIRouter
++
++from app.stubs import add_stubs
++
++router = APIRouter(prefix="/projects/{projectId}", tags=["datasets"])
++
++add_stubs(
++    router,
++    [
++        ("GET", "/sources", "sources list"),
++        ("POST", "/sources", "sources create"),
++        ("GET", "/sources/{sourceId}", "sources get"),
++        ("GET", "/sources/{sourceId}/stats", "sources stats"),
++        ("GET", "/images", "images list"),
++        ("POST", "/images/bulk-delete", "images bulk-delete"),
++        ("GET", "/images/{imageId}", "images get"),
++        ("GET", "/images/{imageId}/file", "images file"),
++        ("GET", "/images/{imageId}/thumbnail", "images thumbnail"),
++        ("GET", "/images/{imageId}/boxes", "boxes list"),
++        ("POST", "/images/{imageId}/boxes", "boxes create"),
++        ("PATCH", "/boxes/{boxId}", "boxes update"),
++        ("DELETE", "/boxes/{boxId}", "boxes delete"),
++        ("POST", "/boxes/review", "boxes review"),
++        ("GET", "/datasets", "datasets list"),
++        ("POST", "/datasets", "datasets create"),
++        ("GET", "/datasets/{datasetId}", "datasets get"),
++        ("GET", "/datasets/{datasetId}/stats", "datasets stats"),
++    ],
++)
+diff --git a/backend/app/db/__init__.py b/backend/app/db/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/db/base.py b/backend/app/db/base.py
+new file mode 100644
+index 0000000..92384f1
+--- /dev/null
++++ b/backend/app/db/base.py
+@@ -0,0 +1,36 @@
++import uuid
++from datetime import UTC, datetime
++
++from sqlalchemy import DateTime, TypeDecorator
++from sqlalchemy.orm import DeclarativeBase
++
++
++class Base(DeclarativeBase):
++    pass
++
++
++class UTCDateTime(TypeDecorator):
++    """SQLite stores naive datetimes; this type stores UTC and always returns aware UTC values."""
++
++    impl = DateTime
++    cache_ok = True
++
++    def process_bind_param(self, value, dialect):
++        if value is None:
++            return None
++        if value.tzinfo is not None:
++            value = value.astimezone(UTC).replace(tzinfo=None)
++        return value
++
++    def process_result_value(self, value, dialect):
++        if value is None:
++            return None
++        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
++
++
++def new_id() -> str:
++    return str(uuid.uuid4())
++
++
++def utcnow() -> datetime:
++    return datetime.now(UTC)
+diff --git a/backend/app/db/migrations/alembic.ini b/backend/app/db/migrations/alembic.ini
+new file mode 100644
+index 0000000..6cb09e6
+--- /dev/null
++++ b/backend/app/db/migrations/alembic.ini
+@@ -0,0 +1,2 @@
++[alembic]
++script_location = %(here)s
+diff --git a/backend/app/db/migrations/env.py b/backend/app/db/migrations/env.py
+new file mode 100644
+index 0000000..3a3e1fd
+--- /dev/null
++++ b/backend/app/db/migrations/env.py
+@@ -0,0 +1,48 @@
++import sys
++from pathlib import Path
++
++from alembic import context
++from sqlalchemy import engine_from_config, pool
++
++sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
++
++from app.db import models  # noqa: E402, F401
++from app.db.base import Base  # noqa: E402
++
++config = context.config
++target_metadata = Base.metadata
++
++
++def run_migrations_offline() -> None:
++    context.configure(
++        url=config.get_main_option("sqlalchemy.url"),
++        target_metadata=target_metadata,
++        literal_binds=True,
++        render_as_batch=True,
++    )
++    with context.begin_transaction():
++        context.run_migrations()
++
++
++def _run(connection) -> None:
++    context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=True)
++    with context.begin_transaction():
++        context.run_migrations()
++
++
++def run_migrations_online() -> None:
++    connection = config.attributes.get("connection")
++    if connection is not None:
++        _run(connection)
++        return
++    engine = engine_from_config(
++        config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool
++    )
++    with engine.connect() as connection:
++        _run(connection)
++
++
++if context.is_offline_mode():
++    run_migrations_offline()
++else:
++    run_migrations_online()
+diff --git a/backend/app/db/migrations/script.py.mako b/backend/app/db/migrations/script.py.mako
+new file mode 100644
+index 0000000..3fe9988
+--- /dev/null
++++ b/backend/app/db/migrations/script.py.mako
+@@ -0,0 +1,22 @@
++"""${message}
++
++Revision ID: ${up_revision}
++Revises: ${down_revision | comma,n}
++Create Date: ${create_date}
++"""
++import sqlalchemy as sa
++from alembic import op
++${imports if imports else ""}
++
++revision = ${repr(up_revision)}
++down_revision = ${repr(down_revision)}
++branch_labels = ${repr(branch_labels)}
++depends_on = ${repr(depends_on)}
++
++
++def upgrade() -> None:
++    ${upgrades if upgrades else "pass"}
++
++
++def downgrade() -> None:
++    ${downgrades if downgrades else "pass"}
+diff --git a/backend/app/db/migrations/versions/0001_initial.py b/backend/app/db/migrations/versions/0001_initial.py
+new file mode 100644
+index 0000000..307fb92
+--- /dev/null
++++ b/backend/app/db/migrations/versions/0001_initial.py
+@@ -0,0 +1,202 @@
++"""initial
++
++Revision ID: 0001
++Revises:
++Create Date: 2026-09-17 18:45:35.125029
++"""
++
++import sqlalchemy as sa
++from alembic import op
++
++revision = "0001"
++down_revision = None
++branch_labels = None
++depends_on = None
++
++
++def upgrade() -> None:
++    # ### commands auto generated by Alembic - please adjust! ###
++    op.create_table(
++        "dataset",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("name", sa.String(), nullable=False),
++        sa.Column("classes", sa.JSON(), nullable=False),
++        sa.Column("split_method", sa.String(), nullable=False),
++        sa.Column("split_params", sa.JSON(), nullable=False),
++        sa.Column("path", sa.String(), nullable=False),
++        sa.Column("job_id", sa.String(length=36), nullable=True),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.PrimaryKeyConstraint("id"),
++        sa.UniqueConstraint("name"),
++    )
++    op.create_table(
++        "job",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("type", sa.String(), nullable=False),
++        sa.Column("state", sa.String(), nullable=False),
++        sa.Column("progress", sa.Float(), nullable=False),
++        sa.Column("message", sa.String(), nullable=False),
++        sa.Column("log_path", sa.String(), nullable=False),
++        sa.Column("params", sa.JSON(), nullable=False),
++        sa.Column("result", sa.JSON(), nullable=True),
++        sa.Column("error", sa.String(), nullable=True),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
++        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    with op.batch_alter_table("job", schema=None) as batch_op:
++        batch_op.create_index("ix_job_created", ["created_at"], unique=False)
++        batch_op.create_index("ix_job_state", ["state"], unique=False)
++
++    op.create_table(
++        "model",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("name", sa.String(), nullable=False),
++        sa.Column("kind", sa.String(), nullable=False),
++        sa.Column("weights_path", sa.String(), nullable=False),
++        sa.Column("base_weights", sa.String(), nullable=True),
++        sa.Column("dataset_id", sa.String(length=36), nullable=True),
++        sa.Column("hyperparameters", sa.JSON(), nullable=False),
++        sa.Column("metrics", sa.JSON(), nullable=True),
++        sa.Column("class_names", sa.JSON(), nullable=False),
++        sa.Column("class_aliases", sa.JSON(), nullable=False),
++        sa.Column("exports", sa.JSON(), nullable=False),
++        sa.Column("artifacts", sa.JSON(), nullable=False),
++        sa.Column("run_id", sa.String(length=36), nullable=True),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    op.create_table(
++        "project",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("name", sa.String(), nullable=False),
++        sa.Column("classes", sa.JSON(), nullable=False),
++        sa.Column("schema_version", sa.Integer(), nullable=False),
++        sa.Column("preannotation_model_id", sa.String(length=36), nullable=True),
++        sa.Column("import_defaults", sa.JSON(), nullable=False),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    op.create_table(
++        "query_run",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("kind", sa.String(), nullable=False),
++        sa.Column("model_id", sa.String(length=36), nullable=True),
++        sa.Column("provider", sa.String(), nullable=True),
++        sa.Column("model_name", sa.String(), nullable=True),
++        sa.Column("query", sa.String(), nullable=False),
++        sa.Column("image_ids", sa.JSON(), nullable=False),
++        sa.Column("tiling", sa.JSON(), nullable=False),
++        sa.Column("conf", sa.Float(), nullable=False),
++        sa.Column("job_id", sa.String(length=36), nullable=True),
++        sa.Column("promoted_at", sa.DateTime(timezone=True), nullable=True),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    op.create_table(
++        "source",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("folder", sa.String(), nullable=False),
++        sa.Column("site", sa.String(), nullable=False),
++        sa.Column("settings", sa.JSON(), nullable=False),
++        sa.Column("image_count", sa.Integer(), nullable=False),
++        sa.Column("duplicate_count", sa.Integer(), nullable=False),
++        sa.Column("job_id", sa.String(length=36), nullable=True),
++        sa.Column("imported_at", sa.DateTime(timezone=True), nullable=True),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    op.create_table(
++        "image",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("path", sa.String(), nullable=False),
++        sa.Column("width", sa.Integer(), nullable=False),
++        sa.Column("height", sa.Integer(), nullable=False),
++        sa.Column("source_id", sa.String(length=36), nullable=False),
++        sa.Column("capture_time", sa.DateTime(timezone=True), nullable=True),
++        sa.Column("lat", sa.Float(), nullable=True),
++        sa.Column("lon", sa.Float(), nullable=True),
++        sa.Column("alt", sa.Float(), nullable=True),
++        sa.Column("phash", sa.String(length=16), nullable=True),
++        sa.Column("group_key", sa.String(), nullable=False),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.ForeignKeyConstraint(
++            ["source_id"],
++            ["source.id"],
++        ),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    with op.batch_alter_table("image", schema=None) as batch_op:
++        batch_op.create_index("ix_image_group", ["group_key"], unique=False)
++        batch_op.create_index("ix_image_path", ["path"], unique=True)
++        batch_op.create_index("ix_image_source", ["source_id"], unique=False)
++
++    op.create_table(
++        "box",
++        sa.Column("id", sa.String(length=36), nullable=False),
++        sa.Column("image_id", sa.String(length=36), nullable=False),
++        sa.Column("class_id", sa.String(length=36), nullable=False),
++        sa.Column("x", sa.Float(), nullable=False),
++        sa.Column("y", sa.Float(), nullable=False),
++        sa.Column("w", sa.Float(), nullable=False),
++        sa.Column("h", sa.Float(), nullable=False),
++        sa.Column("confidence", sa.Float(), nullable=True),
++        sa.Column("provenance_kind", sa.String(), nullable=False),
++        sa.Column("model_id", sa.String(length=36), nullable=True),
++        sa.Column("provider", sa.String(), nullable=True),
++        sa.Column("model_name", sa.String(), nullable=True),
++        sa.Column("query_run_id", sa.String(length=36), nullable=True),
++        sa.Column("review_state", sa.String(), nullable=False),
++        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
++        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
++        sa.ForeignKeyConstraint(["image_id"], ["image.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++    )
++    with op.batch_alter_table("box", schema=None) as batch_op:
++        batch_op.create_index("ix_box_image", ["image_id"], unique=False)
++        batch_op.create_index("ix_box_query_run", ["query_run_id"], unique=False)
++        batch_op.create_index("ix_box_review", ["review_state"], unique=False)
++
++    op.create_table(
++        "dataset_image",
++        sa.Column("dataset_id", sa.String(length=36), nullable=False),
++        sa.Column("image_id", sa.String(length=36), nullable=False),
++        sa.Column("split", sa.String(), nullable=False),
++        sa.Column("boxes", sa.JSON(), nullable=False),
++        sa.ForeignKeyConstraint(["dataset_id"], ["dataset.id"], ondelete="CASCADE"),
++        sa.ForeignKeyConstraint(
++            ["image_id"],
++            ["image.id"],
++        ),
++        sa.PrimaryKeyConstraint("dataset_id", "image_id"),
++    )
++    # ### end Alembic commands ###
++
++
++def downgrade() -> None:
++    # ### commands auto generated by Alembic - please adjust! ###
++    op.drop_table("dataset_image")
++    with op.batch_alter_table("box", schema=None) as batch_op:
++        batch_op.drop_index("ix_box_review")
++        batch_op.drop_index("ix_box_query_run")
++        batch_op.drop_index("ix_box_image")
++
++    op.drop_table("box")
++    with op.batch_alter_table("image", schema=None) as batch_op:
++        batch_op.drop_index("ix_image_source")
++        batch_op.drop_index("ix_image_path")
++        batch_op.drop_index("ix_image_group")
++
++    op.drop_table("image")
++    op.drop_table("source")
++    op.drop_table("query_run")
++    op.drop_table("project")
++    op.drop_table("model")
++    with op.batch_alter_table("job", schema=None) as batch_op:
++        batch_op.drop_index("ix_job_state")
++        batch_op.drop_index("ix_job_created")
++
++    op.drop_table("job")
++    op.drop_table("dataset")
++    # ### end Alembic commands ###
+diff --git a/backend/app/db/models.py b/backend/app/db/models.py
+new file mode 100644
+index 0000000..be4ac78
+--- /dev/null
++++ b/backend/app/db/models.py
+@@ -0,0 +1,151 @@
++"""SQLite tables for one project (spec section 4). UUID string primary keys, JSON for lists and dicts."""
++
++from datetime import datetime
++
++from sqlalchemy import JSON, Float, ForeignKey, Index, Integer, String
++from sqlalchemy.orm import Mapped, mapped_column
++
++from app.db.base import Base, UTCDateTime, new_id, utcnow
++
++
++class Project(Base):
++    __tablename__ = "project"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    name: Mapped[str] = mapped_column(String)
++    classes: Mapped[list] = mapped_column(JSON, default=list)  # [{id, name, colour, hotkey, order}]
++    schema_version: Mapped[int] = mapped_column(Integer, default=1)
++    preannotation_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    import_defaults: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++
++
++class Source(Base):
++    __tablename__ = "source"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    folder: Mapped[str] = mapped_column(String)
++    site: Mapped[str] = mapped_column(String)
++    settings: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings used for this source
++    image_count: Mapped[int] = mapped_column(Integer, default=0)
++    duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
++    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    imported_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++
++
++class Image(Base):
++    __tablename__ = "image"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    path: Mapped[str] = mapped_column(String)  # relative to the project folder, forward slashes
++    width: Mapped[int] = mapped_column(Integer)
++    height: Mapped[int] = mapped_column(Integer)
++    source_id: Mapped[str] = mapped_column(String(36), ForeignKey("source.id"))
++    capture_time: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
++    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
++    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
++    alt: Mapped[float | None] = mapped_column(Float, nullable=True)
++    phash: Mapped[str | None] = mapped_column(String(16), nullable=True)
++    group_key: Mapped[str] = mapped_column(String, default="")
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++    __table_args__ = (
++        Index("ix_image_source", "source_id"),
++        Index("ix_image_group", "group_key"),
++        Index("ix_image_path", "path", unique=True),
++    )
++
++
++class Box(Base):
++    __tablename__ = "box"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    image_id: Mapped[str] = mapped_column(String(36), ForeignKey("image.id", ondelete="CASCADE"))
++    class_id: Mapped[str] = mapped_column(String(36))
++    x: Mapped[float] = mapped_column(Float)
++    y: Mapped[float] = mapped_column(Float)
++    w: Mapped[float] = mapped_column(Float)
++    h: Mapped[float] = mapped_column(Float)
++    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
++    provenance_kind: Mapped[str] = mapped_column(String)  # person | local_model | cloud_provider
++    model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    provider: Mapped[str | None] = mapped_column(String, nullable=True)
++    model_name: Mapped[str | None] = mapped_column(String, nullable=True)
++    query_run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    review_state: Mapped[str] = mapped_column(String, default="unreviewed")
++    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++    __table_args__ = (
++        Index("ix_box_image", "image_id"),
++        Index("ix_box_query_run", "query_run_id"),
++        Index("ix_box_review", "review_state"),
++    )
++
++
++class Dataset(Base):
++    __tablename__ = "dataset"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    name: Mapped[str] = mapped_column(String, unique=True)
++    classes: Mapped[list] = mapped_column(JSON, default=list)
++    split_method: Mapped[str] = mapped_column(String)  # by_group | by_tile | random
++    split_params: Mapped[dict] = mapped_column(JSON, default=dict)  # {val_fraction, seed}
++    path: Mapped[str] = mapped_column(String)  # relative: datasets/<name>
++    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++
++
++class DatasetImage(Base):
++    __tablename__ = "dataset_image"
++    dataset_id: Mapped[str] = mapped_column(
++        String(36), ForeignKey("dataset.id", ondelete="CASCADE"), primary_key=True
++    )
++    image_id: Mapped[str] = mapped_column(String(36), ForeignKey("image.id"), primary_key=True)
++    split: Mapped[str] = mapped_column(String)  # train | val
++    boxes: Mapped[list] = mapped_column(JSON, default=list)  # frozen [{class_id, x, y, w, h}]
++
++
++class Model(Base):
++    __tablename__ = "model"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    name: Mapped[str] = mapped_column(String)
++    kind: Mapped[str] = mapped_column(String)  # imported | trained
++    weights_path: Mapped[str] = mapped_column(String)  # relative to project folder
++    base_weights: Mapped[str | None] = mapped_column(String, nullable=True)
++    dataset_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    hyperparameters: Mapped[dict] = mapped_column(JSON, default=dict)
++    metrics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
++    class_names: Mapped[list] = mapped_column(JSON, default=list)
++    class_aliases: Mapped[dict] = mapped_column(JSON, default=dict)  # {"truck": "dump_truck"}
++    exports: Mapped[dict] = mapped_column(JSON, default=dict)  # {"onnx": "models/x.onnx"}
++    artifacts: Mapped[dict] = mapped_column(JSON, default=dict)  # {results_csv, confusion_matrix, pr_curve}
++    run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++
++
++class Job(Base):
++    __tablename__ = "job"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    type: Mapped[str] = mapped_column(String)  # import | dataset | train | infer | export
++    state: Mapped[str] = mapped_column(String, default="queued")
++    progress: Mapped[float] = mapped_column(Float, default=0.0)
++    message: Mapped[str] = mapped_column(String, default="")
++    log_path: Mapped[str] = mapped_column(String, default="")  # relative: runs/<job_id>/job.log
++    params: Mapped[dict] = mapped_column(JSON, default=dict)
++    result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
++    error: Mapped[str | None] = mapped_column(String, nullable=True)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
++    started_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
++    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
++    __table_args__ = (Index("ix_job_state", "state"), Index("ix_job_created", "created_at"))
++
++
++class QueryRun(Base):
++    __tablename__ = "query_run"
++    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
++    kind: Mapped[str] = mapped_column(String)  # local_model | cloud_provider
++    model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    provider: Mapped[str | None] = mapped_column(String, nullable=True)
++    model_name: Mapped[str | None] = mapped_column(String, nullable=True)
++    query: Mapped[str] = mapped_column(String, default="")
++    image_ids: Mapped[list] = mapped_column(JSON, default=list)
++    tiling: Mapped[dict] = mapped_column(JSON, default=dict)  # {enabled, tile_size, overlap, nms_iou}
++    conf: Mapped[float] = mapped_column(Float, default=0.25)
++    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
++    promoted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
++    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+diff --git a/backend/app/db/session.py b/backend/app/db/session.py
+new file mode 100644
+index 0000000..7456991
+--- /dev/null
++++ b/backend/app/db/session.py
+@@ -0,0 +1,36 @@
++from pathlib import Path
++
++from alembic import command
++from alembic.config import Config
++from sqlalchemy import create_engine, event
++from sqlalchemy.orm import Session, sessionmaker
++
++MIGRATIONS = Path(__file__).parent / "migrations"
++
++
++def _db_url(folder: Path) -> str:
++    return f"sqlite:///{(folder / 'project.db').as_posix()}"
++
++
++def open_project_db(folder: Path):
++    """Create the engine for a project folder and bring its schema to head."""
++    engine = create_engine(_db_url(folder), future=True, connect_args={"check_same_thread": False})
++
++    @event.listens_for(engine, "connect")
++    def _pragmas(conn, _):
++        cur = conn.cursor()
++        cur.execute("PRAGMA journal_mode=WAL")
++        cur.execute("PRAGMA foreign_keys=ON")
++        cur.close()
++
++    cfg = Config(str(MIGRATIONS / "alembic.ini"))
++    cfg.set_main_option("script_location", str(MIGRATIONS))
++    cfg.set_main_option("sqlalchemy.url", _db_url(folder))
++    with engine.begin() as conn:
++        cfg.attributes["connection"] = conn
++        command.upgrade(cfg, "head")
++    return engine
++
++
++def make_session_factory(engine):
++    return sessionmaker(engine, class_=Session, expire_on_commit=False, future=True)
+diff --git a/backend/app/errors.py b/backend/app/errors.py
+new file mode 100644
+index 0000000..87c9104
+--- /dev/null
++++ b/backend/app/errors.py
+@@ -0,0 +1,46 @@
++from fastapi import FastAPI, Request
++from fastapi.encoders import jsonable_encoder
++from fastapi.exceptions import RequestValidationError
++from fastapi.responses import JSONResponse
++from starlette.exceptions import HTTPException as StarletteHTTPException
++
++
++class AppError(Exception):
++    def __init__(self, code: str, message: str, status: int = 400, details: dict | None = None):
++        super().__init__(message)
++        self.code, self.message, self.status, self.details = code, message, status, details or {}
++
++
++def not_found(what: str, id_: str) -> AppError:
++    return AppError("not_found", f"{what} {id_} not found", 404)
++
++
++def not_implemented(what: str) -> AppError:
++    return AppError("not_implemented", f"{what} is not implemented yet", 501)
++
++
++def envelope(code: str, message: str, details: dict | None = None) -> dict:
++    return {"error": {"code": code, "message": message, "details": details or {}}}
++
++
++_HTTP_CODES = {401: "unauthorized", 404: "not_found", 405: "method_not_allowed"}
++
++
++def install_error_handlers(app: FastAPI) -> None:
++    @app.exception_handler(AppError)
++    async def _app_error(_: Request, exc: AppError):
++        return JSONResponse(envelope(exc.code, exc.message, exc.details), status_code=exc.status)
++
++    @app.exception_handler(RequestValidationError)
++    async def _validation(_: Request, exc: RequestValidationError):
++        details = {"errors": jsonable_encoder(exc.errors())}
++        return JSONResponse(envelope("validation_error", "request validation failed", details), 422)
++
++    @app.exception_handler(StarletteHTTPException)
++    async def _http(_: Request, exc: StarletteHTTPException):
++        code = _HTTP_CODES.get(exc.status_code, "http_error")
++        return JSONResponse(envelope(code, str(exc.detail)), exc.status_code, headers=exc.headers)
++
++    @app.exception_handler(Exception)
++    async def _unhandled(_: Request, exc: Exception):
++        return JSONResponse(envelope("internal_error", f"{type(exc).__name__}: {exc}"), 500)
+diff --git a/backend/app/health.py b/backend/app/health.py
+new file mode 100644
+index 0000000..628a738
+--- /dev/null
++++ b/backend/app/health.py
+@@ -0,0 +1,16 @@
++import os
++
++from fastapi import APIRouter, Request
++
++router = APIRouter()
++
++
++@router.get("/health")
++def health(request: Request) -> dict:
++    s = request.app.state.settings
++    return {
++        "status": "ok",
++        "version": s.version,
++        "pid": os.getpid(),
++        "started_at": request.app.state.started_at,
++    }
+diff --git a/backend/app/inference/__init__.py b/backend/app/inference/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/inference/router.py b/backend/app/inference/router.py
+new file mode 100644
+index 0000000..00d8736
+--- /dev/null
++++ b/backend/app/inference/router.py
+@@ -0,0 +1,19 @@
++"""S0 stubs for query runs and pre-annotation (spec sections 7 and 8). S4 replaces them."""
++
++from fastapi import APIRouter
++
++from app.stubs import add_stubs
++
++router = APIRouter(prefix="/projects/{projectId}", tags=["query-runs"])
++
++add_stubs(
++    router,
++    [
++        ("POST", "/images/{imageId}/preannotate", "images preannotate"),
++        ("POST", "/query-runs/estimate", "query-runs estimate"),
++        ("GET", "/query-runs", "query-runs list"),
++        ("POST", "/query-runs", "query-runs create"),
++        ("GET", "/query-runs/{runId}", "query-runs get"),
++        ("POST", "/query-runs/{runId}/promote", "query-runs promote"),
++    ],
++)
+diff --git a/backend/app/jobs/__init__.py b/backend/app/jobs/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/jobs/events.py b/backend/app/jobs/events.py
+new file mode 100644
+index 0000000..6f80c66
+--- /dev/null
++++ b/backend/app/jobs/events.py
+@@ -0,0 +1,60 @@
++"""In-process event bus fanned out to websocket clients (spec section 9, `ws /events`)."""
++
++import asyncio
++import logging
++
++from fastapi import WebSocket
++
++log = logging.getLogger(__name__)
++
++
++class EventBus:
++    def __init__(self):
++        self._subs: set[asyncio.Queue] = set()
++        self._loop: asyncio.AbstractEventLoop | None = None
++
++    def bind(self, loop: asyncio.AbstractEventLoop) -> None:
++        self._loop = loop
++
++    def subscribe(self) -> asyncio.Queue:
++        q: asyncio.Queue = asyncio.Queue(maxsize=1000)
++        self._subs.add(q)
++        return q
++
++    def unsubscribe(self, q: asyncio.Queue) -> None:
++        self._subs.discard(q)
++
++    def publish(self, event: dict) -> None:
++        """Safe to call from worker threads."""
++        if self._loop is None or self._loop.is_closed():
++            return
++        try:
++            self._loop.call_soon_threadsafe(self._fanout, event)
++        except RuntimeError:  # loop shutting down
++            pass
++
++    def _fanout(self, event: dict) -> None:
++        for q in list(self._subs):
++            try:
++                q.put_nowait(event)
++            except asyncio.QueueFull:
++                log.warning("event subscriber is not keeping up; dropping %s", event.get("type"))
++
++
++async def events_websocket(ws: WebSocket) -> None:
++    from app.auth import ws_token_ok
++
++    if not ws_token_ok(ws):
++        await ws.close(code=4401)
++        return
++    await ws.accept()
++    bus: EventBus = ws.app.state.events
++    q = bus.subscribe()
++    try:
++        while True:
++            ev = await q.get()
++            await ws.send_json(ev)
++    except Exception:  # client went away
++        pass
++    finally:
++        bus.unsubscribe(q)
+diff --git a/backend/app/jobs/registry.py b/backend/app/jobs/registry.py
+new file mode 100644
+index 0000000..1a28176
+--- /dev/null
++++ b/backend/app/jobs/registry.py
+@@ -0,0 +1,24 @@
++"""Job type registry. Sub-projects register their long-running work here (spec section 4, Job)."""
++
++from collections.abc import Callable
++
++from app.errors import AppError
++
++_TYPES: dict[str, Callable] = {}
++
++
++def register_job_type(name: str):
++    """Decorator: `@register_job_type("import")` on `fn(ctx: JobContext) -> dict | None`."""
++
++    def deco(fn: Callable):
++        _TYPES[name] = fn
++        return fn
++
++    return deco
++
++
++def get_job_type(name: str) -> Callable:
++    try:
++        return _TYPES[name]
++    except KeyError:
++        raise AppError("validation_error", f"unknown job type {name!r}", 422) from None
+diff --git a/backend/app/jobs/router.py b/backend/app/jobs/router.py
+new file mode 100644
+index 0000000..6c20f39
+--- /dev/null
++++ b/backend/app/jobs/router.py
+@@ -0,0 +1,72 @@
++from collections import deque
++from datetime import datetime
++
++from fastapi import APIRouter, Depends, Query, Request
++from sqlalchemy import select, tuple_
++
++from app.db.models import Job
++from app.jobs.schemas import JobLog, JobOut, JobPage
++from app.pagination import clamp_limit, decode_cursor, encode_cursor
++from app.projects.service import ProjectHandle, get_project
++
++router = APIRouter(prefix="/projects/{projectId}/jobs", tags=["jobs"])
++
++
++def _runner(request: Request):
++    return request.app.state.jobs
++
++
++@router.get("", response_model=JobPage)
++def list_jobs(
++    request: Request,
++    handle: ProjectHandle = Depends(get_project),
++    state: str | None = None,
++    type: str | None = None,
++    limit: int | None = Query(None, ge=1, le=1000),
++    cursor: str | None = None,
++) -> JobPage:
++    n = clamp_limit(limit)
++    q = select(Job).order_by(Job.created_at.desc(), Job.id.desc())
++    if state:
++        q = q.where(Job.state == state)
++    if type:
++        q = q.where(Job.type == type)
++    c = decode_cursor(cursor)
++    if c:
++        q = q.where(tuple_(Job.created_at, Job.id) < (datetime.fromisoformat(c["created_at"]), c["id"]))
++    with handle.session() as s:
++        rows = list(s.execute(q.limit(n + 1)).scalars())
++        for r in rows:
++            s.expunge(r)
++    next_cursor = None
++    if len(rows) > n:
++        rows = rows[:n]
++        last = rows[-1]
++        next_cursor = encode_cursor(created_at=last.created_at.isoformat(), id=last.id)
++    return JobPage(items=[JobOut.from_row(r, handle.id) for r in rows], next_cursor=next_cursor)
++
++
++@router.get("/{jobId}", response_model=JobOut)
++def get_job(jobId: str, request: Request, handle: ProjectHandle = Depends(get_project)) -> JobOut:  # noqa: N803
++    return JobOut.from_row(_runner(request).get(handle, jobId), handle.id)
++
++
++@router.post("/{jobId}/cancel", response_model=JobOut)
++def cancel_job(jobId: str, request: Request, handle: ProjectHandle = Depends(get_project)) -> JobOut:  # noqa: N803
++    return JobOut.from_row(_runner(request).cancel(handle, jobId), handle.id)
++
++
++@router.get("/{jobId}/log", response_model=JobLog)
++def job_log(
++    jobId: str,  # noqa: N803
++    request: Request,
++    handle: ProjectHandle = Depends(get_project),
++    tail: int = Query(200, ge=1, le=10000),
++) -> JobLog:
++    job = _runner(request).get(handle, jobId)
++    path = handle.folder / job.log_path
++    lines: list[str] = []
++    if path.exists():
++        with open(path, encoding="utf-8", errors="replace") as fh:
++            lines = [line.rstrip("\r\n") for line in deque(fh, maxlen=tail)]
++    return JobLog(lines=lines, path=job.log_path)
+diff --git a/backend/app/jobs/runner.py b/backend/app/jobs/runner.py
+new file mode 100644
+index 0000000..ea99935
+--- /dev/null
++++ b/backend/app/jobs/runner.py
+@@ -0,0 +1,186 @@
++"""Thread-pool job runner. Each job writes its state to the project DB and publishes events."""
++
++import logging
++import threading
++import time
++import traceback
++from concurrent.futures import ThreadPoolExecutor
++from datetime import UTC, datetime
++
++from app.db.models import Job
++from app.errors import not_found
++from app.jobs.events import EventBus
++from app.jobs.registry import get_job_type
++from app.projects.service import ProjectHandle
++
++PROGRESS_DB_INTERVAL_S = 0.25
++
++
++class JobCancelled(Exception):
++    pass
++
++
++class JobContext:
++    """What a job function receives: project handle, params, a logger, progress and cancellation."""
++
++    def __init__(
++        self, runner: "JobRunner", project: ProjectHandle, job_id: str, params: dict, log: logging.Logger
++    ):
++        self.runner, self.project, self.job_id, self.params, self.log = runner, project, job_id, params, log
++        self.cancelled = threading.Event()
++        self._last_db_write = 0.0
++
++    def check_cancelled(self) -> None:
++        if self.cancelled.is_set():
++            raise JobCancelled()
++
++    def progress(self, fraction: float, message: str = "") -> None:
++        fraction = max(0.0, min(1.0, float(fraction)))
++        now = time.monotonic()
++        if now - self._last_db_write >= PROGRESS_DB_INTERVAL_S:
++            self._last_db_write = now
++            self.runner.update(self.project, self.job_id, progress=fraction, message=message)
++        self.runner.events.publish(
++            {
++                "type": "job.progress",
++                "project_id": self.project.id,
++                "job_id": self.job_id,
++                "progress": fraction,
++                "message": message,
++                "payload": {},
++            }
++        )
++
++    def publish(self, type: str, payload: dict) -> None:
++        """Domain events such as images.changed or boxes.changed."""
++        self.runner.events.publish(
++            {
++                "type": type,
++                "project_id": self.project.id,
++                "job_id": self.job_id,
++                "progress": None,
++                "message": "",
++                "payload": payload,
++            }
++        )
++
++
++class JobRunner:
++    def __init__(self, events: EventBus, workers: int = 2):
++        self.events = events
++        self._workers = workers
++        self._pool: ThreadPoolExecutor | None = None
++        self._contexts: dict[str, JobContext] = {}
++        self._lock = threading.Lock()
++
++    def start(self) -> None:
++        self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="job")
++
++    def stop(self) -> None:
++        with self._lock:
++            contexts = list(self._contexts.values())
++        for ctx in contexts:
++            ctx.cancelled.set()
++        if self._pool:
++            self._pool.shutdown(wait=True, cancel_futures=True)
++            self._pool = None
++        for ctx in contexts:  # jobs that were still queued never ran; mark them cancelled
++            job = self.get(ctx.project, ctx.job_id)
++            if job.state == "queued":
++                self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
++
++    def submit(self, project: ProjectHandle, type: str, params: dict) -> Job:
++        fn = get_job_type(type)
++        with project.session() as s:
++            job = Job(type=type, params=params)
++            s.add(job)
++            s.flush()
++            job.log_path = f"runs/{job.id}/job.log"
++            s.flush()
++            s.expunge(job)
++        log_dir = project.runs_dir / job.id
++        log_dir.mkdir(parents=True, exist_ok=True)
++        logger = logging.getLogger(f"job.{job.id}")
++        logger.setLevel(logging.INFO)
++        logger.propagate = False
++        handler = logging.FileHandler(log_dir / "job.log", encoding="utf-8")
++        handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
++        logger.addHandler(handler)
++        ctx = JobContext(self, project, job.id, params, logger)
++        with self._lock:
++            self._contexts[job.id] = ctx
++        self._pool.submit(self._run, ctx, fn, handler)
++        return job
++
++    def cancel(self, project: ProjectHandle, job_id: str) -> Job:
++        with self._lock:
++            ctx = self._contexts.get(job_id)
++        if ctx is not None:
++            ctx.cancelled.set()
++            return self.get(project, job_id)
++        job = self.get(project, job_id)
++        if job.state == "queued":  # left over from a previous process
++            return self.update(project, job_id, state="cancelled", finished_at=datetime.now(UTC))
++        return job
++
++    def get(self, project: ProjectHandle, job_id: str) -> Job:
++        with project.session() as s:
++            job = s.get(Job, job_id)
++            if job is None:
++                raise not_found("job", job_id)
++            s.expunge(job)
++            return job
++
++    def update(self, project: ProjectHandle, job_id: str, **fields) -> Job:
++        with project.session() as s:
++            job = s.get(Job, job_id)
++            for k, v in fields.items():
++                setattr(job, k, v)
++            s.flush()
++            s.expunge(job)
++        if "state" in fields:
++            self.events.publish(
++                {
++                    "type": "job.state",
++                    "project_id": project.id,
++                    "job_id": job_id,
++                    "progress": job.progress,
++                    "message": job.message,
++                    "payload": {"state": job.state, "result": job.result, "error": job.error},
++                }
++            )
++        return job
++
++    def _run(self, ctx: JobContext, fn, handler: logging.Handler) -> None:
++        try:
++            if ctx.cancelled.is_set():
++                raise JobCancelled()
++            self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
++            ctx.log.info("job %s started with %s", ctx.job_id, ctx.params)
++            result = fn(ctx)
++            self.update(
++                ctx.project,
++                ctx.job_id,
++                state="succeeded",
++                progress=1.0,
++                result=result,
++                finished_at=datetime.now(UTC),
++            )
++            ctx.log.info("job succeeded")
++        except JobCancelled:
++            self.update(ctx.project, ctx.job_id, state="cancelled", finished_at=datetime.now(UTC))
++            ctx.log.info("job cancelled")
++        except Exception as e:
++            ctx.log.error("job failed\n%s", traceback.format_exc())
++            self.update(
++                ctx.project,
++                ctx.job_id,
++                state="failed",
++                error=f"{type(e).__name__}: {e}",
++                finished_at=datetime.now(UTC),
++            )
++        finally:
++            ctx.log.removeHandler(handler)
++            handler.close()
++            with self._lock:
++                self._contexts.pop(ctx.job_id, None)
+diff --git a/backend/app/jobs/schemas.py b/backend/app/jobs/schemas.py
+new file mode 100644
+index 0000000..ec34fb1
+--- /dev/null
++++ b/backend/app/jobs/schemas.py
+@@ -0,0 +1,50 @@
++from datetime import datetime
++from typing import Any
++
++from pydantic import BaseModel
++
++from app.db.models import Job
++
++
++class JobOut(BaseModel):
++    id: str
++    project_id: str
++    type: str
++    state: str
++    progress: float
++    message: str
++    log_path: str
++    params: dict[str, Any]
++    result: dict[str, Any] | None
++    error: str | None
++    created_at: datetime
++    started_at: datetime | None
++    finished_at: datetime | None
++
++    @classmethod
++    def from_row(cls, row: Job, project_id: str) -> "JobOut":
++        return cls(
++            id=row.id,
++            project_id=project_id,
++            type=row.type,
++            state=row.state,
++            progress=row.progress,
++            message=row.message,
++            log_path=row.log_path,
++            params=row.params or {},
++            result=row.result,
++            error=row.error,
++            created_at=row.created_at,
++            started_at=row.started_at,
++            finished_at=row.finished_at,
++        )
++
++
++class JobPage(BaseModel):
++    items: list[JobOut]
++    next_cursor: str | None
++
++
++class JobLog(BaseModel):
++    lines: list[str]
++    path: str
+diff --git a/backend/app/logging_setup.py b/backend/app/logging_setup.py
+new file mode 100644
+index 0000000..f620ecf
+--- /dev/null
++++ b/backend/app/logging_setup.py
+@@ -0,0 +1,29 @@
++import logging
++import sys
++from logging.handlers import RotatingFileHandler
++from pathlib import Path
++
++FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
++
++
++def configure_logging(data_dir: Path, level: str) -> Path:
++    """Rotating app log under data_dir/logs plus stderr. Idempotent per log file."""
++    log_dir = data_dir / "logs"
++    log_dir.mkdir(parents=True, exist_ok=True)
++    log_file = log_dir / "backend.log"
++    root = logging.getLogger()
++    root.setLevel(level.upper())
++    logging.getLogger("alembic").setLevel(logging.WARNING)
++    logging.getLogger("httpx").setLevel(logging.WARNING)
++    already = any(
++        isinstance(h, RotatingFileHandler) and Path(h.baseFilename) == log_file for h in root.handlers
++    )
++    if not already:
++        fh = RotatingFileHandler(log_file, maxBytes=5_000_000, backupCount=5, encoding="utf-8")
++        fh.setFormatter(logging.Formatter(FORMAT))
++        root.addHandler(fh)
++        if not any(isinstance(h, logging.StreamHandler) and h.stream is sys.stderr for h in root.handlers):
++            sh = logging.StreamHandler(sys.stderr)
++            sh.setFormatter(logging.Formatter(FORMAT))
++            root.addHandler(sh)
++    return log_file
+diff --git a/backend/app/main.py b/backend/app/main.py
+new file mode 100644
+index 0000000..973ed37
+--- /dev/null
++++ b/backend/app/main.py
+@@ -0,0 +1,76 @@
++import asyncio
++import json
++import os
++import socket
++from contextlib import asynccontextmanager
++from datetime import UTC, datetime
++
++from fastapi import FastAPI
++
++from app.config import Settings
++from app.errors import install_error_handlers
++from app.logging_setup import configure_logging
++
++
++def create_app(settings: Settings | None = None) -> FastAPI:
++    settings = settings or Settings()
++    settings.data_dir.mkdir(parents=True, exist_ok=True)
++    configure_logging(settings.data_dir, settings.log_level)
++
++    @asynccontextmanager
++    async def lifespan(app: FastAPI):
++        from app.jobs.events import EventBus
++        from app.jobs.runner import JobRunner
++        from app.projects.service import ProjectRegistry
++
++        app.state.events = EventBus()
++        app.state.events.bind(asyncio.get_running_loop())
++        app.state.projects = ProjectRegistry(settings.data_dir)
++        app.state.jobs = JobRunner(app.state.events)
++        app.state.jobs.start()
++        yield
++        app.state.jobs.stop()
++        app.state.projects.close_all()
++
++    app = FastAPI(
++        title="machinery-backend",
++        version=settings.version,
++        lifespan=lifespan,
++        docs_url=None,
++        redoc_url=None,
++        openapi_url=None,
++    )
++    app.state.settings = settings
++    app.state.started_at = datetime.now(UTC).isoformat()
++    install_error_handlers(app)
++    from app.api import api_router
++    from app.jobs.events import events_websocket
++
++    app.include_router(api_router)
++    app.add_api_websocket_route("/api/v1/events", events_websocket)
++    return app
++
++
++def _free_port(host: str) -> int:
++    with socket.socket() as s:
++        s.bind((host, 0))
++        return s.getsockname()[1]
++
++
++def main() -> None:
++    import uvicorn
++
++    settings = Settings()
++    port = settings.port or _free_port(settings.host)
++    print(json.dumps({"event": "starting", "port": port, "pid": os.getpid()}), flush=True)
++    uvicorn.run(
++        create_app(settings),
++        host=settings.host,
++        port=port,
++        log_level=settings.log_level.lower(),
++        ws="auto",
++    )
++
++
++if __name__ == "__main__":
++    main()
+diff --git a/backend/app/pagination.py b/backend/app/pagination.py
+new file mode 100644
+index 0000000..1cf7fc1
+--- /dev/null
++++ b/backend/app/pagination.py
+@@ -0,0 +1,26 @@
++"""Opaque cursors for list endpoints (base64 JSON) and the shared limit clamp."""
++
++import base64
++import json
++
++DEFAULT_LIMIT = 100
++MAX_LIMIT = 1000
++
++
++def encode_cursor(**kv) -> str:
++    return base64.urlsafe_b64encode(json.dumps(kv, default=str).encode()).decode()
++
++
++def decode_cursor(s: str | None) -> dict:
++    if not s:
++        return {}
++    try:
++        return json.loads(base64.urlsafe_b64decode(s.encode()).decode())
++    except Exception:
++        from app.errors import AppError
++
++        raise AppError("validation_error", "invalid cursor", 422) from None
++
++
++def clamp_limit(limit: int | None) -> int:
++    return max(1, min(MAX_LIMIT, limit or DEFAULT_LIMIT))
+diff --git a/backend/app/projects/__init__.py b/backend/app/projects/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/projects/router.py b/backend/app/projects/router.py
+new file mode 100644
+index 0000000..35de1aa
+--- /dev/null
++++ b/backend/app/projects/router.py
+@@ -0,0 +1,91 @@
++from pathlib import Path
++
++from fastapi import APIRouter, Depends, Request
++
++from app.projects.schemas import (
++    ClassDefInput,
++    ProjectCreate,
++    ProjectOpen,
++    ProjectOut,
++    ProjectPage,
++    ProjectUpdate,
++    Stats,
++)
++from app.projects.service import (
++    ProjectHandle,
++    ProjectRegistry,
++    check_removed_classes_unused,
++    get_project,
++    normalise_classes,
++)
++
++router = APIRouter(prefix="/projects", tags=["projects"])
++
++
++def _registry(request: Request) -> ProjectRegistry:
++    return request.app.state.projects
++
++
++def _out(handle: ProjectHandle) -> ProjectOut:
++    with handle.session() as s:
++        return ProjectOut.from_row(handle.row(s), handle.folder)
++
++
++@router.get("", response_model=ProjectPage)
++def list_projects(request: Request) -> ProjectPage:
++    reg = _registry(request)
++    items: list[ProjectOut] = []
++    for r in reg.recent():
++        folder = Path(r["folder"])
++        if not (folder / "project.db").exists():
++            continue
++        items.append(_out(reg.open(folder)))
++    return ProjectPage(items=items, next_cursor=None)
++
++
++@router.post("", response_model=ProjectOut, status_code=201)
++def create_project(body: ProjectCreate, request: Request) -> ProjectOut:
++    handle = _registry(request).create(body.name, Path(body.folder), [c.model_dump() for c in body.classes])
++    return _out(handle)
++
++
++@router.post("/open", response_model=ProjectOut)
++def open_project(body: ProjectOpen, request: Request) -> ProjectOut:
++    return _out(_registry(request).open(Path(body.folder)))
++
++
++@router.get("/{projectId}", response_model=ProjectOut)
++def get_project_route(handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
++    return _out(handle)
++
++
++@router.patch("/{projectId}", response_model=ProjectOut)
++def update_project(body: ProjectUpdate, handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
++    with handle.session() as s:
++        row = handle.row(s)
++        if body.name is not None:
++            row.name = body.name
++        if "preannotation_model_id" in body.model_fields_set:
++            row.preannotation_model_id = body.preannotation_model_id
++        if body.import_defaults is not None:
++            merged = dict(row.import_defaults or {})
++            merged.update(body.import_defaults.model_dump(exclude_none=True))
++            row.import_defaults = merged
++        out = ProjectOut.from_row(row, handle.folder)
++    return out
++
++
++@router.put("/{projectId}/classes", response_model=ProjectOut)
++def update_classes(body: list[ClassDefInput], handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
++    new = normalise_classes([c.model_dump() for c in body])
++    with handle.session() as s:
++        row = handle.row(s)
++        check_removed_classes_unused(s, row.classes or [], new)
++        row.classes = new
++        out = ProjectOut.from_row(row, handle.folder)
++    return out
++
++
++@router.get("/{projectId}/stats", response_model=Stats)
++def project_stats(handle: ProjectHandle = Depends(get_project)) -> Stats:
++    return Stats()
+diff --git a/backend/app/projects/schemas.py b/backend/app/projects/schemas.py
+new file mode 100644
+index 0000000..0365050
+--- /dev/null
++++ b/backend/app/projects/schemas.py
+@@ -0,0 +1,132 @@
++"""Pydantic models for the projects resource, matching contract/openapi.yaml exactly."""
++
++from datetime import datetime
++from pathlib import Path
++
++from pydantic import BaseModel, Field
++
++from app.db.models import Project
++
++
++class ImportSettings(BaseModel):
++    max_side: int = Field(4000, ge=512, le=12000)
++    quality: int = Field(95, ge=50, le=100)
++    dedupe_threshold: int = Field(4, ge=0, le=32)
++    group_regex: str = r"^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)"
++
++
++class ImportSettingsPatch(BaseModel):
++    max_side: int | None = Field(None, ge=512, le=12000)
++    quality: int | None = Field(None, ge=50, le=100)
++    dedupe_threshold: int | None = Field(None, ge=0, le=32)
++    group_regex: str | None = None
++
++
++class ClassDefInput(BaseModel):
++    id: str | None = None
++    name: str = Field(min_length=1, max_length=64)
++    colour: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
++    hotkey: str | None = Field(None, max_length=1)
++
++
++class ClassDef(BaseModel):
++    id: str
++    name: str
++    colour: str
++    hotkey: str | None
++    order: int
++
++
++class ProjectCreate(BaseModel):
++    name: str = Field(min_length=1)
++    folder: str
++    classes: list[ClassDefInput]
++
++
++class ProjectOpen(BaseModel):
++    folder: str
++
++
++class ProjectUpdate(BaseModel):
++    name: str | None = Field(None, min_length=1)
++    preannotation_model_id: str | None = None
++    import_defaults: ImportSettingsPatch | None = None
++
++
++class ProjectOut(BaseModel):
++    id: str
++    name: str
++    folder: str
++    classes: list[ClassDef]
++    preannotation_model_id: str | None
++    import_defaults: ImportSettings
++    schema_version: int
++    created_at: datetime
++
++    @classmethod
++    def from_row(cls, row: Project, folder: Path) -> "ProjectOut":
++        return cls(
++            id=row.id,
++            name=row.name,
++            folder=str(folder),
++            classes=[ClassDef(**c) for c in row.classes],
++            preannotation_model_id=row.preannotation_model_id,
++            import_defaults=ImportSettings(**(row.import_defaults or {})),
++            schema_version=row.schema_version,
++            created_at=row.created_at,
++        )
++
++
++class ProjectPage(BaseModel):
++    items: list[ProjectOut]
++    next_cursor: str | None = None
++
++
++class CountByClass(BaseModel):
++    class_id: str
++    class_name: str
++    count: int
++
++
++class SourceCount(BaseModel):
++    source_id: str
++    site: str
++    image_count: int
++
++
++class GroupCount(BaseModel):
++    group_key: str
++    image_count: int
++
++
++class ResolutionBucket(BaseModel):
++    width: int
++    height: int
++    count: int
++
++
++class TimeRange(BaseModel):
++    min: datetime
++    max: datetime
++
++
++class GpsBounds(BaseModel):
++    min_lat: float
++    min_lon: float
++    max_lat: float
++    max_lon: float
++
++
++class Stats(BaseModel):
++    image_count: int = 0
++    labeled_count: int = 0
++    unlabeled_count: int = 0
++    box_count: int = 0
++    pending_review_count: int = 0
++    duplicate_count: int = 0
++    boxes_per_class: list[CountByClass] = []
++    sources: list[SourceCount] = []
++    groups: list[GroupCount] = []
++    resolution_histogram: list[ResolutionBucket] = []
++    capture_time_range: TimeRange | None = None
++    gps_bounds: GpsBounds | None = None
+diff --git a/backend/app/projects/service.py b/backend/app/projects/service.py
+new file mode 100644
+index 0000000..fcc366e
+--- /dev/null
++++ b/backend/app/projects/service.py
+@@ -0,0 +1,152 @@
++"""Project registry: opens project folders, owns their engines, tracks recent projects."""
++
++from collections.abc import Iterator
++from contextlib import contextmanager
++from pathlib import Path
++
++from fastapi import Request
++from sqlalchemy import func, select
++from sqlalchemy.orm import Session
++
++from app.appdata import AppData
++from app.db.base import new_id
++from app.db.models import Box, Project
++from app.db.session import make_session_factory, open_project_db
++from app.errors import AppError, not_found
++
++SUBDIRS = ("images", "labels", "datasets", "runs", "models", "cache/thumbs")
++DEFAULT_IMPORT_SETTINGS = {
++    "max_side": 4000,
++    "quality": 95,
++    "dedupe_threshold": 4,
++    "group_regex": r"^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)",
++}
++DEFAULT_COLOUR = "#4f46e5"
++
++
++class ProjectHandle:
++    def __init__(self, id: str, folder: Path, engine):
++        self.id, self.folder, self.engine = id, folder, engine
++        self._factory = make_session_factory(engine)
++
++    images_dir = property(lambda s: s.folder / "images")
++    labels_dir = property(lambda s: s.folder / "labels")
++    datasets_dir = property(lambda s: s.folder / "datasets")
++    runs_dir = property(lambda s: s.folder / "runs")
++    models_dir = property(lambda s: s.folder / "models")
++    thumbs_dir = property(lambda s: s.folder / "cache" / "thumbs")
++
++    @contextmanager
++    def session(self) -> Iterator[Session]:
++        s = self._factory()
++        try:
++            yield s
++            s.commit()
++        except Exception:
++            s.rollback()
++            raise
++        finally:
++            s.close()
++
++    def row(self, s: Session) -> Project:
++        return s.execute(select(Project)).scalar_one()
++
++
++def normalise_classes(classes: list[dict]) -> list[dict]:
++    out: list[dict] = []
++    names: set[str] = set()
++    keys: set[str] = set()
++    for i, c in enumerate(classes):
++        name = (c.get("name") or "").strip()
++        if not name or name in names:
++            raise AppError("validation_error", f"duplicate or empty class name {name!r}", 422)
++        hotkey = c.get("hotkey") or None
++        if hotkey and hotkey in keys:
++            raise AppError("validation_error", f"duplicate hotkey {hotkey!r}", 422)
++        names.add(name)
++        if hotkey:
++            keys.add(hotkey)
++        out.append(
++            {
++                "id": c.get("id") or new_id(),
++                "name": name,
++                "colour": c.get("colour") or DEFAULT_COLOUR,
++                "hotkey": hotkey,
++                "order": i,
++            }
++        )
++    return out
++
++
++def check_removed_classes_unused(s: Session, before: list[dict], after: list[dict]) -> None:
++    kept = {c["id"] for c in after}
++    for c in before:
++        if c["id"] in kept:
++            continue
++        n = s.execute(select(func.count()).select_from(Box).where(Box.class_id == c["id"])).scalar_one()
++        if n:
++            raise AppError(
++                "class_in_use",
++                f"class {c['name']!r} still has {n} boxes; reassign or delete them first",
++                409,
++                {"class_id": c["id"], "box_count": n},
++            )
++
++
++class ProjectRegistry:
++    def __init__(self, data_dir: Path):
++        self.appdata = AppData(data_dir)
++        self._handles: dict[str, ProjectHandle] = {}
++
++    def create(self, name: str, folder: Path, classes: list[dict]) -> ProjectHandle:
++        if (folder / "project.db").exists():
++            raise AppError("already_exists", f"{folder} already contains a project", 409)
++        for sub in SUBDIRS:
++            (folder / sub).mkdir(parents=True, exist_ok=True)
++        engine = open_project_db(folder)
++        row = Project(
++            name=name, classes=normalise_classes(classes), import_defaults=dict(DEFAULT_IMPORT_SETTINGS)
++        )
++        with make_session_factory(engine)() as s:
++            s.add(row)
++            s.commit()
++            pid = row.id
++        return self._cache(pid, folder, engine, name)
++
++    def open(self, folder: Path) -> ProjectHandle:
++        if not (folder / "project.db").exists():
++            raise not_found("project folder", str(folder))
++        for h in self._handles.values():
++            if h.folder == folder:
++                return h
++        engine = open_project_db(folder)
++        with make_session_factory(engine)() as s:
++            row = s.execute(select(Project)).scalar_one()
++            pid, name = row.id, row.name
++        return self._cache(pid, folder, engine, name)
++
++    def _cache(self, pid: str, folder: Path, engine, name: str) -> ProjectHandle:
++        h = ProjectHandle(pid, folder, engine)
++        self._handles[pid] = h
++        self.appdata.remember(pid, name, str(folder))
++        return h
++
++    def get(self, project_id: str) -> ProjectHandle:
++        if project_id in self._handles:
++            return self._handles[project_id]
++        for r in self.appdata.recent():
++            if r["id"] == project_id and (Path(r["folder"]) / "project.db").exists():
++                return self.open(Path(r["folder"]))
++        raise not_found("project", project_id)
++
++    def recent(self) -> list[dict]:
++        return self.appdata.recent()
++
++    def close_all(self) -> None:
++        for h in self._handles.values():
++            h.engine.dispose()
++        self._handles.clear()
++
++
++def get_project(projectId: str, request: Request) -> ProjectHandle:  # noqa: N803 - path param from the contract
++    return request.app.state.projects.get(projectId)
+diff --git a/backend/app/providers/__init__.py b/backend/app/providers/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/providers/router.py b/backend/app/providers/router.py
+new file mode 100644
+index 0000000..070bedd
+--- /dev/null
++++ b/backend/app/providers/router.py
+@@ -0,0 +1,19 @@
++"""S0 stubs for cloud providers (spec section 8). S4 replaces them."""
++
++from fastapi import APIRouter
++
++from app.stubs import add_stubs
++
++router = APIRouter(prefix="/providers", tags=["providers"])
++
++add_stubs(
++    router,
++    [
++        ("GET", "", "providers list"),
++        ("PATCH", "/{provider}", "providers update"),
++        ("PUT", "/{provider}/key", "providers set key"),
++        ("DELETE", "/{provider}/key", "providers delete key"),
++        ("POST", "/{provider}/test", "providers test"),
++    ],
++    project_scoped=False,
++)
+diff --git a/backend/app/stubs.py b/backend/app/stubs.py
+new file mode 100644
+index 0000000..9e7fe48
+--- /dev/null
++++ b/backend/app/stubs.py
+@@ -0,0 +1,27 @@
++"""Helper to mount 501 placeholders so the contract is fully routed before a sub-project lands."""
++
++from fastapi import APIRouter, Body, Depends
++
++from app.errors import not_implemented
++from app.projects.service import ProjectHandle, get_project
++
++
++def _make(name: str, project_scoped: bool):
++    if project_scoped:
++
++        def stub(handle: ProjectHandle = Depends(get_project), body: dict | None = Body(None)):
++            raise not_implemented(name)
++
++    else:
++
++        def stub(body: dict | None = Body(None)):
++            raise not_implemented(name)
++
++    stub.__name__ = "stub_" + name.replace(" ", "_").replace("-", "_")
++    return stub
++
++
++def add_stubs(router: APIRouter, stubs: list[tuple[str, str, str]], project_scoped: bool = True) -> None:
++    """stubs: (method, path, name). Project-scoped stubs resolve the project first (404 when unknown)."""
++    for method, path, name in stubs:
++        router.add_api_route(path, _make(name, project_scoped), methods=[method], name=name)
+diff --git a/backend/app/training/__init__.py b/backend/app/training/__init__.py
+new file mode 100644
+index 0000000..e69de29
+diff --git a/backend/app/training/router.py b/backend/app/training/router.py
+new file mode 100644
+index 0000000..fc9c2e6
+--- /dev/null
++++ b/backend/app/training/router.py
+@@ -0,0 +1,19 @@
++"""S0 stubs for the model registry and training (spec section 7). S3 replaces them."""
++
++from fastapi import APIRouter
++
++from app.stubs import add_stubs
++
++router = APIRouter(prefix="/projects/{projectId}/models", tags=["models"])
++
++add_stubs(
++    router,
++    [
++        ("GET", "", "models list"),
++        ("POST", "/import", "models import"),
++        ("POST", "/train", "models train"),
++        ("GET", "/{modelId}", "models get"),
++        ("DELETE", "/{modelId}", "models delete"),
++        ("POST", "/{modelId}/export", "models export"),
++    ],
++)
+diff --git a/backend/pyproject.toml b/backend/pyproject.toml
+new file mode 100644
+index 0000000..bafe0a8
+--- /dev/null
++++ b/backend/pyproject.toml
+@@ -0,0 +1,24 @@
++[project]
++name = "machinery-backend"
++version = "0.1.0"
++requires-python = "==3.11.*"
++
++[tool.ruff]
++line-length = 110
++target-version = "py311"
++
++[tool.ruff.lint]
++select = ["E", "F", "I", "B", "UP"]
++
++[tool.ruff.lint.flake8-bugbear]
++extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body"]
++
++[tool.pytest.ini_options]
++testpaths = ["tests"]
++asyncio_mode = "auto"
++markers = ["gpu: needs an NVIDIA GPU", "live: calls a cloud provider, needs an API key in the environment"]
++addopts = "-m 'not gpu and not live'"
++filterwarnings = [
++    "error::DeprecationWarning:app.*",
++    "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",
++]
+diff --git a/backend/tests/conftest.py b/backend/tests/conftest.py
+new file mode 100644
+index 0000000..e1a6be4
+--- /dev/null
++++ b/backend/tests/conftest.py
+@@ -0,0 +1,38 @@
++from pathlib import Path
++
++import pytest
++from fastapi.testclient import TestClient
++
++from app.config import Settings
++from app.main import create_app
++
++TOKEN = "test-token"
++
++
++@pytest.fixture
++def settings(tmp_path: Path) -> Settings:
++    return Settings(token=TOKEN, data_dir=tmp_path / "appdata", port=0)
++
++
++@pytest.fixture
++def app(settings):
++    return create_app(settings)
++
++
++@pytest.fixture
++def client(app):
++    with TestClient(app, headers={"Authorization": f"Bearer {TOKEN}"}) as c:
++        yield c
++
++
++@pytest.fixture
++def anon(app):
++    with TestClient(app) as c:
++        yield c
++
++
++@pytest.fixture
++def project_dir(tmp_path: Path) -> Path:
++    d = tmp_path / "proj"
++    d.mkdir()
++    return d
+diff --git a/backend/tests/test_auth.py b/backend/tests/test_auth.py
+new file mode 100644
+index 0000000..da0ac98
+--- /dev/null
++++ b/backend/tests/test_auth.py
+@@ -0,0 +1,14 @@
++def test_missing_token_is_401(anon):
++    r = anon.get("/api/v1/health")
++    assert r.status_code == 401
++    assert r.json()["error"]["code"] == "unauthorized"
++
++
++def test_wrong_token_is_401(anon):
++    r = anon.get("/api/v1/health", headers={"Authorization": "Bearer nope"})
++    assert r.status_code == 401
++
++
++def test_token_as_query_parameter_is_accepted(anon):
++    r = anon.get("/api/v1/health", params={"token": "test-token"})
++    assert r.status_code == 200
+diff --git a/backend/tests/test_contract.py b/backend/tests/test_contract.py
+new file mode 100644
+index 0000000..a9eaaad
+--- /dev/null
++++ b/backend/tests/test_contract.py
+@@ -0,0 +1,65 @@
++"""Contract conformance: every path in contract/openapi.yaml is routed and every response validates."""
++
++from pathlib import Path
++
++import pytest
++import schemathesis
++import yaml
++from hypothesis import HealthCheck, settings
++from schemathesis.specs.openapi.checks import (
++    allow_header_conformance,
++    content_type_conformance,
++    negative_data_rejection,
++    response_schema_conformance,
++    status_code_conformance,
++    unsupported_method,
++)
++
++SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
++METHODS = ("get", "post", "put", "patch", "delete")
++AUTH = {"Authorization": "Bearer test-token"}
++
++
++def _operations(paths: dict) -> set[tuple[str, str]]:
++    return {(m.upper(), p) for p, ops in paths.items() for m in ops if m in METHODS}
++
++
++def test_every_spec_path_is_routed(app):
++    wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
++    have = _operations(app.openapi()["paths"])
++    assert wanted <= have, sorted(wanted - have)
++
++
++def test_no_extra_api_routes(app):
++    wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
++    have = _operations(app.openapi()["paths"])
++    assert have <= wanted, sorted(have - wanted)
++
++
++schema = schemathesis.openapi.from_path(str(SPEC))
++
++
++@pytest.fixture
++def project_id(client, project_dir) -> str:
++    body = {"name": "A", "folder": str(project_dir), "classes": [{"name": "excavator", "colour": "#ff0000"}]}
++    return client.post("/api/v1/projects", json=body).json()["id"]
++
++
++@schema.parametrize()
++@settings(max_examples=3, deadline=None, suppress_health_check=list(HealthCheck))
++def test_responses_conform(case, app, project_id):
++    if "projectId" in (case.path_parameters or {}):
++        case.path_parameters["projectId"] = project_id
++    case.operation.schema.app = app  # in-process ASGI transport, no sockets
++    case.operation.app = app
++    response = case.call(headers=AUTH)
++    if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
++        # S0 stub: the operation is routed but not built yet; it must still answer in the error envelope.
++        checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
++        case.validate_response(response, checks=checks)
++        return
++    # negative_data_rejection: FastAPI ignores unknown query parameters by design.
++    # unsupported_method / allow_header_conformance: literal segments such as /projects/open share
++    # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.
++    excluded = [negative_data_rejection, unsupported_method, allow_header_conformance]
++    case.validate_response(response, excluded_checks=excluded)
+diff --git a/backend/tests/test_db.py b/backend/tests/test_db.py
+new file mode 100644
+index 0000000..283a7be
+--- /dev/null
++++ b/backend/tests/test_db.py
+@@ -0,0 +1,16 @@
++from sqlalchemy import inspect
++
++from app.db.session import open_project_db
++
++
++def test_migrations_create_schema(project_dir):
++    engine = open_project_db(project_dir)
++    names = set(inspect(engine).get_table_names())
++    expected = {"project", "source", "image", "box", "dataset", "dataset_image", "model", "job", "query_run"}
++    assert expected <= names
++
++
++def test_open_twice_is_idempotent(project_dir):
++    open_project_db(project_dir).dispose()
++    engine = open_project_db(project_dir)
++    assert "project" in inspect(engine).get_table_names()
+diff --git a/backend/tests/test_errors.py b/backend/tests/test_errors.py
+new file mode 100644
+index 0000000..fa5d67c
+--- /dev/null
++++ b/backend/tests/test_errors.py
+@@ -0,0 +1,19 @@
++def test_404_uses_error_envelope(client):
++    r = client.get("/api/v1/projects/00000000-0000-0000-0000-000000000000")
++    assert r.status_code == 404
++    body = r.json()
++    assert body["error"]["code"] == "not_found"
++    assert set(body["error"]) == {"code", "message", "details"}
++
++
++def test_validation_error_uses_envelope(client):
++    r = client.post("/api/v1/projects", json={"name": 5})
++    assert r.status_code == 422
++    assert r.json()["error"]["code"] == "validation_error"
++    assert "errors" in r.json()["error"]["details"]
++
++
++def test_unknown_route_uses_error_envelope(client):
++    r = client.get("/api/v1/nope")
++    assert r.status_code == 404
++    assert r.json()["error"]["code"] == "not_found"
+diff --git a/backend/tests/test_health.py b/backend/tests/test_health.py
+new file mode 100644
+index 0000000..29adb77
+--- /dev/null
++++ b/backend/tests/test_health.py
+@@ -0,0 +1,8 @@
++def test_health_ok(client):
++    r = client.get("/api/v1/health")
++    assert r.status_code == 200
++    body = r.json()
++    assert body["status"] == "ok"
++    assert body["version"]
++    assert isinstance(body["pid"], int)
++    assert body["started_at"]
+diff --git a/backend/tests/test_jobs.py b/backend/tests/test_jobs.py
+new file mode 100644
+index 0000000..afd2e82
+--- /dev/null
++++ b/backend/tests/test_jobs.py
+@@ -0,0 +1,180 @@
++import time
++
++import pytest
++from starlette.websockets import WebSocketDisconnect
++
++from app.errors import AppError
++from app.jobs.registry import register_job_type
++
++
++@register_job_type("test_sleep")
++def _sleep_job(ctx):
++    for i in range(5):
++        ctx.check_cancelled()
++        ctx.progress(i / 5, f"step {i}")
++        ctx.log.info("step %d", i)
++        time.sleep(0.05)
++    return {"steps": 5}
++
++
++@register_job_type("test_fail")
++def _fail_job(ctx):
++    raise RuntimeError("boom")
++
++
++@register_job_type("test_domain_event")
++def _domain_event_job(ctx):
++    ctx.publish("images.changed", {"source_id": "s1", "count": 3})
++    return None
++
++
++def _project(client, project_dir):
++    return client.post(
++        "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": []}
++    ).json()["id"]
++
++
++def _wait(client, pid, jid, states=("succeeded", "failed", "cancelled"), timeout=5):
++    t0 = time.time()
++    while time.time() - t0 < timeout:
++        j = client.get(f"/api/v1/projects/{pid}/jobs/{jid}").json()
++        if j["state"] in states:
++            return j
++        time.sleep(0.05)
++    raise AssertionError("timeout waiting for job")
++
++
++def test_job_runs_to_success_with_progress_and_log(client, project_dir, app):
++    pid = _project(client, project_dir)
++    job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {"k": 1})
++    assert job.state == "queued" and job.log_path == f"runs/{job.id}/job.log"
++    j = _wait(client, pid, job.id)
++    assert j["state"] == "succeeded" and j["progress"] == 1.0 and j["result"] == {"steps": 5}
++    assert j["project_id"] == pid and j["params"] == {"k": 1}
++    assert j["started_at"] and j["finished_at"]
++    log = client.get(f"/api/v1/projects/{pid}/jobs/{job.id}/log", params={"tail": 50}).json()
++    assert any("step 4" in line for line in log["lines"])
++    assert log["path"] == job.log_path
++    assert (project_dir / "runs" / job.id / "job.log").exists()
++
++
++def test_log_tail_limits_lines(client, project_dir, app):
++    pid = _project(client, project_dir)
++    job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
++    _wait(client, pid, job.id)
++    log = client.get(f"/api/v1/projects/{pid}/jobs/{job.id}/log", params={"tail": 2}).json()
++    assert len(log["lines"]) == 2
++
++
++def test_failed_job_records_error(client, project_dir, app):
++    pid = _project(client, project_dir)
++    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail", {})
++    j = _wait(client, pid, job.id)
++    assert j["state"] == "failed" and "boom" in j["error"]
++    log = client.get(f"/api/v1/projects/{pid}/jobs/{job.id}/log").json()
++    assert any("Traceback" in line for line in log["lines"])
++
++
++def test_cancel_job(client, project_dir, app):
++    pid = _project(client, project_dir)
++    job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
++    r = client.post(f"/api/v1/projects/{pid}/jobs/{job.id}/cancel")
++    assert r.status_code == 200
++    assert _wait(client, pid, job.id)["state"] == "cancelled"
++
++
++def test_cancel_finished_job_is_noop(client, project_dir, app):
++    pid = _project(client, project_dir)
++    job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
++    _wait(client, pid, job.id)
++    r = client.post(f"/api/v1/projects/{pid}/jobs/{job.id}/cancel")
++    assert r.status_code == 200 and r.json()["state"] == "succeeded"
++
++
++def test_jobs_list_paginates_newest_first(client, project_dir, app):
++    pid = _project(client, project_dir)
++    ids = [app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {}).id for _ in range(3)]
++    page = client.get(f"/api/v1/projects/{pid}/jobs", params={"limit": 2}).json()
++    assert [j["id"] for j in page["items"]] == ids[::-1][:2] and page["next_cursor"]
++    page2 = client.get(
++        f"/api/v1/projects/{pid}/jobs", params={"limit": 2, "cursor": page["next_cursor"]}
++    ).json()
++    assert [j["id"] for j in page2["items"]] == [ids[0]] and page2["next_cursor"] is None
++    for jid in ids:
++        _wait(client, pid, jid)
++
++
++def test_jobs_list_filters_by_state_and_type(client, project_dir, app):
++    pid = _project(client, project_dir)
++    ok = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
++    bad = app.state.jobs.submit(app.state.projects.get(pid), "test_fail", {})
++    _wait(client, pid, ok.id)
++    _wait(client, pid, bad.id)
++    failed = client.get(f"/api/v1/projects/{pid}/jobs", params={"state": "failed"}).json()["items"]
++    assert [j["id"] for j in failed] == [bad.id]
++    typed = client.get(f"/api/v1/projects/{pid}/jobs", params={"type": "test_sleep"}).json()["items"]
++    assert [j["id"] for j in typed] == [ok.id]
++
++
++def test_unknown_job_is_404(client, project_dir):
++    pid = _project(client, project_dir)
++    r = client.get(f"/api/v1/projects/{pid}/jobs/nope")
++    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
++
++
++def test_unknown_job_type_is_422(client, project_dir, app):
++    pid = _project(client, project_dir)
++    with pytest.raises(AppError) as e:
++        app.state.jobs.submit(app.state.projects.get(pid), "nope", {})
++    assert e.value.status == 422
++
++
++def test_websocket_receives_job_events(client, project_dir, app):
++    pid = _project(client, project_dir)
++    with client.websocket_connect("/api/v1/events?token=test-token") as ws:
++        job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
++        seen = set()
++        for _ in range(40):
++            ev = ws.receive_json()
++            if ev["job_id"] != job.id:
++                continue
++            assert ev["project_id"] == pid
++            seen.add(ev["type"])
++            if ev["type"] == "job.state" and ev["payload"]["state"] == "succeeded":
++                assert ev["payload"]["result"] == {"steps": 5}
++                break
++        assert {"job.progress", "job.state"} <= seen
++
++
++def test_websocket_receives_domain_events(client, project_dir, app):
++    pid = _project(client, project_dir)
++    with client.websocket_connect("/api/v1/events?token=test-token") as ws:
++        job = app.state.jobs.submit(app.state.projects.get(pid), "test_domain_event", {})
++        for _ in range(20):
++            ev = ws.receive_json()
++            if ev["type"] == "images.changed":
++                assert ev["payload"] == {"source_id": "s1", "count": 3} and ev["job_id"] == job.id
++                break
++        else:
++            raise AssertionError("images.changed not received")
++
++
++def test_websocket_rejects_bad_token(anon):
++    with pytest.raises(WebSocketDisconnect):
++        with anon.websocket_connect("/api/v1/events?token=wrong"):
++            pass
++
++
++def test_stop_cancels_running_jobs(settings, project_dir):
++    from fastapi.testclient import TestClient
++
++    from app.main import create_app
++
++    app = create_app(settings)
++    with TestClient(app, headers={"Authorization": "Bearer test-token"}) as c:
++        pid = _project(c, project_dir)
++        job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
++        time.sleep(0.1)
++    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
++        j = c.get(f"/api/v1/projects/{pid}/jobs/{job.id}").json()
++        assert j["state"] in ("cancelled", "succeeded")
+diff --git a/backend/tests/test_projects.py b/backend/tests/test_projects.py
+new file mode 100644
+index 0000000..006b345
+--- /dev/null
++++ b/backend/tests/test_projects.py
+@@ -0,0 +1,138 @@
++CLASSES = [
++    {"name": "excavator", "colour": "#ff0000", "hotkey": "1"},
++    {"name": "dump_truck", "colour": "#00ff00", "hotkey": "2"},
++]
++
++
++def _create(client, folder, name="Ahmadia"):
++    r = client.post("/api/v1/projects", json={"name": name, "folder": str(folder), "classes": CLASSES})
++    assert r.status_code == 201, r.text
++    return r.json()
++
++
++def test_create_project_makes_folder_layout(client, project_dir):
++    p = _create(client, project_dir)
++    assert p["name"] == "Ahmadia" and len(p["classes"]) == 2 and p["classes"][0]["order"] == 0
++    assert p["folder"] == str(project_dir)
++    assert p["preannotation_model_id"] is None
++    assert p["import_defaults"]["max_side"] == 4000
++    for sub in ("images", "labels", "datasets", "runs", "models", "cache/thumbs"):
++        assert (project_dir / sub).is_dir()
++    assert (project_dir / "project.db").exists()
++
++
++def test_create_in_new_folder_creates_it(client, tmp_path):
++    folder = tmp_path / "new" / "deep"
++    p = _create(client, folder)
++    assert (folder / "project.db").exists() and p["folder"] == str(folder)
++
++
++def test_create_in_folder_with_existing_project_is_409(client, project_dir):
++    _create(client, project_dir)
++    r = client.post("/api/v1/projects", json={"name": "B", "folder": str(project_dir), "classes": []})
++    assert r.status_code == 409
++    assert r.json()["error"]["code"] == "already_exists"
++
++
++def test_open_existing_project_returns_same_id(client, project_dir):
++    created = _create(client, project_dir, "A")
++    opened = client.post("/api/v1/projects/open", json={"folder": str(project_dir)}).json()
++    assert opened["id"] == created["id"]
++    assert client.get(f"/api/v1/projects/{created['id']}").json()["name"] == "A"
++
++
++def test_open_missing_folder_is_404(client, tmp_path):
++    r = client.post("/api/v1/projects/open", json={"folder": str(tmp_path / "nope")})
++    assert r.status_code == 404
++
++
++def test_recent_projects_listed(client, project_dir):
++    _create(client, project_dir, "A")
++    r = client.get("/api/v1/projects")
++    assert [p["name"] for p in r.json()["items"]] == ["A"]
++    assert r.json()["next_cursor"] is None
++
++
++def test_recent_skips_deleted_folders(client, project_dir, tmp_path):
++    import shutil
++
++    gone = tmp_path / "gone"
++    gone.mkdir()
++    _create(client, gone, "Gone")
++    _create(client, project_dir, "A")
++    from app.projects.service import ProjectRegistry  # noqa: F401  (close handles before deleting)
++
++    client.app.state.projects.close_all()
++    shutil.rmtree(gone)
++    r = client.get("/api/v1/projects")
++    assert [p["name"] for p in r.json()["items"]] == ["A"]
++
++
++def test_get_project_survives_registry_restart(settings, project_dir):
++    from fastapi.testclient import TestClient
++
++    from app.main import create_app
++
++    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
++        pid = _create(c, project_dir, "A")["id"]
++    with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as c:
++        assert c.get(f"/api/v1/projects/{pid}").json()["name"] == "A"
++
++
++def test_update_classes_reorders_and_keeps_ids(client, project_dir):
++    p = _create(client, project_dir, "A")
++    new = [dict(p["classes"][1], hotkey="9"), p["classes"][0]]
++    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=new)
++    assert r.status_code == 200
++    assert [c["name"] for c in r.json()["classes"]] == ["dump_truck", "excavator"]
++    assert r.json()["classes"][0]["id"] == p["classes"][1]["id"]
++    assert r.json()["classes"][0]["hotkey"] == "9"
++    assert [c["order"] for c in r.json()["classes"]] == [0, 1]
++
++
++def test_duplicate_class_name_is_422(client, project_dir):
++    p = _create(client, project_dir, "A")
++    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[CLASSES[0], CLASSES[0]])
++    assert r.status_code == 422
++
++
++def test_duplicate_hotkey_is_422(client, project_dir):
++    p = _create(client, project_dir, "A")
++    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[CLASSES[0], dict(CLASSES[1], hotkey="1")])
++    assert r.status_code == 422
++
++
++def test_removing_class_with_boxes_is_409(client, project_dir):
++    p = _create(client, project_dir, "A")
++    handle = client.app.state.projects.get(p["id"])
++    from app.db.models import Box, Image, Source
++
++    with handle.session() as s:
++        src = Source(folder="x", site="x")
++        s.add(src)
++        s.flush()
++        img = Image(path="images/x/a.jpg", width=10, height=10, source_id=src.id)
++        s.add(img)
++        s.flush()
++        s.add(
++            Box(image_id=img.id, class_id=p["classes"][0]["id"], x=0, y=0, w=1, h=1, provenance_kind="person")
++        )
++    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[p["classes"][1]])
++    assert r.status_code == 409
++    assert r.json()["error"]["code"] == "class_in_use"
++    assert r.json()["error"]["details"]["box_count"] == 1
++
++
++def test_patch_project_name_and_import_defaults(client, project_dir):
++    p = _create(client, project_dir, "A")
++    r = client.patch(f"/api/v1/projects/{p['id']}", json={"name": "B", "import_defaults": {"max_side": 3000}})
++    assert r.status_code == 200
++    assert r.json()["name"] == "B" and r.json()["import_defaults"]["max_side"] == 3000
++    assert r.json()["import_defaults"]["quality"] == 95
++
++
++def test_project_stats_shape(client, project_dir):
++    p = _create(client, project_dir, "A")
++    r = client.get(f"/api/v1/projects/{p['id']}/stats")
++    assert r.status_code == 200
++    assert r.json()["image_count"] == 0 and r.json()["capture_time_range"] is None
+diff --git a/scripts/dev.ps1 b/scripts/dev.ps1
+new file mode 100644
+index 0000000..5f65b34
+--- /dev/null
++++ b/scripts/dev.ps1
+@@ -0,0 +1,16 @@
++# Start the UI in development. -Mode mock: Prism mock server + Vite. -Mode backend: real backend + Vite.
++param([ValidateSet("mock", "backend")] [string] $Mode = "mock")
++$ErrorActionPreference = "Stop"
++$root = Split-Path $PSScriptRoot -Parent
++if ($Mode -eq "mock") {
++  Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\contract'; pnpm mock"
++  Set-Location "$root\frontend"
++  pnpm dev
++} else {
++  $token = -join ((48..57 + 65..90 + 97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
++  Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$root\backend'; `$env:APP_TOKEN='$token'; `$env:APP_PORT='8765'; .\.venv\Scripts\python -m app"
++  $env:APP_BACKEND_URL = "http://127.0.0.1:8765"
++  $env:APP_BACKEND_TOKEN = $token
++  Set-Location "$root\frontend"
++  pnpm dev
++}
