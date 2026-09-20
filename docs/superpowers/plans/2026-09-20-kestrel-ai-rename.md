@@ -264,7 +264,19 @@ In `backend/scripts/smoke_frozen.ps1`, the same for lines 6, 27, 37, 43.
 - [ ] **Step 5: Verify nothing product-named is left in the backend**
 
 Run: `git ls-files backend | xargs grep -n "machinery-app\|machinery-backend\|machinery_backend\|Machinery Detection"`
-Expected: no output. (`empties.py`, `html_out.py` and `service.py` use the bare word `machinery` and must still match a plain `grep -n machinery` — that is correct and intended.)
+
+Expected: **exactly one hit** —
+
+```
+backend/app/providers/keys.py:<line>:LEGACY_SERVICE = "machinery-app"
+```
+
+That constant is migration code (spec §3.2) and **must stay**. Deleting it to make this grep
+silent would strand the operator's stored API keys — the precise failure Task 1 exists to prevent.
+
+Anything else is a miss: fix it and re-run. Separately, `empties.py`, `html_out.py` and
+`service.py` use the bare word `machinery` as the domain noun and must still match a plain
+`grep -n machinery` — that is correct and intended.
 
 - [ ] **Step 6: Run the backend gate**
 
@@ -807,6 +819,8 @@ Expected output: **only** these, all deliberate —
 - the dated checkpoint / acceptance / S6 sections of `docs/progress.md`
 - `docs/superpowers/plans/2026-09-17-s0-contract-and-scaffolding.md` (frozen history, apart from the two path lines fixed in Task 8)
 - `docs/superpowers/specs/2026-09-20-kestrel-ai-rename-design.md` (the name map itself)
+- `docs/superpowers/plans/2026-09-20-kestrel-ai-rename.md` — **this plan**, whose Global Constraints and task steps quote every old name by design
+- `docs/progress.md` **Current state** — the one-paragraph rename note added in Task 8 Step 4, which names the old product on purpose
 - `backend/app/providers/keys.py` (`LEGACY_SERVICE`) and `frontend/src-tauri/src/lib.rs` (the legacy folder name) — both are migration code and must keep the old string
 - `KICKOFF_PROMPT_2.md:15` ("machinery-detection analyst" — the operator's trade)
 
