@@ -140,6 +140,34 @@ def test_drawn_thumbnail_differs_from_the_undrawn_one(tmp_path, make_jpeg):
     assert drawn.getpixel((80, 50)) != undrawn.getpixel((80, 50))
 
 
+def test_a_rotated_box_is_drawn_turned_solid_and_dashed(tmp_path, make_jpeg):
+    """The overlay draws the rotated quad, not the upright rectangle - on both drawing paths.
+
+    Every other thumbnail assertion runs at angle 0, where `_dashed_polygon`/`draw.polygon` and
+    the old rectangle code are indistinguishable, so the turned shape needs its own check. A
+    corner well clear of the upright outline proves the difference rather than just the bytes.
+    """
+    import io
+
+    path = tmp_path / "a.jpg"
+    make_jpeg(path, 200, 200, seed=1)
+    for state in ("accepted", "unreviewed"):
+        upright = html_out.draw_thumbnail(
+            path, [_box(x=50, y=70, w=100, h=60, review_state=state)], CLASSES, 200, 200
+        )
+        turned = html_out.draw_thumbnail(
+            path, [_box(x=50, y=70, w=100, h=60, angle=30, review_state=state)], CLASSES, 200, 200
+        )
+        assert turned != upright, state
+        # The turned quad's top corner is (71.7, 49.0); the upright box starts at y = 70, so the
+        # class's red outline can only reach that pixel by way of the rotated shape. Comparing
+        # channels, not exact values: the thumbnail is re-encoded as JPEG, which moves every pixel.
+        r, g, b = PILImage.open(io.BytesIO(turned)).convert("RGB").getpixel((72, 49))
+        assert r > g + 30 and r > b + 30, (state, (r, g, b))
+        ur, ug, ub = PILImage.open(io.BytesIO(upright)).convert("RGB").getpixel((72, 49))
+        assert not (ur > ug + 30), (state, (ur, ug, ub))
+
+
 def test_unreviewed_dashed_box_differs_from_an_accepted_solid_box(tmp_path, make_jpeg):
     path = tmp_path / "a.jpg"
     make_jpeg(path, 200, 200, seed=1)
