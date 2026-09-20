@@ -164,6 +164,7 @@ class BoxOut(BaseModel):
     y: float
     w: float
     h: float
+    angle: float
     confidence: float | None
     provenance: Provenance
     review_state: Literal["unreviewed", "accepted", "rejected", "edited"]
@@ -180,6 +181,7 @@ class BoxOut(BaseModel):
             y=row.y,
             w=row.w,
             h=row.h,
+            angle=row.angle,
             confidence=row.confidence,
             provenance=Provenance(
                 kind=row.provenance_kind,
@@ -204,6 +206,7 @@ class BoxCreate(BaseModel):
     y: float = Field(ge=0)
     w: float = Field(gt=0)
     h: float = Field(gt=0)
+    angle: float = Field(default=0.0)
 
 
 class BoxUpdate(BaseModel):
@@ -219,6 +222,7 @@ class BoxUpdate(BaseModel):
     y: float = Field(default=None, ge=0)
     w: float = Field(default=None, gt=0)
     h: float = Field(default=None, gt=0)
+    angle: float = Field(default=None)
 
 
 class BoxReview(BaseModel):

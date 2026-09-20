@@ -39,6 +39,16 @@ def _check_bounds(image: Image, x: float, y: float, w: float, h: float) -> None:
         )
 
 
+def normalise_angle(deg: float) -> float:
+    """Degrees into [0, 180). A rectangle has 180 degree symmetry, so 190 and 10 are one shape.
+
+    Normalising on the write path, not only in the UI: a value arriving from the mock server, a
+    test or a future import must land normalised too, or two rows describing the same box compare
+    unequal forever after.
+    """
+    return float(deg) % 180.0
+
+
 def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:
     with handle.session() as s:
         _image(s, image_id)
@@ -51,7 +61,14 @@ def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:
 
 
 def create_box(
-    handle: ProjectHandle, image_id: str, class_id: str, x: float, y: float, w: float, h: float
+    handle: ProjectHandle,
+    image_id: str,
+    class_id: str,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    angle: float = 0.0,
 ) -> Box:
     with handle.session() as s:
         image = _image(s, image_id)
@@ -64,6 +81,7 @@ def create_box(
             y=y,
             w=w,
             h=h,
+            angle=normalise_angle(angle),
             provenance_kind="person",
             review_state="accepted",
             reviewed_at=datetime.now(UTC),
@@ -84,6 +102,8 @@ def update_box(handle: ProjectHandle, box_id: str, **fields) -> Box:
             _check_class(handle, s, fields["class_id"])
         moved = {k: fields.get(k, getattr(row, k)) for k in ("x", "y", "w", "h")}
         _check_bounds(_image(s, row.image_id), **moved)
+        if "angle" in fields:
+            fields["angle"] = normalise_angle(fields["angle"])
         for k, v in fields.items():
             setattr(row, k, v)
         if row.review_state not in GROUND_TRUTH:  # editing a proposal is a review decision

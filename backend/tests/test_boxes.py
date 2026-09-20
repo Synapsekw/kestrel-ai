@@ -210,3 +210,41 @@ def test_patch_rejects_an_explicit_null(client, labelled):
         assert r.json()["error"]["code"] == "validation_error"
     unchanged = client.get(f"/api/v1/projects/{pid}/images/{labelled['image_id']}/boxes").json()["items"][0]
     assert (unchanged["x"], unchanged["w"]) == (10, 30)
+
+
+def test_create_box_defaults_to_zero_angle(client, labelled):
+    r = _create(client, labelled)
+    assert r.status_code == 201, r.text
+    assert r.json()["angle"] == 0.0
+
+
+def test_create_box_accepts_an_angle(client, labelled):
+    r = _create(client, labelled, angle=30.0)
+    assert r.status_code == 201, r.text
+    assert r.json()["angle"] == 30.0
+
+
+def test_patch_box_sets_the_angle(client, labelled):
+    box_id = _create(client, labelled).json()["id"]
+    r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"angle": 45.0})
+    assert r.status_code == 200, r.text
+    assert r.json()["angle"] == 45.0
+
+
+def test_angle_is_normalised_into_zero_to_one_eighty_on_write(client, labelled):
+    """A rectangle has 180 degree symmetry, so 190 and 10 are the same shape (spec 3.1)."""
+    box_id = _create(client, labelled, angle=190.0).json()["id"]
+    assert client.get(f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes").json()[
+        "items"
+    ][0]["angle"] == 10.0
+    r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"angle": -10.0})
+    assert r.json()["angle"] == 170.0
+
+
+def test_existing_boxes_read_back_as_zero_angle(client, labelled):
+    """Migration 0003 gives every pre-existing row angle 0 through the column default."""
+    proposal_id = _proposal(client, labelled)
+    rows = client.get(
+        f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes"
+    ).json()["items"]
+    assert [b["angle"] for b in rows if b["id"] == proposal_id] == [0.0]

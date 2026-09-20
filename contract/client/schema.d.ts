@@ -1481,6 +1481,7 @@ export interface components {
          *           "y": 802,
          *           "w": 96,
          *           "h": 61,
+         *           "angle": 0,
          *           "confidence": 0.81,
          *           "provenance": {
          *             "kind": "local_model",
@@ -1531,6 +1532,7 @@ export interface components {
          *       "y": 300,
          *       "w": 140,
          *       "h": 90,
+         *       "angle": 0,
          *       "confidence": null,
          *       "provenance": {
          *         "kind": "person",
@@ -1552,6 +1554,8 @@ export interface components {
             y: number;
             w: number;
             h: number;
+            /** @description Rotation in degrees about the box's own centre, clockwise in image coordinates. `x`, `y`, `w`, `h` always describe the unrotated box. A rectangle has 180 degree symmetry, so the range is [0, 180) and 190 is stored as 10. */
+            angle: number;
             confidence: number | null;
             provenance: components["schemas"]["Provenance"];
             review_state: components["schemas"]["ReviewState"];
@@ -1571,6 +1575,7 @@ export interface components {
          *           "y": 300,
          *           "w": 140,
          *           "h": 90,
+         *           "angle": 0,
          *           "confidence": null,
          *           "provenance": {
          *             "kind": "person",
@@ -1591,6 +1596,7 @@ export interface components {
          *           "y": 802,
          *           "w": 96,
          *           "h": 61,
+         *           "angle": 0,
          *           "confidence": 0.81,
          *           "provenance": {
          *             "kind": "local_model",
@@ -1624,6 +1630,7 @@ export interface components {
             y: number;
             w: number;
             h: number;
+            angle?: number;
         };
         /**
          * @example {
@@ -1637,6 +1644,7 @@ export interface components {
             y?: number;
             w?: number;
             h?: number;
+            angle?: number;
         };
         /**
          * @example {
