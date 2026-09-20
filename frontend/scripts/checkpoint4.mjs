@@ -72,13 +72,13 @@ async function launch(label) {
 
 async function closeAndCheck(browser, label) {
   await browser.close();
-  ps("Get-Process machinery-app -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }");
+  ps("Get-Process kestrel-ai -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }");
   let remaining = sidecarPids();
   for (let i = 0; i < 40 && remaining; i++) {
     await sleep(250);
     remaining = sidecarPids();
   }
-  const appLeft = ps("(Get-Process machinery-app -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','");
+  const appLeft = ps("(Get-Process kestrel-ai -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id) -join ','");
   step(`${label}: closing the window stops the sidecar and the app`, !remaining && !appLeft, `sidecar left "${remaining}" app left "${appLeft}"`);
 }
 

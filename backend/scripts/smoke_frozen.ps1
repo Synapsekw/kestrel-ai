@@ -38,7 +38,7 @@ if (-not $Dist) { $Dist = Join-Path (Split-Path $PSScriptRoot -Parent) "dist\kes
 # Only a work dir this run generated is ever deleted; one the caller named is left alone.
 $generatedWorkDir = -not $WorkDir
 if ($generatedWorkDir) {
-  $WorkDir = Join-Path $env:TEMP ("machinery-smoke-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
+  $WorkDir = Join-Path $env:TEMP ("kestrel-smoke-" + [guid]::NewGuid().ToString("N").Substring(0, 8))
 }
 $exe = Join-Path $Dist "kestrel-backend.exe"
 if (-not (Test-Path $exe)) { throw "no frozen build at $exe; run backend\scripts\build.ps1 first" }
