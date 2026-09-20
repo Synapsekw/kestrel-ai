@@ -199,15 +199,23 @@ def test_coco_category_ids_are_stable_across_calls(tmp_path):
 
 def test_coco_bbox_is_the_envelope_and_segmentation_is_the_quad(tmp_path):
     """COCO has no rotated-box standard: `bbox` stays axis-aligned for every existing reader,
-    and `segmentation` carries the exact rotated shape for anything that understands it."""
-    images = [_image(boxes=[_box(x=10, y=20, w=30, h=40, angle=90)])]
+    and `segmentation` carries the exact rotated shape for anything that understands it.
+
+    The angle is deliberately NOT 90 degrees. At a right angle the envelope is just the box with
+    its sides swapped, so `bw * bh == w * h` and an `area` computed from the envelope would pass
+    this test unnoticed. At 30 degrees the two diverge — 1200 against 2932 — so the assertion
+    can actually fail.
+    """
+    images = [_image(boxes=[_box(x=10, y=20, w=60, h=20, angle=30)])]
     coco_out.write(images, CLASSES, tmp_path)
     ann = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))["annotations"][0]
-    # A 30x40 box about centre (25, 40), turned 90 degrees, occupies a 40x30 footprint at (5, 25).
-    assert ann["bbox"] == pytest.approx([5.0, 25.0, 40.0, 30.0])
-    assert ann["area"] == pytest.approx(30 * 40)  # rotation does not change area
+    assert ann["bbox"] == pytest.approx([9.019238, 6.339746, 61.961524, 47.320508], abs=1e-6)
+    assert ann["area"] == pytest.approx(60 * 20)  # rotation does not change area
     assert len(ann["segmentation"]) == 1
-    assert len(ann["segmentation"][0]) == 8
+    assert ann["segmentation"][0] == pytest.approx(
+        [19.019238, 6.339746, 70.980762, 36.339746, 60.980762, 53.660254, 9.019238, 23.660254],
+        abs=1e-6,
+    )
 
 
 def test_coco_leaves_an_unrotated_annotation_exactly_as_it_was(tmp_path):
