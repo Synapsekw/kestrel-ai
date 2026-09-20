@@ -52,6 +52,16 @@ export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): v
           e.preventDefault();
           st.setSpaceHeld(false);
           return;
+        case "shift-down":
+          st.setShiftHeld(true);
+          return;
+        case "shift-up":
+          st.setShiftHeld(false);
+          return;
+        case "rotate":
+          e.preventDefault();
+          void actions.rotateSelected(action.delta);
+          return;
         case "escape":
           st.select(null);
           st.setDraft(null);
@@ -97,6 +107,7 @@ export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): v
       document.removeEventListener("keydown", handle);
       document.removeEventListener("keyup", handle);
       useEditorStore.getState().setSpaceHeld(false);
+      useEditorStore.getState().setShiftHeld(false);
     };
   }, [enabled, classes, actions, nav]);
 }

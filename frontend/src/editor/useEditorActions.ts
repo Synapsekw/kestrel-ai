@@ -15,7 +15,7 @@ import {
   type CommandContext,
   type ReviewDecision,
 } from "./commands";
-import type { OrientedRect, Rect } from "./geometry";
+import { orientedRectOf, roundOriented, type OrientedRect, type Rect } from "./geometry";
 import type { History } from "./history";
 
 export interface EditorActions {
@@ -24,6 +24,7 @@ export interface EditorActions {
   deleteBox: (id: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
   duplicateSelected: () => Promise<void>;
+  rotateSelected: (delta: number) => Promise<void>;
   setClass: (id: string, classId: string) => Promise<void>;
   review: (ids: string[], action: ReviewDecision) => Promise<void>;
   acceptAll: () => Promise<void>;
@@ -71,6 +72,15 @@ export function useEditorActions(
         queued(async () => {
           const id = state().selectedId;
           if (id) await cmdDuplicate(ctx, id);
+        }),
+      rotateSelected: (delta) =>
+        queued(async () => {
+          const st = state();
+          const id = st.selectedId;
+          const box = id ? st.boxes[id] : undefined;
+          if (!id || !box) return;
+          const before = orientedRectOf(box);
+          await cmdUpdateRect(ctx, id, before, roundOriented({ ...before, angle: before.angle + delta }));
         }),
       setClass: (id, classId) => queued(() => cmdSetClass(ctx, id, classId)),
       review: (ids, action) => queued(() => cmdReview(ctx, ids, action)),
