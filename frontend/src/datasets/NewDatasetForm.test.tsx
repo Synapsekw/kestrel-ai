@@ -79,4 +79,10 @@ describe("NewDatasetForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(onClose).toHaveBeenCalled();
   });
+
+  it("warns that a frozen dataset does not yet carry box rotation", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(<NewDatasetForm projectId={PROJECT_ID} onClose={vi.fn()} />, { api });
+    expect(screen.getByText(/rotation/i)).toBeInTheDocument();
+  });
 });
