@@ -56,7 +56,7 @@ if ((& git -C $repo branch -r) -match 'origin/main') { & git -C $repo push origi
 
 Write-Host "removing the worktree..."
 Set-Location $repo
-& git worktree remove $wt 2>&1 | Out-Host
+& git worktree remove $wt | Out-Host
 
 if (Test-Path $wt) {
   # Expected: git refuses while node_modules is present. Remove junctions AS LINKS first.
