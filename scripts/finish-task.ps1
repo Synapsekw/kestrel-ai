@@ -23,8 +23,12 @@ $repo = Split-Path -Parent $repo
 if ((& git status --porcelain)) { throw "working tree is dirty - commit or discard first" }
 
 Write-Host "rebasing $branch onto main so the gate runs against the merged state..."
-if ((& git branch -r) -match 'origin/main') { & git fetch origin main | Out-Null }
-& git rebase main
+$rebaseBase = 'main'
+if ((& git branch -r) -match 'origin/main') {
+  & git fetch origin main | Out-Null
+  $rebaseBase = 'origin/main'
+}
+& git rebase $rebaseBase
 if ($LASTEXITCODE -ne 0) {
   throw "rebase conflict - resolve it, then re-run this script"
 }
@@ -50,9 +54,15 @@ if (-not $SkipGate) {
 
 Write-Host "merging $branch into main..."
 & git -C $repo checkout main
+if ($LASTEXITCODE -ne 0) { throw "checkout of main failed" }
+if ((& git -C $repo status --porcelain)) { throw "main checkout is dirty - commit or discard first, then re-run this script" }
+if ((& git -C $repo rev-parse --abbrev-ref HEAD).Trim() -ne 'main') { throw "main checkout is not on main" }
 & git -C $repo merge --ff-only $branch
 if ($LASTEXITCODE -ne 0) { throw "merge failed" }
-if ((& git -C $repo branch -r) -match 'origin/main') { & git -C $repo push origin main }
+if ((& git -C $repo branch -r) -match 'origin/main') {
+  & git -C $repo push origin main
+  if ($LASTEXITCODE -ne 0) { throw "push rejected - main advanced on the remote; pull and re-run" }
+}
 
 Write-Host "removing the worktree..."
 Set-Location $repo

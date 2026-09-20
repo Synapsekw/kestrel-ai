@@ -17,12 +17,13 @@ $wt = Join-Path $repo ".claude\worktrees\$Name"
 
 if (Test-Path $wt) { throw "worktree already exists: $wt" }
 
-Write-Host "fetching origin/main..."
-& git -C $repo fetch origin main | Out-Host
-
 # origin may not exist yet (the repo is published in a later task); fall back to local main.
 $base = 'main'
-if ((& git -C $repo branch -r) -match 'origin/main') { $base = 'origin/main' }
+if ((& git -C $repo branch -r) -match 'origin/main') {
+  Write-Host "fetching origin/main..."
+  & git -C $repo fetch origin main | Out-Host
+  $base = 'origin/main'
+}
 
 & git -C $repo worktree add $wt -b "task/$Name" $base
 if ($LASTEXITCODE -ne 0) { throw "git worktree add failed" }
