@@ -31,6 +31,9 @@ function seed(angle: number, shiftHeld = false) {
     order: [box.id],
     selectedId: box.id,
     shiftHeld,
+    // Pinned rather than left to whatever a previous test left behind: the label's screen offset
+    // is `14 / scale`, so a test that asserts an exact label position must fix the scale too.
+    view: { scale: 1, x: 0, y: 0 },
   });
   return box;
 }
@@ -72,12 +75,15 @@ describe("BoxLayer rotation", () => {
   });
 
   it("anchors the label to the top-most corner of a rotated box", () => {
-    // personBox is 140x90 at (512, 300), so its centre is (582, 345). Rotated 90 degrees the
-    // footprint becomes 90x140, whose top edge is at 345 - 70 = 275 — above the unrotated 300.
-    const box = seed(90);
+    // personBox is 140x90 at (512, 300), centre (582, 345). At 90 degrees its corners are
+    // (627,275), (627,415), (537,415), (537,275) — so the top-most is (627, 275) and the label
+    // hangs 14 screen px above it. The pre-rotation anchor would be (512, 286), which is why
+    // `data-x` is asserted: a y-only check passes against the un-anchored implementation too.
+    seed(90);
     render(<BoxLayer classes={exampleClasses} onCommitRect={vi.fn()} />);
     const label = document.querySelector('[data-konva="text"]')!;
-    expect(Number(label.getAttribute("data-y"))).toBeLessThan(box.y);
+    expect(Number(label.getAttribute("data-x"))).toBeCloseTo(627, 6);
+    expect(Number(label.getAttribute("data-y"))).toBeCloseTo(275 - 14, 6);
   });
 
   it("leaves an unrotated box's label where it has always been", () => {
