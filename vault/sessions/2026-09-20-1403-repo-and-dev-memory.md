@@ -1,0 +1,101 @@
+---
+type: session
+date: 2026-09-20
+branch: main
+trigger: wrapup
+status: complete
+tags: [session]
+related: []
+---
+
+# Repo and dev-memory public-prep session
+
+## What changed
+
+Built out the public-repo preparation plan (`docs/superpowers/plans/2026-09-20-repo-and-dev-memory.md`)
+end to end, then applied a fix wave from a final whole-branch review (no Critical findings, 11
+Important). Commits on `main`, oldest first:
+
+- `409e0c7` chore: track the SDD wave state so it travels between machines
+- `f6dbd41` docs: secret scan before the repo goes public
+- `427e808` chore: group the SDD ignore rule with the other local-state rules
+- `645ba7a` docs: add the working agreement (CLAUDE.md -> AGENTS.md)
+- `7a12ae4` docs: add the contributor reference
+- `209645f` docs: tighten the secret scan record's screenshot and branch coverage
+- `9c1656c` feat(vault): scaffold the Obsidian dev-memory vault
+- `42a98b8` feat(scripts): add the task worktree start/finish helpers
+- `ebc8642` feat(vault): north star, product context and the maps of content
+- `9cfa632` feat(vault): seed the decision log from the progress ledger
+- `e7d29d8` fix(scripts): guard the origin fetch and drop the unsafe native stderr redirect
+- `3844b35` feat: add the /wrapup session-capture command
+- `a4872c7` fix(scripts): drop the last native stderr redirect before the junction cleanup
+- `50dab0f` fix(vault): cite the right commit for the stale 8/8 acceptance run
+
+Plus this session's fix wave (commits follow this note — see `git log` for the exact SHAs):
+corrected two false statements in `vault/moc/memory.md` (the SDD directory is tracked, not
+git-ignored; the empty-ADR-table caveat was stale — 18 ADRs exist, 5 tagged `gotcha`); hardened
+`scripts/start-task.ps1` and `scripts/finish-task.ps1` (guarded the origin fetch, rebase onto
+`origin/main` when it exists, checked the push and main-checkout exit codes, asserted the main
+checkout is clean and on `main` before merging — all without touching the reviewed junction-removal
+block); de-hardcoded the operator's home directory out of `CONTRIBUTING.md`; wrote this seed session
+note; added `vault/decisions/2026-09-20-gotcha-powershell-native-stderr-under-stop.md`; added `vault/`
+to the `README.md` layout table with a pointer to `AGENTS.md` / `CONTRIBUTING.md` /
+`vault/00-north-star.md`; configured Templater's template folder
+(`.obsidian/plugins/templater-obsidian/data.json` → `vault/templates`) and replaced the
+non-existent `tp.user.git_branch()` call in `vault/templates/session.md` with a plain placeholder;
+and fixed several small accuracy issues (`AGENTS.md`'s `check-tokens.mjs` path, `vault/README.md`'s
+frontmatter-type list missing `spec`, and two stale commit citations in `vault/00-north-star.md`).
+
+## Why
+
+The repo is about to be published (operator-gated, not yet done). This work gives it a tracked
+Obsidian dev-memory vault, a working agreement (`AGENTS.md` / `CONTRIBUTING.md`), worktree scripts
+for a second machine, and a `/wrapup` capture command — then a final review caught real defects in
+that scaffolding (mostly on the second-machine/remote path, which had never been exercised) and two
+statements in the vault itself that had gone stale as the vault filled in around them.
+
+## Open threads
+
+- **The repo is NOT yet published.** Publishing is Task 11, operator-gated, and is explicitly out of
+  scope for this session.
+- **The second-machine clone test is NOT done.** Task 12 (cloning onto a second machine and running
+  `start-task.ps1` / `finish-task.ps1` against a real `origin`) has not been performed. The script
+  fixes in this session are reasoned through, not exercised against a live remote.
+- **The Obsidian GUI verification is owed to the operator.** Nobody has opened this vault in the
+  Obsidian app yet to confirm Dataview queries render, Templater expands `vault/templates/session.md`
+  without error, and the Homepage plugin opens `vault/00-north-star.md` on startup.
+- **The 8/8 acceptance run is stale.** It was measured at `177f68b`, which predates the Kestrel AI
+  rename (`vault/00-north-star.md` §5 has the detail). Re-running acceptance against the renamed,
+  installed build is tracked separately (Task 11 Step 5 of the rename plan) and was not touched here.
+
+## How to test
+
+This session's changes are documentation, vault content and PowerShell scripts — nothing in
+`backend/`, `frontend/src/`, `frontend/src-tauri/src/` or `contract/` changed, so there is no app
+behavior to click through. To verify by hand:
+
+1. Open `E:\Dev\Yolo\app` as an Obsidian vault (or reload it if already open) and confirm
+   `vault/00-north-star.md` opens automatically (Homepage plugin) with no console errors.
+2. Confirm Dataview queries render as tables, not code blocks — e.g. the "Gotcha decisions" query in
+   `vault/moc/memory.md` should list 5 rows.
+3. In Obsidian, create a note from `vault/templates/session.md` via Templater (folder template or the
+   "Insert Template" command) and confirm it expands without a `tp.user.git_branch` error, filling
+   `date:` and leaving `branch:` as the plain placeholder.
+4. In a PowerShell 5.1 window: `[System.Management.Automation.PSParser]::Tokenize((Get-Content -Raw
+   scripts\start-task.ps1), [ref]$null).Count` and the same for `finish-task.ps1` — both should return
+   a token count with no parse errors (already done in this session; re-run to confirm nothing
+   regressed).
+5. `grep -n '2>&1' scripts\*.ps1` should return nothing.
+6. Read `README.md`'s Layout table and confirm `vault/` is listed and the pointer paragraph names
+   `AGENTS.md`, `CONTRIBUTING.md` and `vault/00-north-star.md`.
+7. Do **not** run `scripts\finish-task.ps1` for real yet against a fabricated remote — it merges,
+   pushes and deletes, and the push/rebase-onto-`origin/main` paths are still untested against a live
+   `origin`. That verification belongs to Task 12.
+
+## Next session entry point
+
+Task 11 (publish the repo, operator-gated) and Task 12 (second-machine clone test, which is the
+first real exercise of `scripts/start-task.ps1` / `scripts/finish-task.ps1` against a live `origin`)
+are next. After Task 12, re-run acceptance against the renamed, installed Kestrel AI build
+(`vault/00-north-star.md` §5) — that is unrelated to this vault work but is the other open item
+blocking a clean "current state" claim.
