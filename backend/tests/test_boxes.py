@@ -248,3 +248,27 @@ def test_existing_boxes_read_back_as_zero_angle(client, labelled):
         f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes"
     ).json()["items"]
     assert [b["angle"] for b in rows if b["id"] == proposal_id] == [0.0]
+
+
+def test_rotated_box_may_hang_over_the_image_edge(client, labelled):
+    """A truck half out of frame at 30 degrees is a real annotation (spec 3.3).
+
+    320x240 image: this box's right edge is at 340, twenty pixels past it, but its centre (310)
+    is comfortably inside.
+    """
+    r = _create(client, labelled, x=280, y=10, w=60, h=20, angle=30.0)
+    assert r.status_code == 201, r.text
+
+
+def test_rotated_box_centre_must_stay_inside_the_image(client, labelled):
+    """Centre at 430 on a 320-wide image: the box is not merely truncated, it is off the frame."""
+    r = _create(client, labelled, x=400, y=10, w=60, h=20, angle=30.0)
+    assert r.status_code == 422, r.text
+    assert "centre" in r.json()["error"]["message"]
+
+
+def test_unrotated_box_still_must_lie_fully_inside(client, labelled):
+    """The same box at angle 0 is still rejected: today's rule is untouched (spec 3.3)."""
+    r = _create(client, labelled, x=280, y=10, w=60, h=20, angle=0.0)
+    assert r.status_code == 422, r.text
+    assert "does not lie inside" in r.json()["error"]["message"]

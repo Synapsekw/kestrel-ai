@@ -13,6 +13,7 @@ from sqlalchemy import select
 from app.datasets.empties import clear_mark_for_ground_truth
 from app.db.models import Box, Image
 from app.errors import AppError, not_found
+from app.geometry import centre_of, normalise_angle
 from app.projects.service import ProjectHandle
 
 GROUND_TRUTH = ("accepted", "edited")
@@ -30,23 +31,32 @@ def _check_class(handle: ProjectHandle, s, class_id: str) -> None:
         raise AppError("validation_error", f"unknown class {class_id!r}", 422)
 
 
-def _check_bounds(image: Image, x: float, y: float, w: float, h: float) -> None:
-    if x < 0 or y < 0 or w <= 0 or h <= 0 or x + w > image.width or y + h > image.height:
+def _check_bounds(image: Image, x: float, y: float, w: float, h: float, angle: float = 0.0) -> None:
+    """Angle 0 must lie fully inside the image; a rotated box only needs its centre inside.
+
+    The asymmetry is deliberate (spec 3.3). Forcing a rotated box's corners inside the image would
+    shrink or shove it every time the annotator rotated near an edge, and an object half out of
+    frame is exactly the case aerial frames are full of. Angle 0 keeps today's rule untouched so
+    no box that already exists changes meaning.
+    """
+    if w <= 0 or h <= 0:
+        raise AppError("validation_error", f"box ({x}, {y}, {w}, {h}) has a non-positive side", 422)
+    if angle:
+        cx, cy = centre_of(x, y, w, h)
+        if not (0 <= cx <= image.width and 0 <= cy <= image.height):
+            raise AppError(
+                "validation_error",
+                f"rotated box centre ({cx}, {cy}) is outside the "
+                f"{image.width}x{image.height} image",
+                422,
+            )
+        return
+    if x < 0 or y < 0 or x + w > image.width or y + h > image.height:
         raise AppError(
             "validation_error",
             f"box ({x}, {y}, {w}, {h}) does not lie inside the {image.width}x{image.height} image",
             422,
         )
-
-
-def normalise_angle(deg: float) -> float:
-    """Degrees into [0, 180). A rectangle has 180 degree symmetry, so 190 and 10 are one shape.
-
-    Normalising on the write path, not only in the UI: a value arriving from the mock server, a
-    test or a future import must land normalised too, or two rows describing the same box compare
-    unequal forever after.
-    """
-    return float(deg) % 180.0
 
 
 def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:
@@ -73,7 +83,8 @@ def create_box(
     with handle.session() as s:
         image = _image(s, image_id)
         _check_class(handle, s, class_id)
-        _check_bounds(image, x, y, w, h)
+        angle = normalise_angle(angle)
+        _check_bounds(image, x, y, w, h, angle)
         row = Box(
             image_id=image_id,
             class_id=class_id,
@@ -81,7 +92,7 @@ def create_box(
             y=y,
             w=w,
             h=h,
-            angle=normalise_angle(angle),
+            angle=angle,
             provenance_kind="person",
             review_state="accepted",
             reviewed_at=datetime.now(UTC),
@@ -100,10 +111,10 @@ def update_box(handle: ProjectHandle, box_id: str, **fields) -> Box:
             raise not_found("box", box_id)
         if "class_id" in fields:
             _check_class(handle, s, fields["class_id"])
-        moved = {k: fields.get(k, getattr(row, k)) for k in ("x", "y", "w", "h")}
-        _check_bounds(_image(s, row.image_id), **moved)
         if "angle" in fields:
             fields["angle"] = normalise_angle(fields["angle"])
+        moved = {k: fields.get(k, getattr(row, k)) for k in ("x", "y", "w", "h", "angle")}
+        _check_bounds(_image(s, row.image_id), **moved)
         for k, v in fields.items():
             setattr(row, k, v)
         if row.review_state not in GROUND_TRUTH:  # editing a proposal is a review decision
