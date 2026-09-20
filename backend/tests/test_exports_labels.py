@@ -238,3 +238,39 @@ def test_yolo_results_export_writes_the_envelope_of_a_rotated_box(tmp_path):
     assert float(cy) == pytest.approx(0.40)
     assert float(w) == pytest.approx(0.40)  # 40 wide after the turn, not 30
     assert float(h) == pytest.approx(0.30)
+
+
+def test_yolo_clips_an_envelope_that_runs_off_the_frame(tmp_path):
+    """A big rotated box's envelope can be wider than the image; the label must still fit in it.
+
+    A 300x200 box at 45 degrees has a 353.55px envelope, which on a 320x240 frame normalises to
+    1.105. Ultralytics' label verifier asserts every normalised value is <= 1 and calls the pair
+    corrupt otherwise, discarding the whole label file - one such box would silently remove every
+    label for that image. Spec 3.3 asks for the clip; this is the 5-number path taking it.
+    """
+    images = [_image(width=320, height=240, boxes=[_box(x=10, y=20, w=300, h=200, angle=45)])]
+    yolo_out.write(images, CLASSES, tmp_path)
+    line = (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8").strip()
+    index, *numbers = line.split()
+    assert index == "0"
+    assert all(0.0 <= float(n) <= 1.0 for n in numbers), line
+    # The envelope covers the frame in both axes, so the clipped box is the whole image.
+    cx, cy, w, h = (float(n) for n in numbers)
+    assert (cx, cy, w, h) == (0.5, 0.5, 1.0, 1.0)
+
+
+def test_yolo_clip_keeps_the_emitted_box_a_sub_rectangle_of_the_image(tmp_path):
+    """Clipping the centre and the sides separately would still leave an edge outside the frame.
+
+    This 60x70 box at 45 degrees on a 100px image has an envelope spanning -0.1396..0.7796 across
+    and 0.0904..1.0096 down: one edge outside on each axis, the opposite edge inside. Clipping the
+    edges and only then deriving the centre and the sides keeps all four inside; clipping the
+    centre and the width on their own would emit 0.32 +/- 0.919/2, i.e. a right edge at 0.78 but a
+    left edge at -0.14 - still corrupt. The edges that were already inside must not move.
+    """
+    images = [_image(width=100, height=100, boxes=[_box(x=2, y=20, w=60, h=70, angle=45)])]
+    yolo_out.write(images, CLASSES, tmp_path)
+    cx, cy, w, h = (float(n) for n in (tmp_path / "labels_yolo" / "a.txt").read_text("utf-8").split()[1:])
+    left, right, top, bottom = cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2
+    assert (left, bottom) == pytest.approx((0.0, 1.0), abs=1e-6)  # the two edges that were outside
+    assert (right, top) == pytest.approx((0.779619, 0.090381), abs=1e-6)  # the two that were not

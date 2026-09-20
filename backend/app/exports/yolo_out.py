@@ -9,9 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.datasets.materialise import _label_text
+from app.datasets.materialise import _label_text, detect_boxes
 from app.exports.rows import ExportImage
-from app.geometry import aabb_of
 from app.jobs.cancellation import JobFailure
 
 FOLDER = "labels_yolo"
@@ -31,12 +30,16 @@ def _as_box_dicts(image: ExportImage) -> list[dict]:
     loose label, but it still contains the object. Writing the *unrotated* x/y/w/h instead would
     write a rectangle that does not — a wrong label, not merely a loose one. Wave 2 replaces this
     with the 8-corner OBB format and the looseness goes away.
+
+    `datasets.materialise.detect_boxes` does the flattening, so an exported label and a frozen
+    dataset's label are the same decision made once rather than twice.
     """
-    out = []
-    for b in image.boxes:
-        x, y, w, h = aabb_of(b.x, b.y, b.w, b.h, b.angle)
-        out.append({"class_id": b.class_id, "x": x, "y": y, "w": w, "h": h})
-    return out
+    return detect_boxes(
+        [
+            {"class_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h, "angle": b.angle}
+            for b in image.boxes
+        ]
+    )
 
 
 def check_no_stem_collisions(images: list[ExportImage]) -> None:

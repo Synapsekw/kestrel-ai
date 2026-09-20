@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pytest
 import yaml
 
 from app.datasets.splits import assign_splits
+from app.geometry import corners_of
 
 FLIGHTS = {"0031": 6, "0033": 3}
 WIDTH, HEIGHT = 400, 300
@@ -191,6 +194,38 @@ def test_explicit_image_ids_are_used_verbatim(client, labelled_project, wait_job
     wait_job(pid, created["job"]["id"])
     root = project_dir / "datasets" / "v1"
     assert len(list((root / "images").rglob("*.jpg"))) == 4
+
+
+def test_a_rotated_box_freezes_as_its_axis_aligned_envelope(client, labelled_project, wait_job, project_dir):
+    """Freezing must flatten a rotated box to its envelope, never to the unrotated rectangle.
+
+    Wave 1 has no oriented label format, so the frozen 5-number line is all the trainer sees. The
+    unrotated 40x60 rectangle of a box turned 45 degrees overlaps the machine only in the middle:
+    that is a wrong label, and worse than the upright label the same annotation had before this
+    branch existed. The envelope is loose but honest - it contains every corner.
+    """
+    pid = labelled_project["pid"]
+    image = next(i for i in labelled_project["images"] if i["path"].endswith("0031_0001.jpg"))
+    box = client.get(f"/api/v1/projects/{pid}/images/{image['id']}/boxes").json()["items"][0]
+    assert client.patch(f"/api/v1/projects/{pid}/boxes/{box['id']}", json={"angle": 45.0}).status_code == 200
+
+    created = _create_dataset(client, pid, split_method="by_group", val_fraction=0.2, seed=42).json()
+    assert wait_job(pid, created["job"]["id"])["state"] == "succeeded"
+    root = project_dir / "datasets" / "v1"
+    rotated = next(root.glob(f"labels/*/frames__{Path(image['path']).stem}.txt"))
+    _, cx, cy, w, h = (float(n) for n in rotated.read_text().split())
+
+    left, right = (cx - w / 2) * WIDTH, (cx + w / 2) * WIDTH
+    top, bottom = (cy - h / 2) * HEIGHT, (cy + h / 2) * HEIGHT
+    corners = corners_of(100, 60, 40, 60, 45.0)  # the box `labelled_project` drew, now turned
+    eps = 1e-3  # the label holds six decimals of a normalised value: ~2e-4 px on this frame
+    assert all(left - eps <= px <= right + eps for px, _ in corners), (left, right, corners)
+    assert all(top - eps <= py <= bottom + eps for _, py in corners), (top, bottom, corners)
+    assert right - left == pytest.approx(70.710678, abs=eps)  # wider than the 40 it was drawn at
+
+    # An untouched box on another frame is byte-for-byte what it was before rotation existed.
+    upright = root / "labels" / "train" / "frames__IX-12-02491_0031_0002.txt"
+    assert upright.read_text() == "0 0.300000 0.300000 0.100000 0.200000\n"
 
 
 def test_dataset_names_that_are_not_a_folder_are_rejected(client, labelled_project):
