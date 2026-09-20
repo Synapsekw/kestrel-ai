@@ -18,6 +18,31 @@ const noop = () => {};
 describe("ModelDetail actions", () => {
   beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
 
+  it("reveals the weights path and each export path (M3)", async () => {
+    const { api, requests } = fakeClient([{ method: "POST", path: /\/reveal$/, status: 204 }]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleTrainedModel}
+        project={exampleProject}
+        datasetNames={{ names: {}, loaded: false }}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    const buttons = screen.getAllByRole("button", { name: "Show in folder" });
+    expect(buttons).toHaveLength(2); // one next to the weights path, one next to the onnx export
+    fireEvent.click(buttons[0]);
+    await waitFor(() =>
+      expect(requests.find((r) => r.method === "POST")).toMatchObject({
+        url: `/api/v1/projects/${PROJECT_ID}/reveal`,
+        body: { path: exampleTrainedModel.weights_path },
+      }),
+    );
+  });
+
   it("starts an export job and shows it as a job card", async () => {
     const { api, requests } = fakeClient([
       {
@@ -35,7 +60,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleTrainedModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={noop}
         onChanged={noop}
         onDeleted={noop}
@@ -67,7 +92,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleTrainedModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={onProjectSaved}
         onChanged={noop}
         onDeleted={noop}
@@ -88,7 +113,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={onProjectSaved}
         onChanged={noop}
         onDeleted={noop}
@@ -107,7 +132,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleTrainedModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={noop}
         onChanged={noop}
         onDeleted={onDeleted}
@@ -124,6 +149,41 @@ describe("ModelDetail actions", () => {
     });
   });
 
+  it("shows 'deleted dataset' once names have loaded and the model's dataset is missing (I4)", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleTrainedModel}
+        project={exampleProject}
+        datasetNames={{ names: {}, loaded: true }}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    expect(screen.getByText("deleted dataset")).toBeInTheDocument();
+  });
+
+  it("falls back to the raw id while dataset names are still loading or unavailable (I4)", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <ModelDetail
+        projectId={PROJECT_ID}
+        model={exampleTrainedModel}
+        project={exampleProject}
+        datasetNames={{ names: {}, loaded: false }}
+        onProjectSaved={noop}
+        onChanged={noop}
+        onDeleted={noop}
+      />,
+      { api },
+    );
+    expect(screen.queryByText("deleted dataset")).not.toBeInTheDocument();
+    expect(screen.getByText(exampleTrainedModel.dataset_id!)).toBeInTheDocument();
+  });
+
   it("says how many of the model's classes produce proposals in this project", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
@@ -131,7 +191,7 @@ describe("ModelDetail actions", () => {
         projectId={PROJECT_ID}
         model={exampleModel}
         project={exampleProject}
-        datasetNames={{}}
+        datasetNames={{ names: {}, loaded: false }}
         onProjectSaved={noop}
         onChanged={noop}
         onDeleted={noop}

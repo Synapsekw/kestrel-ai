@@ -5,16 +5,18 @@ import { messageOf } from "@/api/errors";
 import { deleteModel, fetchModel } from "@/api/models";
 import { patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { RevealButton } from "@/exports/RevealButton";
 import { Alert, Button, Pill } from "@/ui";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
 import { classMapping, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
+import type { DatasetNames } from "./useDatasetNames";
 
 export interface ModelDetailProps {
   projectId: string;
   model: Model;
   project: Project;
-  datasetNames: Record<string, string>;
+  datasetNames: DatasetNames;
   onProjectSaved: (p: Project) => void;
   onChanged: (m: Model) => void;
   onDeleted: (id: string) => void;
@@ -111,10 +113,18 @@ export function ModelDetail({
               {model.base_weights ?? "–"}
             </Row>
             <Row term="Dataset">
-              {model.dataset_id ? (datasetNames[model.dataset_id] ?? model.dataset_id) : "–"}
+              {model.dataset_id
+                ? (datasetNames.names[model.dataset_id] ??
+                  (datasetNames.loaded ? "deleted dataset" : model.dataset_id))
+                : "–"}
             </Row>
             <Row term="Weights" mono>
-              <span title={model.weights_path}>{model.weights_path}</span>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate" title={model.weights_path}>
+                  {model.weights_path}
+                </span>
+                <RevealButton projectId={projectId} path={model.weights_path} />
+              </span>
             </Row>
             <Row term="Training job" mono>
               {model.run_id ? model.run_id.slice(0, 8) : "–"}

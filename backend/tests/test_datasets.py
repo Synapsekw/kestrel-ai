@@ -195,8 +195,9 @@ def test_explicit_image_ids_are_used_verbatim(client, labelled_project, wait_job
 
 def test_dataset_names_that_are_not_a_folder_are_rejected(client, labelled_project):
     pid = labelled_project["pid"]
-    assert _create_dataset(client, pid, name="..").status_code == 422
-    assert _create_dataset(client, pid, name=".").status_code == 422
+    # 409, not 422: the names match the schema pattern (see materialise.freeze).
+    assert _create_dataset(client, pid, name="..").status_code == 409
+    assert _create_dataset(client, pid, name=".").status_code == 409
 
 
 def test_dataset_from_real_frames(client, project, import_source, ahmadia_sample, wait_job, project_dir):

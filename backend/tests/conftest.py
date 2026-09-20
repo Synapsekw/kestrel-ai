@@ -42,16 +42,21 @@ def settings(tmp_path: Path) -> Settings:
 
 
 @pytest.fixture
-def app(settings):
+def app(settings, monkeypatch):
     """A test app that touches nothing outside the process.
 
     Keys stay in memory (no test may reach Credential Manager) and the CUDA probe is a stub, so
     a health request does not import torch into the pytest process. `test_health.py` keeps one
-    test for the real probe.
+    test for the real probe. `reveal`'s Explorer launch is a no-op here (the `launch` seam, not
+    `subprocess.Popen` itself): the contract conformance test calls every route (including reveal)
+    with generated bodies, and no test may start the real Explorer; `tests/test_reveal.py` restores
+    the real `launch` and monkeypatches `subprocess.Popen` itself where it needs to assert on the
+    exact command.
     """
     created = create_app(settings)
     created.state.keys = MemoryKeyStore()
     created.state.gpu_probe = GpuProbe(probe=lambda: {"available": False, "name": "test-gpu"})
+    monkeypatch.setattr("app.exports.reveal.launch", lambda command: None)
     return created
 
 

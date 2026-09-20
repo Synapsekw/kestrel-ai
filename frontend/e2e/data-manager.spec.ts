@@ -118,7 +118,11 @@ test("run model opens the query screen with the selection; add to dataset posts 
   });
   await expect(page.getByRole("dialog", { name: "Add to dataset" }).getByTestId(/^job-/)).toBeVisible();
   await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Train on it" })).toHaveAttribute("href", `/p/${P}/train`);
+  // The mock's materialise job stays "running" (its static example never reaches "succeeded"), so
+  // "Train on it" stays plain until then (I-B1): the row could still be discarded on failure.
+  await expect(
+    page.getByRole("dialog", { name: "Add to dataset" }).getByRole("link", { name: "Train on it" }),
+  ).toHaveAttribute("href", `/p/${P}/train`);
 });
 
 test("J, K and Enter open the focused image with the list as navigation context", async ({ page }) => {
@@ -145,7 +149,13 @@ test("label selected opens the editor over the selection only", async ({ page })
 
 test("double-click opens a list row even though the first click selects it", async ({ page }) => {
   await page.goto(`/p/${P}/data`);
+<<<<<<< HEAD
   await page.getByRole("radio", { name: "List" }).click();
+=======
+  await page.getByRole("button", { name: "List" }).click();
+  // The "Next:" line loads after the screen and moves the list down once; measure after it.
+  await expect(page.getByTestId("next-step")).toBeVisible();
+>>>>>>> wave1-s2-trial
   const name = page.getByTestId("image-table").getByText("IX-12-02491_0031_0001.jpg");
   const before = await name.boundingBox();
   await name.click();

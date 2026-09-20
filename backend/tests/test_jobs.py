@@ -22,9 +22,29 @@ def _fail_job(ctx):
     raise RuntimeError("boom")
 
 
+@register_job_type("test_fail_for_the_person")
+def _fail_for_the_person_job(ctx):
+    from app.jobs.cancellation import JobFailure
+
+    raise JobFailure("plain message for the person")
+
+
+@register_job_type("test_fail_value_error")
+def _fail_value_error_job(ctx):
+    raise ValueError("invalid literal for int() with base 10: 'x'")  # what a library raises
+
+
 @register_job_type("test_domain_event")
 def _domain_event_job(ctx):
     ctx.publish("images.changed", {"source_id": "s1", "count": 3})
+    return None
+
+
+@register_job_type("test_fast_progress")
+def _fast_progress_job(ctx):
+    # Three messages well inside the database write interval: only the first is stored at once.
+    for i in (1, 2, 3):
+        ctx.progress(i / 3, f"{i} / 3 images")
     return None
 
 
@@ -58,6 +78,14 @@ def test_job_runs_to_success_with_progress_and_log(client, project_dir, app):
     assert (project_dir / "runs" / job.id / "job.log").exists()
 
 
+def test_a_finished_job_keeps_its_last_progress_message(client, project_dir, app):
+    """The database write is throttled; the terminal write must carry the newest message."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fast_progress", {})
+    j = _wait(client, pid, job.id)
+    assert j["state"] == "succeeded" and j["message"] == "3 / 3 images"
+
+
 def test_log_tail_limits_lines(client, project_dir, app):
     pid = _project(client, project_dir)
     job = app.state.jobs.submit(app.state.projects.get(pid), "test_sleep", {})
@@ -73,6 +101,30 @@ def test_failed_job_records_error(client, project_dir, app):
     assert j["state"] == "failed" and "boom" in j["error"]
     log = client.get(f"/api/v1/projects/{pid}/jobs/{job.id}/log").json()
     assert any("Traceback" in line for line in log["lines"])
+
+
+def test_a_job_failure_is_stored_as_the_plain_message_it_carries(client, project_dir, app):
+    """JobFailure is a job's own message for the operator: no class name in front of it."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail_for_the_person", {})
+    j = _wait(client, pid, job.id)
+    assert j["state"] == "failed" and j["error"] == "plain message for the person"
+
+
+def test_a_value_error_from_a_library_keeps_its_class_name(client, project_dir, app):
+    """Libraries raise ValueError too; it is unexpected and must not read like a polished message."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail_value_error", {})
+    j = _wait(client, pid, job.id)
+    assert j["error"] == "ValueError: invalid literal for int() with base 10: 'x'"
+
+
+def test_a_runtime_error_still_keeps_its_class_name(client, project_dir, app):
+    """Anything other than ValueError is unexpected, so it keeps its class name as a clue."""
+    pid = _project(client, project_dir)
+    job = app.state.jobs.submit(app.state.projects.get(pid), "test_fail", {})
+    j = _wait(client, pid, job.id)
+    assert j["error"] == "RuntimeError: boom"
 
 
 def test_cancel_job(client, project_dir, app):

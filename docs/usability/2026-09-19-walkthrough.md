@@ -6,6 +6,8 @@ untouched. New project "Walkthrough", 40 frames copied from `data/raw/ahmadia` (
 the 7 flights), COCO `yolo11m.pt` imported, 14 images labeled, dataset `v1`, 3-epoch training,
 local query over 40 images, review, promote, ONNX export, provider test with an invalid key.
 Before-screenshots: `docs/evidence/usability/2026-09-19-before/`.
+After: the recorded walk-through on the installed app built from main 88d9216, 12/12 steps with
+screenshots per step and `walkthrough.json`: `docs/evidence/usability/2026-09-19-after/`.
 
 Severity: **blocks** (the user cannot continue without outside help), **confuses** (the user can
 continue but does not understand the state or does the wrong thing), **annoys** (friction only).
@@ -41,9 +43,10 @@ The "Closed by" column is filled with the commit that fixes the item.
 | E7 | Editor requests (ledger S2) | No request timeout: a hung request stalls the per-image queue, "Saving..." forever | Timeout with an error and retry | confuses | 0e9fe06 |
 | E8 | Editor opened from a review of one run | No "back to the queue"; the Review nav entry opens the whole queue, the run filter is lost | Back link that keeps the filter | annoys | 130c6ae |
 | E9 | Editor, confidence floor (E6) together with "No machinery" (E4); found on the packaged app while reading the walk-through screenshots | With every proposal hidden by the floor the region panel says "Nothing here? Press N", and N rejects the hidden proposals unseen | The panel names the hidden proposals; N refuses until they are in view | confuses | aa50eb7 |
+| E10 | Editor class hotkeys; found by the walk-through driver on the packaged app | A new box stays selected, so pressing the hotkey of the next class re-classes the box just drawn; the help said only "1-9: select class" | The help says what the key does and how to keep the box (Esc first) | confuses | 94868a0 |
 | S1 | Add to dataset, name "first set" | "request validation failed"; the input's `pattern` is an invalid regex in WebView2 (`/v` flag, console error), so native validation never fires | "Letters, digits, dot, dash, underscore" next to the field, checked before sending | confuses | a8b8bca |
-| S2 | Datasets | No screen lists datasets; they exist only as options of the Train dropdown; no split, class counts or delete | Datasets screen (list, stats, delete) | confuses | |
-| S3 | Add to dataset, by group, 14 images in 4 groups, fraction 0.2 | Result 8 train / 6 val (43 %), no warning | Warning when the achieved split is far from the requested one, suggestion to use random | confuses | |
+| S2 | Datasets | No screen lists datasets; they exist only as options of the Train dropdown; no split, class counts or delete | Datasets screen (list, stats, delete) | confuses | 07f3458 |
+| S3 | Add to dataset, by group, 14 images in 4 groups, fraction 0.2 | Result 8 train / 6 val (43 %), no warning | Warning when the achieved split is far from the requested one, suggestion to use random | confuses | c7726a1 |
 | T1 | Train form | 50 epochs, image size 1280, patience 50 with no guidance | One line per field (what it does, sensible range, rough duration) | confuses | 5b0cba7 |
 | T2 | Train on 14 images / result mAP50 0.0 % | Green "Training finished: the model is registered."; no warning before or after | Warning for tiny datasets before start; "this model is unlikely to be useful" when mAP is near zero | confuses | 5b0cba7 |
 | T3 | Train progress | The log is open by default and shows the worker command line and raw JSON lines | Log collapsed; human-readable epoch lines | annoys | 07af1a1 |
@@ -56,17 +59,19 @@ The "Closed by" column is filled with the commit that fixes the item.
 | Q7 | Query image selection | "First N" defaults to all 40 including labeled images; the group is free text; no "all images" | Group dropdown; sensible N; "all images" | annoys | 95b6717 |
 | Q8 | Query, cloud provider without a key | "Add the key in Settings." is plain text | Link to Settings | annoys | abe0154 |
 | Q9 | Naming | "Query", "Promote", "Proposal" are internal words | "Detect" / "Accept as labels" or a one-line explanation on the screen | annoys | 3a9f9fb |
+| Q10 | Any finished job (found on a detection run by the acceptance dry run on the packaged app) | "100 % · 9 / 10 images" after a run over 10 images: the newest progress message was not stored when it came within 0.25 s of the previous one | The final message of the job | confuses | 66eeb64 |
+| G3 | HTML report thumbnails (seen on the real export) | The class name drawn above each box is small and hard to read on the thumbnail | Readable labels; the count line above each image already names the classes | annoys | open (after this wave) |
 | R1 | Review, empty queue | "0 images waiting" | How proposals get here (pre-annotation, Query) with links | confuses | dcb6002 |
 | R2 | Review from a run (ledger S5) | "Showing 40 images from a query run" counts the ids in the URL, not the images that still have proposals | Real count | annoys | dcb6002 |
 | M1 | Models -> Import with a wrong path | `no usable weights at 'E:\\nope\\x.pt'` (doubled backslashes) | The path as typed | annoys | 662e90b |
 | M2 | Models table (ledger S5) | Rows are not keyboard-focusable | Tab / Enter work | annoys | not a defect: the model name in each row is a button (Tab, Enter); checked 2026-09-19 |
-| M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | |
+| M3 | Model detail after an export | "models/v1-coco-m-f10283f7.onnx" (relative, no folder named, nothing to click) | Full path and "Show in folder" | confuses | efa614a |
 | M4 | Imported COCO model | 80 class names listed; nothing says that only aliased or same-named classes produce proposals (here: truck only) | "1 of 80 classes maps to this project" | confuses | d3b123c |
 | X1 | Settings -> Test provider, failing | Green text: "Failed: ProviderError: anthropic returned 401: Error code: 401 - {'type': 'error', ...}" | Red, "The key was rejected by Anthropic (401)." | confuses | 3d039eb |
 | X2 | Every timestamp in the UI | UTC without a label (05:06 when the clock says 08:06) while job logs use local time | Local time everywhere | confuses | 9e31da3 |
 | H1 | `runs/` (ledger S4) | Old tile caches are never cleaned | Cleanup when a run is deleted or superseded | annoys | adf9b09 |
-| H2 | Providers | No live request with a valid key has run here; the invalid-key test did reach Anthropic (401). Acceptance step 7 pending an operator key | Step 7 run once with a real key | pending key | |
-| G2 | Results | Reviewed detections cannot leave the app: no export of boxes or counts (per image, flight, class) | CSV / report export | open question for the owner | |
+| H2 | Providers | No live request with a valid key has run here; the invalid-key test did reach Anthropic (401). Acceptance step 7 pending an operator key | Step 7 run once with a real key | pending key | not closed: the acceptance run on the installed 88d9216 skipped step 7 (no key stored) |
+| G2 | Results | Reviewed detections cannot leave the app: no export of boxes or counts (per image, flight, class) | CSV / report export | open question for the owner | efa614a + 13eb4d3 |
 
 Verified as already fine: the Data Manager refreshes by itself after an import; grid thumbnails
 carry a box-count badge; "Train on it" on the finished dataset job pre-selects the dataset; the

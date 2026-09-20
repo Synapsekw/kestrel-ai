@@ -1,5 +1,7 @@
 """Deleting a dataset (S2): the folder and rows go, images/labels/models stay."""
 
+from pathlib import Path
+
 import pytest
 
 from app.db.models import Job, Model
@@ -263,3 +265,323 @@ def test_names_that_are_not_safe_folder_names_or_collide_by_case_are_refused(
     r = client.post(f"{BASE}/{project_id}/datasets", json={"name": name})
     assert r.status_code == 409, r.text
     assert r.json()["error"]["code"] in ("conflict", "already_exists")
+
+
+# ------------------------------------------------ crash windows (re-review of 8299964)
+
+
+def _second_dataset(client, project_id, wait_job, name="v2"):
+    created = client.post(f"{BASE}/{project_id}/datasets", json={"name": name}).json()
+    assert wait_job(project_id, created["job"]["id"])["state"] == "succeeded"
+    return created["dataset"]
+
+
+def test_a_commit_that_fails_after_the_move_puts_the_folder_back(
+    client, project_id, handle, labeled_dataset, monkeypatch
+):
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm import Session
+
+    real_commit = Session.commit
+    calls = {"n": 0}
+
+    def failing_once(self):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise OperationalError("COMMIT", {}, Exception("disk I/O error"))
+        return real_commit(self)
+
+    monkeypatch.setattr(Session, "commit", failing_once)
+    ds = labeled_dataset
+    with pytest.raises(OperationalError):  # the test client re-raises what the app answers 500 for
+        client.delete(f"{BASE}/{project_id}/datasets/{ds['id']}")
+    monkeypatch.undo()
+
+    assert client.get(f"{BASE}/{project_id}/datasets/{ds['id']}").status_code == 200
+    assert any((handle.folder / ds["path"]).rglob("*.jpg"))
+    assert not list(handle.datasets_dir.glob(".deleting-*"))
+
+
+def test_a_tombstone_whose_dataset_still_exists_is_restored_never_destroyed(
+    client, project_id, handle, labeled_dataset, wait_job
+):
+    """A kill between the move and the commit leaves the row and a tombstone: the data comes back."""
+    import os
+
+    ds = labeled_dataset
+    other = _second_dataset(client, project_id, wait_job)
+    folder = handle.folder / ds["path"]
+    os.replace(folder, folder.with_name(f".deleting-{ds['id']}"))
+
+    # Deleting an unrelated dataset sweeps tombstones; it must give v1 its folder back, not remove it.
+    assert client.delete(f"{BASE}/{project_id}/datasets/{other['id']}").status_code == 204
+    assert any(folder.rglob("*.jpg"))
+    assert not list(handle.datasets_dir.glob(".deleting-*"))
+
+
+def test_opening_a_project_restores_a_tombstone_left_by_a_crash(handle, labeled_dataset):
+    import os
+
+    from app.datasets.materialise import reconcile_tombstones
+
+    folder = handle.folder / labeled_dataset["path"]
+    os.replace(folder, folder.with_name(f".deleting-{labeled_dataset['id']}"))
+    reconcile_tombstones(handle)
+    assert any(folder.rglob("*.jpg"))
+
+
+def test_a_tombstone_without_a_row_is_removed(handle, labeled_dataset):
+    from app.datasets.materialise import reconcile_tombstones
+
+    leftover = handle.datasets_dir / ".deleting-0b9f1d2e-8c1a-4a57-9d8e-2f4c6b7a1e30"
+    leftover.mkdir()
+    (leftover / "a.txt").write_text("x")
+    reconcile_tombstones(handle)
+    assert not leftover.exists()
+    assert any((handle.folder / labeled_dataset["path"]).rglob("*.jpg"))
+
+
+def test_deleting_works_when_the_project_folder_is_reached_through_a_junction(
+    handle, labeled_dataset, tmp_path
+):
+    import _winapi
+
+    from app.datasets.materialise import delete_dataset
+    from app.projects.service import ProjectHandle
+
+    link = tmp_path / "project-link"
+    _winapi.CreateJunction(str(handle.folder), str(link))
+    try:
+        through_link = ProjectHandle(handle.id, link, handle.engine)
+        delete_dataset(through_link, labeled_dataset["id"])
+        assert not (handle.folder / labeled_dataset["path"]).exists()
+        assert handle.images_dir.is_dir()
+    finally:
+        link.rmdir()  # removes the link, never the project
+
+
+def test_discarding_a_failed_dataset_never_removes_more_than_its_own_folder(handle, labeled_dataset):
+    from app.datasets.materialise import discard
+
+    _set_path(handle, labeled_dataset["id"], "datasets")
+    discard(handle, labeled_dataset["id"])
+    assert handle.datasets_dir.is_dir()
+    assert any(handle.datasets_dir.rglob("*.jpg"))
+
+
+@pytest.mark.parametrize("name", [".", ".."])
+def test_dot_names_are_refused_like_every_other_unusable_name(client, project_id, labeled_dataset, name):
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": name})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict", r.text
+
+
+# ------------------------------------------ second re-review of the deletion (355430f)
+
+UUID_A = "3c6f1e0a-1b2c-4d5e-8f90-a1b2c3d4e5f6"
+
+
+def test_a_discarded_folder_is_out_of_the_way_before_its_files_are_removed(
+    handle, labeled_dataset, monkeypatch
+):
+    """A retry under the same name must never write into a folder that is still being removed."""
+    import shutil
+
+    from app.datasets import materialise
+
+    folder = handle.folder / labeled_dataset["path"]
+    real_rmtree = shutil.rmtree  # the patch below replaces it on the one shared shutil module
+    seen = []
+
+    def spy(path, *a, **k):
+        seen.append((Path(path).name, folder.exists(), materialise._FOLDER_LOCK.locked()))
+        return real_rmtree(path, *a, **k)
+
+    monkeypatch.setattr("app.datasets.materialise.shutil.rmtree", spy)
+    materialise.discard(handle, labeled_dataset["id"])
+
+    assert seen, "the folder was not removed"
+    name, original_still_there, locked = seen[0]
+    assert name.startswith(".deleting-") and not original_still_there
+    assert not locked  # the files go without blocking other deletes or opening projects
+    assert not folder.exists() and not list(handle.datasets_dir.glob(".deleting-*"))
+
+
+def test_a_deletes_files_are_removed_outside_the_lock(
+    client, project_id, handle, labeled_dataset, monkeypatch
+):
+    import shutil
+
+    from app.datasets import materialise
+
+    real_rmtree = shutil.rmtree  # the patch below replaces it on the one shared shutil module
+    held = []
+
+    def spy(path, *a, **k):
+        held.append(materialise._FOLDER_LOCK.locked())
+        return real_rmtree(path, *a, **k)
+
+    monkeypatch.setattr("app.datasets.materialise.shutil.rmtree", spy)
+    assert client.delete(f"{BASE}/{project_id}/datasets/{labeled_dataset['id']}").status_code == 204
+    assert held == [False]
+
+
+def test_a_legacy_dataset_whose_name_looks_like_a_tombstone_is_left_alone(handle, labeled_dataset):
+    from app.datasets.materialise import reconcile_tombstones
+    from app.db.models import Dataset
+
+    for name in (".deleting-legacy", f".deleting-{UUID_A}"):
+        folder = handle.datasets_dir / name
+        folder.mkdir()
+        (folder / "keep.txt").write_text("keep")
+        with handle.session() as s:
+            s.add(
+                Dataset(
+                    name=name, classes=[], split_method="random", split_params={}, path=f"datasets/{name}"
+                )
+            )
+    reconcile_tombstones(handle)
+    for name in (".deleting-legacy", f".deleting-{UUID_A}"):
+        assert (handle.datasets_dir / name / "keep.txt").read_text() == "keep"
+
+
+def test_a_tombstone_that_is_a_file_is_left_alone(handle, labeled_dataset):
+    from app.datasets.materialise import reconcile_tombstones
+
+    stray = handle.datasets_dir / f".deleting-{UUID_A}"
+    stray.write_text("not a folder")
+    reconcile_tombstones(handle)
+    assert stray.read_text() == "not a folder"
+
+
+def test_a_committed_delete_answers_204_even_if_the_sweep_cannot_list(
+    client, project_id, handle, labeled_dataset, monkeypatch
+):
+    def unreadable(handle):
+        raise PermissionError(5, "Access is denied")
+
+    monkeypatch.setattr("app.datasets.materialise._leftovers", unreadable)
+    assert client.delete(f"{BASE}/{project_id}/datasets/{labeled_dataset['id']}").status_code == 204
+    assert client.get(f"{BASE}/{project_id}/datasets/{labeled_dataset['id']}").status_code == 404
+
+
+class _NoLiveJobs:
+    def is_live(self, job_id):
+        return False
+
+
+def test_opening_a_project_restores_a_tombstone_even_when_the_job_sweep_fails(
+    handle, labeled_dataset, monkeypatch, tmp_path
+):
+    import os
+
+    from app.main import project_opened
+    from app.projects.service import ProjectRegistry
+
+    folder = handle.folder / labeled_dataset["path"]
+    os.replace(folder, folder.with_name(f".deleting-{labeled_dataset['id']}"))
+
+    def locked_db(*a, **k):
+        raise RuntimeError("database is locked")
+
+    monkeypatch.setattr("app.jobs.startup.sweep_orphans", locked_db)
+    registry = ProjectRegistry(tmp_path / "appdata", on_open=lambda h: project_opened(h, _NoLiveJobs()))
+    registry.open(handle.folder, remember=False)
+
+    assert any(folder.rglob("*.jpg"))
+
+
+def test_a_sweep_waits_for_a_delete_in_progress(handle, labeled_dataset):
+    import threading
+    import time
+
+    from app.datasets import materialise
+
+    done = threading.Event()
+    with materialise._FOLDER_LOCK:
+        t = threading.Thread(target=lambda: (materialise.reconcile_tombstones(handle), done.set()))
+        t.start()
+        time.sleep(0.3)
+        assert not done.is_set()
+    t.join(5)
+    assert done.is_set()
+
+
+# --------------------------------------------- third review of the deletion (5f678af)
+
+
+def test_a_discard_that_cannot_move_the_folder_keeps_the_dataset(
+    client, project_id, handle, labeled_dataset, monkeypatch
+):
+    """The half-written folder must not stay behind under a free name: the dataset stays listed
+    (its failed job marks it incomplete) and the ordinary delete removes it later."""
+    from app.datasets import materialise
+
+    def locked(folder, dataset_id):
+        raise PermissionError(5, "Access is denied", str(folder))
+
+    monkeypatch.setattr(materialise, "_move_aside", locked)
+    materialise.discard(handle, labeled_dataset["id"])
+
+    assert client.get(f"{BASE}/{project_id}/datasets/{labeled_dataset['id']}").status_code == 200
+    assert any((handle.folder / labeled_dataset["path"]).rglob("*.jpg"))
+
+
+def test_a_name_whose_folder_is_still_on_disk_is_refused(client, project_id, handle, labeled_dataset):
+    stale = handle.datasets_dir / "v9"
+    stale.mkdir()
+    (stale / "old.txt").write_text("from an earlier dataset")
+    r = client.post(f"{BASE}/{project_id}/datasets", json={"name": "V9"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "already_exists", r.text
+    assert "folder" in r.json()["error"]["message"]
+    assert (stale / "old.txt").exists()
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "{3c6f1e0a-1b2c-4d5e-8f90-a1b2c3d4e5f6}",
+        "urn:uuid:3c6f1e0a-1b2c-4d5e-8f90-a1b2c3d4e5f6".replace(":", "_"),
+        "3c6f1e0a1b2c4d5e8f90a1b2c3d4e5f6",
+        "3C6F1E0A-1B2C-4D5E-8F90-A1B2C3D4E5F6",
+    ],
+)
+def test_only_canonical_tombstone_names_are_swept(handle, labeled_dataset, suffix):
+    from app.datasets.materialise import reconcile_tombstones
+
+    folder = handle.datasets_dir / f".deleting-{suffix}"
+    folder.mkdir()
+    (folder / "keep.txt").write_text("keep")
+    reconcile_tombstones(handle)
+    assert (folder / "keep.txt").read_text() == "keep"
+
+
+def test_removing_a_tombstone_that_is_already_gone_is_silent(tmp_path, caplog):
+    import logging
+
+    from app.datasets.materialise import _remove_quietly
+
+    with caplog.at_level(logging.WARNING, logger="app.datasets.materialise"):
+        _remove_quietly(tmp_path / ".deleting-gone")
+    assert caplog.records == []
+
+
+def test_one_unreadable_entry_does_not_stop_the_sweep(handle, labeled_dataset, monkeypatch):
+    from pathlib import Path as P
+
+    from app.datasets.materialise import reconcile_tombstones
+
+    bad = handle.datasets_dir / f".deleting-{UUID_A}"
+    good = handle.datasets_dir / ".deleting-0b9f1d2e-8c1a-4a57-9d8e-2f4c6b7a1e30"
+    for f in (bad, good):
+        f.mkdir()
+    real_is_dir = P.is_dir
+
+    def flaky(self):
+        if self.name == bad.name:
+            raise PermissionError(5, "Access is denied")
+        return real_is_dir(self)
+
+    monkeypatch.setattr(P, "is_dir", flaky)
+    reconcile_tombstones(handle)
+    monkeypatch.undo()
+    assert not good.exists()

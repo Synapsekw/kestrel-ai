@@ -6,6 +6,7 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   train: "Training",
   infer: "Detection run",
   export: "Export",
+  results_export: "Results export",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -73,5 +74,32 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return { label: "Train on it", to: `${p}/train` };
     case "import":
       return { label: "Open images", to: `${p}/data` };
+    case "results_export":
+      return null; // it already lives on the Export screen that started it
   }
+}
+
+/** "N images, M boxes" for a finished results export, or null (still running, failed, or not one). */
+export function resultsExportSummary(job: Job): string | null {
+  if (job.type !== "results_export" || job.state !== "succeeded" || !job.result) return null;
+  const imageCount = job.result.image_count;
+  const boxCount = job.result.box_count;
+  if (typeof imageCount !== "number" || typeof boxCount !== "number") return null;
+  return `${imageCount} image${imageCount === 1 ? "" : "s"}, ${boxCount} box${boxCount === 1 ? "" : "es"}`;
+}
+
+/** The file list of a finished results export, project-relative to its folder; [] when not available. */
+export function resultsExportFiles(job: Job): string[] {
+  const files = job.result?.files;
+  return job.type === "results_export" && job.state === "succeeded" && Array.isArray(files)
+    ? files.filter((f): f is string => typeof f === "string")
+    : [];
+}
+
+/** The folder a finished results export wrote into (project-relative), or null. */
+export function resultsExportFolder(job: Job): string | null {
+  const folder = job.result?.folder;
+  return job.type === "results_export" && job.state === "succeeded" && typeof folder === "string"
+    ? folder
+    : null;
 }

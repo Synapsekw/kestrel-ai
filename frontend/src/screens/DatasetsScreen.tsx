@@ -26,6 +26,17 @@ export function DatasetsScreen() {
 
   useOnJobsFinished("dataset", datasets.reload);
 
+  const { remove, reload } = datasets;
+  const onDeleted = useCallback(
+    (id: string) => {
+      select(null);
+      // Drop it from the list at once; reload() then confirms it with the server (M5b, I6).
+      remove(id);
+      reload();
+    },
+    [select, remove, reload],
+  );
+
   return (
     <section className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start gap-3">
@@ -33,13 +44,12 @@ export function DatasetsScreen() {
           <h1 className="text-xl font-semibold tracking-tight">Datasets</h1>
           <p className="text-sm text-muted">
             A dataset is a frozen copy of the labeled images that training reads.
-            {!datasets.loading && !datasets.unavailable && (
-              <span className="tabular-nums">
-                {" "}
-                {count} {count === 1 ? "dataset" : "datasets"} so far.
-              </span>
-            )}
           </p>
+          {!datasets.loading && !datasets.unavailable && (
+            <p className="text-sm tabular-nums text-muted">
+              {count} {count === 1 ? "dataset" : "datasets"}
+            </p>
+          )}
         </div>
         <Button
           variant="primary"
@@ -55,7 +65,8 @@ export function DatasetsScreen() {
       {datasets.unavailable && (
         <div role="note">
           <Alert tone="info" role="status">
-            Datasets are not available yet (they arrive with the dataset backend).
+            Datasets are not available. Restart the app; if it persists, use Copy diagnostics in the error
+            dialog.
           </Alert>
         </div>
       )}
@@ -78,15 +89,15 @@ export function DatasetsScreen() {
         <div className="grid items-start gap-6 lg:grid-cols-[20rem_1fr]">
           <DatasetList datasets={datasets.datasets} selectedId={selectedId} onSelect={select} />
           {selected ? (
-            <DatasetDetail
-              key={selected.id}
-              projectId={projectId}
-              dataset={selected}
-              onDeleted={() => {
-                select(null);
-                datasets.reload();
-              }}
-            />
+            <DatasetDetail key={selected.id} projectId={projectId} dataset={selected} onDeleted={onDeleted} />
+          ) : selectedId ? (
+            <EmptyState
+              icon="datasets"
+              title="That dataset no longer exists"
+              className="rounded-lg border border-line"
+            >
+              <span role="note">It was deleted, or the link is out of date. Choose one from the list.</span>
+            </EmptyState>
           ) : (
             <EmptyState icon="datasets" title="Choose a dataset" className="rounded-lg border border-line">
               Its classes, split and folder show here, with a button to train on it.

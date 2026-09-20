@@ -101,16 +101,26 @@ def test_update_classes_reorders_and_keeps_ids(client, project_dir):
     assert [c["order"] for c in r.json()["classes"]] == [0, 1]
 
 
-def test_duplicate_class_name_is_422(client, project_dir):
+# 409, not 422: these bodies match the schema (no uniqueItems, `\S` is satisfied by characters that
+# Python's strip() removes), and the contract's conformance check forbids 422 on schema-valid input.
+def test_duplicate_class_name_is_409(client, project_dir):
     p = _create(client, project_dir, "A")
     r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[CLASSES[0], CLASSES[0]])
-    assert r.status_code == 422
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert r.json()["error"]["message"] == "Two classes are called excavator. Class names must be unique."
 
 
-def test_duplicate_hotkey_is_422(client, project_dir):
+def test_a_blank_class_name_is_409(client, project_dir):
+    p = _create(client, project_dir, "A")
+    blank = dict(CLASSES[0], name=chr(0x85))  # not whitespace to the schema's regex, blank to Python
+    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[blank])
+    assert r.status_code == 409 and r.json()["error"]["message"] == "A class name cannot be blank."
+
+
+def test_duplicate_hotkey_is_409(client, project_dir):
     p = _create(client, project_dir, "A")
     r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[CLASSES[0], dict(CLASSES[1], hotkey="1")])
-    assert r.status_code == 422
+    assert r.status_code == 409 and r.json()["error"]["message"] == "Two classes use the hotkey 1."
 
 
 def test_removing_class_with_boxes_is_409(client, project_dir):

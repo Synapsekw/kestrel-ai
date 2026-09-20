@@ -48,7 +48,7 @@ export function NewDatasetForm({ projectId, onClose }: Props) {
     setError(null);
     try {
       const created = await createDataset(api, projectId, {
-        name: name.trim(),
+        name,
         split_method: split,
         val_fraction: fraction,
         seed: seedValue,

@@ -1,0 +1,75 @@
+{
+  "exe": "C:\\Users\\D\\AppData\\Local\\Programs\\Machinery Detection\\machinery-app.exe",
+  "launches": [
+    {
+      "label": "cold",
+      "pid": 54668,
+      "ms_to_projects": 2170,
+      "ms_to_healthy_backend": 2182,
+      "ms_to_gpu_probe": 5252,
+      "sidecar_pids": "1784",
+      "log_path": "C:\\Users\\D\\AppData\\Roaming\\ai.synapse-solutions.machinery-app\\logs\\sidecar.log",
+      "health": {
+        "status": "ok",
+        "version": "0.1.0",
+        "pid": 1784,
+        "started_at": "2026-09-19T16:52:14.992929+00:00",
+        "gpu": {
+          "available": true,
+          "name": "NVIDIA GeForce RTX 5070 Ti"
+        }
+      }
+    },
+    {
+      "label": "warm",
+      "pid": 56212,
+      "ms_to_projects": 1659,
+      "ms_to_healthy_backend": 1665,
+      "ms_to_gpu_probe": 2692,
+      "sidecar_pids": "28904",
+      "log_path": "C:\\Users\\D\\AppData\\Roaming\\ai.synapse-solutions.machinery-app\\logs\\sidecar.log",
+      "health": {
+        "status": "ok",
+        "version": "0.1.0",
+        "pid": 28904,
+        "started_at": "2026-09-19T16:52:23.124850+00:00",
+        "gpu": {
+          "available": true,
+          "name": "NVIDIA GeForce RTX 5070 Ti"
+        }
+      }
+    }
+  ],
+  "steps": [
+    {
+      "name": "cold start under 15 s to the Projects screen",
+      "ok": true,
+      "detail": "2170 ms"
+    },
+    {
+      "name": "sidecar healthy with gpu visible",
+      "ok": true,
+      "detail": "{\"available\":true,\"name\":\"NVIDIA GeForce RTX 5070 Ti\"}"
+    },
+    {
+      "name": "project created from the installed app",
+      "ok": true,
+      "detail": "372aadc7-8810-4a11-afb4-f62a57d998ef 8 classes"
+    },
+    {
+      "name": "cold: closing the window stops the sidecar and the app",
+      "ok": true,
+      "detail": "sidecar left \"\" app left \"\""
+    },
+    {
+      "name": "warm start reaches the Projects screen",
+      "ok": true,
+      "detail": "1659 ms"
+    },
+    {
+      "name": "warm: closing the window stops the sidecar and the app",
+      "ok": true,
+      "detail": "sidecar left \"\" app left \"\""
+    }
+  ]
+}

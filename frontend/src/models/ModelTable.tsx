@@ -1,9 +1,11 @@
 import type { Model } from "@contract/client";
 import { Button, Pill, cx } from "@/ui";
 import { formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
+import type { DatasetNames } from "./useDatasetNames";
 
 interface Props {
   models: Model[];
+  datasetNames: DatasetNames;
   selectedId: string | null;
   onSelect: (id: string) => void;
 }
@@ -12,12 +14,13 @@ const HEADERS: { label: string; className?: string }[] = [
   { label: "Name" },
   { label: "Kind" },
   { label: "Base" },
+  { label: "Dataset" },
   { label: "mAP50", className: "text-right" },
   { label: "Created" },
 ];
 
 /** The registry: one 36px row per model; the name selects it (so does a click anywhere on the row). */
-export function ModelTable({ models, selectedId, onSelect }: Props) {
+export function ModelTable({ models, datasetNames, selectedId, onSelect }: Props) {
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-panel">
       <table data-testid="model-table" className="w-full border-collapse text-left text-[13px]">
@@ -60,6 +63,12 @@ export function ModelTable({ models, selectedId, onSelect }: Props) {
                   </Pill>
                 </td>
                 <td className="px-3 font-mono text-muted">{m.base_weights ?? "–"}</td>
+                <td className="px-3 text-muted">
+                  {m.dataset_id
+                    ? (datasetNames.names[m.dataset_id] ??
+                      (datasetNames.loaded ? "deleted dataset" : m.dataset_id.slice(0, 8)))
+                    : "–"}
+                </td>
                 <td className="px-3 text-right tabular-nums">{formatMetric(m.metrics?.map50)}</td>
                 <td className="px-3 tabular-nums text-muted">{formatLocalDate(m.created_at)}</td>
               </tr>

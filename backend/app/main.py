@@ -17,6 +17,28 @@ from app.providers.config import ProviderConfigStore
 from app.providers.keys import KeyringKeyStore
 
 
+def project_opened(handle, runner) -> None:
+    """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
+    their folders back, sweep partial exports a crash left behind. Each step on its own, so one
+    failing never skips the others."""
+    import logging
+
+    from app.datasets import materialise
+    from app.exports import job as exports_job
+    from app.jobs import startup
+
+    log = logging.getLogger(__name__)
+    for step, run in (
+        ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
+        ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
+        ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
+    ):
+        try:
+            run()
+        except Exception:
+            log.exception("%s failed for project %s", step, handle.id)
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -26,15 +48,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         from app.jobs.events import EventBus
         from app.jobs.runner import JobRunner
-        from app.jobs.startup import sweep_orphans
         from app.projects.service import ProjectRegistry
 
         app.state.events = EventBus()
         app.state.events.bind(asyncio.get_running_loop())
         app.state.jobs = JobRunner(app.state.events)
-        # Projects open lazily, so the orphan sweep hangs off the registry rather than startup.
+        # Projects open lazily, so these sweeps hang off the registry rather than startup.
         app.state.projects = ProjectRegistry(
-            settings.data_dir, on_open=lambda handle: sweep_orphans(handle, app.state.jobs)
+            settings.data_dir, on_open=lambda handle: project_opened(handle, app.state.jobs)
         )
         # jobs reach the key store and provider settings through the runner: a job's params are
         # persisted in the project DB, so a key must never travel that way.

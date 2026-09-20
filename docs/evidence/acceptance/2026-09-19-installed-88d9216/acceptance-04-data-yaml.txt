@@ -1,0 +1,12 @@
+path: 'C:\Users\D\AppData\Local\Temp\claude\E--Dev-Yolo-app\244d1ea1-f337-4336-b57e-c040dd238eaf\scratchpad\accept-final-project\datasets\v1'
+train: images/train
+val: images/val
+names:
+  0: 'excavator'
+  1: 'wheel_loader'
+  2: 'bulldozer'
+  3: 'dump_truck'
+  4: 'crane'
+  5: 'concrete_mixer'
+  6: 'roller'
+  7: 'backhoe'

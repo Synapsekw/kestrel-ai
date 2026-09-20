@@ -1,8 +1,8 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
+import { useId, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import type { Dataset } from "@contract/client";
 import { useApi } from "@/api/client";
-import { fetchDataset, type SplitMethod } from "@/api/datasets";
+import type { SplitMethod } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { splitAdvice } from "@/datasets/splitAdvice";
@@ -42,26 +42,12 @@ export function AddToDatasetDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
-  const [createdDatasetId, setCreatedDatasetId] = useState<string | null>(null);
-  const [dataset, setDataset] = useState<Dataset | null>(null);
-  const { job } = useTrackedJob(projectId, jobId);
   const n = imageIds.length;
-
-  // The job may discard the dataset on failure; only trust it once the job has succeeded.
-  useEffect(() => {
-    if (job?.state !== "succeeded" || !createdDatasetId) return;
-    let cancelled = false;
-    fetchDataset(api, projectId, createdDatasetId)
-      .then((d) => {
-        if (!cancelled) setDataset(d);
-      })
-      .catch((e: unknown) => {
-        pushLog(`refetch dataset ${createdDatasetId} failed: ${messageOf(e, String(e))}`);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [api, projectId, createdDatasetId, job?.state]);
+  const job = useJobsStore((s) => (jobId ? s.jobs[jobId] : undefined));
+  // The creation response already carries the dataset's final counts (freeze() computes the split
+  // before the job writes files), so no refetch is needed once the job succeeds (M7). A failed job
+  // discards the row, so the advice and "Open dataset" only show once the job has succeeded.
+  const [createdDataset, setCreatedDataset] = useState<Dataset | null>(null);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -90,7 +76,7 @@ export function AddToDatasetDialog({
       });
       useJobsStore.getState().upsert(created.job);
       setJobId(created.job.id);
-      setCreatedDatasetId(created.dataset.id);
+      setCreatedDataset(created.dataset);
     } catch (err) {
       pushLog(`add to dataset failed: ${messageOf(err, String(err))}`);
       setError(messageOf(err, "could not create the dataset"));
@@ -99,6 +85,7 @@ export function AddToDatasetDialog({
     }
   }
 
+  const dataset = job?.state === "succeeded" ? createdDataset : null;
   const advice = dataset ? splitAdvice(dataset) : null;
 
   return (
@@ -129,7 +116,10 @@ export function AddToDatasetDialog({
                 Open dataset
               </Link>
             )}
-            <Link to={`/p/${projectId}/train`} className={buttonClass("primary", "md")}>
+            <Link
+              to={`/p/${projectId}/train${dataset ? `?dataset=${dataset.id}` : ""}`}
+              className={buttonClass("primary", "md")}
+            >
               Train on it
             </Link>
             <Button variant="ghost" onClick={onClose}>
@@ -210,10 +200,13 @@ export function AddToDatasetDialog({
             ) : (
               <p className="text-sm text-muted">Job queued</p>
             )}
+            {/* A note, not an alert: the split worked, it just landed off the requested fraction. */}
             {advice && (
-              <Alert tone="warn" role="alert">
-                {advice}
-              </Alert>
+              <div role="note">
+                <Alert tone="warn" role="status">
+                  {advice}
+                </Alert>
+              </div>
             )}
           </div>
         )}

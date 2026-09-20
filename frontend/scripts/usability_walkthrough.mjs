@@ -194,6 +194,8 @@ await step(`5 label ${cfg.label} images in the editor`, async (check, snap) => {
     const cx = bb.x + bb.width / 2;
     const cy = bb.y + bb.height / 2;
     for (const [k, dx] of [["1", -120], ["4", 40]]) {
+      // A new box stays selected and a class key would re-class it: deselect first, as the help says.
+      await page.keyboard.press("Escape");
       await page.keyboard.press(k);
       await page.mouse.move(cx + dx, cy - 30);
       await page.mouse.down();
@@ -251,6 +253,44 @@ await step("6 dataset from the labeled images; a bad name is explained", async (
   await snap("dataset-created");
   await train.click();
   await urlIs(/\/train/);
+});
+
+await step("6.5 the datasets screen lists, explains and deletes", async (check, snap) => {
+  await page.getByRole("navigation").getByRole("link", { name: "Datasets" }).click();
+  await urlIs(/\/datasets/);
+  const table = page.getByTestId("dataset-table");
+  check("the dataset is listed", await visible(table.getByRole("button", { name: "Select dataset v1" })));
+  await table.getByRole("button", { name: "Select dataset v1" }).click();
+  const detail = page.getByTestId("dataset-detail");
+  check("per-class counts are shown", await visible(detail.getByTestId("dataset-class-stats")));
+  check("the detail leads to training", await visible(detail.getByRole("link", { name: "Train on this dataset" })));
+  await snap("datasets-detail");
+
+  // A second, throw-away dataset: a name differing only by case is refused, then it is deleted.
+  await page.getByRole("button", { name: "New dataset from all labeled images" }).click();
+  const form = page.getByRole("form", { name: "New dataset" }).or(page.locator('[aria-label="New dataset"]')).first();
+  await form.getByLabel("Dataset name").fill("V1");
+  await form.getByRole("button", { name: "Create dataset" }).click();
+  check("a name that differs only by case is refused", await visible(page.getByRole("alert").filter({ hasText: "already exists" })));
+  await form.getByLabel("Dataset name").fill("scratch");
+  await form.getByRole("button", { name: "Create dataset" }).click();
+  const scratch = table.getByRole("button", { name: "Select dataset scratch" });
+  check("the new dataset appears when its job ends", await visible(scratch, 120_000));
+  await sleep(1500);
+  await scratch.click();
+  const scratchId = new URL(page.url()).searchParams.get("dataset");
+  await detail.getByRole("button", { name: "Delete dataset" }).click();
+  check("the delete asks first and says what is kept", await visible(detail.getByText(/Images, labels\s+and trained models are kept/)));
+  await snap("datasets-delete-confirm");
+  await detail.getByRole("button", { name: "Delete permanently" }).click();
+  check("the deleted dataset leaves the list", await scratch.waitFor({ state: "detached", timeout: 15_000 }).then(() => true).catch(() => false));
+  const gone = await fetch(`${base}/api/v1/projects/${projectId}/datasets/${scratchId}`, { headers: { Authorization: `Bearer ${token}` } });
+  check("the backend no longer has it", gone.status === 404, `status ${gone.status}`);
+  await snap("datasets-after-delete");
+
+  await table.getByRole("button", { name: "Select dataset v1" }).click();
+  await detail.getByRole("link", { name: "Train on this dataset" }).click();
+  await urlIs(/\/train\?dataset=/);
 });
 
 await step("7 train: guidance before, honest verdict after", async (check, snap) => {
@@ -348,6 +388,44 @@ await step("9 export the trained model to ONNX", async (check, snap) => {
   await page.getByRole("button", { name: "Export ONNX" }).click();
   check("the ONNX file is listed", await visible(page.getByText(/\.onnx/), 600_000));
   await snap("onnx-exported");
+});
+
+await step("9.5 export the results in every format; the model section shows the ONNX file", async (check, snap) => {
+  const { existsSync, readFileSync, readdirSync } = await import("node:fs");
+  await page.getByRole("navigation").getByRole("link", { name: "Export" }).click();
+  await urlIs(/\/export/);
+  const form = page.locator('[aria-label="Results"]');
+  check("the export says what it will contain", await visible(form.getByText(/Exports (all )?\d+ images?: \d+ accepted box(es)? on the \d+ checked images?/)));
+  for (const label of ["Labels in YOLO format", "Labels in COCO format"]) {
+    const box = form.getByLabel(label);
+    if (!(await box.isChecked())) await box.check();
+  }
+  await form.getByLabel(/Include proposals nobody has reviewed yet/).check();
+  await snap("export-form");
+  const before = await api("GET", `/projects/${projectId}/jobs?type=results_export`);
+  await form.getByRole("button", { name: "Export", exact: true }).click();
+  let job = null;
+  for (let i = 0; i < 300; i++) {
+    const jobs = await api("GET", `/projects/${projectId}/jobs?type=results_export`);
+    job = jobs.items.find((j) => !before.items.some((b) => b.id === j.id));
+    if (job && !["queued", "running"].includes(job.state)) break;
+    await sleep(1000);
+  }
+  check("the export job succeeded", job?.state === "succeeded", `${job?.state} ${job?.error ?? ""}`);
+  const row = page.getByTestId(`export-job-${job.id}`);
+  check("the past export is listed with Show in folder", await visible(row.getByRole("button", { name: "Show in folder" }), 30_000));
+  const folder = join(cfg.projectFolder, ...job.result.folder.split("/"));
+  const files = readdirSync(folder);
+  check("every chosen format is on disk", ["detections.csv", "counts_by_group.csv", "counts_by_image.csv", "labels_coco.json", "report.html", "labels_yolo"].every((f) => files.includes(f)), files.join(", "));
+  check("the CSV opens in Excel (UTF-8 with BOM)", readFileSync(join(folder, "detections.csv"))[0] === 0xef);
+  const report = readFileSync(join(folder, "report.html"), "utf8");
+  check("the report is self-contained with thumbnails", report.includes("data:image/jpeg") && !/https?:\/\//.test(report));
+  check("no partial folder is left behind", !readdirSync(join(cfg.projectFolder, "exports")).some((n) => n.startsWith(".partial")));
+  await snap("export-done");
+  const models = page.locator('[aria-label="Model for other applications"]');
+  check("the model section explains ONNX and shows the exported file", await visible(models.getByText(/\.onnx/)));
+  await snap("export-model-section");
+  check("export folder exists", existsSync(folder));
 });
 
 await step("10 no IPC errors in the console", async (check) => {

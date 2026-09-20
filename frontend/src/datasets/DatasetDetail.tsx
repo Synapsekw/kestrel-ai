@@ -5,8 +5,9 @@ import { useApi } from "@/api/client";
 import { deleteDataset, fetchDatasetStats } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { formatLocalDate } from "@/models/modelLabels";
-import { Alert, Button, Skeleton, buttonClass } from "@/ui";
+import { Alert, Button, Pill, Skeleton, buttonClass } from "@/ui";
 import { splitAdvice } from "./splitAdvice";
 
 export interface DatasetDetailProps {
@@ -16,32 +17,36 @@ export interface DatasetDetailProps {
 }
 
 interface StatsState {
-  datasetId: string;
   stats: DatasetStats | null;
   error: string | null;
 }
 
+/**
+ * The caller remounts `DatasetDetail` with `key={dataset.id}` (see DatasetsScreen), so a dataset
+ * change always starts this hook fresh: no second "is this still the right id" guard is needed
+ * here (M4).
+ */
 function useDatasetStats(projectId: string, datasetId: string): StatsState {
   const api = useApi();
-  const [state, setState] = useState<StatsState>({ datasetId: "", stats: null, error: null });
+  const [state, setState] = useState<StatsState>({ stats: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
     fetchDatasetStats(api, projectId, datasetId)
       .then((stats) => {
-        if (!cancelled) setState({ datasetId, stats, error: null });
+        if (!cancelled) setState({ stats, error: null });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         pushLog(`load dataset stats ${datasetId} failed: ${messageOf(e, String(e))}`);
-        setState({ datasetId, stats: null, error: messageOf(e, "could not load dataset statistics") });
+        setState({ stats: null, error: messageOf(e, "could not load dataset statistics") });
       });
     return () => {
       cancelled = true;
     };
   }, [api, projectId, datasetId]);
 
-  return state.datasetId === datasetId ? state : { datasetId, stats: null, error: null };
+  return state;
 }
 
 const SPLIT_LABEL: Record<Dataset["split_method"], string> = {
@@ -71,6 +76,13 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Recent jobs are usually already loaded project-wide, but a dataset survives a crash that left
+  // its materialise job "failed" at the next start (M5e), so a job not yet in the store is fetched
+  // once here (useTrackedJob checks the store first and only fetches when it must).
+  const { job: materialiseJob } = useTrackedJob(projectId, dataset.job_id);
+  const jobState = materialiseJob?.state;
+  const isWriting = jobState === "queued" || jobState === "running";
+  const isIncomplete = jobState === "failed" || jobState === "cancelled";
 
   async function remove() {
     setBusy(true);
@@ -92,12 +104,27 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
     >
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{dataset.name}</h2>
-        <Link to={`/p/${projectId}/train?dataset=${dataset.id}`} className={buttonClass("secondary", "sm")}>
-          Train on this dataset
-        </Link>
+        {isWriting && (
+          <Pill tone="accent" live>
+            Writing
+          </Pill>
+        )}
+        {isIncomplete && <Pill tone="warn">Incomplete</Pill>}
+        {!isWriting && !isIncomplete && (
+          <Link to={`/p/${projectId}/train?dataset=${dataset.id}`} className={buttonClass("secondary", "sm")}>
+            Train on this dataset
+          </Link>
+        )}
       </header>
 
-      {advice && <Alert tone="warn">{advice}</Alert>}
+      {/* A note, not an alert: it explains the split that was chosen, it is not a failure (M3). */}
+      {advice && (
+        <div role="note">
+          <Alert tone="warn" role="status">
+            {advice}
+          </Alert>
+        </div>
+      )}
 
       <dl className="flex flex-col">
         <Row label="Images">{dataset.image_count}</Row>
@@ -122,6 +149,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
             <Skeleton className="h-4 w-2/3" />
           </div>
         )}
+        {!stats && !statsError && <p className="text-sm text-slate-400">Loading…</p>}
         {stats && (
           <table data-testid="dataset-class-stats" className="w-full text-left text-[13px]">
             <thead>

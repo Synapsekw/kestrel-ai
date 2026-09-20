@@ -7,7 +7,10 @@ test("opens the jobs panel from the top bar, shows progress and log, cancels and
   page,
 }) => {
   await page.goto(`/p/${P}/data`);
-  await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible();
+  // First page of a run: a cold dev server can need more than the default 5 s (as in boot.spec).
+  await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
   const listed = page.waitForRequest(
     (r) => r.method() === "GET" && r.url().includes(`/projects/${P}/jobs?limit=100`),
   );

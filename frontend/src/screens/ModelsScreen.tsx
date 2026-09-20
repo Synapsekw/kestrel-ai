@@ -82,7 +82,12 @@ export function ModelsScreen() {
             No models yet. Add a starter model above, or import your own weights.
           </p>
         ) : (
-          <ModelTable models={registry.models} selectedId={selectedId} onSelect={select} />
+          <ModelTable
+            models={registry.models}
+            datasetNames={datasetNames}
+            selectedId={selectedId}
+            onSelect={select}
+          />
         ))}
       {selected && project && (
         <ModelDetail

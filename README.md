@@ -109,6 +109,10 @@ acceptance drivers use.
    .\scripts\build.ps1     # PyInstaller one-folder -> frontend/src-tauri/binaries/
    ```
 
+   From a git worktree (which has no `backend\.venv` and must not link to the shared one) pass the
+   environment explicitly: `.\scripts\build.ps1 -Venv E:\Dev\Yolo\app\backend\.venv`. The worktree
+   also needs its own `backend\starter_weights` (step 0 fetches them).
+
    On the reference machine: about 2 minutes, `dist/machinery-backend` is 3.4 GB in ~14,100 files.
    The bundle carries CUDA torch, torchvision, Ultralytics, OpenCV and the ONNX stack, because the
    same exe is also the training and export worker (`machinery-backend.exe worker train <params>`).

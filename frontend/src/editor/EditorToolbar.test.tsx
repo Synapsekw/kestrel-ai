@@ -29,6 +29,12 @@ describe("EditorToolbar shortcuts help", () => {
     expect(button).toHaveAttribute("aria-expanded", "true");
     expect(within(help).getByText("Ctrl+D")).toBeInTheDocument();
     expect(within(help).getByText("duplicate selected box")).toBeInTheDocument();
+    // A class key re-classes the selected box (a new box stays selected): the help must say so.
+    expect(
+      within(help).getByText(
+        "class for the next box; with a box selected, changes that box's class (Esc first to keep it)",
+      ),
+    ).toBeInTheDocument();
     fireEvent.keyDown(help, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).toBeNull();
     fireEvent.click(button);

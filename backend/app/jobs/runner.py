@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 from app.db.models import Job
 from app.errors import not_found
-from app.jobs.cancellation import JobCancelled
+from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.events import EventBus
 from app.jobs.registry import get_job_type
 from app.projects.service import ProjectHandle
@@ -30,6 +30,8 @@ class JobContext:
         self.runner, self.project, self.job_id, self.params, self.log = runner, project, job_id, params, log
         self.cancelled = threading.Event()
         self._last_db_write = 0.0
+        # The newest message, stored with the terminal state: the throttled write may have skipped it.
+        self.last_message: str | None = None
 
     def check_cancelled(self) -> None:
         if self.cancelled.is_set():
@@ -37,6 +39,7 @@ class JobContext:
 
     def progress(self, fraction: float, message: str = "") -> None:
         fraction = max(0.0, min(1.0, float(fraction)))
+        self.last_message = message
         now = time.monotonic()
         if now - self._last_db_write >= PROGRESS_DB_INTERVAL_S:
             self._last_db_write = now
@@ -178,7 +181,8 @@ class JobRunner:
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
             ctx.log.info("job %s started", ctx.job_id)
             result = fn(ctx)
-            self._finish(ctx, state="succeeded", progress=1.0, result=result)
+            final = {"message": ctx.last_message} if ctx.last_message is not None else {}
+            self._finish(ctx, state="succeeded", progress=1.0, result=result, **final)
             ctx.log.info("job succeeded")
         except JobCancelled:
             self._finish(ctx, state="cancelled")
@@ -186,7 +190,10 @@ class JobRunner:
         except Exception as e:
             ctx.log.error("job failed\n%s", traceback.format_exc())
             log.warning("job %s failed: %s: %s", ctx.job_id, type(e).__name__, e)  # params may hold secrets
-            self._finish(ctx, state="failed", error=f"{type(e).__name__}: {e}")
+            # A JobFailure carries a message written for the operator; anything else is unexpected
+            # (libraries raise ValueError too), so it keeps its class name as a clue for support.
+            message = str(e) if isinstance(e, JobFailure) else f"{type(e).__name__}: {e}"
+            self._finish(ctx, state="failed", error=message)
         finally:
             self._close_log(ctx)
             with self._lock:
