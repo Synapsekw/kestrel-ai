@@ -1,3 +1,4 @@
+mod appdata;
 mod logfile;
 mod sidecar;
 
