@@ -1,6 +1,11 @@
+import sqlite3
+
 import pytest
+from alembic import command
+from alembic.config import Config
 
 from app.db.models import Box
+from app.db.session import MIGRATIONS
 
 
 @pytest.fixture
@@ -204,7 +209,7 @@ def test_patch_rejects_an_explicit_null(client, labelled):
     """`null` is outside the contract's BoxUpdate schema, so it is a 422, never a 500."""
     box = _create(client, labelled).json()
     pid = labelled["pid"]
-    for field in ("x", "y", "w", "h", "class_id"):
+    for field in ("x", "y", "w", "h", "class_id", "angle"):
         r = client.patch(f"/api/v1/projects/{pid}/boxes/{box['id']}", json={field: None})
         assert r.status_code == 422, (field, r.status_code, r.text)
         assert r.json()["error"]["code"] == "validation_error"
@@ -241,13 +246,63 @@ def test_angle_is_normalised_into_zero_to_one_eighty_on_write(client, labelled):
     assert r.json()["angle"] == 170.0
 
 
-def test_existing_boxes_read_back_as_zero_angle(client, labelled):
-    """Migration 0003 gives every pre-existing row angle 0 through the column default."""
+def test_a_box_written_without_an_angle_reads_back_as_zero(client, labelled):
+    """A writer that never mentions `angle` still gets 0, via the column's client-side default.
+
+    This is the ORM half only: it inserts through SQLAlchemy, so it would pass even if migration
+    0003 had never run. `test_migration_0003_gives_an_existing_box_angle_zero` covers the database.
+    """
     proposal_id = _proposal(client, labelled)
     rows = client.get(
         f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes"
     ).json()["items"]
     assert [b["angle"] for b in rows if b["id"] == proposal_id] == [0.0]
+
+
+def test_migration_0003_gives_an_existing_box_angle_zero(tmp_path):
+    """Open a project created at revision 0002, upgrade, and read `angle` = 0 for the old box.
+
+    This is the path the app actually takes on an existing project: rows written before the column
+    existed, then migrated. A test that inserts through the ORM only exercises SQLAlchemy's
+    client-side default and would pass even with no migration at all — and the app opening at all
+    rides on this one (`AGENTS.md`: a failed migration must never be why the app will not open).
+    """
+    db_path = tmp_path / "project.db"
+    cfg = Config(str(MIGRATIONS / "alembic.ini"))
+    cfg.set_main_option("script_location", str(MIGRATIONS))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path.as_posix()}")
+    command.upgrade(cfg, "0002")
+
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO source (id, folder, site, settings, image_count, duplicate_count, "
+            "job_id, imported_at, created_at) VALUES "
+            "('s1', 'f', 'site', '{}', 0, 0, NULL, NULL, '2024-01-01 00:00:00')"
+        )
+        conn.execute(
+            "INSERT INTO image (id, path, width, height, source_id, capture_time, lat, lon, "
+            "alt, phash, group_key, marked_empty, created_at) VALUES "
+            "('i1', 'images/a.jpg', 320, 240, 's1', NULL, NULL, NULL, NULL, NULL, '', 0, "
+            "'2024-01-01 00:00:00')"
+        )
+        conn.execute(
+            "INSERT INTO box (id, image_id, class_id, x, y, w, h, confidence, provenance_kind, "
+            "model_id, provider, model_name, query_run_id, review_state, reviewed_at, created_at) "
+            "VALUES ('b1', 'i1', 'c1', 1, 2, 3, 4, NULL, 'person', NULL, NULL, NULL, NULL, "
+            "'accepted', NULL, '2024-01-01 00:00:00')"
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    command.upgrade(cfg, "head")
+
+    conn = sqlite3.connect(db_path)
+    try:
+        assert conn.execute("SELECT angle FROM box WHERE id = 'b1'").fetchone()[0] == 0.0
+    finally:
+        conn.close()
 
 
 def test_rotated_box_may_hang_over_the_image_edge(client, labelled):
@@ -258,6 +313,33 @@ def test_rotated_box_may_hang_over_the_image_edge(client, labelled):
     """
     r = _create(client, labelled, x=280, y=10, w=60, h=20, angle=30.0)
     assert r.status_code == 201, r.text
+
+
+def test_rotated_box_may_hang_over_the_left_and_top_edges(client, labelled):
+    """The mirror of the right-edge case, and the one the schema used to veto.
+
+    A rotated box's `x` is its *unrotated* left edge, so overhanging the left edge means a negative
+    x. The centre (10, 5) is inside the 320x240 image, so `_check_bounds` accepts it — and nothing
+    upstream may reject it first, or the same gesture works on the right edge and 422s on the left.
+    """
+    r = _create(client, labelled, x=-20, y=-5, w=60, h=20, angle=30.0)
+    assert r.status_code == 201, r.text
+    assert (r.json()["x"], r.json()["y"]) == (-20, -5)
+
+
+def test_unrotated_box_over_the_left_edge_is_still_rejected(client, labelled):
+    """The same box at angle 0 is still rejected, and with the bounds message, not a schema one."""
+    r = _create(client, labelled, x=-20, y=-5, w=60, h=20, angle=0.0)
+    assert r.status_code == 422, r.text
+    assert "does not lie inside" in r.json()["error"]["message"]
+
+
+def test_patch_may_move_a_rotated_box_over_the_left_edge(client, labelled):
+    """BoxUpdate carries the same relaxation as BoxCreate: dragging left must not 422 either."""
+    box_id = _create(client, labelled, x=200, y=10, w=60, h=20, angle=30.0).json()["id"]
+    r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"x": -20})
+    assert r.status_code == 200, r.text
+    assert r.json()["x"] == -20
 
 
 def test_rotated_box_centre_must_stay_inside_the_image(client, labelled):

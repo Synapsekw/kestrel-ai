@@ -201,9 +201,17 @@ class BoxList(BaseModel):
 
 
 class BoxCreate(BaseModel):
+    """`x`/`y` carry no lower bound: a rotated box may legitimately start outside the frame.
+
+    `x, y` describe the *unrotated* box, so a box rotated near the left or top edge has a negative
+    one while its centre is still comfortably inside. Bounds are `boxes._check_bounds`' single
+    decision (spec 3.3) — it still rejects a negative x at angle 0, and with a message that says
+    what is wrong. `w`/`h` keep `gt=0`: a non-positive side is invalid at any angle.
+    """
+
     class_id: str
-    x: float = Field(ge=0)
-    y: float = Field(ge=0)
+    x: float
+    y: float
     w: float = Field(gt=0)
     h: float = Field(gt=0)
     angle: float = Field(default=0.0)
@@ -215,11 +223,13 @@ class BoxUpdate(BaseModel):
     The types therefore stay non-optional and `None` is only the "not sent" default (pydantic does
     not validate defaults), so an explicit `null` fails validation with 422 instead of reaching the
     model. `model_dump(exclude_unset=True)` yields exactly the fields the caller sent.
+
+    `x`/`y` have no lower bound here either, for the reason given on `BoxCreate`.
     """
 
     class_id: str = Field(default=None)
-    x: float = Field(default=None, ge=0)
-    y: float = Field(default=None, ge=0)
+    x: float = Field(default=None)
+    y: float = Field(default=None)
     w: float = Field(default=None, gt=0)
     h: float = Field(default=None, gt=0)
     angle: float = Field(default=None)

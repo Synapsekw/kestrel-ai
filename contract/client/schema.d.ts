@@ -1616,6 +1616,7 @@ export interface components {
             items: components["schemas"]["Box"][];
         };
         /**
+         * @description `x`/`y` have no minimum: they describe the *unrotated* box, so a box rotated near the left or top edge has a negative one while its centre is still inside the image. The server is the single judge of bounds — a box at angle 0 must still lie fully inside, and a rotated one needs its centre inside (see Box.angle) — and it answers with a message saying so.
          * @example {
          *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
          *       "x": 512,
@@ -1634,6 +1635,7 @@ export interface components {
             angle?: number;
         };
         /**
+         * @description Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason given on BoxCreate.
          * @example {
          *       "x": 520,
          *       "y": 305

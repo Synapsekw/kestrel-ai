@@ -1669,10 +1669,15 @@ components:
     BoxCreate:
       type: object
       required: [class_id, x, y, w, h]
+      description: >-
+        `x`/`y` have no minimum: they describe the *unrotated* box, so a box rotated near the left
+        or top edge has a negative one while its centre is still inside the image. The server is
+        the single judge of bounds — a box at angle 0 must still lie fully inside, and a rotated
+        one needs its centre inside (see Box.angle) — and it answers with a message saying so.
       properties:
         class_id: { type: string }
-        x: { type: number, minimum: 0 }
-        y: { type: number, minimum: 0 }
+        x: { type: number }
+        y: { type: number }
         w: { type: number, exclusiveMinimum: 0 }
         h: { type: number, exclusiveMinimum: 0 }
         angle:
@@ -1685,10 +1690,13 @@ components:
       example: { class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 512, y: 300, w: 140, h: 90 }
     BoxUpdate:
       type: object
+      description: >-
+        Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason
+        given on BoxCreate.
       properties:
         class_id: { type: string }
-        x: { type: number, minimum: 0 }
-        y: { type: number, minimum: 0 }
+        x: { type: number }
+        y: { type: number }
         w: { type: number, exclusiveMinimum: 0 }
         h: { type: number, exclusiveMinimum: 0 }
         angle:
