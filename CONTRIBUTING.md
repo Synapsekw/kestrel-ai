@@ -66,8 +66,13 @@ cd backend; .\.venv\Scripts\python.exe -m ruff check .; .\.venv\Scripts\python.e
 pnpm -C frontend lint
 pnpm -C frontend test
 pnpm -C frontend build
-cargo test --manifest-path frontend/src-tauri/Cargo.toml
+cargo test --manifest-path frontend/src-tauri/Cargo.toml  # only if the frozen sidecar is present
 ```
+
+The `cargo test` line runs only when `frontend/src-tauri/binaries/kestrel-backend-*.exe` exists —
+that binary is git-ignored, so a fresh worktree or clone never has it and the step is skipped, not
+failed. `scripts\finish-task.ps1` checks for it under the worktree being gated and prints a clear
+message when it skips.
 
 Two things that trip people up:
 

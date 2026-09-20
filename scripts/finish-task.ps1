@@ -43,7 +43,15 @@ if (-not $SkipGate) {
     @{ n = 'frontend lint';  c = { & pnpm -C (Join-Path $wt 'frontend') lint } },
     @{ n = 'frontend test';  c = { & pnpm -C (Join-Path $wt 'frontend') test } },
     @{ n = 'frontend build'; c = { & pnpm -C (Join-Path $wt 'frontend') build } },
-    @{ n = 'cargo test';     c = { & $cargo test --manifest-path (Join-Path $wt 'frontend\src-tauri\Cargo.toml') } }
+    @{ n = 'cargo test';     c = {
+        $sidecarGlob = Join-Path $wt 'frontend\src-tauri\binaries\kestrel-backend-*.exe'
+        if (Test-Path $sidecarGlob) {
+          & $cargo test --manifest-path (Join-Path $wt 'frontend\src-tauri\Cargo.toml')
+        } else {
+          Write-Host "skipping cargo test: no frontend\src-tauri\binaries\kestrel-backend-*.exe in this worktree. That frozen backend sidecar is git-ignored (.gitignore: frontend/src-tauri/binaries/*), so a fresh worktree never has it; backend\scripts\build.ps1 produces it. Rust tests only run where that build has been done."
+          $global:LASTEXITCODE = 0
+        }
+      } }
   )
   foreach ($g in $gate) {
     Write-Host "--- $($g.n) ---"

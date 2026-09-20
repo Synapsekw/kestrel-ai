@@ -56,9 +56,12 @@ traps as ADRs in `vault/decisions/`.
    pnpm -C frontend lint
    pnpm -C frontend test
    pnpm -C frontend build
-   cargo test --manifest-path frontend/src-tauri/Cargo.toml
+   cargo test --manifest-path frontend/src-tauri/Cargo.toml  # only if the frozen sidecar is present
    ```
-   See `CONTRIBUTING.md` → "Testing" for the packaging-path additions and the worktree/venv note.
+   The `cargo test` line runs only when `frontend/src-tauri/binaries/kestrel-backend-*.exe` exists —
+   that binary is git-ignored, so a fresh worktree or clone never has it and the step is skipped, not
+   failed. See `CONTRIBUTING.md` → "Testing" for the packaging-path additions and the worktree/venv
+   note.
 5. **Contract-first.** `contract/openapi.yaml` is the source of truth; `contract/client/schema.d.ts`
    is generated and committed in the same change, never hand-edited (the local analogue of
    Monolith's migrations-and-regenerate-types rule).

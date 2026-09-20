@@ -67,6 +67,16 @@ statements in the vault itself that had gone stale as the vault filled in around
 - **The 8/8 acceptance run is stale.** It was measured at `177f68b`, which predates the Kestrel AI
   rename (`vault/00-north-star.md` §5 has the detail). Re-running acceptance against the renamed,
   installed build is tracked separately (Task 11 Step 5 of the rename plan) and was not touched here.
+- **The first live `finish-task.ps1` round trip failed.** Task 12's smoke run (`task/smoke-check`)
+  exercised the gate for real for the first time: the first six steps passed (contract check, ruff,
+  583 pytest, frontend lint, frontend test, frontend build), but the seventh, `cargo test`, failed —
+  Tauri's build script resolves the frozen-sidecar `externalBin` resource at compile time, and
+  `frontend/src-tauri/binaries/kestrel-backend-*.exe` is git-ignored, so the fresh worktree never had
+  it. The gate was unachievable as written. Fixed by making that step conditional on the sidecar's
+  presence under the worktree being gated — it runs when found, otherwise skips with an explicit
+  printed reason and does not fail the gate. See
+  `vault/decisions/2026-09-20-gotcha-cargo-test-needs-the-frozen-sidecar.md`. The `task/smoke-check`
+  worktree itself is left as-is for the controller to finish that round trip.
 
 ## How to test
 
