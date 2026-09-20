@@ -1675,7 +1675,13 @@ components:
         y: { type: number, minimum: 0 }
         w: { type: number, exclusiveMinimum: 0 }
         h: { type: number, exclusiveMinimum: 0 }
-        angle: { type: number, minimum: 0, exclusiveMaximum: 180 }
+        angle:
+          type: number
+          description: >-
+            Rotation in degrees about the box's own centre. Optional; omitting it means 0.
+            Any value is accepted and normalised into [0, 180) on write, because a rectangle has
+            180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore
+            guaranteed on the way out (see Box.angle), not demanded on the way in.
       example: { class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 512, y: 300, w: 140, h: 90 }
     BoxUpdate:
       type: object
@@ -1685,7 +1691,13 @@ components:
         y: { type: number, minimum: 0 }
         w: { type: number, exclusiveMinimum: 0 }
         h: { type: number, exclusiveMinimum: 0 }
-        angle: { type: number, minimum: 0, exclusiveMaximum: 180 }
+        angle:
+          type: number
+          description: >-
+            Rotation in degrees about the box's own centre. Optional; omitting it leaves the
+            angle unchanged. Any value is accepted and normalised into [0, 180) on write, because
+            a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds
+            are therefore guaranteed on the way out (see Box.angle), not demanded on the way in.
       example: { x: 520, y: 305 }
     BoxReview:
       type: object

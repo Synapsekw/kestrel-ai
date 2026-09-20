@@ -1630,6 +1630,7 @@ export interface components {
             y: number;
             w: number;
             h: number;
+            /** @description Rotation in degrees about the box's own centre. Optional; omitting it means 0. Any value is accepted and normalised into [0, 180) on write, because a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore guaranteed on the way out (see Box.angle), not demanded on the way in. */
             angle?: number;
         };
         /**
@@ -1644,6 +1645,7 @@ export interface components {
             y?: number;
             w?: number;
             h?: number;
+            /** @description Rotation in degrees about the box's own centre. Optional; omitting it leaves the angle unchanged. Any value is accepted and normalised into [0, 180) on write, because a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore guaranteed on the way out (see Box.angle), not demanded on the way in. */
             angle?: number;
         };
         /**
