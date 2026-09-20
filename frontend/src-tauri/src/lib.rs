@@ -33,6 +33,23 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(sidecar::BackendState(std::sync::Mutex::new(None)))
         .setup(|app| {
+            // Before anything writes to the app-data folder, bring a pre-rename one across.
+            let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+            if let Some(legacy) = data_dir
+                .parent()
+                .map(|p| p.join("ai.synapse-solutions.machinery-app"))
+            {
+                match appdata::migrate(&legacy, &data_dir) {
+                    appdata::Migration::Moved => {
+                        eprintln!("[appdata] migrated {} -> {}", legacy.display(), data_dir.display())
+                    }
+                    appdata::Migration::BothPresent => {
+                        eprintln!("[appdata] pre-rename folder left in place: {}", legacy.display())
+                    }
+                    appdata::Migration::Failed(e) => eprintln!("[appdata] migration failed: {e}"),
+                    appdata::Migration::NothingToDo => {}
+                }
+            }
             let backend = sidecar::start(app.handle())?;
             *app.state::<sidecar::BackendState>().0.lock().unwrap() = Some(backend);
             Ok(())

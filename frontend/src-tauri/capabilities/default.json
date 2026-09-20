@@ -1,17 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "shell access limited to the machinery-backend sidecar, plus folder dialogs",
+  "description": "shell access limited to the kestrel-backend sidecar, plus folder dialogs",
   "windows": ["main"],
   "permissions": [
     "core:default",
     {
       "identifier": "shell:allow-execute",
-      "allow": [{ "name": "binaries/machinery-backend", "sidecar": true, "args": false }]
+      "allow": [{ "name": "binaries/kestrel-backend", "sidecar": true, "args": false }]
     },
     {
       "identifier": "shell:allow-spawn",
-      "allow": [{ "name": "binaries/machinery-backend", "sidecar": true, "args": false }]
+      "allow": [{ "name": "binaries/kestrel-backend", "sidecar": true, "args": false }]
     },
     "shell:allow-kill",
     "dialog:allow-open",

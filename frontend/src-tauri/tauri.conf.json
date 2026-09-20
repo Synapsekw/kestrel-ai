@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
-  "productName": "Machinery Detection",
-  "identifier": "ai.synapse-solutions.machinery-app",
+  "productName": "Kestrel AI",
+  "identifier": "ai.synapse-solutions.kestrel-ai",
   "version": "0.1.0",
   "build": {
     "frontendDist": "../dist",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "Machinery Detection",
+        "title": "Kestrel AI",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
@@ -35,7 +35,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/machinery-backend"],
+    "externalBin": ["binaries/kestrel-backend"],
     "resources": {
       "binaries/_internal/": "_internal/"
     }

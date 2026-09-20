@@ -80,7 +80,7 @@ mod tests {
 
     fn temp_dir(name: &str) -> PathBuf {
         let dir =
-            std::env::temp_dir().join(format!("machinery-logfile-{name}-{}", std::process::id()));
+            std::env::temp_dir().join(format!("kestrel-logfile-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         dir
     }

@@ -53,7 +53,7 @@ pub fn start(app: &AppHandle) -> Result<Backend, String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let (mut rx, child) = app
         .shell()
-        .sidecar("machinery-backend")
+        .sidecar("kestrel-backend")
         .map_err(|e| e.to_string())?
         .env("APP_PORT", port.to_string())
         .env("APP_TOKEN", &token)
