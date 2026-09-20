@@ -15,12 +15,12 @@ import {
   type CommandContext,
   type ReviewDecision,
 } from "./commands";
-import type { Rect } from "./geometry";
+import type { OrientedRect, Rect } from "./geometry";
 import type { History } from "./history";
 
 export interface EditorActions {
   drawBox: (rect: Rect, classId: string) => Promise<void>;
-  commitRect: (id: string, before: Rect, after: Rect) => Promise<void>;
+  commitRect: (id: string, before: OrientedRect, after: OrientedRect) => Promise<void>;
   deleteBox: (id: string) => Promise<void>;
   deleteSelected: () => Promise<void>;
   duplicateSelected: () => Promise<void>;

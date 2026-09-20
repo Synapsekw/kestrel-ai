@@ -5,13 +5,13 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import type { ClassDef } from "@contract/client";
 import { pushLog } from "@/app/diagnostics";
 import { useEditorStore, visibleBoxes } from "@/store/editor";
-import { clampRect, MIN_BOX_SIDE, rectOf, roundRect, type Rect as RectShape } from "./geometry";
+import { clampRect, MIN_BOX_SIDE, rectOf, roundRect, type OrientedRect } from "./geometry";
 import { colourOf, nameOf } from "./labels";
 
 interface Props {
   classes: ClassDef[];
   /** Resolves when the move/resize has been saved or has failed; the node is re-synced from the store then. */
-  onCommitRect: (id: string, before: RectShape, after: RectShape) => Promise<void>;
+  onCommitRect: (id: string, before: OrientedRect, after: OrientedRect) => Promise<void>;
 }
 
 /** Boxes in image pixels; strokes, dashes and labels are kept in screen pixels through `strokeScaleEnabled={false}` and 1/scale. */
@@ -66,7 +66,9 @@ export function BoxLayer({ classes, onCommitRect }: Props) {
     );
     node.scale({ x: 1, y: 1 });
     node.setAttrs({ x: after.x, y: after.y, width: after.w, height: after.h });
-    void onCommitRect(id, rectOf(box), roundRect(after))
+    // The Transformer has rotateEnabled={false}, so a drag or resize here never changes the angle
+    // (Task 6 adds the rotate handle); it still has to ride along unchanged in the PATCH body.
+    void onCommitRect(id, { ...rectOf(box), angle: box.angle }, { ...roundRect(after), angle: box.angle })
       .catch((err: unknown) => pushLog(`commit rect failed: ${String(err)}`))
       .then(() => syncNode(id));
   };

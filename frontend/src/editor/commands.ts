@@ -4,7 +4,7 @@ import { messageOf } from "@/api/errors";
 import { setMarkedEmpty } from "@/api/images";
 import { pushLog } from "@/app/diagnostics";
 import { hasGroundTruth, hiddenProposalCount, type EditorStore } from "@/store/editor";
-import { duplicateOffset, rectEquals, rectOf, roundRect, type Rect } from "./geometry";
+import { duplicateOffset, orientedEquals, rectOf, roundOriented, type OrientedRect } from "./geometry";
 import type { BoxRef, History } from "./history";
 
 export interface CommandContext {
@@ -102,10 +102,10 @@ export async function cmdCreateBox(
 export async function cmdUpdateRect(
   ctx: CommandContext,
   id: string,
-  before: Rect,
-  after: Rect,
+  before: OrientedRect,
+  after: OrientedRect,
 ): Promise<void> {
-  if (rectEquals(before, after)) return;
+  if (orientedEquals(before, after)) return;
   const { api, projectId, store, history } = ctx;
   const restore = stateToRestore(store.getState().boxes[id]);
   const updated = await tracked(ctx, "move box", () => updateBox(api, projectId, id, after));
@@ -198,7 +198,8 @@ export async function cmdDuplicate(ctx: CommandContext, id: string): Promise<Box
   const box = store.getState().boxes[id];
   const image = store.getState().image;
   if (!box || !image) return undefined;
-  const rect = roundRect(duplicateOffset(rectOf(box), image));
+  const moved = duplicateOffset(rectOf(box), image);
+  const rect = roundOriented({ ...moved, angle: box.angle });
   return cmdCreateBox(ctx, box.image_id, { class_id: box.class_id, ...rect });
 }
 
