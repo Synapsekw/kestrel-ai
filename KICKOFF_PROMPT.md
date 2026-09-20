@@ -1,4 +1,4 @@
-# Kickoff prompt: build the machinery detection app
+# Kickoff prompt: build the Kestrel AI app
 
 Copy everything below this line into a fresh Claude session opened in `E:\Dev\Yolo\app`.
 

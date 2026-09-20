@@ -255,6 +255,6 @@ All under `E:\Dev\Yolo`. Read-only unless stated.
 
 ## 15. Open items with defaults
 
-- App name: owner to choose; default folder and identifiers use `machinery-app` until then.
+- App name: resolved 2026-09-20 — Kestrel AI, with `kestrel-ai` identifiers and app-data folder.
 - Aerial augmentation preset contents: start with Ultralytics defaults plus flips in both axes and 90 degree rotations; tune later.
 - OpenAI model name: configurable, no default committed here; verify current model names at implementation time.
