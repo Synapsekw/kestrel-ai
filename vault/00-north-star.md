@@ -85,12 +85,16 @@ outstanding friction-list minors G3 and G2/M3 (§5).
 
 ### Stale acceptance run (blocking claim of a current PASS)
 
-`docs/progress.md` records an **8/8 PASS** for the acceptance run (spec 13.5), but that figure was
-measured on the **pre-rename** build at commit `9f3aa01` (product then still named "Machinery
-Detection"). **It has not been re-run against the renamed, installed Kestrel AI build.** Do not
-read the 8/8 as current. This is tracked as **Task 11 Step 5** of
+`docs/progress.md` records an **8/8 PASS** for the acceptance run (spec 13.5) at main `177f68b`
+(2026-09-20, the U2 site-office build; evidence `docs/evidence/acceptance/2026-09-20-installed-177f68b/`,
+driver run committed at `df39048`). That build **predates the Kestrel AI rename** — every rename
+commit lands after it. **It has not been re-run against the renamed, installed Kestrel AI build.**
+Do not read the 8/8 as a current PASS. This is tracked as **Task 11 Step 5** of
 `docs/superpowers/plans/2026-09-20-kestrel-ai-rename.md` ("Re-run acceptance ... The previous 8/8
 was measured on the old build and is stale until this passes").
+
+(The earlier run at commit `9f3aa01`, 2026-09-18, is a different, earlier result: 7/8, step 7
+skipped for lack of a provider key — not the run the 8/8 figure belongs to.)
 
 ### Other open items found while reading `docs/progress.md`
 
