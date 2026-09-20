@@ -76,7 +76,7 @@ Two things that trip people up:
   `E:\Dev\Yolo\app\backend\.venv\Scripts\python.exe`. Do not `uv venv` a fresh one inside a
   worktree.
 - **`cargo` is not on PATH** in every shell. If `cargo test` fails to resolve, call the real binary
-  directly: `C:\Users\D\.cargo\bin\cargo.exe test --manifest-path frontend/src-tauri/Cargo.toml`.
+  directly: `%USERPROFILE%\.cargo\bin\cargo.exe test --manifest-path frontend/src-tauri/Cargo.toml`.
 
 Packaging changes additionally require `backend\scripts\build.ps1`,
 `backend\scripts\smoke_frozen.ps1` and `pnpm -C frontend build:installer` — see `README.md` →

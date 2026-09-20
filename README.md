@@ -17,6 +17,12 @@ models or OpenAI / Anthropic vision models.
 | `backend/starter_weights/` | The bundled base models (`yolo11n/s/m.pt`, COCO); git-ignored, filled by `scripts/fetch_starter_weights.ps1` | - |
 | `frontend/` | Tauri 2 shell with the React/TypeScript/Vite UI | pnpm, Vitest, Playwright, Rust stable MSVC |
 | `contract/` | `openapi.yaml`, generated TypeScript client, Prism mock server, Spectral lint | pnpm |
+| `vault/` | Tracked Obsidian dev-memory vault: project state, decisions, session notes | Obsidian (optional) |
+
+New to this repo? `AGENTS.md` carries the working agreement, `CONTRIBUTING.md` the contributor
+detail, and `vault/00-north-star.md` is the project's own entry point — read it first, on any
+machine. `scripts/start-task.ps1` / `scripts/finish-task.ps1` cut and land task worktrees; see
+`CONTRIBUTING.md` → "Branching workflow".
 
 ## Prerequisites (reference machine)
 

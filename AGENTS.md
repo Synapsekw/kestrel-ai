@@ -7,7 +7,7 @@ detection. Orientation map:
 | --- | --- |
 | `backend/` | FastAPI sidecar: projects, datasets, annotation storage, jobs, training, inference. Python 3.11 in `backend/.venv` (uv) |
 | `frontend/` | Tauri 2 shell (`src-tauri/`, Rust) + the React/TS/Vite UI (`src/`) |
-| `frontend/src/ui/` | The design-system primitives; `scripts/check-tokens.mjs` enforces their use |
+| `frontend/src/ui/` | The design-system primitives; `frontend/scripts/check-tokens.mjs` enforces their use |
 | `contract/` | `openapi.yaml` (source of truth), the generated TS client, Prism mock, Spectral lint |
 | `docs/` | `progress.md` (the evidence ledger), `superpowers/{specs,plans}`, `evidence/` |
 | `vault/` | Dev memory: `00-north-star.md`, `decisions/` (ADRs), `sessions/` |
