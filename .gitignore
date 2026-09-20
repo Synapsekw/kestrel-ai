@@ -22,6 +22,10 @@ frontend/src-tauri/binaries/*
 .worktrees/
 .claude/worktrees/
 .playwright-mcp/
+# Obsidian per-machine state (rest of .obsidian/ is deliberately tracked for plugins & config)
+.obsidian/workspace.json
+.obsidian/graph.json
+.obsidian/workspace-mobile.json
 # SDD wave state travels with the repo; only its installs do not
 .superpowers/**/node_modules/
 *.db
