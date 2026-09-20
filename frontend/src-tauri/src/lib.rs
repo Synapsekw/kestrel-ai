@@ -2,6 +2,7 @@ mod appdata;
 mod logfile;
 mod sidecar;
 
+use logfile::{RotatingLog, MAX_BYTES};
 use tauri::Manager;
 
 #[tauri::command]
@@ -34,6 +35,11 @@ pub fn run() {
         .manage(sidecar::BackendState(std::sync::Mutex::new(None)))
         .setup(|app| {
             // Before anything writes to the app-data folder, bring a pre-rename one across.
+            //
+            // This must stay the FIRST thing in setup() that touches app_data_dir. Registering
+            // any plugin that touches it earlier (tauri-plugin-store, -log, -fs, ...) would create
+            // the new folder before migrate() runs, so migrate() would see it already present,
+            // return BothPresent, and silently never migrate anything again.
             let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
             if let Some(legacy) = data_dir
                 .parent()
@@ -41,12 +47,30 @@ pub fn run() {
             {
                 match appdata::migrate(&legacy, &data_dir) {
                     appdata::Migration::Moved => {
-                        eprintln!("[appdata] migrated {} -> {}", legacy.display(), data_dir.display())
+                        eprintln!("[appdata] migrated {} -> {}", legacy.display(), data_dir.display());
+                        let log = RotatingLog::new(data_dir.join("logs").join("sidecar.log"), MAX_BYTES);
+                        log.append(&format!(
+                            "[appdata] migrated legacy folder {} -> {}",
+                            legacy.display(),
+                            data_dir.display()
+                        ));
                     }
                     appdata::Migration::BothPresent => {
-                        eprintln!("[appdata] pre-rename folder left in place: {}", legacy.display())
+                        eprintln!("[appdata] pre-rename folder left in place: {}", legacy.display());
+                        let log = RotatingLog::new(data_dir.join("logs").join("sidecar.log"), MAX_BYTES);
+                        log.append(&format!(
+                            "[appdata] both folders present, legacy folder left in place: {}",
+                            legacy.display()
+                        ));
                     }
-                    appdata::Migration::Failed(e) => eprintln!("[appdata] migration failed: {e}"),
+                    appdata::Migration::Failed(e) => {
+                        eprintln!("[appdata] migration failed: {e}");
+                        let log = RotatingLog::new(data_dir.join("logs").join("sidecar.log"), MAX_BYTES);
+                        log.append(&format!(
+                            "[appdata] migration failed, legacy folder still at {}: {e}",
+                            legacy.display()
+                        ));
+                    }
                     appdata::Migration::NothingToDo => {}
                 }
             }
