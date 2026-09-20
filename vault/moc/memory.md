@@ -17,7 +17,7 @@ How Kestrel AI's memory is layered, modelled on Monolith's vault.
    regenerates a `.gitignore` containing `*` inside this directory on every run, which is harmless
    for files already tracked but means a **new** wave needs `git add -f` — see `CONTRIBUTING.md`'s
    note under "Dev memory".
-3. **Machine-local Claude auto-memory** — `C:\Users\D\.claude\projects\E--Dev-Yolo-app\memory\` —
+3. **Machine-local Claude auto-memory** — `%USERPROFILE%\.claude\projects\E--Dev-Yolo-app\memory\` —
    user behaviour (how Claude Code should act on this machine), saved outside the repo, not shared.
 
 ## Gotcha decisions

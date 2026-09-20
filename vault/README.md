@@ -66,7 +66,7 @@ live Dataview queries.
 
 ## Related
 
-- Machine-local Claude auto-memory at `C:\Users\D\.claude\projects\E--Dev-Yolo-app\memory\` — user
+- Machine-local Claude auto-memory at `%USERPROFILE%\.claude\projects\E--Dev-Yolo-app\memory\` — user
   behaviour (how Claude Code should act on this machine), saved outside the repo. This vault is a
   different layer that coexists: project state (what happened, why, what's decided), saved inside
   the repo and shared with anyone who clones it.
