@@ -2040,12 +2040,14 @@ components:
 
     AgentMessage:
       type: object
+      additionalProperties: false
       required: [role, content]
       properties:
         role: { type: string, enum: [user, assistant] }
         content: { type: string, minLength: 1, maxLength: 2000 }
     AgentPlan:
       type: object
+      additionalProperties: false
       required: [name, classes, starter_model_key, image_guidance, labeling_query]
       properties:
         name: { type: string, minLength: 1, maxLength: 120 }
@@ -2066,6 +2068,7 @@ components:
         labeling_query: Find every excavator and dump truck. Draw a tight bounding box around each visible machine.
     AgentChatRequest:
       type: object
+      additionalProperties: false
       required: [provider, messages]
       properties:
         provider: { $ref: "#/components/schemas/ProviderName" }
@@ -2083,6 +2086,7 @@ components:
         messages: [{ role: user, content: Help me detect excavators and dump trucks in aerial photos. }]
     AgentChatResponse:
       type: object
+      additionalProperties: false
       required: [message, plan, model_name]
       properties:
         message: { type: string, minLength: 1, maxLength: 4000 }
