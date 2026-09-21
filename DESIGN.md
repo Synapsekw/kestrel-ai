@@ -54,6 +54,20 @@ instead of nested cards. Floating surfaces receive shadows; ordinary screen sect
 The shared primitives remain Button, IconButton, Input, Textarea, Select, Checkbox, Switch, Field,
 Pill, Alert, Toast, Progress, Skeleton, EmptyState, Segmented, Kbd, Dialog, Icon and Disclosure.
 
+## App identity
+
+`frontend/src/assets/kestrel-mark.svg` is the single geometry master for the Kestrel bird. The app
+uses it as a decorative charcoal mark on the amber Brand tile, while the adjacent `Kestrel AI` text
+provides the accessible name (visually hidden in the compact rail).
+
+Run `pnpm -C frontend icons:generate` after changing the master. The command adds the same mark to
+an amber rounded square with native-safe padding, then uses the installed Tauri CLI to regenerate
+the tracked PNG, ICO and ICNS files without adding platform-specific assets. Run
+`pnpm -C frontend icons:check` to verify source freshness, exact filename coverage and output bytes.
+Tauri uses the generated ICO/ICNS/PNG set for the executable and native bundles. The Inno Setup
+compiler uses the same `icon.ico` for setup, the installed executable supplies the Start menu
+shortcut icon, and Windows uses that executable for the uninstaller display icon.
+
 ## Shell and workspaces
 
 An open project starts with an 82px navigation rail: icons and short labels, active amber state,
