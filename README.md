@@ -4,6 +4,18 @@ Windows desktop app for aerial construction-machinery detection: dataset prepara
 bounding-box annotation, YOLO training with a model registry, and inference with local
 models or OpenAI / Anthropic vision models.
 
+Use **Setup agent** in the header to describe a new detector to GPT or Claude using the provider
+already configured in App settings. Review its project name, classes and YOLO starter, choose local
+project and image folders, then select up to 24 images for a first cloud labeling run. The drawer
+shows a cost estimate before starting and takes you to Review when suggestions are ready. Drafts
+stay while the app is open; imports, model downloads and labeling continue as background jobs.
+
+**Models → Starter models** offers 44 compatible box-detection checkpoints across YOLO26, YOLO12,
+YOLO11, YOLOv10, YOLOv9, YOLOv8, YOLOv5u and YOLOv3u. Choose the family and size; only the selected
+weights download, and cached or bundled weights work offline. These are starting weights for
+training on your classes. Segmentation, pose, classification and rotated-box training are separate
+tasks and are not offered by this detection workflow.
+
 - Design and PRD: `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md`
 - Progress, decisions and resume instructions: `docs/progress.md`
 - API contract (source of truth): `contract/openapi.yaml`

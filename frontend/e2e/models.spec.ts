@@ -149,14 +149,68 @@ test("export, import, use as pre-annotation and delete send the contract request
   await expect(page.getByTestId("model-detail")).toHaveCount(0);
 });
 
-test("offers the bundled starter weights and imports one with a click", async ({ page }) => {
+test("selects another YOLO family and acquires only its chosen model", async ({ page }) => {
+  const starters = [
+    ["yolo26n", "YOLO26"],
+    ["yolo12n", "YOLO12"],
+    ["yolo11n", "YOLO11"],
+    ["yolov10n", "YOLOv10"],
+    ["yolov9t", "YOLOv9"],
+    ["yolov8s", "YOLOv8"],
+    ["yolov5nu", "YOLOv5u"],
+    ["yolov3u", "YOLOv3u"],
+  ].map(([key, family]) => ({
+    key,
+    family,
+    task: "detect",
+    name: `${family} starter`,
+    description: "A detector ready for fine-tuning",
+    size_mb: 0,
+    available: false,
+  }));
+  await page.route("**/api/v1/starter-models", (route) =>
+    route.fulfill(json({ items: starters, next_cursor: null })),
+  );
+  await page.route("**/models/acquire-starter", (route) =>
+    route.fulfill(
+      json(
+        {
+          job: {
+            id: "acquire-1",
+            project_id: P,
+            type: "import",
+            state: "succeeded",
+            progress: 1,
+            message: "Model ready",
+            params: { purpose: "starter_model" },
+            result: { model_id: MODEL },
+            error: null,
+            log_path: "runs/acquire-1/job.log",
+            created_at: "2026-09-21T16:00:00Z",
+            started_at: "2026-09-21T16:00:00Z",
+            finished_at: "2026-09-21T16:00:01Z",
+          },
+        },
+        202,
+      ),
+    ),
+  );
   await page.goto(`/p/${P}/models`);
   await expect(page.getByRole("heading", { name: "Starter models" })).toBeVisible();
+  await expect(page.getByLabel("Model family").locator("option")).toHaveCount(8);
+  await page.getByLabel("Model family").selectOption("YOLOv8");
+  await expect(page.getByLabel("Starter model")).toHaveValue("yolov8s");
+  await page.screenshot({
+    path: "../docs/evidence/setup-agent/yolo-families.png",
+    fullPage: true,
+    animations: "disabled",
+  });
   const imported = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith("/models/import-starter"),
+    (r) => r.method() === "POST" && r.url().endsWith("/models/acquire-starter"),
   );
-  await page.getByRole("button", { name: "Add YOLO11 nano" }).click();
-  expect((await imported).postDataJSON()).toEqual({ key: "yolo11n" });
+  await page.getByRole("button", { name: "Download and add YOLOv8 starter" }).click();
+  expect((await imported).postDataJSON()).toEqual({ key: "yolov8s" });
+  await expect(page).toHaveURL(new RegExp(`model=${MODEL}`));
 });
 
 test("a 501 registry shows the note and keeps the screen usable", async ({ page }) => {
