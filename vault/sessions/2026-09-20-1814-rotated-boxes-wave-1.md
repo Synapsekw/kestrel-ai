@@ -107,6 +107,13 @@ it, and says so in the UI so nobody spends a day rotating labels under a wrong a
 Steps 3 and 6 are the only ones that cannot be covered by the suite: the canvas tests mock Konva, and
 middle-click autoscroll suppression only proves out in the packaged build.
 
+**Verified on the installed build, 2026-09-20 ~19:00.** The operator rebuilt and installed
+(`Kestrel AI_0.1.0_x64-setup.exe`, sidecar frozen 18:23, migration `0003` present on disk in the
+install at `_internal/app/db/migrations/versions/`) and confirmed the whole walkthrough passes,
+**including steps 3 and 6** — so middle-button panning and resize-with-rotation are now backed by a
+real check on the packaged app, not only by hand-derived arithmetic. That is the strongest evidence
+those two paths will get until `commit()` becomes reachable by a test.
+
 ## Next session entry point
 
 Decide the push (§5). Then either write the wave-2 plan from spec §5, or clear the two deferred

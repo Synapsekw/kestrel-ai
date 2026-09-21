@@ -86,7 +86,9 @@ canvas; the angle is stored, survives a reload, and reaches CSV, COCO, HTML and 
 Training on the angle is wave 2 and the dataset form says so. Also adds middle-button panning of the
 canvas. Gate green **on the merged result**: contract check, ruff, 620 pytest, frontend lint, 497
 vitest, frontend build; `cargo test` skipped (sidecar absent — see the ADR). Worktree removed,
-branch deleted, `backend/.venv` verified intact. Details: [[2026-09-20-1814-rotated-boxes-wave-1]].
+branch deleted, `backend/.venv` verified intact. Details: [[2026-09-20-1814-rotated-boxes-wave-1]]. **Rebuilt, installed and walked through on
+the operator's machine the same evening — all 11 steps pass, including the two the test suite
+cannot reach (middle-button panning, resize-with-rotation).**
 Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
