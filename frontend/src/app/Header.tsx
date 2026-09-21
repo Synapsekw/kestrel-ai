@@ -4,7 +4,8 @@ import { useLocation } from "react-router-dom";
 import type { Job } from "@contract/client";
 import { JobsButton } from "@/jobs/JobsButton";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
-import { Pill } from "@/ui";
+import { Button, Pill } from "@/ui";
+import { useAgentPanel } from "@/agent/panelStore";
 
 const SCREEN: Record<string, string> = {
   data: "Images",
@@ -82,6 +83,17 @@ export function Header({
         )}
       </p>
       <RunningPill projectId={projectId} />
+      <Button
+        size="sm"
+        aria-controls="setup-agent"
+        aria-expanded={useAgentPanel((s) => s.open)}
+        onClick={() => {
+          useJobsStore.getState().setPanelOpen(false);
+          useAgentPanel.getState().setOpen(true);
+        }}
+      >
+        Setup agent
+      </Button>
       <JobsButton />
     </header>
   );

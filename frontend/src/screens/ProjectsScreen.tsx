@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ClassDefInput, Project } from "@contract/client";
+import { useAgentPanel } from "@/agent/panelStore";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf, unwrap } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
@@ -264,6 +265,7 @@ export function ProjectsScreen() {
         <div className="flex flex-col gap-10">
           <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-4" noValidate>
             <h2 className="text-base font-semibold">Create a project</h2>
+            <Button onClick={() => useAgentPanel.getState().setOpen(true)}>Plan with the setup agent</Button>
             <Field label="Name" htmlFor="project-name">
               <Input
                 id="project-name"
