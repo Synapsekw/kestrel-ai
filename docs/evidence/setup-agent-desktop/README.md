@@ -4,6 +4,9 @@ Application source: `75aa11b`, identical application trees to verified setup-age
 Build workspace: `task/setup-agent-desktop`. This rebuild packages the setup drawer and the full
 44-checkpoint, eight-family detection catalog into the Windows desktop app.
 
+Evidence merged/pushed at `f15f89b`; task worktree and branch removed. Shared Python environment
+preserved. The installed app was reopened normally for the operator (PID 48328, title Kestrel AI).
+
 ## Evidence collected
 
 - Fresh PyInstaller backend: **204 seconds**, **3,522.9 MiB**, 14,161 files. Three offline YOLO11

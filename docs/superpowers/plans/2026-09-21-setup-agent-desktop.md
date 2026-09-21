@@ -26,4 +26,7 @@ Verification-driver preparation can run while the backend freezes. This chain is
 - [x] Check installed executable hashes, startup/shutdown, setup drawer, provider readiness,
       44 starters/eight families and real background model registration.
 - [x] Confirm application source matches the previously verified tree; finish required gates.
-- [ ] Record evidence and operator steps, merge/push, remove the worktree and log the session.
+- [x] Record evidence and operator steps, merge/push, remove the worktree and log the session.
+
+Completed: evidence merged/pushed at `f15f89b`, owned worktree/branch removed, updated installed
+app reopened normally. See `docs/evidence/setup-agent-desktop/README.md` and the 20:03 vault session.
