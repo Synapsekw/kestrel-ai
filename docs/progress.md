@@ -316,6 +316,15 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
+- 2026-09-21: Contour rebuilt and installed from `54b5e29` in `task/contour-desktop`, with unchanged
+  application trees. Fresh CUDA backend smoke passed (31.84s), 8 Rust tests passed, release build
+  and Inno installer passed (1,853.8 MiB), installation exited 0 with both executable hashes matching.
+  Installed WebView2 checks passed: project creation, three-photo import, Contour navigation/hover/focus,
+  real annotation save/undo/redo, compact layout, jobs/settings navigation and clean shutdown.
+  First startup 3.097s; warm 1.948s. Six native screenshots and reproducible driver:
+  `docs/evidence/ui/2026-09-21-contour-installed/`. Full cloud-provider acceptance was not rerun.
+  Visual follow-up: pre-existing cramped class-name fields in project settings, also present in the
+  earlier source capture. Installer retained in `dist/`; installed app opened for the operator.
 - 2026-09-17: session 1 started. Read spec, README, reuse files. Toolchain: node 24.11, pnpm 10.24,
   uv 0.11.32 with CPython 3.11.15 available, MSVC 14.29 (VS 2019 Build Tools) and Windows SDK
   10.0.19041 present, WebView2 153 present, Rust missing. Wrote the S0 plan.

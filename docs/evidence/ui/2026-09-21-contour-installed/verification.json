@@ -1,0 +1,89 @@
+{
+  "exe": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI\\kestrel-ai.exe",
+  "source": "54b5e299df2ba89b9c813ce0aef1d66fe7c40773",
+  "launches": [
+    {
+      "label": "First after install",
+      "projects_ms": 3097,
+      "healthy_ms": 3118,
+      "gpu_ms": 7627,
+      "gpu": {
+        "available": true,
+        "name": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "app_pid": 50356,
+      "sidecar_pids": [
+        13216
+      ]
+    },
+    {
+      "label": "Warm",
+      "projects_ms": 1948,
+      "healthy_ms": 1956,
+      "gpu_ms": 4327,
+      "gpu": {
+        "available": true,
+        "name": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "app_pid": 53740,
+      "sidecar_pids": [
+        2880
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "First after install launch, healthy owned sidecar and CUDA",
+      "detail": "3097 ms to Projects"
+    },
+    {
+      "name": "Create project from installed UI",
+      "detail": "8 default classes"
+    },
+    {
+      "name": "Bundled backend imports three real photographs as a background job",
+      "detail": ""
+    },
+    {
+      "name": "Contour 1024px hero, hover, keyboard focus and reduced motion",
+      "detail": ""
+    },
+    {
+      "name": "Expandable navigation and real image grid",
+      "detail": ""
+    },
+    {
+      "name": "Class shortcut, canvas drawing, persistent save, undo and redo",
+      "detail": ""
+    },
+    {
+      "name": "1024px layout and unclipped shortcuts",
+      "detail": "{\"x\":82,\"y\":157,\"width\":632,\"height\":611}"
+    },
+    {
+      "name": "Jobs drawer and project settings",
+      "detail": ""
+    },
+    {
+      "name": "No JavaScript page errors",
+      "detail": ""
+    },
+    {
+      "name": "Disposable project removed from recent projects; files retained in scratch",
+      "detail": ""
+    },
+    {
+      "name": "Window close stops app and owned sidecar",
+      "detail": ""
+    },
+    {
+      "name": "Warm launch, healthy owned sidecar and CUDA",
+      "detail": "1948 ms to Projects"
+    },
+    {
+      "name": "Window close stops app and owned sidecar",
+      "detail": ""
+    }
+  ],
+  "passed": true
+}
