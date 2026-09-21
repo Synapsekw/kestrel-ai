@@ -61,6 +61,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Wave 3 — S6 packaging & acceptance | merged (2 fix rounds) | checkpoint 4 passed; acceptance run passed, step 7 skipped (no provider key at the time) |
 | Phase 2: usability (goal 2) — friction-list fixes, starter weights, negative images, Datasets screen, results export | merged to `main` | acceptance closed 8/8 on the installed app (`177f68b`), step 7 with a stored provider key; friction list closed except G3 and G2/M3 (see §5) |
 | Site office UI redesign (U2) | merged to `main` (`2bc15a4`) | every screen restyled on `frontend/src/ui/`; walk-through 12 steps / 66 checks against the real backend |
+| Contour UI redesign | merged to `main` (`50c5e0d`) | selected visual direction implemented; 517 frontend tests, 620 backend tests, 57 browser tests; 13 development screenshots; installer unchanged |
 | Kestrel AI rename | naming and code renamed 2026-09-20 | acceptance has **not** been re-run against the renamed installed build — see §5 |
 | Rotated boxes (OBB) wave 1 — annotate, store, export | merged to `main` (`249262b`) | gate green on the merged result; 2 cross-cutting defects found by the whole-branch review and fixed before merge; wave 2 (OBB training) unplanned |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
@@ -74,8 +75,11 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** nothing shipped during the UI design-exploration block. Three standalone visual
-directions are ready for operator selection; no app code changed. See [[2026-09-21-1706-ui-design-directions]].
+**Shipped last:** **Contour UI**, selected by the operator and merged/pushed at `50c5e0d`.
+Charcoal/amber styling, compact expandable navigation, bounded Home imagery and one drawing/review
+inspector are implemented. Review fixed clipped help overlays; all source gates passed. The task
+worktree and branch were removed and the shared Python/CUDA environment remains intact. The installed
+desktop build is unchanged. See [[2026-09-21-1753-contour-ui]].
 
 Previously shipped: **the task-worktree workflow, proven end to end** — `start-task.ps1` →
 `finish-task.ps1` ran the full gate, merged, pushed `0ce41f5..7288966`, and tore the worktree down
@@ -96,19 +100,26 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** UI design exploration, awaiting the operator's choice of Fieldwork, Contour, Studio,
-or a combination. The interactive study lives outside the repository; implementation has not started.
+**In flight:** Contour source work is complete. Its installed-build verification is still pending (§5).
+The separately prepared folder rename remains pending (§5).
 
-**Next:** collect the UI direction choice before proposing the redesign specification and implementation.
+**Next:** build/install Contour and verify it on the desktop when that follow-up is requested.
 The existing backlog remains: plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
 task guards, rotated inference — spec §5 of
 `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
 it, decide whether to bound the pytest step in `finish-task.ps1`, given the 16h57m run recorded in
 [[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]]. Also still owed: re-run
 acceptance against the renamed installed build (§5); close friction-list minors G3 and G2/M3 (§5);
-do the Obsidian GUI verification (§5).
+carry out the prepared folder rename when the operator is ready (§5).
 
 ## 5. Owed
+
+### Contour installed-build verification
+
+The Contour source passed the gate and browser validation at `50c5e0d`. It has not been packaged or
+installed. The 13 screenshots use the real React UI with Prism metadata and a local photograph;
+they are not a Tauri/WebView2 acceptance run. A desktop update needs an installer rebuild and the
+installed walkthrough. Evidence: `docs/evidence/ui/2026-09-21-contour/README.md`.
 
 ### ~~Round trip incomplete~~ — CLOSED 2026-09-21, spec §7.5 MET
 
