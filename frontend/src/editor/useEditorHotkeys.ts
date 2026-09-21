@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 import type { ClassDef } from "@contract/client";
 import { useEditorStore } from "@/store/editor";
 import { actionForKey, isTypingTarget } from "./hotkeys";
@@ -14,7 +14,10 @@ interface Options {
 
 /** Document-level hotkeys for the editor (spec section 6); typing targets are left alone. */
 export function useEditorHotkeys({ enabled, classes, actions, nav }: Options): void {
-  useEffect(() => {
+  // A layout effect, not a passive one: the listener must swap in the same commit that shows the
+  // loaded image. A passive effect runs a task later, and a key pressed in that gap hits the stale
+  // `enabled: false` handler and is silently dropped (the CI e2e flake, see vault/decisions/).
+  useLayoutEffect(() => {
     const handle = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       const action = actionForKey({
