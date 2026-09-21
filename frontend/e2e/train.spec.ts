@@ -9,7 +9,7 @@ test("starts training with the chosen parameters and shows the live card with lo
   page,
 }) => {
   await page.goto(`/p/${P}/train`);
-  await expect(page.getByRole("heading", { name: "Train" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Train", exact: true })).toBeVisible();
   await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
   await expect(page.getByLabel("Base model")).toHaveValue(MODEL);
   await expect(page.getByLabel("Model name")).toHaveValue("v1-yolo11m-coco");

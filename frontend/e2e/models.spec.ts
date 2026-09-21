@@ -67,7 +67,7 @@ const isModelsList = (url: URL) => url.pathname === `/api/v1/projects/${P}/model
 
 test("lists the registry and opens the imported model's detail from the table", async ({ page }) => {
   await page.goto(`/p/${P}/models`);
-  await expect(page.getByRole("heading", { name: "Models" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Models", exact: true })).toBeVisible();
   await expect(page.getByTestId("model-table")).toContainText("yolo11m-coco");
   await expect(page.getByTestId("model-table")).toContainText("Imported");
   await page.getByRole("button", { name: "Select model yolo11m-coco" }).click();

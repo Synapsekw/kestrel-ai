@@ -164,6 +164,19 @@ test("A accepts all visible proposals and R rejects them through the review endp
   await expect(page.getByRole("button", { name: "Accept all (A)" })).toBeDisabled();
 });
 
+// Regression: on a slow machine a key pressed the moment the image shows used to hit the stale
+// "still loading" hotkey handler and vanish. An 8x CPU throttle reproduced that every time.
+test("a hotkey pressed the moment the image shows is not dropped on a slow machine", async ({ page }) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setCPUThrottlingRate", { rate: 8 });
+  await openEditor(page);
+  const rejected = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"), {
+    timeout: 5_000,
+  });
+  await page.keyboard.press("r");
+  expect((await rejected).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "reject" });
+});
+
 test("R rejects, Show rejected reveals the row, and the region list accepts one proposal", async ({
   page,
 }) => {

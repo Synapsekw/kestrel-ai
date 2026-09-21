@@ -5,7 +5,7 @@ const DATASET = "d0000000-7777-4000-8000-000000000001";
 
 test("lists the example dataset, opens its detail with per-class stats, and deletes it", async ({ page }) => {
   await page.goto(`/p/${P}/datasets`);
-  await expect(page.getByRole("heading", { name: "Datasets" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Datasets", exact: true })).toBeVisible();
   const table = page.getByTestId("dataset-table");
   await expect(table).toContainText("v1");
   await expect(table).toContainText("24 / 6");

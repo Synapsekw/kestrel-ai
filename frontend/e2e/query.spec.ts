@@ -47,7 +47,7 @@ test("estimates and starts a cloud detection, then reviews results, accepts as l
   );
   await page.goto(`/p/${P}/query`);
   await unlabeled;
-  await expect(page.getByRole("heading", { name: "Detect" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Detect", exact: true })).toBeVisible();
   await expect(page.getByLabel("Model", { exact: true })).toHaveValue(MODEL);
   await expect(page.getByTestId("image-count")).toHaveText("2 images selected");
   const grouped = page.waitForRequest((r) => r.url().includes("group_key=0031"));
@@ -168,7 +168,7 @@ test("a local-model run over the first N images; a 501 estimate shows the note",
   await expect(page.getByTestId("estimate")).toHaveCount(0);
   await page.getByRole("button", { name: "Estimate" }).click();
   await expect(page.getByRole("note")).toContainText("Detection runs are not available yet");
-  await expect(page.getByRole("heading", { name: "Detect" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Detect", exact: true })).toBeVisible();
 });
 
 test("an interrupted run offers Resume, which re-submits the run's job", async ({ page }) => {

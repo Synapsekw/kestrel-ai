@@ -57,6 +57,10 @@ jobs:
         working-directory: frontend
       - run: pnpm e2e
         working-directory: frontend
+      # A failed e2e run keeps its traces: the runner is the only machine where some races show.
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with: { name: playwright-results, path: frontend/test-results, retention-days: 7 }
 
   sidecar-smoke:
     if: github.event_name == 'workflow_dispatch'
