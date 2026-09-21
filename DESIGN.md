@@ -102,4 +102,20 @@ Screen names remain Projects, Home, Images, Label, Datasets, Train, Detect, Revi
 Project settings and App settings. Use suggestions, accept as labels, and flight where appropriate.
 Buttons name the action. A/R continue to accept/reject visible suggestions using existing handlers.
 Training, inference, import and export remain background jobs with progress. No dataset traversal,
-whole-image-set read, new endpoint, runtime dependency, or fabricated aggregate is introduced.
+whole-image-set read, runtime dependency, or fabricated aggregate is introduced.
+
+## Setup agent and starter models
+
+Setup agent opens a 34rem right drawer from the header or Projects. It shares Contour typography,
+controls, surfaces and 220ms drawer motion. Focus enters on opening, Escape closes it, and focus
+returns to the opener when it remains on screen. It is a nonmodal companion; closing or navigating
+keeps its draft and active jobs for the current app session.
+
+Progressively reveal chat, the editable project plan, image import, and a small first labeling batch.
+Use explicit action names, real job progress and recoverable errors. Review remains the next step
+after labeling. Metadata and thumbnail pages contain at most 24 images; first-batch selection is
+also capped at 24. Changing inputs or refreshing provider settings invalidates the price estimate.
+
+The Models screen groups supported YOLO detection starters by family and size instead of repeating
+dozens of cards. Cached availability is distinct from a first download. Weight acquisition runs as
+a background job, and unrelated task types are not offered as detection choices.

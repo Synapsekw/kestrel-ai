@@ -316,6 +316,18 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
+- 2026-09-21: Setup agent and the expanded YOLO catalog implemented on `task/setup-agent`
+  (`4930d3c`..`da2e475`), rebased onto the new Kestrel identity at `ad2f762`. The drawer uses
+  stored GPT/Claude credentials for bounded project planning, then creates a project, downloads
+  a selected starter, imports images, guides a 24-image first labeling batch and opens review.
+  44 compatible detection checkpoints across eight YOLO families are available on demand.
+  Real backend integration covers project/import/query/boxes with only paid AI calls replaced.
+  Independent final review ready with no blockers after recovery/estimate/task-validation fixes.
+  Required gates passed: contract check, Ruff, 666 backend tests (9 marked tests deselected),
+  frontend lint, 533 unit tests and production build; full browser suite 59 passed.
+  Rust skipped per policy because the fresh worktree has no frozen sidecar. Five refreshed
+  screenshots, full walkthrough, scope and limitations: `docs/evidence/setup-agent/README.md`.
+  No paid provider calls, all-model training benchmark or replacement installer claimed.
 - 2026-09-21: Approved A / Kestrel bird implemented in `89a63a2`: one SVG geometry master for
   the shared sidebar/splash Brand and all 17 native PNG/ICO/ICNS assets. Deterministic generation
   and integrity check added. Contract/Ruff, 620 backend tests, frontend lint/517 tests/build and
