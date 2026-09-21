@@ -35,6 +35,7 @@ export function useEditorImage(
   const revision = useChangesStore((s) => s.boxesRevision[imageId] ?? 0);
   // `loading` is derived: the id of the last image whose load settled versus the requested one.
   const [settledId, setSettledId] = useState<string | null>(null);
+  const loadedId = useEditorStore((s) => s.imageId);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,5 +89,9 @@ export function useEditorImage(
     };
   }, [api, projectId, imageId, revision]);
 
-  return { loading: settledId !== imageId };
+  // The store's own image id decides first: it commits in the same render as the image and its
+  // boxes (store updates render synchronously), while `settledId` is a state update React commits
+  // a task later, a window in which hotkeys gated on `loading` would drop keys on a visible image.
+  // `settledId` still ends loading for a failed load, which never puts an image in the store.
+  return { loading: loadedId !== imageId && settledId !== imageId };
 }

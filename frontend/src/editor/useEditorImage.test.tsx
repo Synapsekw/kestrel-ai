@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { useLayoutEffect, type ReactNode } from "react";
 import {
   errorBody,
   exampleImage,
@@ -97,5 +97,34 @@ describe("useEditorImage pre-annotation notices", () => {
     await waitFor(() => expect(useEditorStore.getState().image).not.toBeNull());
     expect(notices.filter(Boolean)).toEqual([]);
     expect(requests.some((r) => r.url.endsWith("/preannotate"))).toBe(false);
+  });
+});
+
+describe("useEditorImage loading", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+
+  it("never commits the loaded image while still reporting loading", async () => {
+    const { api } = fakeClient(base);
+    // Every committed render: is the image showing, and does the hook still say "loading"?
+    const commits: { shown: boolean; loading: boolean }[] = [];
+    renderHook(
+      () => {
+        const { loading } = useEditorImage(PROJECT_ID, IMAGE_ID, null);
+        const shown = useEditorStore((s) => s.imageId === IMAGE_ID);
+        useLayoutEffect(() => {
+          commits.push({ shown, loading });
+        });
+        return loading;
+      },
+      {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <TestApiProvider api={api}>{children}</TestApiProvider>
+        ),
+      },
+    );
+    await waitFor(() => expect(commits.at(-1)).toEqual({ shown: true, loading: false }));
+    // The hotkeys are gated on `loading`: a commit that shows the image with loading still true
+    // is a window where a key press on the visible image is silently dropped.
+    expect(commits.filter((c) => c.shown && c.loading)).toEqual([]);
   });
 });
