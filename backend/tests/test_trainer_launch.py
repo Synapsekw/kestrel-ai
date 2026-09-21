@@ -59,11 +59,12 @@ def test_train_reports_progress_and_returns_artifacts(tmp_path, trainer, log):
 
     assert [round(f, 3) for f, _ in seen][-1] == 1.0
     messages = [m for _, m in seen if m]
-    assert [m.split(" loss ")[0] for m in messages] == [
-        "epoch 1/3 mAP50 0.100",
-        "epoch 2/3 mAP50 0.200",
-        "epoch 3/3 mAP50 0.300",
-    ]
+    heads = [m.split(" loss ")[0] for m in messages]
+    # Each poll reports the latest epoch, so a slow poll can skip one (CI did, 2026-09-21); what
+    # holds is that epochs only move forward and the last one is always reported.
+    expected = ["epoch 1/3 mAP50 0.100", "epoch 2/3 mAP50 0.200", "epoch 3/3 mAP50 0.300"]
+    assert heads == sorted(set(heads), key=expected.index)
+    assert heads[-1] == "epoch 3/3 mAP50 0.300"
     # The worker's loss terms and ETA ride along on every epoch message (spec section 7).
     assert all(" loss box " in m and " ETA " in m and m.endswith("s") for m in messages)
     assert seen[-1][1].endswith("ETA 0s")
