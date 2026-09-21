@@ -1,4 +1,5 @@
 import { test, expect, type Route } from "@playwright/test";
+import { evidencePath } from "./evidence";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MODEL = "m0000000-2222-4000-8000-000000000001";
@@ -201,7 +202,7 @@ test("selects another YOLO family and acquires only its chosen model", async ({ 
   await page.getByLabel("Model family").selectOption("YOLOv8");
   await expect(page.getByLabel("Starter model")).toHaveValue("yolov8s");
   await page.screenshot({
-    path: "../docs/evidence/setup-agent/yolo-families.png",
+    path: evidencePath("setup-agent", "yolo-families.png"),
     fullPage: true,
     animations: "disabled",
   });

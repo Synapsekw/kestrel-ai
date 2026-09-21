@@ -9,7 +9,12 @@ const mockPort = Number(process.env.E2E_MOCK_PORT ?? 4010);
 export default defineConfig({
   testDir: "e2e",
   timeout: 30_000,
-  use: { baseURL: `http://127.0.0.1:${webPort}`, headless: true },
+  // CI keeps a trace of each failure (uploaded as the playwright-results artifact).
+  use: {
+    baseURL: `http://127.0.0.1:${webPort}`,
+    headless: true,
+    trace: process.env.CI ? "retain-on-failure" : "off",
+  },
   webServer: [
     {
       command: `pnpm --dir ../contract exec prism mock openapi.yaml --host 127.0.0.1 --port ${mockPort}`,

@@ -33,6 +33,8 @@ Integrated and pushed to main at `89de91b`. Task branch and worktree removed; sh
 `yolo-families.png` were captured by `frontend/e2e/setup-agent.spec.ts` and `models.spec.ts`.
 They show synthetic API/image fixtures, not user projects or actual AI accuracy. Existing Home
 screen background responses may use Prism examples. Animations are disabled for stable captures.
+Ordinary e2e runs write these under `frontend/test-results/`; refresh the committed copies with
+`$env:E2E_CAPTURE_EVIDENCE = "1"; pnpm -C frontend e2e`.
 
 ## Model and API references
 

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { evidencePath } from "./evidence";
 
 const projectId = "8f1c2e3a-1111-4000-8000-000000000001";
 const stamp = "2026-09-21T16:00:00Z";
@@ -168,7 +169,7 @@ test("setup agent guides a bounded first labeling run and retains its plan", asy
   await expect(drawer.getByLabel("Project name")).toHaveValue("West site survey");
   await drawer.getByLabel("Project folder").fill(project.folder);
   await page.screenshot({
-    path: "../docs/evidence/setup-agent/project-plan.png",
+    path: evidencePath("setup-agent", "project-plan.png"),
     fullPage: true,
     animations: "disabled",
   });
@@ -187,7 +188,7 @@ test("setup agent guides a bounded first labeling run and retains its plan", asy
   await drawer.getByRole("button", { name: "Estimate first labeling" }).click();
   await expect(drawer.getByTestId("estimate")).toContainText("0.02");
   await page.screenshot({
-    path: "../docs/evidence/setup-agent/image-selection.png",
+    path: evidencePath("setup-agent", "image-selection.png"),
     fullPage: true,
     animations: "disabled",
   });
@@ -204,7 +205,7 @@ test("setup agent guides a bounded first labeling run and retains its plan", asy
   });
   expect(requests.some((r) => r.path.includes("/promote"))).toBe(false);
   await page.screenshot({
-    path: "../docs/evidence/setup-agent/first-labeling.png",
+    path: evidencePath("setup-agent", "first-labeling.png"),
     fullPage: true,
     animations: "disabled",
   });
@@ -220,7 +221,7 @@ test("missing credentials give a settings route at narrow laptop width", async (
   await expect(drawer.getByRole("link", { name: "App settings" })).toHaveAttribute("href", "/settings");
   await expect(drawer).toBeInViewport();
   await page.screenshot({
-    path: "../docs/evidence/setup-agent/missing-key.png",
+    path: evidencePath("setup-agent", "missing-key.png"),
     fullPage: true,
     animations: "disabled",
   });
