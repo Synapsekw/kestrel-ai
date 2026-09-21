@@ -5,8 +5,8 @@ import { Checkbox, cx, transition } from "@/ui";
 import { computeWindow, useVirtualRows } from "./useVirtualRows";
 import type { ImageTableProps } from "./ImageTable";
 
-export const CELL_WIDTH = 200;
-export const CELL_HEIGHT = 190;
+export const CELL_WIDTH = 232;
+export const CELL_HEIGHT = 218;
 
 export interface ImageGridProps {
   projectId: string;
@@ -26,7 +26,7 @@ export interface ImageGridProps {
  */
 function Thumb({ src, alt }: { src: string; alt: string }) {
   const [failed, setFailed] = useState(false);
-  if (failed) return <span className="px-2 text-center text-xs text-dim">No thumbnail</span>;
+  if (failed) return <span className="px-2 text-center text-xs text-muted">No thumbnail</span>;
   return <img src={src} alt={alt} onError={() => setFailed(true)} className="h-full w-full object-cover" />;
 }
 
@@ -37,14 +37,14 @@ function StatusBadge({ img }: { img: ImageRow }) {
   if (img.pending_count > 0)
     return (
       <span
-        className={cx(base, "bg-warn-strong text-ink")}
+        className={cx(base, "bg-warn-strong text-accent-fg")}
         title={`${img.pending_count} ${img.pending_count === 1 ? "suggestion" : "suggestions"} to review`}
       >
         Review
       </span>
     );
   if (img.marked_empty) return <span className={cx(base, "bg-panel text-muted")}>Empty</span>;
-  if (img.labeled) return <span className={cx(base, "bg-ok text-white")}>Labeled</span>;
+  if (img.labeled) return <span className={cx(base, "bg-ok text-ground")}>Labeled</span>;
   return null;
 }
 
@@ -109,8 +109,7 @@ export function ImageGrid(p: ImageGridProps) {
               >
                 <div
                   className={cx(
-                    "relative flex flex-1 items-center justify-center overflow-hidden rounded-lg border bg-well",
-                    "hover:-translate-y-0.5 hover:shadow-float motion-reduce:hover:translate-y-0",
+                    "relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-panel",
                     transition,
                     isSelected
                       ? "border-accent ring-2 ring-accent"
@@ -119,7 +118,9 @@ export function ImageGrid(p: ImageGridProps) {
                         : "border-line",
                   )}
                 >
-                  <Thumb key={src} src={src} alt={img.file_name} />
+                  <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-canvas">
+                    <Thumb key={src} src={src} alt={img.file_name} />
+                  </div>
                   <span
                     className={cx(
                       "absolute left-1.5 top-1.5 flex",
@@ -141,12 +142,12 @@ export function ImageGrid(p: ImageGridProps) {
                   <span className="absolute right-1.5 top-1.5 flex">
                     <StatusBadge img={img} />
                   </span>
-                  <span className="absolute inset-x-0 bottom-0 flex items-end gap-2 bg-gradient-to-t from-canvas/85 via-canvas/40 to-transparent px-2 pb-1.5 pt-6 text-xs text-inverse-fg">
-                    <span className="min-w-0 flex-1 truncate font-mono" title={img.file_name}>
+                  <span className="flex w-full shrink-0 flex-col gap-1 border-t border-line px-3 py-2 text-xs text-ink">
+                    <span className="min-w-0 truncate font-mono" title={img.file_name}>
                       {img.file_name}
                     </span>
                     {img.box_count > 0 && (
-                      <span className="shrink-0 tabular-nums">
+                      <span className="shrink-0 tabular-nums text-muted">
                         {img.box_count} {img.box_count === 1 ? "box" : "boxes"}
                       </span>
                     )}

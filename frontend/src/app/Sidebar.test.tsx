@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { act, screen, within } from "@testing-library/react";
+import { act, fireEvent, screen, within } from "@testing-library/react";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useProgressStore } from "@/store/progress";
@@ -18,6 +18,27 @@ const base = {
 describe("Sidebar", () => {
   beforeEach(() => useProgressStore.setState({ byProject: {} }));
 
+  it("expands the compact rail without losing routes or locked explanations", () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    const toggle = screen.getByRole("button", { name: "Expand navigation" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const links = screen.getAllByRole("link").map((link) => link.getAttribute("href"));
+    act(() => screen.getByRole("link", { name: /^Train/ }).focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Create a dataset first");
+    fireEvent.click(toggle);
+    expect(screen.getByRole("button", { name: "Collapse navigation" })).toHaveAttribute(
+      "aria-expanded",
+      "true",
+    );
+    expect(screen.getByText("Walkthrough")).toBeVisible();
+    expect(screen.getAllByRole("link").map((link) => link.getAttribute("href"))).toEqual(links);
+    fireEvent.click(screen.getByRole("button", { name: "Collapse navigation" }));
+    expect(screen.getByRole("link", { name: "Project settings" })).toBeVisible();
+    expect(screen.getByRole("link", { name: "App settings" })).toBeVisible();
+  });
+
   it("with no project open it shows Projects, the hint and App settings only", () => {
     const { api } = fakeClient([]);
     renderWithProviders(<Sidebar projectId={undefined} projectName={null} />, { api });
@@ -32,6 +53,7 @@ describe("Sidebar", () => {
     useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40, labeled: 14 });
     const { api } = fakeClient([]);
     renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     const nav = screen.getByRole("navigation");
     const labels = [
       "Home",
@@ -86,7 +108,8 @@ describe("Sidebar", () => {
       route: `/p/${PROJECT_ID}/edit/img-1`,
     });
     const nav = screen.getByRole("navigation");
-    expect(within(nav).getByRole("link", { name: /^Label/ }).className).toContain("bg-panel");
-    expect(within(nav).getByRole("link", { name: /^Images/ }).className).not.toContain("bg-panel");
+    expect(within(nav).getByRole("link", { name: /^Label/ })).toHaveAttribute("aria-current", "page");
+    expect(within(nav).getByRole("link", { name: /^Label/ }).className).toContain("bg-accent-soft");
+    expect(within(nav).getByRole("link", { name: /^Images/ }).className).not.toContain("bg-accent-soft");
   });
 });

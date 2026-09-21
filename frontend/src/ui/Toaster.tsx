@@ -33,9 +33,9 @@ function ToastItem({ toast }: { toast: Toast }) {
         className={cx(
           "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full",
           toast.tone === "ok"
-            ? "bg-ok text-white"
+            ? "bg-ok text-ground"
             : toast.tone === "danger"
-              ? "bg-danger text-white"
+              ? "bg-danger text-ground"
               : "bg-inverse-fg/20",
         )}
       >

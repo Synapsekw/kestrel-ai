@@ -121,7 +121,7 @@ function GridSkeleton() {
     <div className="flex flex-wrap gap-3">
       <span className="sr-only">Loading images</span>
       {Array.from({ length: 10 }, (_, i) => (
-        <Skeleton key={i} className="h-[178px] w-[188px] rounded-lg" />
+        <Skeleton key={i} className="h-[206px] w-[220px] rounded-lg" />
       ))}
     </div>
   );
@@ -228,7 +228,7 @@ export function DataManagerScreen() {
   return (
     <section className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Images</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Images</h1>
         <div className="flex items-center gap-2">
           <ShortcutsButton />
           <Button variant="primary" icon="import" onClick={() => setImporting((v) => !v)} disabled={!project}>

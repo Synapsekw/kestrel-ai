@@ -15,7 +15,7 @@ export function StepTicks({ projectId }: { projectId: string }) {
         <span
           key={s.id}
           title={s.label}
-          className={`h-1.5 w-6 rounded-full transition-colors duration-220 ${
+          className={`h-1.5 w-6 rounded-full ${
             s.state === "done" ? "bg-ok" : s.state === "current" ? "bg-accent" : "bg-line-strong/60"
           }`}
         />
@@ -36,7 +36,7 @@ export function NextStepBar({ projectId }: { projectId: string }) {
     <div
       key={step.text}
       data-testid="next-step"
-      className="flex items-center gap-4 border-b border-accent-line bg-accent-soft px-6 py-2 text-sm text-accent-ink animate-reveal motion-reduce:animate-none"
+      className="flex items-center gap-4 border-b border-line bg-ground px-4 py-2 text-[13px] text-accent-ink lg:px-6"
     >
       <Icon name="arrow-right" size={15} className="shrink-0" />
       <p className="min-w-0 flex-1 truncate">
@@ -47,7 +47,7 @@ export function NextStepBar({ projectId }: { projectId: string }) {
         >
           {step.text}
         </Link>
-        <span className="ml-2 text-accent-ink/80">{step.detail}</span>
+        <span className="ml-2 text-muted">{step.detail}</span>
       </p>
       <StepTicks projectId={projectId} />
     </div>

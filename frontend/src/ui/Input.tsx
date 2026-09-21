@@ -12,10 +12,10 @@ import { cx, transition } from "./tokens";
 /** Shared field chrome: border, panel background, accent focus ring, invalid state. */
 export const fieldClass = (invalid?: boolean, className?: string) =>
   cx(
-    "w-full rounded-md border bg-panel text-sm text-ink placeholder:text-dim",
-    "hover:border-line-strong focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/20",
+    "w-full rounded-md border bg-panel text-sm text-ink placeholder:text-muted",
+    "hover:border-muted focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/20",
     "disabled:opacity-45 disabled:pointer-events-none",
-    invalid ? "border-danger" : "border-line",
+    invalid ? "border-danger" : "border-control-line",
     transition,
     className,
   );

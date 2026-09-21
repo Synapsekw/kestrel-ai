@@ -45,3 +45,11 @@ detect not query, suggestions not proposals, accept as labels not promote.
    keyboard shortcuts.
 4. Advanced settings fold away behind "More options"; the defaults suit most projects.
 5. The imagery is the brightest thing on the screen in the editor; the chrome around it stays quiet.
+
+## Selected visual direction
+
+Contour was selected on September 21, 2026. Charcoal surfaces and warm amber actions keep aerial
+imagery at the centre of the workspace. Compact navigation gives the image more room; a single
+inspector brings drawing classes, review decisions and regions together. Home leads with the real
+next action and at most three recent image previews. Missing previews never interrupt the workflow.
+The design keeps the existing audience, plain language, project state and bounded-data promises.

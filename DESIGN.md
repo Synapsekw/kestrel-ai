@@ -1,93 +1,90 @@
-# Design system: Site office
+# Design system: Contour
 
-Light, stone-grey neutrals tinted toward the imagery, one safety-orange accent for the primary action
-and the current step, green for done, amber for "needs review". Implemented as CSS custom properties in
-`frontend/src/index.css`, exposed as Tailwind colour names in `frontend/tailwind.config.ts`, and used
-through the components in `frontend/src/ui/`.
+Contour is the selected Kestrel direction: charcoal surfaces, warm amber for the next action, and
+quiet green for completed work. A site manager at a Windows laptop spends most of a session looking
+at sand-coloured aerial imagery; the dark chrome keeps that imagery foremost. Instrument Sans and
+plain task language carry the interface. CSS custom properties in `frontend/src/index.css` are exposed
+through `frontend/tailwind.config.ts` and the shared `frontend/src/ui/` primitives.
 
-## Colour (hex; Tailwind name in brackets)
+## Colour
 
-| Role | Value | Tailwind | Use |
-|---|---|---|---|
-| ground | #f5f5f1 | `bg-ground` | app background |
-| sidebar | #ebece6 | `bg-side` | sidebar, editor side panels |
-| panel | #ffffff | `bg-panel` | cards, inputs, popovers, table rows |
-| well | #e6e7e1 | `bg-well` | segmented controls, progress tracks, skeletons |
-| hover | rgb(30 32 26 / 0.06) | `bg-hover` | hover wash on ghost buttons and nav |
-| ink | #1f221d | `text-ink` | body text |
-| muted | #6a6f66 | `text-muted` | secondary text, labels |
-| dim | #a9ada4 | `text-dim` | disabled text |
-| line | #dcddd6 | `border-line` | default borders |
-| line-strong | #c3c6bd | `border-line-strong` | hovered borders, checkbox border |
-| accent | #d9480f | `bg-accent` | primary buttons, current step, focus ring |
-| accent-hover | #c23f0b | `bg-accent-hover` | primary button hover |
-| accent-soft | #fbeadf | `bg-accent-soft` | next-step banner, running pill |
-| accent-ink | #8a2f08 | `text-accent-ink` | text on accent-soft |
-| accent-line | #f0cdb8 | `border-accent-line` | border of accent-soft surfaces |
-| ok | #2f7d4f | `text-ok` / `bg-ok` | done, succeeded |
-| ok-soft | #dff1e5 | `bg-ok-soft` | success pill and alert background |
-| warn | #b98200 | `text-warn` | needs review, warnings (text) |
-| warn-strong | #e0a400 | `bg-warn-strong` | review badge on thumbnails |
-| warn-soft | #fbf0c7 | `bg-warn-soft` | warning pill and alert background |
-| danger | #b42318 | `text-danger` / `bg-danger` | destructive actions, errors |
-| danger-soft | #fde8e6 | `bg-danger-soft` | error alert background |
-| inverse | #1f221d | `bg-inverse` | selection bar, toasts, tooltips |
-| inverse-fg | #f5f5f1 | `text-inverse-fg` | text on inverse |
-| canvas | #232722 | `bg-canvas` | the editor's image area |
+| Role | Hex | Use |
+|---|---|---|
+| ground | #1d2322 | app background |
+| side | #191f1d | navigation rail |
+| panel | #262d2b | inspector, forms, floating surfaces |
+| well | #303936 | selected regions, tracks, neutral pills |
+| canvas | #151b19 | image work area |
+| ink | #edf0e9 | body and control text |
+| muted | #a3aea6 | secondary text and metadata |
+| dim | #738078 | disabled and nonessential decoration |
+| line | #38423e | quiet separators |
+| line-strong | #56645c | emphasized separators |
+| control-line | #839188 | essential input boundaries |
+| accent | #e5af64 | primary action and focus |
+| accent-hover | #efbf7b | primary action hover |
+| accent-fg | #29241b | text and checkmarks on amber |
+| accent-soft | #373226 | active navigation |
+| accent-ink | #edc991 | text on accent-soft and action links |
+| accent-line | #665236 | accent surface borders |
+| ok | #aed1b1 | success text and completed steps |
+| ok-soft | #283b2e | success surfaces |
+| warn | #eec779 | warning text |
+| warn-strong | #e5af64 | thumbnail review badge, with accent-fg text |
+| warn-soft | #3e3422 | warning surfaces |
+| danger | #f6a299 | error text and destructive emphasis |
+| danger-soft | #412a28 | error surfaces |
+| inverse | #151b19 | floating selection bars and tooltips |
+| inverse-fg | #edf0e9 | text on inverse and photography overlays |
 
-Class colours for boxes stay as stored per project (orange, yellow, green, cyan, blue, purple, pink, red).
+Body/control text targets 4.5:1 contrast; essential control boundaries and focus target 3:1.
+`ui/contrast.test.ts` reads the actual palette. Filled semantic success and danger elements use dark
+`text-ground`; filled amber uses `text-accent-fg`. Stored box class colours remain unchanged.
+Native controls use a dark colour scheme. Fine separators need not carry the brighter input border.
 
-Strategy: Restrained. Orange is on the primary button, the current step, the focus ring and links,
-nowhere else. Semantic green, amber and red are not accents.
+## Typography and geometry
 
-## Typography
+One bundled family: Instrument Sans, with Segoe UI and system sans fallbacks. Body and controls are
+13–14px; secondary metadata 11–12px; section headings 16–18px; principal page headings 24–28px.
+File names and paths use the monospace stack; counts use tabular numerals. Use weights 400, 500 and
+600, with tight tracking only for headings.
 
-One family: Instrument Sans (variable, bundled from `@fontsource-variable/instrument-sans`), fallback
-"Segoe UI", system-ui. Numbers in tables and counters use `tabular-nums`. File names and paths use the
-monospace stack (`font-mono`) at the same size as the surrounding text.
+Controls use 7px corners and panels/thumbnails 10px. Borders are 1px. Use spacing and fine separators
+instead of nested cards. Floating surfaces receive shadows; ordinary screen sections do not.
+The shared primitives remain Button, IconButton, Input, Textarea, Select, Checkbox, Switch, Field,
+Pill, Alert, Toast, Progress, Skeleton, EmptyState, Segmented, Kbd, Dialog, Icon and Disclosure.
 
-Scale (rem at 16px root): 12 (captions, table meta), 13 (dense UI: tables, editor chrome), 14 (body,
-forms, buttons), 16 (section titles, `font-semibold`), 20 (screen titles, `font-semibold`,
-`tracking-tight`). Nothing larger inside the app. Weights 400, 500 (buttons, nav), 600 (titles).
+## Shell and workspaces
 
-## Radius, borders, shadow
+An open project starts with an 82px navigation rail: icons and short labels, active amber state,
+completed-step checks, and an explicit expand control. Expansion shows full labels, counts and the
+project name at 224px. Locked links retain explanations on hover/focus. Projects, project settings
+and app settings stay reachable. The header identifies project and screen and retains Jobs.
+Long names truncate; the rail scrolls on short windows. Width changes are immediate.
 
-- `rounded-md` (7px) on controls, `rounded-lg` (10px) on panels and thumbnails, `rounded-full` on pills.
-- Borders 1px `border-line`. No side stripes. No nested cards.
-- Shadow only on things that float: popovers, the jobs drawer, toasts, hovered thumbnails
-  (`shadow-float`).
+The editor has a single 310px right inspector. Drawing class stays visible above an All classes
+disclosure containing class counts and hotkeys. Review actions, confidence, no-machinery state and
+regions share the inspector's scroll area. The image toolbar groups filename/navigation separately
+from view/history controls. At small widths the inspector stacks below a usable canvas. Existing
+label, selected-region, pan, rotation and shortcut semantics are unchanged.
 
-## Spacing and layout
-
-- Sidebar 224px, header 48px, screen padding 24px, gap 16px between blocks, 8px inside rows.
-- Screens are left-aligned with a max width of 72rem for forms and prose; lists and grids fill the width.
-- Tables: 36px rows, header in `text-muted` 12px, zebra off, hover wash on rows.
-
-## Components (`frontend/src/ui/`)
-
-Button (primary, secondary, ghost, danger; sm, md; `loading`), IconButton, Input, Textarea, Select
-(native select, styled, chevron), Checkbox, Switch, Field (label, hint, error), Pill (neutral, ok, warn,
-danger, accent; optional live dot), Alert (info, ok, warn, danger), Toast + `toast()` store, Progress,
-Skeleton, EmptyState, Segmented, Kbd, Dialog, Icon (`name` from a fixed set), Disclosure ("More
-options").
-
-Every interactive component has default, hover, focus-visible (2px accent ring, offset 2), active
-(`scale-[.97]`), disabled (opacity 45, no hover) states.
+Home makes the real next action its focal point, beside a recent image when available. One metadata
+request uses limit=3 with newest imports first; it never follows a cursor. Thumbnail or metadata
+failure leaves a quiet fallback and a working next action. Totals and running jobs remain real.
+Images retains virtualized/paginated reads and all filters, selection and bulk actions; each
+thumbnail has a separate filename caption and deliberate selection/focus treatment.
 
 ## Motion
 
-- `--ease-out: cubic-bezier(.23,1,.32,1)`; 140ms hover/press, 180ms reveals, 220ms drawers and dialogs.
-- Press: `active:scale-[.97]` on buttons and checkboxes.
-- Reveal: selection bar, alerts, toasts, dialogs enter with opacity 0 to 1 and translateY(6px) to 0,
-  or scale .97 to 1 for dialogs. Exits are 120ms.
-- Running work: a shimmer on progress bars; a pulsing dot in the running pill. Nothing else loops.
-- Lists load with skeleton rows, never a spinner in the middle of the content.
-- No animation on keyboard-triggered actions in the editor. `prefers-reduced-motion` removes movement,
-  keeps opacity.
+Use cubic-bezier(.23,1,.32,1): 140ms hover/press, 180ms reveals, 220ms drawers. Animate transform and
+opacity, never layout properties. Keyboard class/region selection and rail width changes are
+immediate. Reduced motion removes movement. Existing job progress animation conveys running state;
+no decorative loops are added. Loading chrome mirrors the final layout.
 
-## Copy
+## Copy and budgets
 
-Screen names: Projects, Home, Images, Label, Datasets, Train, Detect, Review, Models, Project settings,
-App settings. Suggestions (not proposals), accept as labels (not promote), flight (not group) where the
-group is a flight. Buttons name the action: "Import images", "Start training", "Run detection",
-"Accept 12 boxes as labels".
+Screen names remain Projects, Home, Images, Label, Datasets, Train, Detect, Review, Models, Export,
+Project settings and App settings. Use suggestions, accept as labels, and flight where appropriate.
+Buttons name the action. A/R continue to accept/reject visible suggestions using existing handlers.
+Training, inference, import and export remain background jobs with progress. No dataset traversal,
+whole-image-set read, new endpoint, runtime dependency, or fabricated aggregate is introduced.

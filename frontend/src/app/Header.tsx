@@ -16,6 +16,7 @@ const SCREEN: Record<string, string> = {
   train: "Train",
   query: "Detect",
   settings: "Project settings",
+  export: "Export",
 };
 
 /** The human name of the screen at `pathname`. */
@@ -48,7 +49,7 @@ function RunningPill({ projectId }: { projectId: string | undefined }) {
   const text = job.message ? `${TYPE_VERB[job.type]}: ${job.message}` : TYPE_VERB[job.type];
   const more = active.length > 1 ? ` (+${active.length - 1})` : "";
   return (
-    <Pill tone="accent" live className="max-w-md" title={text}>
+    <Pill tone="accent" live className="hidden max-w-xs sm:inline-flex" title={text}>
       <span className="truncate">
         {text}
         {more}
@@ -68,7 +69,7 @@ export function Header({
   const { pathname } = useLocation();
   const screen = screenName(pathname);
   return (
-    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-ground px-6">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-ground px-4 lg:px-6">
       <p className="min-w-0 flex-1 truncate text-sm">
         {projectId ? (
           <>

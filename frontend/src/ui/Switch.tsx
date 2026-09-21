@@ -38,7 +38,8 @@ export function Switch({ checked, onChange, label, disabled, className, id, hide
       >
         <span
           className={cx(
-            "absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow-[0_1px_2px_rgb(0_0_0/0.3)]",
+            "absolute left-0.5 top-0.5 h-4 w-4 rounded-full shadow-[0_1px_2px_rgb(0_0_0/0.3)]",
+            checked ? "bg-accent-fg" : "bg-ink",
             "transition-transform duration-180 ease-out motion-reduce:transition-none",
             checked && "translate-x-3.5",
           )}

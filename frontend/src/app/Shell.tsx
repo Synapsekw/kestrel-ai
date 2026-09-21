@@ -52,7 +52,9 @@ export function Shell() {
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Header projectId={projectId} projectName={projectName} />
         {projectId && !editor && !isHome && <NextStepBar projectId={projectId} />}
-        <main className={editor ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-6"}>
+        <main
+          className={editor ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-4 lg:p-6"}
+        >
           <Outlet />
         </main>
         {projectId && <JobsPanel projectId={projectId} />}

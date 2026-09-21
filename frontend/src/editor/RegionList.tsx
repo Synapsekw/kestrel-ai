@@ -47,11 +47,11 @@ export function RegionList({
   onReview,
 }: Props) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex shrink-0 flex-col">
       <h2 className="flex h-11 shrink-0 items-center border-b border-line px-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
         Regions ({boxes.length})
       </h2>
-      <ul role="list" aria-label="Regions" className="min-h-0 flex-1 overflow-auto">
+      <ul role="list" aria-label="Regions" className="flex flex-col gap-1 p-2">
         {boxes.map((b, i) => {
           const n = i + 1;
           const selected = b.id === selectedId;
@@ -76,9 +76,9 @@ export function RegionList({
               onMouseLeave={() => onHover(null)}
               // No transition: selection follows hotkeys and the canvas, and nothing animates on a key.
               className={cx(
-                "group flex cursor-pointer flex-col border-b border-line/70 text-[13px] text-ink",
+                "group flex cursor-pointer flex-col rounded-md border border-transparent pb-2 text-[13px] text-ink",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
-                selected ? "bg-panel" : b.id === hoveredId ? "bg-hover" : "hover:bg-hover",
+                selected ? "border-line-strong bg-well" : b.id === hoveredId ? "bg-hover" : "hover:bg-hover",
               )}
             >
               {/* First line is plain text in the middle, so a click on the row selects it and keeps
@@ -122,7 +122,7 @@ export function RegionList({
                   dense
                   aria-label={`Class of box ${n}`}
                   value={b.class_id}
-                  wrapperClassName="w-40 min-w-0"
+                  wrapperClassName="min-w-0 flex-1"
                   onClick={(e) => e.stopPropagation()}
                   onChange={(e) => onSetClass(b.id, e.target.value)}
                 >

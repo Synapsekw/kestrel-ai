@@ -168,7 +168,7 @@ export function SelectionBar({
               variant="danger"
               size="sm"
               icon="trash"
-              className="!border-transparent !bg-danger !text-white hover:!bg-danger/90"
+              className="!border-transparent !bg-danger !text-ground hover:!bg-danger/90"
               onClick={() => void confirmDelete()}
               loading={busy}
             >

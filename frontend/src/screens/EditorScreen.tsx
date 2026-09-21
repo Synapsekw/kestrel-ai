@@ -6,14 +6,13 @@ import { useBackend } from "@/api/client";
 import { pushLog } from "@/app/diagnostics";
 import { useProject } from "@/api/project";
 import { BoxLayer } from "@/editor/BoxLayer";
-import { ClassSidebar } from "@/editor/ClassSidebar";
+import { EditorInspector } from "@/editor/EditorInspector";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { BackLink } from "@/editor/BackLink";
 import { ConfidenceFloor } from "@/editor/ConfidenceFloor";
-import { EditorToolbar, ToolbarDivider } from "@/editor/EditorToolbar";
+import { EditorToolbar } from "@/editor/EditorToolbar";
 import { EmptyToggle } from "@/editor/EmptyToggle";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
-import { RegionList } from "@/editor/RegionList";
 import { useEditorActions } from "@/editor/useEditorActions";
 import { useEditorHotkeys } from "@/editor/useEditorHotkeys";
 import { useEditorImage } from "@/editor/useEditorImage";
@@ -44,24 +43,22 @@ export function EditorScreen() {
   return <EditorBody projectId={projectId} imageId={imageId} project={project} />;
 }
 
-/** The editor's frame while the project loads: the same three columns, in skeleton blocks. */
+/** Loading keeps the same canvas and single-inspector geometry as the ready editor. */
 function EditorSkeleton() {
   return (
-    <div role="status" aria-label="Loading project" className="flex h-full min-h-0">
-      <div className="flex w-48 shrink-0 flex-col gap-2 border-r border-line bg-side p-3">
-        <Skeleton className="h-3 w-16" />
-        {Array.from({ length: 6 }, (_, i) => (
-          <Skeleton key={i} className="h-6 w-full" />
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex h-11 items-center gap-2 border-b border-line bg-side px-3">
+    <div
+      role="status"
+      aria-label="Loading project"
+      className="flex h-full min-h-0 flex-col overflow-auto md:flex-row"
+    >
+      <div className="flex min-h-[360px] min-w-0 flex-1 flex-col md:min-h-0">
+        <div className="flex h-[100px] shrink-0 flex-col justify-center gap-3 border-b border-line bg-ground px-3">
           <Skeleton className="h-5 w-20" />
           <Skeleton className="h-5 w-40" />
         </div>
         <div className="min-h-0 flex-1 bg-canvas" />
       </div>
-      <div className="flex w-72 shrink-0 flex-col gap-2 border-l border-line bg-side p-3">
+      <div className="flex w-full shrink-0 flex-col gap-2 border-t border-line bg-panel p-4 md:w-[310px] md:border-l md:border-t-0">
         <Skeleton className="h-3 w-20" />
         <Skeleton className="h-7 w-full" />
         <Skeleton className="h-7 w-full" />
@@ -195,11 +192,15 @@ function EditorBody({
 
   const reviewControls = (
     <>
-      <ToolbarDivider />
       <Pill tone={proposalIds.length > 0 ? "warn" : "neutral"} data-testid="proposal-count">
         {proposalIds.length} {proposalIds.length === 1 ? "suggestion" : "suggestions"}
       </Pill>
-      <Button size="sm" disabled={proposalIds.length === 0} onClick={() => void actions.acceptAll()}>
+      <Button
+        variant="primary"
+        size="sm"
+        disabled={proposalIds.length === 0}
+        onClick={() => void actions.acceptAll()}
+      >
         Accept all (A)
       </Button>
       <Button size="sm" disabled={proposalIds.length === 0} onClick={() => void actions.rejectAll()}>
@@ -214,7 +215,6 @@ function EditorBody({
       {(proposalIds.length > 0 || hiddenByFloor > 0 || minConfidence > 0) && (
         <ConfidenceFloor value={minConfidence} hidden={hiddenByFloor} onChange={setMinConfidence} />
       )}
-      <ToolbarDivider />
       <EmptyToggle
         image={image}
         hasGroundTruth={groundTruth}
@@ -225,16 +225,8 @@ function EditorBody({
   );
 
   return (
-    <div className="flex h-full min-h-0">
-      <aside className="flex w-48 shrink-0 flex-col overflow-auto border-r border-line bg-side p-2">
-        <ClassSidebar
-          classes={project.classes}
-          activeClassId={activeClassId}
-          counts={counts}
-          onSelect={setActiveClass}
-        />
-      </aside>
-      <div className="flex min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-auto md:flex-row md:overflow-hidden">
+      <div className="flex min-h-[360px] min-w-0 flex-1 flex-col md:min-h-0">
         <EditorToolbar
           lead={<BackLink projectId={projectId} />}
           fileName={image?.file_name ?? (loading ? "Loading…" : "")}
@@ -249,7 +241,6 @@ function EditorBody({
           onOneToOne={oneToOne}
           onUndo={() => void actions.undo()}
           onRedo={() => void actions.redo()}
-          extra={reviewControls}
         />
         {/* Errors and notices often follow a hotkey: they appear without the reveal animation. */}
         {error && (
@@ -281,21 +272,26 @@ function EditorBody({
           </EditorCanvas>
         </div>
       </div>
-      <aside className="flex w-72 shrink-0 flex-col border-l border-line bg-side">
-        <RegionList
-          boxes={visible}
-          classes={project.classes}
-          selectedId={selectedId}
-          hoveredId={hoveredId}
-          markedEmpty={image?.marked_empty ?? false}
-          hiddenByFloor={hiddenByFloor}
-          onSelect={select}
-          onHover={hover}
-          onSetClass={(id, classId) => void actions.setClass(id, classId)}
-          onDelete={(id) => void actions.deleteBox(id)}
-          onReview={(id, action) => void actions.review([id], action)}
-        />
-      </aside>
+      <EditorInspector
+        classes={project.classes}
+        activeClassId={activeClassId}
+        counts={counts}
+        onSelect={setActiveClass}
+        reviewControls={reviewControls}
+        regions={{
+          boxes: visible,
+          classes: project.classes,
+          selectedId,
+          hoveredId,
+          markedEmpty: image?.marked_empty ?? false,
+          hiddenByFloor,
+          onSelect: select,
+          onHover: hover,
+          onSetClass: (id, classId) => void actions.setClass(id, classId),
+          onDelete: (id) => void actions.deleteBox(id),
+          onReview: (id, action) => void actions.review([id], action),
+        }}
+      />
     </div>
   );
 }

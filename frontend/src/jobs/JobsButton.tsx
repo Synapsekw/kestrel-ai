@@ -18,7 +18,7 @@ export function JobsButton() {
     >
       Jobs
       {count > 0 && (
-        <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent px-1 text-[11px] font-semibold text-white">
+        <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent px-1 text-[11px] font-semibold text-accent-fg">
           {count}
         </span>
       )}

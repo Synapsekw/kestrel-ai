@@ -37,7 +37,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           aria-hidden="true"
           className={cx(
             "grid h-4 w-4 place-items-center rounded-[4px] border",
-            onDark ? "border-white/70 bg-black/30" : "border-line-strong bg-panel",
+            onDark ? "border-white/70 bg-black/30" : "border-muted bg-panel",
             "peer-hover:border-accent",
             "peer-checked:border-accent peer-checked:bg-accent peer-checked:[&>svg]:scale-100 peer-checked:[&>svg]:opacity-100",
             "peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2",
@@ -50,7 +50,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
           <Icon
             name="check"
             size={11}
-            className="scale-50 text-white opacity-0 transition-[transform,opacity] duration-140 ease-out [stroke-width:3] motion-reduce:transition-none"
+            className="scale-50 text-accent-fg opacity-0 transition-[transform,opacity] duration-140 ease-out [stroke-width:3] motion-reduce:transition-none"
           />
         </span>
       </span>
