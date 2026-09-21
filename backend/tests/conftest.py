@@ -53,6 +53,7 @@ def app(settings, monkeypatch):
     the real `launch` and monkeypatches `subprocess.Popen` itself where it needs to assert on the
     exact command.
     """
+
     def no_model_download(*args, **kwargs):
         from app.jobs.cancellation import JobFailure
 

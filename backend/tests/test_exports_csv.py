@@ -283,9 +283,7 @@ def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_d
     assert "-flight" in by_image and "'-flight" not in by_image
 
 
-def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(
-    handle, project_dir, tmp_path
-):
+def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(handle, project_dir, tmp_path):
     """csv.writer's own quoting must survive a class name that itself looks like it could break a row."""
     tricky = 'Wheel, "Loader"'
     with handle.session() as s:

@@ -545,9 +545,12 @@ def test_unpromote_returns_the_promoted_boxes_to_unreviewed_and_spares_the_perso
     by_hand = next(b for b in boxes_of(handle) if round(b.confidence, 1) == 0.4)
     r = client.post(f"{BASE}/{project_id}/boxes/review", json={"box_ids": [by_hand.id], "action": "accept"})
     assert r.status_code == 200, r.text
-    assert client.post(
-        f"{BASE}/{project_id}/query-runs/{run_id}/promote", json={"min_confidence": 0.5}
-    ).json()["accepted"] == 2
+    assert (
+        client.post(f"{BASE}/{project_id}/query-runs/{run_id}/promote", json={"min_confidence": 0.5}).json()[
+            "accepted"
+        ]
+        == 2
+    )
 
     r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/unpromote")
     assert r.status_code == 200, r.text
@@ -694,9 +697,11 @@ def test_resume_reuses_the_finished_tiles_and_keeps_reviewed_boxes(
 
     # the user accepts the proposal on the first image before resuming
     with handle.session() as s:
-        keep = s.execute(
-            select(Box).where(Box.query_run_id == run_id, Box.image_id == frames[0])
-        ).scalars().one()
+        keep = (
+            s.execute(select(Box).where(Box.query_run_id == run_id, Box.image_id == frames[0]))
+            .scalars()
+            .one()
+        )
         keep.review_state = "accepted"
         keep_id, kept_geometry = keep.id, (keep.x, keep.y, keep.w, keep.h)
 
@@ -834,7 +839,5 @@ def test_two_resumes_at_once_start_one_job(
         release.set()
 
     assert sorted(statuses) == [202, 409], statuses
-    infer_jobs = [
-        j for j in client.get(f"{BASE}/{project_id}/jobs").json()["items"] if j["type"] == "infer"
-    ]
+    infer_jobs = [j for j in client.get(f"{BASE}/{project_id}/jobs").json()["items"] if j["type"] == "infer"]
     assert len(infer_jobs) == 2  # the original run and exactly one resume

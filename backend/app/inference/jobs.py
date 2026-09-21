@@ -108,9 +108,7 @@ def _reviewed(s, run: QueryRun, image_id: str, names: dict[str, str]) -> list[De
     ]
 
 
-def _write_boxes(
-    ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detection], nms_iou: float
-) -> int:
+def _write_boxes(ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detection], nms_iou: float) -> int:
     """Replace this image's *unreviewed* boxes for the run, without re-proposing reviewed ones.
 
     Replacing rather than appending keeps a re-run from doubling proposals, and leaving reviewed
@@ -239,9 +237,7 @@ def _drop_local_tile_cache(ctx: JobContext, run: QueryRun, totals: dict) -> None
 def _count_boxes(ctx: JobContext, run: QueryRun, image_id: str) -> int:
     with ctx.project.session() as s:
         return s.execute(
-            select(func.count())
-            .select_from(Box)
-            .where(Box.query_run_id == run.id, Box.image_id == image_id)
+            select(func.count()).select_from(Box).where(Box.query_run_id == run.id, Box.image_id == image_id)
         ).scalar_one()
 
 

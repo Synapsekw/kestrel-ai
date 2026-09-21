@@ -240,9 +240,7 @@ def create_box(
     body: BoxCreate,
     handle: ProjectHandle = Depends(get_project),
 ) -> BoxOut:
-    row = boxes.create_box(
-        handle, imageId, body.class_id, body.x, body.y, body.w, body.h, body.angle
-    )
+    row = boxes.create_box(handle, imageId, body.class_id, body.x, body.y, body.w, body.h, body.angle)
     return BoxOut.from_row(row)
 
 

@@ -340,9 +340,7 @@ def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> li
     return rows
 
 
-def _write_proposals(
-    handle: ProjectHandle, image_id: str, model: Model, dets: list[Detection]
-) -> list[Box]:
+def _write_proposals(handle: ProjectHandle, image_id: str, model: Model, dets: list[Detection]) -> list[Box]:
     """Replace this model's unreviewed proposals on the image, in one transaction.
 
     Two editor tabs can ask at the same moment: both see no boxes, both run the model, and an

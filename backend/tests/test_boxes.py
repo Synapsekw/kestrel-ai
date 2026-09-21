@@ -239,9 +239,12 @@ def test_patch_box_sets_the_angle(client, labelled):
 def test_angle_is_normalised_into_zero_to_one_eighty_on_write(client, labelled):
     """A rectangle has 180 degree symmetry, so 190 and 10 are the same shape (spec 3.1)."""
     box_id = _create(client, labelled, angle=190.0).json()["id"]
-    assert client.get(f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes").json()[
-        "items"
-    ][0]["angle"] == 10.0
+    assert (
+        client.get(f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes").json()["items"][
+            0
+        ]["angle"]
+        == 10.0
+    )
     r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"angle": -10.0})
     assert r.json()["angle"] == 170.0
 
@@ -253,9 +256,9 @@ def test_a_box_written_without_an_angle_reads_back_as_zero(client, labelled):
     0003 had never run. `test_migration_0003_gives_an_existing_box_angle_zero` covers the database.
     """
     proposal_id = _proposal(client, labelled)
-    rows = client.get(
-        f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes"
-    ).json()["items"]
+    rows = client.get(f"/api/v1/projects/{labelled['pid']}/images/{labelled['image_id']}/boxes").json()[
+        "items"
+    ]
     assert [b["angle"] for b in rows if b["id"] == proposal_id] == [0.0]
 
 
@@ -361,9 +364,7 @@ def test_patch_may_rotate_a_box_that_then_overhangs_the_edge(client, labelled):
     rejected = _create(client, labelled, x=280, y=10, w=60, h=20, angle=0.0)
     assert rejected.status_code == 422, "a 60-wide box at x=280 must not fit upright on a 320px image"
     box_id = _create(client, labelled, x=200, y=10, w=60, h=20).json()["id"]
-    r = client.patch(
-        f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"x": 280, "angle": 30.0}
-    )
+    r = client.patch(f"/api/v1/projects/{labelled['pid']}/boxes/{box_id}", json={"x": 280, "angle": 30.0})
     assert r.status_code == 200, r.text
     assert (r.json()["x"], r.json()["angle"]) == (280, 30.0)
 

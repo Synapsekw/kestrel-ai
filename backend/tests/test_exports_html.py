@@ -52,8 +52,13 @@ def _image(**over) -> ExportImage:
 
 def _write(images, tmp_path, **kw):
     files = html_out.write(
-        images, CLASSES, tmp_path, project_name=kw.pop("project_name", "Site A"),
-        export_time=kw.pop("export_time", EXPORT_TIME), settings=kw.pop("settings", SETTINGS), **kw
+        images,
+        CLASSES,
+        tmp_path,
+        project_name=kw.pop("project_name", "Site A"),
+        export_time=kw.pop("export_time", EXPORT_TIME),
+        settings=kw.pop("settings", SETTINGS),
+        **kw,
     )
     assert files == ["report.html"]
     return (tmp_path / "report.html").read_text("utf-8")

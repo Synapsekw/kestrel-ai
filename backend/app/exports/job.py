@@ -137,11 +137,7 @@ def _own_partial_folder(exports_dir: Path, entry: Path) -> bool:
     except OSError:
         return False
     root = exports_dir.resolve()
-    return (
-        resolved.parent == root
-        and resolved.name.casefold() == entry.name.casefold()
-        and resolved.is_dir()
-    )
+    return resolved.parent == root and resolved.name.casefold() == entry.name.casefold() and resolved.is_dir()
 
 
 def sweep_partial_exports(handle) -> None:
@@ -238,9 +234,7 @@ def run_export(ctx: JobContext) -> dict:
     now_local = _now_local()
     partial, stamp, n = _reserve_partial_folder(handle.exports_dir, now_local)
     try:
-        files = _write_formats(
-            ctx, images, classes, partial, handle, formats, include_unreviewed, now_local
-        )
+        files = _write_formats(ctx, images, classes, partial, handle, formats, include_unreviewed, now_local)
         final = _promote(handle.exports_dir, partial, stamp, n)
     except Exception:
         shutil.rmtree(partial, ignore_errors=True)

@@ -46,8 +46,7 @@ def _check_bounds(image: Image, x: float, y: float, w: float, h: float, angle: f
         if not (0 <= cx <= image.width and 0 <= cy <= image.height):
             raise AppError(
                 "validation_error",
-                f"rotated box centre ({cx}, {cy}) is outside the "
-                f"{image.width}x{image.height} image",
+                f"rotated box centre ({cx}, {cy}) is outside the {image.width}x{image.height} image",
                 422,
             )
         return

@@ -16,6 +16,7 @@ def _age(path) -> None:
     itself hides a bug in the other checks a test is aimed at."""
     os.utime(path, (OLD_MTIME, OLD_MTIME))
 
+
 BASE = "/api/v1/projects"
 CLASSES = ["excavator", "dump_truck"]
 

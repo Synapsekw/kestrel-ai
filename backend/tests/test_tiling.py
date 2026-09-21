@@ -31,8 +31,8 @@ def test_every_tile_is_full_size_and_inside_the_image():
     [
         (4000, 2667),  # both sides larger than the tile
         (1920, 1080),  # only the height fits in one tile
-        (4000, 800),   # a wide strip: the height is far below the tile size
-        (900, 3000),   # a tall strip: the width is far below the tile size
+        (4000, 800),  # a wide strip: the height is far below the tile size
+        (900, 3000),  # a tall strip: the width is far below the tile size
         (1280, 1280),  # exactly one tile
     ],
 )

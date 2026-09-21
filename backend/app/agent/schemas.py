@@ -18,9 +18,7 @@ class AgentMessage(AgentModel):
 
 class AgentPlan(AgentModel):
     name: str = Field(min_length=1, max_length=120)
-    classes: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(
-        min_length=1, max_length=32
-    )
+    classes: list[Annotated[str, Field(min_length=1, max_length=64)]] = Field(min_length=1, max_length=32)
     starter_model_key: str
     image_guidance: str = Field(min_length=1, max_length=4000)
     labeling_query: str = Field(min_length=1, max_length=2000)
@@ -34,8 +32,11 @@ class AgentPlan(AgentModel):
 
     def check_meaning(self) -> None:
         names = [name.strip().casefold() for name in self.classes]
-        if (not all(names) or len(set(names)) != len(names)
-                or not all(v.strip() for v in (self.name, self.image_guidance, self.labeling_query))):
+        if (
+            not all(names)
+            or len(set(names)) != len(names)
+            or not all(v.strip() for v in (self.name, self.image_guidance, self.labeling_query))
+        ):
             raise AppError("invalid_plan", "Use nonblank text and unique class names.", 409)
 
 

@@ -97,9 +97,7 @@ def _distinct_image_ids(s: Session, ids: list[str], *, review_state) -> set[str]
     found: set[str] = set()
     for chunk in _chunks(ids):
         found.update(
-            s.execute(
-                select(Box.image_id).where(Box.image_id.in_(chunk), review_state).distinct()
-            )
+            s.execute(select(Box.image_id).where(Box.image_id.in_(chunk), review_state).distinct())
             .scalars()
             .all()
         )

@@ -110,10 +110,7 @@ def draw_thumbnail(
     draw = ImageDraw.Draw(im)
     for box in boxes:
         colour = colour_by_id.get(box.class_id, (255, 0, 0))
-        pts = [
-            (px * total_x, py * total_y)
-            for px, py in corners_of(box.x, box.y, box.w, box.h, box.angle)
-        ]
+        pts = [(px * total_x, py * total_y) for px, py in corners_of(box.x, box.y, box.w, box.h, box.angle)]
         label = name_by_id.get(box.class_id, box.class_id)
         if box.review_state == "unreviewed":
             _dashed_polygon(draw, pts, colour)
@@ -326,7 +323,7 @@ def write(
     parts = [
         "<!DOCTYPE html>",
         '<html><head><meta charset="utf-8">'
-        f'<title>{_e(project_name)} — results export</title><style>{_STYLE}</style></head><body>',
+        f"<title>{_e(project_name)} — results export</title><style>{_STYLE}</style></head><body>",
         f"<h1>{_e(project_name)}</h1>",
         f"<p>Exported {_e(_format_export_time(export_time))}</p>",
         f"<p>{_settings_text(settings)}</p>",

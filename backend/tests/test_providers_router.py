@@ -32,7 +32,11 @@ def model_row(handle):
 
 def test_local_factory_maps_classes_through_the_models_aliases(handle, model_row):
     provider = get_provider(
-        "local_model", handle=handle, keys=MemoryKeyStore(), config=None, model_row=model_row,
+        "local_model",
+        handle=handle,
+        keys=MemoryKeyStore(),
+        config=None,
+        model_row=model_row,
         project_class_names=CLASSES,
     )
     assert isinstance(provider, LocalYoloProvider)
@@ -42,8 +46,14 @@ def test_local_factory_maps_classes_through_the_models_aliases(handle, model_row
 
 def test_local_factory_honours_imgsz_and_device(handle, model_row):
     provider = get_provider(
-        "local_model", handle=handle, keys=MemoryKeyStore(), config=None, model_row=model_row,
-        project_class_names=CLASSES, imgsz=2560, device="cpu",
+        "local_model",
+        handle=handle,
+        keys=MemoryKeyStore(),
+        config=None,
+        model_row=model_row,
+        project_class_names=CLASSES,
+        imgsz=2560,
+        device="cpu",
     )
     assert (provider.imgsz, provider.device) == (2560, "cpu")
 
@@ -51,8 +61,12 @@ def test_local_factory_honours_imgsz_and_device(handle, model_row):
 def test_cloud_factory_without_a_key_is_a_permanent_provider_error():
     with pytest.raises(ProviderError) as e:
         get_provider(
-            "cloud_provider", handle=None, keys=MemoryKeyStore(), config=DEFAULTS["anthropic"],
-            provider_name="anthropic", project_class_names=CLASSES,
+            "cloud_provider",
+            handle=None,
+            keys=MemoryKeyStore(),
+            config=DEFAULTS["anthropic"],
+            provider_name="anthropic",
+            project_class_names=CLASSES,
         )
     assert e.value.retryable is False
     assert "no API key stored" in str(e.value)
@@ -64,8 +78,12 @@ def test_cloud_factory_builds_the_configured_model(monkeypatch):
     from app.providers.config import ProviderConfig
 
     provider = get_provider(
-        "cloud_provider", handle=None, keys=keys, config=ProviderConfig("openai", "gpt-5-mini"),
-        provider_name="openai", project_class_names=CLASSES,
+        "cloud_provider",
+        handle=None,
+        keys=keys,
+        config=ProviderConfig("openai", "gpt-5-mini"),
+        provider_name="openai",
+        project_class_names=CLASSES,
     )
     assert provider.name == "openai"
     assert provider.model_name == "gpt-5-mini"
@@ -73,9 +91,7 @@ def test_cloud_factory_builds_the_configured_model(monkeypatch):
 
 def test_unknown_kind_is_a_permanent_provider_error():
     with pytest.raises(ProviderError):
-        get_provider(
-            "psychic", handle=None, keys=MemoryKeyStore(), config=None, project_class_names=CLASSES
-        )
+        get_provider("psychic", handle=None, keys=MemoryKeyStore(), config=None, project_class_names=CLASSES)
 
 
 def test_test_endpoint_reports_the_model_that_answered(client, app, monkeypatch):

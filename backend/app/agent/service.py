@@ -63,17 +63,20 @@ async def _call(body: AgentChatRequest, key: str, model: str) -> AgentOutput:
 
         async with AsyncOpenAI(api_key=key, timeout=TIMEOUT_SECONDS, max_retries=0) as client:
             result = await client.responses.create(
-                model=model, instructions=instructions(body), input=messages,
-                max_output_tokens=MAX_TOKENS, store=False,
-                text={"format": {"type": "json_schema", "name": "setup_plan",
-                                 "schema": schema, "strict": True}},
+                model=model,
+                instructions=instructions(body),
+                input=messages,
+                max_output_tokens=MAX_TOKENS,
+                store=False,
+                text={
+                    "format": {"type": "json_schema", "name": "setup_plan", "schema": schema, "strict": True}
+                },
             )
         if result.status != "completed":
             raise ValueError("incomplete response")
         for item in result.output or []:
             if getattr(item, "type", None) == "refusal" or any(
-                getattr(part, "type", None) == "refusal"
-                for part in getattr(item, "content", None) or []
+                getattr(part, "type", None) == "refusal" for part in getattr(item, "content", None) or []
             ):
                 raise ValueError("refused response")
         raw = result.output_text
@@ -82,7 +85,9 @@ async def _call(body: AgentChatRequest, key: str, model: str) -> AgentOutput:
 
         async with AsyncAnthropic(api_key=key, timeout=TIMEOUT_SECONDS, max_retries=0) as client:
             result = await client.messages.create(
-                model=model, system=instructions(body), messages=messages,
+                model=model,
+                system=instructions(body),
+                messages=messages,
                 max_tokens=MAX_TOKENS,
                 output_config={"format": {"type": "json_schema", "schema": schema}},
             )
@@ -120,7 +125,8 @@ async def chat(body: AgentChatRequest, keys: KeyStore, config: ProviderConfigSto
         except Exception:
             raise AppError(
                 "agent_provider_error",
-                "The provider could not return a valid setup plan. Please try again.", 502,
+                "The provider could not return a valid setup plan. Please try again.",
+                502,
             ) from None
         return AgentChatResponse(**output.model_dump(), model_name=model)
     finally:

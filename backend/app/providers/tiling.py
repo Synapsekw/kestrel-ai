@@ -37,10 +37,7 @@ def make_tiles(width: int, height: int, spec: TilingSpec) -> list[Tile]:
     # image on that axis: a 4000x800 strip is one row of 4000/1024 tiles, not a row hanging 480 px
     # below the image.
     w, h = min(spec.tile_size, width), min(spec.tile_size, height)
-    return [
-        Tile(index=i, x=x, y=y, w=w, h=h)
-        for i, (y, x) in enumerate((y, x) for y in ys for x in xs)
-    ]
+    return [Tile(index=i, x=x, y=y, w=w, h=h) for i, (y, x) in enumerate((y, x) for y in ys for x in xs)]
 
 
 def crop_tile(image: PILImage.Image, tile: Tile) -> PILImage.Image:
@@ -97,9 +94,7 @@ def not_covered_by(
     in advance, such as boxes a person has already reviewed.
     """
     return [
-        c
-        for c in candidates
-        if not any(k.label == c.label and iou(k, c) >= iou_threshold for k in keepers)
+        c for c in candidates if not any(k.label == c.label and iou(k, c) >= iou_threshold for k in keepers)
     ]
 
 
