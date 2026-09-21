@@ -119,4 +119,6 @@ def import_starter(handle: ProjectHandle, folder: Path, key: str, name: str | No
         raise AppError("not_found", f"The starter model {key} is not included in this copy of the app.", 404)
     names = set(project_class_names(handle))
     aliases = {src: dst for src, dst in DEFAULT_ALIASES.items() if dst in names}
-    return registry.import_model(handle, name or f"{key}-coco", str(f.resolve()), aliases)
+    return registry.import_model(
+        handle, name or f"{key}-coco", str(f.resolve()), aliases, expected_task="detect"
+    )

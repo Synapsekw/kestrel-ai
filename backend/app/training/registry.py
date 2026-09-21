@@ -29,11 +29,14 @@ def slug(name: str) -> str:
     return s or "model"
 
 
-def read_class_names(weights: Path) -> list[str]:
+def read_class_names(weights: Path, *, expected_task: str | None = None) -> list[str]:
     """Class names in index order, read from the checkpoint once (lazy ultralytics import)."""
     from ultralytics import YOLO
 
-    names = YOLO(str(weights)).names or {}
+    model = YOLO(str(weights))
+    if expected_task is not None and model.task != expected_task:
+        raise ValueError(f"This starter requires a {expected_task} checkpoint; found {model.task!r}.")
+    names = model.names or {}
     if isinstance(names, dict):
         return [str(names[k]) for k in sorted(names, key=lambda k: int(k))]
     return [str(n) for n in names]
@@ -48,7 +51,14 @@ def relative(handle: ProjectHandle, path: Path) -> str:
         return p.as_posix()
 
 
-def import_model(handle: ProjectHandle, name: str, weights_path: str, class_aliases: dict) -> Model:
+def import_model(
+    handle: ProjectHandle,
+    name: str,
+    weights_path: str,
+    class_aliases: dict,
+    *,
+    expected_task: str | None = None,
+) -> Model:
     source = Path(weights_path)
     # An empty weights_path is a 422 from the schema (`minLength: 1`). Anything else that is
     # schema-valid but unusable answers 404: the contract's conformance gate (schemathesis
@@ -65,7 +75,11 @@ def import_model(handle: ProjectHandle, name: str, weights_path: str, class_alia
     target = handle.models_dir / f"{slug(name)}-{uuid.uuid4().hex[:8]}.pt"
     shutil.copy2(source, target)  # the source stays where it is: it may be a read-only input
     try:
-        class_names = read_class_names(target)
+        class_names = (
+            read_class_names(target, expected_task=expected_task)
+            if expected_task is not None
+            else read_class_names(target)
+        )
     except Exception as e:
         target.unlink(missing_ok=True)  # never leave a half-imported copy in the project
         raise AppError(

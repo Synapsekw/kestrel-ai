@@ -107,3 +107,52 @@ def test_catalogue_finds_downloaded_weights_in_writable_cache(tmp_path):
     (cache / "yolo26n.pt").write_bytes(b"x" * 100)
     item = next(i for i in starter.list_starters(tmp_path / "bundle", cache) if i["key"] == "yolo26n")
     assert item["available"] is True
+
+
+@pytest.mark.parametrize("source", ["bundle", "cache"])
+@pytest.mark.parametrize("task", ["classify", "segment", "pose", "obb"])
+def test_starter_rejects_renamed_non_detection_checkpoint_before_registration(
+    handle, tmp_path, monkeypatch, source, task
+):
+    import sys
+
+    from app.errors import AppError
+    from app.training import registry
+
+    folder = tmp_path / source
+    folder.mkdir()
+    (folder / "yolo26n.pt").write_bytes(b"checkpoint renamed to a detection filename")
+    loads = []
+
+    def load_model(path):
+        loads.append(path)
+        return SimpleNamespace(task=task, names={0: "truck"})
+
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=load_model))
+    ctx = Context(
+        handle, key="yolo26n", bundle_dir=str(tmp_path / "bundle"), cache_dir=str(tmp_path / "cache")
+    )
+    with pytest.raises(AppError, match="requires a detect checkpoint"):
+        starter_download.run_acquire_starter(ctx)
+    assert len(loads) == 1
+    assert registry.list_models(handle, None, None)[0] == []
+    assert list(handle.models_dir.glob("*.pt")) == []
+
+
+def test_starter_validates_detection_and_reads_names_in_one_model_load(handle, tmp_path, monkeypatch):
+    import sys
+
+    from app.training import registry
+
+    (tmp_path / "yolo26n.pt").write_bytes(b"detection checkpoint")
+    loads = []
+
+    def load_model(path):
+        loads.append(path)
+        return SimpleNamespace(task="detect", names={0: "truck"})
+
+    monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=load_model))
+    ctx = Context(handle, key="yolo26n", bundle_dir=str(tmp_path), cache_dir=str(tmp_path / "cache"))
+    result = starter_download.run_acquire_starter(ctx)
+    assert len(loads) == 1
+    assert registry.get_model(handle, result["model_id"]).class_names == ["truck"]

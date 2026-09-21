@@ -11,7 +11,7 @@ def folder(tmp_path, monkeypatch) -> Path:
     d = tmp_path / "starter_weights"
     d.mkdir()
     (d / "yolo11n.pt").write_bytes(b"x" * 2_000_000)
-    monkeypatch.setattr("app.training.registry.read_class_names", lambda path: ["person", "truck"])
+    monkeypatch.setattr("app.training.registry.read_class_names", lambda path, **kwargs: ["person", "truck"])
     return d
 
 

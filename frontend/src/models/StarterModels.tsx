@@ -48,6 +48,21 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
     if (!job) return;
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
+    async function poll(current: Job) {
+      if (cancelled) return;
+      try {
+        const next = await fetchJob(api, projectId, current.id);
+        if (!cancelled) {
+          setError(null);
+          await check(next);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setError(`${messageOf(e, "Could not check progress.")} Reconnecting to this download...`);
+          timer = setTimeout(() => void poll(current), 1000);
+        }
+      }
+    }
     async function check(current: Job) {
       if (cancelled) return;
       useJobsStore.getState().upsert(current);
@@ -67,17 +82,7 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
           setBusy(false);
           setJob(null);
         } else {
-          timer = setTimeout(() => {
-            fetchJob(api, projectId, current.id)
-              .then(check)
-              .catch((e: unknown) => {
-                if (!cancelled) {
-                  setError(messageOf(e, "Could not check progress. Open Jobs to see the download."));
-                  setBusy(false);
-                  setJob(null);
-                }
-              });
-          }, 1000);
+          timer = setTimeout(() => void poll(current), 1000);
         }
       } catch (e) {
         if (!cancelled) {

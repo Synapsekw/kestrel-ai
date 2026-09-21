@@ -89,3 +89,38 @@ it("keeps controls disabled while the background job runs and exposes cancellati
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
   await waitFor(() => expect(requests.some((r) => r.url.endsWith("/cancel"))).toBe(true));
 });
+
+it("keeps the original acquisition during a transient polling failure and reconnects", async () => {
+  let polls = 0;
+  const onImported = vi.fn();
+  const { api, requests } = fakeClient([
+    { method: "GET", path: /\/starter-models$/, body: { items: starters, next_cursor: null } },
+    {
+      method: "POST",
+      path: /\/models\/acquire-starter$/,
+      status: 202,
+      body: { job: { ...done, state: "running" } },
+    },
+    {
+      method: "GET",
+      path: /\/jobs\/[^/]+$/,
+      body: () => {
+        if (++polls === 1) throw new Error("Connection interrupted");
+        return done;
+      },
+    },
+    { method: "GET", path: /\/models\/[^/]+$/, body: exampleModel },
+  ]);
+  renderWithProviders(<StarterModels projectId={PROJECT_ID} existingNames={[]} onImported={onImported} />, {
+    api,
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Add YOLO11 nano" }));
+  expect(await screen.findByRole("alert", {}, { timeout: 1800 })).toHaveTextContent("Connection interrupted");
+  const adding = screen.getByRole("button", { name: /Adding/ });
+  expect(adding).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  fireEvent.click(adding);
+  await waitFor(() => expect(onImported).toHaveBeenCalledWith(exampleModel), { timeout: 1800 });
+  expect(requests.filter((r) => r.method === "POST")).toHaveLength(1);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
