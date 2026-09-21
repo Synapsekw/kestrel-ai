@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-20
+last-updated: 2026-09-21
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -63,6 +63,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Site office UI redesign (U2) | merged to `main` (`2bc15a4`) | every screen restyled on `frontend/src/ui/`; walk-through 12 steps / 66 checks against the real backend |
 | Kestrel AI rename | naming and code renamed 2026-09-20 | acceptance has **not** been re-run against the renamed installed build — see §5 |
 | Rotated boxes (OBB) wave 1 — annotate, store, export | merged to `main` (`249262b`) | gate green on the merged result; 2 cross-cutting defects found by the whole-branch review and fixed before merge; wave 2 (OBB training) unplanned |
+| Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 21 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 [[2026-09-17-s1-dataset-backend]], [[2026-09-17-s2-annotation-ui]],
@@ -73,7 +74,13 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **rotated bounding boxes, wave 1** — merged to `main` as `249262b`
+**Shipped last:** **the task-worktree workflow, proven end to end** — `start-task.ps1` →
+`finish-task.ps1` ran the full gate, merged, pushed `0ce41f5..7288966`, and tore the worktree down
+by the junction-safe path with `backend/.venv` verified intact afterwards. Spec §7.5 met; the
+repo-and-dev-memory plan is complete. Three earlier attempts each exposed a defect that static
+review had passed (see §5). Details: [[2026-09-21-1216-round-trip-proven]].
+
+Before that: **rotated bounding boxes, wave 1** — merged to `main` as `249262b`
 (2026-09-20, 18 commits `bb99feb`..`03fce8f`, 40 files). An annotator can rotate a box on the
 canvas; the angle is stored, survives a reload, and reaches CSV, COCO, HTML and YOLO exports.
 Training on the angle is wave 2 and the dataset form says so. Also adds middle-button panning of the
@@ -84,59 +91,55 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing is mid-build. The `start-task.ps1` → `finish-task.ps1` round trip (Task 12
-Step 4) remains **paused by operator decision** before merge/push — see §5. The reason for the
-pause has now changed: the parallel session's OBB work it was waiting on is merged, so the only
-remaining blocker to that round trip is the push decision itself.
+**In flight:** nothing is mid-build, and nothing is paused. `origin/main` and local `main` are in
+sync at `7288966`.
 
-**Next:** decide the push — local `main` is now **24 commits** ahead of `origin/main` (§5), which is
-the largest it has been and gates the paused round trip. Then: plan wave 2 of rotated boxes (OBB
-label format, `yolo11*-obb` starter weights, training task guards, rotated inference — spec §5 of
-`docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet); re-run acceptance
-against the renamed installed build (§5); close friction-list minors G3 and G2/M3 (§5); do the
-Obsidian GUI verification (§5).
+**Next:** plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
+task guards, rotated inference — spec §5 of
+`docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
+it, decide whether to bound the pytest step in `finish-task.ps1`, given the 16h57m run recorded in
+[[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]]. Also still owed: re-run
+acceptance against the renamed installed build (§5); close friction-list minors G3 and G2/M3 (§5);
+do the Obsidian GUI verification (§5).
 
 ## 5. Owed
 
-### Round trip incomplete — `start-task.ps1` → `finish-task.ps1` (spec §7.5 unmet, blocking)
+### ~~Round trip incomplete~~ — CLOSED 2026-09-21, spec §7.5 MET
 
-Task 12 of `docs/superpowers/plans/2026-09-20-repo-and-dev-memory.md` is only partly done. The
-fresh-clone test (Steps 1-3) passed. The first live gate run (Step 4, worktree `task/smoke-check`)
-exercised six of seven gate steps for real and they passed — contract check, ruff, 583 pytest,
-frontend lint, frontend test, frontend build — then `cargo test` failed: Tauri's build script
-resolves the frozen-sidecar `externalBin` resource at compile time, and
-`frontend/src-tauri/binaries/kestrel-backend-*.exe` is git-ignored (`.gitignore:19`), so no fresh
-worktree or clone has it. `finish-task.ps1` was fixed to make that step conditional on the sidecar's
-presence (commit `4807473`; see
-`vault/decisions/2026-09-20-gotcha-cargo-test-needs-the-frozen-sidecar.md`) and correctly stopped
-**before** merging or pushing.
+Task 12 is complete. The fourth attempt ran `start-task.ps1` → trivial commit → `finish-task.ps1`
+end to end against a live `origin`: gate green (contract check, ruff, **620 pytest in 152.46s**,
+frontend lint, **497 vitest across 119 files**, frontend build, `cargo test` **skipped with its
+reason printed**), then `merge --ff-only`, then `push 0ce41f5..7288966 main -> main`, then the
+junction-safe teardown, then `Deleted branch task/smoke-check`.
 
-The round trip is now **paused by operator decision**, not complete: spec §7.5 (a proven
-`start-task.ps1`/`finish-task.ps1` round trip against a live `origin`) is still unmet. The merge,
-the push and the junction-safe teardown were never reached. Worktree
-`.claude/worktrees/smoke-check` and branch `task/smoke-check` (at `ad3633e`) are deliberately left
-in place, ready to resume. **Update 2026-09-20 18:14: that OBB work is now merged (`249262b`), so this
-reason no longer applies — what remains is purely the push decision.** Original reason for the
-pause: finishing the round trip pushes `main`, and a
-parallel session's in-flight OBB spec is also on local `main` — the operator chose to wait so that
-work isn't carried to the public remote before the parallel session is ready. Do not treat
-`start-task.ps1`/`finish-task.ps1` as proven end-to-end until this resumes and completes.
+**The teardown was proven against the real failure mode.** `git worktree remove` printed
+`error: failed to delete ...: Directory not empty` — the exact refusal the script is written
+around — and the cleanup unlinked junctions as links rather than following them. Verified
+afterwards: worktree gone from disk and deregistered, branch deleted, and **`backend/.venv` intact
+(3.8 GB, torch 2.14.0+cu130, cuda True, ultralytics 8.4.154)**. That is the 2026-09-18 incident
+replayed and survived — see [[2026-09-18-gotcha-shared-venv-deleted-with-a-worktree]].
 
-### Unpushed commits on local `main` — `origin/main` is behind (worse as of 2026-09-20 18:14)
+Getting there took three failed attempts, each of which found something static review had passed:
+`cargo test` cannot run in a worktree at all
+([[2026-09-20-gotcha-cargo-test-needs-the-frozen-sidecar]]); the rebase base was wrong whenever the
+remote was *behind* local `main`
+([[2026-09-21-gotcha-rebase-base-must-be-the-most-advanced-main]]); and one run wedged for 16h57m
+from an unconfirmed cause
+([[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]] — still `proposed`).
+`start-task.ps1` and `finish-task.ps1` may now be treated as proven end to end. Details:
+[[2026-09-21-1216-round-trip-proven]].
 
-Local `main` is **24 commits** ahead of `origin/main` (`0ce41f5`) and none have been pushed. That is
-the OBB spec and plan (`59b28a4`, `8bf1add`, `c739d7e`), this plan's `cargo test` gate fix
-(`4807473`), a parallel session's vault note (`16f8dee`), and the whole of rotated boxes wave 1
-(18 commits plus merge `249262b`).
+### ~~Unpushed commits on local `main`~~ — CLOSED 2026-09-21
 
-Two consequences, both current:
+`origin/main` and local `main` are in sync at `7288966`; `git log origin/main..main` is empty. The
+push carried 28 commits: the OBB spec, plan and the whole of rotated boxes wave 1, this plan's gate
+fixes, and the vault. A second machine cloning now gets everything, including the conditional-gate
+fix.
 
-- A second machine cloning from GitHub gets `origin/main` at `0ce41f5`: no conditional-gate fix, so
-  it hits the same `cargo test` failure Task 12 Step 4 hit — and no rotated boxes at all.
-- `git branch -d` refuses to delete a task branch that tracks `origin/main`, because it measures
-  "merged" against the unpushed upstream rather than local `main`. This bit the wave-1 teardown:
-  the branch was fully contained in `main` (verified with `git merge-base --is-ancestor`) and still
-  needed `-D`. Expect the same on every task branch until `main` is pushed.
+One consequence of the long unpushed period is worth keeping: `git branch -d` measures "merged"
+against the tracked upstream, not local `main`, so while `main` was unpushed it refused to delete
+task branches that *were* fully contained in local `main`, and the wave-1 teardown needed `-D`.
+With the remote in sync this should no longer occur.
 
 ### Rotated boxes wave 2 unplanned, and wave 1's deferred minors
 
