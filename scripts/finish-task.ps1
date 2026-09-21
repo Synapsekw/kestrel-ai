@@ -65,10 +65,22 @@ if (-not $SkipGate) {
   $gate = @(
     @{ n = 'contract';       c = { & pnpm -C (Join-Path $wt 'contract') check } },
     @{ n = 'ruff';           c = { Push-Location (Join-Path $wt 'backend'); try { & $py -m ruff check . } finally { Pop-Location } } },
+    # CI runs the formatter check too; without it here, unformatted files reach main unseen.
+    @{ n = 'ruff format';    c = { Push-Location (Join-Path $wt 'backend'); try { & $py -m ruff format --check . } finally { Pop-Location } } },
     @{ n = 'pytest';         c = { Push-Location (Join-Path $wt 'backend'); try { & $py -m pytest -q } finally { Pop-Location } } },
     @{ n = 'frontend lint';  c = { & pnpm -C (Join-Path $wt 'frontend') lint } },
     @{ n = 'frontend test';  c = { & pnpm -C (Join-Path $wt 'frontend') test } },
     @{ n = 'frontend build'; c = { & pnpm -C (Join-Path $wt 'frontend') build } },
+    # CI runs e2e as well. Free ports, so a dev server another checkout holds on 1420/4010 is never
+    # reused and tested in place of this worktree's code (playwright.config.ts reuseExistingServer).
+    @{ n = 'frontend e2e';   c = {
+        $ports = 1..2 | ForEach-Object {
+          $l = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0); $l.Start()
+          $l.LocalEndpoint.Port; $l.Stop()
+        }
+        $env:E2E_WEB_PORT = "$($ports[0])"; $env:E2E_MOCK_PORT = "$($ports[1])"
+        try { & pnpm -C (Join-Path $wt 'frontend') e2e } finally { Remove-Item Env:E2E_WEB_PORT, Env:E2E_MOCK_PORT }
+      } },
     @{ n = 'cargo test';     c = {
         $sidecarGlob = Join-Path $wt 'frontend\src-tauri\binaries\kestrel-backend-*.exe'
         if (Test-Path $sidecarGlob) {

@@ -52,10 +52,11 @@ traps as ADRs in `vault/decisions/`.
 4. **Tests are mandatory** — written and executed. The gate:
    ```
    pnpm -C contract check
-   cd backend; .\.venv\Scripts\python.exe -m ruff check .; .\.venv\Scripts\python.exe -m pytest
+   cd backend; .\.venv\Scripts\python.exe -m ruff check .; .\.venv\Scripts\python.exe -m ruff format --check .; .\.venv\Scripts\python.exe -m pytest
    pnpm -C frontend lint
    pnpm -C frontend test
    pnpm -C frontend build
+   pnpm -C frontend e2e  # scripts\finish-task.ps1 runs it on free ports
    cargo test --manifest-path frontend/src-tauri/Cargo.toml  # only if the frozen sidecar is present
    ```
    The `cargo test` line runs only when `frontend/src-tauri/binaries/kestrel-backend-*.exe` exists —
