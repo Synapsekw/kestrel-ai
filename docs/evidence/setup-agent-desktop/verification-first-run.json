@@ -1,0 +1,78 @@
+{
+  "exe": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI\\kestrel-ai.exe",
+  "source": "5bd2e40b188993c08614290cc9f6d5928d958d06",
+  "launches": [
+    {
+      "label": "First after install",
+      "projects_ms": 3052,
+      "healthy_ms": 3073,
+      "gpu_ms": 7783,
+      "gpu": {
+        "available": true,
+        "name": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "app_pid": 41144,
+      "sidecar_pids": [
+        45020
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "First after install launch, healthy owned sidecar and CUDA",
+      "detail": "3052 ms to Projects"
+    },
+    {
+      "name": "Installed backend offers 44 detection starters across eight families",
+      "detail": ""
+    },
+    {
+      "name": "Create disposable project from installed UI",
+      "detail": ""
+    },
+    {
+      "name": "Setup drawer reads existing GPT/Claude key readiness without exposing credentials",
+      "detail": ""
+    },
+    {
+      "name": "Setup draft survives closing; Escape restores focus",
+      "detail": ""
+    },
+    {
+      "name": "Frozen setup endpoint is registered and validates requests",
+      "detail": ""
+    },
+    {
+      "name": "Installed bundled backend imports three photographs in a background job",
+      "detail": ""
+    },
+    {
+      "name": "Installed Models UI exposes all 44 choices through eight family selectors",
+      "detail": ""
+    },
+    {
+      "name": "YOLO26 nano acquired and registered by the real installed background job",
+      "detail": "Downloaded official weights"
+    },
+    {
+      "name": "New YOLO26 model predicts through the bundled inference engine",
+      "detail": "0 proposals"
+    },
+    {
+      "name": "Window close stops app and owned sidecar",
+      "detail": ""
+    }
+  ],
+  "provider_readiness": [
+    {
+      "name": "openai",
+      "has_key": true
+    },
+    {
+      "name": "anthropic",
+      "has_key": true
+    }
+  ],
+  "passed": false,
+  "error": "The expression evaluated to a falsy value:\n\n  assert(bounds.x >= 0 && bounds.x + bounds.width <= 1024)\n"
+}

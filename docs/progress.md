@@ -316,6 +316,16 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
+- 2026-09-21: Setup agent/catalog desktop rebuilt from `75aa11b` in `task/setup-agent-desktop`.
+  Application trees match the prior source gates exactly. Fresh backend freeze passed (204s,
+  3,522.9 MiB), CUDA/worker/ONNX smoke passed (23.13s), 8 Rust tests passed, native/Inno build
+  passed (427s, 1,853.8 MiB). Installed with exit 0 and matching app/sidecar hashes, no reboot.
+  Installed WebView2 checks: 16 passed, including stored GPT/Claude readiness, drawer state/focus,
+  all 44 choices/eight families, a real YOLO26 nano download, cached registration and prediction.
+  First Projects 3.052s, final verification 1.966s, warm 2.443s. Four native screenshots and
+  reproducible checks: `docs/evidence/setup-agent-desktop/`. An initial compact-layout assertion
+  measured the entrance animation; diagnosed and fixed in the driver, with no app-source changes.
+  Retained installer is under `dist/`; no paid provider calls or full provider acceptance claimed.
 - 2026-09-21: Setup agent and the expanded YOLO catalog merged/pushed to main at `89de91b`;
   task worktree and branch removed, shared backend environment intact. Implemented on `task/setup-agent`
   (`4930d3c`..`da2e475`), rebased onto the new Kestrel identity at `ad2f762`. The drawer uses

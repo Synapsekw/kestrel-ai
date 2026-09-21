@@ -1,0 +1,18 @@
+startup ok port 55088 pid 55144
+health ok
+cuda True NVIDIA GeForce RTX 5070 Ti
+starter ok 3
+import ok 3 images
+model ok yolo11n-coco 80 classes
+alias ok
+predict ok 0 boxes
+dataset ok train 2 val 1
+worker ok mAP50 0
+font ok E:\Dev\Yolo\app\dist\setup-agent-desktop-2026-09-21\frozen-smoke\appdata\ultralytics\Arial.ttf
+export ok E:\Dev\Yolo\app\dist\setup-agent-desktop-2026-09-21\frozen-smoke\project\models\smoke-940dcecd.onnx 10.1 MB
+keyring skip (a key is already stored for anthropic; not touching it)
+
+bundle: 3,522.9 MB at E:\Dev\Yolo\app\.claude\worktrees\setup-agent-desktop\backend\dist\kestrel-backend
+timings (s): startup_line=0.98 health=0.61 cuda=1.34 starter_models=0.04 create_project=0.1 import=1.08 import_model=0.23 predict=1.68 dataset=0.57 worker_train=12.86 export_onnx=3.61 keyring=0.02 total=23.13
+smoke ok
+work dir kept: E:\Dev\Yolo\app\dist\setup-agent-desktop-2026-09-21\frozen-smoke

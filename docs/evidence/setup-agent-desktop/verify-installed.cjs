@@ -1,6 +1,6 @@
 // Installed WebView2 verification, with real bundled backend and a disposable project.
 // node <this-file> <installed-exe> <scratch-folder> <three-image-sample-folder> [cdp-port]
-// Tokens stay in memory. No provider requests, routes, API stubs or existing-project edits.
+// Tokens stay in memory. No paid provider calls, API stubs or existing-project edits.
 const { chromium, expect } = require('../../../frontend/node_modules/@playwright/test');
 const { spawn, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
@@ -80,13 +80,33 @@ async function shot(name) {
   await active.page.evaluate(() => Promise.all([...document.images].map(i => i.decode().catch(() => {}))));
   await active.page.screenshot({ path: path.join(__dirname, name + '.png'), animations: 'disabled' });
 }
+async function forgetDisposableProject() {
+  if (!projectId || !active?.info) return;
+  const jobs = (await api('GET', `/projects/${projectId}/jobs?limit=20`)).items;
+  for (const job of jobs) {
+    if (!['queued', 'running'].includes(job.state)) continue;
+    await api('POST', `/projects/${projectId}/jobs/${job.id}/cancel`);
+    await expect.poll(async () => (await api('GET', `/projects/${projectId}/jobs/${job.id}`)).state,
+      { timeout: 30000 }).not.toMatch(/^(queued|running)$/);
+  }
+  await api('DELETE', '/projects/' + projectId);
+  projectId = null;
+}
 (async () => {
-  const page = await launch('First after install');
+  const page = await launch('Verification launch');
   const catalog = (await api('GET', '/starter-models')).items;
   assert.equal(catalog.length, 44);
   assert.equal(new Set(catalog.map(model => model.family)).size, 8);
   assert(catalog.every(model => model.task === 'detect'));
   check('Installed backend offers 44 detection starters across eight families');
+
+  // Capture only this disposable project's screens, never the operator's recent-project list.
+  await page.fill('#project-name', 'Setup agent desktop verification');
+  await page.fill('#project-folder', path.join(scratch, 'project'));
+  await page.getByRole('button', { name: 'Create project', exact: true }).click();
+  await page.waitForURL(/\/p\/[0-9a-f-]+$/);
+  projectId = page.url().split('/p/')[1];
+  check('Create disposable project from installed UI');
 
   const providers = (await api('GET', '/providers')).items;
   const opener = page.getByRole('button', { name: 'Setup agent', exact: true });
@@ -124,12 +144,6 @@ async function shot(name) {
   assert.equal(invalidChat.status, 422);
   check('Frozen setup endpoint is registered and validates requests');
 
-  await page.fill('#project-name', 'Setup agent desktop verification');
-  await page.fill('#project-folder', path.join(scratch, 'project'));
-  await page.getByRole('button', { name: 'Create project', exact: true }).click();
-  await page.waitForURL(/\/p\/[0-9a-f-]+$/);
-  projectId = page.url().split('/p/')[1];
-  check('Create disposable project from installed UI');
   const imported = await api('POST', `/projects/${projectId}/sources`, { folder: sample, site: 'Desktop verification' });
   await expect.poll(async () => (await api('GET', `/projects/${projectId}/jobs/${imported.job.id}`)).state,
     { timeout: 60000 }).toBe('succeeded');
@@ -157,7 +171,7 @@ async function shot(name) {
   await page.getByRole('button', {
     name: (chosen.available ? 'Add ' : 'Download and add ') + chosen.name, exact: true,
   }).click();
-  await expect(page.getByRole('cell', { name: 'yolo26n-coco', exact: true })).toBeVisible({ timeout: 180000 });
+  await expect(page.getByRole('button', { name: 'Select model yolo26n-coco', exact: true })).toBeVisible({ timeout: 180000 });
   const models = (await api('GET', `/projects/${projectId}/models`)).items;
   const model = models.find(item => item.name === 'yolo26n-coco');
   assert(model);
@@ -172,13 +186,14 @@ async function shot(name) {
   await opener.click();
   await expect(drawer.getByLabel('Message', { exact: true })).toHaveValue(prompt);
   await page.setViewportSize({ width: 1024, height: 768 });
+  await drawer.evaluate(e => Promise.all(e.getAnimations().map(a => a.finished.catch(() => {}))));
   const bounds = await drawer.boundingBox();
   assert(bounds.x >= 0 && bounds.x + bounds.width <= 1024);
   await shot('04-setup-compact');
   check('Drawer survives navigation and fits the 1024px viewport');
   assert.deepEqual(active.errors, []);
   check('No JavaScript page errors');
-  await api('DELETE', '/projects/' + projectId); projectId = null;
+  await forgetDisposableProject();
   check('Disposable project forgotten; source photographs and operator projects untouched');
   await close();
   await sleep(1000);
@@ -188,7 +203,12 @@ async function shot(name) {
 })().catch(error => {
   result.passed = false; result.error = error.message; console.error(error.message); process.exitCode = 1;
 }).finally(async () => {
-  if (projectId && active?.info) await api('DELETE', '/projects/' + projectId).catch(() => {});
-  if (active) await close().catch(error => { result.cleanup_error = error.message; process.exitCode = 1; });
+  await forgetDisposableProject().catch(error => {
+    result.cleanup_error = error.message; result.passed = false; process.exitCode = 1;
+  });
+  if (active) await close().catch(error => {
+    result.cleanup_error = [result.cleanup_error, error.message].filter(Boolean).join('; ');
+    result.passed = false; process.exitCode = 1;
+  });
   fs.writeFileSync(path.join(__dirname, 'verification.json'), JSON.stringify(result, null, 2) + '\n');
 });

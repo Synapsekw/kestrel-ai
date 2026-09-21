@@ -1,0 +1,111 @@
+{
+  "exe": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI\\kestrel-ai.exe",
+  "source": "5bd2e40b188993c08614290cc9f6d5928d958d06",
+  "launches": [
+    {
+      "label": "Verification launch",
+      "projects_ms": 1966,
+      "healthy_ms": 1986,
+      "gpu_ms": 3979,
+      "gpu": {
+        "available": true,
+        "name": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "app_pid": 22952,
+      "sidecar_pids": [
+        54948
+      ]
+    },
+    {
+      "label": "Warm",
+      "projects_ms": 2443,
+      "healthy_ms": 2461,
+      "gpu_ms": 4523,
+      "gpu": {
+        "available": true,
+        "name": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "app_pid": 54544,
+      "sidecar_pids": [
+        30472
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "Verification launch launch, healthy owned sidecar and CUDA",
+      "detail": "1966 ms to Projects"
+    },
+    {
+      "name": "Installed backend offers 44 detection starters across eight families",
+      "detail": ""
+    },
+    {
+      "name": "Create disposable project from installed UI",
+      "detail": ""
+    },
+    {
+      "name": "Setup drawer reads existing GPT/Claude key readiness without exposing credentials",
+      "detail": ""
+    },
+    {
+      "name": "Setup draft survives closing; Escape restores focus",
+      "detail": ""
+    },
+    {
+      "name": "Frozen setup endpoint is registered and validates requests",
+      "detail": ""
+    },
+    {
+      "name": "Installed bundled backend imports three photographs in a background job",
+      "detail": ""
+    },
+    {
+      "name": "Installed Models UI exposes all 44 choices through eight family selectors",
+      "detail": ""
+    },
+    {
+      "name": "YOLO26 nano acquired and registered by the real installed background job",
+      "detail": "Cached official weights"
+    },
+    {
+      "name": "New YOLO26 model predicts through the bundled inference engine",
+      "detail": "0 proposals"
+    },
+    {
+      "name": "Drawer survives navigation and fits the 1024px viewport",
+      "detail": ""
+    },
+    {
+      "name": "No JavaScript page errors",
+      "detail": ""
+    },
+    {
+      "name": "Disposable project forgotten; source photographs and operator projects untouched",
+      "detail": ""
+    },
+    {
+      "name": "Window close stops app and owned sidecar",
+      "detail": ""
+    },
+    {
+      "name": "Warm launch, healthy owned sidecar and CUDA",
+      "detail": "2443 ms to Projects"
+    },
+    {
+      "name": "Window close stops app and owned sidecar",
+      "detail": ""
+    }
+  ],
+  "provider_readiness": [
+    {
+      "name": "openai",
+      "has_key": true
+    },
+    {
+      "name": "anthropic",
+      "has_key": true
+    }
+  ],
+  "passed": true
+}

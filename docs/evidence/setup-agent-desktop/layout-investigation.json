@@ -1,0 +1,46 @@
+{
+  "exe": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI\\kestrel-ai.exe",
+  "source": "5bd2e40b188993c08614290cc9f6d5928d958d06",
+  "launches": [
+    {
+      "label": "Layout investigation",
+      "projects_ms": 1965,
+      "healthy_ms": 1987,
+      "gpu_ms": 4085,
+      "gpu": {
+        "available": true,
+        "name": "NVIDIA GeForce RTX 5070 Ti"
+      },
+      "app_pid": 42852,
+      "sidecar_pids": [
+        38408
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "Layout investigation launch, healthy owned sidecar and CUDA",
+      "detail": "1965 ms to Projects"
+    },
+    {
+      "name": "Window close stops app and owned sidecar",
+      "detail": ""
+    }
+  ],
+  "before": {
+    "viewport": 1024,
+    "left": 496.5773620605469,
+    "right": 1040.5773620605469,
+    "width": 544,
+    "transform": "matrix(1, 0, 0, 1, 16.5774, 0)",
+    "animation": "slide-in"
+  },
+  "after": {
+    "viewport": 1024,
+    "left": 480,
+    "right": 1024,
+    "width": 544,
+    "transform": "matrix(1, 0, 0, 1, 0, 0)",
+    "animation": "slide-in"
+  }
+}

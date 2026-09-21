@@ -7,6 +7,8 @@ The user requested rebuilding the Windows app; routine local installation is inc
 
 No application behavior changes are planned. Reuse the shared Python interpreter without linking
 its directory into the worktree. Freeze/package run as background shell processes with progress.
+Carry forward the preceding feature's passed source gates only while backend/frontend/contract
+trees remain identical; run fresh frozen, Rust, native-build and installed-app checks.
 Use a disposable three-image sample; installed catalog reads are 44 bounded records and image reads
 are limited to three. No bulk model downloads or paid provider requests are needed for this rebuild.
 
@@ -17,11 +19,11 @@ Verification-driver preparation can run while the backend freezes. This chain is
 
 ## Checklist
 
-- [ ] Build a fresh backend bundle with the three existing offline starters.
-- [ ] Verify frozen health, CUDA inference, training worker, ONNX export and keyring behavior.
-- [ ] Build the native Windows release/installer and run the now-applicable Rust gate.
-- [ ] Save the installer outside the worktree, gracefully close the installed app and install.
-- [ ] Check installed executable hashes, startup/shutdown, setup drawer, provider readiness,
+- [x] Build a fresh backend bundle with the three existing offline starters.
+- [x] Verify frozen health, CUDA inference, training worker, ONNX export and keyring behavior.
+- [x] Build the native Windows release/installer and run the now-applicable Rust gate.
+- [x] Save the installer outside the worktree, gracefully close any installed app and install.
+- [x] Check installed executable hashes, startup/shutdown, setup drawer, provider readiness,
       44 starters/eight families and real background model registration.
-- [ ] Confirm application source matches the previously verified tree; finish required gates.
+- [x] Confirm application source matches the previously verified tree; finish required gates.
 - [ ] Record evidence and operator steps, merge/push, remove the worktree and log the session.

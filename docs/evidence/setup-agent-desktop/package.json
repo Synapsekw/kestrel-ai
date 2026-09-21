@@ -1,0 +1,23 @@
+{
+  "created": "2026-09-21T19:55:33.2061364+03:00",
+  "application_source": "75aa11bb2ac39fff7e9f3838650411c45a8bd546",
+  "installer": "E:\\Dev\\Yolo\\app\\dist\\Kestrel AI_0.1.0_Setup-agent_2026-09-21_x64-setup.exe",
+  "installer_bytes": 1943889030,
+  "installer_sha256": "135F4B2AD1749076AB286828583E59DEB153B9F959ED3335B6F76EFF57443B5D",
+  "app_sha256": "EC44C99EFB4BFD8B4D4E6EE1806DB36B544673CC0076BFC041CC19FF695D3166",
+  "sidecar_sha256": "6C229872425A60AEAE2F151E26BB8D844E465A594461C2D7621D38B55BA20C23",
+  "freeze_seconds": 204,
+  "frozen_smoke_seconds": 23.13,
+  "build_seconds": 427,
+  "inno_seconds": 367.812,
+  "webview2_bootstrapper_included": false,
+  "installed_path": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI",
+  "installer_exit_code": 0,
+  "installed_app_sha256": "EC44C99EFB4BFD8B4D4E6EE1806DB36B544673CC0076BFC041CC19FF695D3166",
+  "installed_sidecar_sha256": "6C229872425A60AEAE2F151E26BB8D844E465A594461C2D7621D38B55BA20C23",
+  "application_trees": {
+    "backend": "fb0480683a2cfa409e2cf15f3411cda289df3c77",
+    "frontend": "9c25761d06ce668f279082f73995d69a3dd8a464",
+    "contract": "5f46acda7db22b61e6171515ae39475fd4a97d18"
+  }
+}
