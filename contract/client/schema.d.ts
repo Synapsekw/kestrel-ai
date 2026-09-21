@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/v1/agent/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Plan a detection project with the configured cloud provider. No files or project data are changed.
+         * @description Bounded text conversation using the existing Credential Manager key. Cloud calls time out after 45 seconds. Missing credentials or a busy agent return 409; provider failures return a sanitized error. A draft must be applied through the ordinary project and background-job endpoints.
+         */
+        post: operations["chatWithSetupAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/health": {
         parameters: {
             query?: never;
@@ -585,10 +605,32 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Starter weights bundled with this build of the app. `available` is false when the file is missing (a development checkout that has not fetched them). */
+        /** All supported YOLO box-detection starters. Available means cached or bundled locally; other models can be acquired through a background job. */
         get: operations["listStarterModels"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/models/acquire-starter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Acquire one supported YOLO starter and register it through a background import job.
+         * @description Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the jobs resource. The successful job.result.model_id identifies the registered model.
+         */
+        post: operations["acquireStarterModel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1904,7 +1946,7 @@ export interface components {
             };
         };
         /** @enum {string} */
-        StarterModelKey: "yolo11n" | "yolo11s" | "yolo11m";
+        StarterModelKey: "yolo26n" | "yolo26s" | "yolo26m" | "yolo26l" | "yolo26x" | "yolo12n" | "yolo12s" | "yolo12m" | "yolo12l" | "yolo12x" | "yolo11n" | "yolo11s" | "yolo11m" | "yolo11l" | "yolo11x" | "yolov10n" | "yolov10s" | "yolov10m" | "yolov10b" | "yolov10l" | "yolov10x" | "yolov9t" | "yolov9s" | "yolov9m" | "yolov9c" | "yolov9e" | "yolov8n" | "yolov8s" | "yolov8m" | "yolov8l" | "yolov8x" | "yolov5nu" | "yolov5su" | "yolov5mu" | "yolov5lu" | "yolov5xu" | "yolov5n6u" | "yolov5s6u" | "yolov5m6u" | "yolov5l6u" | "yolov5x6u" | "yolov3u" | "yolov3-tinyu" | "yolov3-sppu";
         /**
          * @example {
          *       "key": "yolo11n",
@@ -1922,6 +1964,13 @@ export interface components {
             /** @description size of the bundled file */
             size_mb: number;
             available: boolean;
+            /** @description YOLO generation displayed in the model selector */
+            family?: string;
+            /**
+             * @description axis-aligned box detection supported by the current training pipeline
+             * @enum {string}
+             */
+            task?: "detect";
         };
         StarterModelPage: {
             items: components["schemas"]["StarterModel"][];
@@ -1998,6 +2047,51 @@ export interface components {
         };
         JobRef: {
             job: components["schemas"]["Job"];
+        };
+        AgentMessage: {
+            /** @enum {string} */
+            role: "user" | "assistant";
+            content: string;
+        };
+        /**
+         * @example {
+         *       "name": "Site machinery",
+         *       "classes": [
+         *         "excavator",
+         *         "dump_truck"
+         *       ],
+         *       "starter_model_key": "yolo11n",
+         *       "image_guidance": "Choose varied flights, lighting and camera angles. Include empty scenes and avoid near-duplicate consecutive frames.",
+         *       "labeling_query": "Find every excavator and dump truck. Draw a tight bounding box around each visible machine."
+         *     }
+         */
+        AgentPlan: {
+            name: string;
+            classes: string[];
+            starter_model_key: components["schemas"]["StarterModelKey"];
+            image_guidance: string;
+            labeling_query: string;
+        };
+        /**
+         * @example {
+         *       "provider": "openai",
+         *       "messages": [
+         *         {
+         *           "role": "user",
+         *           "content": "Help me detect excavators and dump trucks in aerial photos."
+         *         }
+         *       ]
+         *     }
+         */
+        AgentChatRequest: {
+            provider: components["schemas"]["ProviderName"];
+            messages: components["schemas"]["AgentMessage"][];
+            plan?: components["schemas"]["AgentPlan"] | null;
+        };
+        AgentChatResponse: {
+            message: string;
+            plan: components["schemas"]["AgentPlan"] | null;
+            model_name: string;
         };
         /** @enum {string} */
         ProviderName: "openai" | "anthropic";
@@ -2418,6 +2512,31 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    chatWithSetupAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentChatRequest"];
+            };
+        };
+        responses: {
+            /** @description guidance and an optional editable project draft */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentChatResponse"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getHealth: {
         parameters: {
             query?: never;
@@ -3466,13 +3585,40 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description the fixed catalogue, smallest first */
+            /** @description the supported catalogue grouped by family */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["StarterModelPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    acquireStarterModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StarterModelImport"];
+            };
+        };
+        responses: {
+            /** @description model acquisition queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
                 };
             };
             default: components["responses"]["Error"];

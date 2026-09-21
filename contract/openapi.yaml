@@ -52,8 +52,28 @@ tags:
   - name: query-runs
   - name: exports
   - name: jobs
+  - name: agent
 
 paths:
+  /api/v1/agent/chat:
+    post:
+      tags: [agent]
+      operationId: chatWithSetupAgent
+      summary: Plan a detection project with the configured cloud provider. No files or project data are changed.
+      description: Bounded text conversation using the existing Credential Manager key. Cloud calls time out after 45 seconds. Missing credentials or a busy agent return 409; provider failures return a sanitized error. A draft must be applied through the ordinary project and background-job endpoints.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentChatRequest" }
+      responses:
+        "200":
+          description: guidance and an optional editable project draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentChatResponse" }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/health:
     get:
       tags: [health]
@@ -751,16 +771,37 @@ paths:
     get:
       tags: [models]
       operationId: listStarterModels
-      summary: Starter weights bundled with this build of the app. `available` is false when the file is missing (a development checkout that has not fetched them).
+      summary: All supported YOLO box-detection starters. Available means cached or bundled locally; other models can be acquired through a background job.
       responses:
         "200":
-          description: the fixed catalogue, smallest first
+          description: the supported catalogue grouped by family
           content:
             application/json:
               schema: { $ref: "#/components/schemas/StarterModelPage" }
         default: { $ref: "#/components/responses/Error" }
 
   # ---------------------------------------------------------------- providers
+  /api/v1/projects/{projectId}/models/acquire-starter:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [models]
+      operationId: acquireStarterModel
+      summary: Acquire one supported YOLO starter and register it through a background import job.
+      description: Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the jobs resource. The successful job.result.model_id identifies the registered model.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StarterModelImport" }
+      responses:
+        "202":
+          description: model acquisition queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+
   /api/v1/providers:
     get:
       tags: [providers]
@@ -1923,7 +1964,7 @@ components:
       example: { name: yolo11m-coco, weights_path: "E:\\Dev\\Yolo\\models\\yolo11m.pt", class_aliases: { truck: dump_truck } }
     StarterModelKey:
       type: string
-      enum: [yolo11n, yolo11s, yolo11m]
+      enum: [yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, yolo12n, yolo12s, yolo12m, yolo12l, yolo12x, yolo11n, yolo11s, yolo11m, yolo11l, yolo11x, yolov10n, yolov10s, yolov10m, yolov10b, yolov10l, yolov10x, yolov9t, yolov9s, yolov9m, yolov9c, yolov9e, yolov8n, yolov8s, yolov8m, yolov8l, yolov8x, yolov5nu, yolov5su, yolov5mu, yolov5lu, yolov5xu, yolov5n6u, yolov5s6u, yolov5m6u, yolov5l6u, yolov5x6u, yolov3u, yolov3-tinyu, yolov3-sppu]
     StarterModel:
       type: object
       required: [key, name, description, size_mb, available]
@@ -1933,6 +1974,8 @@ components:
         description: { type: string, description: one sentence for the operator on when to pick this size }
         size_mb: { type: number, description: size of the bundled file, 0 when it is not available }
         available: { type: boolean }
+        family: { type: string, description: YOLO generation displayed in the model selector }
+        task: { type: string, enum: [detect], description: axis-aligned box detection supported by the current training pipeline }
       example:
         key: yolo11n
         name: YOLO11 nano
@@ -1994,6 +2037,60 @@ components:
       required: [job]
       properties:
         job: { $ref: "#/components/schemas/Job" }
+
+    AgentMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string, minLength: 1, maxLength: 2000 }
+    AgentPlan:
+      type: object
+      required: [name, classes, starter_model_key, image_guidance, labeling_query]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        classes:
+          type: array
+          minItems: 1
+          maxItems: 32
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 64 }
+        starter_model_key: { $ref: "#/components/schemas/StarterModelKey" }
+        image_guidance: { type: string, minLength: 1, maxLength: 4000 }
+        labeling_query: { type: string, minLength: 1, maxLength: 2000 }
+      example:
+        name: Site machinery
+        classes: [excavator, dump_truck]
+        starter_model_key: yolo11n
+        image_guidance: Choose varied flights, lighting and camera angles. Include empty scenes and avoid near-duplicate consecutive frames.
+        labeling_query: Find every excavator and dump truck. Draw a tight bounding box around each visible machine.
+    AgentChatRequest:
+      type: object
+      required: [provider, messages]
+      properties:
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 12
+          items: { $ref: "#/components/schemas/AgentMessage" }
+        plan:
+          anyOf:
+            - $ref: "#/components/schemas/AgentPlan"
+            - type: "null"
+      example:
+        provider: openai
+        messages: [{ role: user, content: Help me detect excavators and dump trucks in aerial photos. }]
+    AgentChatResponse:
+      type: object
+      required: [message, plan, model_name]
+      properties:
+        message: { type: string, minLength: 1, maxLength: 4000 }
+        plan:
+          anyOf:
+            - $ref: "#/components/schemas/AgentPlan"
+            - type: "null"
+        model_name: { type: string }
 
     ProviderName:
       type: string
