@@ -85,11 +85,37 @@ jobs:
         working-directory: backend
       - run: .\scripts\build.ps1
         working-directory: backend
+      # Started the way the Tauri launcher does (smoke_frozen.ps1): port 0, the port read off the
+      # startup JSON line. A cold 1 GB one-folder bundle can take well over 10 s to come up here.
       - run: |
-          $env:APP_TOKEN = "ci"; $env:APP_PORT = "8765"
-          $p = Start-Process -PassThru -FilePath .\dist\kestrel-backend\kestrel-backend.exe
-          Start-Sleep -Seconds 10
-          $r = Invoke-WebRequest -Headers @{ Authorization = "Bearer ci" } http://127.0.0.1:8765/api/v1/health
-          if ($r.StatusCode -ne 200) { throw "health returned $($r.StatusCode)" }
-          Stop-Process -Id $p.Id
+          $env:APP_TOKEN = "ci"; $env:APP_PORT = "0"
+          $env:APP_DATA_DIR = Join-Path $env:RUNNER_TEMP "kestrel-appdata"
+          New-Item -ItemType Directory -Force $env:APP_DATA_DIR | Out-Null
+          $out = Join-Path $env:RUNNER_TEMP "sidecar-out.txt"; $err = Join-Path $env:RUNNER_TEMP "sidecar-err.txt"
+          $p = Start-Process -PassThru -WindowStyle Hidden -FilePath .\dist\kestrel-backend\kestrel-backend.exe `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+          try {
+            $port = $null; $deadline = (Get-Date).AddSeconds(180)
+            while (-not $port -and (Get-Date) -lt $deadline) {
+              if ($p.HasExited) { throw "sidecar exited with $($p.ExitCode)" }
+              $line = Get-Content $out -ErrorAction SilentlyContinue | Where-Object { $_ -match '"port":\s*(\d+)' }
+              if ($line) { $port = [int]$Matches[1] } else { Start-Sleep -Milliseconds 250 }
+            }
+            if (-not $port) { throw "no startup line within 180 s" }
+            $ok = $false
+            while (-not $ok -and (Get-Date) -lt $deadline) {
+              try {
+                $r = Invoke-WebRequest -UseBasicParsing -Headers @{ Authorization = "Bearer ci" } "http://127.0.0.1:$port/api/v1/health"
+                $ok = $r.StatusCode -eq 200
+              } catch { Start-Sleep -Milliseconds 500 }
+            }
+            if (-not $ok) { throw "health never answered 200 on port $port" }
+            Write-Host "health ok on port $port"
+          } catch {
+            Write-Host "--- sidecar stdout ---"; Get-Content $out -ErrorAction SilentlyContinue
+            Write-Host "--- sidecar stderr ---"; Get-Content $err -ErrorAction SilentlyContinue
+            throw
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force }
+          }
         working-directory: backend
