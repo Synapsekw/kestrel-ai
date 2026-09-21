@@ -167,12 +167,28 @@ Also: spec §4.7 promised an angle in the HTML report's row detail and it was **
 — that report has no per-box rows. CSV is the only export where the number is readable. Recorded so
 it is not later logged as a missing wave-1 item.
 
-### Obsidian GUI verification owed (spec §7.3)
+### ~~Obsidian GUI verification~~ — CLOSED 2026-09-21, spec §7.3 MET
 
-Nobody has opened this vault in the Obsidian app to confirm Dataview queries render, Templater
-expands `vault/templates/session.md` without error, and the Homepage plugin opens
-`vault/00-north-star.md` on startup. Carried over from the seed session note's open threads,
-unresolved.
+The operator opened the vault in the Obsidian app and confirmed it works. That was the last
+verification the repo-and-dev-memory plan was waiting on, so **every criterion in spec §7 is now
+met**.
+
+The vault currently appears as **"app"**, because Obsidian names a vault after its folder and this
+one is `E:\Dev\Yolo\app` — the registry stores only `path`, so there is no display-name setting.
+Spec §2 originally accepted that cost; the operator has since decided to rename the folder to
+`kestrel-ai`. See the pending item below.
+
+### Folder rename to `kestrel-ai` — prepared, not yet run
+
+`scripts/rename-project.ps1` and `docs/superpowers/plans/2026-09-21-rename-project-folder.md` cover
+it. The rename cannot be performed from inside a Claude session living in the folder, and it
+requires that no worktree other than the main checkout is registered — worktree `gitdir` pointers
+are absolute and would break. It also invalidates `backend/.venv`, both `node_modules` trees and
+`frontend/src-tauri/target/`, all of which the script rebuilds.
+
+Prerequisite already done: the legacy `.worktrees/wave1` worktree was removed on 2026-09-21 by the
+junction-safe path (2106 reparse points, 0 escaping, no venv junction present; `backend/.venv`
+verified intact afterwards). Branch `wave1-s2-trial` is untouched and still on the remote.
 
 ### Stale acceptance run (blocking claim of a current PASS)
 
