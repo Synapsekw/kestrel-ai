@@ -66,6 +66,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Setup agent and YOLO catalog | merged/pushed to `main` (`89de91b`); rebuilt and installed (`f15f89b`) | conversational project setup through first labeling/review; 44 detection starters across eight families; 666 backend, 533 frontend and 59 browser tests; fresh GPU smoke, 8 Rust tests and 16 installed checks passed |
 | Kestrel AI rename | naming and code renamed 2026-09-20 | acceptance has **not** been re-run against the renamed installed build — see §5 |
 | Rotated boxes (OBB) wave 1 — annotate, store, export | merged to `main` (`249262b`) | gate green on the merged result; 2 cross-cutting defects found by the whole-branch review and fixed before merge; wave 2 (OBB training) unplanned |
+| CI green (GitHub Actions `ci`) | merged/pushed to `main` (`afba411`) | red on all 14 push runs since publishing; four stacked causes fixed and the local gate now runs `ruff format --check` and e2e as CI does; 3/3 dispatch runs green on all four jobs including `sidecar-smoke`. See [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -77,7 +78,17 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Setup agent desktop rebuilt and installed**, evidence merged/pushed at `f15f89b`.
+**Shipped last:** **CI green**, merged/pushed at `afba411` (11 commits from `bcba190`). GitHub Actions had
+failed every run since publishing. The causes were stacked: unformatted backend files; registry tests
+reading `E:/Dev/Yolo/models`; a starter-weights script that died without an `E:` drive; and three
+real input bugs that e2e only exposed on the slower runner. The bugs: two editor hotkey races that
+dropped a key on a just-loaded image, and a train form that refilled a cleared model name. Each bug
+has a regression test that fails without its fix. `finish-task.ps1` now runs `ruff format --check`
+and e2e too. Three dispatch runs on `afba411` passed contract, backend, frontend and sidecar-smoke.
+Those UI fixes are not in the installed app yet. See [[2026-09-21-2139-ci-green]] and
+[[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]].
+
+Previously installed: **Setup agent desktop rebuilt and installed**, evidence merged/pushed at `f15f89b`.
 Application source `75aa11b` preserves the previously verified setup-agent/catalog trees. Fresh GPU
 smoke, 8 Rust tests, native installer and 16 installed WebView2 checks passed. Both executable hashes
 match the build; actual YOLO26 download, cache reuse and prediction worked. First Projects 3.052s,
@@ -96,7 +107,9 @@ resource checks and 15 installed UI/lifecycle checks passed; first Projects 3.05
 The desktop app is open for the operator. See [[2026-09-21-1905-kestrel-a-identity]].
 
 Previously installed: **Contour desktop rebuild**, evidence `5555557`, application source `54b5e29`.
-See [[2026-09-21-1826-contour-desktop-rebuild]] and [[2026-09-21-1753-contour-ui]].
+See [[2026-09-21-1826-contour-desktop-rebuild]] and [[2026-09-21-1753-contour-ui]]. The directions
+explored before those builds were chosen: [[2026-09-21-1706-ui-design-directions]] (UI, which led to
+Contour) and [[2026-09-21-1834-logo-directions]] (logo, which led to Kestrel A).
 
 Previously shipped: **the task-worktree workflow, proven end to end** — `start-task.ps1` →
 `finish-task.ps1` ran the full gate, merged, pushed `0ce41f5..7288966`, and tore the worktree down
@@ -121,7 +134,10 @@ verification (Task 12 Steps 1-3) passed.
 and all 44 compatible detection starters, with focused native verification complete.
 The separately prepared folder rename remains pending (§5).
 
-**Next:** address the pre-existing cramped class-name fields in project settings (§5).
+**Next:** keep `ci` green: check `gh run list --branch main` after each merge, and dispatch
+`sidecar-smoke` after packaging changes (§5, "CI follow-ups"). Address the pre-existing cramped
+class-name fields in project settings (§5). The next Windows distribution also carries the
+editor/train fixes from `afba411`.
 The existing backlog remains: plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
 task guards, rotated inference — spec §5 of
 `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
@@ -139,6 +155,16 @@ installed UI checks. Both stored providers report ready; the real YOLO26 downloa
 prediction worked. Evidence `f15f89b`: `docs/evidence/setup-agent-desktop/README.md`.
 No paid planner/vision call was made. A live setup conversation and labeling of an operator-selected
 batch remain outside this focused rebuild verification, as does the broader historical acceptance debt.
+
+### CI follow-ups (opened 2026-09-21)
+
+`ci` is green as of `afba411` (see [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]]).
+Still owed:
+- `sidecar-smoke` runs only on `workflow_dispatch`. Dispatch it after packaging changes.
+- `test_inference_gpu.py` and `test_training_gpu.py` hardcode `E:/Dev/Yolo/models`. They are
+  deselected on CI, but they are not portable.
+- The CI actions target Node 20: `checkout@v4`, `setup-node@v4`, `pnpm/action-setup@v4` and
+  `setup-uv@v6`. GitHub currently forces them onto Node 24; bump them before that stops.
 
 ### ~~Contour installed-build verification~~ — CLOSED 2026-09-21
 
