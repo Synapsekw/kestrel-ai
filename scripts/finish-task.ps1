@@ -22,13 +22,39 @@ $repo = Split-Path -Parent $repo
 
 if ((& git status --porcelain)) { throw "working tree is dirty - commit or discard first" }
 
-Write-Host "rebasing $branch onto main so the gate runs against the merged state..."
-$rebaseBase = 'main'
+Write-Host "syncing local main with origin/main..."
 if ((& git branch -r) -match 'origin/main') {
   & git fetch origin main | Out-Null
-  $rebaseBase = 'origin/main'
+  if ($LASTEXITCODE -ne 0) { throw "fetch of origin/main failed" }
+
+  # Fast-forwarding local main touches the main checkout, so assert here the same
+  # clean-and-on-main guarantees the script asserts again later before merging.
+  & git -C $repo checkout main
+  if ($LASTEXITCODE -ne 0) { throw "checkout of main failed" }
+  if ((& git -C $repo status --porcelain)) { throw "main checkout is dirty - commit or discard first, then re-run this script" }
+  if ((& git -C $repo rev-parse --abbrev-ref HEAD).Trim() -ne 'main') { throw "main checkout is not on main" }
+
+  $localMain = (& git -C $repo rev-parse main).Trim()
+  $remoteMain = (& git -C $repo rev-parse origin/main).Trim()
+  if ($localMain -ne $remoteMain) {
+    & git -C $repo merge-base --is-ancestor $localMain $remoteMain
+    $localBehind = ($LASTEXITCODE -eq 0)
+    & git -C $repo merge-base --is-ancestor $remoteMain $localMain
+    $localAhead = ($LASTEXITCODE -eq 0)
+    if ($localBehind) {
+      Write-Host "local main is behind origin/main - fast-forwarding..."
+      & git -C $repo merge --ff-only origin/main
+      if ($LASTEXITCODE -ne 0) { throw "fast-forward of local main to origin/main failed" }
+    } elseif ($localAhead) {
+      Write-Host "local main is ahead of origin/main - local main is already the most advanced main."
+    } else {
+      throw "local main and origin/main have diverged - reconcile main manually before finishing a task"
+    }
+  }
 }
-& git rebase $rebaseBase
+
+Write-Host "rebasing $branch onto main so the gate runs against the merged state..."
+& git rebase main
 if ($LASTEXITCODE -ne 0) {
   throw "rebase conflict - resolve it, then re-run this script"
 }
