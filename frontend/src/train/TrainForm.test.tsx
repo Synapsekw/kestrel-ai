@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
 import { exampleDataset, exampleModel, exampleTrainedModel, fakeClient, PROJECT_ID } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { MemoryRouter } from "react-router-dom";
+import { renderWithProviders, TestApiProvider } from "@/test/render";
 import { TrainForm } from "./TrainForm";
 
 describe("TrainForm", () => {
@@ -126,6 +127,34 @@ describe("TrainForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start training" }));
     expect(onStart).not.toHaveBeenCalled();
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a dataset.");
+  });
+
+  it("keeps a name the user cleared when the lists arrive again", () => {
+    const { api } = fakeClient([]);
+    const form = (datasets: (typeof exampleDataset)[], models: (typeof exampleModel)[]) => (
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={datasets}
+        models={models}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={vi.fn()}
+      />
+    );
+    const { rerender } = renderWithProviders(form([exampleDataset], [exampleModel]), { api });
+    fireEvent.change(screen.getByLabelText("Model name"), { target: { value: "" } });
+    // A refetch hands the form new arrays with the same content (the Train screen polls them).
+    rerender(
+      <TestApiProvider api={api}>
+        <MemoryRouter>{form([{ ...exampleDataset }], [{ ...exampleModel }])}</MemoryRouter>
+      </TestApiProvider>,
+    );
+    expect(screen.getByLabelText("Model name")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Start training" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Give the model a name.");
   });
 
   it("points to a starter model when the registry has loaded, is available and empty", () => {

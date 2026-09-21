@@ -93,7 +93,9 @@ export function TrainForm({
         datasets.find((d) => d.id === datasetId),
         models.find((m) => m.id === baseModelId),
       );
-      const name = f.name === "" || f.name === lastSuggested.current ? suggested : f.name;
+      // Only a name still equal to the last suggestion follows the lists. A name the user cleared is
+      // an edit too: refilling it on the next refetch hid the "Give the model a name." check.
+      const name = f.name === lastSuggested.current ? suggested : f.name;
       lastSuggested.current = suggested;
       if (datasetId === f.datasetId && baseModelId === f.baseModelId && name === f.name) return f;
       return { ...f, datasetId, baseModelId, name };

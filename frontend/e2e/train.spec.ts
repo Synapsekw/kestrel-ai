@@ -70,6 +70,8 @@ test("validation blocks an empty name and a 501 trainer shows the note", async (
   );
   await page.goto(`/p/${P}/train`);
   await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
+  // The name is suggested once the models list arrives too; clear it only after that.
+  await expect(page.getByLabel("Model name")).not.toHaveValue("");
   await page.getByLabel("Model name").fill("");
   await page.getByRole("button", { name: "Start training" }).click();
   await expect(page.getByRole("alert")).toContainText("Give the model a name.");
