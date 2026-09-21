@@ -71,7 +71,8 @@ only needed spacing/contrast fixes, not unrelated workflow rewrites.
 
 Training, inference, import and export remain existing background jobs with progress. No new background
 job type, API endpoint, dataset traversal, or whole-image-set read. Home reads at most three metadata
-records and three thumbnail URLs; no automatic next-page fetch. Existing editor display image bounds
+records, one existing display-image URL capped at 1024px for the hero, and at most two thumbnail URLs;
+no automatic next-page fetch. The backend's 256px thumbnails are too small for the hero. Existing editor display image bounds
 and virtualized/paginated image lists remain unchanged. Add no UI runtime dependency.
 
 ## Execution DAG

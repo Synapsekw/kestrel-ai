@@ -107,7 +107,9 @@ test("class hotkeys, fit and 1:1 keys, region list selection, Delete and Ctrl+D"
   await openEditor(page);
   const fitted = await readView(page);
   await page.keyboard.press("4");
-  await expect(page.getByRole("button", { name: /dump_truck/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Drawing class", { exact: true })).toHaveValue(
+    "c1a2b3c4-0000-4000-8000-000000000004",
+  );
   await page.keyboard.press("0");
   await expect(page.getByTestId("editor-canvas")).toHaveAttribute("data-view-scale", "1.0000");
   await page.keyboard.press("f");
@@ -128,6 +130,7 @@ test("class hotkeys, fit and 1:1 keys, region list selection, Delete and Ctrl+D"
     y: 312,
     w: 140,
     h: 90,
+    angle: 0,
   });
 
   await excavatorRow.click();

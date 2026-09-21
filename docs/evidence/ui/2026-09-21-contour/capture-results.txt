@@ -1,0 +1,13 @@
+01-projects: rendered
+02-home: rendered
+Primary action: 140ms hover, dark foreground, keyboard focus ring and reduced-motion override verified
+04-images: rendered
+05-label: rendered; desktop canvas {"x":82,"y":157,"width":1048,"height":803}
+06-label-laptop: {"x":82,"y":157,"width":632,"height":611}
+07-train: rendered
+08-review: rendered
+Jobs drawer: 220ms entry and reduced-motion override verified
+10-settings: rendered
+11-app-settings: rendered
+No JavaScript page errors
+Photograph and box coordinates supplied by capture fixtures: 256px thumbnails, 1024px Home hero; the 4000px editor image fits its existing 4096px cap. Other API responses come from Prism.

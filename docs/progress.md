@@ -9,6 +9,21 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Contour UI — 2026-09-21
+
+The operator selected Contour after the standalone visual study. Source implementation is in
+`4783855` and `b8c658f`: charcoal/amber tokens, compact expandable navigation, real bounded Home
+imagery, separated image captions, and one scrollable drawing/review inspector. Existing shortcuts,
+annotation operations and API/background-job behavior are preserved. Review caught and fixed clipped
+locked-step tooltips and shortcut help; a bounded 1024px hero replaces enlarged 256px thumbnails.
+
+Verified: contract check, Ruff, 620 backend tests, frontend lint, 517 unit tests plus final focused
+checks, build, 57 browser tests and 13 actual-app development screenshots. Rust tests were skipped
+because this worktree has no frozen sidecar. The first backend run had one intermediate-epoch timing
+failure; the isolated module and full rerun passed without source changes. Full provenance, limits,
+reproduction and operator walkthrough: `docs/evidence/ui/2026-09-21-contour/README.md`.
+The installed desktop executable was not rebuilt or replaced by this change.
+
 ## Current state
 
 Renamed from "Machinery Detection" / `machinery-app` to **Kestrel AI** / `kestrel-ai` on 2026-09-20

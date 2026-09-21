@@ -15,7 +15,7 @@ and consolidate editor chrome into one inspector. Add a bounded real-image resum
 
 - No backend/contract behavior changes, new UI runtime dependencies, or fictional production data.
 - Training, inference, import and export remain existing background jobs with progress.
-- Home reads at most three metadata records and three thumbnail URLs; no automatic next-page fetch.
+- Home reads at most three metadata records, one existing display URL capped at 1024px, and two thumbnail URLs; no automatic next-page fetch.
 - Existing editor display image bounds and virtualized/paginated image lists remain unchanged.
 - Stored box class colors stay unchanged. Keep existing shortcut meanings, rotation, and middle-button pan.
 - Work only in .claude/worktrees/contour-ui on task/contour-ui; stage explicit paths.
@@ -45,20 +45,20 @@ accent-fg as a semantic Tailwind token for amber fills. A navigation toggle is a
 aria-expanded. Inspector is a named region whose controls use existing handlers. Home's list helper
 uses the existing list contract with limit=3 and never follows next_cursor.
 
-- [ ] Write focused behavioral tests before implementation. New navigation test expands/collapses
+- [x] Write focused behavioral tests before implementation. New navigation test expands/collapses
   while all routes and locked explanations remain accessible. Inspector test changes active class and
   invokes existing decision callbacks while the class list is folded. Home test asserts outgoing
   limit=3 and successful next-action rendering when preview fetch fails. Preserve relevant regressions.
-- [ ] Run new tests red and report exact failures. Existing helpers renderWithProviders/fakeClient
+- [x] Run new tests red and report exact failures. Existing helpers renderWithProviders/fakeClient
   support request routing; inspect their APIs rather than adding production test hooks.
-- [ ] Implement the spec. For the bounded fetch use the real contract API:
+- [x] Implement the spec. For the bounded fetch use the real contract API:
   `api.GET("/api/v1/projects/{projectId}/images", {params:{path:{projectId},query:{limit:3}}})`.
   Confirm the source-defined endpoint and response type before using this sketch.
-- [ ] Check amber-filled text/checkmarks across Button, Checkbox, Switch, Brand, Pills and steps.
+- [x] Check amber-filled text/checkmarks across Button, Checkbox, Switch, Brand, Pills and steps.
   Add contrast checks that read actual palette definitions and fail on unreadable role pairs.
-- [ ] Run focused tests green, frontend lint and build. Inspect the diff for regressions, keep
+- [x] Run focused tests green, frontend lint and build. Inspect the diff for regressions, keep
   existing tests meaningful, and update stale assertions only where the selected design changes them.
-- [ ] Commit explicit task paths and write an implementer report with changes, test commands/results,
+- [x] Commit explicit task paths and write an implementer report with changes, test commands/results,
   red evidence, issues and any deviations. Do not run the whole backend gate concurrently.
 
 ### Task 2: Verify, review, and integrate
@@ -69,12 +69,12 @@ uses the existing list contract with limit=3 and never follows next_cursor.
 **Interfaces:** Task 1 production routes and controls; existing Prism/mock test setup. No changing
 production logic to make fixture screenshots work.
 
-- [ ] Prepare browser fixtures outside production src. Use project-shaped sample data, local preview
+- [x] Prepare browser fixtures outside production src. Use project-shaped sample data, local preview
   images, and explicit limits. Serve on unique loopback ports so no other task's app is tested.
-- [ ] Inspect actual rendered Home, Images, Label, Train, Review, settings, and Jobs; exercise nav toggle,
+- [x] Inspect actual rendered Home, Images, Label, Train, Review, settings, and Jobs; exercise nav toggle,
   inspector controls, accept/undo, class selection, image filters, responsive widths, reduced motion.
-- [ ] Dispatch a task reviewer with spec, brief, implementer report and full task diff; resolve findings.
-- [ ] Run the required gate once serially: contract check; ruff; pytest; frontend lint/test/build;
+- [x] Dispatch a task reviewer with spec, brief, implementer report and full task diff; resolve findings.
+- [x] Run the required gate once serially: contract check; ruff; pytest; frontend lint/test/build;
   conditional cargo test. Capture evidence, investigate failures, rerun only affected checks after fixes.
 - [ ] Dispatch a final branch reviewer with the entire diff and test evidence, resolve any real findings.
 - [ ] Commit docs/evidence by exact paths, rebase onto main if needed, merge only the tested state,

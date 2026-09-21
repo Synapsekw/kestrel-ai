@@ -12,7 +12,7 @@ test("ticks YOLO on the Export screen and posts the chosen formats", async ({ pa
   const created = page.waitForRequest(
     (r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/exports`),
   );
-  await page.getByRole("button", { name: "Export" }).click();
+  await page.getByRole("button", { name: "Export", exact: true }).click();
   expect((await created).postDataJSON()).toEqual({
     formats: ["csv", "yolo", "html"],
     include_unreviewed: false,
