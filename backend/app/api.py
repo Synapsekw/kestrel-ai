@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 
+from app.agent.router import router as agent_router
 from app.auth import require_token
 from app.datasets.router import router as datasets_router
 from app.exports.router import router as exports_router
@@ -14,6 +15,7 @@ from app.training.starter_router import router as starter_router
 
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
 for r in (
+    agent_router,
     health_router,
     projects_router,
     jobs_router,
