@@ -66,6 +66,8 @@ export function useSetupAgent(open: boolean) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMetadataLoading(true);
     setMetadataError(null);
+    // Model and pricing may have changed in App settings while this drawer was closed.
+    setEstimate(null);
     void Promise.all([fetchProviders(api), listStarterModels(api)])
       .then(([p, c]) => {
         if (!ignore) {

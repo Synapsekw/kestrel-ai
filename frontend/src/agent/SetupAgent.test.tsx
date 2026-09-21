@@ -179,6 +179,33 @@ describe("Setup agent", () => {
     await screen.findByLabelText("Image folder");
     expect(requests.filter((r) => r.method === "POST" && r.url === "/api/v1/projects")).toHaveLength(1);
   });
+  it("requires a new estimate after provider settings refresh without losing the selected batch", async () => {
+    const rs = routes();
+    const { api } = fakeClient(rs);
+    renderWithProviders(<Harness />, { api });
+    await createAndImport();
+    fireEvent.click(screen.getByLabelText(`Select ${exampleImagePage.items[0].file_name}`));
+    fireEvent.click(screen.getByRole("button", { name: "Estimate first labeling" }));
+    await screen.findByTestId("estimate");
+    fireEvent.click(screen.getByRole("link", { name: "App settings" }));
+    rs[0].body = {
+      items: [
+        {
+          name: "openai",
+          has_key: true,
+          model_name: "new-priced-model",
+          requests_per_minute: 30,
+          cost_per_request: 0.5,
+        },
+      ],
+    };
+    fireEvent.click(screen.getByRole("button", { name: "Reopen agent" }));
+    await screen.findByText(/new-priced-model/);
+    expect(screen.queryByTestId("estimate")).toBeNull();
+    expect(screen.getByRole("button", { name: "Start first labeling" })).toBeDisabled();
+    expect(screen.getByLabelText(`Select ${exampleImagePage.items[0].file_name}`)).toBeChecked();
+    expect(screen.getByLabelText("Labeling instructions")).toHaveValue(plan.labeling_query);
+  });
   it("retains the unsent message after a chat failure and can retry", async () => {
     const rs = routes();
     const endpoint = rs.find((r) => r.path.test("/agent/chat"))!;
