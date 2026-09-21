@@ -63,6 +63,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Site office UI redesign (U2) | merged to `main` (`2bc15a4`) | every screen restyled on `frontend/src/ui/`; walk-through 12 steps / 66 checks against the real backend |
 | Contour UI redesign | merged to `main` (`50c5e0d`); installed verification `5555557` | selected direction implemented; 517 frontend, 620 backend, 57 browser tests; rebuilt/installed 2026-09-21, fresh GPU smoke and 8 Rust tests, 13 installed checks and 6 native screenshots |
 | Kestrel A identity | merged/pushed to `main` (`33f1c28`); rebuilt and installed | approved bird shared across sidebar/splash and 17 native assets; app/setup icon resources match at 16px/32px; 15 installed checks passed |
+| Setup agent and YOLO catalog | merged/pushed to `main` (`89de91b`); source/build verified | conversational project setup through first labeling/review; 44 detection starters across eight families; 666 backend, 533 frontend and 59 browser tests passed; installer not rebuilt |
 | Kestrel AI rename | naming and code renamed 2026-09-20 | acceptance has **not** been re-run against the renamed installed build — see §5 |
 | Rotated boxes (OBB) wave 1 — annotate, store, export | merged to `main` (`249262b`) | gate green on the merged result; 2 cross-cutting defects found by the whole-branch review and fixed before merge; wave 2 (OBB training) unplanned |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
@@ -76,7 +77,14 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **A / Kestrel bird implemented, rebuilt and installed**; merged/pushed at `33f1c28`.
+**Shipped last:** **Setup agent and 44-model YOLO detection catalog**, merged/pushed at `89de91b`.
+GPT/Claude planning now guides editable project creation, image import and a bounded first labeling
+run through review. Model downloads and labeling remain background jobs. Contract/Ruff, 666 backend,
+frontend lint/533 unit/build and 59 browser checks passed; independent review approved. Task worktree
+and branch removed, shared Python environment intact. Source/build verified; installer unchanged.
+See [[2026-09-21-1920-setup-agent]] and `docs/evidence/setup-agent/README.md`.
+
+Previously installed: **A / Kestrel bird implemented, rebuilt and installed**; merged/pushed at `33f1c28`.
 The operator selected A from the prior exploration. One SVG master now supplies sidebar/splash branding
 and all 17 native icon files, including app, installer, shortcut and uninstall display surfaces.
 Installed app/sidecar hashes match the new build. Full required gates, fresh CUDA smoke, native icon
@@ -105,11 +113,12 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** no remaining work for the selected A identity. Contour and logo implementation,
-rebuild and installed verification are complete.
+**In flight:** no remaining setup-agent source work. The latest installed app remains the Kestrel A
+identity build; the setup feature is merged and build/browser verified, awaiting the next distribution.
 The separately prepared folder rename remains pending (§5).
 
-**Next:** address the pre-existing cramped class-name fields in project settings (§5).
+**Next:** include setup-agent/catalog changes in the next Windows distribution, and address the
+pre-existing cramped class-name fields in project settings (§5).
 The existing backlog remains: plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
 task guards, rotated inference — spec §5 of
 `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
@@ -119,6 +128,14 @@ acceptance against the renamed installed build (§5); close friction-list minors
 carry out the prepared folder rename when the operator is ready (§5).
 
 ## 5. Owed
+
+### Setup agent/catalog desktop distribution and live provider check
+
+Source is merged at `89de91b` with all required source gates and 59 browser tests passing.
+This block did not rebuild/install Windows binaries or call paid providers. The installed app remains
+the earlier Kestrel A identity build. Package the new source for the next distribution, then verify
+the drawer with stored credentials and a small operator-selected image batch. Source evidence:
+`docs/evidence/setup-agent/README.md`. This does not replace the broader historical acceptance debt.
 
 ### ~~Contour installed-build verification~~ — CLOSED 2026-09-21
 
