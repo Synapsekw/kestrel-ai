@@ -12,7 +12,7 @@ sub-project whose state is not `merged`, then continue from its first unchecked 
 ## Contour UI — 2026-09-21
 
 The operator selected Contour after the standalone visual study. Source implementation is in
-`4783855` and `b8c658f`: charcoal/amber tokens, compact expandable navigation, real bounded Home
+`275f6fe` and `bd145d4`: charcoal/amber tokens, compact expandable navigation, real bounded Home
 imagery, separated image captions, and one scrollable drawing/review inspector. Existing shortcuts,
 annotation operations and API/background-job behavior are preserved. Review caught and fixed clipped
 locked-step tooltips and shortcut help; a bounded 1024px hero replaces enlarged 256px thumbnails.

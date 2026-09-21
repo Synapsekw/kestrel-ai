@@ -76,7 +76,7 @@ production logic to make fixture screenshots work.
 - [x] Dispatch a task reviewer with spec, brief, implementer report and full task diff; resolve findings.
 - [x] Run the required gate once serially: contract check; ruff; pytest; frontend lint/test/build;
   conditional cargo test. Capture evidence, investigate failures, rerun only affected checks after fixes.
-- [ ] Dispatch a final branch reviewer with the entire diff and test evidence, resolve any real findings.
+- [x] Dispatch a final branch reviewer with the entire diff and test evidence, resolve any real findings.
 - [ ] Commit docs/evidence by exact paths, rebase onto main if needed, merge only the tested state,
   remove this worktree and branch with verified path/junction handling, then execute /wrapup.
 - [ ] Report the delivered design and numbered operator walkthrough. Clarify installer unchanged.

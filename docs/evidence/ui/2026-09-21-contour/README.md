@@ -34,7 +34,7 @@ are committed. Screenshots are committed for visual review.
 
 ## Browser verification
 
-Final application source: `b8c658f` (with initial implementation `4783855`), built on local main
+Final application source: `bd145d4` (with initial implementation `275f6fe`), built on local main
 `43483af`. Validation:
 
 | Gate | Result |
@@ -105,3 +105,12 @@ The supplied photograph must match the example's 4000×2667 geometry for the cap
 4. Change Drawing class, expand All classes, and review a suggestion. Check keyboard shortcuts,
    undo/redo, pan and fit. Shrink the window to 1024×768 and confirm the inspector remains usable.
 5. Open Jobs and settings. Check keyboard focus and enable the system's reduced-motion preference.
+
+## Final review and integration base
+
+Task review and the scoped fix review passed. The final whole-branch review of 8855688 found no
+critical, important or new minor issues. After review, the branch was rebased onto 9fc1429 to retain
+a concurrent folder-rename script/runbook and vault update. Frontend, backend and contract Git tree
+hashes were identical before and after that rebase; no application tests were invalidated. The
+original application commits 4783855/b8c658f became 275f6fe/bd145d4. Only evidence/plan bookkeeping
+follows this review.
