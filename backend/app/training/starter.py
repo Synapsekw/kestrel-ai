@@ -1,4 +1,4 @@
-"""Starter weights that ship with the app (usability gap G1): COCO YOLO11 in three sizes."""
+"""Audited detection starter catalogue, listed without importing the model engine."""
 
 import logging
 import sys
@@ -19,23 +19,54 @@ class StarterSpec:
     key: str
     name: str
     description: str
+    family: str
 
 
+# Fixed, audited COCO detection checkpoints supported by Ultralytics 8.4.154.
+# Older v3/v5 checkpoints must use the compatible anchor-free "u" variants.
+SCALES = {
+    "n": "nano",
+    "s": "small",
+    "m": "medium",
+    "l": "large",
+    "x": "extra large",
+    "t": "tiny",
+    "c": "compact",
+    "e": "extended",
+    "b": "balanced",
+}
 CATALOGUE = [
     StarterSpec(
-        "yolo11n", "YOLO11 nano", "Fastest to train and run; the right first choice for a new project."
-    ),
-    StarterSpec(
-        "yolo11s",
-        "YOLO11 small",
-        "A little slower, usually more accurate once a few hundred images are labeled.",
-    ),
-    StarterSpec(
-        "yolo11m",
-        "YOLO11 medium",
-        "Slowest of the three; best accuracy with a large labeled set and for pre-annotation.",
-    ),
+        f"{prefix}{scale}{suffix}",
+        f"{family} {SCALES[scale]}{extra}",
+        "COCO object detection weights. Larger sizes need more memory and take longer."
+        + (
+            " YOLO12 attention models can be slower on CPU and less stable during training."
+            if prefix == "yolo12"
+            else ""
+        ),
+        family,
+    )
+    for prefix, family, scales, suffix, extra in (
+        ("yolo11", "YOLO11", "nsmlx", "", ""),
+        ("yolo26", "YOLO26", "nsmlx", "", ""),
+        ("yolo12", "YOLO12", "nsmlx", "", ""),
+        ("yolov10", "YOLOv10", "nsmblx", "", ""),
+        ("yolov9", "YOLOv9", "tsmce", "", ""),
+        ("yolov8", "YOLOv8", "nsmlx", "", ""),
+        ("yolov5", "YOLOv5u", "nsmlx", "u", ""),
+        ("yolov5", "YOLOv5u", "nsmlx", "6u", " P6"),
+    )
+    for scale in scales
+] + [
+    StarterSpec(key, name, "COCO object detection with the Ultralytics anchor-free head.", "YOLOv3u")
+    for key, name in (
+        ("yolov3-tinyu", "YOLOv3u tiny"),
+        ("yolov3u", "YOLOv3u standard"),
+        ("yolov3-sppu", "YOLOv3u SPP"),
+    )
 ]
+STARTER_KEYS = {spec.key for spec in CATALOGUE}
 
 # COCO has no construction classes; its `truck` is the closest to a dump truck.
 DEFAULT_ALIASES = {"truck": "dump_truck"}
@@ -54,16 +85,20 @@ def weights_dir(settings: Settings) -> Path:
     return checkout
 
 
-def list_starters(folder: Path) -> list[dict]:
+def list_starters(folder: Path, cache: Path | None = None) -> list[dict]:
     items = []
     for spec in CATALOGUE:
         f = folder / f"{spec.key}.pt"
+        if not f.is_file() and cache is not None:
+            f = cache / f"{spec.key}.pt"
         ok = f.is_file()
         items.append(
             {
                 "key": spec.key,
                 "name": spec.name,
                 "description": spec.description,
+                "family": spec.family,
+                "task": "detect",
                 "size_mb": round(f.stat().st_size / 1_048_576, 1) if ok else 0,
                 "available": ok,
             }

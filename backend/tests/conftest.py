@@ -53,6 +53,12 @@ def app(settings, monkeypatch):
     the real `launch` and monkeypatches `subprocess.Popen` itself where it needs to assert on the
     exact command.
     """
+    def no_model_download(*args, **kwargs):
+        from app.jobs.cancellation import JobFailure
+
+        raise JobFailure("Model downloads are disabled in tests.")
+
+    monkeypatch.setattr("app.training.starter_download.download_weights", no_model_download)
     created = create_app(settings)
     created.state.keys = MemoryKeyStore()
     created.state.gpu_probe = GpuProbe(probe=lambda: {"available": False, "name": "test-gpu"})

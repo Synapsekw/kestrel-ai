@@ -3,6 +3,7 @@ import { screen, fireEvent, waitFor } from "@testing-library/react";
 import {
   errorBody,
   exampleDataset,
+  exampleJob,
   exampleModel,
   exampleProject,
   exampleTrainedModel,
@@ -92,7 +93,13 @@ describe("ModelsScreen", () => {
       { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
       { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
       { method: "GET", path: /\/starter-models$/, body: { items: starters, next_cursor: null } },
-      { method: "POST", path: /\/models\/import-starter$/, status: 201, body: exampleModel },
+      {
+        method: "POST",
+        path: /\/models\/acquire-starter$/,
+        status: 202,
+        body: { job: { ...exampleJob, state: "succeeded", result: { model_id: exampleModel.id } } },
+      },
+      { method: "GET", path: /\/models\/[^/]+$/, body: exampleModel },
     ]);
     renderWithProviders(<ModelsScreen />, {
       api,

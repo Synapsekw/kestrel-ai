@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { StarterModel } from "@contract/client";
-import { exampleModel, fakeClient, PROJECT_ID } from "@/test/fixtures";
-import { importStarterModel, listStarterModels } from "./starterModels";
+import { exampleJob, exampleModel, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { acquireStarterModel, importStarterModel, listStarterModels } from "./starterModels";
 
 const starters: StarterModel[] = [
   { key: "yolo11n", name: "YOLO11 nano", description: "Fastest.", size_mb: 5.4, available: true },
@@ -39,4 +39,12 @@ describe("starter models api", () => {
     await importStarterModel(api, PROJECT_ID, "yolo11s", "mine");
     expect(requests[0]).toMatchObject({ body: { key: "yolo11s", name: "mine" } });
   });
+});
+
+it("queues acquisition of a model that is not installed", async () => {
+  const { api, requests } = fakeClient([
+    { method: "POST", path: /\/models\/acquire-starter$/, status: 202, body: { job: exampleJob } },
+  ]);
+  expect(await acquireStarterModel(api, PROJECT_ID, "yolo26x", "large detector")).toEqual(exampleJob);
+  expect(requests[0]).toMatchObject({ body: { key: "yolo26x", name: "large detector" } });
 });

@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import Model
 from app.jobs.schemas import JobOut
@@ -88,7 +88,9 @@ class TrainRequest(BaseModel):
 
 
 class StarterModelOut(BaseModel):
-    key: Literal["yolo11n", "yolo11s", "yolo11m"]
+    key: str
+    family: str
+    task: Literal["detect"] = "detect"
     name: str
     description: str
     size_mb: float
@@ -101,8 +103,17 @@ class StarterModelPage(BaseModel):
 
 
 class StarterModelImport(BaseModel):
-    key: Literal["yolo11n", "yolo11s", "yolo11m"]
+    key: str
     name: str | None = Field(None, min_length=1)
+
+    @field_validator("key")
+    @classmethod
+    def known_starter(cls, value: str) -> str:
+        from app.training.starter import STARTER_KEYS
+
+        if value not in STARTER_KEYS:
+            raise ValueError("Choose a supported detection starter model.")
+        return value
 
 
 class ExportRequest(BaseModel):

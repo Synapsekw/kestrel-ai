@@ -92,3 +92,14 @@ describe("job labels", () => {
     expect(resultsExportSummary({ ...runningJob, type: "train" })).toBeNull();
   });
 });
+
+it("links a downloaded starter to the model and labels it clearly", () => {
+  const job = {
+    ...runningJob,
+    params: { purpose: "starter_model", key: "yolo26n" },
+    state: "succeeded" as const,
+    result: { model_id: "m1" },
+  };
+  expect(jobTitle(job)).toBe("Model download: yolo26n");
+  expect(resultTarget(job, "p")).toEqual({ label: "Open model", to: "/p/p/models?model=m1" });
+});

@@ -23,6 +23,9 @@ function str(record: Record<string, unknown> | null | undefined, key: string): s
 }
 
 export function jobTitle(job: Job): string {
+  if (job.type === "import" && job.params?.purpose === "starter_model") {
+    return `Model download: ${str(job.params, "name") ?? str(job.params, "key") ?? "YOLO"}`;
+  }
   const name = str(job.params, "name");
   return name ? `${TYPE_LABEL[job.type]}: ${name}` : TYPE_LABEL[job.type];
 }
@@ -73,6 +76,10 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "dataset":
       return { label: "Train on it", to: `${p}/train` };
     case "import":
+      if (job.params?.purpose === "starter_model") {
+        const id = str(job.result, "model_id");
+        return id ? { label: "Open model", to: `${p}/models?model=${id}` } : null;
+      }
       return { label: "Open images", to: `${p}/data` };
     case "results_export":
       return null; // it already lives on the Export screen that started it

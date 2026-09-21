@@ -80,6 +80,10 @@ def hold_import_lock(project_id: str, cancelled: threading.Event, log=None):
 
 @register_job_type("import")
 def run_import(ctx: JobContext) -> dict:
+    if ctx.params.get("purpose") == "starter_model":
+        from app.training.starter_download import run_acquire_starter
+
+        return run_acquire_starter(ctx)
     with hold_import_lock(ctx.project.id, ctx.cancelled, ctx.log):
         return _run_import(ctx)
 
