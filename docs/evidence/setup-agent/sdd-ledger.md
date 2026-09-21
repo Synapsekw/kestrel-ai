@@ -26,7 +26,7 @@
 - T3 complete: agent_frontend implemented retained setup drawer, editable draft, project/import/selection/estimate/label/review and recovery tests (`037ebc2`, `31986da`).
 - T4 complete: yolo_catalog implemented 44 starters, streamed acquisition and family/model UI; actual-task and post-success metadata recovery fixed (`ffcb94e`, `dde24b8`, `da2e475`).
 - T5 complete: real-backend selected-image integration and browser coverage (`853d838`, `feb3003`); final independent review at da2e475 ready with no blockers.
-- T6 gates complete: contract, Ruff, 666 backend, frontend lint/533 unit/build, 59 browser. Rust correctly skipped without frozen sidecar. Merge/cleanup and vault wrapup are the remaining mechanical steps.
+- T6 complete: contract, Ruff, 666 backend, frontend lint/533 unit/build, 59 browser. Rust correctly skipped without frozen sidecar. Fast-forwarded/pushed main to 89de91b; worktree and branch removed, shared backend environment preserved. Vault wrapup recorded in 2026-09-21-1920-setup-agent.md.
 
 ## Review resolution
 - Actual checkpoint task is checked before starter registration, using the existing metadata load.

@@ -2,6 +2,8 @@
 
 Date: 2026-09-21. Scope: source/build and browser integration, with deterministic cloud responses.
 
+Integrated and pushed to main at `89de91b`. Task branch and worktree removed; shared Python environment verified intact.
+
 ## What was built
 
 - Global Setup agent drawer uses configured OpenAI or Anthropic model/key for bounded, structured planning.

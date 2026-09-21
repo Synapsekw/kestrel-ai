@@ -316,7 +316,8 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
-- 2026-09-21: Setup agent and the expanded YOLO catalog implemented on `task/setup-agent`
+- 2026-09-21: Setup agent and the expanded YOLO catalog merged/pushed to main at `89de91b`;
+  task worktree and branch removed, shared backend environment intact. Implemented on `task/setup-agent`
   (`4930d3c`..`da2e475`), rebased onto the new Kestrel identity at `ad2f762`. The drawer uses
   stored GPT/Claude credentials for bounded project planning, then creates a project, downloads
   a selected starter, imports images, guides a 24-image first labeling batch and opens review.

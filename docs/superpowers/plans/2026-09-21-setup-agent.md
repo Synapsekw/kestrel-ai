@@ -56,6 +56,8 @@ Files: backend/app/training/starter*, related schemas/tests; frontend model sele
 
 ### T6: Gates, integration and memory (controller)
 - [x] Run contract check, backend ruff/pytest, frontend lint/test/build; conditional cargo gate.
-- [ ] Record results and limitations in docs/progress.md; update vault via /wrapup checklist.
-- [ ] Commit explicit owned paths, merge to main, safely remove task worktree and delete branch.
-- [ ] Give numbered operator walkthrough and mark goal complete only when all work is done.
+- [x] Record results and limitations in docs/progress.md; update vault via /wrapup checklist.
+- [x] Commit explicit owned paths, merge to main, safely remove task worktree and delete branch.
+- [x] Give numbered operator walkthrough in docs/evidence/setup-agent/README.md; goal completion follows the final clean-main check.
+
+Completed 2026-09-21. Fast-forwarded and pushed to main at `89de91b`; task branch and worktree removed. Required gates and the full 59-test browser suite passed. See the evidence README and `vault/sessions/2026-09-21-1920-setup-agent.md`.
