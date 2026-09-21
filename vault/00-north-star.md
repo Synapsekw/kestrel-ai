@@ -75,7 +75,10 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Contour desktop rebuild and installation**, evidence merged/pushed at `5555557`.
+**Shipped last:** logo exploration only this block; nothing shipped to the application. Three logo
+directions were presented, with selection pending. See [[2026-09-21-1834-logo-directions]].
+
+Last installed: **Contour desktop rebuild and installation**, evidence merged/pushed at `5555557`.
 Application source is unchanged from `54b5e29`; a fresh CUDA backend and native release were packaged
 and installed. Installed hashes match the build. GPU prediction/training/export, 8 Rust tests and
 13 installed UI/lifecycle checks passed; first launch 3.097s, warm launch 1.948s. The desktop app is
@@ -101,10 +104,13 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** Contour source and installed-build verification are complete.
+**In flight:** logo brainstorming — A Kestrel, B Focus K, C Survey Wing; awaiting the operator's
+selection before implementing. Contour source and installed-build verification are complete.
 The separately prepared folder rename remains pending (§5).
 
-**Next:** address the pre-existing cramped class-name fields observed in project settings (§5).
+**Next:** after selection, implement one consistent mark inside the app and across Windows app,
+shortcut and installer icons, then rebuild/verify the installation. The pre-existing cramped
+class-name fields in project settings remain owed (§5).
 The existing backlog remains: plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
 task guards, rotated inference — spec §5 of
 `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
