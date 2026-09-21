@@ -14,7 +14,13 @@ from app.training.presets import TrainParams
 from app.training.registry import register_trained, slug
 from app.training.trainer import TrainResult
 
-YOLO11N = Path("E:/Dev/Yolo/models/yolo11n.pt")
+# The operator's model folder first, then the starter copy `scripts/fetch_starter_weights.ps1` pins by
+# SHA-256 (what CI fetches). Tests that load it skip when neither exists, like the GPU tests do.
+_CANDIDATES = [
+    Path("E:/Dev/Yolo/models/yolo11n.pt"),
+    Path(__file__).resolve().parents[1] / "starter_weights" / "yolo11n.pt",
+]
+YOLO11N = next((p for p in _CANDIDATES if p.is_file()), _CANDIDATES[-1])
 BASE = "/api/v1/projects"
 
 
@@ -33,6 +39,8 @@ def fake_weights(tmp_path, monkeypatch) -> Path:
 
 @pytest.fixture
 def imported(client, project_id):
+    if not YOLO11N.is_file():
+        pytest.skip(f"{YOLO11N} not present (run scripts/fetch_starter_weights.ps1)")
     body = {"name": "yolo11n coco", "weights_path": str(YOLO11N), "class_aliases": {"truck": "dump_truck"}}
     r = client.post(f"{models_url(project_id)}/import", json=body)
     assert r.status_code == 201, r.text

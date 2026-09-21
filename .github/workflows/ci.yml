@@ -34,6 +34,11 @@ jobs:
       - run: .venv/Scripts/ruff check . && .venv/Scripts/ruff format --check .
         working-directory: backend
         shell: bash
+      # Pinned-SHA starter weights: the registry tests import yolo11n.pt (they skip without it).
+      - uses: actions/cache@v4
+        with: { path: backend/starter_weights, key: "starter-weights-${{ hashFiles('backend/scripts/fetch_starter_weights.ps1') }}" }
+      - run: .\scripts\fetch_starter_weights.ps1
+        working-directory: backend
       - run: .venv/Scripts/python -m pytest -q
         working-directory: backend
         shell: bash
@@ -73,6 +78,11 @@ jobs:
       - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
         working-directory: backend
         shell: bash
+      # build.ps1 bundles all three starter weights and refuses to run without them.
+      - uses: actions/cache@v4
+        with: { path: backend/starter_weights, key: "starter-weights-${{ hashFiles('backend/scripts/fetch_starter_weights.ps1') }}" }
+      - run: .\scripts\fetch_starter_weights.ps1
+        working-directory: backend
       - run: .\scripts\build.ps1
         working-directory: backend
       - run: |
