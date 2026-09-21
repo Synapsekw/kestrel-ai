@@ -74,7 +74,10 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **the task-worktree workflow, proven end to end** — `start-task.ps1` →
+**Shipped last:** nothing shipped during the UI design-exploration block. Three standalone visual
+directions are ready for operator selection; no app code changed. See [[2026-09-21-1706-ui-design-directions]].
+
+Previously shipped: **the task-worktree workflow, proven end to end** — `start-task.ps1` →
 `finish-task.ps1` ran the full gate, merged, pushed `0ce41f5..7288966`, and tore the worktree down
 by the junction-safe path with `backend/.venv` verified intact afterwards. Spec §7.5 met; the
 repo-and-dev-memory plan is complete. Three earlier attempts each exposed a defect that static
@@ -93,10 +96,11 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing is mid-build, and nothing is paused. `origin/main` and local `main` are in
-sync at `7288966`.
+**In flight:** UI design exploration, awaiting the operator's choice of Fieldwork, Contour, Studio,
+or a combination. The interactive study lives outside the repository; implementation has not started.
 
-**Next:** plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
+**Next:** collect the UI direction choice before proposing the redesign specification and implementation.
+The existing backlog remains: plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
 task guards, rotated inference — spec §5 of
 `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
 it, decide whether to bound the pytest step in `finish-task.ps1`, given the 16h57m run recorded in
