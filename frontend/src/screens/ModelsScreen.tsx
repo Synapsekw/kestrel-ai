@@ -60,6 +60,7 @@ export function ModelsScreen() {
       )}
       {!registry.unavailable && (
         <StarterModels
+          key={projectId}
           projectId={projectId}
           existingNames={registry.models.map((m) => m.name)}
           onImported={onImported}

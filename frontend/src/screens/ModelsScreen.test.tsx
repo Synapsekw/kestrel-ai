@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+import { useJobsStore } from "@/store/jobs";
 import { describe, it, expect } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import {
@@ -129,4 +131,62 @@ describe("ModelsScreen", () => {
     expect(screen.getByRole("heading", { name: "Models" })).toBeInTheDocument();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
+});
+
+it("keeps acquisition state with its originating project when navigating between Models screens", async () => {
+  const otherProject = "other-project";
+  const completed = {
+    ...exampleJob,
+    project_id: PROJECT_ID,
+    state: "succeeded",
+    result: { model_id: exampleModel.id },
+  };
+  const { api, requests } = fakeClient([
+    { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
+    { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+    { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
+    {
+      method: "GET",
+      path: /\/starter-models$/,
+      body: {
+        items: [{ key: "yolo11n", name: "YOLO11 nano", description: "Fast.", size_mb: 5, available: true }],
+        next_cursor: null,
+      },
+    },
+    { method: "POST", path: /\/acquire-starter$/, status: 202, body: { job: completed } },
+    {
+      method: "GET",
+      path: /\/models\/[^/]+$/,
+      body: () => {
+        throw new Error("Temporary connection failure");
+      },
+    },
+  ]);
+  renderWithProviders(
+    <>
+      <Link to={`/p/${otherProject}/models`}>Other project</Link>
+      <ModelsScreen />
+    </>,
+    {
+      api,
+      route: `/p/${PROJECT_ID}/models`,
+      path: "/p/:projectId/models",
+    },
+  );
+  fireEvent.click(await screen.findByRole("button", { name: "Add YOLO11 nano" }));
+  await screen.findByText(/Temporary connection failure/);
+  fireEvent.click(screen.getByRole("link", { name: "Other project" }));
+  expect(await screen.findByRole("button", { name: "Add YOLO11 nano" })).toBeEnabled();
+  expect(screen.queryByText(/Temporary connection failure/)).not.toBeInTheDocument();
+  expect(useJobsStore.getState().jobs[completed.id]).toMatchObject({
+    project_id: PROJECT_ID,
+    state: "succeeded",
+  });
+  expect(
+    requests.filter(
+      (r) =>
+        r.url.includes(otherProject) &&
+        (r.url.includes("/jobs/") || r.url.includes(`/models/${exampleModel.id}`)),
+    ),
+  ).toEqual([]);
 });

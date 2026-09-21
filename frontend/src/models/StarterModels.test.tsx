@@ -124,3 +124,32 @@ it("keeps the original acquisition during a transient polling failure and reconn
   expect(requests.filter((r) => r.method === "POST")).toHaveLength(1);
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
+
+it("retries loading the already registered model without starting another acquisition", async () => {
+  let reads = 0;
+  const onImported = vi.fn();
+  const { api, requests } = fakeClient([
+    { method: "GET", path: /\/starter-models$/, body: { items: starters, next_cursor: null } },
+    { method: "POST", path: /\/models\/acquire-starter$/, status: 202, body: { job: done } },
+    {
+      method: "GET",
+      path: /\/models\/[^/]+$/,
+      body: () => {
+        if (++reads === 1) throw new Error("Model details temporarily unavailable");
+        return exampleModel;
+      },
+    },
+  ]);
+  renderWithProviders(<StarterModels projectId={PROJECT_ID} existingNames={[]} onImported={onImported} />, {
+    api,
+  });
+  fireEvent.click(await screen.findByRole("button", { name: "Add YOLO11 nano" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Model details temporarily unavailable");
+  const adding = screen.getByRole("button", { name: /Adding/ });
+  expect(adding).toBeDisabled();
+  fireEvent.click(adding);
+  await waitFor(() => expect(onImported).toHaveBeenCalledWith(exampleModel), { timeout: 1800 });
+  expect(onImported).toHaveBeenCalledTimes(1);
+  expect(requests.filter((r) => r.method === "POST")).toHaveLength(1);
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});

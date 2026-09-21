@@ -73,6 +73,7 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
           if (typeof modelId !== "string") throw new Error("The import did not return a model.");
           const model = await fetchModel(api, projectId, modelId);
           if (!cancelled) {
+            setError(null);
             imported.current(model);
             setBusy(false);
             setJob(null);
@@ -86,9 +87,8 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(messageOf(e, "Could not add the model."));
-          setBusy(false);
-          setJob(null);
+          setError(`${messageOf(e, "Could not load the registered model.")} Reconnecting to this model...`);
+          timer = setTimeout(() => void check(current), 1000);
         }
       }
     }
@@ -106,7 +106,9 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
     setBusy(true);
     setError(null);
     try {
-      setJob(await acquireStarterModel(api, projectId, selected.key));
+      const queued = await acquireStarterModel(api, projectId, selected.key);
+      useJobsStore.getState().upsert(queued);
+      setJob(queued);
     } catch (e) {
       setError(messageOf(e, "Could not start the model download."));
       setBusy(false);
