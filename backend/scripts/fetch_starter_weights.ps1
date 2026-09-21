@@ -69,7 +69,8 @@ foreach ($key in $keys) {
   }
 
   # A local copy of another release is not an error: fall through to the download.
-  $source = Join-Path $sourceDir "$key.pt"
+  # String concatenation, not Join-Path: PowerShell 7's Join-Path throws on a machine with no E: drive.
+  $source = "$sourceDir\$key.pt"
   if (Test-Path $source) {
     Copy-Item $source $target -Force
     if (Test-Checksum $key $target) {
