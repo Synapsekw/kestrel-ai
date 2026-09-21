@@ -316,6 +316,16 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
+- 2026-09-21: Approved A / Kestrel bird implemented in `89a63a2`: one SVG geometry master for
+  the shared sidebar/splash Brand and all 17 native PNG/ICO/ICNS assets. Deterministic generation
+  and integrity check added. Contract/Ruff, 620 backend tests, frontend lint/517 tests/build and
+  8 Rust tests passed. Fresh CUDA freeze/smoke passed (23.01s); native release/Inno package passed
+  (457s, 1,853.8 MiB). Installed with matching app/sidecar hashes, then passed 15 installed checks
+  and exact 16px/32px app-versus-installer icon checks. First Projects 3.053s, warm 2.459s.
+  Task/final/scoped reviews approved. Evidence, six UI screenshots, four extracted icons and
+  reproducible drivers: `docs/evidence/brand/2026-09-21-kestrel-a/`. Saved installer remains in
+  `dist/`; installed app reopened. No provider calls or backend behavior changes; full provider
+  acceptance and the pre-existing settings layout issue remain separately owed.
 - 2026-09-21: Contour rebuilt and installed from `54b5e29` in `task/contour-desktop`, with unchanged
   application trees. Fresh CUDA backend smoke passed (31.84s), 8 Rust tests passed, release build
   and Inno installer passed (1,853.8 MiB), installation exited 0 with both executable hashes matching.

@@ -38,21 +38,21 @@ test/training workload runs at a time. Critical path: approved master → icons 
 It is a complete square 256×256 SVG with flat charcoal #1d2322 paths and a transparent background.
 The controller supplies this while implementation proceeds; do not edit it or invent a second bird.
 
-- [ ] Read DESIGN.md and the existing Brand/icon/installer configuration. Run the existing Sidebar
+- [x] Read DESIGN.md and the existing Brand/icon/installer configuration. Run the existing Sidebar
   test as the baseline. Keep the accessible Kestrel AI text exactly once, including compact mode.
-- [ ] Implement a reusable developer command `pnpm -C frontend icons:generate`: consume the SVG
+- [x] Implement a reusable developer command `pnpm -C frontend icons:generate`: consume the SVG
   master, place it with generous padding on an amber #e5af64 rounded square and use the installed
   Tauri CLI to generate PNG/ICO/ICNS assets. Preserve and regenerate every currently tracked native
   icon filename. The small 16/32px native sizes must remain recognizable.
-- [ ] Provide meaningful automated validation of native asset freshness/coverage or real image
+- [x] Provide meaningful automated validation of native asset freshness/coverage or real image
   loading; first demonstrate failure against old/missing assets, then success after generation.
   Do not add tautological assertions over hardcoded SVG paths or trivial snapshot tests.
-- [ ] Use the master in Brand as a decorative local image. The tile remains amber; size the bird
+- [x] Use the master in Brand as a decorative local image. The tile remains amber; size the bird
   generously inside the existing 28px/36px tiles (roughly 22px/28px image). Preserve name visibility,
   screen-reader name, and existing props. No animation or unrelated UI changes.
-- [ ] Reuse existing compiler/installer icon references when they already point at regenerated
+- [x] Reuse existing compiler/installer icon references when they already point at regenerated
   `icon.ico`; document setup, uninstaller and shortcut coverage. Add no unneeded platform assets.
-- [ ] Run focused verification and frontend lint. Stage only owned paths, commit and self-review.
+- [x] Run focused verification and frontend lint. Stage only owned paths, commit and self-review.
   Report design/source integration concerns to the controller; no subagents or global gate runs.
 
 ### Task 2: Review, rebuild, install, and verify
@@ -60,11 +60,11 @@ The controller supplies this while implementation proceeds; do not edit it or in
 **Controller-owned:** source master, plan/ledger/evidence, backend freeze, full required gates,
 release/installer build, installed-app verification, integration and dev-memory wrapup.
 
-- [ ] Inspect icon proof at small and large sizes and the actual Brand in compact/expanded/splash use.
-- [ ] Independent task review and final review. Run contract check, Ruff, pytest, frontend lint,
+- [x] Inspect icon proof at small and large sizes and actual compact/expanded branding; confirm Splash shares Brand.
+- [x] Independent task review and final review. Run contract check, Ruff, pytest, frontend lint,
   tests/build and Rust tests with frozen sidecar present; record actual results.
-- [ ] Build and smoke the backend, compile native release + installer, retain artifact outside worktree.
-- [ ] Check running app for active work before closing for the authorized update. Install silently;
+- [x] Build and smoke the backend, compile native release + installer, retain artifact outside worktree.
+- [x] Check running app for active work before closing for the authorized update. Install silently;
   prove installed hashes equal the new build and extracted native app/installer icons show the bird.
-- [ ] Verify actual installed WebView branding and startup/healthy GPU, along with editor smoke.
+- [x] Verify actual installed WebView branding and startup/healthy GPU, along with editor smoke.
   Reopen the installed app, record evidence and operator walkthrough, merge/push and clean worktree.
