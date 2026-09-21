@@ -26,6 +26,7 @@ describe("EditorToolbar shortcuts help", () => {
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).toBeNull();
     fireEvent.click(button);
     const help = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
+    expect(help).toHaveFocus();
     expect(button).toHaveAttribute("aria-expanded", "true");
     expect(within(help).getByText("Ctrl+D")).toBeInTheDocument();
     expect(within(help).getByText("duplicate selected box")).toBeInTheDocument();

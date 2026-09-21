@@ -39,6 +39,12 @@ describe("HomeScreen", () => {
     ]);
     renderWithProviders(<HomeScreen />, { api, route: `/p/${PROJECT_ID}`, path: "/p/:projectId" });
     const previews = await screen.findAllByRole("img");
+    const heroUrl = new URL(previews[0].getAttribute("src")!);
+    expect(heroUrl.pathname).toMatch(/\/file$/);
+    expect(heroUrl.searchParams.get("max_side")).toBe("1024");
+    expect(
+      previews.slice(1).every((image) => new URL(image.getAttribute("src")!).pathname.endsWith("/thumbnail")),
+    ).toBe(true);
     fireEvent.error(previews[0]);
     expect(screen.getByTestId("home-next-step")).toHaveTextContent("Label");
     const imageRequests = requests.filter((r) => r.url.includes("/images?"));

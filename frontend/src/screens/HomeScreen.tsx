@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { thumbnailUrl, type Job, type Image } from "@contract/client";
+import { imageFileUrl, thumbnailUrl, type Job, type Image } from "@contract/client";
 import { useBackend } from "@/api/client";
 import { useProject } from "@/api/project";
 import { nextStep } from "@/app/nextStep";
@@ -105,7 +105,7 @@ export function HomeScreen() {
           <Preview
             key={firstPreview?.id ?? "empty"}
             image={firstPreview}
-            src={firstPreview ? thumbnailUrl(baseUrl, token, projectId, firstPreview.id) : undefined}
+            src={firstPreview ? imageFileUrl(baseUrl, token, projectId, firstPreview.id, 1024) : undefined}
             hero
           />
           <div className="flex flex-col items-start justify-center gap-4 p-6 lg:p-8">

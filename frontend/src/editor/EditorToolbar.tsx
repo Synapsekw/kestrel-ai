@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { Button, IconButton, Kbd, Pill } from "@/ui";
 import { HOTKEY_HELP } from "./hotkeys";
 
@@ -28,6 +28,9 @@ export function ToolbarDivider() {
 export function EditorToolbar(p: ToolbarProps) {
   const saving = p.pending > 0;
   const [keysOpen, setKeysOpen] = useState(false);
+  const focusHelp = useCallback((node: HTMLDivElement | null) => {
+    node?.focus({ preventScroll: true });
+  }, []);
   return (
     <div className="flex shrink-0 flex-col border-b border-line bg-ground text-[13px] text-ink">
       <div className="flex min-h-14 items-center gap-1 border-b border-line px-3 py-2">
@@ -57,7 +60,7 @@ export function EditorToolbar(p: ToolbarProps) {
           </span>
         )}
       </div>
-      <div className="flex min-h-11 flex-wrap items-center gap-1 px-3 py-1.5">
+      <div className="relative flex min-h-11 flex-wrap items-center gap-1 px-3 py-1.5">
         <IconButton icon="fit" label="Fit" title="Fit (F)" size="sm" onClick={p.onFit} />
         <IconButton
           icon="one-to-one"
@@ -88,7 +91,7 @@ export function EditorToolbar(p: ToolbarProps) {
           disabled={!p.canRedo || saving}
         />
         {p.extra}
-        <div className="relative">
+        <div>
           <IconButton
             icon="keyboard"
             label="Keyboard shortcuts"
@@ -99,9 +102,11 @@ export function EditorToolbar(p: ToolbarProps) {
           {keysOpen && (
             <div
               role="dialog"
+              tabIndex={-1}
+              ref={focusHelp}
               aria-label="Keyboard shortcuts"
               onKeyDown={(e) => e.key === "Escape" && setKeysOpen(false)}
-              className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-line bg-panel p-3 text-[13px] shadow-float"
+              className="absolute left-3 top-full z-20 mt-1.5 max-h-[calc(100vh-180px)] w-80 max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-line bg-panel p-3 text-[13px] shadow-float"
             >
               <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
                 {HOTKEY_HELP.map((h) => (
@@ -113,7 +118,7 @@ export function EditorToolbar(p: ToolbarProps) {
                   </div>
                 ))}
               </dl>
-              <Button size="sm" autoFocus className="mt-3" onClick={() => setKeysOpen(false)}>
+              <Button size="sm" className="mt-3" onClick={() => setKeysOpen(false)}>
                 Close
               </Button>
             </div>

@@ -69,7 +69,8 @@ from view/history controls. At small widths the inspector stacks below a usable 
 label, selected-region, pan, rotation and shortcut semantics are unchanged.
 
 Home makes the real next action its focal point, beside a recent image when available. One metadata
-request uses limit=3 with newest imports first; it never follows a cursor. Thumbnail or metadata
+request uses limit=3 with newest imports first; it never follows a cursor. The hero uses one bounded
+1024px display image, and the other two previews use thumbnails. Image or metadata
 failure leaves a quiet fallback and a working next action. Totals and running jobs remain real.
 Images retains virtualized/paginated reads and all filters, selection and bulk actions; each
 thumbnail has a separate filename caption and deliberate selection/focus treatment.
