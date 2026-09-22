@@ -328,3 +328,44 @@ def test_card_counts_show_unreviewed_alongside_the_class_count(tmp_path):
         thumbnail_fn=lambda i: None,
     )
     assert "excavator 2 (1 unreviewed)" in text
+
+
+def _near(px, rgb, tol=60):
+    return all(abs(a - b) <= tol for a, b in zip(px, rgb, strict=True))
+
+
+def _label_strip(state: str, box_y: int, tmp_path):
+    """The thumbnail of one red box on flat grey, and the strip where its label is drawn."""
+    import io
+
+    path = tmp_path / f"flat-{state}-{box_y}.jpg"
+    PILImage.new("RGB", (400, 300), (128, 128, 128)).save(path, "JPEG", quality=95)
+    box = _box(x=100, y=box_y, w=120, h=80, review_state=state)
+    drawn = PILImage.open(io.BytesIO(html_out.draw_thumbnail(path, [box], CLASSES, 400, 300))).convert("RGB")
+    return drawn
+
+
+def test_thumbnail_labels_are_a_readable_filled_tag(tmp_path):
+    """G3: the class name sat as tiny coloured strokes on sand imagery. It is now a filled tag in the
+    class colour, tall enough to read at the report's 1:1 thumbnail size."""
+    for state in ("accepted", "unreviewed"):
+        drawn = _label_strip(state, box_y=100, tmp_path=tmp_path)
+        # The band just above the box's top edge, under the start of the label.
+        band = [drawn.getpixel((x, y)) for x in range(102, 150) for y in range(86, 98)]
+        red = sum(_near(p, (255, 0, 0)) for p in band)
+        assert red / len(band) > 0.5, (state, red / len(band))
+        # At least 14 px tall: the row 14 px above the top edge is still inside the tag.
+        assert _near(drawn.getpixel((104, 100 - 14)), (255, 0, 0)), state
+
+
+def test_a_label_for_a_box_at_the_top_edge_stays_inside_the_thumbnail(tmp_path):
+    drawn = _label_strip("accepted", box_y=0, tmp_path=tmp_path)
+    band = [drawn.getpixel((x, y)) for x in range(104, 150) for y in range(4, 14)]
+    assert sum(_near(p, (255, 0, 0)) for p in band) / len(band) > 0.5
+
+
+def test_label_ink_is_whichever_of_black_or_white_contrasts_more():
+    assert html_out._label_ink((249, 115, 22)) == (0, 0, 0)  # orange: white would be ~2.8:1
+    assert html_out._label_ink((234, 179, 8)) == (0, 0, 0)  # yellow
+    assert html_out._label_ink((30, 58, 138)) == (255, 255, 255)  # dark blue
+    assert html_out._label_ink((127, 29, 29)) == (255, 255, 255)  # dark red

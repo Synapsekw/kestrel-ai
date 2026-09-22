@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 
 from PIL import Image as PILImage
-from PIL import ImageDraw
+from PIL import ImageDraw, ImageFont
 
 from app.exports.rows import ExportBox, ExportImage, class_counts
 from app.geometry import corners_of
@@ -68,6 +68,51 @@ def _dashed_polygon(
             b = (start[0] + ux * (travelled + seg), start[1] + uy * (travelled + seg))
             draw.line([a, b], fill=colour, width=width)
             travelled += dash + gap
+
+
+LABEL_FONT_PX = 14
+_label_font: ImageFont.ImageFont | ImageFont.FreeTypeFont | None = None
+
+
+def _font() -> ImageFont.ImageFont | ImageFont.FreeTypeFont:
+    # Pillow's bundled font, so the frozen sidecar needs no font file; without FreeType it falls
+    # back to the small bitmap font rather than failing the export.
+    global _label_font
+    if _label_font is None:
+        _label_font = ImageFont.load_default(size=LABEL_FONT_PX)
+    return _label_font
+
+
+def _draw_label(
+    draw: ImageDraw.ImageDraw,
+    anchor: tuple[float, float],
+    text: str,
+    colour: tuple[int, int, int],
+    image_width: int,
+) -> None:
+    """A filled tag in the class colour above the box's top corner (G3): coloured strokes alone
+    were unreadable on sand-coloured imagery. A box at the top edge gets its tag just inside."""
+    font = _font()
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    pad = 3
+    tag_w, tag_h = right - left + 2 * pad, bottom - top + 2 * pad
+    x = min(max(0, anchor[0]), max(0, image_width - tag_w))
+    y = anchor[1] - tag_h if anchor[1] >= tag_h else anchor[1] + 2
+    draw.rectangle([x, y, x + tag_w, y + tag_h], fill=colour)
+    draw.text((x + pad - left, y + pad - top), text, fill=_label_ink(colour), font=font)
+
+
+def _label_ink(colour: tuple[int, int, int]) -> tuple[int, int, int]:
+    """Black or white, whichever has the higher WCAG contrast against the tag's class colour."""
+
+    def linear(c: int) -> float:
+        v = c / 255
+        return v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4
+
+    lum = 0.2126 * linear(colour[0]) + 0.7152 * linear(colour[1]) + 0.0722 * linear(colour[2])
+    on_black = (lum + 0.05) / 0.05
+    on_white = 1.05 / (lum + 0.05)
+    return (0, 0, 0) if on_black >= on_white else (255, 255, 255)
 
 
 def draw_thumbnail(
@@ -117,8 +162,7 @@ def draw_thumbnail(
             label = f"{label} ?"
         else:
             draw.polygon(pts, outline=colour, width=2)
-        anchor = min(pts, key=lambda p: p[1])
-        draw.text((anchor[0] + 2, max(0, anchor[1] - 11)), label, fill=colour)
+        _draw_label(draw, min(pts, key=lambda p: p[1]), label, colour, im.width)
     buf = io.BytesIO()
     im.save(buf, "JPEG", quality=85)
     return buf.getvalue()
