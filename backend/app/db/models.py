@@ -1,6 +1,7 @@
 """SQLite tables for one project (spec section 4). UUID string primary keys, JSON for lists and dicts."""
 
 from datetime import datetime
+from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy import JSON, Boolean, Float, ForeignKey, Index, Integer, String
@@ -153,3 +154,48 @@ class QueryRun(Base):
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     promoted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class AgentTurn(Base):
+    __tablename__ = "agent_turn"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    state: Mapped[str] = mapped_column(String)  # running | awaiting_approval | succeeded | failed | cancelled
+    provider: Mapped[str] = mapped_column(String)
+    model_name: Mapped[str] = mapped_column(String)
+    error: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # sanitized: never an SDK string or a key
+    tool_calls: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+
+
+class AgentItem(Base):
+    __tablename__ = "agent_item"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    seq: Mapped[int] = mapped_column(Integer)  # monotonic per project, unique
+    turn_id: Mapped[str] = mapped_column(String(36), ForeignKey("agent_turn.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # user | assistant | tool
+    text: Mapped[str] = mapped_column(String, default="")  # message text; empty for tool items
+    tool_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    tool_call_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    tool_input: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    tool_status: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # running|ok|error|denied|awaiting_approval
+    tool_summary: Mapped[str | None] = mapped_column(String, nullable=True)  # short human-readable outcome
+    tool_result: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )  # internal: text sent back to the model
+    result_image_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    job_ids: Mapped[list] = mapped_column(JSON, default=list)
+    approval: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {title, detail, estimated_cost}
+    navigate: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {screen, image_id}
+    provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    # internal: raw provider blocks for exact replay (Anthropic thinking blocks, OpenAI reasoning items)
+    provider_payload: Mapped[Any] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (
+        Index("ix_agent_item_seq", "seq", unique=True),
+        Index("ix_agent_item_turn", "turn_id"),
+    )
