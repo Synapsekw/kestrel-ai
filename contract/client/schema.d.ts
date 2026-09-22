@@ -2288,6 +2288,12 @@ export interface components {
             /** Format: date-time */
             created_at: string;
         };
+        /**
+         * @example {
+         *       "items": [],
+         *       "turn": null
+         *     }
+         */
         AgentConversation: {
             items: components["schemas"]["AgentItem"][];
             turn: components["schemas"]["AgentTurn"] | null;

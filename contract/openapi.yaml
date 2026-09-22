@@ -2297,6 +2297,7 @@ components:
           anyOf:
             - $ref: "#/components/schemas/AgentTurn"
             - type: "null"
+      example: { items: [], turn: null }
 
     ProviderName:
       type: string
