@@ -259,7 +259,10 @@ SELECTION_DOC = (
 )
 
 
-def _selection_field(optional: bool = False):
+def _selection_field(optional: bool = False, required: bool = False):
+    """`required` for tools that change images: a missing selection must never mean "some images"."""
+    if required:
+        return Field(description=SELECTION_DOC + " Required: say exactly which images.")
     if optional:
         return Field(None, description=SELECTION_DOC + " Omit for the tool's default.")
     return Field(default_factory=ImageSelector, description=SELECTION_DOC)
@@ -634,15 +637,23 @@ class GetJob(Tool):
         return _ok(body, f"Read {j['type']} job ({j['state']})")
 
 
-class LabelArgs(_Args):
+LABELER_DOC = (
+    "local_model with a model_id from list_models (free, runs on this PC), or "
+    "cloud_provider with provider openai|anthropic and a plain-words query (costs money)."
+)
+CONF_DOC = "Minimum confidence for a suggestion (0-1)."
+
+
+class EstimateArgs(_Args):
     selection: ImageSelector = _selection_field()
-    labeler: Labeler = Field(
-        description=(
-            "local_model with a model_id from list_models (free, runs on this PC), or "
-            "cloud_provider with provider openai|anthropic and a plain-words query (costs money)."
-        )
-    )
-    conf: float = Field(0.25, ge=0, le=1, description="Minimum confidence for a suggestion (0-1).")
+    labeler: Labeler = Field(description=LABELER_DOC)
+    conf: float = Field(0.25, ge=0, le=1, description=CONF_DOC)
+
+
+class LabelArgs(_Args):
+    selection: ImageSelector = _selection_field(required=True)
+    labeler: Labeler = Field(description=LABELER_DOC)
+    conf: float = Field(0.25, ge=0, le=1, description=CONF_DOC)
 
 
 def _query_body(labeler: dict, image_ids: list[str], conf: float) -> dict:
@@ -659,7 +670,7 @@ class EstimateLabeling(Tool):
     name = "estimate_labeling"
     label = "Estimate labeling cost"
     risk = "read"
-    Args = LabelArgs
+    Args = EstimateArgs
     description = (
         "Estimate a labeling run before starting it: images, tiles (large images are cut into "
         "tiles), requests, cost per request and estimated USD cost (0 for a local model). "
@@ -862,7 +873,7 @@ class ReviewBoxes(Tool):
 
 
 class MarkEmptyArgs(_Args):
-    selection: ImageSelector = _selection_field()
+    selection: ImageSelector = _selection_field(required=True)
     empty: bool = Field(
         True, description="true marks the images as containing no machinery; false undoes it."
     )
@@ -1275,7 +1286,7 @@ class TrainModel(Tool):
 
 
 class DeleteImagesArgs(_Args):
-    selection: ImageSelector = _selection_field()
+    selection: ImageSelector = _selection_field(required=True)
 
 
 class DeleteImages(Tool):

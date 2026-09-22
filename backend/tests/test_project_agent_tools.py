@@ -426,7 +426,10 @@ def test_label_images_with_a_local_model_starts_a_job(
 
 
 def test_label_images_with_an_unknown_model_is_an_error(tool, image_ids):
-    out = tool("label_images", {"labeler": {"kind": "local_model", "model_id": "ghost"}})
+    out = tool(
+        "label_images",
+        {"selection": {"limit": 2}, "labeler": {"kind": "local_model", "model_id": "ghost"}},
+    )
     assert out.is_error and "not found" in out.result
 
 
@@ -467,7 +470,10 @@ def test_cloud_labeling_needs_approval_with_the_estimate(
 def test_cloud_labeling_without_a_key_is_refused_before_approval(tool, image_ids):
     out = tool(
         "label_images",
-        {"labeler": {"kind": "cloud_provider", "provider": "openai", "query": "excavators"}},
+        {
+            "selection": {"limit": 2},
+            "labeler": {"kind": "cloud_provider", "provider": "openai", "query": "excavators"},
+        },
     )
     assert isinstance(out, ToolOutcome) and out.is_error
     assert "key" in out.result.lower()
@@ -604,3 +610,36 @@ def test_dataset_training_and_deletion_flow(
 )
 def test_a_folder_counts_as_typed_only_as_a_whole_absolute_path(folder, texts, allowed):
     assert tools._typed_by_user(folder, texts) is allowed
+
+
+@pytest.mark.parametrize(
+    ("name", "args"),
+    [
+        ("mark_images_empty", {"empty": True}),
+        ("label_images", {"labeler": {"kind": "local_model", "model_id": "MODEL"}}),
+        ("delete_images", {}),
+    ],
+)
+def test_mutating_tools_require_an_explicit_selection(
+    tool, client, project_id, image_ids, model_id, name, args
+):
+    if "labeler" in args:
+        args = {"labeler": {**args["labeler"], "model_id": model_id}}
+    out = tool(name, args)
+    assert isinstance(out, ToolOutcome) and out.is_error
+    assert "selection" in out.result
+    page = client.get(f"/api/v1/projects/{project_id}/images", params={"limit": 100}).json()
+    assert page["total"] == N_IMAGES
+    assert not any(i["marked_empty"] for i in page["items"])
+    assert client.get(f"/api/v1/projects/{project_id}/query-runs").json()["items"] == []
+
+
+def test_read_tools_keep_the_default_selection(tool, image_ids):
+    assert ok(tool("find_images", {}))["count"] == N_IMAGES
+    est = tool(
+        "estimate_labeling", {"labeler": {"kind": "cloud_provider", "provider": "anthropic", "query": "x"}}
+    )
+    assert ok(est)["images"] == N_IMAGES
+    schemas = {s.name: s.input_schema for s in tool_specs()}
+    for name in ("mark_images_empty", "label_images", "delete_images"):
+        assert "selection" in schemas[name]["required"], name
