@@ -36,6 +36,13 @@ export type JobType = Schemas["JobType"];
 export type JobLog = Schemas["JobLog"];
 export type ApiError = Schemas["Error"];
 export type AppEvent = Schemas["Event"];
+export type AgentTurn = Schemas["AgentTurn"];
+export type AgentTurnState = Schemas["AgentTurnState"];
+export type AgentItem = Schemas["AgentItem"];
+export type AgentToolStatus = Schemas["AgentToolStatus"];
+export type AgentApproval = Schemas["AgentApproval"];
+export type AgentNavigate = Schemas["AgentNavigate"];
+export type AgentConversation = Schemas["AgentConversation"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */

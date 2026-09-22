@@ -38,6 +38,7 @@ x-websocket:
     - `job.state`: `payload` is `{state, result, error}` for the job.
     - `images.changed`: `payload` is `{source_id, count}` after an import batch lands.
     - `boxes.changed`: `payload` is `{image_ids: [...]}` after proposals or reviews are written by a job.
+    - `agent.changed`: `payload` is `{turn_id, state}` whenever the project agent's turn or transcript changes.
   message: "#/components/schemas/Event"
 
 tags:
@@ -1105,6 +1106,86 @@ paths:
               schema: { $ref: "#/components/schemas/JobLog" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ----------------------------------------------------------------- project agent
+  /api/v1/projects/{projectId}/agent:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [agent]
+      operationId: getAgentConversation
+      summary: The project agent conversation (last 200 items, oldest first) and the latest turn.
+      responses:
+        "200":
+          description: conversation
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentConversation" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [agent]
+      operationId: clearAgentConversation
+      summary: Delete the project agent conversation. 409 `conflict` while a turn is running or awaiting approval.
+      responses:
+        "204": { description: cleared }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/agent/turns:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [agent]
+      operationId: startAgentTurn
+      summary: |
+        Send a message to the project agent. The turn runs in the background with the configured
+        provider and reports progress through `agent.changed` events. 409 `agent_busy` while another
+        turn in this project is running or awaiting approval; 409 `provider_key_missing` without a key.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentTurnCreate" }
+      responses:
+        "202":
+          description: turn started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTurn" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/agent/turns/{turnId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/turnId"
+    post:
+      tags: [agent]
+      operationId: cancelAgentTurn
+      summary: Stop the turn. Background jobs it already started keep running. A finished turn is returned unchanged.
+      responses:
+        "200":
+          description: turn
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTurn" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/agent/turns/{turnId}/approval:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/turnId"
+    post:
+      tags: [agent]
+      operationId: decideAgentApproval
+      summary: Approve or deny the action the turn is waiting on, then continue the turn. 409 `conflict` when the turn is not awaiting approval.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AgentApprovalDecision" }
+      responses:
+        "200":
+          description: turn, running again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AgentTurn" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1145,6 +1226,11 @@ components:
       schema: { type: string }
     modelId:
       name: modelId
+      in: path
+      required: true
+      schema: { type: string }
+    turnId:
+      name: turnId
       in: path
       required: true
       schema: { type: string }
@@ -2096,6 +2182,122 @@ components:
             - type: "null"
         model_name: { type: string }
 
+    AgentTurnState:
+      type: string
+      enum: [running, awaiting_approval, succeeded, failed, cancelled]
+    AgentToolStatus:
+      type: string
+      enum: [running, ok, error, denied, awaiting_approval]
+    AgentTurnCreate:
+      type: object
+      additionalProperties: false
+      required: [provider, message]
+      properties:
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        message: { type: string, minLength: 1, maxLength: 4000 }
+      example: { provider: anthropic, message: "Label the first 500 images with excavator and dump_truck" }
+    AgentApprovalDecision:
+      type: object
+      additionalProperties: false
+      required: [approve]
+      properties:
+        approve: { type: boolean }
+      example: { approve: true }
+    AgentApproval:
+      type: object
+      required: [title, detail, estimated_cost]
+      properties:
+        title: { type: string }
+        detail: { type: string }
+        estimated_cost: { type: [number, "null"], description: USD, for cloud labeling }
+      example: { title: "Label 500 images with Claude", detail: "500 images, 4000 requests to anthropic", estimated_cost: 80.0 }
+    AgentNavigate:
+      type: object
+      required: [screen, image_id]
+      properties:
+        screen:
+          type: string
+          enum: [home, images, label, review, datasets, models, train, detect, export, settings, editor]
+        image_id: { type: [string, "null"] }
+    AgentTurn:
+      type: object
+      required: [id, state, provider, model_name, error, tool_calls, created_at, finished_at]
+      properties:
+        id: { type: string }
+        state: { $ref: "#/components/schemas/AgentTurnState" }
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        model_name: { type: string }
+        error: { type: [string, "null"] }
+        tool_calls: { type: integer, description: tool calls made so far in this turn }
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+      example:
+        id: "t0000000-9999-4000-8000-000000000001"
+        state: running
+        provider: anthropic
+        model_name: claude-opus-5
+        error: null
+        tool_calls: 2
+        created_at: "2026-09-22T10:00:00Z"
+        finished_at: null
+    AgentItem:
+      type: object
+      required: [id, seq, turn_id, kind, text, tool_name, tool_input, tool_status, tool_summary, job_ids, approval, navigate, created_at]
+      properties:
+        id: { type: string }
+        seq: { type: integer }
+        turn_id: { type: string }
+        kind:
+          type: string
+          enum: [user, assistant, tool]
+        text: { type: string, description: message text; empty for tool items }
+        tool_name: { type: [string, "null"] }
+        tool_input:
+          type: [object, "null"]
+          additionalProperties: true
+        tool_status:
+          anyOf:
+            - $ref: "#/components/schemas/AgentToolStatus"
+            - type: "null"
+        tool_summary: { type: [string, "null"], description: short human-readable outcome }
+        job_ids:
+          type: array
+          items: { type: string }
+        approval:
+          anyOf:
+            - $ref: "#/components/schemas/AgentApproval"
+            - type: "null"
+        navigate:
+          anyOf:
+            - $ref: "#/components/schemas/AgentNavigate"
+            - type: "null"
+        created_at: { type: string, format: date-time }
+      example:
+        id: "i0000000-9999-4000-8000-000000000002"
+        seq: 2
+        turn_id: "t0000000-9999-4000-8000-000000000001"
+        kind: tool
+        text: ""
+        tool_name: label_images
+        tool_input: { selection: { sort: path, order: asc, offset: 0, limit: 500 } }
+        tool_status: ok
+        tool_summary: "Started labeling 500 images"
+        job_ids: ["j0000000-4444-4000-8000-000000000003"]
+        approval: null
+        navigate: null
+        created_at: "2026-09-22T10:00:05Z"
+    AgentConversation:
+      type: object
+      required: [items, turn]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AgentItem" }
+        turn:
+          anyOf:
+            - $ref: "#/components/schemas/AgentTurn"
+            - type: "null"
+
     ProviderName:
       type: string
       enum: [openai, anthropic]
@@ -2374,7 +2576,7 @@ components:
       properties:
         type:
           type: string
-          enum: [job.progress, job.state, images.changed, boxes.changed]
+          enum: [job.progress, job.state, images.changed, boxes.changed, agent.changed]
         project_id: { type: string }
         job_id: { type: [string, "null"] }
         progress: { type: [number, "null"] }

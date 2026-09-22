@@ -948,6 +948,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/agent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** The project agent conversation (last 200 items, oldest first) and the latest turn. */
+        get: operations["getAgentConversation"];
+        put?: never;
+        post?: never;
+        /** Delete the project agent conversation. 409 `conflict` while a turn is running or awaiting approval. */
+        delete: operations["clearAgentConversation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/agent/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a message to the project agent. The turn runs in the background with the configured
+         *     provider and reports progress through `agent.changed` events. 409 `agent_busy` while another
+         *     turn in this project is running or awaiting approval; 409 `provider_key_missing` without a key.
+         */
+        post: operations["startAgentTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/agent/turns/{turnId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                turnId: components["parameters"]["turnId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop the turn. Background jobs it already started keep running. A finished turn is returned unchanged. */
+        post: operations["cancelAgentTurn"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/agent/turns/{turnId}/approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                turnId: components["parameters"]["turnId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve or deny the action the turn is waiting on, then continue the turn. 409 `conflict` when the turn is not awaiting approval. */
+        post: operations["decideAgentApproval"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2094,6 +2177,122 @@ export interface components {
             model_name: string;
         };
         /** @enum {string} */
+        AgentTurnState: "running" | "awaiting_approval" | "succeeded" | "failed" | "cancelled";
+        /** @enum {string} */
+        AgentToolStatus: "running" | "ok" | "error" | "denied" | "awaiting_approval";
+        /**
+         * @example {
+         *       "provider": "anthropic",
+         *       "message": "Label the first 500 images with excavator and dump_truck"
+         *     }
+         */
+        AgentTurnCreate: {
+            provider: components["schemas"]["ProviderName"];
+            message: string;
+        };
+        /**
+         * @example {
+         *       "approve": true
+         *     }
+         */
+        AgentApprovalDecision: {
+            approve: boolean;
+        };
+        /**
+         * @example {
+         *       "title": "Label 500 images with Claude",
+         *       "detail": "500 images, 4000 requests to anthropic",
+         *       "estimated_cost": 80
+         *     }
+         */
+        AgentApproval: {
+            title: string;
+            detail: string;
+            /** @description USD */
+            estimated_cost: number | null;
+        };
+        AgentNavigate: {
+            /** @enum {string} */
+            screen: "home" | "images" | "label" | "review" | "datasets" | "models" | "train" | "detect" | "export" | "settings" | "editor";
+            image_id: string | null;
+        };
+        /**
+         * @example {
+         *       "id": "t0000000-9999-4000-8000-000000000001",
+         *       "state": "running",
+         *       "provider": "anthropic",
+         *       "model_name": "claude-opus-5",
+         *       "error": null,
+         *       "tool_calls": 2,
+         *       "created_at": "2026-09-22T10:00:00Z",
+         *       "finished_at": null
+         *     }
+         */
+        AgentTurn: {
+            id: string;
+            state: components["schemas"]["AgentTurnState"];
+            provider: components["schemas"]["ProviderName"];
+            model_name: string;
+            error: string | null;
+            /** @description tool calls made so far in this turn */
+            tool_calls: number;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
+        };
+        /**
+         * @example {
+         *       "id": "i0000000-9999-4000-8000-000000000002",
+         *       "seq": 2,
+         *       "turn_id": "t0000000-9999-4000-8000-000000000001",
+         *       "kind": "tool",
+         *       "text": "",
+         *       "tool_name": "label_images",
+         *       "tool_input": {
+         *         "selection": {
+         *           "sort": "path",
+         *           "order": "asc",
+         *           "offset": 0,
+         *           "limit": 500
+         *         }
+         *       },
+         *       "tool_status": "ok",
+         *       "tool_summary": "Started labeling 500 images",
+         *       "job_ids": [
+         *         "j0000000-4444-4000-8000-000000000003"
+         *       ],
+         *       "approval": null,
+         *       "navigate": null,
+         *       "created_at": "2026-09-22T10:00:05Z"
+         *     }
+         */
+        AgentItem: {
+            id: string;
+            seq: number;
+            turn_id: string;
+            /** @enum {string} */
+            kind: "user" | "assistant" | "tool";
+            /** @description message text; empty for tool items */
+            text: string;
+            tool_name: string | null;
+            tool_input: {
+                [key: string]: unknown;
+            } | null;
+            tool_status: components["schemas"]["AgentToolStatus"] | null;
+            /** @description short human-readable outcome */
+            tool_summary: string | null;
+            job_ids: string[];
+            approval: components["schemas"]["AgentApproval"] | null;
+            navigate: components["schemas"]["AgentNavigate"] | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        AgentConversation: {
+            items: components["schemas"]["AgentItem"][];
+            turn: components["schemas"]["AgentTurn"] | null;
+        };
+        /** @enum {string} */
         ProviderName: "openai" | "anthropic";
         /**
          * @example {
@@ -2471,7 +2670,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed";
             project_id: string;
             job_id: string | null;
             progress: number | null;
@@ -2499,6 +2698,7 @@ export interface components {
         boxId: string;
         datasetId: string;
         modelId: string;
+        turnId: string;
         runId: string;
         jobId: string;
         provider: components["schemas"]["ProviderName"];
@@ -4081,6 +4281,129 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobLog"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getAgentConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description conversation */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentConversation"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearAgentConversation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    startAgentTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentTurnCreate"];
+            };
+        };
+        responses: {
+            /** @description turn started */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTurn"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelAgentTurn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                turnId: components["parameters"]["turnId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description turn */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTurn"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    decideAgentApproval: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                turnId: components["parameters"]["turnId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentApprovalDecision"];
+            };
+        };
+        responses: {
+            /** @description turn, running again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTurn"];
                 };
             };
             default: components["responses"]["Error"];
