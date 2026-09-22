@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { pushLog } from "@/app/diagnostics";
-import { SetupAgent } from "@/agent/SetupAgent";
+import { AgentDrawer } from "@/agent/AgentDrawer";
 import { useAgentPanel } from "@/agent/panelStore";
 import { Header } from "@/app/Header";
 import { NextStepBar } from "@/app/NextStepBar";
@@ -61,7 +61,12 @@ export function Shell() {
           <Outlet />
         </main>
         {projectId && <JobsPanel projectId={projectId} />}
-        <SetupAgent open={agent.open} onClose={() => agent.setOpen(false)} />
+        <AgentDrawer
+          projectId={projectId}
+          projectName={projectName}
+          open={agent.open}
+          onClose={() => agent.setOpen(false)}
+        />
       </div>
       <Toaster />
     </div>

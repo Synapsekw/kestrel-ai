@@ -85,14 +85,14 @@ export function Header({
       <RunningPill projectId={projectId} />
       <Button
         size="sm"
-        aria-controls="setup-agent"
+        aria-controls={projectId ? "project-agent" : "setup-agent"}
         aria-expanded={useAgentPanel((s) => s.open)}
         onClick={() => {
           useJobsStore.getState().setPanelOpen(false);
           useAgentPanel.getState().setOpen(true);
         }}
       >
-        Setup agent
+        {projectId ? "Project agent" : "Setup agent"}
       </Button>
       <JobsButton />
     </header>
