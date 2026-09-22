@@ -181,37 +181,40 @@ def sweep_interrupted(handle) -> int:
 
 
 def last_result_image_ids(handle) -> dict[str, str]:
-    """`{tool_call_id: result_image_id}` for the tool items of the newest assistant item that have
-    status ok/error/denied and a non-null `result_image_id`.
+    """`{tool_call_id: result_image_id}` for the tool items of the newest assistant item that has
+    at least one tool item with status ok/error/denied — the same "newest group with a result"
+    rule `build_history` uses to pick its last `tool_results` entry. A newest assistant item can be
+    a plain-text reply with no tool items after it (the normal end of a turn); that group is
+    skipped in favour of the newest one that actually resolved a tool call.
     """
     with handle.session() as s:
-        newest_assistant = (
-            s.execute(
-                select(AgentItem).where(AgentItem.kind == "assistant").order_by(AgentItem.seq.desc()).limit(1)
-            )
-            .scalars()
-            .first()
-        )
-        if newest_assistant is None:
-            return {}
-        tool_rows = (
-            s.execute(
-                select(AgentItem)
-                .where(
-                    AgentItem.turn_id == newest_assistant.turn_id,
-                    AgentItem.kind == "tool",
-                    AgentItem.seq > newest_assistant.seq,
-                )
-                .order_by(AgentItem.seq)
-            )
+        assistants = (
+            s.execute(select(AgentItem).where(AgentItem.kind == "assistant").order_by(AgentItem.seq.desc()))
             .scalars()
             .all()
         )
-        out: dict[str, str] = {}
-        for t in tool_rows:
-            if t.tool_status in RESULTED_STATUSES and t.result_image_id:
-                out[t.tool_call_id] = t.result_image_id
-        return out
+        for assistant in assistants:
+            # Bound the group to items before the next user/assistant item, same as build_history's
+            # grouping, so an older assistant's search never reaches into a newer group's tool items.
+            next_boundary = s.execute(
+                select(func.min(AgentItem.seq)).where(
+                    AgentItem.seq > assistant.seq, AgentItem.kind.in_(("user", "assistant"))
+                )
+            ).scalar_one_or_none()
+            query = select(AgentItem).where(
+                AgentItem.turn_id == assistant.turn_id,
+                AgentItem.kind == "tool",
+                AgentItem.seq > assistant.seq,
+            )
+            if next_boundary is not None:
+                query = query.where(AgentItem.seq < next_boundary)
+            tool_rows = s.execute(query.order_by(AgentItem.seq)).scalars().all()
+
+            resulted = [t for t in tool_rows if t.tool_status in RESULTED_STATUSES]
+            if not resulted:
+                continue
+            return {t.tool_call_id: t.result_image_id for t in resulted if t.result_image_id}
+        return {}
 
 
 def build_history(
@@ -224,11 +227,18 @@ def build_history(
     """Replay the last `max_items` items as the neutral history the turn loop and adapters use.
 
     See `project_agent/schemas.py`/the task brief for the exact rules; summarised:
-    1. Take the newest `max_items` items by seq; drop leading items until the first is `user`.
+    1. Take the newest `max_items` items by seq; drop leading items until the first is `user`. A
+       single turn can exceed `max_items` (up to 1 user + 25 * (assistant + tool) = 51 items); if
+       the window holds no `user` item at all, keep the whole conversation from the newest `user`
+       item forward instead, so the turn's own user message and every later tool call/result pair
+       is never dropped mid-turn — rule 5 (the char budget) is what trims that back down.
     2. `user` items become a `user` entry. `assistant` items become an `assistant` entry followed,
        when any of their tool items resolved, by one `tool_results` entry.
     3. Tool items still `running`/`awaiting_approval` are dropped; the assistant entry only lists
-       calls that got a result (a provider rejects a tool call without one).
+       calls that got a result (a provider rejects a tool call without one). When any call in the
+       group was dropped this way, `provider_payload` is also dropped (set to `None`): the raw
+       payload a provider adapter replays verbatim still names the skipped call, and replaying a
+       tool call with no matching result is what the provider's API rejects with a 400.
     4. Only the last `tool_results` entry gets its image loaded; older ones note it was shown.
     5. Oldest tool result contents are replaced with a placeholder until under `max_chars`.
     """
@@ -238,8 +248,28 @@ def build_history(
                 s.execute(select(AgentItem).order_by(AgentItem.seq.desc()).limit(max_items)).scalars().all()
             )
         )
-        while rows and rows[0].kind != "user":
-            rows.pop(0)
+        if any(r.kind == "user" for r in rows):
+            while rows and rows[0].kind != "user":
+                rows.pop(0)
+        else:
+            newest_user = (
+                s.execute(
+                    select(AgentItem).where(AgentItem.kind == "user").order_by(AgentItem.seq.desc()).limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            rows = (
+                list(
+                    s.execute(
+                        select(AgentItem).where(AgentItem.seq >= newest_user.seq).order_by(AgentItem.seq)
+                    )
+                    .scalars()
+                    .all()
+                )
+                if newest_user is not None
+                else []
+            )
 
         # Group into (kind, row, tool_rows) — tool_rows only populated for "assistant" groups.
         groups: list[tuple[str, AgentItem, list[AgentItem]]] = []
@@ -276,13 +306,16 @@ def build_history(
 
             resulted = [t for t in tool_rows if t.tool_status in RESULTED_STATUSES]
             calls = [ToolCall(t.tool_call_id, t.tool_name, t.tool_input or {}) for t in resulted]
+            # A skipped call (still running/awaiting_approval) has no result to replay; the raw
+            # provider payload still names it, so it must not be replayed verbatim either (rule 3).
+            any_skipped = len(resulted) != len(tool_rows)
             entries.append(
                 HistoryEntry(
                     "assistant",
                     text=row.text,
                     tool_calls=calls,
                     provider=row.provider,
-                    provider_payload=row.provider_payload,
+                    provider_payload=None if any_skipped else row.provider_payload,
                 )
             )
             if not resulted:

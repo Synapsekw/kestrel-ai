@@ -198,6 +198,28 @@ def test_last_result_image_ids(handle):
     assert store.last_result_image_ids(handle) == {"tc1": "img-1"}
 
 
+def test_last_result_image_ids_uses_newest_group_with_results(handle):
+    """The newest *assistant* item may be a plain-text reply with no tool items after it (the
+    normal end of a turn) — the function must fall back to the newest group that actually has a
+    resolved tool item, the same rule `build_history` uses for its `tool_results` entries.
+    """
+    turn = store.create_turn(handle, "anthropic", "claude-opus-5")
+    store.add_item(handle, turn.id, "user", text="look then summarize")
+    store.add_item(handle, turn.id, "assistant", text="looking")
+    store.add_item(
+        handle,
+        turn.id,
+        "tool",
+        tool_name="view_image",
+        tool_call_id="tc1",
+        tool_status="ok",
+        result_image_id="img-1",
+    )
+    store.add_item(handle, turn.id, "assistant", text="Done, it shows an excavator.")
+
+    assert store.last_result_image_ids(handle) == {"tc1": "img-1"}
+
+
 # ------------------------------------------------------------------------------- conversation/clear
 
 
@@ -345,6 +367,37 @@ def test_build_history_rule1_drops_leading_items_until_first_user(handle):
     assert history[1].text == "a2"
 
 
+def test_build_history_rule1_keeps_whole_turn_when_it_exceeds_max_items(handle):
+    """A single turn can hold 1 user item + up to 25 * (assistant + tool) = 51 items, more than
+    `max_items` (40). The newest-40 window then holds no `user` item at all; instead of returning
+    an empty history (which would drop the turn's own user message and desync every remaining
+    tool call from its result), the whole turn must be kept from its `user` item forward, oversize
+    window and all — `build_history`'s char budget (rule 5) is what trims it back down.
+    """
+    turn = store.create_turn(handle, "anthropic", "claude-opus-5")
+    store.add_item(handle, turn.id, "user", text="do a lot of things")
+    for i in range(25):
+        store.add_item(handle, turn.id, "assistant", text=f"step {i}")
+        store.add_item(
+            handle,
+            turn.id,
+            "tool",
+            tool_name="get_job",
+            tool_call_id=f"tc{i}",
+            tool_status="ok",
+            tool_result=f"result {i}",
+        )
+
+    history = store.build_history(handle)  # default max_items=40; this turn has 51 items
+
+    assert history[0].role == "user"
+    assert history[0].text == "do a lot of things"
+    assistant_entries = [e for e in history if e.role == "assistant"]
+    assert len(assistant_entries) == 25
+    for entry in assistant_entries:
+        assert len(entry.tool_calls) == 1  # every call kept its result; none dropped by windowing
+
+
 def test_build_history_rule2_groups_tool_results_after_assistant(handle):
     turn = store.create_turn(handle, "anthropic", "claude-opus-5")
     store.add_item(handle, turn.id, "user", text="label them")
@@ -395,6 +448,52 @@ def test_build_history_rule3_skips_running_and_awaiting_approval_tools(handle):
 
     assert [e.role for e in history] == ["user", "assistant"]
     assert history[1].tool_calls == []
+
+
+def test_build_history_rule3_drops_provider_payload_when_any_call_skipped(handle):
+    """The adapters replay `provider_payload` verbatim (raw provider blocks, including tool_use/
+    function_call blocks for every call the model made). If any of an assistant's tool calls was
+    skipped (still running/awaiting_approval, so it has no matching tool_result), replaying that
+    raw payload sends the provider a tool call with no result and the provider call fails with a
+    400. `provider_payload` must drop to `None` in that case so the adapter rebuilds the message
+    from `text`/`tool_calls`, which only lists calls that got a result.
+    """
+    turn = store.create_turn(handle, "anthropic", "claude-opus-5")
+    store.add_item(handle, turn.id, "user", text="go")
+    store.add_item(
+        handle,
+        turn.id,
+        "assistant",
+        text="",
+        provider="anthropic",
+        provider_payload=[{"type": "tool_use", "id": "tc1"}, {"type": "tool_use", "id": "tc2"}],
+    )
+    store.add_item(
+        handle, turn.id, "tool", tool_name="get_job", tool_call_id="tc1", tool_status="ok", tool_result="done"
+    )
+    store.add_item(
+        handle, turn.id, "tool", tool_name="wait_for_job", tool_call_id="tc2", tool_status="running"
+    )
+
+    history = store.build_history(handle)
+
+    assistant_entry = next(e for e in history if e.role == "assistant")
+    assert assistant_entry.provider_payload is None
+
+
+def test_build_history_rule3_keeps_provider_payload_when_all_calls_resulted(handle):
+    turn = store.create_turn(handle, "anthropic", "claude-opus-5")
+    store.add_item(handle, turn.id, "user", text="go")
+    payload = [{"type": "tool_use", "id": "tc1"}]
+    store.add_item(handle, turn.id, "assistant", text="", provider="anthropic", provider_payload=payload)
+    store.add_item(
+        handle, turn.id, "tool", tool_name="get_job", tool_call_id="tc1", tool_status="ok", tool_result="done"
+    )
+
+    history = store.build_history(handle)
+
+    assistant_entry = next(e for e in history if e.role == "assistant")
+    assert assistant_entry.provider_payload == payload
 
 
 def test_build_history_marks_error_and_denied_as_is_error(handle):
