@@ -8,6 +8,7 @@ import { useJobsStore } from "@/store/jobs";
 import { exampleProviders, fakeClient, PROJECT_ID, runningJob, type FakeRoute } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useProjectAgentEvents } from "./agentEvents";
+import { screenRoute } from "./useProjectAgent";
 
 const turn = (state: AgentTurn["state"], extra: Partial<AgentTurn> = {}): AgentTurn => ({
   id: "turn-1",
@@ -259,6 +260,35 @@ describe("ProjectAgent", () => {
     await waitFor(() => expect(posts(requests, "/turns/turn-1/cancel")).toHaveLength(1));
   });
 
+  it("offers Stop while a card waits, so a turn nobody can resolve is never a dead end", async () => {
+    const items = [
+      item("tool", {
+        tool_name: "delete_images",
+        tool_status: "awaiting_approval",
+        approval: { title: "Delete 3 images", detail: "Cannot be undone", estimated_cost: null },
+      }),
+    ];
+    const { requests } = renderDrawer(() => ({ items, turn: turn("awaiting_approval") }));
+    const stop = await screen.findByRole("button", { name: "Stop" });
+    fireEvent.click(stop);
+    await waitFor(() => expect(posts(requests, "/turns/turn-1/cancel")).toHaveLength(1));
+  });
+
+  it("says Finished. when a succeeded turn ends on an empty answer", async () => {
+    const items = [item("user", { text: "Go" }), item("assistant", { text: "" })];
+    renderDrawer(() => ({ items, turn: turn("succeeded") }));
+    const log = await screen.findByRole("log");
+    expect(await within(log).findByText("Finished.")).toBeInTheDocument();
+  });
+
+  it("does not say Finished. while the turn is still running", async () => {
+    const items = [item("user", { text: "Go" }), item("assistant", { text: "" })];
+    renderDrawer(() => ({ items, turn: turn("running") }));
+    const log = await screen.findByRole("log");
+    await within(log).findByText("Go");
+    expect(within(log).queryByText("Finished.")).not.toBeInTheDocument();
+  });
+
   it("clears the conversation when idle", async () => {
     const items = [item("user", { text: "Go" })];
     const { requests } = renderDrawer(() => ({ items, turn: turn("succeeded") }));
@@ -339,5 +369,13 @@ describe("ProjectAgent", () => {
     await waitFor(() => expect(gets()).toBe(2));
     await new Promise((r) => setTimeout(r, 250));
     expect(gets()).toBe(2);
+  });
+});
+
+describe("screenRoute", () => {
+  it("encodes the image id of an editor route", () => {
+    expect(screenRoute("p1", { screen: "editor", image_id: "a/b?c" })).toBe("/p/p1/edit/a%2Fb%3Fc");
+    expect(screenRoute("p1", { screen: "editor", image_id: null })).toBeNull();
+    expect(screenRoute("p1", { screen: "detect", image_id: null })).toBe("/p/p1/query");
   });
 });

@@ -44,7 +44,8 @@ const SCREEN_PATH: Record<Exclude<AgentNavigate["screen"], "home" | "editor">, s
 export function screenRoute(projectId: string, nav: AgentNavigate): string | null {
   const base = `/p/${projectId}`;
   if (nav.screen === "home") return base;
-  if (nav.screen === "editor") return nav.image_id ? `${base}/edit/${nav.image_id}` : null;
+  if (nav.screen === "editor")
+    return nav.image_id ? `${base}/edit/${encodeURIComponent(nav.image_id)}` : null;
   return `${base}/${SCREEN_PATH[nav.screen]}`;
 }
 
@@ -239,8 +240,9 @@ export function useProjectAgent(projectId: string, open: boolean): ProjectAgentS
     });
   };
 
+  // A waiting turn can be stopped too: the backend cancel closes its card.
   const stop = async () => {
-    if (!turn || !busy) return;
+    if (!turn || !(busy || awaiting)) return;
     await act("The agent could not be stopped. Try again.", async () => {
       withTurn(await cancelTurn(api, projectId, turn.id));
       await load();

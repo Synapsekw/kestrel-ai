@@ -148,6 +148,7 @@ export function ProjectAgent({
         ) : (
           <Transcript
             items={a.items}
+            turn={a.turn}
             awaiting={a.awaiting}
             deciding={a.pending}
             onDecide={(approve) => void a.decide(approve)}
@@ -203,7 +204,7 @@ export function ProjectAgent({
           </Field>
           <div className="flex items-center justify-end gap-2">
             <p className="mr-auto text-xs text-dim">Enter to send, Shift+Enter for a new line</p>
-            {a.busy && (
+            {(a.busy || a.awaiting) && (
               <Button variant="secondary" disabled={a.pending} onClick={() => void a.stop()}>
                 Stop
               </Button>
