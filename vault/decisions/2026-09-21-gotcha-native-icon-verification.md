@@ -40,3 +40,8 @@ preserves a useful check; the old app/setup resources still fail the required am
 
 - `frontend/scripts/generate-icons.mjs`
 - `docs/evidence/brand/2026-09-21-kestrel-a/`
+
+2026-09-22 observation: this running Tauri window returned zero for WM_GETICON BIG and for its
+class icon, but valid SMALL and SMALL2 handles containing the bird. Inspect those variants before
+concluding the runtime icon is missing. Shell-resolved shortcuts are another distinct surface;
+direct PE extraction alone does not verify their references. See `docs/evidence/brand/2026-09-22-windows-icon-refresh/`.

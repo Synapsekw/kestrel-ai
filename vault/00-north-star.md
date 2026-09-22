@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-21
+last-updated: 2026-09-22
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -78,7 +78,13 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **CI green**, merged/pushed at `afba411` (11 commits from `bcba190`). GitHub Actions had
+**Shipped last:** **Windows icon reference refreshed locally**. The installed executable, running
+window and shell extractions already showed the approved bird. The Start shortcut now points to an
+explicit verified bird ICO and Windows received icon-reference refresh notifications. The app is open;
+no binary rebuild was needed. See [[2026-09-22-0627-windows-icon-refresh]]. The installed application
+remains the setup-agent build; subsequent editor/train fixes still await distribution.
+
+Previously shipped: **CI green**, merged/pushed at `afba411` (11 commits from `bcba190`). GitHub Actions had
 failed every run since publishing. The causes were stacked: unformatted backend files; registry tests
 reading `E:/Dev/Yolo/models`; a starter-weights script that died without an `E:` drive; and three
 real input bugs that e2e only exposed on the slower runner. The bugs: two editor hotkey races that
@@ -130,8 +136,8 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** no remaining setup-agent rebuild work. The installed app now includes the setup drawer
-and all 44 compatible detection starters, with focused native verification complete.
+**In flight:** no remaining work for the local Windows icon-reference refresh. The installed app
+includes the setup drawer and all 44 compatible detection starters, with focused native verification complete.
 The separately prepared folder rename remains pending (§5).
 
 **Next:** keep `ci` green: check `gh run list --branch main` after each merge, and dispatch
