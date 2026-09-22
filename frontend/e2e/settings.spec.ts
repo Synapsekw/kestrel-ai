@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { evidencePath } from "./evidence";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const CLASS1 = "c1a2b3c4-0000-4000-8000-000000000001";
@@ -89,4 +90,15 @@ test("import defaults save with PATCH and the provider placeholder is present", 
   expect(body.import_defaults.dedupe_threshold).toBe(4);
   await expect(page.getByRole("heading", { name: "Provider keys" })).toBeVisible();
   await expect(page.getByText(/Windows Credential Manager/)).toBeVisible();
+});
+
+test("class-name fields keep their width beside the narrow hotkey select", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto(`/p/${P}/settings`);
+  const name = await page.getByLabel("Name of class 1").boundingBox();
+  const hotkey = await page.getByLabel("Hotkey of class 1").boundingBox();
+  // The hotkey select is sized 4.5rem (72 px); before the fix it took the whole row.
+  expect(hotkey!.width).toBeLessThan(80);
+  expect(name!.width).toBeGreaterThan(hotkey!.width * 3);
+  await page.screenshot({ path: evidencePath("cleanup-a", "settings-classes.png") });
 });
