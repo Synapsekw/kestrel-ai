@@ -101,6 +101,8 @@ class AgentRunner:
         item = store.pending_approval_item(handle, turn_id)
         if item is None:
             raise AppError("conflict", NOT_WAITING, 409)
+        if not approve:
+            return self._deny(handle, turn, item)
         if not self._has_key(turn.provider):
             raise AppError("provider_key_missing", KEY_MISSING, 409)
         # Claim the turn before the first await, so a second decision gets the 409 above. From here
@@ -108,18 +110,30 @@ class AgentRunner:
         # this request is cancelled: a claimed turn with no task would answer agent_busy forever.
         turn = store.update_turn(handle, turn_id, state="running")
         try:
-            if approve:
-                await self._execute_approved(handle, item)
-            else:
-                store.update_item(
-                    handle, item["id"], tool_status="denied", tool_result=DECLINED, tool_summary="Declined"
-                )
-                log.info("agent tool %s declined", _log_name(item["tool_name"]))
+            await self._execute_approved(handle, item)
         finally:
             turn = store.get_turn(handle, turn_id)
             if turn.state == "running":  # not cancelled while the approved call ran
                 self._publish(handle, turn)
                 self._spawn(handle, turn_id)
+        return turn
+
+    def _deny(self, handle, turn: AgentTurnOut, item: dict) -> AgentTurnOut:
+        """Record the denial (no await: a second decision gets the 409). Denying never needs the
+        key; without one the turn ends here instead of restarting a loop that cannot call the model,
+        so the drawer is never stuck on a card nobody can resolve."""
+        store.update_item(
+            handle, item["id"], tool_status="denied", tool_result=DECLINED, tool_summary="Declined"
+        )
+        log.info("agent tool %s declined", _log_name(item["tool_name"]))
+        if not self._has_key(turn.provider):
+            turn = store.update_turn(handle, turn.id, state="failed", error=KEY_MISSING, finished_at=_now())
+            log.info("agent turn failed: provider key missing")
+            self._publish(handle, turn)
+            return turn
+        turn = store.update_turn(handle, turn.id, state="running")
+        self._publish(handle, turn)
+        self._spawn(handle, turn.id)
         return turn
 
     async def _execute_approved(self, handle, item: dict) -> None:

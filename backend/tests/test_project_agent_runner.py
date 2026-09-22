@@ -637,3 +637,37 @@ def test_unknown_tool_names_from_the_model_are_not_logged(start, settle, llm, ke
 
 def test_the_prompt_never_says_promote():
     assert "promot" not in system_prompt("P", ["excavator"]).lower()
+
+
+def test_denying_without_a_key_records_the_denial_and_ends_the_turn(
+    client, app, start, settle, llm, key, project_id, image_ids, conv
+):
+    """The key was removed while a card waited: Deny must still work (it never needs the key), and
+    the turn ends instead of wedging the drawer."""
+    turn_id = _awaiting_turn(start, settle, llm, image_ids)
+    fake = app.state.agent_llm
+    app.state.keys.delete("anthropic")
+
+    r = client.post(f"{BASE}/{project_id}/agent/turns/{turn_id}/approval", json={"approve": False})
+
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == "failed"
+    body = conv()
+    assert body["turn"]["state"] == "failed"
+    assert body["turn"]["error"] == "Add this provider's API key in App settings."
+    assert body["turn"]["finished_at"] is not None
+    card = next(i for i in body["items"] if i["tool_name"] == "label_images")
+    assert card["tool_status"] == "denied"
+    assert len(fake.calls) == 1  # the model was not asked again
+    assert client.delete(f"{BASE}/{project_id}/agent").status_code in (200, 204)
+
+
+def test_approving_without_a_key_is_still_refused(
+    client, app, start, settle, llm, key, project_id, image_ids, conv
+):
+    turn_id = _awaiting_turn(start, settle, llm, image_ids)
+    app.state.keys.delete("anthropic")
+    r = client.post(f"{BASE}/{project_id}/agent/turns/{turn_id}/approval", json={"approve": True})
+    assert r.status_code == 409
+    assert r.json()["error"]["code"] == "provider_key_missing"
+    assert conv()["turn"]["state"] == "awaiting_approval"
