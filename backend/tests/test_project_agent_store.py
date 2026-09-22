@@ -554,6 +554,20 @@ def test_build_history_rule3_drops_provider_payload_when_any_call_skipped(handle
     assert assistant_entry.provider_payload is None
 
 
+def test_build_history_names_the_model_that_wrote_each_assistant_item(handle):
+    old = store.create_turn(handle, "anthropic", "claude-old")
+    store.add_item(handle, old.id, "user", text="a")
+    store.add_item(handle, old.id, "assistant", text="x", provider="anthropic", provider_payload=[])
+    store.update_turn(handle, old.id, state="succeeded")
+    new = store.create_turn(handle, "anthropic", "claude-new")
+    store.add_item(handle, new.id, "user", text="b")
+    store.add_item(handle, new.id, "assistant", text="y", provider="anthropic", provider_payload=[])
+
+    models = [e.model for e in store.build_history(handle) if e.role == "assistant"]
+
+    assert models == ["claude-old", "claude-new"]
+
+
 def test_build_history_rule3_keeps_provider_payload_when_all_calls_resulted(handle):
     turn = store.create_turn(handle, "anthropic", "claude-opus-5")
     store.add_item(handle, turn.id, "user", text="go")

@@ -2,8 +2,8 @@
 
 A turn replays the stored transcript as a list of `HistoryEntry`. Each adapter turns that list into
 its own wire format; `provider_payload` carries the raw blocks a provider needs back unchanged
-(Anthropic thinking blocks, OpenAI reasoning items) and is only replayed to the provider that
-produced it.
+(Anthropic thinking blocks, OpenAI reasoning items) and is only replayed to the provider and
+model that produced it.
 """
 
 from __future__ import annotations
@@ -45,6 +45,7 @@ class HistoryEntry:
     tool_calls: list[ToolCall] = field(default_factory=list)
     results: list[ToolResult] = field(default_factory=list)
     provider: str | None = None  # the provider that produced `provider_payload`
+    model: str | None = None  # the model that produced it; replayed only to the same model
     provider_payload: Any = None
 
 

@@ -312,6 +312,16 @@ def build_history(
         ]
         last_tool_group_idx = tool_group_indices[-1] if tool_group_indices else None
 
+        # The model that wrote each assistant item: a raw payload is only replayed to that model.
+        turn_ids = {row.turn_id for kind, row, _t in groups if kind == "assistant"}
+        models = (
+            dict(
+                s.execute(select(AgentTurn.id, AgentTurn.model_name).where(AgentTurn.id.in_(turn_ids))).all()
+            )
+            if turn_ids
+            else {}
+        )
+
         entries: list[HistoryEntry] = []
         for idx, (kind, row, tool_rows) in enumerate(groups):
             if kind == "user":
@@ -332,6 +342,7 @@ def build_history(
                     text=row.text,
                     tool_calls=calls,
                     provider=row.provider,
+                    model=models.get(row.turn_id),
                     provider_payload=None if any_skipped else row.provider_payload,
                 )
             )

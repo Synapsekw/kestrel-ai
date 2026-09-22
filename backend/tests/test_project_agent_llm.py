@@ -115,7 +115,8 @@ def test_anthropic_request_shape(sdk):
     }
     assert "thinking" not in request and "temperature" not in request
     assert KEY not in json.dumps(request)
-    assert llm.MODEL_TIMEOUT_S == 120 and llm.MAX_OUTPUT_TOKENS == 16000
+    assert llm.MODEL_TIMEOUT_S == 300 and llm.MAX_OUTPUT_TOKENS == 16000
+    assert llm._DEADLINE_S > llm.MODEL_TIMEOUT_S
 
 
 def test_openai_request_shape(sdk):
@@ -248,7 +249,13 @@ def test_anthropic_replays_own_payload_unchanged(sdk):
     ]
     history = [
         HistoryEntry(role="user", text="Count"),
-        HistoryEntry(role="assistant", tool_calls=[CALL], provider="anthropic", provider_payload=payload),
+        HistoryEntry(
+            role="assistant",
+            tool_calls=[CALL],
+            provider="anthropic",
+            model="the-model",
+            provider_payload=payload,
+        ),
         HistoryEntry(role="tool_results", results=[RESULT]),
     ]
     run("anthropic", history)
@@ -306,7 +313,9 @@ def test_openai_replays_own_payload_and_ignores_foreign(sdk):
     ]
     history = [
         HistoryEntry(role="user", text="Count"),
-        HistoryEntry(role="assistant", tool_calls=[CALL], provider="openai", provider_payload=own),
+        HistoryEntry(
+            role="assistant", tool_calls=[CALL], provider="openai", model="the-model", provider_payload=own
+        ),
         HistoryEntry(role="tool_results", results=[RESULT]),
         HistoryEntry(
             role="assistant",
@@ -484,66 +493,55 @@ def test_wall_clock_deadline(sdk, monkeypatch):
     async def stalled(*args, **kwargs):
         await asyncio.sleep(10)
 
-    monkeypatch.setattr(llm, "MODEL_TIMEOUT_S", -4.95)  # deadline = MODEL_TIMEOUT_S + 5 = 0.05 s
+    monkeypatch.setattr(llm, "_DEADLINE_S", 0.05)
     monkeypatch.setattr(llm, "_anthropic", stalled)
     with pytest.raises(LlmError) as info:
         run("anthropic", [HistoryEntry(role="user", text="Hi")])
     assert info.value.message == "The provider took too long to answer."
 
 
-# --- clean_schema --------------------------------------------------------------------------------
+# --- final review fixes --------------------------------------------------------------------------
 
 
-def test_clean_schema_strips_titles_and_inlines_refs():
-    from pydantic import BaseModel, Field
-
-    class Box(BaseModel):
-        title: str = Field(title="Box title")
-        x: float
-
-    class Args(BaseModel):
-        box: Box
-        boxes: list[Box] = []
-        note: str | None = None
-
-    cleaned = llm.clean_schema(Args.model_json_schema())
-    text = json.dumps(cleaned)
-    assert "$defs" not in text and "$ref" not in text
-    assert cleaned["properties"]["box"]["properties"]["title"] == {"type": "string"}
-    assert cleaned["properties"]["box"]["required"] == ["title", "x"]
-    assert cleaned["properties"]["boxes"]["items"]["properties"]["x"] == {"type": "number"}
-    assert "title" not in cleaned
-    assert "title" not in cleaned["properties"]["note"]
-    assert set(cleaned["properties"]) == {"box", "boxes", "note"}
+def test_anthropic_payload_drops_empty_text_blocks(sdk):
+    blocks = [
+        ThinkingBlock(type="thinking", thinking="plan", signature="sig"),
+        TextBlock(type="text", text=""),
+        ToolUseBlock(type="tool_use", id="toolu_1", name="list_images", input={"limit": 2}),
+    ]
+    sdk["anthropic"] = _anthropic_message(blocks, stop_reason="tool_use")
+    reply = run("anthropic", [HistoryEntry(role="user", text="Hi")])
+    assert reply.provider_payload == [
+        {"type": "thinking", "thinking": "plan", "signature": "sig"},
+        {"type": "tool_use", "id": "toolu_1", "name": "list_images", "input": {"limit": 2}},
+    ]
 
 
-def test_clean_schema_keeps_ref_siblings_and_does_not_mutate():
-    schema = {
-        "type": "object",
-        "title": "Root",
-        "properties": {"mode": {"$ref": "#/$defs/Mode", "description": "The mode."}},
-        "$defs": {"Mode": {"title": "Mode", "type": "string", "enum": ["a", "b"]}},
-    }
-    original = json.loads(json.dumps(schema))
-    cleaned = llm.clean_schema(schema)
-    assert cleaned == {
-        "type": "object",
-        "properties": {"mode": {"type": "string", "enum": ["a", "b"], "description": "The mode."}},
-    }
-    assert schema == original
-
-
-def test_clean_schema_handles_recursive_refs():
-    schema = {
-        "type": "object",
-        "properties": {"node": {"$ref": "#/$defs/Node"}},
-        "$defs": {"Node": {"type": "object", "properties": {"child": {"$ref": "#/$defs/Node"}}}},
-    }
-    cleaned = llm.clean_schema(schema)
-    assert "$ref" not in json.dumps(cleaned)
-    assert cleaned["properties"]["node"]["properties"]["child"] == {}
-
-
-def test_clean_schema_keeps_title_inside_literal_values():
-    schema = {"type": "object", "default": {"title": "kept"}, "enum": [{"title": "kept"}]}
-    assert llm.clean_schema(schema) == schema
+@pytest.mark.parametrize("provider", ["anthropic", "openai"])
+def test_a_payload_from_another_model_is_not_replayed(sdk, provider):
+    payload = (
+        [
+            {"type": "thinking", "thinking": "hmm", "signature": "sig"},
+            {"type": "tool_use", "id": "call_1", "name": "list_images", "input": {"limit": 5}},
+        ]
+        if provider == "anthropic"
+        else [
+            {"type": "reasoning", "id": "rs_1", "summary": [], "encrypted_content": "enc"},
+            {"type": "function_call", "call_id": "call_1", "name": "list_images", "arguments": "{}"},
+        ]
+    )
+    history = [
+        HistoryEntry(role="user", text="Count"),
+        HistoryEntry(
+            role="assistant",
+            tool_calls=[CALL],
+            provider=provider,
+            model="an-older-model",
+            provider_payload=payload,
+        ),
+        HistoryEntry(role="tool_results", results=[RESULT]),
+    ]
+    run(provider, history)
+    request = json.dumps(sdk["requests"][0])
+    assert "sig" not in request and "rs_1" not in request
+    assert "call_1" in request  # the neutral replay still names the resulted call

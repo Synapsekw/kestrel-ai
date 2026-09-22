@@ -63,7 +63,7 @@ SDK exception text is stored.
    the project, message 1–4,000 chars), stores the user item and a `running` turn, starts the
    asyncio task and returns `202 AgentTurn`.
 2. Loop step: rebuild history from items (last 40 items, ~60k chars; older tool results and images
-   collapse to a one-line placeholder), call the model (120 s timeout, `max_retries=0`), store the
+   collapse to a one-line placeholder), call the model (300 s timeout, `max_retries=0`), store the
    assistant item (text + tool calls), then run tool calls in order.
 3. `read`/`write` tools run immediately. An `approval` tool (or `label_images` with a cloud
    labeler) is prepared first — selection resolved, cost estimated — then stored as
@@ -179,7 +179,7 @@ Background work: the turn is an asyncio task with progress events; labeling, imp
 materialisation, training, model acquisition and exports remain existing background jobs.
 
 Bounds: one active turn per project; ≤ 25 tool calls and 15 minutes wall time per turn (then
-`failed` with a clear message); 120 s per model call; history ≤ 40 items / ~60k chars; each tool
+`failed` with a clear message); 300 s per model call; history ≤ 40 items / ~60k chars; each tool
 result ≤ 8,000 chars; `find_images` ≤ 50 rows; selectors ≤ 5,000 ids resolved in 200-row pages;
 one image per `view_image` at ≤ 1024 px JPEG; `wait_for_job` ≤ 60 s per call; the conversation
 endpoint returns ≤ 200 items. No full image set is ever loaded in memory.

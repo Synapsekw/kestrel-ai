@@ -9,13 +9,14 @@ never passed on, logged or chained.
 from __future__ import annotations
 
 import asyncio
-import copy
 import json
 from typing import Any
 
 from app.project_agent.history import HistoryEntry, LlmError, ModelReply, ToolCall, ToolSpec
 
-MODEL_TIMEOUT_S = 120
+MODEL_TIMEOUT_S = 300
+# The wall-clock bound around one call: the SDK timeout plus a little slack for connect/teardown.
+_DEADLINE_S = MODEL_TIMEOUT_S + 5
 MAX_OUTPUT_TOKENS = 16000
 
 _NO_TEXT = "(no text)"
@@ -47,7 +48,7 @@ async def complete(
     try:
         return await asyncio.wait_for(
             call(api_key=api_key, model=model, system=system, history=history, tools=tools),
-            MODEL_TIMEOUT_S + 5,
+            _DEADLINE_S,
         )
     except LlmError:
         raise
@@ -74,6 +75,12 @@ def _error_message(provider: str, exc: Exception) -> str:
     return _FAILED
 
 
+def _replayable(entry: HistoryEntry, provider: str, model: str) -> bool:
+    """A raw payload goes back only to the provider *and* model that wrote it (thinking signatures and
+    encrypted reasoning are model-bound); anything else replays neutrally from text and calls."""
+    return entry.provider == provider and entry.model == model and isinstance(entry.provider_payload, list)
+
+
 # --- Anthropic -----------------------------------------------------------------------------------
 
 
@@ -86,7 +93,7 @@ async def _anthropic(
         response = await client.messages.create(
             model=model,
             system=system,
-            messages=_anthropic_messages(history),
+            messages=_anthropic_messages(history, model),
             tools=[
                 {"name": t.name, "description": t.description, "input_schema": t.input_schema} for t in tools
             ],
@@ -104,17 +111,22 @@ async def _anthropic(
                 texts.append(block.text)
         elif block.type == "tool_use":
             calls.append(ToolCall(id=block.id, name=block.name, input=_as_object(block.input)))
-    payload = [block.model_dump(mode="json", exclude_none=True) for block in response.content]
+    # Only thinking blocks must round-trip byte-exact; an empty text block is rejected on replay.
+    payload = [
+        block.model_dump(mode="json", exclude_none=True)
+        for block in response.content
+        if not (block.type == "text" and not block.text)
+    ]
     return ModelReply(text="\n\n".join(texts), tool_calls=calls, provider_payload=payload)
 
 
-def _anthropic_messages(history: list[HistoryEntry]) -> list[dict]:
+def _anthropic_messages(history: list[HistoryEntry], model: str) -> list[dict]:
     messages: list[dict] = []
     for entry in history:
         if entry.role == "user":
             _append_anthropic(messages, {"role": "user", "content": entry.text})
         elif entry.role == "assistant":
-            if entry.provider == "anthropic" and isinstance(entry.provider_payload, list):
+            if _replayable(entry, "anthropic", model):
                 content = entry.provider_payload
             else:
                 content = [{"type": "text", "text": entry.text}] if entry.text else []
@@ -176,7 +188,7 @@ async def _openai(
         result = await client.responses.create(
             model=model,
             instructions=system,
-            input=_openai_input(history),
+            input=_openai_input(history, model),
             tools=[
                 {
                     "type": "function",
@@ -204,13 +216,13 @@ async def _openai(
     return ModelReply(text=result.output_text or "", tool_calls=calls, provider_payload=payload)
 
 
-def _openai_input(history: list[HistoryEntry]) -> list[dict]:
+def _openai_input(history: list[HistoryEntry], model: str) -> list[dict]:
     items: list[dict] = []
     for entry in history:
         if entry.role == "user":
             items.append({"role": "user", "content": entry.text})
         elif entry.role == "assistant":
-            if entry.provider == "openai" and isinstance(entry.provider_payload, list):
+            if _replayable(entry, "openai", model):
                 items.extend(entry.provider_payload)
                 continue
             if entry.text:
@@ -247,47 +259,3 @@ def _parse_arguments(arguments: str) -> dict:
 
 def _as_object(value: Any) -> dict:
     return value if isinstance(value, dict) else {}
-
-
-# --- tool schemas --------------------------------------------------------------------------------
-
-
-def clean_schema(schema: dict) -> dict:
-    """Make a pydantic JSON schema portable: drop `title` metadata and inline `#/$defs/...` refs.
-
-    Property *names* called `title` are kept. A recursive ref is replaced by `{}` (any value). The
-    input is not mutated.
-    """
-    defs = schema.get("$defs", {})
-    return _clean(schema, defs, ())
-
-
-# Keys whose values are data, not sub-schemas: a `title` inside a default value must survive.
-_LITERAL_KEYS = frozenset({"default", "enum", "const", "examples"})
-
-
-def _clean(node: Any, defs: dict, seen: tuple[str, ...]) -> Any:
-    if isinstance(node, list):
-        return [_clean(item, defs, seen) for item in node]
-    if not isinstance(node, dict):
-        return copy.deepcopy(node)
-    ref = node.get("$ref")
-    if isinstance(ref, str) and ref.startswith("#/$defs/"):
-        name = ref.removeprefix("#/$defs/")
-        if name in seen or name not in defs:
-            resolved: dict = {}
-        else:
-            resolved = _clean(defs[name], defs, (*seen, name))
-        siblings = {k: v for k, v in node.items() if k != "$ref"}
-        return {**resolved, **_clean(siblings, defs, seen)}
-    cleaned: dict = {}
-    for key, value in node.items():
-        if key in ("title", "$defs"):
-            continue
-        if key in _LITERAL_KEYS:
-            cleaned[key] = copy.deepcopy(value)
-        elif key in ("properties", "patternProperties") and isinstance(value, dict):
-            cleaned[key] = {name: _clean(sub, defs, seen) for name, sub in value.items()}
-        else:
-            cleaned[key] = _clean(value, defs, seen)
-    return cleaned
