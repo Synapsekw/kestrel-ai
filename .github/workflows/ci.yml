@@ -24,7 +24,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uv venv --python 3.11.15 .venv
         working-directory: backend
       # CPU wheels on the runner; the reference machine uses the cu130 pins from requirements.txt.
@@ -72,7 +72,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.2.0
       - run: uv venv --python 3.11.15 .venv
         working-directory: backend
       - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt

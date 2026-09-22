@@ -123,8 +123,6 @@ describe("Select", () => {
         <option value="">none</option>
       </Select>,
     );
-    expect(screen.getByRole("combobox", { name: "Class" }).parentElement!.className).toContain(
-      "w-full",
-    );
+    expect(screen.getByRole("combobox", { name: "Class" }).parentElement!.className).toContain("w-full");
   });
 });
