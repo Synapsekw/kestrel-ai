@@ -30,6 +30,7 @@ from app.project_agent.history import LlmError, ModelReply, ToolCall
 from app.project_agent.prompt import system_prompt
 from app.project_agent.schemas import AgentTurnOut
 from app.project_agent.tools import (
+    REGISTRY,
     Prepared,
     ToolContext,
     ToolOutcome,
@@ -52,6 +53,7 @@ WAITING_NOT_RUN = "Not run: waiting for approval of an earlier action. Ask again
 DECLINED = "The user declined this action."
 STOPPED = "Stopped by the user."
 NOT_RUN_STOPPED = "Not run: the turn was stopped."
+APPROVED_FAILED = "The approved action could not run."
 CANCEL_WAIT_S = 5.0
 
 
@@ -59,8 +61,9 @@ def _now() -> datetime:
     return datetime.now(UTC)
 
 
-def _aware(value: datetime) -> datetime:
-    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+def _log_name(name: str | None) -> str:
+    """A tool name the model sent is model output: log it only when it is one of ours."""
+    return name if name in REGISTRY else "unknown"
 
 
 class _TurnEnded(Exception):
@@ -100,34 +103,54 @@ class AgentRunner:
             raise AppError("conflict", NOT_WAITING, 409)
         if not self._has_key(turn.provider):
             raise AppError("provider_key_missing", KEY_MISSING, 409)
-        # Claim the turn before the first await, so a second decision gets the 409 above.
+        # Claim the turn before the first await, so a second decision gets the 409 above. From here
+        # on the loop is always spawned again (the `finally`), even when the approved call breaks or
+        # this request is cancelled: a claimed turn with no task would answer agent_busy forever.
         turn = store.update_turn(handle, turn_id, state="running")
-        if approve:
-            store.update_item(handle, item["id"], tool_status="running")
-            self._publish(handle, turn)
-            prepared_args = (item.get("provider_payload") or {}).get("prepared_args") or {}
-            started = time.monotonic()
+        try:
+            if approve:
+                await self._execute_approved(handle, item)
+            else:
+                store.update_item(
+                    handle, item["id"], tool_status="denied", tool_result=DECLINED, tool_summary="Declined"
+                )
+                log.info("agent tool %s declined", _log_name(item["tool_name"]))
+        finally:
+            turn = store.get_turn(handle, turn_id)
+            if turn.state == "running":  # not cancelled while the approved call ran
+                self._publish(handle, turn)
+                self._spawn(handle, turn_id)
+        return turn
+
+    async def _execute_approved(self, handle, item: dict) -> None:
+        name = _log_name(item["tool_name"])
+        store.update_item(handle, item["id"], tool_status="running")
+        self._publish(handle, store.get_turn(handle, item["turn_id"]))
+        prepared_args = (item.get("provider_payload") or {}).get("prepared_args") or {}
+        started = time.monotonic()
+        try:
             async with ApiCaller(self.app, self.app.state.settings.token, handle.id) as api:
                 ctx = ToolContext(api=api, project_id=handle.id, user_texts=store.user_texts(handle))
                 outcome = await execute_approved(ctx, item["tool_name"], prepared_args)
             self._store_outcome(handle, item["id"], outcome)
-            log.info(
-                "agent tool %s approved: %s in %.1fs",
-                item["tool_name"],
-                "error" if outcome.is_error else "ok",
-                time.monotonic() - started,
-            )
-        else:
+        except BaseException as e:  # the type only: the message can carry payloads
+            log.error("agent approved tool %s could not run: %s", name, type(e).__name__)
             store.update_item(
-                handle, item["id"], tool_status="denied", tool_result=DECLINED, tool_summary="Declined"
+                handle,
+                item["id"],
+                tool_status="error",
+                tool_result=APPROVED_FAILED,
+                tool_summary=APPROVED_FAILED,
             )
-            log.info("agent tool %s declined", item["tool_name"])
-        turn = store.get_turn(handle, turn_id)
-        if turn.state != "running":  # cancelled while the approved call ran
-            return turn
-        self._publish(handle, turn)
-        self._spawn(handle, turn_id)
-        return turn
+            if not isinstance(e, Exception):
+                raise
+            return
+        log.info(
+            "agent tool %s approved: %s in %.1fs",
+            name,
+            "error" if outcome.is_error else "ok",
+            time.monotonic() - started,
+        )
 
     async def cancel(self, handle, turn_id: str) -> AgentTurnOut:
         turn = store.get_turn(handle, turn_id)
@@ -182,12 +205,23 @@ class AgentRunner:
 
         task.add_done_callback(done)
 
-    def _fail(self, handle, turn_id: str, error: str, open_items_text: str | None = None) -> None:
+    def _fail(
+        self,
+        handle,
+        turn_id: str,
+        error: str,
+        open_items_text: str | None = None,
+        final_item: bool = False,
+    ) -> None:
+        """Fail a running turn. `final_item` adds an assistant item saying why (spec: a budget
+        failure ends with an item that says which budget)."""
         if open_items_text is not None:
             _close_open_items(handle, turn_id, open_items_text, "Stopped")
         turn = store.get_turn(handle, turn_id)
         if turn.state != "running":  # already cancelled: leave it be
             return
+        if final_item:
+            store.add_item(handle, turn_id, "assistant", text=error)
         turn = store.update_turn(handle, turn_id, state="failed", error=error, finished_at=_now())
         self._publish(handle, turn)
 
@@ -207,12 +241,9 @@ class AgentRunner:
 
     async def _run(self, handle, turn_id: str) -> None:
         try:
-            turn = store.get_turn(handle, turn_id)
-            deadline = _aware(turn.created_at).timestamp() + self.MAX_TURN_SECONDS
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                raise TimeoutError
-            await asyncio.wait_for(self._loop(handle, turn_id), remaining)
+            # Each loop run (the turn's start, or the restart after an approval decision) gets the
+            # full wall time: time the turn spent waiting for the user does not count.
+            await asyncio.wait_for(self._loop(handle, turn_id), self.MAX_TURN_SECONDS)
         except asyncio.CancelledError:
             raise  # cancel() or shutdown already decided the turn's state
         except _TurnEnded:
@@ -222,7 +253,7 @@ class AgentRunner:
             self._fail(handle, turn_id, e.message)
         except TimeoutError:
             log.info("agent turn failed: wall time")
-            self._fail(handle, turn_id, TIMEOUT_TEXT, open_items_text=TIMEOUT_TEXT)
+            self._fail(handle, turn_id, TIMEOUT_TEXT, open_items_text=TIMEOUT_TEXT, final_item=True)
         except Exception as e:  # never the message: it can carry payloads
             log.error("agent turn failed: %s", type(e).__name__)
             try:
@@ -343,13 +374,16 @@ class AgentRunner:
                     _record_unrun(handle, turn_id, calls[index + 1 :], "denied", WAITING_NOT_RUN, "Not run")
                     recorded = len(calls)
                     turn = store.update_turn(handle, turn_id, state="awaiting_approval")
-                    log.info("agent tool %s awaiting approval (%.1fs)", call.name, elapsed)
+                    log.info("agent tool %s awaiting approval (%.1fs)", _log_name(call.name), elapsed)
                     self._publish(handle, turn)
                     return True
 
                 self._store_outcome(handle, item.id, outcome)
                 log.info(
-                    "agent tool %s: %s in %.1fs", call.name, "error" if outcome.is_error else "ok", elapsed
+                    "agent tool %s: %s in %.1fs",
+                    _log_name(call.name),
+                    "error" if outcome.is_error else "ok",
+                    elapsed,
                 )
                 self._publish(handle, turn)
             return False

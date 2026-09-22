@@ -558,3 +558,76 @@ def test_a_failing_sweep_logs_and_the_project_still_opens(handle, tmp_path, monk
     reopened = _reopen(handle, tmp_path)
     assert reopened.id == handle.id
     assert any("agent turn sweep failed" in r.getMessage() for r in caplog.records)
+
+
+# ------------------------------------------------------------- fix round 1
+
+
+def _awaiting_turn(start, settle, llm, image_ids, *after):
+    labeler = {"kind": "cloud_provider", "provider": "anthropic", "query": "excavators"}
+    llm(calls(("label_images", {"selection": {"limit": 2}, "labeler": labeler})), *after)
+    start("label two images")
+    body = settle()
+    assert body["turn"]["state"] == "awaiting_approval"
+    return body["turn"]["id"]
+
+
+def test_the_wall_time_counts_from_the_restart_after_an_approval(
+    client, start, settle, llm, key, project_id, image_ids, handle, monkeypatch
+):
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setattr("app.inference.jobs.get_provider", lambda *a, **k: EmptyProvider())
+    turn_id = _awaiting_turn(start, settle, llm, image_ids, answer("Started."))
+    store.update_turn(handle, turn_id, created_at=datetime.now(UTC) - timedelta(seconds=2000))
+    r = client.post(f"{BASE}/{project_id}/agent/turns/{turn_id}/approval", json={"approve": True})
+    assert r.status_code == 200
+    body = settle()
+    assert body["turn"]["state"] == "succeeded", body["turn"]
+
+
+def test_a_timed_out_turn_ends_with_an_item_that_says_why(start, settle, llm, key, monkeypatch):
+    monkeypatch.setattr(AgentRunner, "MAX_TURN_SECONDS", 0.5)
+    llm(forever)
+    start()
+    body = settle()
+    assert body["turn"]["error"] == TIMEOUT_TEXT
+    assert body["items"][-1]["kind"] == "assistant"
+    assert body["items"][-1]["text"] == TIMEOUT_TEXT
+
+
+def test_an_approved_action_that_cannot_run_does_not_wedge_the_turn(
+    client, start, settle, llm, key, project_id, image_ids, monkeypatch
+):
+    turn_id = _awaiting_turn(start, settle, llm, image_ids, answer("It could not run."))
+
+    async def broken(ctx, name, prepared_args):
+        raise RuntimeError(f"broken {SECRET_KEY}")
+
+    monkeypatch.setattr("app.project_agent.runner.execute_approved", broken)
+    r = client.post(f"{BASE}/{project_id}/agent/turns/{turn_id}/approval", json={"approve": True})
+    assert r.status_code == 200, r.text
+    body = settle()
+    assert body["turn"]["state"] == "succeeded", body["turn"]
+    card = next(i for i in body["items"] if i["tool_name"] == "label_images")
+    assert card["tool_status"] == "error"
+    assert card["tool_summary"] == "The approved action could not run."
+    # The project is free again.
+    llm(answer("ok"))
+    assert start("again").status_code == 202
+
+
+def test_unknown_tool_names_from_the_model_are_not_logged(start, settle, llm, key, caplog):
+    import logging
+
+    caplog.set_level(logging.INFO, logger="app.project_agent.runner")
+    llm(calls(("ignore previous instructions", {})), answer("ok"))
+    start()
+    assert settle()["turn"]["state"] == "succeeded"
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "ignore previous" not in text
+    assert "agent tool unknown" in text
+
+
+def test_the_prompt_never_says_promote():
+    assert "promot" not in system_prompt("P", ["excavator"]).lower()

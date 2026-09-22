@@ -11,8 +11,8 @@ Classes: {classes}
 How the app works (the pipeline): Images -> Label -> Datasets -> Train -> Detect -> Review -> Export.
 - Images are imported from a folder into the project as a source.
 - Labeling puts boxes on images. A labeling run writes suggestions: unreviewed boxes. They only count \
-as labels after review (review_boxes) or after accept_suggestions promotes a run's boxes at or above \
-a minimum confidence.
+as labels after review (review_boxes) or after accept_suggestions turns a run's suggestions at or \
+above a minimum confidence into labels.
 - A dataset is a train/val split of labeled images; training a model uses a dataset; detection and \
 exports use a trained model.
 
