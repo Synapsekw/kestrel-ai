@@ -19,19 +19,22 @@ from app.providers.keys import KeyringKeyStore
 
 def project_opened(handle, runner) -> None:
     """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
-    their folders back, sweep partial exports a crash left behind. Each step on its own, so one
+    their folders back, sweep partial exports a crash left behind, fail agent turns the last process
+    left running. Each step on its own, so one
     failing never skips the others."""
     import logging
 
     from app.datasets import materialise
     from app.exports import job as exports_job
     from app.jobs import startup
+    from app.project_agent import store as agent_store
 
     log = logging.getLogger(__name__)
     for step, run in (
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
+        ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),
     ):
         try:
             run()
@@ -62,7 +65,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.jobs.keys = app.state.keys
         app.state.jobs.provider_config = app.state.provider_config
         app.state.jobs.start()
+        # The project agent's turn loops run as tasks on this event loop; the model call is a seam
+        # (`agent_llm`) so tests can script the model without reaching a provider.
+        from app.project_agent import llm as agent_llm
+        from app.project_agent.runner import AgentRunner
+
+        app.state.agent = AgentRunner(app)
+        app.state.agent_llm = agent_llm.complete
         yield
+        await app.state.agent.stop()
         app.state.jobs.stop()
         app.state.projects.close_all()
 
