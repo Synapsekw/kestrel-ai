@@ -184,6 +184,12 @@ def test_the_system_prompt_names_the_project_classes_and_the_rules():
     assert "Kestrel AI" in text
 
 
+def test_the_system_prompt_says_how_to_pick_a_labeler():
+    text = system_prompt("Site 7", ["excavator"])
+    assert "Prefer a registered local model whose classes match" in text
+    assert "cloud provider that has a key" in text and "get_project" in text
+
+
 def test_the_system_prompt_handles_a_project_without_classes():
     assert "no classes" in system_prompt("Empty", []).lower()
 

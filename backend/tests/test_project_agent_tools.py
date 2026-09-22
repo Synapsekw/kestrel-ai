@@ -314,7 +314,7 @@ def test_list_sources(tool, source_id, folder):
 
 def test_find_images_counts_and_lists_at_most_50_rows(tool, image_ids):
     body = ok(tool("find_images", {"selection": {"limit": 5000}}))
-    assert body["count"] == N_IMAGES
+    assert body["selected"] == N_IMAGES
     assert [r["id"] for r in body["images"]] == image_ids
     assert set(body["images"][0]) == {
         "id",
@@ -325,14 +325,14 @@ def test_find_images_counts_and_lists_at_most_50_rows(tool, image_ids):
         "marked_empty",
     }
     body = ok(tool("find_images", {"selection": {"offset": 2, "limit": 3}}))
-    assert body["count"] == 3
+    assert body["selected"] == 3
     assert [r["id"] for r in body["images"]] == image_ids[2:5]
 
 
 def test_find_images_caps_the_rows_at_50(tool, monkeypatch, image_ids):
     monkeypatch.setattr(tools, "FIND_ROWS", 4)
     body = ok(tool("find_images", {}))
-    assert body["count"] == N_IMAGES
+    assert body["selected"] == N_IMAGES
     assert len(body["images"]) == 4
 
 
@@ -635,7 +635,7 @@ def test_mutating_tools_require_an_explicit_selection(
 
 
 def test_read_tools_keep_the_default_selection(tool, image_ids):
-    assert ok(tool("find_images", {}))["count"] == N_IMAGES
+    assert ok(tool("find_images", {}))["selected"] == N_IMAGES
     est = tool(
         "estimate_labeling", {"labeler": {"kind": "cloud_provider", "provider": "anthropic", "query": "x"}}
     )
@@ -643,3 +643,96 @@ def test_read_tools_keep_the_default_selection(tool, image_ids):
     schemas = {s.name: s.input_schema for s in tool_specs()}
     for name in ("mark_images_empty", "label_images", "delete_images"):
         assert "selection" in schemas[name]["required"], name
+
+
+# ------------------------------------------------------------ final review fixes
+
+
+@pytest.mark.parametrize("bad", ["", ".", "..", "a/b", "a\\b", "../projects"])
+def test_seg_refuses_dot_segments_and_separators(bad):
+    with pytest.raises(tools.ToolError):
+        tools._seg(bad)
+
+
+def test_seg_keeps_a_uuid():
+    assert tools._seg("10000000-5555-4000-8000-000000000001") == "10000000-5555-4000-8000-000000000001"
+
+
+@pytest.mark.parametrize(
+    ("name", "args"),
+    [
+        ("delete_boxes", {"box_ids": [".."]}),
+        ("update_box", {"box_id": "..", "x": 1}),
+        ("get_image", {"image_id": ".."}),
+        ("get_job", {"job_id": ".."}),
+        ("delete_dataset", {"dataset_id": ".."}),
+        ("view_image", {"image_id": "a/b"}),
+        ("find_images", {"selection": {"image_ids": ["a,b"]}}),
+        ("label_images", {"selection": {}, "labeler": {"kind": "local_model", "model_id": ".."}}),
+    ],
+)
+def test_a_dot_segment_id_is_rejected_before_any_request(tool, client, project_id, name, args):
+    out = tool(name, args)
+    assert isinstance(out, ToolOutcome) and out.is_error
+    assert "Invalid arguments" in out.result
+    assert client.get(f"/api/v1/projects/{project_id}").status_code == 200
+
+
+def test_an_approved_delete_boxes_with_a_dot_segment_never_reaches_the_project(agent, client, project_id):
+    out = agent(lambda ctx: execute_approved(ctx, "delete_boxes", {"box_ids": ["..", ".", "x/y"]}))
+    assert out.is_error
+    assert client.get(f"/api/v1/projects/{project_id}").status_code == 200
+
+
+def test_find_images_reports_the_true_total_beyond_the_limit(tool, image_ids):
+    body = ok(tool("find_images", {"selection": {"limit": 3}}))
+    assert body["total"] == N_IMAGES
+    assert body["selected"] == 3
+    assert body["returned"] == 3
+    assert [r["id"] for r in body["images"]] == image_ids[:3]
+    body = ok(tool("find_images", {"selection": {"image_ids": image_ids[:2] + ["ghost"]}}))
+    assert body["total"] == 2 and body["selected"] == 2
+    assert "total" in REGISTRY["find_images"].description
+
+
+def test_update_classes_summary_keeps_the_case_of_class_names(tool):
+    out = tool("update_classes", {"add": ["Crawler_Crane"]})
+    assert out.summary == "Added Crawler_Crane"
+    out = tool("update_classes", {"rename": [{"from": "Crawler_Crane", "to": "CC"}]})
+    assert out.summary == "Renamed Crawler_Crane to CC"
+
+
+def test_execute_approved_turns_a_non_outcome_into_an_error(agent, monkeypatch):
+    class Odd(Tool):
+        name = "odd"
+        description = "returns a Prepared from run, which execute_approved must not pass on"
+        Args = tools.NoArgs
+        risk = "approval"
+        label = "Odd"
+
+        async def run(self, ctx, args):
+            return Prepared(title="t", detail="d", estimated_cost=None, args={})
+
+    monkeypatch.setitem(REGISTRY, "odd", Odd())
+    out = agent(lambda ctx: execute_approved(ctx, "odd", {}))
+    assert isinstance(out, ToolOutcome) and out.is_error
+
+
+def test_the_labeler_union_is_any_of_not_one_of():
+    specs = {s.name: s for s in tool_specs()}
+    for name in ("label_images", "estimate_labeling"):
+        text = json.dumps(specs[name].input_schema)
+        assert "oneOf" not in text
+        assert "anyOf" in json.dumps(specs[name].input_schema["properties"]["labeler"])
+
+
+def test_get_project_lists_the_cloud_providers_with_a_key(tool, app, image_ids):
+    app.state.keys.set("anthropic", "sk-fake-key")
+    out = tool("get_project")
+    body = ok(out)
+    assert body["cloud_providers"] == [
+        {"name": "openai", "has_key": False},
+        {"name": "anthropic", "has_key": True},
+    ]
+    assert "sk-fake-key" not in out.result
+    assert "provider" in REGISTRY["get_project"].description

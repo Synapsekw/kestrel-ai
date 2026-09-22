@@ -25,7 +25,14 @@ from urllib.parse import quote
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.project_agent.dispatch import ApiCaller, ApiCallError, ImageSelector, resolve_selection
+from app.project_agent.dispatch import (
+    ID_PATTERN,
+    ApiCaller,
+    ApiCallError,
+    Id,
+    ImageSelector,
+    resolve_selection,
+)
 from app.project_agent.history import ToolSpec
 
 log = logging.getLogger(__name__)
@@ -124,7 +131,13 @@ def _json(value: Any) -> str:
 
 
 def _seg(value: str) -> str:
-    """A path segment the model supplied, quoted so it cannot walk to another route."""
+    """A path segment the model supplied, quoted so it cannot walk to another route.
+
+    Quoting alone is not enough: `..` and `.` survive it and the HTTP client normalises them as dot
+    segments (`/projects/P/boxes/..` is `/projects/P`), so they, empty ids and separators refuse.
+    """
+    if not isinstance(value, str) or value in ("", ".", "..") or "/" in value or "\\" in value:
+        raise ToolError(f"{value!r} is not a valid id.")
     return quote(value, safe="")
 
 
@@ -237,7 +250,7 @@ def _page(key: str, rows: list, next_cursor: str | None) -> dict:
 
 class LocalLabeler(_Args):
     kind: Literal["local_model"]
-    model_id: str = Field(description="A model id from list_models.")
+    model_id: str = Field(pattern=ID_PATTERN, description="A model id from list_models.")
 
 
 class CloudLabeler(_Args):
@@ -279,12 +292,15 @@ class GetProject(Tool):
     description = (
         "Get the project's name, its classes (id and name), the pre-annotation model and summary "
         "counts: images, labeled and unlabeled images, accepted boxes, unreviewed suggestions, "
-        "boxes per class and images per source. Call this first to orient yourself."
+        "boxes per class and images per source, and which cloud providers have an API key "
+        "stored (cloud_providers: name, has_key) for cloud labeling. Call this first to orient "
+        "yourself."
     )
 
     async def run(self, ctx, args):
         project = await ctx.api.call("GET", "")
         stats = await ctx.api.call("GET", "/stats")
+        providers = (await ctx.api.call("GET", "/api/v1/providers"))["items"]
         body = {
             "id": project["id"],
             "name": project["name"],
@@ -305,6 +321,8 @@ class GetProject(Tool):
                     for s in stats["sources"][:20]
                 ],
             },
+            # Only whether a key exists: the key itself never leaves the credential store.
+            "cloud_providers": [{"name": p["name"], "has_key": bool(p["has_key"])} for p in providers],
         }
         return _ok(body, f"Read project {project['name']}")
 
@@ -345,14 +363,28 @@ class FindImages(Tool):
     risk = "read"
     Args = FindImagesArgs
     description = (
-        "Resolve an image selection and return how many images it selects (`count`, at most "
-        "5000) and the first 50 of them with file name, labeled, accepted box count, unreviewed "
-        "suggestion count and marked_empty. Use it to check a selection before acting on it, "
-        "or to find image ids."
+        "Resolve an image selection. Returns `total` (how many project images match the filters, "
+        "ignoring offset and limit, so it is the true count), `selected` (how many the selection "
+        "takes after offset and limit, at most 5000), `returned` and the first 50 selected images "
+        "with file name, labeled, accepted box count, unreviewed suggestion count and "
+        "marked_empty. Use it to count images, check a selection before acting on it, or to find "
+        "image ids."
     )
 
     async def run(self, ctx, args):
-        ids = await resolve_selection(ctx.api, ImageSelector(**args["selection"]))
+        sel = ImageSelector(**args["selection"])
+        ids = await resolve_selection(ctx.api, sel)
+        if sel.image_ids is not None:
+            total = len(ids)
+        else:
+            params = {
+                "source_id": sel.source_id,
+                "labeled": sel.labeled,
+                "has_pending": sel.has_pending,
+                "search": sel.search,
+                "limit": 1,
+            }
+            total = (await ctx.api.call("GET", "/images", params=params))["total"]
         rows: list[dict] = []
         shown = ids[:FIND_ROWS]
         if shown:
@@ -371,11 +403,15 @@ class FindImages(Tool):
                             "marked_empty": i["marked_empty"],
                         }
                     )
-        return _ok({"count": len(ids), "images": rows}, f"Found {_plural(len(ids), 'image')}")
+        body = {"total": total, "selected": len(ids), "returned": len(rows), "images": rows}
+        summary = f"Found {_plural(total, 'image')}"
+        if len(ids) != total:
+            summary += f", selected {len(ids):,}"
+        return _ok(body, summary)
 
 
 class ImageIdArgs(_Args):
-    image_id: str = Field(description="An image id from find_images.")
+    image_id: str = Field(pattern=ID_PATTERN, description="An image id from find_images.")
 
 
 class GetImage(Tool):
@@ -527,7 +563,7 @@ class ListDatasets(Tool):
 
 
 class DatasetIdArgs(_Args):
-    dataset_id: str = Field(description="A dataset id from list_datasets.")
+    dataset_id: str = Field(pattern=ID_PATTERN, description="A dataset id from list_datasets.")
 
 
 class GetDataset(Tool):
@@ -616,7 +652,7 @@ class ListJobs(Tool):
 
 
 class JobIdArgs(_Args):
-    job_id: str = Field(description="A job id.")
+    job_id: str = Field(pattern=ID_PATTERN, description="A job id.")
 
 
 class GetJob(Tool):
@@ -741,7 +777,8 @@ class UpdateClasses(Tool):
             parts.append(f"added {', '.join(added)}")
         if args["rename"]:
             parts.append("renamed " + ", ".join(f"{r['from']} to {r['to']}" for r in args["rename"]))
-        summary = ("; ".join(parts) or "no change").capitalize()
+        text = "; ".join(parts) or "no change"
+        summary = text[0].upper() + text[1:]  # never lower-case a class name
         return _ok({"classes": [c["name"] for c in project["classes"]]}, summary)
 
 
@@ -796,7 +833,7 @@ class LabelImages(Tool):
 
 
 class AcceptArgs(_Args):
-    query_run_id: str = Field(description="A labeling run id from list_query_runs.")
+    query_run_id: str = Field(pattern=ID_PATTERN, description="A labeling run id from list_query_runs.")
     min_confidence: float = Field(
         0, ge=0, le=1, description="Accept only suggestions at or above this confidence."
     )
@@ -826,7 +863,7 @@ class AcceptSuggestions(Tool):
 
 
 class RunIdArgs(_Args):
-    query_run_id: str = Field(description="A labeling run id from list_query_runs.")
+    query_run_id: str = Field(pattern=ID_PATTERN, description="A labeling run id from list_query_runs.")
 
 
 class UndoAcceptSuggestions(Tool):
@@ -848,7 +885,7 @@ class UndoAcceptSuggestions(Tool):
 
 
 class ReviewArgs(_Args):
-    box_ids: list[str] = Field(
+    box_ids: list[Id] = Field(
         min_length=1, max_length=500, description="Box ids from get_image (at most 500)."
     )
     action: Literal["accept", "reject", "unreview"]
@@ -903,7 +940,7 @@ class MarkImagesEmpty(Tool):
 
 
 class CreateBoxArgs(_Args):
-    image_id: str
+    image_id: Id
     class_name: str = Field(description="A project class name.")
     x: float = Field(description="Left edge in full-size image pixels.")
     y: float = Field(description="Top edge in full-size image pixels.")
@@ -933,7 +970,7 @@ class CreateBox(Tool):
 
 
 class UpdateBoxArgs(_Args):
-    box_id: str
+    box_id: Id
     class_name: str | None = Field(None, description="New class name.")
     x: float | None = None
     y: float | None = None
@@ -1117,7 +1154,7 @@ class ExportResults(Tool):
 
 
 class ExportModelArgs(_Args):
-    model_id: str
+    model_id: Id
     format: Literal["onnx", "engine"] = Field(description="onnx, or engine for TensorRT on the GPU.")
     imgsz: int = Field(1280, ge=320, le=4096)
     half: bool = Field(False, description="FP16; only for engine.")
@@ -1141,7 +1178,7 @@ class ExportModel(Tool):
 
 class UpdateProjectArgs(_Args):
     name: str | None = Field(None, min_length=1, description="New project name.")
-    preannotation_model_id: str | None = Field(
+    preannotation_model_id: Id | None = Field(
         None, description="Model used for one-image pre-annotation in the editor."
     )
     clear_preannotation_model: bool = Field(False, description="true removes the pre-annotation model.")
@@ -1187,7 +1224,7 @@ class CancelJob(Tool):
 
 
 class WaitArgs(_Args):
-    job_id: str
+    job_id: Id
     seconds: int = Field(30, ge=1, le=60, description="Wait at most this long (1-60 s).")
 
 
@@ -1221,7 +1258,7 @@ class WaitForJob(Tool):
 
 class OpenScreenArgs(_Args):
     screen: SCREENS
-    image_id: str | None = Field(None, description="Required for the editor screen.")
+    image_id: Id | None = Field(None, description="Required for the editor screen.")
 
 
 class OpenScreen(Tool):
@@ -1249,8 +1286,8 @@ class OpenScreen(Tool):
 
 class TrainArgs(_Args):
     name: str = Field(min_length=1, description="Name for the new model, e.g. site-v2.")
-    dataset_id: str = Field(description="A dataset id from list_datasets.")
-    base_model_id: str = Field(description="A model id from list_models to start from.")
+    dataset_id: Id = Field(description="A dataset id from list_datasets.")
+    base_model_id: Id = Field(description="A model id from list_models to start from.")
     epochs: int = Field(50, ge=1, le=1000)
     imgsz: int = Field(1280, ge=320, le=4096)
     batch: int | None = Field(None, ge=1, description="Omit for automatic.")
@@ -1314,7 +1351,7 @@ class DeleteImages(Tool):
 
 
 class DeleteBoxesArgs(_Args):
-    box_ids: list[str] = Field(min_length=1, max_length=500, description="Box ids (at most 500).")
+    box_ids: list[Id] = Field(min_length=1, max_length=500, description="Box ids (at most 500).")
 
 
 class DeleteBoxes(Tool):
@@ -1337,10 +1374,11 @@ class DeleteBoxes(Tool):
         )
 
     async def run(self, ctx, args):
+        segs = [_seg(box_id) for box_id in args["box_ids"]]  # refuse before deleting any
         deleted = missing = 0
-        for box_id in args["box_ids"]:
+        for seg in segs:
             try:
-                await ctx.api.call("DELETE", f"/boxes/{_seg(box_id)}")
+                await ctx.api.call("DELETE", f"/boxes/{seg}")
                 deleted += 1
             except ApiCallError as e:
                 if e.status != 404:
@@ -1377,7 +1415,7 @@ class DeleteDataset(Tool):
 
 
 class ModelIdArgs(_Args):
-    model_id: str = Field(description="A model id from list_models.")
+    model_id: str = Field(pattern=ID_PATTERN, description="A model id from list_models.")
 
 
 class DeleteModel(Tool):
@@ -1449,7 +1487,8 @@ REGISTRY: dict[str, Tool] = {
 
 
 def _clean_schema(schema: dict) -> dict:
-    """A self-contained JSON schema: `$defs` refs inlined, titles and discriminator hints dropped."""
+    """A self-contained JSON schema: `$defs` refs inlined, titles and discriminator hints dropped,
+    `oneOf` emitted as `anyOf`."""
     defs = schema.get("$defs", {})
 
     def walk(node: Any, properties: bool = False) -> Any:
@@ -1467,8 +1506,10 @@ def _clean_schema(schema: dict) -> dict:
         if isinstance(all_of, list) and len(all_of) == 1:
             rest = {k: v for k, v in node.items() if k != "allOf"}
             return walk({**all_of[0], **rest})
+        # A discriminated union comes out as `oneOf`; `anyOf` is the form every provider's function
+        # parameters accept (the `kind` literal still tells the branches apart).
         return {
-            k: walk(v, properties=(k == "properties"))
+            ("anyOf" if k == "oneOf" else k): walk(v, properties=(k == "properties"))
             for k, v in node.items()
             if k not in ("title", "$defs", "discriminator")
         }
@@ -1532,7 +1573,9 @@ async def execute_approved(ctx: ToolContext, name: str, prepared_args: dict) -> 
     if tool is None:
         return _error(f"There is no tool named {name!r}.")
     outcome = _finish(await _guard(name, lambda: tool.run(ctx, prepared_args)))
-    assert isinstance(outcome, ToolOutcome)
+    if not isinstance(outcome, ToolOutcome):
+        log.error("agent approved tool %s returned no outcome", name)
+        return _error(f"The tool {name} failed unexpectedly.")
     return outcome
 
 

@@ -26,6 +26,8 @@ add them first with update_classes (clear English names such as dump_truck), the
 - A local_model labeler needs a registered model whose classes match (see list_models). A \
 cloud_provider labeler (openai or anthropic) needs a query that names the objects to find, in plain \
 words.
+- Choosing a labeler: Prefer a registered local model whose classes match the objects (free); \
+otherwise use a cloud provider that has a key (get_project lists cloud_providers with has_key).
 
 Background work: labeling, imports, datasets, training and exports run as background jobs. Starting \
 one returns a job id at once. Use wait_for_job sparingly, for short jobs whose result you need next; \

@@ -9,7 +9,7 @@ exactly as they do for the UI. `ApiCaller` must be used on the event loop the ap
 
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field
@@ -19,6 +19,9 @@ BASE_URL = "http://agent.local"
 SELECT_PAGE = 200
 MAX_SELECTION = 5000
 MAX_IDS = 200
+# Every id the model supplies (the app's ids are UUIDs): no dot segments, separators or commas.
+ID_PATTERN = r"^[A-Za-z0-9_-]{1,64}$"
+Id = Annotated[str, Field(pattern=ID_PATTERN)]
 
 
 class ApiCallError(Exception):
@@ -104,12 +107,12 @@ class ImageSelector(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    image_ids: list[str] | None = Field(
+    image_ids: list[Id] | None = Field(
         None,
         max_length=MAX_IDS,
         description="Explicit image ids (at most 200). When given, every other field is ignored.",
     )
-    source_id: str | None = Field(None, description="Only images imported from this source.")
+    source_id: Id | None = Field(None, description="Only images imported from this source.")
     labeled: bool | None = Field(
         None,
         description="true: images with an accepted/edited box or marked empty; false: images with neither.",
