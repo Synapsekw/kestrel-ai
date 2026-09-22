@@ -7,6 +7,7 @@ place the backend touches torch outside the worker subprocess.
 from pathlib import Path
 
 import pytest
+from local_paths import MODELS_DIR
 from sqlalchemy import select
 
 from app.db.models import Dataset, Model
@@ -17,7 +18,7 @@ from app.training.trainer import TrainResult
 # The operator's model folder first, then the starter copy `scripts/fetch_starter_weights.ps1` pins by
 # SHA-256 (what CI fetches). Tests that load it skip when neither exists, like the GPU tests do.
 _CANDIDATES = [
-    Path("E:/Dev/Yolo/models/yolo11n.pt"),
+    MODELS_DIR / "yolo11n.pt",
     Path(__file__).resolve().parents[1] / "starter_weights" / "yolo11n.pt",
 ]
 YOLO11N = next((p for p in _CANDIDATES if p.is_file()), _CANDIDATES[-1])

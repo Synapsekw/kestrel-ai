@@ -6,9 +6,9 @@ Keys are read from the environment at call time and never stored, logged or asse
 
 import logging
 import os
-from pathlib import Path
 
 import pytest
+from local_paths import FRAMES_DIR
 from PIL import Image as PILImage
 
 from app.providers.base import Tile
@@ -16,7 +16,7 @@ from app.providers.config import DEFAULTS
 
 pytestmark = pytest.mark.live
 
-FRAMES = Path("E:/Dev/Yolo/data/raw/ahmadia")
+FRAMES = FRAMES_DIR
 CLASSES = ["excavator", "wheel_loader", "bulldozer", "dump_truck", "crane"]
 TILE = Tile(index=0, x=1024, y=512, w=1280, h=1280)
 LOG = logging.getLogger("live")

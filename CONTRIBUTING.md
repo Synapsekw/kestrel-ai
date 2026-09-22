@@ -84,6 +84,10 @@ Two things that trip people up:
 - **`cargo` is not on PATH** in every shell. If `cargo test` fails to resolve, call the real binary
   directly: `%USERPROFILE%\.cargo\bin\cargo.exe test --manifest-path frontend/src-tauri/Cargo.toml`.
 
+The GPU (`pytest -m gpu`), live-provider and real-frame tests read weights from
+`KESTREL_MODELS_DIR` (default `E:/Dev/Yolo/models`) and aerial frames from `KESTREL_FRAMES_DIR`
+(default `E:/Dev/Yolo/data/raw/ahmadia`); they skip when those files are missing.
+
 Packaging changes additionally require `backend\scripts\build.ps1`,
 `backend\scripts\smoke_frozen.ps1` and `pnpm -C frontend build:installer` — see `README.md` →
 "Build".

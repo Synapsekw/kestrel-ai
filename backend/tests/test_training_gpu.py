@@ -8,18 +8,18 @@ import importlib.util
 import json
 import shutil
 import time
-from pathlib import Path
 
 import pytest
 import yaml
+from local_paths import FRAMES_DIR, MODELS_DIR
 from PIL import Image as PILImage
 
 from app.db.models import Dataset
 
 pytestmark = pytest.mark.gpu
 
-FRAMES = Path("E:/Dev/Yolo/data/raw/ahmadia")
-YOLO11N = Path("E:/Dev/Yolo/models/yolo11n.pt")
+FRAMES = FRAMES_DIR
+YOLO11N = MODELS_DIR / "yolo11n.pt"
 CLASSES = ["excavator", "dump_truck"]
 BASE = "/api/v1/projects"
 TRAIN_TIMEOUT_S = 600

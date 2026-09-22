@@ -10,6 +10,7 @@ import time
 from pathlib import Path
 
 import pytest
+from local_paths import FRAMES_DIR, MODELS_DIR
 
 from app.providers.base import TilingSpec
 from app.providers.local_yolo import LocalYoloProvider, build_class_map
@@ -17,8 +18,8 @@ from app.training import registry
 
 pytestmark = pytest.mark.gpu
 
-FRAMES = Path("E:/Dev/Yolo/data/raw/ahmadia")
-YOLO11M = Path("E:/Dev/Yolo/models/yolo11m.pt")
+FRAMES = FRAMES_DIR
+YOLO11M = MODELS_DIR / "yolo11m.pt"
 TILED_BUDGET_S = 60
 FULL_FRAME_BUDGET_S = 30
 

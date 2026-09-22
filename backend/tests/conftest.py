@@ -6,6 +6,7 @@ import numpy as np
 import piexif
 import pytest
 from fastapi.testclient import TestClient
+from local_paths import FRAMES_DIR
 from PIL import Image
 
 from app.config import Settings
@@ -14,7 +15,7 @@ from app.main import create_app
 from app.providers.keys import MemoryKeyStore
 
 TOKEN = "test-token"
-AHMADIA_RAW = Path(r"E:\Dev\Yolo\data\raw\ahmadia")
+AHMADIA_RAW = FRAMES_DIR
 SAMPLE_FRAMES = 20
 EIGHT_CLASSES = [
     "excavator",
