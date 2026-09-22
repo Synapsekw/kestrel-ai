@@ -10,10 +10,10 @@ jobs:
   contract:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: { version: 10 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm, cache-dependency-path: contract/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
         working-directory: contract
@@ -23,8 +23,8 @@ jobs:
   backend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
       - run: uv venv --python 3.11.15 .venv
         working-directory: backend
       # CPU wheels on the runner; the reference machine uses the cu130 pins from requirements.txt.
@@ -35,7 +35,7 @@ jobs:
         working-directory: backend
         shell: bash
       # Pinned-SHA starter weights: the registry tests import yolo11n.pt (they skip without it).
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with: { path: backend/starter_weights, key: "starter-weights-${{ hashFiles('backend/scripts/fetch_starter_weights.ps1') }}" }
       - run: .\scripts\fetch_starter_weights.ps1
         working-directory: backend
@@ -46,10 +46,10 @@ jobs:
   frontend:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
         with: { version: 10 }
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with: { node-version: 24, cache: pnpm, cache-dependency-path: frontend/pnpm-lock.yaml }
       - run: pnpm install --frozen-lockfile
         working-directory: contract
@@ -64,22 +64,22 @@ jobs:
         working-directory: frontend
       # A failed e2e run keeps its traces: the runner is the only machine where some races show.
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with: { name: playwright-results, path: frontend/test-results, retention-days: 7 }
 
   sidecar-smoke:
     if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10
       - run: uv venv --python 3.11.15 .venv
         working-directory: backend
       - run: uv pip install --python .venv/Scripts/python.exe --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple --override ci-overrides-cpu.txt -r requirements-dev.txt
         working-directory: backend
         shell: bash
       # build.ps1 bundles all three starter weights and refuses to run without them.
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with: { path: backend/starter_weights, key: "starter-weights-${{ hashFiles('backend/scripts/fetch_starter_weights.ps1') }}" }
       - run: .\scripts\fetch_starter_weights.ps1
         working-directory: backend
