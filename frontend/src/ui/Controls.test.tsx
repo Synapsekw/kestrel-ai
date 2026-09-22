@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { Checkbox } from "./Checkbox";
 import { Disclosure } from "./Disclosure";
 import { Field } from "./Field";
-import { Input } from "./Input";
+import { Input, Select } from "./Input";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 import { Tooltip } from "./Tooltip";
@@ -100,5 +100,31 @@ describe("Tooltip", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+describe("Select", () => {
+  // cx() only joins classes, and Tailwind emits w-full after w-[4.5rem], so a wrapper carrying
+  // both renders full width and squeezes its neighbours (the class-name fields in settings).
+  it("lets a caller's wrapper width replace the default full width", () => {
+    render(
+      <Select aria-label="Hotkey" wrapperClassName="w-[4.5rem]">
+        <option value="">none</option>
+      </Select>,
+    );
+    const wrapper = screen.getByRole("combobox", { name: "Hotkey" }).parentElement!;
+    expect(wrapper.className).toContain("w-[4.5rem]");
+    expect(wrapper.className).not.toContain("w-full");
+  });
+
+  it("is full width when the caller gives no wrapper class", () => {
+    render(
+      <Select aria-label="Class">
+        <option value="">none</option>
+      </Select>,
+    );
+    expect(screen.getByRole("combobox", { name: "Class" }).parentElement!.className).toContain(
+      "w-full",
+    );
   });
 });

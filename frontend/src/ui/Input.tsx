@@ -71,7 +71,15 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   ref,
 ) {
   return (
-    <span className={cx("relative inline-flex w-full", wrapperClassName)}>
+    // cx() does not resolve Tailwind conflicts and w-full is emitted after arbitrary widths, so a
+    // caller's width only wins if the default steps aside.
+    <span
+      className={cx(
+        "relative inline-flex",
+        !/(^|\s)w-/.test(wrapperClassName ?? "") && "w-full",
+        wrapperClassName,
+      )}
+    >
       <select
         ref={ref}
         aria-invalid={invalid || undefined}
