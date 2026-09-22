@@ -1,0 +1,8 @@
+{
+  "Shortcut": "C:\\Users\\D\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Kestrel AI.lnk",
+  "Target": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI\\kestrel-ai.exe",
+  "Icon": "C:\\Users\\D\\AppData\\Local\\Programs\\Kestrel AI\\kestrel-bird-61b90923c2e6.ico,0",
+  "IconSHA256": "61B90923C2E6A11163CDE71D232292116C9610E4685EABDA5FEB485A23719E77",
+  "Refresh": "SHCNE_UPDATEITEM paths + SHCNE_ASSOCCHANGED, synchronous",
+  "RebuildNeeded": false
+}

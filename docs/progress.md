@@ -316,6 +316,12 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
+- 2026-09-22: Windows icon report investigated without a rebuild. All 17 source assets, installed
+  PE icons, running-window SMALL/SMALL2 and shell-resolved shortcut already showed the approved bird.
+  Set the Start shortcut to an explicit content-specific bird ICO and refreshed Windows references;
+  post-change shell extraction verified. App remains open; binary hash matches the setup-agent build.
+  Evidence and limits: `docs/evidence/brand/2026-09-22-windows-icon-refresh/`. No app source changed;
+  the reported stale bitmap was not reproduced by native reads. Later CI UI fixes remain uninstalled.
 - 2026-09-21: Setup agent/catalog desktop rebuilt from `75aa11b` in `task/setup-agent-desktop`.
   Application trees match the prior source gates exactly. Fresh backend freeze passed (204s,
   3,522.9 MiB), CUDA/worker/ONNX smoke passed (23.13s), 8 Rust tests passed, native/Inno build
