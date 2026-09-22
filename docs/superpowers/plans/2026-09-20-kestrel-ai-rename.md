@@ -937,13 +937,13 @@ Expected: the first is `True`, the second `False` (the folder was moved, not cop
 
 If Recent projects is empty but the legacy folder still exists, the migration returned `BothPresent` or `Failed` — read the reason from the console output and resolve before continuing.
 
-- [ ] **Step 5: Re-run acceptance**
+- [x] **Step 5: Re-run acceptance** — done 2026-09-22 on main `8823d95`: 8/8, evidence in `docs/evidence/acceptance/2026-09-22-installed-8823d95/` (named by date and commit like the earlier runs, not `2026-09-20-kestrel-ai/`)
 
 Follow `scripts/acceptance.md` against the installed Kestrel AI build. The previous 8/8 was measured on the old build and is stale until this passes.
 
 Write evidence to `docs/evidence/acceptance/2026-09-20-kestrel-ai/`. **Do not overwrite** `docs/evidence/acceptance/` — the earlier run stays as the record of the pre-rename build.
 
-- [ ] **Step 6: Record the result and commit**
+- [x] **Step 6: Record the result and commit** — `docs/progress.md` log, 2026-09-22
 
 Add a dated row to `docs/progress.md` under the acceptance section giving the commit, the installer size, and the pass/skip counts. State honestly which steps were skipped and why (the earlier run skipped step 7 for want of a provider key).
 
