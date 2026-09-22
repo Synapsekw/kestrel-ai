@@ -64,8 +64,9 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Contour UI redesign | merged to `main` (`50c5e0d`); installed verification `5555557` | selected direction implemented; 517 frontend, 620 backend, 57 browser tests; rebuilt/installed 2026-09-21, fresh GPU smoke and 8 Rust tests, 13 installed checks and 6 native screenshots |
 | Kestrel A identity | merged/pushed to `main` (`33f1c28`); rebuilt and installed | approved bird shared across sidebar/splash and 17 native assets; app/setup icon resources match at 16px/32px; 15 installed checks passed |
 | Setup agent and YOLO catalog | merged/pushed to `main` (`89de91b`); rebuilt and installed (`f15f89b`) | conversational project setup through first labeling/review; 44 detection starters across eight families; 666 backend, 533 frontend and 59 browser tests; fresh GPU smoke, 8 Rust tests and 16 installed checks passed |
-| Kestrel AI rename | naming and code renamed 2026-09-20 | acceptance has **not** been re-run against the renamed installed build — see §5 |
+| Kestrel AI rename | naming and code renamed 2026-09-20 | acceptance **8/8** on the renamed installed build `8823d95` (2026-09-22, evidence `93892bd`); rename plan Task 11 Steps 5-6 closed |
 | Rotated boxes (OBB) wave 1 — annotate, store, export | merged to `main` (`249262b`) | gate green on the merged result; 2 cross-cutting defects found by the whole-branch review and fixed before merge; wave 2 (OBB training) unplanned |
+| Cleanup batch A | merged/pushed to `main` (`8823d95`); rebuilt, installed, acceptance at `93892bd` | Select width fix (cramped class fields), G3 report label tags, CI actions on Node 24 majors, portable GPU-test paths; G2/M3 ledger closed. See [[2026-09-22-1758-cleanup-a-and-acceptance]] |
 | CI green (GitHub Actions `ci`) | merged/pushed to `main` (`afba411`) | red on all 14 push runs since publishing; four stacked causes fixed and the local gate now runs `ruff format --check` and e2e as CI does; 3/3 dispatch runs green on all four jobs including `sidecar-smoke`. See [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
@@ -78,11 +79,19 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Windows icon reference refreshed locally**. The installed executable, running
-window and shell extractions already showed the approved bird. The Start shortcut now points to an
-explicit verified bird ICO and Windows received icon-reference refresh notifications. The app is open;
-no binary rebuild was needed. See [[2026-09-22-0627-windows-icon-refresh]]. The installed application
-remains the setup-agent build; subsequent editor/train fixes still await distribution.
+**Shipped last:** **Cleanup batch A, rebuilt, installed and accepted 8/8** — `f59007b..93892bd`
+(10 commits, two task worktrees, both removed). Fixed the cramped class-name fields (`Select`
+dropped the caller's width because `cx()` does not resolve Tailwind conflicts), made HTML-report
+labels readable filled tags (G3), moved every CI action to its Node 24 major, and made the GPU/live
+tests read `KESTREL_MODELS_DIR`/`KESTREL_FRAMES_DIR`. Rebuilt from `8823d95` and installed with
+verified hashes; the installed app now carries the `afba411` editor/train fixes too. Acceptance
+**8/8** on the installed renamed build, step 7 on the stored Anthropic key. The run needed four
+passes because the operator used the driver's window and step 3 wrote into their project (repaired
+with consent); the driver now guards against that. See [[2026-09-22-1758-cleanup-a-and-acceptance]]
+and [[2026-09-22-gotcha-acceptance-window-looks-like-the-operators-app]].
+
+Previously shipped: **Windows icon reference refreshed locally**. The Start shortcut points to an
+explicit verified bird ICO. See [[2026-09-22-0627-windows-icon-refresh]].
 
 Previously shipped: **CI green**, merged/pushed at `afba411` (11 commits from `bcba190`). GitHub Actions had
 failed every run since publishing. The causes were stacked: unformatted backend files; registry tests
@@ -136,21 +145,17 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** no remaining work for the local Windows icon-reference refresh. The installed app
-includes the setup drawer and all 44 compatible detection starters, with focused native verification complete.
-The separately prepared folder rename remains pending (§5).
+**In flight:** nothing from this block. Another session's worktree `.claude/worktrees/project-agent`
+(`task/project-agent`) exists; its state is not recorded here.
 
-**Next:** keep `ci` green: check `gh run list --branch main` after each merge, and dispatch
-`sidecar-smoke` after packaging changes (§5, "CI follow-ups"). Address the pre-existing cramped
-class-name fields in project settings (§5). The next Windows distribution also carries the
-editor/train fixes from `afba411`.
-The existing backlog remains: plan wave 2 of rotated boxes (OBB label format, `yolo11*-obb` starter weights, training
-task guards, rotated inference — spec §5 of
-`docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan written yet). Before starting
-it, decide whether to bound the pytest step in `finish-task.ps1`, given the 16h57m run recorded in
-[[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]]. Also still owed: re-run
-acceptance against the renamed installed build (§5); close friction-list minors G3 and G2/M3 (§5);
-carry out the prepared folder rename when the operator is ready (§5).
+**Next:** brainstorm direction **D, counts per flight** — per-flight/per-date machinery counts, a
+trend, an Excel export and a GPS map for site managers — agreed with the operator on 2026-09-22 as
+the next feature. Keep `ci` green (`gh run list --branch main` after each merge; dispatch
+`sidecar-smoke` after packaging changes). Backlog unchanged: plan wave 2 of rotated boxes (spec §5
+of `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan yet; decide first whether to
+bound the pytest step in `finish-task.ps1`, see
+[[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]]); carry out the prepared
+folder rename when the operator is ready (§5).
 
 ## 5. Owed
 
@@ -167,10 +172,11 @@ batch remain outside this focused rebuild verification, as does the broader hist
 `ci` is green as of `afba411` (see [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]]).
 Still owed:
 - `sidecar-smoke` runs only on `workflow_dispatch`. Dispatch it after packaging changes.
-- `test_inference_gpu.py` and `test_training_gpu.py` hardcode `E:/Dev/Yolo/models`. They are
-  deselected on CI, but they are not portable.
-- The CI actions target Node 20: `checkout@v4`, `setup-node@v4`, `pnpm/action-setup@v4` and
-  `setup-uv@v6`. GitHub currently forces them onto Node 24; bump them before that stops.
+- ~~GPU tests hardcode `E:/Dev/Yolo/models`~~ — closed 2026-09-22 (`fde7f8f`): they read
+  `KESTREL_MODELS_DIR` / `KESTREL_FRAMES_DIR`, same defaults.
+- ~~CI actions on Node 20~~ — closed 2026-09-22 (`be87fda`, `a4eb3c9`): Node 24 majors; `setup-uv`
+  is pinned to `v10.2.0` because it has no moving major tag. Dispatch on the branch green on all
+  four jobs.
 
 ### ~~Contour installed-build verification~~ — CLOSED 2026-09-21
 
@@ -180,7 +186,11 @@ Six native screenshots supplement the original development captures. Evidence:
 `docs/evidence/ui/2026-09-21-contour-installed/README.md` (`5555557`). The full cloud-provider
 acceptance run remains separately owed below; this UI walkthrough does not close it.
 
-### Cramped class-name fields in project settings
+### ~~Cramped class-name fields in project settings~~ — CLOSED 2026-09-22 (`add5c20`, `3015f99`)
+
+Cause: `Select`'s wrapper carried both `w-full` and the caller's `w-[4.5rem]`; `cx()` only joins
+classes and Tailwind emits `w-full` later. Installed in the `8823d95` build. Original finding:
+
 
 Native visual inspection found class-name inputs squeezed to a narrow sliver beside wide hotkey
 dropdowns. Also visible in the earlier development screenshot `2026-09-21-contour/10-settings.png`;
@@ -268,7 +278,11 @@ Prerequisite already done: the legacy `.worktrees/wave1` worktree was removed on
 junction-safe path (2106 reparse points, 0 escaping, no venv junction present; `backend/.venv`
 verified intact afterwards). Branch `wave1-s2-trial` is untouched and still on the remote.
 
-### Stale acceptance run (blocking claim of a current PASS)
+### ~~Stale acceptance run~~ — CLOSED 2026-09-22: 8/8 on the installed renamed build `8823d95`
+
+Evidence `docs/evidence/acceptance/2026-09-22-installed-8823d95/` (merged `93892bd`). The text below is
+the original entry.
+
 
 `docs/progress.md` records an **8/8 PASS** for the acceptance run (spec 13.5) at main `177f68b`
 (2026-09-20, the U2 site-office build; evidence `docs/evidence/acceptance/2026-09-20-installed-177f68b/`,
@@ -282,7 +296,18 @@ was measured on the old build and is stale until this passes").
 earlier result: 7/8, step 7 skipped for lack of a provider key — not the run the 8/8 figure
 belongs to.)
 
-### Other open items found while reading `docs/progress.md`
+### Stale files in the install folder (opened 2026-09-22)
+
+Inno Setup leaves files a newer build stopped shipping: 45 `api-ms-win-*` forwarders and 4
+`__pycache__` from the 2026-09-21 install remain in `%LOCALAPPDATA%\Programs\Kestrel AI\_internal`.
+Harmless on Windows 11. An `[InstallDelete]` of `{app}\_internal` in `kestrel-ai.iss` would clear
+them if one ever shadows a new file. See [[2026-09-22-gotcha-acceptance-window-looks-like-the-operators-app]].
+
+### ~~Other open items found while reading `docs/progress.md`~~ — CLOSED 2026-09-22
+
+G3 fixed in `6b04cd1` and confirmed in the frozen build; M3 had been closed at `efa614a` and only the
+ledger row was stale (`8823d95`). Original entry:
+
 
 - **G3** (class labels on report thumbnails) — noted open after usability wave 1
   ("`G3 (class labels on report thumbnails) after this wave`"); no later entry in `docs/progress.md`
