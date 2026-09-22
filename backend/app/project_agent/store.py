@@ -11,6 +11,7 @@ from typing import Any
 
 from sqlalchemy import delete, func, select
 
+from app.db.base import utcnow
 from app.db.models import AgentItem, AgentTurn
 from app.errors import AppError, not_found
 from app.project_agent.history import HistoryEntry, ToolCall, ToolResult
@@ -152,6 +153,10 @@ def sweep_interrupted(handle) -> int:
     """On project open: a `running` turn left by a previous process failed; its `running` tool items
     become `error`. `awaiting_approval` turns are left alone (they stay resumable). Returns the
     number of turns swept.
+
+    A hard kill never let the loop record the reply's unstarted calls, so the raw provider payloads
+    of the swept turns (naming calls with no stored result) are dropped: replay falls back to the
+    neutral text + resulted calls instead of a provider 400 on every later turn.
     """
     message = "Interrupted when the app closed."
     with handle.session() as s:
@@ -159,9 +164,18 @@ def sweep_interrupted(handle) -> int:
         if not turns:
             return 0
         turn_ids = [t.id for t in turns]
+        now = utcnow()
         for t in turns:
             t.state = "failed"
             t.error = message
+            t.finished_at = now
+        assistants = (
+            s.execute(select(AgentItem).where(AgentItem.turn_id.in_(turn_ids), AgentItem.kind == "assistant"))
+            .scalars()
+            .all()
+        )
+        for a in assistants:
+            a.provider_payload = None
         items = (
             s.execute(
                 select(AgentItem).where(
@@ -308,7 +322,10 @@ def build_history(
             calls = [ToolCall(t.tool_call_id, t.tool_name, t.tool_input or {}) for t in resulted]
             # A skipped call (still running/awaiting_approval) has no result to replay; the raw
             # provider payload still names it, so it must not be replayed verbatim either (rule 3).
-            any_skipped = len(resulted) != len(tool_rows)
+            # Likewise when the payload names calls that were never stored at all (a hard kill).
+            any_skipped = len(resulted) != len(tool_rows) or not _payload_matches(
+                row.provider_payload, {t.tool_call_id for t in resulted}
+            )
             entries.append(
                 HistoryEntry(
                     "assistant",
@@ -344,6 +361,22 @@ def build_history(
 
         _shrink_to_budget(entries, max_chars)
         return entries
+
+
+def _payload_matches(payload: Any, call_ids: set[str]) -> bool:
+    """Whether a raw provider payload names exactly `call_ids` (Anthropic `tool_use` ids, OpenAI
+    `function_call` call ids). A payload that is not a block list is never replayed by an adapter."""
+    if not isinstance(payload, list):
+        return True
+    named = set()
+    for block in payload:
+        if not isinstance(block, dict):
+            continue
+        if block.get("type") == "tool_use":
+            named.add(block.get("id"))
+        elif block.get("type") == "function_call":
+            named.add(block.get("call_id"))
+    return named == call_ids
 
 
 def _total_chars(entries: list[HistoryEntry]) -> int:

@@ -278,6 +278,79 @@ def test_sweep_interrupted_fails_running_turn_and_its_running_tools(handle):
     assert swept_item["tool_status"] == "error"
 
 
+def test_sweep_interrupted_drops_raw_payloads_and_finishes_the_turn(handle):
+    """A hard kill (the shell kills the sidecar) leaves an assistant whose raw payload names three
+    calls with only one stored tool item. Replaying that payload is a provider 400 forever after, so
+    the sweep drops the swept turn's raw payloads and stamps `finished_at`."""
+    turn = store.create_turn(handle, "anthropic", "claude-opus-5")
+    store.add_item(handle, turn.id, "user", text="go")
+    assistant = store.add_item(
+        handle,
+        turn.id,
+        "assistant",
+        text="",
+        provider="anthropic",
+        provider_payload=[{"type": "tool_use", "id": f"tc{i}"} for i in (1, 2, 3)],
+    )
+    store.add_item(handle, turn.id, "tool", tool_name="get_job", tool_call_id="tc1", tool_status="running")
+
+    store.sweep_interrupted(handle)
+
+    assert store.get_item(handle, assistant.id)["provider_payload"] is None
+    assert store.get_turn(handle, turn.id).finished_at is not None
+    history = store.build_history(handle)
+    entry = next(e for e in history if e.role == "assistant")
+    assert entry.provider_payload is None
+    assert [c.id for c in entry.tool_calls] == ["tc1"]
+
+
+def test_build_history_drops_payload_naming_more_calls_than_stored(handle):
+    """Robust on its own: a payload naming three calls with one resulted tool item is not replayed."""
+    turn = store.create_turn(handle, "anthropic", "claude-opus-5")
+    store.update_turn(handle, turn.id, state="failed")
+    store.add_item(handle, turn.id, "user", text="go")
+    store.add_item(
+        handle,
+        turn.id,
+        "assistant",
+        text="",
+        provider="anthropic",
+        provider_payload=[{"type": "tool_use", "id": f"tc{i}"} for i in (1, 2, 3)],
+    )
+    store.add_item(
+        handle, turn.id, "tool", tool_name="get_job", tool_call_id="tc1", tool_status="ok", tool_result="x"
+    )
+
+    entry = next(e for e in store.build_history(handle) if e.role == "assistant")
+
+    assert entry.provider_payload is None
+    assert [c.id for c in entry.tool_calls] == ["tc1"]
+
+
+def test_build_history_drops_openai_payload_naming_more_calls_than_stored(handle):
+    turn = store.create_turn(handle, "openai", "gpt-5")
+    store.add_item(handle, turn.id, "user", text="go")
+    store.add_item(
+        handle,
+        turn.id,
+        "assistant",
+        text="",
+        provider="openai",
+        provider_payload=[
+            {"type": "reasoning", "id": "rs_1"},
+            {"type": "function_call", "call_id": "c1", "name": "get_job", "arguments": "{}"},
+            {"type": "function_call", "call_id": "c2", "name": "get_job", "arguments": "{}"},
+        ],
+    )
+    store.add_item(
+        handle, turn.id, "tool", tool_name="get_job", tool_call_id="c1", tool_status="ok", tool_result="x"
+    )
+
+    entry = next(e for e in store.build_history(handle) if e.role == "assistant")
+
+    assert entry.provider_payload is None
+
+
 def test_sweep_interrupted_leaves_awaiting_approval_turns_alone(handle):
     turn = store.create_turn(handle, "anthropic", "claude-opus-5")
     store.update_turn(handle, turn.id, state="awaiting_approval")
