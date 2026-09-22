@@ -75,8 +75,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 /** The step being worked on, so a throw from anywhere inside it names the right one. */
 let current = "attach";
+/** The run's project once known; see `stopOnForeignProject`. */
+let guardedProjectId = null;
 const begin = (name) => {
   current = name;
+  if (guardedProjectId) stopOnForeignProject(page.url());
   return timer();
 };
 
@@ -108,6 +111,10 @@ async function connect() {
 }
 
 const { browser, page } = await connect();
+page.on("framenavigated", (frame) => {
+  if (frame === page.mainFrame()) stopOnForeignProject(frame.url());
+});
+await markWindow();
 const info = await page.evaluate(() => window.__TAURI_INTERNALS__.invoke("backend_info"));
 
 /**
@@ -144,8 +151,41 @@ async function openDisclosure(scope, name) {
   if ((await button.getAttribute("aria-expanded")) === "false") await button.click();
 }
 
+/**
+ * The window this driver clicks in looks exactly like the operator's app, and on 2026-09-22 a
+ * person used it: they opened their own project, and step 3 then imported weights into that
+ * project and changed its pre-annotation model. Once the run's project is known, any navigation
+ * to another path stops the driver before its next click - the evidence is written and the
+ * process exits, because an in-flight Playwright action cannot be cancelled from here.
+ */
+function stopOnForeignProject(url) {
+  if (!guardedProjectId) return;
+  const path = new URL(url).pathname;
+  if (path === `/p/${guardedProjectId}` || path.startsWith(`/p/${guardedProjectId}/`)) return;
+  result.failed_step = current;
+  result.error = `the acceptance window left project ${guardedProjectId} (now at ${path}); stopped so no UI action lands in another project`;
+  writeFileSync(join(cfg.evidence, "acceptance.json"), JSON.stringify(result, null, 2));
+  console.error(`\nSTOPPED: ${result.error}`);
+  process.exit(3);
+}
+
+/** A banner that tells a person this window belongs to the driver; it never intercepts clicks. */
+async function markWindow() {
+  await page.evaluate(() => {
+    if (document.getElementById("acceptance-banner")) return;
+    const el = document.createElement("div");
+    el.id = "acceptance-banner";
+    el.textContent = "Acceptance run in progress - do not use this window";
+    el.style.cssText =
+      "position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:2147483647;pointer-events:none;" +
+      "background:#b91c1c;color:#fff;font:600 13px system-ui;padding:4px 12px;border-radius:0 0 6px 6px";
+    document.body.appendChild(el);
+  });
+}
+
 /** The sidebar link, which is how a person moves between screens. */
 async function openScreen(label, heading) {
+  stopOnForeignProject(page.url());
   // Pipeline steps carry a count after their name ("Images 40"): match the name as a prefix.
   await page
     .getByRole("navigation")
@@ -377,6 +417,7 @@ try {
   let elapsed = begin("1. create or resume the project");
   if (projectId) {
     await go(`/p/${projectId}/data`);
+    guardedProjectId = projectId;
     step("1. resume on an existing project", true, projectId);
   } else {
     await page.fill("#project-name", cfg.projectName);
@@ -386,6 +427,7 @@ try {
     await page.waitForURL(/\/p\/[0-9a-f-]+/, { timeout: 60_000 });
     projectId = page.url().split("/p/")[1].split("/")[0];
     await go(`/p/${projectId}/data`);
+    guardedProjectId = projectId;
     const project = await api("GET", `/projects/${projectId}`);
     await shot(page, "01-project");
     step(

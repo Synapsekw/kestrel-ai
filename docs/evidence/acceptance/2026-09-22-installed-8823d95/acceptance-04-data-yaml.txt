@@ -1,0 +1,12 @@
+path: 'E:\tmp\acceptance-8823d95\datasets\v1'
+train: images/train
+val: images/val
+names:
+  0: 'excavator'
+  1: 'wheel_loader'
+  2: 'bulldozer'
+  3: 'dump_truck'
+  4: 'crane'
+  5: 'concrete_mixer'
+  6: 'roller'
+  7: 'backhoe'
