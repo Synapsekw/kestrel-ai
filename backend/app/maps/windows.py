@@ -55,13 +55,18 @@ def strips(windows: list[MapWindow]) -> list[list[MapWindow]]:
 
 
 def to_map(det: Detection, win: MapWindow) -> Detection:
+    """Offset a window-local detection into map pixels, clamped to the window footprint."""
     sx, sy = win.w / win.out_w, win.h / win.out_h
+    x0 = min(max(det.x, 0.0), float(win.out_w))
+    y0 = min(max(det.y, 0.0), float(win.out_h))
+    x1 = min(max(det.x + det.w, 0.0), float(win.out_w))
+    y1 = min(max(det.y + det.h, 0.0), float(win.out_h))
     return Detection(
         label=det.label,
-        x=win.x + det.x * sx,
-        y=win.y + det.y * sy,
-        w=det.w * sx,
-        h=det.h * sy,
+        x=win.x + x0 * sx,
+        y=win.y + y0 * sy,
+        w=(x1 - x0) * sx,
+        h=(y1 - y0) * sy,
         confidence=det.confidence,
         raw_ref=det.raw_ref,
     )

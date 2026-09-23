@@ -54,6 +54,16 @@ def test_to_map_scales_and_offsets():
     assert (d.x, d.y, d.w, d.h) == (1020, 540, 60, 80)
 
 
+def test_to_map_clamps_overshooting_boxes():
+    win = MapWindow(3, 1000, 500, 2560, 2560, 1280, 1280)
+    # Box overshoots right edge (x=1270, w=40 extends to 1310 > 1280)
+    # and above top (y=-10, h=30 extends to 20)
+    d = to_map(det(1270, -10, 40, 30), win)
+    # Clamped to [0, 1280] in window-local: x0=1270, y0=0, x1=1280, y1=20
+    # Scaled and offset: x=1000+1270*2=3540, y=500+0*2=500, w=10*2=20, h=20*2=40
+    assert (d.x, d.y, d.w, d.h) == (3540, 500, 20, 40)
+
+
 def test_masked_fraction():
     mask = np.ones((100, 200), dtype=bool)
     mask[:, :100] = False  # left half nodata
