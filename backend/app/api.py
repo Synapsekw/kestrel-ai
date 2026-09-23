@@ -58,3 +58,12 @@ try:
     api_router.include_router(maps_router)
 except Exception:
     log.exception("maps router failed to load; map endpoints will be unavailable")
+
+# Reviewing detection runs (plan 2 unit V). It imports the map schemas, so it is guarded like the
+# maps router: a broken native stack costs the review endpoints, never the app.
+try:
+    from app.detect.review_router import router as review_router
+
+    api_router.include_router(review_router, dependencies=[Depends(require_kind(("detect",), ANY_KIND))])
+except Exception:
+    log.exception("review router failed to load; review endpoints will be unavailable")
