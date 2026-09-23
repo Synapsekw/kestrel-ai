@@ -90,4 +90,32 @@ describe("NewRunDialog", () => {
     );
     await waitFor(() => expect(screen.getByLabelText("Model trained at (cm / px)")).toHaveValue(4));
   });
+
+  it("does not preselect a model whose file is missing and blocks the submit", async () => {
+    const { api, requests } = fakeClient([
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        body: { items: [{ ...exampleModel, state: "unavailable" }], next_cursor: null },
+      },
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "POST", path: /\/map-runs\/estimate$/, status: 500, body: {} },
+    ]);
+    renderWithProviders(
+      <NewRunDialog
+        projectId={PROJECT_ID}
+        geoMap={exampleGeoMap}
+        runs={[]}
+        onClose={() => {}}
+        onStarted={() => {}}
+      />,
+      { api },
+    );
+    const missing = await screen.findByRole("option", { name: `${exampleModel.name} (file missing)` });
+    expect(missing).toBeDisabled();
+    expect(screen.getByLabelText("Model")).toHaveValue("");
+    fireEvent.click(screen.getByRole("button", { name: "Start detection" }));
+    expect(await screen.findByText("Choose a model.")).toBeInTheDocument();
+    expect(requests.some((r) => r.method === "POST" && r.url.endsWith("/map-runs"))).toBe(false);
+  });
 });

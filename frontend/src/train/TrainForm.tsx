@@ -41,6 +41,11 @@ function changedOptions(f: Form): string[] {
   return changed;
 }
 
+/** The first model whose weights file is present; a missing one cannot be trained from. */
+function firstReady(models: LibraryModel[]): LibraryModel | undefined {
+  return models.find((m) => m.state !== "unavailable");
+}
+
 /** Spec section 7 parameters. Preselects when the lists arrive (or change) without touching what the user typed. */
 export function TrainForm({
   projectId,
@@ -61,8 +66,8 @@ export function TrainForm({
     return {
       ...DEFAULT_TRAIN_FORM,
       datasetId,
-      baseModelId: models[0]?.id ?? "",
-      name: suggestName(dataset, models[0]),
+      baseModelId: firstReady(models)?.id ?? "",
+      name: suggestName(dataset, firstReady(models)),
     };
   });
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +93,7 @@ export function TrainForm({
         f.datasetId && (datasets.length === 0 || datasets.some((d) => d.id === f.datasetId))
           ? f.datasetId
           : (datasets[0]?.id ?? "");
-      const baseModelId = f.baseModelId || (models[0]?.id ?? "");
+      const baseModelId = f.baseModelId || (firstReady(models)?.id ?? "");
       const suggested = suggestName(
         datasets.find((d) => d.id === datasetId),
         models.find((m) => m.id === baseModelId),
@@ -210,8 +215,8 @@ export function TrainForm({
             <option value="">Choose a base model</option>
             <optgroup label="Models in your library">
               {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({originLabel(m.origin)})
+                <option key={m.id} value={m.id} disabled={m.state === "unavailable"}>
+                  {m.name} ({originLabel(m.origin)}){m.state === "unavailable" ? " (file missing)" : ""}
                 </option>
               ))}
             </optgroup>

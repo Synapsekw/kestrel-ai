@@ -37,8 +37,7 @@ export function NewRunDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const effectiveModel =
-    modelId || registry.models.find((m) => m.state === "ready")?.id || registry.models[0]?.id || "";
+  const effectiveModel = modelId || registry.models.find((m) => m.state === "ready")?.id || "";
   const chosenModel = registry.models.find((m) => m.id === effectiveModel);
   // Re-prefills the GSD field when the detector or model changes, without fighting a value the
   // operator is mid-typing: a render-phase state adjustment (React's "reset state on a changed key"
@@ -124,6 +123,7 @@ export function NewRunDialog({
         {kind === "local_model" ? (
           <Field label="Model" htmlFor="run-model">
             <Select id="run-model" value={effectiveModel} onChange={(e) => setModelId(e.target.value)}>
+              {!effectiveModel && <option value="">Choose a model</option>}
               <optgroup label="Models in your library">
                 {registry.models.map((m) => (
                   <option key={m.id} value={m.id} disabled={m.state === "unavailable"}>

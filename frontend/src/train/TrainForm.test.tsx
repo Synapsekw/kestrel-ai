@@ -279,4 +279,24 @@ describe("TrainForm", () => {
     // The warning informs; it does not block a deliberate smoke test.
     expect(screen.getByRole("button", { name: "Start training" })).toBeEnabled();
   });
+
+  it("disables models whose file is missing and does not preselect them", () => {
+    const { api } = fakeClient([]);
+    renderWithProviders(
+      <TrainForm
+        projectId={PROJECT_ID}
+        datasets={[exampleDataset]}
+        models={[{ ...exampleModel, state: "unavailable" }, exampleTrainedModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(screen.getByRole("option", { name: /yolo11m-coco .* \(file missing\)$/ })).toBeDisabled();
+    expect(screen.getByLabelText("Base model")).toHaveValue(exampleTrainedModel.id);
+  });
 });
