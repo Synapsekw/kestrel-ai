@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { act, screen } from "@testing-library/react";
+import { act, fireEvent, screen } from "@testing-library/react";
 import { SurveysScreen } from "./SurveysScreen";
 import { exampleJob, exampleTimeline, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
@@ -57,5 +57,16 @@ describe("SurveysScreen", () => {
     act(() => useJobsStore.getState().upsert({ ...running, state: "succeeded", progress: 1 }));
     await screen.findAllByRole("row");
     expect(requests.filter((r) => r.url.includes("survey-timeline")).length).toBeGreaterThan(before);
+  });
+
+  it("draws the chart and hides a class when its legend entry is switched off", async () => {
+    const { api } = fakeClient([{ method: "GET", path: /survey-timeline/, body: exampleTimeline }]);
+    renderWithProviders(<SurveysScreen />, { api, route, path });
+    expect(await screen.findByRole("img", { name: /object counts for each survey/i })).toBeInTheDocument();
+    const legend = screen.getByRole("button", { name: "excavator" });
+    expect(legend).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(legend);
+    expect(legend).toHaveAttribute("aria-pressed", "false");
+    expect(document.querySelectorAll("polyline")).toHaveLength(0);
   });
 });
