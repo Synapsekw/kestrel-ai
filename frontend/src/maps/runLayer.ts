@@ -22,6 +22,8 @@ export interface RunLayerSpec {
   hidden: ReadonlySet<string>;
   colours: Record<string, string>;
   matchOf?: (id: string) => Match | undefined;
+  /** Review mode: the detection under review, drawn thicker in the accent colour. */
+  selectedId?: string | null;
   load: (bbox: string, minConf: number) => Promise<MapDetectionPage>;
   density: (minConf: number) => Promise<MapDensity>;
   onViewCounts?: (counts: Record<string, number>, truncated: boolean) => void;
@@ -39,6 +41,17 @@ function classFill(spec: RunLayerSpec, classId: string, alpha: number): string {
 function boxStyle(spec: RunLayerSpec, f: FeatureLike): Style | undefined {
   const classId = f.get("classId") as string;
   if (spec.hidden.has(classId)) return undefined;
+  if (spec.selectedId && f.getId() === spec.selectedId) {
+    return new Style({
+      stroke: new Stroke({ color: tokenColour("accent"), width: 3 }),
+      fill: new Fill({ color: tokenColour("accent", 0.12) }),
+      zIndex: 1,
+    });
+  }
+  // A rejected detection stays visible (it can be un-rejected) but reads as struck out.
+  if (f.get("reviewState") === "rejected") {
+    return new Style({ stroke: new Stroke({ color: tokenColour("dim"), width: 1.5, lineDash: [2, 4] }) });
+  }
   const match = spec.matchOf?.(String(f.getId()));
   const colour = match ? tokenColour(MATCH_TOKEN[match]) : (spec.colours[classId] ?? tokenColour("accent"));
   return new Style({
@@ -71,7 +84,7 @@ export function useRunLayer(
   map: OlMap | null,
   geoMap: GeoMap,
   spec: RunLayerSpec | null,
-): { focus(id: string): void } {
+): { focus(id: string): void; refresh(): void } {
   const specRef = useRef(spec);
   const layers = useRef<{ boxes: VectorLayer<VectorSource>; dots: VectorLayer<VectorSource> } | null>(null);
   useEffect(() => {
@@ -107,7 +120,13 @@ export function useRunLayer(
             const feats = page.items.map((d) => {
               const f = new Feature(new Polygon([boxRing(d.x, d.y, d.w, d.h)]));
               f.setId(d.id);
-              f.setProperties({ classId: d.class_id, confidence: d.confidence, kind: "detection" });
+              f.setProperties({
+                classId: d.class_id,
+                confidence: d.confidence,
+                kind: "detection",
+                reviewState: d.review_state,
+                provenanceKind: d.provenance_kind,
+              });
               return f;
             });
             boxes.addFeatures(feats);
@@ -171,6 +190,10 @@ export function useRunLayer(
   }, [map, geoMap, runId, minConf]);
 
   return {
+    /** Reload the boxes in view, e.g. after a review write changed their state or added one. */
+    refresh() {
+      layers.current?.boxes.getSource()?.refresh();
+    },
     focus(id: string) {
       const f = layers.current?.boxes.getSource()?.getFeatureById(id);
       const geom = f?.getGeometry();

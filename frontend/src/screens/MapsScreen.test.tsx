@@ -278,6 +278,98 @@ describe("MapsScreen", () => {
       expect(useToastStore.getState().toasts.some((t) => t.text.includes("disk full"))).toBe(true),
     );
   });
+  describe("review mode", () => {
+    const reviewRoutes = [
+      ...base.slice(0, 3),
+      { method: "GET", path: /\/runs$/, body: { items: [exampleMapRun] } },
+      ...base.slice(4),
+      { method: "GET", path: /\/density$/, body: { cell_size: 80000, cells: [] } },
+      { method: "GET", path: /\/score/, body: exampleMapScore },
+      {
+        method: "GET",
+        path: /\/next-unreviewed$/,
+        body: {
+          detection: {
+            id: "d1",
+            class_id: CLASS_ID(1),
+            confidence: 0.64,
+            x: 3000,
+            y: 2400,
+            w: 170,
+            h: 110,
+            angle: null,
+            review_state: "unreviewed",
+            provenance_kind: "local_model",
+          },
+          remaining: 20,
+        },
+      },
+      {
+        method: "POST",
+        path: /\/map-runs\/[^/]+\/detections$/,
+        status: 201,
+        body: {
+          id: "p1",
+          class_id: CLASS_ID(2),
+          confidence: 1,
+          x: 10,
+          y: 20,
+          w: 30,
+          h: 40,
+          angle: null,
+          review_state: "accepted",
+          provenance_kind: "person",
+        },
+      },
+    ];
+
+    function renderReview(api: Parameters<typeof renderWithProviders>[1]["api"]) {
+      renderWithProviders(<MapsScreen />, {
+        api,
+        route: `/p/${PROJECT_ID}/maps/${MAP_ID}?mode=review&run=${exampleMapRun.id}`,
+        path: "/p/:projectId/maps/:mapId",
+      });
+    }
+
+    it("replaces the tabs with the review panel for the run in the address", async () => {
+      const { api } = fakeClient(reviewRoutes);
+      renderReview(api);
+      const panel = await screen.findByRole("region", { name: "Review" });
+      expect(await within(panel).findByText("39 of 59 reviewed")).toBeInTheDocument();
+      expect(screen.queryByRole("radio", { name: "Labels" })).not.toBeInTheDocument();
+      // The reviewed run is the one drawn on the map.
+      expect(screen.getByRole("checkbox", { name: /Show machinery-v3/ })).toBeChecked();
+    });
+
+    it("draws a missed object into the run", async () => {
+      const { api, requests } = fakeClient(reviewRoutes);
+      renderReview(api);
+      await screen.findByText("39 of 59 reviewed");
+      expect(latestLabelLayerOpts().tool).toBe("pan");
+      fireEvent.click(screen.getByRole("button", { name: "Draw missed object" }));
+      await waitFor(() => expect(latestLabelLayerOpts().tool).toBe("box"));
+      fireEvent.change(screen.getByLabelText("Draws as"), { target: { value: CLASS_ID(2) } });
+      act(() => latestLabelLayerOpts().onBox?.({ x: 10, y: 20, w: 30, h: 40 }));
+      await waitFor(() =>
+        expect(requests.find((r) => r.method === "POST" && r.url.endsWith("/detections"))?.body).toEqual({
+          class_id: CLASS_ID(2),
+          x: 10,
+          y: 20,
+          w: 30,
+          h: 40,
+        }),
+      );
+      // Drawing in review never creates a ground-truth label.
+      expect(requests.some((r) => r.method === "POST" && r.url.endsWith("/labels"))).toBe(false);
+    });
+
+    it("leaves review mode back to the tabs", async () => {
+      const { api } = fakeClient(reviewRoutes);
+      renderReview(api);
+      fireEvent.click(await screen.findByRole("button", { name: "Leave review" }));
+      expect(await screen.findByRole("radio", { name: "Labels" })).toBeInTheDocument();
+    });
+  });
 });
 
 describe("boxFacts", () => {

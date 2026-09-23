@@ -59,6 +59,11 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
   const [acceptAbove, setAcceptAbove] = useState(DEFAULT_ACCEPT_ABOVE);
   const [accepting, setAccepting] = useState(false);
   const busy = useRef(false);
+  // The screen's callback changes identity with the map view; the walk must not restart because of it.
+  const onCurrentRef = useRef(onCurrent);
+  useEffect(() => {
+    onCurrentRef.current = onCurrent;
+  }, [onCurrent]);
 
   const walk = useCallback(
     async (afterId: string | null) => {
@@ -67,9 +72,9 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
       if (!next.detection && next.remaining > 0 && afterId)
         next = await nextUnreviewed(api, projectId, runId, null);
       setRemaining(next.remaining);
-      onCurrent(next.detection);
+      onCurrentRef.current(next.detection);
     },
-    [api, projectId, runId, onCurrent],
+    [api, projectId, runId],
   );
 
   useEffect(() => {
@@ -78,7 +83,7 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
       .then((next) => {
         if (cancelled) return;
         setRemaining(next.remaining);
-        onCurrent(next.detection);
+        onCurrentRef.current(next.detection);
       })
       .catch((err: unknown) => {
         if (!cancelled) fail("load the next detection", err);
@@ -86,7 +91,7 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, runId, onCurrent]);
+  }, [api, projectId, runId]);
 
   const run = useCallback((label: string, op: () => Promise<void>) => {
     if (busy.current) return;
