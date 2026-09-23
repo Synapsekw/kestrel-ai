@@ -19,8 +19,9 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from app.datasets.grouping import slugify
 from app.db.base import new_id
-from app.db.models import GeoMap, MapLabel, MapZone
+from app.db.models import GeoMap, MapLabel, MapZone, Source
 from app.errors import AppError
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
@@ -161,7 +162,19 @@ def _copy_into_target(ctx, source, target, map_id, map_row, zones, labels, sourc
             )
             if len(classes) != len(project.classes or []):
                 project.classes = normalise_classes(classes)
-            s.add(GeoMap(**{**map_row, "job_id": ctx.job_id}))
+            # The map becomes a source of the detection project (the source row it had, if any,
+            # belongs to the project it comes from).
+            source = Source(
+                kind="map",
+                label=map_row["name"],
+                folder=map_row["source_path"],
+                site=slugify(Path(map_row["source_path"]).stem) or "map",
+                settings={},
+                captured_on=map_row["captured_on"],
+            )
+            s.add(source)
+            s.flush()
+            s.add(GeoMap(**{**map_row, "job_id": ctx.job_id, "source_id": source.id}))
             s.flush()
             s.add_all(MapZone(**z) for z in zones)
             s.add_all(MapLabel(**{**lab, "class_id": mapping[lab["class_id"]]}) for lab in labels)

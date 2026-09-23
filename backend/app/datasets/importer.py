@@ -155,6 +155,13 @@ def _run_import(ctx: JobContext) -> dict:
         ).scalar_one()
         source.duplicate_count = len(recorded)
         source.imported_at = datetime.now(UTC)
+        # The survey date is the earliest EXIF capture in the import; one the operator set is kept.
+        if source.captured_on is None:
+            first = s.execute(
+                select(func.min(Image.capture_time)).where(Image.source_id == source_id)
+            ).scalar_one()
+            if first is not None:
+                source.captured_on = first.date()
     ctx.log.info(
         "imported %d, duplicates %d, failed %d, skipped %d", imported, len(duplicates), failed, skipped
     )

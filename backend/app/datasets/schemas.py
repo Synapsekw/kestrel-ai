@@ -1,10 +1,10 @@
 """Pydantic models for sources, images, boxes and datasets, matching contract/openapi.yaml exactly."""
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.db.models import Box, Dataset, Image, Source
 from app.jobs.schemas import JobOut
@@ -38,8 +38,15 @@ class SourceCreate(BaseModel):
     _folder_abs = field_validator("folder")(_absolute)
 
 
+SourceKind = Literal["images", "map"]
+
+
 class SourceOut(BaseModel):
     id: str
+    kind: SourceKind
+    label: str | None
+    captured_on: date | None
+    map_id: str | None
     folder: str
     site: str
     settings: ImportSettings
@@ -50,9 +57,14 @@ class SourceOut(BaseModel):
     created_at: datetime
 
     @classmethod
-    def from_row(cls, row: Source) -> "SourceOut":
+    def from_row(cls, row: Source, map_id: str | None = None) -> "SourceOut":
+        """`map_id` is the map a `map` source owns (`GeoMap.source_id` points back at the source)."""
         return cls(
             id=row.id,
+            kind=row.kind or "images",
+            label=row.label,
+            captured_on=row.captured_on,
+            map_id=map_id,
             folder=row.folder,
             site=row.site,
             settings=ImportSettings(**(row.settings or {})),
@@ -62,6 +74,14 @@ class SourceOut(BaseModel):
             imported_at=row.imported_at,
             created_at=row.created_at,
         )
+
+
+class SourcePatch(BaseModel):
+    """Rename a source or correct its survey date; a field left out is left alone, null clears it."""
+
+    model_config = ConfigDict(extra="forbid")
+    label: str | None = Field(None, max_length=200)
+    captured_on: date | None = None
 
 
 class SourceWithJob(BaseModel):
