@@ -105,7 +105,10 @@ export function useLabelLayers(map: OlMap | null, _geoMap: GeoMap, opts: LabelLa
       opts.labels.map((l) => {
         const f = new Feature(new Polygon([boxRing(l.x, l.y, l.w, l.h)]));
         f.setId(l.id);
-        f.set("classId", l.class_id);
+        // `kind` separates a ground-truth label from a run detection: both carry `classId`, and
+        // the two layers can sit under the same pointer, so `MapsScreen`'s detection popover keys
+        // off this instead of the shared `classId` property (a label has no confidence to show).
+        f.setProperties({ classId: l.class_id, kind: "label" });
         return f;
       }),
     );

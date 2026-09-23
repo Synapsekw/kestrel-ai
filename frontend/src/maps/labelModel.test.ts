@@ -47,6 +47,60 @@ describe("label history", () => {
     expect(h.canRedo).toBe(false);
     expect(await new LabelHistory().undo(api)).toBe(false);
   });
+
+  it("threads the recreated id through every step of a create -> edit -> delete chain", async () => {
+    // Regression for the id-remap bug: the command that triggers a recreate must itself pick up
+    // the new id, not just its neighbours, or a later step in the same chain replays a stale id.
+    const h = new LabelHistory();
+    const api = fakeApi();
+    h.record({ kind: "create", id: "a", body });
+    h.record({ kind: "update", id: "a", before: { x: 1 }, after: { x: 9 } });
+    h.record({ kind: "delete", id: "a", body });
+
+    expect(await h.undo(api)).toBe(true); // delete -> recreate as new-1
+    expect(await h.undo(api)).toBe(true); // update -> targets new-1
+    expect(await h.undo(api)).toBe(true); // create -> remove new-1
+    expect(api.calls).toEqual(["create", "update new-1", "remove new-1"]);
+    expect(h.canUndo).toBe(false);
+
+    expect(await h.redo(api)).toBe(true); // create -> recreate as new-2
+    expect(await h.redo(api)).toBe(true); // update -> targets new-2
+    expect(await h.redo(api)).toBe(true); // delete -> remove new-2
+    expect(api.calls.slice(3)).toEqual(["create", "update new-2", "remove new-2"]);
+    expect(h.canRedo).toBe(false);
+  });
+
+  it("threads the recreated id through undo x2 / redo x2 of a create -> delete chain", async () => {
+    const h = new LabelHistory();
+    const api = fakeApi();
+    h.record({ kind: "create", id: "a", body });
+    h.record({ kind: "delete", id: "a", body });
+
+    expect(await h.undo(api)).toBe(true); // delete -> recreate as new-1
+    expect(await h.undo(api)).toBe(true); // create -> remove new-1
+    expect(api.calls).toEqual(["create", "remove new-1"]);
+
+    expect(await h.redo(api)).toBe(true); // create -> recreate as new-2
+    expect(await h.redo(api)).toBe(true); // delete -> remove new-2
+    expect(api.calls.slice(2)).toEqual(["create", "remove new-2"]);
+    expect(h.canUndo).toBe(true);
+    expect(h.canRedo).toBe(false);
+  });
+
+  it("keeps a command undoable when its recreate rejects mid-undo", async () => {
+    const h = new LabelHistory();
+    const api = fakeApi();
+    h.record({ kind: "delete", id: "a", body });
+
+    vi.mocked(api.create).mockRejectedValueOnce(new Error("network"));
+    await expect(h.undo(api)).rejects.toThrow("network");
+    expect(h.canUndo).toBe(true);
+    expect(h.canRedo).toBe(false);
+
+    // The command survived the failed attempt under its original id and can still be undone.
+    expect(await h.undo(api)).toBe(true);
+    expect(api.calls).toEqual(["create"]);
+  });
 });
 
 describe("zones and boxes", () => {

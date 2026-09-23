@@ -28,6 +28,7 @@ import {
   type MapLabelUpdate,
 } from "@/api/maps";
 import { useProject } from "@/api/project";
+import { pushLog } from "@/app/diagnostics";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
@@ -223,6 +224,31 @@ export function MapsScreen() {
     [api, projectId, active, reloadLabels],
   );
 
+  // Undo/redo replay a server call, so two in flight at once is how a stale-id race becomes
+  // visible: an in-flight flag serialises them (a queued keypress is dropped, not deferred) and
+  // also disables the toolbar buttons for the same span. A rejected replay (e.g. a lost recreate)
+  // is logged rather than thrown into an unhandled rejection; `LabelHistory` already put the
+  // command back where it came from, so the operator can simply try again.
+  const historyBusy = useRef(false);
+  const [historyBusyState, setHistoryBusyState] = useState(false);
+  const runHistoryOp = useCallback(
+    (op: (api: LabelApi) => Promise<boolean>) => {
+      if (historyBusy.current) return;
+      historyBusy.current = true;
+      setHistoryBusyState(true);
+      void op(labelApi)
+        .then(bumpHistory)
+        .catch((err: unknown) => pushLog(`label history: ${err instanceof Error ? err.message : err}`))
+        .finally(() => {
+          historyBusy.current = false;
+          setHistoryBusyState(false);
+        });
+    },
+    [labelApi, bumpHistory],
+  );
+  const doUndo = useCallback(() => runHistoryOp((a) => history.current.undo(a)), [runHistoryOp]);
+  const doRedo = useCallback(() => runHistoryOp((a) => history.current.redo(a)), [runHistoryOp]);
+
   // Filters out a run id from a map just switched away from: `selected` and `runs` each clear on
   // their own effect after a map change, so for one render they can briefly disagree.
   const liveSelected = useMemo(
@@ -317,15 +343,14 @@ export function MapsScreen() {
       const ctrl = e.ctrlKey || e.metaKey;
       if (ctrl) {
         const lower = e.key.toLowerCase();
-        if (lower === "z" && e.shiftKey) {
+        if (lower === "z" || lower === "y") {
+          // A held key must not queue one replay per auto-repeat tick (matches the editor's own
+          // undo/redo guard in `editor/hotkeys.ts`); `runHistoryOp` also refuses a second replay
+          // while one is still in flight.
+          if (e.repeat) return;
           e.preventDefault();
-          void history.current.redo(labelApi).then(bumpHistory);
-        } else if (lower === "z") {
-          e.preventDefault();
-          void history.current.undo(labelApi).then(bumpHistory);
-        } else if (lower === "y") {
-          e.preventDefault();
-          void history.current.redo(labelApi).then(bumpHistory);
+          if (lower === "y" || e.shiftKey) doRedo();
+          else doUndo();
         }
         return;
       }
@@ -366,14 +391,18 @@ export function MapsScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rightTab, labelApi, selectedId, labels, classes, bumpHistory]);
+  }, [rightTab, labelApi, selectedId, labels, classes, bumpHistory, doUndo, doRedo]);
 
   // The box popover (spec section 7): the class, confidence, centre readout and size of whatever
   // detection box sits under the pointer.
   useEffect(() => {
     if (!olMap || !active) return;
     const onClick = (e: { pixel: number[] }) => {
-      const feature = olMap.forEachFeatureAtPixel(e.pixel, (f) => (f.get("classId") ? f : undefined));
+      // `kind === "detection"` excludes ground-truth label features, which share the `classId`
+      // property but have no confidence to show (see `labelLayers.ts`).
+      const feature = olMap.forEachFeatureAtPixel(e.pixel, (f) =>
+        f.get("kind") === "detection" ? f : undefined,
+      );
       if (!feature) {
         setPopover(null);
         return;
@@ -559,10 +588,10 @@ export function MapsScreen() {
                 onDeleteZone={(id) =>
                   void deleteZone(api, projectId, active.id, id).then(() => reloadZones())
                 }
-                canUndo={canUndo}
-                canRedo={canRedo}
-                onUndo={() => void history.current.undo(labelApi).then(bumpHistory)}
-                onRedo={() => void history.current.redo(labelApi).then(bumpHistory)}
+                canUndo={canUndo && !historyBusyState}
+                canRedo={canRedo && !historyBusyState}
+                onUndo={doUndo}
+                onRedo={doRedo}
               />
             )}
           </>

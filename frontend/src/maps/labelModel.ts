@@ -46,24 +46,57 @@ export class LabelHistory {
     for (const c of [...this.past, ...this.future]) if (c.id === oldId) c.id = newId;
   }
 
+  /**
+   * A create/delete pair swaps a label's id every time it crosses the recreate boundary. The
+   * executed command must be part of the remap pass (it is pushed onto its destination stack
+   * before `remap` runs, so its own `id` field is one of the ones rewritten), and a failed API
+   * call must put the command back where it came from rather than lose it, so the history and the
+   * server never disagree about what exists.
+   */
   async undo(api: LabelApi): Promise<boolean> {
     const cmd = this.past.pop();
     if (!cmd) return false;
-    if (cmd.kind === "create") await api.remove(cmd.id);
-    else if (cmd.kind === "update") await api.update(cmd.id, cmd.before);
-    else this.remap(cmd.id, await api.create(cmd.body));
-    this.future.push(cmd);
-    return true;
+    try {
+      if (cmd.kind === "create") {
+        await api.remove(cmd.id);
+        this.future.push(cmd);
+      } else if (cmd.kind === "update") {
+        await api.update(cmd.id, cmd.before);
+        this.future.push(cmd);
+      } else {
+        const oldId = cmd.id;
+        const newId = await api.create(cmd.body);
+        this.future.push(cmd);
+        this.remap(oldId, newId);
+      }
+      return true;
+    } catch (err) {
+      this.past.push(cmd);
+      throw err;
+    }
   }
 
   async redo(api: LabelApi): Promise<boolean> {
     const cmd = this.future.pop();
     if (!cmd) return false;
-    if (cmd.kind === "create") this.remap(cmd.id, await api.create(cmd.body));
-    else if (cmd.kind === "update") await api.update(cmd.id, cmd.after);
-    else await api.remove(cmd.id);
-    this.past.push(cmd);
-    return true;
+    try {
+      if (cmd.kind === "create") {
+        const oldId = cmd.id;
+        const newId = await api.create(cmd.body);
+        this.past.push(cmd);
+        this.remap(oldId, newId);
+      } else if (cmd.kind === "update") {
+        await api.update(cmd.id, cmd.after);
+        this.past.push(cmd);
+      } else {
+        await api.remove(cmd.id);
+        this.past.push(cmd);
+      }
+      return true;
+    } catch (err) {
+      this.future.push(cmd);
+      throw err;
+    }
   }
 }
 
