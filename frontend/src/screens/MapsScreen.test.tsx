@@ -3,8 +3,10 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import {
   CLASS_ID,
   exampleGeoMap,
+  exampleLabel,
   exampleMapRun,
   exampleProject,
+  exampleZone,
   fakeClient,
   MAP_ID,
   PROJECT_ID,
@@ -126,6 +128,26 @@ describe("MapsScreen", () => {
     expect(
       requests.some((r) => r.method === "GET" && /\/density\?/.test(r.url) && r.url.includes("cells=1")),
     ).toBe(true);
+  });
+
+  it("shows zones in the Labels tab and picks a class by hotkey", async () => {
+    const { api } = fakeClient([
+      ...base.slice(0, 3),
+      { method: "GET", path: /\/runs$/, body: { items: [] } },
+      { method: "GET", path: /\/zones$/, body: { items: [exampleZone] } },
+      { method: "GET", path: /\/labels$/, body: { items: [exampleLabel] } },
+    ]);
+    renderWithProviders(<MapsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/maps/${MAP_ID}`,
+      path: "/p/:projectId/maps/:mapId",
+    });
+    await screen.findByTestId("map-view");
+    fireEvent.click(await screen.findByRole("radio", { name: "Labels" }));
+    expect(await screen.findByDisplayValue("Zone 1")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "4" });
+    expect(screen.getByRole("button", { name: /dump_truck/ })).toHaveAttribute("aria-pressed", "true");
   });
 });
 

@@ -1,12 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type OlMap from "ol/Map";
-import { mapTileUrl, type ClassDef, type GeoMap, type MapRun } from "@contract/client";
+import {
+  mapTileUrl,
+  type ClassDef,
+  type GeoMap,
+  type MapLabel,
+  type MapRun,
+  type MapZone,
+} from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
-import { fetchDensity, fetchDetections, listMapRuns, listMaps } from "@/api/maps";
+import {
+  createLabel,
+  createZone,
+  deleteLabel,
+  deleteZone,
+  fetchDensity,
+  fetchDetections,
+  listLabels,
+  listMapRuns,
+  listMaps,
+  listZones,
+  seedLabels,
+  updateLabel,
+  updateZone,
+  type MapLabelCreate,
+  type MapLabelUpdate,
+} from "@/api/maps";
 import { useProject } from "@/api/project";
+import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
+import { LabelPanel } from "@/maps/LabelPanel";
 import { MapList } from "@/maps/MapList";
 import { MapOverlay } from "@/maps/MapOverlay";
 import { MapView } from "@/maps/MapView";
@@ -15,6 +40,8 @@ import { ResultsPanel, type CountScope } from "@/maps/ResultsPanel";
 import { RunList } from "@/maps/RunList";
 import { makeReadout, type Readout } from "@/maps/coords";
 import { fromOl } from "@/maps/grid";
+import { useLabelLayers, type Tool } from "@/maps/labelLayers";
+import { LabelHistory, outsideZones, type LabelApi } from "@/maps/labelModel";
 import { type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
 import {
   MAX_COMPARE,
@@ -24,7 +51,9 @@ import {
   type BoxFacts,
   type BoxGeom,
 } from "@/maps/runModel";
-import { Alert, Button, EmptyState } from "@/ui";
+import { Alert, Button, EmptyState, Segmented } from "@/ui";
+
+type RightTab = "results" | "labels";
 
 const nf = new Intl.NumberFormat("en-GB").format;
 const px = (n: number) => nf(n).replace(/,/g, " ");
@@ -98,6 +127,20 @@ export function MapsScreen() {
   const [inViewTruncated, setInViewTruncated] = useState(false);
   const [popover, setPopover] = useState<{ x: number; y: number; facts: BoxFacts } | null>(null);
 
+  const [rightTab, setRightTab] = useState<RightTab>("results");
+  const [zones, setZones] = useState<MapZone[]>([]);
+  const [labels, setLabels] = useState<MapLabel[]>([]);
+  const [tool, setTool] = useState<Tool>("pan");
+  const [activeClassId, setActiveClassId] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const history = useRef(new LabelHistory());
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const bumpHistory = useCallback(() => {
+    setCanUndo(history.current.canUndo);
+    setCanRedo(history.current.canRedo);
+  }, []);
+
   const reload = useCallback(() => {
     void listMaps(api, projectId).then(setMaps);
   }, [api, projectId]);
@@ -142,6 +185,43 @@ export function MapsScreen() {
     reloadRuns();
   }, [reloadRuns]);
   useOnJobsFinished("map_detect", reloadRuns);
+
+  const reloadZones = useCallback(() => {
+    if (!active) return Promise.resolve();
+    return listZones(api, projectId, active.id).then(setZones);
+  }, [api, projectId, active]);
+  const reloadLabels = useCallback(() => {
+    if (!active) return Promise.resolve();
+    return listLabels(api, projectId, active.id).then(setLabels);
+  }, [api, projectId, active]);
+  useEffect(() => {
+    void reloadZones();
+    void reloadLabels();
+  }, [reloadZones, reloadLabels]);
+
+  // Every label edit is an immediate API call, so undo/redo simply replays these three calls; the
+  // history remaps ids after a re-create (Task 13 spec).
+  const labelApi = useMemo<LabelApi>(
+    () => ({
+      create: async (body) => {
+        if (!active) throw new Error("no active map");
+        const label = await createLabel(api, projectId, active.id, body);
+        await reloadLabels();
+        return label.id;
+      },
+      update: async (id, body) => {
+        if (!active) throw new Error("no active map");
+        await updateLabel(api, projectId, active.id, id, body);
+        await reloadLabels();
+      },
+      remove: async (id) => {
+        if (!active) throw new Error("no active map");
+        await deleteLabel(api, projectId, active.id, id);
+        await reloadLabels();
+      },
+    }),
+    [api, projectId, active, reloadLabels],
+  );
 
   // Filters out a run id from a map just switched away from: `selected` and `runs` each clear on
   // their own effect after a map change, so for one render they can briefly disagree.
@@ -190,6 +270,103 @@ export function MapsScreen() {
   const spec2 = useMemo(() => specFor(liveSelected[1], true), [specFor, liveSelected]);
   useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec1);
   useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec2);
+
+  const effectiveClassId = activeClassId || classes[0]?.id || "";
+  const warnIds = useMemo(() => outsideZones(labels, zones), [labels, zones]);
+  const seededCount = useMemo(() => labels.filter((l) => l.source.startsWith("from_run:")).length, [labels]);
+
+  useLabelLayers(olMap, active ?? EMPTY_GEOMAP, {
+    labels,
+    zones,
+    colours,
+    tool: rightTab === "labels" ? tool : "pan",
+    selectedId,
+    warnIds,
+    onBox: (box) => {
+      if (!active || !effectiveClassId) return;
+      const body: MapLabelCreate = { class_id: effectiveClassId, x: box.x, y: box.y, w: box.w, h: box.h };
+      void labelApi.create(body).then((id) => {
+        history.current.record({ kind: "create", id, body });
+        bumpHistory();
+      });
+    },
+    onZone: (polygon) => {
+      if (!active) return;
+      void createZone(api, projectId, active.id, { name: `Zone ${zones.length + 1}`, polygon }).then(() =>
+        reloadZones(),
+      );
+    },
+    onEdit: (id, box) => {
+      const existing = labels.find((l) => l.id === id);
+      if (!existing) return;
+      const before: MapLabelUpdate = { x: existing.x, y: existing.y, w: existing.w, h: existing.h };
+      const after: MapLabelUpdate = { x: box.x, y: box.y, w: box.w, h: box.h };
+      void labelApi.update(id, after).then(() => {
+        history.current.record({ kind: "update", id, before, after });
+        bumpHistory();
+      });
+    },
+    onSelect: setSelectedId,
+  });
+
+  // Hotkeys: only while the Labels tab is open, and never while typing into a field.
+  useEffect(() => {
+    if (rightTab !== "labels") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (ctrl) {
+        const lower = e.key.toLowerCase();
+        if (lower === "z" && e.shiftKey) {
+          e.preventDefault();
+          void history.current.redo(labelApi).then(bumpHistory);
+        } else if (lower === "z") {
+          e.preventDefault();
+          void history.current.undo(labelApi).then(bumpHistory);
+        } else if (lower === "y") {
+          e.preventDefault();
+          void history.current.redo(labelApi).then(bumpHistory);
+        }
+        return;
+      }
+      if (e.key === "Escape") {
+        setTool("pan");
+        return;
+      }
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (!selectedId) return;
+        const existing = labels.find((l) => l.id === selectedId);
+        if (!existing) return;
+        const id = selectedId;
+        const body: MapLabelCreate = {
+          class_id: existing.class_id,
+          x: existing.x,
+          y: existing.y,
+          w: existing.w,
+          h: existing.h,
+        };
+        setSelectedId(null);
+        void labelApi.remove(id).then(() => {
+          history.current.record({ kind: "delete", id, body });
+          bumpHistory();
+        });
+        return;
+      }
+      const lower = e.key.toLowerCase();
+      if (lower === "b") {
+        setTool("box");
+        return;
+      }
+      if (lower === "z") {
+        setTool("zone-rect");
+        return;
+      }
+      const cls = classes.find((c) => c.hotkey === e.key);
+      if (cls) setActiveClassId(cls.id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [rightTab, labelApi, selectedId, labels, classes, bumpHistory]);
 
   // The box popover (spec section 7): the class, confidence, centre readout and size of whatever
   // detection box sits under the pointer.
@@ -321,30 +498,72 @@ export function MapsScreen() {
                 pixels, but not as GIS layers.
               </Alert>
             )}
-            {liveSelected.length > 0 ? (
-              <ResultsPanel
-                runs={runs}
-                selected={liveSelected}
-                classes={classes}
-                wholeMap={wholeMap}
-                inView={inView}
-                inViewTruncated={inViewTruncated}
-                scope={scope}
-                onScope={setScope}
-                minConf={minConf}
-                onMinConf={setMinConf}
-                hidden={hidden}
-                onToggleClass={(classId) =>
-                  setHidden((h) => {
-                    const next = new Set(h);
-                    if (next.has(classId)) next.delete(classId);
-                    else next.add(classId);
-                    return next;
-                  })
-                }
-              />
+            <Segmented
+              label="Right panel"
+              size="sm"
+              value={rightTab}
+              onChange={setRightTab}
+              options={[
+                { value: "results", label: "Results" },
+                { value: "labels", label: "Labels" },
+              ]}
+            />
+            {rightTab === "results" ? (
+              liveSelected.length > 0 ? (
+                <ResultsPanel
+                  runs={runs}
+                  selected={liveSelected}
+                  classes={classes}
+                  wholeMap={wholeMap}
+                  inView={inView}
+                  inViewTruncated={inViewTruncated}
+                  scope={scope}
+                  onScope={setScope}
+                  minConf={minConf}
+                  onMinConf={setMinConf}
+                  hidden={hidden}
+                  onToggleClass={(classId) =>
+                    setHidden((h) => {
+                      const next = new Set(h);
+                      if (next.has(classId)) next.delete(classId);
+                      else next.add(classId);
+                      return next;
+                    })
+                  }
+                />
+              ) : (
+                <p className="text-sm text-muted">Tick a finished run to see its boxes and counts.</p>
+              )
             ) : (
-              <p className="text-sm text-muted">Tick a finished run to see its boxes and counts.</p>
+              <LabelPanel
+                tool={tool}
+                onTool={setTool}
+                classes={classes}
+                activeClassId={effectiveClassId}
+                onClass={setActiveClassId}
+                zones={zones}
+                labels={labels}
+                warnCount={warnIds.size}
+                seededCount={seededCount}
+                runs={runs}
+                onSeed={(runId, zoneId, minConfSeed) =>
+                  void seedLabels(api, projectId, active.id, {
+                    run_id: runId,
+                    zone_id: zoneId,
+                    min_conf: minConfSeed,
+                  }).then(() => reloadLabels())
+                }
+                onRenameZone={(id, name) =>
+                  void updateZone(api, projectId, active.id, id, { name }).then(() => reloadZones())
+                }
+                onDeleteZone={(id) =>
+                  void deleteZone(api, projectId, active.id, id).then(() => reloadZones())
+                }
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={() => void history.current.undo(labelApi).then(bumpHistory)}
+                onRedo={() => void history.current.redo(labelApi).then(bumpHistory)}
+              />
             )}
           </>
         )}
