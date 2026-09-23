@@ -111,6 +111,27 @@ describe("SourcesSection", () => {
     expect(section).toHaveTextContent("3299 images");
   });
 
+  it("lists imported folders only: a map source is not a folder to re-import", async () => {
+    const mapSource = {
+      ...exampleSource,
+      id: "50000000-3333-4000-8000-000000000002",
+      kind: "map" as const,
+      label: "May survey",
+      map_id: "a0000000-6666-4000-8000-000000000001",
+      folder: "D:\\Surveys\\may-ortho.tif",
+      site: "may-ortho",
+      image_count: 0,
+    };
+    const { api } = fakeClient([
+      { method: "GET", path: /\/sources$/, body: { items: [exampleSource, mapSource], next_cursor: null } },
+    ]);
+    renderWithProviders(<SourcesSection projectId={PROJECT_ID} />, { api });
+    const section = await screen.findByTestId("sources-section");
+    await waitFor(() => expect(section).toHaveTextContent("3299 images"));
+    expect(section).not.toHaveTextContent("may-ortho");
+    expect(screen.getAllByRole("button", { name: "Re-import new files" })).toHaveLength(1);
+  });
+
   it("tolerates 501", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/sources$/, status: 501, body: errorBody("not_implemented", "S1 later") },
