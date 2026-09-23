@@ -462,25 +462,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get: operations["listModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/import": {
+    "/api/v1/projects/{projectId}/train": {
         parameters: {
             query?: never;
             header?: never;
@@ -491,45 +473,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register existing weights (for example COCO yolo11m.pt). The file is copied under `models/`. */
-        post: operations["importModel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/import-starter": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register one of the starter weights that ship with the app (COCO YOLO11). The file is copied under `models/`; `truck` is aliased to `dump_truck` when the project has that class. */
-        post: operations["importStarterModel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/train": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start a training job. The Model row is registered when the job succeeds; `job.result.model_id` points at it. */
+        /**
+         * Start a training job in a training project. `base_model_id` is a library model id. When
+         *     the job succeeds the trained weights are registered in the library (`origin: trained`)
+         *     and `job.result.model_id` is the new library model id.
+         */
         post: operations["trainModel"];
         delete?: never;
         options?: never;
@@ -537,39 +485,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models/{modelId}": {
+    "/api/v1/projects/{projectId}/adoption": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
         };
-        get: operations["getModel"];
-        put?: never;
-        post?: never;
-        /** Remove the registry entry and its weights. Boxes keep their `model_id` provenance. */
-        delete: operations["deleteModel"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/{modelId}/artifacts/{artifact}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
-                artifact: "results_csv" | "confusion_matrix" | "pr_curve";
-            };
-            cookie?: never;
-        };
-        /** A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) for the registry and training screens. */
-        get: operations["getModelArtifact"];
+        /**
+         * Progress of moving this training project's old models into the library. Models whose
+         *     weights file is missing are listed in `missing`; `job_id` is the adoption job that is
+         *     queued or running, if any.
+         */
+        get: operations["getModelAdoption"];
         put?: never;
         post?: never;
         delete?: never;
@@ -578,20 +508,249 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models/{modelId}/export": {
+    "/api/v1/projects/{projectId}/adoption/retry": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forget the missing and failed adoptions and start the adoption job again (a `library_adopt` job in this project). */
+        post: operations["retryModelAdoption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the app-wide model library opened at startup, and where it lives. Never answers 503. */
+        get: operations["getLibraryStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every model in the library, newest first. */
+        get: operations["listLibraryModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a `.pt` weights file into the library through a `library_import` job: hash, copy,
+         *     load-check, read the task and class names, register. A file already in the library (same
+         *     sha256) fails the job with a message naming the existing model. The source file is only read.
+         */
+        post: operations["importLibraryModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryModel"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove the model and its folder from the library. Past runs keep their own copy of the
+         *     model's name and classes and stay readable; check `/usage` first to warn the operator.
+         */
+        delete: operations["deleteLibraryModel"];
+        options?: never;
+        head?: never;
+        /** Rename the model or change its notes, supplier or class aliases. */
+        patch: operations["updateLibraryModel"];
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        /** Recently opened projects that use the model (pre-annotation, detection runs, map runs). Projects not on the recent list are not scanned. */
+        get: operations["getLibraryModelUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/artifacts/{artifact}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+                artifact: "results_csv" | "confusion_matrix" | "pr_curve";
+            };
+            cookie?: never;
+        };
+        /** A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) kept with the library model. */
+        get: operations["getLibraryModelArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Export to ONNX or TensorRT through a job; the path lands in `model.exports[format]`. */
-        post: operations["exportModel"];
+        /** Export to ONNX or TensorRT through a `library_export` job; the path lands in `exports[format]` of the library model. */
+        post: operations["exportLibraryModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/starters/{key}/acquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["schemas"]["StarterModelKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add one supported YOLO starter to the library through a `library_starter` job.
+         * @description Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the library jobs resource. The successful `job.result.model_id` identifies the library model.
+         */
+        post: operations["acquireStarterModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Library jobs (import, export, starter), newest first. Their `project_id` is `library`. */
+        get: operations["listLibraryJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs/{jobId}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryJobLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs/{jobId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request cancellation. The state becomes `cancelled` once the worker notices; finished jobs are returned unchanged. */
+        post: operations["cancelLibraryJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -609,28 +768,6 @@ export interface paths {
         get: operations["listStarterModels"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/acquire-starter": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Acquire one supported YOLO starter and register it through a background import job.
-         * @description Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the jobs resource. The successful job.result.model_id identifies the registered model.
-         */
-        post: operations["acquireStarterModel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -873,6 +1010,31 @@ export interface paths {
         head?: never;
         /** Correct the survey date - when the imagery was flown, not when the file was imported. */
         patch: operations["patchMap"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy a past map out of this training project into a detection project (a `map_move` job
+         *     that lives in the **target** project, params `{source_project_id, map_id}`). The map row,
+         *     its derived overview and tiles, its capture date, zones and labels are copied; its runs
+         *     are not. The source file is only referenced, never copied or modified.
+         */
+        post: operations["moveMapToProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/projects/{projectId}/maps/{mapId}/preview": {
@@ -1426,7 +1588,10 @@ export interface components {
             error: {
                 /**
                  * @description machine-readable: unauthorized, not_found, validation_error, already_exists,
-                 *     class_in_use, conflict, not_implemented, provider_error, internal_error
+                 *     class_in_use, conflict, not_implemented, provider_error, internal_error,
+                 *     wrong_project_kind (409: the operation does not belong to this kind of project;
+                 *     details `{kind, allowed}`), library_unavailable (503: the model library could not
+                 *     be opened), model_unavailable (409: the library model's weights file is missing)
                  */
                 code: string;
                 message: string;
@@ -1518,10 +1683,17 @@ export interface components {
             group_regex: string;
         };
         /**
+         * @description `train` labels images, builds datasets and trains models; `detect` runs library models over sources. Set at creation, never changed.
+         * @example train
+         * @enum {string}
+         */
+        ProjectKind: "train" | "detect";
+        /**
          * @example {
          *       "id": "7f1c2e3a-1111-4000-8000-000000000001",
          *       "name": "Ahmadia",
          *       "folder": "E:\\Projects\\Ahmadia",
+         *       "kind": "train",
          *       "classes": [
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
@@ -1596,7 +1768,9 @@ export interface components {
             name: string;
             /** @description absolute path of the project folder */
             folder: string;
+            kind: components["schemas"]["ProjectKind"];
             classes: components["schemas"]["ClassDef"][];
+            /** @description a library model id */
             preannotation_model_id: string | null;
             import_defaults: components["schemas"]["ImportSettings"];
             schema_version: number;
@@ -1607,6 +1781,7 @@ export interface components {
          * @example {
          *       "name": "Ahmadia",
          *       "folder": "E:\\Projects\\Ahmadia",
+         *       "kind": "train",
          *       "classes": [
          *         {
          *           "name": "excavator",
@@ -1625,6 +1800,8 @@ export interface components {
             name: string;
             /** @description absolute path; created when missing */
             folder: string;
+            kind: components["schemas"]["ProjectKind"];
+            /** @description a detection project may start with an empty list */
             classes: components["schemas"]["ClassDefInput"][];
         };
         /**
@@ -1643,6 +1820,7 @@ export interface components {
          */
         ProjectUpdate: {
             name?: string;
+            /** @description a library model id */
             preannotation_model_id?: string | null;
             import_defaults?: components["schemas"]["ImportSettings"];
         };
@@ -1964,7 +2142,7 @@ export interface components {
          *     }
          */
         PreannotateRequest: {
-            /** @description defaults to the project's pre-annotation model */
+            /** @description a library model id; defaults to the project's pre-annotation model */
             model_id?: string;
             /** @default 2560 */
             imgsz: number;
@@ -2294,8 +2472,6 @@ export interface components {
                 image_count: number;
             }[];
         };
-        /** @enum {string} */
-        ModelKind: "imported" | "trained";
         ClassMetrics: {
             class_name: string;
             map50: number;
@@ -2328,83 +2504,365 @@ export interface components {
             per_class: components["schemas"]["ClassMetrics"][];
         };
         /**
+         * @description A snapshot taken when the model was registered, never a live link: the project, dataset or base model it names may have been renamed, moved or deleted since. Every field is optional and nullable.
          * @example {
-         *       "id": "m0000000-2222-4000-8000-000000000001",
-         *       "name": "yolo11m-coco",
-         *       "kind": "imported",
-         *       "weights_path": "models/yolo11m.pt",
-         *       "base_weights": null,
-         *       "dataset_id": null,
-         *       "hyperparameters": {},
-         *       "metrics": null,
-         *       "class_names": [
-         *         "person",
-         *         "bicycle",
-         *         "car",
-         *         "motorcycle",
-         *         "airplane",
-         *         "bus",
-         *         "train",
-         *         "truck"
-         *       ],
-         *       "class_aliases": {
-         *         "truck": "dump_truck"
-         *       },
-         *       "exports": {},
-         *       "artifacts": {},
-         *       "run_id": null,
-         *       "created_at": "2026-09-17T10:10:00Z"
+         *       "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *       "project_name": "Ahmadia",
+         *       "project_folder": "E:\\Projects\\Ahmadia",
+         *       "dataset_id": "d0000000-7777-4000-8000-000000000001",
+         *       "dataset_name": "v1",
+         *       "run_id": "j0000000-4444-4000-8000-000000000005",
+         *       "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *       "base_model_name": "yolo11n-coco",
+         *       "source_file": null
          *     }
          */
-        Model: {
+        ModelProvenance: {
+            project_id?: string | null;
+            project_name?: string | null;
+            project_folder?: string | null;
+            dataset_id?: string | null;
+            dataset_name?: string | null;
+            /** @description the training job id */
+            run_id?: string | null;
+            /** @description the library model training started from */
+            base_model_id?: string | null;
+            base_model_name?: string | null;
+            /** @description the file an imported model was copied from */
+            source_file?: string | null;
+        };
+        /**
+         * @description a model in the app-wide library (`%APPDATA%\kestrel-ai\library`), usable by every project
+         * @example {
+         *       "id": "m0000000-2222-4000-8000-000000000001",
+         *       "name": "ahmadia-v1-n",
+         *       "notes": "First model trained on the April flights.",
+         *       "supplier": null,
+         *       "task": "detect",
+         *       "format": "pt",
+         *       "origin": "trained",
+         *       "state": "ready",
+         *       "class_names": [
+         *         "excavator",
+         *         "dump_truck"
+         *       ],
+         *       "class_aliases": {},
+         *       "provenance": {
+         *         "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *         "project_name": "Ahmadia",
+         *         "project_folder": "E:\\Projects\\Ahmadia",
+         *         "dataset_id": "d0000000-7777-4000-8000-000000000001",
+         *         "dataset_name": "v1",
+         *         "run_id": "j0000000-4444-4000-8000-000000000005",
+         *         "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *         "base_model_name": "yolo11n-coco",
+         *         "source_file": null
+         *       },
+         *       "hyperparameters": {
+         *         "epochs": 50,
+         *         "imgsz": 1280,
+         *         "batch": 8,
+         *         "patience": 50,
+         *         "augmentation": "aerial"
+         *       },
+         *       "metrics": {
+         *         "map50": 0.71,
+         *         "map50_95": 0.44,
+         *         "precision": 0.78,
+         *         "recall": 0.66,
+         *         "per_class": [
+         *           {
+         *             "class_name": "excavator",
+         *             "map50": 0.8,
+         *             "map50_95": 0.5,
+         *             "precision": 0.82,
+         *             "recall": 0.7
+         *           },
+         *           {
+         *             "class_name": "dump_truck",
+         *             "map50": 0.62,
+         *             "map50_95": 0.38,
+         *             "precision": 0.74,
+         *             "recall": 0.62
+         *           }
+         *         ]
+         *       },
+         *       "exports": {
+         *         "onnx": "exports/weights.onnx"
+         *       },
+         *       "artifacts": {
+         *         "results_csv": "artifacts/results.csv",
+         *         "confusion_matrix": "artifacts/confusion_matrix.png",
+         *         "pr_curve": "artifacts/PR_curve.png"
+         *       },
+         *       "train_gsd_cm": 2,
+         *       "sha256": "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a",
+         *       "created_at": "2026-09-18T09:00:00Z"
+         *     }
+         */
+        LibraryModel: {
             id: string;
             name: string;
-            kind: components["schemas"]["ModelKind"];
-            /** @description relative to the project folder */
-            weights_path: string;
-            base_weights: string | null;
-            dataset_id: string | null;
-            hyperparameters: {
-                [key: string]: unknown;
-            };
-            metrics: components["schemas"]["ModelMetrics"] | null;
+            notes: string;
+            /** @description free text for imported models, e.g. the client or partner who supplied it */
+            supplier: string | null;
+            /**
+             * @description `detect` for boxes, `obb` for rotated boxes
+             * @enum {string}
+             */
+            task: "detect" | "obb";
+            /** @enum {string} */
+            format: "pt" | "onnx";
+            /** @enum {string} */
+            origin: "trained" | "imported" | "starter";
+            /**
+             * @description `unavailable` when the weights file is missing from the library folder
+             * @enum {string}
+             */
+            state: "ready" | "unavailable";
             /** @description class names the weights predict, in index order */
             class_names: string[];
             /** @description model class name to project class name (for COCO weights, `truck` to `dump_truck`) */
             class_aliases: {
                 [key: string]: string;
             };
-            /** @description format to relative path */
+            provenance: components["schemas"]["ModelProvenance"];
+            hyperparameters: {
+                [key: string]: unknown;
+            };
+            metrics: components["schemas"]["ModelMetrics"] | null;
+            /** @description format to path relative to the model's library folder, e.g. `{onnx: exports/weights.onnx}` */
             exports: {
                 [key: string]: string;
             };
-            /** @description relative paths of run artifacts when present */
+            /** @description training artifacts present, keyed `results_csv`, `confusion_matrix`, `pr_curve`; paths relative to the model's library folder */
             artifacts: {
-                results_csv?: string;
-                confusion_matrix?: string;
-                pr_curve?: string;
+                [key: string]: string;
             };
-            /** @description training job id */
-            run_id: string | null;
+            /** @description ground size of one pixel in the training images */
+            train_gsd_cm: number | null;
+            /** @description of the weights file; the same file cannot be added twice */
+            sha256: string;
             /** Format: date-time */
             created_at: string;
         };
         /**
          * @example {
-         *       "name": "yolo11m-coco",
-         *       "weights_path": "E:\\Dev\\Yolo\\models\\yolo11m.pt",
-         *       "class_aliases": {
-         *         "truck": "dump_truck"
-         *       }
+         *       "items": [
+         *         {
+         *           "id": "m0000000-2222-4000-8000-000000000001",
+         *           "name": "ahmadia-v1-n",
+         *           "notes": "First model trained on the April flights.",
+         *           "supplier": null,
+         *           "task": "detect",
+         *           "format": "pt",
+         *           "origin": "trained",
+         *           "state": "ready",
+         *           "class_names": [
+         *             "excavator",
+         *             "dump_truck"
+         *           ],
+         *           "class_aliases": {},
+         *           "provenance": {
+         *             "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *             "project_name": "Ahmadia",
+         *             "project_folder": "E:\\Projects\\Ahmadia",
+         *             "dataset_id": "d0000000-7777-4000-8000-000000000001",
+         *             "dataset_name": "v1",
+         *             "run_id": "j0000000-4444-4000-8000-000000000005",
+         *             "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *             "base_model_name": "yolo11n-coco",
+         *             "source_file": null
+         *           },
+         *           "hyperparameters": {
+         *             "epochs": 50,
+         *             "imgsz": 1280,
+         *             "batch": 8,
+         *             "patience": 50,
+         *             "augmentation": "aerial"
+         *           },
+         *           "metrics": {
+         *             "map50": 0.71,
+         *             "map50_95": 0.44,
+         *             "precision": 0.78,
+         *             "recall": 0.66,
+         *             "per_class": [
+         *               {
+         *                 "class_name": "excavator",
+         *                 "map50": 0.8,
+         *                 "map50_95": 0.5,
+         *                 "precision": 0.82,
+         *                 "recall": 0.7
+         *               },
+         *               {
+         *                 "class_name": "dump_truck",
+         *                 "map50": 0.62,
+         *                 "map50_95": 0.38,
+         *                 "precision": 0.74,
+         *                 "recall": 0.62
+         *               }
+         *             ]
+         *           },
+         *           "exports": {
+         *             "onnx": "exports/weights.onnx"
+         *           },
+         *           "artifacts": {
+         *             "results_csv": "artifacts/results.csv",
+         *             "confusion_matrix": "artifacts/confusion_matrix.png",
+         *             "pr_curve": "artifacts/PR_curve.png"
+         *           },
+         *           "train_gsd_cm": 2,
+         *           "sha256": "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a",
+         *           "created_at": "2026-09-18T09:00:00Z"
+         *         },
+         *         {
+         *           "id": "m0000000-2222-4000-8000-000000000002",
+         *           "name": "yolo11n-coco",
+         *           "notes": "",
+         *           "supplier": null,
+         *           "task": "detect",
+         *           "format": "pt",
+         *           "origin": "starter",
+         *           "state": "ready",
+         *           "class_names": [
+         *             "person",
+         *             "bicycle",
+         *             "car",
+         *             "motorcycle",
+         *             "airplane",
+         *             "bus",
+         *             "train",
+         *             "truck"
+         *           ],
+         *           "class_aliases": {
+         *             "truck": "dump_truck"
+         *           },
+         *           "provenance": {},
+         *           "hyperparameters": {},
+         *           "metrics": null,
+         *           "exports": {},
+         *           "artifacts": {},
+         *           "train_gsd_cm": null,
+         *           "sha256": "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
+         *           "created_at": "2026-09-17T10:10:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
          *     }
          */
-        ModelImport: {
+        LibraryModelPage: {
+            items: components["schemas"]["LibraryModel"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "name": "client-x-machinery",
+         *       "weights_path": "E:\\Models\\client-x\\best.pt",
+         *       "class_aliases": {
+         *         "truck": "dump_truck"
+         *       },
+         *       "supplier": "Client X"
+         *     }
+         */
+        LibraryModelImport: {
             name: string;
-            /** @description absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into models/ */
+            /** @description absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into the library */
             weights_path: string;
+            /** @default {} */
+            class_aliases: {
+                [key: string]: string;
+            };
+            /** @description who supplied the model */
+            supplier?: string | null;
+        };
+        /**
+         * @description every field is optional
+         * @example {
+         *       "name": "ahmadia-v1-n",
+         *       "notes": "Good on excavators, weak on small trucks.",
+         *       "supplier": null
+         *     }
+         */
+        LibraryModelPatch: {
+            name?: string;
+            notes?: string;
+            supplier?: string | null;
             class_aliases?: {
                 [key: string]: string;
             };
+        };
+        /**
+         * @example {
+         *       "projects": [
+         *         {
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "name": "Ahmadia",
+         *           "folder": "E:\\Projects\\Ahmadia",
+         *           "preannotation": true,
+         *           "query_runs": 2,
+         *           "map_runs": 1
+         *         }
+         *       ]
+         *     }
+         */
+        ModelUsage: {
+            /** @description recently opened projects that use the model; projects that are not on the recent list are not scanned */
+            projects: {
+                project_id: string;
+                name: string;
+                folder: string;
+                /** @description the project's pre-annotation model is this model */
+                preannotation: boolean;
+                /** @description detection runs on images that used the model */
+                query_runs: number;
+                /** @description map runs that used the model */
+                map_runs: number;
+            }[];
+        };
+        /**
+         * @example {
+         *       "available": true,
+         *       "root": "C:\\Users\\operator\\AppData\\Roaming\\kestrel-ai\\library",
+         *       "error": null
+         *     }
+         */
+        LibraryStatus: {
+            available: boolean;
+            /** @description absolute path of the library folder */
+            root: string;
+            /** @description why the library could not be opened; null when it is available */
+            error: string | null;
+        };
+        /**
+         * @example {
+         *       "name": "yolo11n-coco"
+         *     }
+         */
+        StarterAcquire: {
+            /** @description library name; defaults to `<key>-coco` */
+            name?: string | null;
+        };
+        /**
+         * @example {
+         *       "pending": 0,
+         *       "adopted": 3,
+         *       "missing": [],
+         *       "job_id": null
+         *     }
+         */
+        AdoptionStatus: {
+            /** @description old project models not yet in the library */
+            pending: number;
+            /** @description old project models now in the library */
+            adopted: number;
+            /** @description old project models that could not be adopted */
+            missing: {
+                old_model_id: string;
+                name: string;
+                error: string;
+            }[];
+            /** @description the adoption job that is queued or running */
+            job_id: string | null;
         };
         /** @enum {string} */
         StarterModelKey: "yolo26n" | "yolo26s" | "yolo26m" | "yolo26l" | "yolo26x" | "yolo12n" | "yolo12s" | "yolo12m" | "yolo12l" | "yolo12x" | "yolo11n" | "yolo11s" | "yolo11m" | "yolo11l" | "yolo11x" | "yolov10n" | "yolov10s" | "yolov10m" | "yolov10b" | "yolov10l" | "yolov10x" | "yolov9t" | "yolov9s" | "yolov9m" | "yolov9c" | "yolov9e" | "yolov8n" | "yolov8s" | "yolov8m" | "yolov8l" | "yolov8x" | "yolov5nu" | "yolov5su" | "yolov5mu" | "yolov5lu" | "yolov5xu" | "yolov5n6u" | "yolov5s6u" | "yolov5m6u" | "yolov5l6u" | "yolov5x6u" | "yolov3u" | "yolov3-tinyu" | "yolov3-sppu";
@@ -2440,20 +2898,6 @@ export interface components {
         };
         /**
          * @example {
-         *       "key": "yolo11n"
-         *     }
-         */
-        StarterModelImport: {
-            key: components["schemas"]["StarterModelKey"];
-            /** @description registry name; defaults to `<key>-coco` */
-            name?: string;
-        };
-        ModelPage: {
-            items: components["schemas"]["Model"][];
-            next_cursor: string | null;
-        };
-        /**
-         * @example {
          *       "name": "ahmadia-v1-n",
          *       "dataset_id": "d0000000-7777-4000-8000-000000000001",
          *       "base_model_id": "m0000000-2222-4000-8000-000000000002",
@@ -2468,7 +2912,7 @@ export interface components {
         TrainRequest: {
             name: string;
             dataset_id: string;
-            /** @description any registry model */
+            /** @description a library model id (any library model, including starter COCO weights) */
             base_model_id: string;
             /** @default 50 */
             epochs: number;
@@ -2835,7 +3279,7 @@ export interface components {
          */
         QueryRunCreate: {
             kind: components["schemas"]["QueryRunKind"];
-            /** @description required for local_model */
+            /** @description a library model id; required for local_model */
             model_id?: string;
             provider?: components["schemas"]["ProviderName"];
             /** @description required for cloud_provider */
@@ -3033,7 +3477,7 @@ export interface components {
         MapRunCreate: {
             map_id: string;
             kind: components["schemas"]["QueryRunKind"];
-            /** @description required for local_model */
+            /** @description a library model id; required for local_model */
             model_id?: string;
             provider?: components["schemas"]["ProviderName"];
             /** @description required for cloud_provider */
@@ -3395,6 +3839,15 @@ export interface components {
         };
         /**
          * @example {
+         *       "target_project_id": "7f1c2e3a-1111-4000-8000-000000000002"
+         *     }
+         */
+        MapMoveRequest: {
+            /** @description an open or recently opened detection project */
+            target_project_id: string;
+        };
+        /**
+         * @example {
          *       "min_confidence": 0.5
          *     }
          */
@@ -3500,7 +3953,7 @@ export interface components {
             path: string;
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -3524,6 +3977,7 @@ export interface components {
          */
         Job: {
             id: string;
+            /** @description the project id, or `library` for library jobs */
             project_id: string;
             type: components["schemas"]["JobType"];
             state: components["schemas"]["JobState"];
@@ -3534,7 +3988,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id}; infer {query_run_id, boxes}; export {format, path} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path} */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -3577,6 +4031,7 @@ export interface components {
         Event: {
             /** @enum {string} */
             type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed";
+            /** @description the project id, or `library` for library jobs */
             project_id: string;
             job_id: string | null;
             progress: number | null;
@@ -3593,6 +4048,47 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the operation does not belong to this kind of project (`code` is `wrong_project_kind`, details `{kind, allowed}`) */
+        WrongProjectKind: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "wrong_project_kind",
+                 *         "message": "This is a detection project. Datasets belong in a training project.",
+                 *         "details": {
+                 *           "kind": "detect",
+                 *           "allowed": [
+                 *             "train"
+                 *           ]
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the model library could not be opened at startup (`code` is `library_unavailable`); `GET /library/status` has the reason */
+        LibraryUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "library_unavailable",
+                 *         "message": "The model library could not be opened.",
+                 *         "details": {}
+                 *       }
+                 *     }
+                 */
                 "application/json": components["schemas"]["Error"];
             };
         };
@@ -4212,6 +4708,16 @@ export interface operations {
                     "application/json": components["schemas"]["PreannotateResult"];
                 };
             };
+            /** @description the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -4368,6 +4874,7 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetPage"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4395,6 +4902,7 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetWithJob"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4419,6 +4927,7 @@ export interface operations {
                     "application/json": components["schemas"]["Dataset"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4441,6 +4950,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4465,87 +4975,7 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetStats"];
                 };
             };
-            default: components["responses"]["Error"];
-        };
-    };
-    listModels: {
-        parameters: {
-            query?: {
-                limit?: components["parameters"]["limit"];
-                /** @description opaque cursor from the previous page's `next_cursor` */
-                cursor?: components["parameters"]["cursor"];
-            };
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description registry */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelPage"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    importModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelImport"];
-            };
-        };
-        responses: {
-            /** @description registered */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Model"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    importStarterModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StarterModelImport"];
-            };
-        };
-        responses: {
-            /** @description registered */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Model"];
-                };
-            };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4573,39 +5003,232 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            /** @description the project, the dataset or the base library model does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the base model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the request body is invalid (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    getModel: {
+    getModelAdoption: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description adoption status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdoptionStatus"];
+                };
+            };
+            /** @description no such project (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    retryModelAdoption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description adoption job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description no such project (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description an adoption job is already queued or running (`code` is `conflict`), or the project is not a training project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description library status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryModels: {
+        parameters: {
+            query?: {
+                task?: "detect" | "obb";
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description library models */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryModelPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    importLibraryModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryModelImport"];
+            };
+        };
+        responses: {
+            /** @description import job queued; when it succeeds its `result` is `{model_id}` */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description `weights_path` is not absolute, not a .pt file, or does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description the model */
+            /** @description the library model */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Model"];
+                    "application/json": components["schemas"]["LibraryModel"];
                 };
             };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    deleteModel: {
+    deleteLibraryModel: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
@@ -4619,15 +5242,94 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    getModelArtifact: {
+    updateLibraryModel: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryModelPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated library model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryModel"];
+                };
+            };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModelUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the projects that use the model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelUsage"];
+                };
+            };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModelArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 modelId: components["parameters"]["modelId"];
                 artifact: "results_csv" | "confusion_matrix" | "pr_curve";
             };
@@ -4645,7 +5347,7 @@ export interface operations {
                     "text/csv": string;
                 };
             };
-            /** @description the model has no such artifact */
+            /** @description no such model, or the model has no such artifact (`code` is `not_found`) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4654,15 +5356,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    exportModel: {
+    exportLibraryModel: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
@@ -4673,7 +5375,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description export job queued */
+            /** @description export job queued; when it succeeds its `result` is `{format, path}` */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -4682,6 +5384,182 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    acquireStarterModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["schemas"]["StarterModelKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StarterAcquire"];
+            };
+        };
+        responses: {
+            /** @description starter acquisition queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description no such starter model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryJobs: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["JobState"];
+                type?: components["schemas"]["JobType"];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description library jobs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description no such job (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryJobLog: {
+        parameters: {
+            query?: {
+                tail?: number;
+            };
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description last lines of the job log */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobLog"];
+                };
+            };
+            /** @description no such job (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelLibraryJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job after the request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description no such job (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -4701,33 +5579,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StarterModelPage"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    acquireStarterModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StarterModelImport"];
-            };
-        };
-        responses: {
-            /** @description model acquisition queued */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRef"];
                 };
             };
             default: components["responses"]["Error"];
@@ -4874,6 +5725,7 @@ export interface operations {
                     "application/json": components["schemas"]["CostEstimate"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4928,6 +5780,16 @@ export interface operations {
                     "application/json": components["schemas"]["QueryRunWithJob"];
                 };
             };
+            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -4976,7 +5838,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description the run's job is still queued or running (`code` is `conflict`) */
+            /** @description the run's job is still queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5013,6 +5875,7 @@ export interface operations {
                     "application/json": components["schemas"]["PromoteResult"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5037,6 +5900,7 @@ export interface operations {
                     "application/json": components["schemas"]["UnpromoteResult"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5087,6 +5951,7 @@ export interface operations {
                     "application/json": components["schemas"]["GeoMapWithJob"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5132,6 +5997,61 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description one of the map's jobs is queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    moveMapToProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description move job queued in the target project */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the project, the map or the target project does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description this project is not a training project, or the target is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
             };
             default: components["responses"]["Error"];
         };
@@ -5276,6 +6196,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapRunEstimate"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5303,6 +6224,16 @@ export interface operations {
                     "application/json": components["schemas"]["MapRunWithJob"];
                 };
             };
+            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -5349,6 +6280,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5373,6 +6305,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5585,6 +6518,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapZone"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5608,6 +6542,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5637,6 +6572,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapZone"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5689,6 +6625,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabel"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5712,6 +6649,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5741,6 +6679,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabel"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5769,6 +6708,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabelSeedResult"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5796,6 +6736,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5974,6 +6915,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentConversation"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5995,6 +6937,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6022,6 +6965,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6046,6 +6990,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6074,6 +7019,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };

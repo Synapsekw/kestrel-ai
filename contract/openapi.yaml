@@ -52,6 +52,7 @@ tags:
   - name: boxes
   - name: datasets
   - name: models
+  - name: library
   - name: providers
   - name: query-runs
   - name: exports
@@ -473,6 +474,12 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PreannotateResult" }
+        "409":
+          description: "the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
 
   # -------------------------------------------------------------------- boxes
@@ -570,6 +577,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DatasetPage" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
     post:
       tags: [datasets]
@@ -589,6 +597,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DatasetWithJob" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/datasets/{datasetId}:
     parameters:
@@ -603,6 +612,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Dataset" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [datasets]
@@ -611,6 +621,7 @@ paths:
       responses:
         "204":
           description: deleted
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/datasets/{datasetId}/stats:
     parameters:
@@ -625,70 +636,20 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/DatasetStats" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
 
-  # ------------------------------------------------------------------- models
-  /api/v1/projects/{projectId}/models:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-    get:
-      tags: [models]
-      operationId: listModels
-      parameters:
-        - $ref: "#/components/parameters/limit"
-        - $ref: "#/components/parameters/cursor"
-      responses:
-        "200":
-          description: registry
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/ModelPage" }
-        default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/models/import:
+  # ------------------------------------------------------------------ training
+  /api/v1/projects/{projectId}/train:
     parameters:
       - $ref: "#/components/parameters/projectId"
     post:
-      tags: [models]
-      operationId: importModel
-      summary: Register existing weights (for example COCO yolo11m.pt). The file is copied under `models/`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/ModelImport" }
-      responses:
-        "201":
-          description: registered
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Model" }
-        default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/models/import-starter:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-    post:
-      tags: [models]
-      operationId: importStarterModel
-      summary: Register one of the starter weights that ship with the app (COCO YOLO11). The file is copied under `models/`; `truck` is aliased to `dump_truck` when the project has that class.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/StarterModelImport" }
-      responses:
-        "201":
-          description: registered
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Model" }
-        default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/models/train:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-    post:
-      tags: [models]
+      tags: [library]
       operationId: trainModel
-      summary: Start a training job. The Model row is registered when the job succeeds; `job.result.model_id` points at it.
+      summary: |
+        Start a training job in a training project. `base_model_id` is a library model id. When
+        the job succeeds the trained weights are registered in the library (`origin: trained`)
+        and `job.result.model_id` is the new library model id.
       requestBody:
         required: true
         content:
@@ -700,32 +661,210 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
-        default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/models/{modelId}:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-      - $ref: "#/components/parameters/modelId"
-    get:
-      tags: [models]
-      operationId: getModel
-      responses:
-        "200":
-          description: the model
+        "404":
+          description: the project, the dataset or the base library model does not exist (`code` is `not_found`)
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Model" }
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the base model's weights file is missing (`code` is `model_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: the request body is invalid (`code` is `validation_error`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------ model adoption
+  /api/v1/projects/{projectId}/adoption:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [projects]
+      operationId: getModelAdoption
+      summary: |
+        Progress of moving this training project's old models into the library. Models whose
+        weights file is missing are listed in `missing`; `job_id` is the adoption job that is
+        queued or running, if any.
+      responses:
+        "200":
+          description: adoption status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdoptionStatus" }
+        "404":
+          description: no such project (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/adoption/retry:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [projects]
+      operationId: retryModelAdoption
+      summary: Forget the missing and failed adoptions and start the adoption job again (a `library_adopt` job in this project).
+      responses:
+        "202":
+          description: adoption job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404":
+          description: no such project (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "an adoption job is already queued or running (`code` is `conflict`), or the project is not a training project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------- library
+  /api/v1/library/status:
+    get:
+      tags: [library]
+      operationId: getLibraryStatus
+      summary: Whether the app-wide model library opened at startup, and where it lives. Never answers 503.
+      responses:
+        "200":
+          description: library status
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryStatus" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/models:
+    get:
+      tags: [library]
+      operationId: listLibraryModels
+      summary: Every model in the library, newest first.
+      parameters:
+        - name: task
+          in: query
+          schema: { type: string, enum: [detect, obb] }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: library models
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryModelPage" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/models/import:
+    post:
+      tags: [library]
+      operationId: importLibraryModel
+      summary: |
+        Import a `.pt` weights file into the library through a `library_import` job: hash, copy,
+        load-check, read the task and class names, register. A file already in the library (same
+        sha256) fails the job with a message naming the existing model. The source file is only read.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryModelImport" }
+      responses:
+        "202":
+          description: "import job queued; when it succeeds its `result` is `{model_id}`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404":
+          description: "`weights_path` is not absolute, not a .pt file, or does not exist (`code` is `not_found`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/models/{modelId}:
+    parameters:
+      - $ref: "#/components/parameters/modelId"
+    get:
+      tags: [library]
+      operationId: getLibraryModel
+      responses:
+        "200":
+          description: the library model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryModel" }
+        "404":
+          description: no such model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [library]
+      operationId: updateLibraryModel
+      summary: Rename the model or change its notes, supplier or class aliases.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryModelPatch" }
+      responses:
+        "200":
+          description: the updated library model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryModel" }
+        "404":
+          description: no such model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
     delete:
-      tags: [models]
-      operationId: deleteModel
-      summary: Remove the registry entry and its weights. Boxes keep their `model_id` provenance.
+      tags: [library]
+      operationId: deleteLibraryModel
+      summary: |
+        Remove the model and its folder from the library. Past runs keep their own copy of the
+        model's name and classes and stay readable; check `/usage` first to warn the operator.
       responses:
         "204":
           description: deleted
+        "404":
+          description: no such model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/models/{modelId}/artifacts/{artifact}:
+  /api/v1/library/models/{modelId}/usage:
     parameters:
-      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/modelId"
+    get:
+      tags: [library]
+      operationId: getLibraryModelUsage
+      summary: Recently opened projects that use the model (pre-annotation, detection runs, map runs). Projects not on the recent list are not scanned.
+      responses:
+        "200":
+          description: the projects that use the model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelUsage" }
+        "404":
+          description: no such model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/models/{modelId}/artifacts/{artifact}:
+    parameters:
       - $ref: "#/components/parameters/modelId"
       - name: artifact
         in: path
@@ -734,9 +873,9 @@ paths:
           type: string
           enum: [results_csv, confusion_matrix, pr_curve]
     get:
-      tags: [models]
-      operationId: getModelArtifact
-      summary: A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) for the registry and training screens.
+      tags: [library]
+      operationId: getLibraryModelArtifact
+      summary: A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) kept with the library model.
       responses:
         "200":
           description: the file
@@ -746,19 +885,19 @@ paths:
             text/csv:
               schema: { type: string }
         "404":
-          description: the model has no such artifact
+          description: no such model, or the model has no such artifact (`code` is `not_found`)
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/models/{modelId}/export:
+  /api/v1/library/models/{modelId}/export:
     parameters:
-      - $ref: "#/components/parameters/projectId"
       - $ref: "#/components/parameters/modelId"
     post:
-      tags: [models]
-      operationId: exportModel
-      summary: Export to ONNX or TensorRT through a job; the path lands in `model.exports[format]`.
+      tags: [library]
+      operationId: exportLibraryModel
+      summary: Export to ONNX or TensorRT through a `library_export` job; the path lands in `exports[format]` of the library model.
       requestBody:
         required: true
         content:
@@ -766,10 +905,129 @@ paths:
             schema: { $ref: "#/components/schemas/ExportRequest" }
       responses:
         "202":
-          description: export job queued
+          description: "export job queued; when it succeeds its `result` is `{format, path}`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
+        "404":
+          description: no such model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/starters/{key}/acquire:
+    parameters:
+      - name: key
+        in: path
+        required: true
+        schema: { $ref: "#/components/schemas/StarterModelKey" }
+    post:
+      tags: [library]
+      operationId: acquireStarterModel
+      summary: Add one supported YOLO starter to the library through a `library_starter` job.
+      description: Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the library jobs resource. The successful `job.result.model_id` identifies the library model.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StarterAcquire" }
+      responses:
+        "202":
+          description: starter acquisition queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404":
+          description: no such starter model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/jobs:
+    get:
+      tags: [library]
+      operationId: listLibraryJobs
+      summary: Library jobs (import, export, starter), newest first. Their `project_id` is `library`.
+      parameters:
+        - name: state
+          in: query
+          schema: { $ref: "#/components/schemas/JobState" }
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/JobType" }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: library jobs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobPage" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/jobs/{jobId}:
+    parameters:
+      - $ref: "#/components/parameters/jobId"
+    get:
+      tags: [library]
+      operationId: getLibraryJob
+      responses:
+        "200":
+          description: the job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404":
+          description: no such job (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/jobs/{jobId}/log:
+    parameters:
+      - $ref: "#/components/parameters/jobId"
+    get:
+      tags: [library]
+      operationId: getLibraryJobLog
+      parameters:
+        - name: tail
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10000, default: 200 }
+      responses:
+        "200":
+          description: last lines of the job log
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobLog" }
+        "404":
+          description: no such job (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/jobs/{jobId}/cancel:
+    parameters:
+      - $ref: "#/components/parameters/jobId"
+    post:
+      tags: [library]
+      operationId: cancelLibraryJob
+      summary: Request cancellation. The state becomes `cancelled` once the worker notices; finished jobs are returned unchanged.
+      responses:
+        "200":
+          description: the job after the request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Job" }
+        "404":
+          description: no such job (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
 
   /api/v1/starter-models:
@@ -786,27 +1044,6 @@ paths:
         default: { $ref: "#/components/responses/Error" }
 
   # ---------------------------------------------------------------- providers
-  /api/v1/projects/{projectId}/models/acquire-starter:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-    post:
-      tags: [models]
-      operationId: acquireStarterModel
-      summary: Acquire one supported YOLO starter and register it through a background import job.
-      description: Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the jobs resource. The successful job.result.model_id identifies the registered model.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/StarterModelImport" }
-      responses:
-        "202":
-          description: model acquisition queued
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/JobRef" }
-        default: { $ref: "#/components/responses/Error" }
-
   /api/v1/providers:
     get:
       tags: [providers]
@@ -894,6 +1131,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CostEstimate" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/query-runs:
     parameters:
@@ -929,6 +1167,12 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/QueryRunWithJob" }
+        "409":
+          description: "the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/query-runs/{runId}:
     parameters:
@@ -961,7 +1205,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
         "409":
-          description: the run's job is still queued or running (`code` is `conflict`)
+          description: "the run's job is still queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -985,6 +1229,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PromoteResult" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/query-runs/{runId}/unpromote:
     parameters:
@@ -1000,6 +1245,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UnpromoteResult" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
 
   # ---------------------------------------------------------------------- maps
@@ -1032,6 +1278,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/GeoMapWithJob" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}:
     parameters:
@@ -1070,6 +1317,45 @@ paths:
       summary: Delete the map, its runs, zones and labels, and its folder under `maps/`. 409 while one of its jobs is queued or running.
       responses:
         "204": { description: deleted }
+        "409":
+          description: "one of the map's jobs is queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/move:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    post:
+      tags: [maps]
+      operationId: moveMapToProject
+      summary: |
+        Copy a past map out of this training project into a detection project (a `map_move` job
+        that lives in the **target** project, params `{source_project_id, map_id}`). The map row,
+        its derived overview and tiles, its capture date, zones and labels are copied; its runs
+        are not. The source file is only referenced, never copied or modified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapMoveRequest" }
+      responses:
+        "202":
+          description: move job queued in the target project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404":
+          description: the project, the map or the target project does not exist (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "this project is not a training project, or the target is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/preview:
     parameters:
@@ -1138,6 +1424,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapRunEstimate" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs:
     parameters:
@@ -1157,6 +1444,12 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapRunWithJob" }
+        "409":
+          description: "the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}:
     parameters:
@@ -1178,6 +1471,7 @@ paths:
       summary: Delete the run and its detections. 409 while its job is queued or running.
       responses:
         "204": { description: deleted }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}/resume:
     parameters:
@@ -1193,6 +1487,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}/detections:
     parameters:
@@ -1320,6 +1615,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapZone" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/zones/{zoneId}:
     parameters:
@@ -1340,12 +1636,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapZone" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [maps]
       operationId: deleteMapZone
       responses:
         "204": { description: deleted }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/labels:
     parameters:
@@ -1376,6 +1674,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapLabel" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/labels/{labelId}:
     parameters:
@@ -1397,12 +1696,14 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapLabel" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [maps]
       operationId: deleteMapLabel
       responses:
         "204": { description: deleted }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/labels/seed:
     parameters:
@@ -1423,6 +1724,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapLabelSeedResult" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-exports:
     parameters:
@@ -1442,6 +1744,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
 
   # ------------------------------------------------------------------ exports
@@ -1566,6 +1869,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AgentConversation" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [agent]
@@ -1573,6 +1877,7 @@ paths:
       summary: Delete the project agent conversation. 409 `conflict` while a turn is running or awaiting approval.
       responses:
         "204": { description: cleared }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/agent/turns:
     parameters:
@@ -1595,6 +1900,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AgentTurn" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/agent/turns/{turnId}/cancel:
     parameters:
@@ -1610,6 +1916,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AgentTurn" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/agent/turns/{turnId}/approval:
     parameters:
@@ -1630,6 +1937,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/AgentTurn" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
 
 components:
@@ -1726,6 +2034,26 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    WrongProjectKind:
+      description: "the operation does not belong to this kind of project (`code` is `wrong_project_kind`, details `{kind, allowed}`)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              code: wrong_project_kind
+              message: "This is a detection project. Datasets belong in a training project."
+              details: { kind: detect, allowed: [train] }
+    LibraryUnavailable:
+      description: "the model library could not be opened at startup (`code` is `library_unavailable`); `GET /library/status` has the reason"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              code: library_unavailable
+              message: "The model library could not be opened."
+              details: {}
 
   schemas:
     Error:
@@ -1740,7 +2068,10 @@ components:
               type: string
               description: |
                 machine-readable: unauthorized, not_found, validation_error, already_exists,
-                class_in_use, conflict, not_implemented, provider_error, internal_error
+                class_in_use, conflict, not_implemented, provider_error, internal_error,
+                wrong_project_kind (409: the operation does not belong to this kind of project;
+                details `{kind, allowed}`), library_unavailable (503: the model library could not
+                be opened), model_unavailable (409: the library model's weights file is missing)
             message: { type: string }
             details:
               type: object
@@ -1809,17 +2140,23 @@ components:
           description: the named group `flight` is the group key (flights span cameras); fall back to a 250 m tile, then the source site
       example: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)" }
 
+    ProjectKind:
+      type: string
+      enum: [train, detect]
+      description: "`train` labels images, builds datasets and trains models; `detect` runs library models over sources. Set at creation, never changed."
+      example: train
     Project:
       type: object
-      required: [id, name, folder, classes, preannotation_model_id, import_defaults, schema_version, created_at]
+      required: [id, name, folder, kind, classes, preannotation_model_id, import_defaults, schema_version, created_at]
       properties:
         id: { type: string }
         name: { type: string }
         folder: { type: string, description: absolute path of the project folder }
+        kind: { $ref: "#/components/schemas/ProjectKind" }
         classes:
           type: array
           items: { $ref: "#/components/schemas/ClassDef" }
-        preannotation_model_id: { type: [string, "null"] }
+        preannotation_model_id: { type: [string, "null"], description: a library model id }
         import_defaults: { $ref: "#/components/schemas/ImportSettings" }
         schema_version: { type: integer }
         created_at: { type: string, format: date-time }
@@ -1827,6 +2164,7 @@ components:
         id: "7f1c2e3a-1111-4000-8000-000000000001"
         name: Ahmadia
         folder: "E:\\Projects\\Ahmadia"
+        kind: train
         classes:
           - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", hotkey: "1", order: 0 }
           - { id: "c1a2b3c4-0000-4000-8000-000000000002", name: wheel_loader, colour: "#eab308", hotkey: "2", order: 1 }
@@ -1842,16 +2180,19 @@ components:
         created_at: "2026-09-17T10:00:00Z"
     ProjectCreate:
       type: object
-      required: [name, folder, classes]
+      required: [name, folder, classes, kind]
       properties:
         name: { type: string, minLength: 1 }
         folder: { type: string, description: absolute path; created when missing, must not already hold a project }
+        kind: { $ref: "#/components/schemas/ProjectKind" }
         classes:
           type: array
+          description: a detection project may start with an empty list
           items: { $ref: "#/components/schemas/ClassDefInput" }
       example:
         name: Ahmadia
         folder: "E:\\Projects\\Ahmadia"
+        kind: train
         classes:
           - { name: excavator, colour: "#f97316", hotkey: "1" }
           - { name: dump_truck, colour: "#06b6d4", hotkey: "2" }
@@ -1865,7 +2206,7 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1 }
-        preannotation_model_id: { type: [string, "null"] }
+        preannotation_model_id: { type: [string, "null"], description: a library model id }
         import_defaults: { $ref: "#/components/schemas/ImportSettings" }
       example: { name: Ahmadia, preannotation_model_id: "m0000000-2222-4000-8000-000000000001" }
     ProjectPage:
@@ -2134,7 +2475,7 @@ components:
     PreannotateRequest:
       type: object
       properties:
-        model_id: { type: string, description: defaults to the project's pre-annotation model }
+        model_id: { type: string, description: "a library model id; defaults to the project's pre-annotation model" }
         imgsz: { type: integer, minimum: 320, maximum: 6400, default: 2560 }
         conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
       example: { imgsz: 2560, conf: 0.25 }
@@ -2416,9 +2757,6 @@ components:
           - { group_key: "0031", split: train, image_count: 24 }
           - { group_key: "0033", split: val, image_count: 6 }
 
-    ModelKind:
-      type: string
-      enum: [imported, trained]
     ClassMetrics:
       type: object
       required: [class_name, map50, map50_95, precision, recall]
@@ -2446,23 +2784,45 @@ components:
         recall: 0.66
         per_class:
           - { class_name: excavator, map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }
-    Model:
+    ModelProvenance:
       type: object
-      required: [id, name, kind, weights_path, base_weights, dataset_id, hyperparameters, metrics, class_names, class_aliases, exports, artifacts, run_id, created_at]
+      description: >-
+        A snapshot taken when the model was registered, never a live link: the project, dataset or
+        base model it names may have been renamed, moved or deleted since. Every field is optional
+        and nullable.
+      properties:
+        project_id: { type: [string, "null"] }
+        project_name: { type: [string, "null"] }
+        project_folder: { type: [string, "null"] }
+        dataset_id: { type: [string, "null"] }
+        dataset_name: { type: [string, "null"] }
+        run_id: { type: [string, "null"], description: the training job id }
+        base_model_id: { type: [string, "null"], description: the library model training started from }
+        base_model_name: { type: [string, "null"] }
+        source_file: { type: [string, "null"], description: the file an imported model was copied from }
+      example:
+        project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+        project_name: Ahmadia
+        project_folder: "E:\\Projects\\Ahmadia"
+        dataset_id: "d0000000-7777-4000-8000-000000000001"
+        dataset_name: v1
+        run_id: "j0000000-4444-4000-8000-000000000005"
+        base_model_id: "m0000000-2222-4000-8000-000000000002"
+        base_model_name: yolo11n-coco
+        source_file: null
+    LibraryModel:
+      type: object
+      description: a model in the app-wide library (`%APPDATA%\kestrel-ai\library`), usable by every project
+      required: [id, name, notes, supplier, task, format, origin, state, class_names, class_aliases, provenance, hyperparameters, metrics, exports, artifacts, train_gsd_cm, sha256, created_at]
       properties:
         id: { type: string }
         name: { type: string }
-        kind: { $ref: "#/components/schemas/ModelKind" }
-        weights_path: { type: string, description: relative to the project folder }
-        base_weights: { type: [string, "null"] }
-        dataset_id: { type: [string, "null"] }
-        hyperparameters:
-          type: object
-          additionalProperties: true
-        metrics:
-          oneOf:
-            - $ref: "#/components/schemas/ModelMetrics"
-            - type: "null"
+        notes: { type: string }
+        supplier: { type: [string, "null"], description: "free text for imported models, e.g. the client or partner who supplied it" }
+        task: { type: string, enum: [detect, obb], description: "`detect` for boxes, `obb` for rotated boxes" }
+        format: { type: string, enum: [pt, onnx] }
+        origin: { type: string, enum: [trained, imported, starter] }
+        state: { type: string, enum: [ready, unavailable], description: "`unavailable` when the weights file is missing from the library folder" }
         class_names:
           type: array
           description: class names the weights predict, in index order
@@ -2471,44 +2831,201 @@ components:
           type: object
           description: model class name to project class name (for COCO weights, `truck` to `dump_truck`)
           additionalProperties: { type: string }
+        provenance: { $ref: "#/components/schemas/ModelProvenance" }
+        hyperparameters:
+          type: object
+          additionalProperties: true
+        metrics:
+          oneOf:
+            - $ref: "#/components/schemas/ModelMetrics"
+            - type: "null"
         exports:
           type: object
-          description: format to relative path
+          description: "format to path relative to the model's library folder, e.g. `{onnx: exports/weights.onnx}`"
           additionalProperties: { type: string }
         artifacts:
           type: object
-          description: relative paths of run artifacts when present
-          properties:
-            results_csv: { type: string }
-            confusion_matrix: { type: string }
-            pr_curve: { type: string }
-        run_id: { type: [string, "null"], description: training job id }
+          description: "training artifacts present, keyed `results_csv`, `confusion_matrix`, `pr_curve`; paths relative to the model's library folder"
+          additionalProperties: { type: string }
+        train_gsd_cm: { type: [number, "null"], description: ground size of one pixel in the training images, in centimetres; the default target GSD for map runs }
+        sha256: { type: string, description: of the weights file; the same file cannot be added twice }
         created_at: { type: string, format: date-time }
       example:
         id: "m0000000-2222-4000-8000-000000000001"
-        name: yolo11m-coco
-        kind: imported
-        weights_path: "models/yolo11m.pt"
-        base_weights: null
-        dataset_id: null
-        hyperparameters: {}
-        metrics: null
-        class_names: [person, bicycle, car, motorcycle, airplane, bus, train, truck]
-        class_aliases: { truck: dump_truck }
-        exports: {}
-        artifacts: {}
-        run_id: null
-        created_at: "2026-09-17T10:10:00Z"
-    ModelImport:
+        name: ahmadia-v1-n
+        notes: "First model trained on the April flights."
+        supplier: null
+        task: detect
+        format: pt
+        origin: trained
+        state: ready
+        class_names: [excavator, dump_truck]
+        class_aliases: {}
+        provenance:
+          project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+          project_name: Ahmadia
+          project_folder: "E:\\Projects\\Ahmadia"
+          dataset_id: "d0000000-7777-4000-8000-000000000001"
+          dataset_name: v1
+          run_id: "j0000000-4444-4000-8000-000000000005"
+          base_model_id: "m0000000-2222-4000-8000-000000000002"
+          base_model_name: yolo11n-coco
+          source_file: null
+        hyperparameters: { epochs: 50, imgsz: 1280, batch: 8, patience: 50, augmentation: aerial }
+        metrics:
+          map50: 0.71
+          map50_95: 0.44
+          precision: 0.78
+          recall: 0.66
+          per_class:
+            - { class_name: excavator, map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }
+            - { class_name: dump_truck, map50: 0.62, map50_95: 0.38, precision: 0.74, recall: 0.62 }
+        exports: { onnx: "exports/weights.onnx" }
+        artifacts: { results_csv: "artifacts/results.csv", confusion_matrix: "artifacts/confusion_matrix.png", pr_curve: "artifacts/PR_curve.png" }
+        train_gsd_cm: 2.0
+        sha256: "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a"
+        created_at: "2026-09-18T09:00:00Z"
+    LibraryModelPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryModel" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - id: "m0000000-2222-4000-8000-000000000001"
+            name: ahmadia-v1-n
+            notes: "First model trained on the April flights."
+            supplier: null
+            task: detect
+            format: pt
+            origin: trained
+            state: ready
+            class_names: [excavator, dump_truck]
+            class_aliases: {}
+            provenance:
+              project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+              project_name: Ahmadia
+              project_folder: "E:\\Projects\\Ahmadia"
+              dataset_id: "d0000000-7777-4000-8000-000000000001"
+              dataset_name: v1
+              run_id: "j0000000-4444-4000-8000-000000000005"
+              base_model_id: "m0000000-2222-4000-8000-000000000002"
+              base_model_name: yolo11n-coco
+              source_file: null
+            hyperparameters: { epochs: 50, imgsz: 1280, batch: 8, patience: 50, augmentation: aerial }
+            metrics:
+              map50: 0.71
+              map50_95: 0.44
+              precision: 0.78
+              recall: 0.66
+              per_class:
+                - { class_name: excavator, map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }
+                - { class_name: dump_truck, map50: 0.62, map50_95: 0.38, precision: 0.74, recall: 0.62 }
+            exports: { onnx: "exports/weights.onnx" }
+            artifacts: { results_csv: "artifacts/results.csv", confusion_matrix: "artifacts/confusion_matrix.png", pr_curve: "artifacts/PR_curve.png" }
+            train_gsd_cm: 2.0
+            sha256: "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a"
+            created_at: "2026-09-18T09:00:00Z"
+          - id: "m0000000-2222-4000-8000-000000000002"
+            name: yolo11n-coco
+            notes: ""
+            supplier: null
+            task: detect
+            format: pt
+            origin: starter
+            state: ready
+            class_names: [person, bicycle, car, motorcycle, airplane, bus, train, truck]
+            class_aliases: { truck: dump_truck }
+            provenance: {}
+            hyperparameters: {}
+            metrics: null
+            exports: {}
+            artifacts: {}
+            train_gsd_cm: null
+            sha256: "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c"
+            created_at: "2026-09-17T10:10:00Z"
+        next_cursor: null
+    LibraryModelImport:
       type: object
       required: [name, weights_path]
       properties:
         name: { type: string, minLength: 1 }
-        weights_path: { type: string, minLength: 1, description: absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into models/ }
+        weights_path: { type: string, minLength: 1, description: absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into the library, the original is only read }
+        class_aliases:
+          type: object
+          default: {}
+          additionalProperties: { type: string }
+        supplier: { type: [string, "null"], description: who supplied the model, free text }
+      example: { name: client-x-machinery, weights_path: "E:\\Models\\client-x\\best.pt", class_aliases: { truck: dump_truck }, supplier: "Client X" }
+    LibraryModelPatch:
+      type: object
+      description: every field is optional
+      properties:
+        name: { type: string, minLength: 1 }
+        notes: { type: string }
+        supplier: { type: [string, "null"] }
         class_aliases:
           type: object
           additionalProperties: { type: string }
-      example: { name: yolo11m-coco, weights_path: "E:\\Dev\\Yolo\\models\\yolo11m.pt", class_aliases: { truck: dump_truck } }
+      example: { name: ahmadia-v1-n, notes: "Good on excavators, weak on small trucks.", supplier: null }
+    ModelUsage:
+      type: object
+      required: [projects]
+      properties:
+        projects:
+          type: array
+          description: recently opened projects that use the model; projects that are not on the recent list are not scanned
+          items:
+            type: object
+            required: [project_id, name, folder, preannotation, query_runs, map_runs]
+            properties:
+              project_id: { type: string }
+              name: { type: string }
+              folder: { type: string }
+              preannotation: { type: boolean, description: the project's pre-annotation model is this model }
+              query_runs: { type: integer, description: detection runs on images that used the model }
+              map_runs: { type: integer, description: map runs that used the model }
+      example:
+        projects:
+          - { project_id: "7f1c2e3a-1111-4000-8000-000000000001", name: Ahmadia, folder: "E:\\Projects\\Ahmadia", preannotation: true, query_runs: 2, map_runs: 1 }
+    LibraryStatus:
+      type: object
+      required: [available, root, error]
+      properties:
+        available: { type: boolean }
+        root: { type: string, description: absolute path of the library folder }
+        error: { type: [string, "null"], description: why the library could not be opened; null when it is available }
+      example: { available: true, root: "C:\\Users\\operator\\AppData\\Roaming\\kestrel-ai\\library", error: null }
+    StarterAcquire:
+      type: object
+      properties:
+        name: { type: [string, "null"], minLength: 1, description: "library name; defaults to `<key>-coco`" }
+      example: { name: yolo11n-coco }
+    AdoptionStatus:
+      type: object
+      required: [pending, adopted, missing, job_id]
+      properties:
+        pending: { type: integer, description: old project models not yet in the library }
+        adopted: { type: integer, description: old project models now in the library }
+        missing:
+          type: array
+          description: old project models that could not be adopted
+          items:
+            type: object
+            required: [old_model_id, name, error]
+            properties:
+              old_model_id: { type: string }
+              name: { type: string }
+              error: { type: string }
+        job_id: { type: [string, "null"], description: the adoption job that is queued or running }
+      example:
+        pending: 0
+        adopted: 3
+        missing: []
+        job_id: null
     StarterModelKey:
       type: string
       enum: [yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, yolo12n, yolo12s, yolo12m, yolo12l, yolo12x, yolo11n, yolo11s, yolo11m, yolo11l, yolo11x, yolov10n, yolov10s, yolov10m, yolov10b, yolov10l, yolov10x, yolov9t, yolov9s, yolov9m, yolov9c, yolov9e, yolov8n, yolov8s, yolov8m, yolov8l, yolov8x, yolov5nu, yolov5su, yolov5mu, yolov5lu, yolov5xu, yolov5n6u, yolov5s6u, yolov5m6u, yolov5l6u, yolov5x6u, yolov3u, yolov3-tinyu, yolov3-sppu]
@@ -2537,28 +3054,13 @@ components:
           type: array
           items: { $ref: "#/components/schemas/StarterModel" }
         next_cursor: { type: [string, "null"], description: always null, the catalogue is one page }
-    StarterModelImport:
-      type: object
-      required: [key]
-      properties:
-        key: { $ref: "#/components/schemas/StarterModelKey" }
-        name: { type: string, minLength: 1, description: "registry name; defaults to `<key>-coco`" }
-      example: { key: yolo11n }
-    ModelPage:
-      type: object
-      required: [items, next_cursor]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/Model" }
-        next_cursor: { type: [string, "null"] }
     TrainRequest:
       type: object
       required: [name, dataset_id, base_model_id]
       properties:
         name: { type: string, minLength: 1 }
         dataset_id: { type: string }
-        base_model_id: { type: string, description: any registry model, including imported COCO weights }
+        base_model_id: { type: string, description: "a library model id (any library model, including starter COCO weights)" }
         epochs: { type: integer, minimum: 1, maximum: 1000, default: 50 }
         imgsz: { type: integer, minimum: 320, maximum: 4096, default: 1280 }
         batch: { type: [integer, "null"], description: null = auto }
@@ -2856,7 +3358,7 @@ components:
       required: [kind, image_ids]
       properties:
         kind: { $ref: "#/components/schemas/QueryRunKind" }
-        model_id: { type: string, description: required for local_model }
+        model_id: { type: string, description: "a library model id; required for local_model" }
         provider: { $ref: "#/components/schemas/ProviderName" }
         query: { type: string, minLength: 1, description: required for cloud_provider, e.g. "dump trucks" }
         image_ids:
@@ -3035,7 +3537,7 @@ components:
       properties:
         map_id: { type: string }
         kind: { $ref: "#/components/schemas/QueryRunKind" }
-        model_id: { type: string, description: required for local_model }
+        model_id: { type: string, description: "a library model id; required for local_model" }
         provider: { $ref: "#/components/schemas/ProviderName" }
         query: { type: string, minLength: 1, description: required for cloud_provider }
         tile_size: { type: integer, minimum: 256, maximum: 4096, default: 1280 }
@@ -3335,6 +3837,12 @@ components:
           items: { $ref: "#/components/schemas/MapExportFormat" }
           minItems: 1
           uniqueItems: true
+    MapMoveRequest:
+      type: object
+      required: [target_project_id]
+      properties:
+        target_project_id: { type: string, description: an open or recently opened detection project }
+      example: { target_project_id: "7f1c2e3a-1111-4000-8000-000000000002" }
     PromoteRequest:
       type: object
       properties:
@@ -3416,7 +3924,7 @@ components:
       example: { path: "exports/2026-09-19_101500" }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -3425,7 +3933,7 @@ components:
       required: [id, project_id, type, state, progress, message, log_path, params, result, error, created_at, started_at, finished_at]
       properties:
         id: { type: string }
-        project_id: { type: string }
+        project_id: { type: string, description: "the project id, or `library` for library jobs" }
         type: { $ref: "#/components/schemas/JobType" }
         state: { $ref: "#/components/schemas/JobState" }
         progress: { type: number, minimum: 0, maximum: 1 }
@@ -3437,7 +3945,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id}; infer {query_run_id, boxes}; export {format, path}"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
@@ -3494,7 +4002,7 @@ components:
               map_runs.changed,
               map_labels.changed,
             ]
-        project_id: { type: string }
+        project_id: { type: string, description: "the project id, or `library` for library jobs" }
         job_id: { type: [string, "null"] }
         progress: { type: [number, "null"] }
         message: { type: string }
