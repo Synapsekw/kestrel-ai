@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
+import numpy as np
 from affine import Affine
 from pyproj import CRS, Transformer
 
@@ -23,9 +24,10 @@ class Georef:
         self.affine = Affine.from_gdal(*geotransform)
         self.crs = CRS.from_wkt(crs_wkt)
         self._to_wgs84 = Transformer.from_crs(self.crs, CRS.from_epsg(4326), always_xy=True)
+        self._to_native: Transformer | None = None  # built on first use of wgs84_to_pixel
 
     def pixel_to_native(self, px: float, py: float) -> tuple[float, float]:
-        x, y = self.affine * (px, py)
+        x, y = self.affine @ (px, py)
         return float(x), float(y)
 
     def native_to_wgs84(self, xs, ys):
@@ -34,6 +36,21 @@ class Georef:
     def pixel_to_wgs84(self, px: float, py: float) -> tuple[float, float]:
         lon, lat = self.native_to_wgs84(*self.pixel_to_native(px, py))
         return float(lon), float(lat)
+
+    def wgs84_to_pixel(self, lon, lat) -> tuple:
+        """The inverse of `pixel_to_wgs84`: scalars give `(px, py)` floats, equal-length sequences
+        (lists, tuples or numpy arrays) give `(xs, ys)` lists. Rotation terms included, through the
+        inverted affine."""
+        if self._to_native is None:
+            self._to_native = Transformer.from_crs(CRS.from_epsg(4326), self.crs, always_xy=True)
+        inverse = ~self.affine
+        if np.ndim(lon) > 0:  # a list, tuple or numpy array
+            xs, ys = self._to_native.transform(np.asarray(lon, float), np.asarray(lat, float))
+            pixels = [inverse @ (x, y) for x, y in zip(xs, ys, strict=True)]
+            return [float(p[0]) for p in pixels], [float(p[1]) for p in pixels]
+        x, y = self._to_native.transform(lon, lat)
+        px, py = inverse @ (x, y)
+        return float(px), float(py)
 
     def _edge_pixels(self, width: int, height: int) -> list[tuple[float, float]]:
         pts: list[tuple[float, float]] = []

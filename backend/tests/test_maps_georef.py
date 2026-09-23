@@ -50,3 +50,37 @@ def test_box_corners_axis_aligned_and_rotated():
     assert box_corners(10, 20, 4, 2) == [(10, 20), (14, 20), (14, 22), (10, 22)]
     rotated = box_corners(0, 0, 2, 2, angle=90)
     assert [tuple(round(v, 9) for v in p) for p in rotated] == [(2, 0), (2, 2), (0, 2), (0, 0)]
+
+
+ROTATED_GT = (Affine.translation(500000, 4983000) * Affine.rotation(30) * Affine.scale(0.03, -0.03)).to_gdal()
+
+
+@pytest.mark.parametrize("gt", [GT, ROTATED_GT], ids=["utm", "rotated"])
+def test_wgs84_to_pixel_inverts_pixel_to_wgs84(gt):
+    g = Georef(gt, UTM33)
+    for px, py in [(0, 0), (1000, 2000), (12345.5, 678.25), (-50, 3000)]:
+        lon, lat = g.pixel_to_wgs84(px, py)
+        assert g.wgs84_to_pixel(lon, lat) == pytest.approx((px, py), abs=1e-6)
+
+
+def test_wgs84_to_pixel_takes_sequences():
+    g = Georef(ROTATED_GT, UTM33)
+    pts = [(0.0, 0.0), (100.0, 50.0), (400.0, 900.0)]
+    lons, lats = zip(*(g.pixel_to_wgs84(*p) for p in pts), strict=True)
+    xs, ys = g.wgs84_to_pixel(list(lons), list(lats))
+    assert list(zip(xs, ys, strict=True)) == [pytest.approx(p, abs=1e-6) for p in pts]
+
+
+def test_wgs84_to_pixel_takes_numpy_arrays_and_raises_no_affine_warning():
+    import warnings
+
+    import numpy as np
+
+    g = Georef(ROTATED_GT, UTM33)
+    pts = [(0.0, 0.0), (100.0, 50.0), (400.0, 900.0)]
+    lons, lats = zip(*(g.pixel_to_wgs84(*p) for p in pts), strict=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        xs, ys = g.wgs84_to_pixel(np.array(lons), np.array(lats))
+        assert g.pixel_to_native(1, 1)
+    assert list(zip(xs, ys, strict=True)) == [pytest.approx(p, abs=1e-6) for p in pts]
