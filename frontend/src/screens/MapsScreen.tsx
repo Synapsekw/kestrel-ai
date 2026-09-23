@@ -32,6 +32,8 @@ import {
   type MapLabelUpdate,
 } from "@/api/maps";
 import { useProject } from "@/api/project";
+import { SiteAreaDrawBar } from "@/analytics/SiteAreaDrawBar";
+import { useSiteAreaOverlay } from "@/analytics/useSiteAreaOverlay";
 import { pushLog } from "@/app/diagnostics";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
@@ -194,6 +196,8 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   useOnJobsFinished("map_import", reload);
 
   const active = maps?.find((m) => m.id === mapId) ?? null;
+  // Site areas (plan 2 unit A): outlines on the map, and the outline tool for `?draw=site-area`.
+  const siteAreas = useSiteAreaOverlay(olMap, active, projectId, !readOnly);
   const read = useMemo(() => (active ? makeReadout(active) : null), [active]);
   const tileUrl = active ? mapTileUrl(baseUrl, token, projectId, active.id) : "";
 
@@ -696,6 +700,15 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
               onViewChange={(v) => setResolution(v.resolution)}
             />
             <MapOverlay map={olMap} geoMap={active} readout={readout} resolution={resolution} />
+            {siteAreas.drawMode && (
+              <SiteAreaDrawBar
+                projectId={projectId}
+                mapId={active.id}
+                polygon={siteAreas.polygon}
+                onCancel={siteAreas.cancel}
+                onSaved={siteAreas.saved}
+              />
+            )}
             {popover && (
               <div
                 className="absolute z-10 flex max-w-64 flex-col gap-1 rounded-md border border-line bg-panel p-2.5 text-xs shadow-float"

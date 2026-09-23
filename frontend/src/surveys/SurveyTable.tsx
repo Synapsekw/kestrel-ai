@@ -8,7 +8,17 @@ function delta(n: number | undefined): string {
   return n > 0 ? `+${n}` : `${n}`;
 }
 
-export function SurveyTable({ timeline }: { timeline: SurveyTimeline }) {
+/**
+ * `verified`: "both" shows each count as total (verified), "only" says the counts are verified
+ * detections (the timeline was fetched with `verified_only`). Without it, plain totals.
+ */
+export function SurveyTable({
+  timeline,
+  verified,
+}: {
+  timeline: SurveyTimeline;
+  verified?: "both" | "only";
+}) {
   const rows: Survey[] = [...timeline.surveys].reverse(); // newest first on screen
   return (
     <table className="w-full text-sm">
@@ -34,7 +44,9 @@ export function SurveyTable({ timeline }: { timeline: SurveyTimeline }) {
             </td>
             {timeline.classes.map((c) => (
               <td key={c.id} className="tabular-nums text-ink">
-                {s.counts[c.id] ?? "-"}
+                {verified === "both" && s.counts[c.id] !== undefined
+                  ? `${s.counts[c.id]} (${s.verified_counts?.[c.id] ?? 0} verified)`
+                  : (s.counts[c.id] ?? "-")}
                 <span className="text-muted"> {delta(s.deltas[c.id])}</span>
               </td>
             ))}
