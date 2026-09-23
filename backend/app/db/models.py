@@ -120,6 +120,8 @@ class Model(Base):
     exports: Mapped[dict] = mapped_column(JSON, default=dict)  # {"onnx": "models/x.onnx"}
     artifacts: Mapped[dict] = mapped_column(JSON, default=dict)  # {results_csv, confusion_matrix, pr_curve}
     run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # cm of ground per model-input pixel during training; null until established (spec 2026-09-23)
+    train_gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
