@@ -25,4 +25,22 @@ describe("useProjectKindState", () => {
     });
     expect(requests.some((r) => r.url === `/api/v1/projects/${PROJECT_ID}`)).toBe(true);
   });
+
+  it("sends one retry per cycle however many components watch the project", async () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "failed");
+    // No route: every read of the project answers 404, so the entry stays "failed".
+    const { api, requests } = fakeClient([]);
+    renderWithProviders(
+      <>
+        <Probe />
+        <Probe />
+        <Probe />
+      </>,
+      { api },
+    );
+    // The first retry fires after 1 s, the next one not before 2 s later.
+    await new Promise((r) => setTimeout(r, 1600));
+    const reads = requests.filter((r) => r.url === `/api/v1/projects/${PROJECT_ID}`);
+    expect(reads).toHaveLength(1);
+  });
 });
