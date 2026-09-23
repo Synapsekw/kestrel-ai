@@ -27,3 +27,6 @@ pyyaml
 onnx
 onnxslim
 onnxruntime
+# maps (spec 2026-09-22-geotiff-maps): GDAL/PROJ come bundled in these wheels
+rasterio==1.4.4
+pyproj==3.7.2

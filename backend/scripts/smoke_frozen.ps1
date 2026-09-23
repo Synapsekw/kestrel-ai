@@ -9,9 +9,9 @@
   runs, the `worker` subcommand trains with DataLoader workers (freeze_support), ONNX export
   works, and keyring reaches Windows Credential Manager without setuptools entry points.
 
-  Prints `health ok`, `cuda True <gpu name>`, `starter ok 3`, `predict ok <n> boxes` and
-  `worker ok`, and exits non-zero on any failure. Sample frames are copied out of the read-only
-  source folder first.
+  Prints `geo ok 32633 <lon> <lat>`, `health ok`, `cuda True <gpu name>`, `starter ok 3`,
+  `predict ok <n> boxes` and `worker ok`, and exits non-zero on any failure. Sample frames are
+  copied out of the read-only source folder first.
 
 .PARAMETER Keep
   Leave the generated work dir behind; it is deleted on the way out by default.
@@ -54,6 +54,12 @@ function Complete-Step([string] $Name) {
   $timings[$Name] = [math]::Round($step.Elapsed.TotalSeconds, 2)
   $step.Restart()
 }
+
+# rasterio/pyproj inside the bundle (ADR 2026-09-22): one GeoTIFF write/read and one reprojection.
+$geo = & $exe geo-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $geo -notmatch "geo ok 32633") { throw "geo selftest failed: $geo" }
+Write-Host ($geo.Trim().Split("`n")[-1])
+Complete-Step "geo"
 
 function Invoke-Api([string] $Method, [string] $Path, $Body, [int] $TimeoutSec = 900) {
   $request = @{
