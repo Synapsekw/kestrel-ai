@@ -9,6 +9,67 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Detection workspace — 2026-09-23/24 (gated on `task/dw-integration`, not yet on `main`)
+
+Plan 2 of the train/detect split (spec
+`docs/superpowers/specs/2026-09-23-train-detect-split-and-model-library-design.md` §7–§10, plan
+`docs/superpowers/plans/2026-09-23-detection-workspace.md`). Built as parallel units C, S, D, R, V,
+A, E and X in `.claude/worktrees/dw-*`, merged into `.claude/worktrees/dw-integration`.
+
+What changed:
+
+- **A detection project is a site workspace.** Its sidebar is Sources, Runs, Review, Analytics,
+  Export, then Site areas. The old Detect, Maps and Surveys steps are gone; their addresses still
+  open (`/surveys` redirects to Analytics).
+- **Sources** lists photo batches and maps in one table, newest survey first; the survey date is
+  edited in place (a map source's date writes the map too).
+- **Runs** apply one library model to one source each. A model class the project lacks is asked
+  once (`422 unmapped_classes`, then `PUT /model-class-maps/{model}`) and remembered. Pinning a
+  run makes it the one its source counts with.
+- **Review** picks a source: photos use the image queue and editor, a map opens the viewer in
+  review mode (A / R / 1–9 / N, draw a missed object, accept above a confidence as a job).
+- **Counts live on run rows** (`counts` = total, `verified_counts`, `area_counts`, migration
+  `0008_detect_workspace`, add-only). Every review write increments them in the same transaction;
+  `recount` / `area_recount` rebuild them
+  (`vault/decisions/2026-09-23-counts-live-on-run-rows.md`).
+- **Site areas and Analytics.** Areas are drawn on a map; Analytics shows surveys, one source,
+  per-area counts (partly covered marked) and photo batches (detections, never objects), with a
+  Verified-only switch. Analytics reads run rows only.
+- **Export**: a `detect_export` job writes a CSV (source × class × area) or a PDF report per source
+  (new dependency `reportlab==5.0.1`, see `CONTRIBUTING.md`); the GeoPackage gains `review_state`,
+  the mapped class name and a `site_areas` layer.
+
+Unit X added:
+
+- e2e specs `sources.spec.ts`, `runs.spec.ts` (422 mapping step, then the retry), `detect-review.spec.ts`
+  (map review keys), `analytics.spec.ts` (verified toggle, photo caption), `detect-export.spec.ts`;
+  `projects.spec.ts` and `surveys.spec.ts` rewritten for the new steps and the `/surveys` redirect
+- the backend flow test `tests/test_detect_flow.py`: photos and a map, a class-mapped run per
+  source, review on both, a site area; analytics equal a recount, and the CSV carries the same
+  numbers
+- the operator walkthrough `docs/usability/2026-09-23-detection-workspace-walkthrough.md`
+- the ADR above and the reportlab note in `CONTRIBUTING.md`
+
+X also fixed one regression the full e2e suite found: the old Detect screen's **Review results**
+link (`/review?ids=`) landed on the per-source Review picker in a detection project, which ignores
+the ids. With `ids` in the address, Review now keeps the narrowed image queue
+(`frontend/src/screens/ReviewScreen.tsx`, owned by unit V; test in `ReviewScreenIds.test.tsx`).
+
+Verified in the integration worktree (2026-09-24, on the tree of this entry's commit minus the
+entry itself), with the gate lines from `AGENTS.md`:
+
+- contract check: clean
+- Ruff check and format: clean
+- pytest: 1269 passed, 9 deselected
+- frontend lint: 0 errors (1 existing hook warning in `MapView.tsx`)
+- unit tests: 796 in 164 files
+- build: passed
+- e2e: 76 browser tests in 25 files, on free ports as `scriptsinish-task.ps1` runs them
+- `cargo test`: skipped, because this worktree has no frozen sidecar
+
+Not yet done: landing (`scriptsinish-task.ps1` from `dw-integration`, then removing the `dw-*`
+worktrees by the junction rule), and a frozen build that proves the PDF export with reportlab.
+
 ## Model library and project kinds — 2026-09-23 (gated on `task/tds-integration`, not yet on `main`)
 
 Plan 1 of the train/detect split (spec
