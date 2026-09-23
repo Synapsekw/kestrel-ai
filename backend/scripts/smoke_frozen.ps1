@@ -170,7 +170,7 @@ try {
   $names = @("excavator", "wheel_loader", "bulldozer", "dump_truck", "crane", "concrete_mixer", "roller", "backhoe")
   $colours = @("#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#ef4444")
   $classes = 0..7 | ForEach-Object { @{ name = $names[$_]; colour = $colours[$_]; hotkey = "$($_ + 1)" } }
-  $project = Invoke-Api POST "/projects" @{ name = "Frozen smoke"; folder = $projectFolder; classes = $classes }
+  $project = Invoke-Api POST "/projects" @{ name = "Frozen smoke"; folder = $projectFolder; classes = $classes; kind = "train" }
   $pid1 = $project.id
   Complete-Step "create_project"
 
