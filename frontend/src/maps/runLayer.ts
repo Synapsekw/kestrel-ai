@@ -29,6 +29,13 @@ export interface RunLayerSpec {
 
 const MATCH_TOKEN: Record<Match, string> = { tp: "ok", fp: "danger", fn: "warn" };
 
+/** A class colour with alpha, falling back to the live `accent` token (never a hardcoded hex) when
+ * the class carries none. */
+function classFill(spec: RunLayerSpec, classId: string, alpha: number): string {
+  const hex = spec.colours[classId];
+  return hex ? withAlpha(hex, alpha) : tokenColour("accent", alpha);
+}
+
 function boxStyle(spec: RunLayerSpec, f: FeatureLike): Style | undefined {
   const classId = f.get("classId") as string;
   if (spec.hidden.has(classId)) return undefined;
@@ -37,9 +44,7 @@ function boxStyle(spec: RunLayerSpec, f: FeatureLike): Style | undefined {
   return new Style({
     stroke: new Stroke({ color: colour, width: 2, lineDash: spec.dashed ? [6, 4] : undefined }),
     fill: new Fill({
-      color: match
-        ? tokenColour(MATCH_TOKEN[match], 0.12)
-        : withAlpha(spec.colours[classId] ?? "#e5af64", 0.08),
+      color: match ? tokenColour(MATCH_TOKEN[match], 0.12) : classFill(spec, classId, 0.08),
     }),
   });
 }
@@ -51,7 +56,7 @@ function dotStyle(spec: RunLayerSpec, f: FeatureLike): Style | undefined {
   return new Style({
     image: new Circle({
       radius: 3 + Math.sqrt(n) * 2,
-      fill: new Fill({ color: withAlpha(spec.colours[classId] ?? "#e5af64", 0.55) }),
+      fill: new Fill({ color: classFill(spec, classId, 0.55) }),
       stroke: new Stroke({ color: tokenColour("inverse", 0.6), width: 1 }),
     }),
   });
@@ -80,6 +85,15 @@ export function useRunLayer(
   useEffect(() => {
     if (!map || !runId || minConf === undefined) return;
     let truncated = false;
+    // Every re-run of this effect (a new `runId`/`minConf` generation) gets its own `stale` flag,
+    // flipped in the cleanup below. A viewport request from an earlier generation (say the confidence
+    // slider moved from 0.25 to 0.75 while a 0.25 request was still in flight) can resolve after the
+    // new generation has already taken over the map; without this guard its late `report()` would
+    // overwrite `onViewCounts` with a count for a confidence the operator is no longer looking at,
+    // and its late `truncated`/visibility write could flip the layers for a generation it no longer
+    // owns. Same pattern as the whole-map counts effect in `MapsScreen.tsx` and the estimate effect
+    // in `NewRunDialog.tsx`.
+    let stale = false;
     const boxes = new VectorSource({
       strategy: bboxStrategy,
       loader: (extent, _res, _proj, success, failure) => {
@@ -88,6 +102,7 @@ export function useRunLayer(
         if (!bbox || !s) return success?.([]);
         s.load(bbox, minConf)
           .then((page) => {
+            if (stale) return;
             truncated = page.truncated;
             const feats = page.items.map((d) => {
               const f = new Feature(new Polygon([boxRing(d.x, d.y, d.w, d.h)]));
@@ -102,6 +117,7 @@ export function useRunLayer(
             report();
           })
           .catch(() => {
+            if (stale) return;
             boxes.removeLoadedExtent(extent);
             failure?.();
           });
@@ -120,6 +136,7 @@ export function useRunLayer(
       visible: false,
     });
     void specRef.current?.density(minConf).then((d) => {
+      if (stale) return;
       dots.addFeatures(
         d.cells.map((c) => {
           const f = new Feature(new Point(toOl((c.gx + 0.5) * d.cell_size, (c.gy + 0.5) * d.cell_size)));
@@ -129,6 +146,7 @@ export function useRunLayer(
       );
     });
     function report() {
+      if (stale) return;
       const s = specRef.current;
       if (!s?.onViewCounts || !map) return;
       const extent = map.getView().calculateExtent(map.getSize());
@@ -144,6 +162,7 @@ export function useRunLayer(
     map.on("moveend", report);
     layers.current = { boxes: boxLayer, dots: dotLayer };
     return () => {
+      stale = true;
       map.un("moveend", report);
       map.removeLayer(boxLayer);
       map.removeLayer(dotLayer);
