@@ -1,4 +1,4 @@
-import type { ClassDef, GeoMap, MapRun, Provider, ProviderName } from "@contract/client";
+import type { ClassDef, GeoMap, MapRun, Model, Provider, ProviderName } from "@contract/client";
 import type { MapDensity } from "@/api/maps";
 import { makeReadout, type Readout } from "./coords";
 
@@ -12,15 +12,24 @@ export const MAX_COMPARE = 2;
  */
 export const DEFAULT_MAP_RUN = { tile_size: 1280, overlap: 0.2, nms_iou: 0.5, conf: 0.25 } as const;
 
-export function defaultTargetGsd(
-  runs: MapRun[],
-  modelId: string | null,
-  mapGsd: number | null,
-): number | null {
+/**
+ * The scale to run a model at (spec 2026-09-23 section 5).
+ *
+ * The model's own training scale wins. A past run is deliberately NOT a fallback here: the failure
+ * this replaced left ICVD_V4 with a run recorded at the map's native 2.296 cm/px, and any ordering
+ * that let that outrank a derived scale would hand the wrong number straight back. The dialog
+ * derives an estimate instead, and only uses a past run when nothing can be derived.
+ */
+export function defaultTargetGsd(model: Model | null): number | null {
+  return model?.train_gsd_cm ?? null;
+}
+
+/** The operator's own prior choice, used only when no scale can be derived (spec section 5, (3)). */
+export function lastRunTargetGsd(runs: MapRun[], modelId: string | null): number | null {
   const last = runs
     .filter((r) => r.model_id === modelId && r.target_gsd_cm)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
-  return last?.target_gsd_cm ?? mapGsd;
+  return last?.target_gsd_cm ?? null;
 }
 
 export function countsFromDensity(d: MapDensity): Record<string, number> {
