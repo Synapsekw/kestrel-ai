@@ -78,6 +78,7 @@ describe("useProjectProgress", () => {
         body: { error: { code: "library_unavailable", message: "down", details: {} } },
       },
       { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, body: { items: [] } },
     ]);
     renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
     await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
