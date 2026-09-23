@@ -174,7 +174,12 @@ def _job_states(s: Session, job_ids: list[str | None]) -> dict[str, str]:
 
 
 def _review_by_run(s: Session, run_col, state_col, run_ids: list[str]) -> dict[str, Review]:
-    """Review progress per run from one grouped COUNT (index-served; no row is read)."""
+    """Review progress per run from one grouped COUNT.
+
+    For map runs the covering index ix_map_detection_run_state serves it without reading a row.
+    For photo runs ix_box_query_run finds the boxes but each one is read for its review_state:
+    O(boxes in the chosen runs). A box(query_run_id, review_state) index, or reviewed counts on
+    the run row, would remove that (a later schema change)."""
     out = {rid: Review() for rid in run_ids}
     if not run_ids:
         return out
