@@ -5,10 +5,15 @@ import {
   type ClassDef,
   type CostEstimate,
   type Dataset,
+  type GeoMap,
   type Image as ImageRow,
   type ImagePage,
   type Job,
   type JobLog,
+  type MapLabel,
+  type MapRun,
+  type MapScore,
+  type MapZone,
   type Model,
   type Project,
   type Provider,
@@ -383,3 +388,135 @@ export function fakeClient(routes: FakeRoute[]): { api: ApiClient; requests: Rec
   const { fetch: fetchImpl, requests } = fakeFetch(routes);
   return { api: createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl }), requests };
 }
+
+export const MAP_ID = "a0000000-6666-4000-8000-000000000001";
+export const MAP_RUN_ID = "r0000000-7777-4000-8000-000000000001";
+
+export const exampleGeoMap: GeoMap = {
+  id: MAP_ID,
+  name: "Site north ortho",
+  status: "ready",
+  error: null,
+  source_path: "D:/orthos/site-north.tif",
+  source_size: 3221225472,
+  width: 80000,
+  height: 60000,
+  band_count: 4,
+  dtype: "uint8",
+  crs_wkt: 'PROJCS["WGS 84 / UTM zone 33N"]',
+  epsg: 32633,
+  proj4: "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs",
+  geotransform: [500000, 0.03, 0, 4983000, 0, -0.03],
+  bounds_native: [500000, 4981200, 502400, 4983000],
+  bounds_wgs84: [15.0, 44.98, 15.03, 45.0],
+  gsd_cm: 3,
+  tile_grid: { tile_size: 256, max_zoom: 9 },
+  labels_version: 3,
+  job_id: JOB_ID,
+  created_at: "2026-09-22T10:00:00Z",
+};
+
+export const exampleMapRun: MapRun = {
+  id: MAP_RUN_ID,
+  map_id: MAP_ID,
+  kind: "local_model",
+  model_id: MODEL_ID,
+  provider: null,
+  model_name: "machinery-v3",
+  query: "",
+  tile_size: 1280,
+  overlap: 0.2,
+  nms_iou: 0.5,
+  conf: 0.25,
+  target_gsd_cm: 2,
+  job_id: JOB_ID,
+  state: "succeeded",
+  counts: { [CLASS_ID(1)]: 42, [CLASS_ID(4)]: 17 },
+  detection_count: 59,
+  created_at: "2026-09-22T11:00:00Z",
+};
+
+export const exampleZone: MapZone = {
+  id: "z0000000-9999-4000-8000-000000000001",
+  map_id: MAP_ID,
+  name: "Zone 1",
+  polygon: [
+    [1000, 1000],
+    [6000, 1000],
+    [6000, 5000],
+    [1000, 5000],
+  ],
+};
+
+export const exampleLabel: MapLabel = {
+  id: "l0000000-1212-4000-8000-000000000001",
+  map_id: MAP_ID,
+  class_id: CLASS_ID(1),
+  x: 1210,
+  y: 1205,
+  w: 175,
+  h: 118,
+  angle: null,
+  source: "manual",
+  created_at: "2026-09-22T12:00:00Z",
+  updated_at: "2026-09-22T12:00:00Z",
+};
+
+const scoreRow = (class_id: string | null) => ({
+  class_id,
+  tp: 18,
+  fp: 2,
+  fn: 3,
+  precision: 0.9,
+  recall: 0.857,
+  f1: 0.878,
+  predicted: 20,
+  actual: 21,
+  count_error: -1,
+  count_error_pct: -4.76,
+});
+
+export const exampleMapScore: MapScore = {
+  run_id: MAP_RUN_ID,
+  iou: 0.5,
+  labels_version: 3,
+  has_zones: true,
+  overall: scoreRow(null),
+  per_class: [scoreRow(CLASS_ID(1))],
+  per_zone: [{ ...scoreRow(null), zone_id: exampleZone.id }],
+  matches: [
+    {
+      kind: "detection",
+      id: "d1",
+      match: "tp",
+      zone_id: exampleZone.id,
+      class_id: CLASS_ID(1),
+      x: 1200,
+      y: 1200,
+      w: 180,
+      h: 120,
+    },
+    {
+      kind: "detection",
+      id: "d2",
+      match: "fp",
+      zone_id: exampleZone.id,
+      class_id: CLASS_ID(1),
+      x: 3000,
+      y: 2400,
+      w: 170,
+      h: 110,
+    },
+    {
+      kind: "label",
+      id: exampleLabel.id,
+      match: "fn",
+      zone_id: exampleZone.id,
+      class_id: CLASS_ID(4),
+      x: 4100,
+      y: 3300,
+      w: 200,
+      h: 140,
+    },
+  ],
+};
