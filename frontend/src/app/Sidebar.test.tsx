@@ -118,6 +118,7 @@ describe("Sidebar", () => {
     expect(within(nav).queryByRole("link", { name: /^Maps/ })).toBeNull();
     expect(within(nav).queryByRole("link", { name: /^Models/ })).toBeNull();
     expect(within(nav).queryByRole("link", { name: /Past detections/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /^Surveys/ })).toBeNull();
     expect(within(nav).getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
   });
 
@@ -147,13 +148,17 @@ describe("Sidebar", () => {
     renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="North site" />, { api });
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     const nav = screen.getByRole("navigation");
-    const order = ["Home", "Images", "Detect", "Maps", "Review", "Export", "Project settings"].map((label) =>
-      within(nav).getByText(label),
+    const order = ["Home", "Images", "Detect", "Maps", "Review", "Export", "Surveys", "Project settings"].map(
+      (label) => within(nav).getByText(label),
     );
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
     expect(within(nav).getByRole("link", { name: /^Maps/ })).toHaveAttribute("href", `/p/${PROJECT_ID}/maps`);
+    expect(within(nav).getByRole("link", { name: "Surveys" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/surveys`,
+    );
     for (const name of ["Label", "Datasets", "Train", "Past detections", "Models"]) {
       expect(within(nav).queryByRole("link", { name: new RegExp(`^${name}`) })).toBeNull();
     }
