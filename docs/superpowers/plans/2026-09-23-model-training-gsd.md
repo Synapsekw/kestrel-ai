@@ -617,7 +617,7 @@ def trained_model_with_dataset(handle, make_jpeg, tmp_path):
         s.flush()
         for i in range(12):
             rel = f"images/test/f{i:03d}.jpg"
-            make_jpeg(handle.root / rel, 4000, 2667, seed=i, exif=AERIA_EXIF)
+            make_jpeg(handle.folder / rel, 4000, 2667, seed=i, exif=AERIA_EXIF)
             img = Image(path=rel, width=4000, height=2667, source_id=source.id, alt=191.0)
             s.add(img)
             s.flush()
@@ -708,7 +708,7 @@ def estimate_train_gsd(handle: ProjectHandle, model: Model) -> GsdEstimate | Non
     read = 0
     for r in rows[:EXIF_SAMPLE]:
         try:
-            with PILImage.open(handle.root / r.path) as im:
+            with PILImage.open(handle.folder / r.path) as im:
                 read += 1
                 intr = intrinsics_from_exif(im.getexif())
         except OSError:
@@ -883,13 +883,23 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
   - `patchModel(api, projectId, modelId, body: { train_gsd_cm: number | null }): Promise<Model>`
   - `type ModelGsdEstimate = components["schemas"]["ModelGsdEstimate"]`
 
-- [ ] **Step 1: Add `train_gsd_cm` to the fixture**
+- [ ] **Step 1: Add `train_gsd_cm` to every `Model` literal in the codebase**
 
-In `frontend/src/test/fixtures.ts`, in `exampleModel`, after `run_id: null,`:
+`train_gsd_cm` is **required** on the contract `Model`, so every construction site must supply it or `pnpm -C frontend build` fails. There are exactly four, verified by `grep -rn "class_aliases" frontend/src frontend/e2e`:
 
-```ts
-  train_gsd_cm: null,
+| File | What to add |
+| --- | --- |
+| `frontend/src/test/fixtures.ts` (`exampleModel`, after `run_id: null,`) | `train_gsd_cm: null,` |
+| `frontend/src/api/models.test.ts` (2 literals, ~lines 43 and 52) | `train_gsd_cm: null,` |
+| `frontend/src/models/ImportModelForm.test.tsx` (1 literal, ~line 31) | `train_gsd_cm: null,` |
+| `frontend/e2e/models.spec.ts` (3 literals, ~lines 32, 53, 142) | `train_gsd_cm: null,` |
+
+`ImportModelForm.tsx` and `ModelDetail.tsx` only *read* `Model` fields — they build a request body, not a `Model` — so they need no change. Confirm with:
+
+```bash
+pnpm -C frontend build
 ```
+Expected: no `train_gsd_cm is missing` errors. If the build names a file not in the table above, add it there too.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -962,7 +972,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add frontend/src/api/models.ts frontend/src/api/models.test.ts frontend/src/test/fixtures.ts
+git add frontend/src/api/models.ts frontend/src/api/models.test.ts frontend/src/test/fixtures.ts frontend/src/models/ImportModelForm.test.tsx frontend/e2e/models.spec.ts
 git commit -m "feat(models-api): fetch and set a model's training scale
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
@@ -978,7 +988,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `Model.train_gsd_cm` (Task 1).
-- Produces: `defaultTargetGsd(runs: MapRun[], model: Model | null): number | null` — **the signature changes**: the third parameter `mapGsd` is gone and the second is now the whole model, not its id. Task 7 is the only caller.
+- Produces: `defaultTargetGsd(model: Model | null): number | null` — **the signature changes**: it now takes only the model. `runs` and `mapGsd` are both gone, because neither feeds the primary default any more. Past-run history moves to the separate `lastRunTargetGsd(runs: MapRun[], modelId: string | null): number | null`. Task 7 is the only caller of either.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -988,26 +998,41 @@ Replace the `defaultTargetGsd` tests in `frontend/src/maps/runModel.test.ts` wit
 const model = (over: Partial<Model> = {}): Model => ({ ...exampleModel, id: "m1", ...over });
 
 describe("defaultTargetGsd", () => {
-  it("prefers the model's own training scale", () => {
-    const runs = [{ ...exampleMapRun, model_id: "m1", target_gsd_cm: 2.3 }];
-    expect(defaultTargetGsd(runs, model({ train_gsd_cm: 18.92 }))).toBe(18.92);
+  it("is the model's own training scale", () => {
+    expect(defaultTargetGsd(model({ train_gsd_cm: 18.92 }))).toBe(18.92);
   });
 
-  it("does NOT fall back to a past run at the map's native scale", () => {
-    // The reported failure: ICVD_V4 had a run recorded at the map's 2.296 cm/px, which found
-    // 1.5 m boxes on a site of 9 m machines. A null training scale must not resurrect it.
-    const runs = [{ ...exampleMapRun, model_id: "m1", target_gsd_cm: 2.296 }];
-    expect(defaultTargetGsd(runs, model({ train_gsd_cm: null }))).toBeNull();
+  it("is null when the model has no training scale", () => {
+    expect(defaultTargetGsd(model({ train_gsd_cm: null }))).toBeNull();
+    expect(defaultTargetGsd(null)).toBeNull();
   });
+});
 
-  it("returns null when there is nothing to go on", () => {
-    expect(defaultTargetGsd([], model({ train_gsd_cm: null }))).toBeNull();
-    expect(defaultTargetGsd([], null)).toBeNull();
+describe("lastRunTargetGsd", () => {
+  it("is the most recent run of that model", () => {
+    const older = { ...exampleMapRun, id: "old", model_id: "m1", target_gsd_cm: 1.5, created_at: "2026-09-20T00:00:00Z" };
+    const newer = { ...exampleMapRun, id: "new", model_id: "m1", target_gsd_cm: 7, created_at: "2026-09-22T00:00:00Z" };
+    expect(lastRunTargetGsd([older, newer], "m1")).toBe(7);
   });
 
   it("ignores runs belonging to another model", () => {
     const runs = [{ ...exampleMapRun, model_id: "other", target_gsd_cm: 7 }];
-    expect(defaultTargetGsd(runs, model({ train_gsd_cm: null }))).toBeNull();
+    expect(lastRunTargetGsd(runs, "m1")).toBeNull();
+  });
+
+  it("is null with no runs", () => {
+    expect(lastRunTargetGsd([], "m1")).toBeNull();
+  });
+});
+
+describe("the reported failure", () => {
+  it("a null training scale does NOT resurrect a past run at the map's native scale", () => {
+    // ICVD_V4 had a run recorded at the map's 2.296 cm/px, which found 1.5 m boxes on a site of
+    // 9 m machines. The primary default must not hand that number back.
+    const runs = [{ ...exampleMapRun, model_id: "m1", target_gsd_cm: 2.296 }];
+    expect(defaultTargetGsd(model({ train_gsd_cm: null }))).toBeNull();
+    // It remains reachable only as the last resort, which the dialog uses after a derive fails.
+    expect(lastRunTargetGsd(runs, "m1")).toBe(2.296);
   });
 });
 ```
@@ -1032,7 +1057,7 @@ Replace `defaultTargetGsd` in `frontend/src/maps/runModel.ts`:
  * that let that outrank a derived scale would hand the wrong number straight back. The dialog
  * derives an estimate instead, and only uses a past run when nothing can be derived.
  */
-export function defaultTargetGsd(runs: MapRun[], model: Model | null): number | null {
+export function defaultTargetGsd(model: Model | null): number | null {
   return model?.train_gsd_cm ?? null;
 }
 
@@ -1132,7 +1157,7 @@ Replace the prefill block (currently lines 40-48):
     setGsdKeySeen(gsdKey);
     const d =
       kind === "local_model"
-        ? (defaultTargetGsd(runs, selected) ?? lastRunTargetGsd(runs, effectiveModel))
+        ? (defaultTargetGsd(selected) ?? lastRunTargetGsd(runs, effectiveModel))
         : lastRunTargetGsd(runs, null);
     setGsd(d ? String(d) : "");
     setOffer(null);
@@ -1428,7 +1453,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 9: Gates, evidence, and the walkthrough
 
 **Files:**
-- Modify: `frontend/e2e/maps.spec.ts:25` (the `MapRun` fixture and any `Model` fixture it inlines)
+- Modify: `frontend/e2e/maps.spec.ts:25` (the `MapRun` fixture) — note the `Model` literals in `frontend/e2e/models.spec.ts` were already handled in Task 5
 - Create: `docs/evidence/model-gsd/2026-09-23-scale-offer.png`
 - Modify: `docs/progress.md`
 
@@ -1437,7 +1462,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 Any inline `Model` literal in `frontend/e2e/` needs `train_gsd_cm`. Search first:
 
 ```bash
-grep -rn "class_aliases" frontend/e2e/
+grep -rn "class_aliases" frontend/src frontend/e2e
 ```
 Add `train_gsd_cm: 18.92` to each `Model` literal found.
 
