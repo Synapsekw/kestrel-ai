@@ -5,6 +5,7 @@ sensor read off FocalPlaneXResolution, flown at a median 191.02 m, letterboxed t
 """
 
 import pytest
+from sqlalchemy import select
 
 from app.training.gsd import (
     PLAUSIBLE_M,
@@ -74,6 +75,27 @@ def test_the_letterbox_scales_by_the_long_side():
     assert model_gsd_cm(img, 2667, 4000, 1280) == pytest.approx(img * 4000 / 1280)
 
 
+def test_orientation_cancels_out_end_to_end():
+    """A portrait-stored frame must give the same model GSD as the landscape one.
+
+    `prepare.py` applies `ImageOps.exif_transpose`, so a frame shot at orientation 6/8 is *stored*
+    portrait while the EXIF travelling with it still reports the sensor's long axis -- so
+    `sensor_width_mm`, and the ground width it implies, always describe the long side. Driving
+    `image_gsd_cm` -> `model_gsd_cm` (rather than handing `model_gsd_cm` a hard-coded image GSD, as
+    the test above does) is what makes the cancellation observable: with a stored *width* divisor
+    the portrait case came out 4000/2667 = 1.5x too large, which would push section 3.3's 8.5 m
+    median to 12.8 m -- still inside the plausible band, so it would be offered as a silent default.
+    """
+    landscape = image_gsd_cm(191.02175, AERIA_X, max(4000, 2667))
+    portrait = image_gsd_cm(191.02175, AERIA_X, max(2667, 4000))
+    assert model_gsd_cm(landscape, 4000, 2667, 1280) == pytest.approx(18.92, abs=0.02)
+    assert model_gsd_cm(portrait, 2667, 4000, 1280) == pytest.approx(18.92, abs=0.02)
+    # Section 2's identity, in both orientations: the ground width divided by imgsz, with the
+    # stored pixel count cancelling out entirely.
+    ground_width_cm = 191.02175 * 100.0 * AERIA_X.sensor_width_mm / AERIA_X.focal_mm
+    assert model_gsd_cm(portrait, 2667, 4000, 1280) == pytest.approx(ground_width_cm / 1280)
+
+
 def test_plausibility_accepts_real_machinery():
     # ICVD_V3's own classes at 6.055 cm/px: roller 5.07 m ... crane 17.94 m, median 8.51 m.
     assert plausible(8.51) is True
@@ -132,6 +154,10 @@ def trained_model_with_dataset(handle, make_jpeg, tmp_path):
     Each frame also carries one excavator and one dump_truck box, sized (in stored-image pixels)
     so that at the dataset's ~6.055 cm/px image GSD they imply real objects of roughly 8 m and
     9.5 m: both inside the plausible band, so `plausible` comes back True.
+
+    The boxes are `review_state="accepted"`, which is how `datasets/boxes.py` creates a person-drawn
+    box. The model default is `"unreviewed"`, i.e. a suggestion nobody has looked at, and those are
+    not part of the training set the cross-check is supposed to measure.
     """
     from app.db.models import Box, Dataset, DatasetImage, Image, Model, Source
 
@@ -159,6 +185,7 @@ def trained_model_with_dataset(handle, make_jpeg, tmp_path):
                     w=132,
                     h=110,
                     provenance_kind="person",
+                    review_state="accepted",
                 )
             )
             s.add(
@@ -170,6 +197,7 @@ def trained_model_with_dataset(handle, make_jpeg, tmp_path):
                     w=157,
                     h=120,
                     provenance_kind="person",
+                    review_state="accepted",
                 )
             )
         model = Model(
@@ -204,6 +232,107 @@ def test_gsd_estimate_endpoint_returns_the_scale_and_its_evidence(
     # and the name-keying of per_class_m (a class-id key would not match "excavator"/"dump_truck").
     assert body["per_class_m"] == pytest.approx({"excavator": 7.99, "dump_truck": 9.5}, abs=0.05)
     assert body["median_object_m"] == pytest.approx(8.75, abs=0.05)
+
+
+@pytest.fixture
+def portrait_model(handle, make_jpeg, tmp_path):
+    """The same camera, but frames *stored* portrait — `prepare.py`'s `exif_transpose` of a frame
+    shot at orientation 6/8. The EXIF still reports the 6000 px long axis, as a real file does."""
+    from app.db.models import Box, Dataset, DatasetImage, Image, Model, Source
+
+    with handle.session() as s:
+        source = Source(folder=str(tmp_path / "p"), site="portrait", image_count=2)
+        s.add(source)
+        s.flush()
+        dataset = Dataset(
+            name="ICVD_V3_portrait",
+            classes=[{"id": "c1", "name": "excavator"}],
+            split_method="by_group",
+            path="datasets/icvd_v3_p",
+        )
+        s.add(dataset)
+        s.flush()
+        for i in range(2):
+            rel = f"images/portrait/p{i:03d}.jpg"
+            make_jpeg(handle.folder / rel, 2667, 4000, seed=100 + i, exif=AERIA_EXIF)
+            img = Image(path=rel, width=2667, height=4000, source_id=source.id, alt=191.0)
+            s.add(img)
+            s.flush()
+            s.add(DatasetImage(dataset_id=dataset.id, image_id=img.id, split="train"))
+            s.add(
+                Box(
+                    image_id=img.id,
+                    class_id="c1",
+                    x=100,
+                    y=100,
+                    w=132,
+                    h=110,
+                    provenance_kind="person",
+                    review_state="accepted",
+                )
+            )
+        model = Model(
+            name="ICVD_V4_portrait",
+            kind="trained",
+            weights_path="models/icvd-v4-p.pt",
+            dataset_id=dataset.id,
+            hyperparameters={"imgsz": 1280},
+            class_names=["excavator"],
+        )
+        s.add(model)
+        s.flush()
+        return model.id
+
+
+def test_a_portrait_stored_frame_gives_the_same_scale(client, project_id, portrait_model):
+    # Dividing the ground width by the stored *width* (2667) and then letterboxing by the long side
+    # (4000) does not cancel: it returned 28.4 cm/px, 1.5x too large, and dragged the cross-check's
+    # 8 m machines to 12 m — still inside the plausible band, so it would be offered silently.
+    body = client.get(f"{BASE}/{project_id}/models/{portrait_model}/gsd-estimate").json()
+    assert body["train_gsd_cm"] == pytest.approx(18.92, rel=0.02)
+    assert body["image_gsd_cm"] == pytest.approx(6.055, abs=0.01)
+    assert body["per_class_m"]["excavator"] == pytest.approx(7.99, abs=0.05)
+
+
+def test_the_cross_check_ignores_unreviewed_suggestions_and_deleted_classes(
+    client, project_id, handle, trained_model_with_dataset
+):
+    """The evidence must be computed over the training set, not over everything in the table.
+
+    On a project where suggestions were generated before curation, an unreviewed box is exactly
+    what the curator rejected; a box whose class was deleted is one `materialise.py` skips. Either
+    one drags `per_class_m` and the median the plausibility gate reads.
+    """
+    from app.db.models import Box, DatasetImage
+
+    model_id = trained_model_with_dataset
+    before = client.get(f"{BASE}/{project_id}/models/{model_id}/gsd-estimate").json()
+
+    with handle.session() as s:
+        image_id = s.execute(select(DatasetImage.image_id)).scalars().first()
+        # A rejected suggestion 1000 px across: ~60 m, which would nearly double the excavator
+        # average and shove the median out of the 2-25 m band.
+        s.add(Box(image_id=image_id, class_id="c1", x=0, y=0, w=1000, h=900, provenance_kind="model"))
+        # Accepted, but its class was deleted from the dataset: it was never trained on, and it
+        # would appear in per_class_m keyed by a raw id nobody can read.
+        s.add(
+            Box(
+                image_id=image_id,
+                class_id="c9",
+                x=0,
+                y=0,
+                w=1000,
+                h=900,
+                provenance_kind="person",
+                review_state="accepted",
+            )
+        )
+
+    after = client.get(f"{BASE}/{project_id}/models/{model_id}/gsd-estimate").json()
+    assert after["per_class_m"] == before["per_class_m"]
+    assert after["median_object_m"] == before["median_object_m"]
+    assert after["plausible"] is True
+    assert "c9" not in after["per_class_m"]
 
 
 def test_gsd_estimate_is_404_for_a_model_with_no_dataset(client, project_id, imported_model):

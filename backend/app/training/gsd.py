@@ -75,10 +75,17 @@ def intrinsics_from_exif(exif) -> Intrinsics | None:
     return None
 
 
-def image_gsd_cm(alt_m: float, intr: Intrinsics, stored_width_px: int) -> float:
-    """Ground centimetres per pixel of the *stored* training image."""
+def image_gsd_cm(alt_m: float, intr: Intrinsics, stored_long_px: int) -> float:
+    """Ground centimetres per pixel of the *stored* training image.
+
+    The divisor is the stored image's **long** side, not its width. `sensor_width_mm` is always the
+    sensor's long axis, so the ground width it implies is the ground the long side covers; import
+    applies `ImageOps.exif_transpose`, so a frame shot at orientation 6/8 is stored portrait and its
+    long side is the height. Using the long side in both places keeps `model_gsd_cm` cancelling back
+    to spec section 2's `ground_width / imgsz` in either orientation.
+    """
     ground_width_cm = alt_m * 100.0 * intr.sensor_width_mm / intr.focal_mm
-    return ground_width_cm / stored_width_px
+    return ground_width_cm / stored_long_px
 
 
 def model_gsd_cm(image_gsd: float, stored_w: int, stored_h: int, imgsz: int) -> float:

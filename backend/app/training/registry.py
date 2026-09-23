@@ -32,6 +32,11 @@ from app.training.trainer import TrainResult
 
 PATH_PARAMS = ("data_yaml", "base_weights", "run_dir")
 
+#: The review states that count as the dataset's labels, exactly as `datasets/materialise.py` reads
+#: them when it builds the training set. The cross-check must measure what the model was trained on,
+#: not the suggestions a curator rejected.
+GROUND_TRUTH = ("accepted", "edited")
+
 log = logging.getLogger(__name__)
 
 
@@ -195,15 +200,21 @@ def estimate_train_gsd(handle: ProjectHandle, model: Model) -> GsdEstimate | Non
                 .where(DatasetImage.dataset_id == model.dataset_id)
             )
         )
+        names = {str(c.get("id")): str(c.get("name")) for c in (dataset.classes or [])}
+        # Ground truth only, and only classes the dataset still has: `materialise.py` filters both
+        # ways when it writes the labels, so anything else is measuring boxes the model never saw.
         sizes = list(
             s.execute(
                 select(Box.class_id, func.avg(Box.w), func.count())
                 .join(DatasetImage, DatasetImage.image_id == Box.image_id)
-                .where(DatasetImage.dataset_id == model.dataset_id)
+                .where(
+                    DatasetImage.dataset_id == model.dataset_id,
+                    Box.review_state.in_(GROUND_TRUTH),
+                    Box.class_id.in_(list(names)),
+                )
                 .group_by(Box.class_id)
             )
         )
-        names = {str(c.get("id")): str(c.get("name")) for c in (dataset.classes or [])}
 
     alts = [r.alt for r in rows if r.alt is not None]
     if not alts or not rows:
@@ -226,13 +237,15 @@ def estimate_train_gsd(handle: ProjectHandle, model: Model) -> GsdEstimate | Non
 
     stored_w = rows[0].width
     stored_h = rows[0].height
-    img_gsd = image_gsd_cm(median_alt, intr, stored_w)
+    # The long side, not the width: import applies `ImageOps.exif_transpose`, so a frame shot at
+    # orientation 6/8 is *stored* portrait while the EXIF copied with it still reports the sensor's
+    # long axis. Dividing the ground width by the stored width would then no longer cancel against
+    # the letterbox below, and the estimate would come out 1.5x too large.
+    img_gsd = image_gsd_cm(median_alt, intr, max(stored_w, stored_h))
     train_gsd = model_gsd_cm(img_gsd, stored_w, stored_h, imgsz)
 
     per_class = {
-        names.get(str(cid), str(cid)): round(float(avg_w) * img_gsd / 100.0, 2)
-        for cid, avg_w, _n in sizes
-        if avg_w
+        names[str(cid)]: round(float(avg_w) * img_gsd / 100.0, 2) for cid, avg_w, _n in sizes if avg_w
     }
     median_object = statistics.median(per_class.values()) if per_class else 0.0
 
