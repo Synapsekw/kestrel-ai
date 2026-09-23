@@ -9,6 +9,66 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Model library and project kinds — 2026-09-23 (gated on `task/tds-integration`, not yet on `main`)
+
+Plan 1 of the train/detect split (spec
+`docs/superpowers/specs/2026-09-23-train-detect-split-and-model-library-design.md` §4–§6, plan
+`docs/superpowers/plans/2026-09-23-model-library-and-project-kinds.md`). It was built as parallel
+units C, BL, BK, FL, FK, BM, FM and X in `.claude/worktrees/tds-*`, and merged into the
+integration worktree `.claude/worktrees/train-detect-spec`.
+
+What changed:
+
+- **App-wide model library.** Every model now lives in `%APPDATA%\kestrel-ai\library`, which has
+  its own `library.db` and migrations. Import, export and starter download run as library jobs on
+  the project `JobRunner`, through a project-shaped `LibraryHandle`
+  (`vault/decisions/2026-09-23-library-jobs-reuse-the-project-jobrunner.md`). If the library
+  cannot open, the app still starts and every library route answers `503 library_unavailable`.
+- **Two kinds of project.** Projects are `train` or `detect` (migration `0006_project_kind`). A
+  server-side `require_kind` guards every project route, and a route-walk test fails when a route
+  declares no kind. Each kind gets its own sidebar steps. Training projects show their old runs
+  and maps under a read-only **Past detections**.
+- **Adoption of old models.** Opening a training project copies its old models into the library
+  (job `library_adopt`). The ids in pre-annotation, query runs, map runs and boxes are rewritten
+  with set-based `UPDATE`s. Nothing in the old `models/` folder is deleted. A past map can be
+  moved into a detection project (job `map_move`).
+
+Unit X added:
+
+- the e2e specs `library.spec.ts` (import, then a job with progress, then the new model
+  selected), `projects.spec.ts` and `past-detections.spec.ts`
+- the backend test `test_library_adoption.py::test_real_project_copy`, which opens a schema-0005
+  project through the API and adopts its model
+- the operator walkthrough `docs/usability/2026-09-23-library-walkthrough.md`
+- screenshots in `docs/evidence/model-library/`
+
+X also fixed two e2e problems found in the full suite:
+
+- The `asDetectionProject` helper fetched from the mock inside its route handler, so a request
+  still in flight when a test ended failed that test ("route.fetch: Test ended"). The helper now
+  reads the mock once, up front.
+- The contour spec's locked-Train check broke once Train counted library models trained in the
+  project. The spec now serves an empty library.
+
+Verified in the integration worktree (2026-09-23), with the gate lines from `AGENTS.md`:
+
+- contract check: clean
+- Ruff check and format: clean
+- pytest: 1066 passed, 9 deselected
+- frontend lint: 0 errors (1 existing hook warning in `MapView.tsx`)
+- unit tests: 703 in 147 files
+- build: passed
+- e2e: 67 browser tests, on free ports as `scripts\finish-task.ps1` runs them
+- `cargo test`: skipped, because this worktree has no frozen sidecar
+
+**Open before merging to `main`:** `main` already has the survey timeline's
+`0006_map_captured_on`, and this branch adds `0006_project_kind`, also with down_revision
+`"0005"`. The rebase in `finish-task.ps1` will leave two Alembic heads. Renumber one migration so
+the two chain (the plan says the survey timeline rebases onto `0006_project_kind`, but it merged
+first). Then rerun the gate. `map_move` copies every `GeoMap` column, so `captured_on` moves
+with the map once the two branches are combined. `MoveMapDialog` already says the capture date is
+copied.
+
 ## Project agent — 2026-09-22 (merged, installed)
 
 An in-project AI drawer that operates the app with the user's own OpenAI or Anthropic key. The
