@@ -64,6 +64,9 @@ datas = (
     + [(str(p), "starter_weights") for p in sorted((Path(SPECPATH) / "starter_weights").glob("yolo11*.pt"))]
     + collect_data_files("rasterio")  # gdal_data/ and proj_data/ (ADR 2026-09-22)
     + collect_data_files("pyproj")  # proj_dir/share/proj/proj.db
+    # The detection PDF report (plan 2 unit E). reportlab's standard-font metric modules are named
+    # by pyinstaller-hooks-contrib (hook-reportlab.pdfbase._fontdata); its fonts/ folder is data.
+    + collect_data_files("reportlab")
 )
 
 binaries = (
