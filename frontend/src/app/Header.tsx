@@ -13,10 +13,10 @@ const SCREEN: Record<string, string> = {
   edit: "Label",
   review: "Review",
   datasets: "Datasets",
-  models: "Models",
   train: "Train",
   query: "Detect",
   maps: "Maps",
+  past: "Past detections",
   settings: "Project settings",
   export: "Export",
 };
@@ -26,6 +26,7 @@ export function screenName(pathname: string): string {
   const parts = pathname.split("/").filter(Boolean);
   if (parts.length === 0) return "Projects";
   if (parts[0] === "settings") return "App settings";
+  if (parts[0] === "library") return "Library";
   if (parts[0] === "p") return parts.length >= 3 ? (SCREEN[parts[2]] ?? "") : "Home";
   return "";
 }
@@ -40,6 +41,11 @@ const TYPE_VERB: Record<Job["type"], string> = {
   map_import: "Importing a map",
   map_detect: "Detecting on a map",
   map_export: "Exporting map results",
+  library_import: "Importing a model",
+  library_export: "Exporting a model",
+  library_starter: "Adding a starter model",
+  library_adopt: "Moving models into the library",
+  map_move: "Moving a map",
 };
 
 /** The newest active job as a live pill; nothing when the project is idle. */
