@@ -177,13 +177,20 @@ def import_source(client, wait_job):
 
 
 @pytest.fixture
-def project(client, project_dir) -> dict:
-    """A project with the eight machinery classes (hotkeys 1-8)."""
+def project_kind() -> str:
+    """The kind of project the `project` fixture creates; a module overrides it for detection work."""
+    return "train"
+
+
+@pytest.fixture
+def project(client, project_dir, project_kind) -> dict:
+    """A project with the eight machinery classes (hotkeys 1-8), a training project by default."""
     classes = [
         {"name": n, "colour": c, "hotkey": str(i + 1)}
         for i, (n, c) in enumerate(zip(EIGHT_CLASSES, COLOURS, strict=True))
     ]
-    r = client.post("/api/v1/projects", json={"name": "T", "folder": str(project_dir), "classes": classes})
+    body = {"name": "T", "folder": str(project_dir), "classes": classes, "kind": project_kind}
+    r = client.post("/api/v1/projects", json=body)
     assert r.status_code == 201, r.text
     return r.json()
 

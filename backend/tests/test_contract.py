@@ -56,7 +56,12 @@ EXPECTED_STUBS: set[str] = set()
 
 @pytest.fixture
 def project_id(client, project_dir) -> str:
-    body = {"name": "A", "folder": str(project_dir), "classes": [{"name": "excavator", "colour": "#ff0000"}]}
+    body = {
+        "name": "A",
+        "folder": str(project_dir),
+        "classes": [{"name": "excavator", "colour": "#ff0000"}],
+        "kind": "train",
+    }
     return client.post("/api/v1/projects", json=body).json()["id"]
 
 

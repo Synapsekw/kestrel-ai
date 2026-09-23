@@ -50,7 +50,7 @@ def _fast_progress_job(ctx):
 
 def _project(client, project_dir):
     return client.post(
-        "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": []}
+        "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": [], "kind": "train"}
     ).json()["id"]
 
 

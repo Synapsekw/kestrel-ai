@@ -17,6 +17,7 @@ def project_id(client, project_dir) -> str:
         "name": "T",
         "folder": str(project_dir),
         "classes": [{"name": "excavator", "colour": "#ff0000"}],
+        "kind": "train",
     }
     r = client.post("/api/v1/projects", json=body)
     assert r.status_code == 201, r.text

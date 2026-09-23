@@ -9,6 +9,14 @@ from app.db.models import MapDetection
 from app.providers.base import Detection, ProviderError, TileResult
 
 BASE = "/api/v1/projects"
+
+
+@pytest.fixture
+def project_kind() -> str:
+    """Maps and query runs are detection work (spec 2026-09-23 section 5.2)."""
+    return "detect"
+
+
 SQUARES = [(200, 200, 60), (1250, 400, 60), (2500, 1000, 60), (2600, 300, 60)]  # 2nd sits on a seam
 
 
