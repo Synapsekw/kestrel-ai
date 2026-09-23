@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { asDetectionProject } from "./kinds";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MODEL = "m0000000-2222-4000-8000-000000000001";
@@ -11,6 +12,8 @@ const JOB = "j0000000-4444-4000-8000-000000000001";
  * The mock's run points at job `…0003`, but `GET /jobs/{id}` always answers with job `…0001`, so the
  * tracked job would never resolve. This route hands the run the job id the mock actually serves.
  */
+test.beforeEach(({ page }) => asDetectionProject(page, P));
+
 const runWithMockJob = {
   id: RUN,
   kind: "cloud_provider",

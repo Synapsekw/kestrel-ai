@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { asDetectionProject } from "./kinds";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MAP = "a0000000-6666-4000-8000-000000000001";
@@ -32,6 +33,8 @@ const score = {
   run_id: RUN, iou: 0.5, labels_version: 1, has_zones: true, overall: row(null), per_class: [row(EXC)], per_zone: [],
   matches: [{ kind: "detection", id: "d2", match: "fp", zone_id: "z1", class_id: EXC, x: 3000, y: 2400, w: 170, h: 110 }],
 };
+
+test.beforeEach(({ page }) => asDetectionProject(page, P));
 
 async function json(page: Page, pattern: (u: URL) => boolean, body: unknown, status = 200) {
   await page.route(pattern, (route) =>
