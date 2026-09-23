@@ -130,19 +130,25 @@ def test_detect_project_shares_image_storage_and_jobs(client, tmp_path):
     assert client.get(f"{BASE}/{pid}/query-runs").status_code == 200
 
 
-def test_train_project_keeps_past_detections_read_only(client, tmp_path):
+def test_train_project_keeps_past_maps_read_only(client, tmp_path):
+    pid = _create(client, tmp_path / "t", "train").json()["id"]
+    r = client.post(f"{BASE}/{pid}/maps", json={"path": str(tmp_path / "x.tif")})
+    assert r.status_code == 409, r.text
+    assert _error(r)["code"] == "wrong_project_kind"
+    assert _error(r)["details"] == {"kind": "train", "allowed": ["detect"]}
+    assert client.get(f"{BASE}/{pid}/maps").status_code == 200
+
+
+def test_train_project_still_labels_with_query_runs(client, tmp_path):
+    """Deviation from the plan's kind table (reported): the project agent and the setup flow label a
+    training project's images through query runs, so query runs serve both kinds until the plan
+    gives training projects another labelling path."""
     pid = _create(client, tmp_path / "t", "train").json()["id"]
     r = client.post(
         f"{BASE}/{pid}/query-runs", json={"kind": "local_model", "image_ids": ["x"], "model_id": "m"}
     )
-    assert r.status_code == 409, r.text
-    assert _error(r)["details"] == {"kind": "train", "allowed": ["detect"]}
+    assert r.status_code != 409 or _error(r)["code"] != "wrong_project_kind", r.text
     assert client.get(f"{BASE}/{pid}/query-runs").status_code == 200
-
-    r = client.post(f"{BASE}/{pid}/maps", json={"path": str(tmp_path / "x.tif")})
-    assert r.status_code == 409, r.text
-    assert _error(r)["code"] == "wrong_project_kind"
-    assert client.get(f"{BASE}/{pid}/maps").status_code == 200
 
 
 def test_unknown_project_is_still_404(client):
