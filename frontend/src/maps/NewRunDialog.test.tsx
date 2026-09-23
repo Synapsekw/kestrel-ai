@@ -134,4 +134,16 @@ describe("NewRunDialog", () => {
     await userEvent.type(await screen.findByLabelText(/Model trained at/), "19");
     expect(screen.getByRole("button", { name: /start detection/i })).toBeEnabled();
   });
+
+  it("keeps Start disabled for a zero scale", async () => {
+    renderDialog({ models: [{ ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: null }] });
+    await userEvent.type(await screen.findByLabelText(/Model trained at/), "0");
+    expect(screen.getByRole("button", { name: /start detection/i })).toBeDisabled();
+  });
+
+  it("keeps Start disabled for a negative scale", async () => {
+    renderDialog({ models: [{ ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: null }] });
+    await userEvent.type(await screen.findByLabelText(/Model trained at/), "-5");
+    expect(screen.getByRole("button", { name: /start detection/i })).toBeDisabled();
+  });
 });

@@ -56,6 +56,11 @@ export function NewRunDialog({
     setOffer(null);
   }
 
+  // Gate on a real scale, not merely a non-empty string: the form has `noValidate` (Dialog.tsx),
+  // so native min="0.1" never runs, and `0` or a negative number is as unknown as an empty field.
+  const gsdNum = Number(gsd);
+  const gsdValid = Number.isFinite(gsdNum) && gsdNum > 0;
+
   // A model with no training scale but a dataset to measure: derive it once and offer it.
   useEffect(() => {
     if (kind !== "local_model" || !selected || selected.train_gsd_cm || !selected.dataset_id) return;
@@ -106,6 +111,11 @@ export function NewRunDialog({
     const form = kind === "local_model" ? { kind, modelId: effectiveModel } : { kind, provider, query };
     const problem = validateRunForm(form, providers.providers);
     if (problem) return setError(problem);
+    if (!gsdValid) {
+      return setError(
+        "Set the scale this model was trained at — a run at the wrong scale finds nothing, or finds the wrong thing.",
+      );
+    }
     setBusy(true);
     try {
       const r = await createMapRun(api, projectId, body);
@@ -131,7 +141,7 @@ export function NewRunDialog({
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" icon="detect" loading={busy} disabled={!gsd}>
+          <Button type="submit" variant="primary" icon="detect" loading={busy} disabled={!gsdValid}>
             Start detection
           </Button>
         </>
@@ -187,7 +197,7 @@ export function NewRunDialog({
             label="Model trained at (cm / px)"
             htmlFor="run-gsd"
             hint={
-              !gsd
+              !gsdValid
                 ? "Set the scale this model was trained at — a run at the wrong scale finds nothing, or finds the wrong thing."
                 : geoMap.gsd_cm
                   ? `This map is ${geoMap.gsd_cm.toFixed(1)} cm / px. Different by over 15 % means the map is rescaled.`
@@ -218,7 +228,7 @@ export function NewRunDialog({
         {offer && (
           <div className="flex items-center gap-3 rounded-md border border-line p-3" aria-live="polite">
             <p className="text-sm text-muted flex-1">
-              {`This model was trained at about ${offer.train_gsd_cm} cm / px — its imagery was flown at ${offer.median_alt_m} m, which makes its labelled machines ${offer.median_object_m} m across.`}
+              {`This model was trained at about ${offer.train_gsd_cm} cm / px — its imagery was flown at about ${offer.median_alt_m} m, which makes its labelled machines about ${offer.median_object_m} m across.`}
             </p>
             <Button onClick={() => void acceptOffer()}>{`Use ${offer.train_gsd_cm}`}</Button>
           </div>
