@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  classMapping,
   formatDate,
   formatLocalDate,
   formatMetric,
@@ -32,18 +31,5 @@ describe("model labels", () => {
     } finally {
       process.env.TZ = tz;
     }
-  });
-
-  it("tells which of a model's classes reach the project, by name or by alias", () => {
-    const coco = ["person", "car", "truck", "excavator"];
-    expect(classMapping(coco, { truck: "dump_truck" }, ["excavator", "dump_truck", "crane"])).toEqual({
-      mapped: [
-        { from: "truck", to: "dump_truck" },
-        { from: "excavator", to: "excavator" },
-      ],
-      ignored: 2,
-    });
-    // An alias to a class the project does not have maps nothing.
-    expect(classMapping(["truck"], { truck: "lorry" }, ["crane"])).toEqual({ mapped: [], ignored: 1 });
   });
 });

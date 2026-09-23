@@ -33,22 +33,3 @@ export function originLabel(origin: LibraryModel["origin"]): string {
 export function taskLabel(task: LibraryModel["task"]): string {
   return TASK_LABEL[task];
 }
-
-export interface ClassMapping {
-  mapped: { from: string; to: string }[];
-  /** Classes of the model that reach no project class; their detections are dropped. */
-  ignored: number;
-}
-
-/** Which of a model's classes produce proposals in this project: same name, or an alias onto a project class. */
-export function classMapping(
-  modelClasses: string[],
-  aliases: Record<string, string>,
-  projectClasses: string[],
-): ClassMapping {
-  const known = new Set(projectClasses);
-  const mapped = modelClasses
-    .map((from) => ({ from, to: aliases[from] ?? from }))
-    .filter((m) => known.has(m.to));
-  return { mapped, ignored: modelClasses.length - mapped.length };
-}
