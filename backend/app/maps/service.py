@@ -79,6 +79,19 @@ def get_map(handle: ProjectHandle, map_id: str) -> GeoMap:
     return row
 
 
+def timeline_rows(handle: ProjectHandle) -> tuple[list[GeoMap], dict[str, list[MapRun]]]:
+    """Every map of the project with its runs. Bounded: tens of rows, and never a detection."""
+    with handle.session() as s:
+        maps = list(s.execute(select(GeoMap)).scalars())
+        runs = list(s.execute(select(MapRun)).scalars())
+        for row in (*maps, *runs):
+            s.expunge(row)
+    by_map: dict[str, list[MapRun]] = {}
+    for r in runs:
+        by_map.setdefault(r.map_id, []).append(r)
+    return maps, by_map
+
+
 def set_captured_on(handle: ProjectHandle, map_id: str, captured_on: date | None) -> GeoMap:
     with handle.session() as s:
         row = _get(s, map_id)

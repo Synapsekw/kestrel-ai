@@ -9,7 +9,7 @@ from fastapi import Path as PathParam
 
 from app.events_util import publish_map_labels_changed_event
 from app.jobs.schemas import JobOut
-from app.maps import service
+from app.maps import service, timeline
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers map_detect
 from app.maps.jobs_export import run_map_export  # noqa: F401 - registers `map_export`
 from app.maps.jobs_import import run_map_import  # noqa: F401 - registers `map_import`
@@ -40,6 +40,10 @@ from app.maps.schemas import (
     MapZoneList,
     MapZoneOut,
     MapZoneUpdate,
+    SurveyBasisOut,
+    SurveyClassOut,
+    SurveyOut,
+    SurveyTimelineOut,
 )
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.tiles import TILE_CACHE, render_tile
@@ -63,6 +67,36 @@ def create_map(
     job = request.app.state.jobs.submit(handle, "map_import", {"map_id": row.id, "name": row.name})
     row = service.set_map_job(handle, row.id, job.id)
     return GeoMapWithJob(map=GeoMapOut.from_row(row), job=JobOut.from_row(job, handle.id))
+
+
+@router.get("/survey-timeline", response_model=SurveyTimelineOut)
+def get_survey_timeline(
+    model_id: str | None = None,
+    conf: float | None = None,
+    handle: ProjectHandle = Depends(get_project),
+) -> SurveyTimelineOut:
+    """Counts per class for every survey, with the change since the previous comparable one."""
+    maps, runs_by_map = service.timeline_rows(handle)
+    all_runs = [r for rs in runs_by_map.values() for r in rs]
+    basis = timeline.choose_basis(all_runs)
+    if basis and (model_id is not None or conf is not None):
+        wanted_id = model_id if model_id is not None else basis.model_id
+        named = next((r for r in all_runs if r.model_id == wanted_id), None)
+        basis = timeline.Basis(
+            model_id=wanted_id,
+            model_name=named.model_name if named else basis.model_name,
+            conf=conf if conf is not None else basis.conf,
+        )
+    with handle.session() as s:
+        classes = [
+            SurveyClassOut(id=c["id"], name=c["name"], colour=c["colour"]) for c in handle.row(s).classes
+        ]
+    surveys = timeline.build_timeline(maps, runs_by_map, basis)
+    return SurveyTimelineOut(
+        basis=SurveyBasisOut(**vars(basis)) if basis else None,
+        classes=classes,
+        surveys=[SurveyOut(**vars(survey)) for survey in surveys],
+    )
 
 
 @router.get("/maps/{mapId}", response_model=GeoMapOut)

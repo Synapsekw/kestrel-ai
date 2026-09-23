@@ -76,6 +76,40 @@ class GeoMapCreate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
 
 
+class SurveyBasisOut(BaseModel):
+    model_id: str | None
+    model_name: str | None
+    conf: float
+
+
+class SurveyClassOut(BaseModel):
+    id: str
+    name: str
+    colour: str
+
+
+class SurveyOut(BaseModel):
+    map_id: str
+    map_name: str
+    captured_on: date | None
+    date_is_import_date: bool
+    run_id: str | None
+    model_name: str | None
+    conf: float | None
+    counts: dict[str, int]
+    deltas: dict[str, int]
+    state: Literal["ok", "not_comparable", "not_counted"]
+    reason: str | None
+
+
+class SurveyTimelineOut(BaseModel):
+    """Every survey of this project, oldest first (spec 2026-09-23-survey-timeline section 6)."""
+
+    basis: SurveyBasisOut | None
+    classes: list[SurveyClassOut]
+    surveys: list[SurveyOut]
+
+
 class GeoMapPatch(BaseModel):
     """Only the survey date is editable; the operator corrects it by hand."""
 
