@@ -3,7 +3,6 @@ import type { ClassDef, MapRun } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import {
-  acceptRunAbove,
   nextUnreviewed,
   reviewMapDetections,
   reviewProgressText,
@@ -12,8 +11,8 @@ import {
 } from "@/api/review";
 import { pushLog } from "@/app/diagnostics";
 import { isTypingTarget } from "@/editor/hotkeys";
-import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
-import { Button, Field, Input, Kbd, Pill, Progress, Select, cx, toast, type PillTone } from "@/ui";
+import { AcceptAbove } from "@/review/AcceptAbove";
+import { Button, Field, Kbd, Pill, Progress, Select, cx, toast, type PillTone } from "@/ui";
 
 export interface MapReviewPanelProps {
   projectId: string;
@@ -38,8 +37,6 @@ const STATE: Record<MapDetection["review_state"], { label: string; tone: PillTon
   rejected: { label: "Rejected", tone: "danger" },
 };
 
-const DEFAULT_ACCEPT_ABOVE = "0.80";
-
 function fail(action: string, err: unknown) {
   const message = messageOf(err, `could not ${action}`);
   pushLog(`${action} failed: ${message}`);
@@ -56,8 +53,6 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
   const { projectId, onCurrent, onChanged, current } = p;
   const runId = p.run.id;
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [acceptAbove, setAcceptAbove] = useState(DEFAULT_ACCEPT_ABOVE);
-  const [accepting, setAccepting] = useState(false);
   const busy = useRef(false);
   // The screen's callback changes identity with the map view; the walk must not restart because of it.
   const onCurrentRef = useRef(onCurrent);
@@ -120,12 +115,6 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
     run("load the next detection", () => walk(current?.id ?? null));
   }, [run, walk, current]);
 
-  useOnJobsFinished("accept_above", () => {
-    setAccepting(false);
-    onChanged();
-    run("load the next detection", () => walk(null));
-  });
-
   const classes = p.classes;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -152,8 +141,10 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
 
   const total = p.run.detection_count;
   const reviewed = remaining === null ? null : Math.max(0, total - remaining);
-  const threshold = Number(acceptAbove);
-  const thresholdValid = acceptAbove.trim() !== "" && threshold >= 0 && threshold <= 1;
+  const onAcceptedAbove = () => {
+    onChanged();
+    run("load the next detection", () => walk(null));
+  };
   const currentClass = current ? classes.find((c) => c.id === current.class_id) : undefined;
 
   return (
@@ -256,40 +247,12 @@ export function MapReviewPanel(p: MapReviewPanelProps) {
       </div>
 
       <div className="flex flex-col gap-2 border-t border-line pt-4">
-        <Field
-          label="Minimum confidence"
-          htmlFor="review-accept-above"
-          hint="Accepts every detection not yet reviewed at or above this confidence."
-          error={thresholdValid ? undefined : "Enter a number from 0 to 1."}
-        >
-          <Input
-            id="review-accept-above"
-            dense
-            type="number"
-            min={0}
-            max={1}
-            step={0.05}
-            value={acceptAbove}
-            invalid={!thresholdValid}
-            onChange={(e) => setAcceptAbove(e.target.value)}
-          />
-        </Field>
-        <Button
-          size="sm"
-          loading={accepting}
-          disabled={!thresholdValid || remaining === 0}
-          onClick={() => {
-            setAccepting(true);
-            void acceptRunAbove(api, projectId, runId, threshold)
-              .then(() => toast("info", `Accepting detections at or above ${Math.round(threshold * 100)}%`))
-              .catch((err: unknown) => {
-                setAccepting(false);
-                fail("accept detections", err);
-              });
-          }}
-        >
-          Accept all at or above
-        </Button>
+        <AcceptAbove
+          projectId={projectId}
+          runId={runId}
+          disabled={remaining === 0}
+          onDone={onAcceptedAbove}
+        />
       </div>
     </section>
   );
