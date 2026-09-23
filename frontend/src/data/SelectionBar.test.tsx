@@ -39,11 +39,12 @@ describe("SelectionBar", () => {
     expect(screen.getByRole("button", { name: "Add to dataset" })).toBeInTheDocument();
   });
 
-  it("a detection project's selection runs a model and never builds a dataset", () => {
+  it("a detection project's selection runs a model and never builds a dataset or labels by hand", () => {
     const { api } = fakeClient([]);
     renderBar(api, { kind: "detect" });
     expect(screen.getByRole("button", { name: "Run model" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Add to dataset" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Label selected" })).toBeNull();
   });
 
   it("hands label and run-model to the screen, opens the dataset dialog and deletes after confirmation", async () => {

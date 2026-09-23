@@ -110,9 +110,12 @@ export function SelectionBar({
       <div className="flex flex-col rounded-lg bg-inverse px-4 text-inverse-fg shadow-float animate-reveal motion-reduce:animate-none">
         <div className="flex min-h-11 flex-wrap items-center gap-2 py-1.5">
           <span className="mr-1 text-sm font-medium tabular-nums">{n} selected</span>
-          <Button variant="primary" size="sm" icon="label" onClick={onLabel} disabled={busy}>
-            Label selected
-          </Button>
+          {/* A detection project has no classes of its own to draw: its boxes come from a model. */}
+          {kind !== "detect" && (
+            <Button variant="primary" size="sm" icon="label" onClick={onLabel} disabled={busy}>
+              Label selected
+            </Button>
+          )}
           {kind !== "train" && (
             <Button
               size="sm"
