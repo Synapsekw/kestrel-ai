@@ -16,6 +16,7 @@ const SCREEN: Record<string, string> = {
   models: "Models",
   train: "Train",
   query: "Detect",
+  maps: "Maps",
   settings: "Project settings",
   export: "Export",
 };
