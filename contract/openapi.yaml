@@ -1047,6 +1047,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/GeoMap" }
         default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [maps]
+      operationId: patchMap
+      summary: Correct the survey date - when the imagery was flown, not when the file was imported.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeoMapPatch" }
+            example: { captured_on: "2026-04-15" }
+      responses:
+        "200":
+          description: the updated map
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoMap" }
+        default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [maps]
       operationId: deleteMap
@@ -1230,6 +1247,50 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/MapScore" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/survey-timeline:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [maps]
+      operationId: getSurveyTimeline
+      summary: Counts per class for every survey (map) of this project, oldest first, with the change since the previous comparable survey.
+      parameters:
+        - { name: model_id, in: query, required: false, schema: { type: string }, description: compare on this model instead of the newest run's }
+        - { name: conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 }, description: compare at this confidence instead of the newest run's }
+      responses:
+        "200":
+          description: the timeline
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurveyTimeline" }
+              example:
+                basis: { model_id: "m0000000-2222-4000-8000-000000000001", model_name: "yolo11m-coco", conf: 0.25 }
+                classes:
+                  - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: "excavator", colour: "#f97316" }
+                surveys:
+                  - map_id: "7c9e1b2a-5555-4000-8000-000000000001"
+                    map_name: "April survey"
+                    captured_on: "2026-04-15"
+                    date_is_import_date: false
+                    run_id: "5e4d3c2b-0000-4000-8000-000000000001"
+                    model_name: "yolo11m-coco"
+                    conf: 0.25
+                    counts: { "c1a2b3c4-0000-4000-8000-000000000001": 12 }
+                    deltas: {}
+                    state: ok
+                    reason: null
+                  - map_id: "7c9e1b2a-5555-4000-8000-000000000002"
+                    map_name: "May survey"
+                    captured_on: "2026-05-20"
+                    date_is_import_date: false
+                    run_id: "5e4d3c2b-0000-4000-8000-000000000002"
+                    model_name: "yolo11m-coco"
+                    conf: 0.25
+                    counts: { "c1a2b3c4-0000-4000-8000-000000000001": 15 }
+                    deltas: { "c1a2b3c4-0000-4000-8000-000000000001": 3 }
+                    state: ok
+                    reason: null
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/zones:
     parameters:
@@ -2839,14 +2900,61 @@ components:
       properties:
         tile_size: { type: integer, enum: [256] }
         max_zoom: { type: integer, minimum: 0 }
+    GeoMapPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        captured_on: { type: [string, "null"], format: date, description: when the imagery was flown; null clears it }
+    SurveyBasis:
+      type: object
+      required: [model_id, model_name, conf]
+      properties:
+        model_id: { type: [string, "null"] }
+        model_name: { type: [string, "null"] }
+        conf: { type: number }
+    SurveyClass:
+      type: object
+      required: [id, name, colour]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        colour: { type: string }
+    Survey:
+      type: object
+      required: [map_id, map_name, captured_on, date_is_import_date, run_id, model_name, conf, counts, deltas, state, reason]
+      properties:
+        map_id: { type: string }
+        map_name: { type: string }
+        captured_on: { type: [string, "null"], format: date }
+        date_is_import_date: { type: boolean, description: the date shown is the import date, because the survey date is unknown }
+        run_id: { type: [string, "null"] }
+        model_name: { type: [string, "null"] }
+        conf: { type: [number, "null"] }
+        counts: { type: object, additionalProperties: { type: integer } }
+        deltas: { type: object, additionalProperties: { type: integer }, description: change since the previous comparable survey; absent for a class that survey did not have }
+        state: { type: string, enum: [ok, not_comparable, not_counted] }
+        reason: { type: [string, "null"], description: why this survey cannot be compared }
+    SurveyTimeline:
+      type: object
+      required: [basis, classes, surveys]
+      properties:
+        basis: { oneOf: [{ $ref: "#/components/schemas/SurveyBasis" }, { type: "null" }] }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/SurveyClass" }
+        surveys:
+          type: array
+          description: oldest first
+          items: { $ref: "#/components/schemas/Survey" }
     GeoMap:
       type: object
-      required: [id, name, status, error, source_path, source_size, width, height, band_count, dtype, crs_wkt, epsg, proj4, geotransform, bounds_native, bounds_wgs84, gsd_cm, tile_grid, labels_version, job_id, created_at]
+      required: [id, name, status, error, source_path, source_size, width, height, band_count, dtype, crs_wkt, epsg, proj4, geotransform, bounds_native, bounds_wgs84, gsd_cm, captured_on, tile_grid, labels_version, job_id, created_at]
       properties:
         id: { type: string }
         name: { type: string }
         status: { $ref: "#/components/schemas/GeoMapStatus" }
         error: { type: [string, "null"] }
+        captured_on: { type: [string, "null"], format: date, description: when the imagery was flown; null until known }
         source_path: { type: string, description: the original file; never copied or modified }
         source_size: { type: integer }
         width: { type: integer }
@@ -2884,6 +2992,7 @@ components:
         name: "Site north ortho"
         status: ready
         error: null
+        captured_on: "2026-04-15"
         source_path: "D:/orthos/site-north.tif"
         source_size: 3221225472
         width: 80000

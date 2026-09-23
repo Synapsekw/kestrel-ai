@@ -871,7 +871,8 @@ export interface paths {
         delete: operations["deleteMap"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Correct the survey date - when the imagery was flown, not when the file was imported. */
+        patch: operations["patchMap"];
         trace?: never;
     };
     "/api/v1/projects/{projectId}/maps/{mapId}/preview": {
@@ -1065,6 +1066,25 @@ export interface paths {
         };
         /** The run scored against the map's labels inside its zones. */
         get: operations["getMapRunScore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/survey-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Counts per class for every survey (map) of this project, oldest first, with the change since the previous comparable survey. */
+        get: operations["getSurveyTimeline"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2859,12 +2879,58 @@ export interface components {
             tile_size: 256;
             max_zoom: number;
         };
+        GeoMapPatch: {
+            /**
+             * Format: date
+             * @description when the imagery was flown; null clears it
+             */
+            captured_on?: string | null;
+        };
+        SurveyBasis: {
+            model_id: string | null;
+            model_name: string | null;
+            conf: number;
+        };
+        SurveyClass: {
+            id: string;
+            name: string;
+            colour: string;
+        };
+        Survey: {
+            map_id: string;
+            map_name: string;
+            /** Format: date */
+            captured_on: string | null;
+            /** @description the date shown is the import date */
+            date_is_import_date: boolean;
+            run_id: string | null;
+            model_name: string | null;
+            conf: number | null;
+            counts: {
+                [key: string]: number;
+            };
+            /** @description change since the previous comparable survey; absent for a class that survey did not have */
+            deltas: {
+                [key: string]: number;
+            };
+            /** @enum {string} */
+            state: "ok" | "not_comparable" | "not_counted";
+            /** @description why this survey cannot be compared */
+            reason: string | null;
+        };
+        SurveyTimeline: {
+            basis: components["schemas"]["SurveyBasis"] | null;
+            classes: components["schemas"]["SurveyClass"][];
+            /** @description oldest first */
+            surveys: components["schemas"]["Survey"][];
+        };
         /**
          * @example {
          *       "id": "a0000000-6666-4000-8000-000000000001",
          *       "name": "Site north ortho",
          *       "status": "ready",
          *       "error": null,
+         *       "captured_on": "2026-04-15",
          *       "source_path": "D:/orthos/site-north.tif",
          *       "source_size": 3221225472,
          *       "width": 80000,
@@ -2909,6 +2975,11 @@ export interface components {
             name: string;
             status: components["schemas"]["GeoMapStatus"];
             error: string | null;
+            /**
+             * Format: date
+             * @description when the imagery was flown; null until known
+             */
+            captured_on: string | null;
             /** @description the original file; never copied or modified */
             source_path: string;
             source_size: number;
@@ -5065,6 +5136,39 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    patchMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "captured_on": "2026-04-15"
+                 *     }
+                 */
+                "application/json": components["schemas"]["GeoMapPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated map */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMap"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getMapPreview: {
         parameters: {
             query?: never;
@@ -5349,6 +5453,84 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MapScore"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurveyTimeline: {
+        parameters: {
+            query?: {
+                /** @description compare on this model instead of the newest run's */
+                model_id?: string;
+                /** @description compare at this confidence instead of the newest run's */
+                conf?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the timeline */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "basis": {
+                     *         "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *         "model_name": "yolo11m-coco",
+                     *         "conf": 0.25
+                     *       },
+                     *       "classes": [
+                     *         {
+                     *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
+                     *           "name": "excavator",
+                     *           "colour": "#f97316"
+                     *         }
+                     *       ],
+                     *       "surveys": [
+                     *         {
+                     *           "map_id": "7c9e1b2a-5555-4000-8000-000000000001",
+                     *           "map_name": "April survey",
+                     *           "captured_on": "2026-04-15",
+                     *           "date_is_import_date": false,
+                     *           "run_id": "5e4d3c2b-0000-4000-8000-000000000001",
+                     *           "model_name": "yolo11m-coco",
+                     *           "conf": 0.25,
+                     *           "counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 12
+                     *           },
+                     *           "deltas": {},
+                     *           "state": "ok",
+                     *           "reason": null
+                     *         },
+                     *         {
+                     *           "map_id": "7c9e1b2a-5555-4000-8000-000000000002",
+                     *           "map_name": "May survey",
+                     *           "captured_on": "2026-05-20",
+                     *           "date_is_import_date": false,
+                     *           "run_id": "5e4d3c2b-0000-4000-8000-000000000002",
+                     *           "model_name": "yolo11m-coco",
+                     *           "conf": 0.25,
+                     *           "counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 15
+                     *           },
+                     *           "deltas": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 3
+                     *           },
+                     *           "state": "ok",
+                     *           "reason": null
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SurveyTimeline"];
                 };
             };
             default: components["responses"]["Error"];
