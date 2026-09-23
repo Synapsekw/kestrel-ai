@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from app.config import Settings
-from app.db.models import Model
 from app.errors import AppError
-from app.projects.service import ProjectHandle
-from app.training import registry
+from app.jobs.cancellation import JobFailure
+from app.library import service as library
+from app.library.db import LibraryModel
+from app.library.handle import LibraryHandle
 
 log = logging.getLogger(__name__)
 
@@ -106,19 +107,36 @@ def list_starters(folder: Path, cache: Path | None = None) -> list[dict]:
     return items
 
 
-def project_class_names(handle: ProjectHandle) -> list[str]:
-    with handle.session() as s:
-        return [str(c.get("name")) for c in (handle.row(s).classes or [])]
+def import_starter(lib: LibraryHandle, folder: Path, key: str, name: str | None) -> LibraryModel:
+    """Add a starter's weights to the library (`origin: starter`); the bundled file stays.
 
-
-def import_starter(handle: ProjectHandle, folder: Path, key: str, name: str | None) -> Model:
+    The same weights are one library model: acquiring a starter that is already in the library
+    returns that model instead of a second copy. Library models are standalone, so the COCO aliases
+    are not filtered by any project's classes; the project mapping happens when a run starts.
+    """
     f = folder / f"{key}.pt"
-    if key not in {s.key for s in CATALOGUE} or not f.is_file():
+    if key not in STARTER_KEYS or not f.is_file():
         # The operator reads the message; the fix is a developer's (scripts/fetch_starter_weights.ps1).
         log.warning("starter weights %s missing under %s; run scripts/fetch_starter_weights.ps1", key, folder)
         raise AppError("not_found", f"The starter model {key} is not included in this copy of the app.", 404)
-    names = set(project_class_names(handle))
-    aliases = {src: dst for src, dst in DEFAULT_ALIASES.items() if dst in names}
-    return registry.import_model(
-        handle, name or f"{key}-coco", str(f.resolve()), aliases, expected_task="detect"
+    digest = library.sha256_file(f)
+    existing = library.find_by_sha(lib, digest)
+    if existing is not None:
+        return existing
+    try:
+        task, class_names = library.read_checkpoint(f)
+    except Exception as e:
+        raise JobFailure(f"{f.name} is not a loadable YOLO checkpoint: {e}") from e
+    if task != "detect":
+        raise JobFailure(f"This starter requires a detect checkpoint; found {task!r}.")
+    aliases = {src: dst for src, dst in DEFAULT_ALIASES.items() if src in class_names}
+    return library.add_model(
+        lib,
+        source_weights=f.resolve(),
+        name=name or f"{key}-coco",
+        origin="starter",
+        task=task,
+        class_names=class_names,
+        class_aliases=aliases,
+        sha256=digest,
     )

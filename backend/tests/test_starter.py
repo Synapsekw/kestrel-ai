@@ -1,8 +1,10 @@
 from pathlib import Path
 
 import pytest
+from library_helpers import stub_checkpoint
 
 from app.errors import AppError
+from app.library import service as library
 from app.training import starter
 
 
@@ -11,8 +13,13 @@ def folder(tmp_path, monkeypatch) -> Path:
     d = tmp_path / "starter_weights"
     d.mkdir()
     (d / "yolo11n.pt").write_bytes(b"x" * 2_000_000)
-    monkeypatch.setattr("app.training.registry.read_class_names", lambda path, **kwargs: ["person", "truck"])
+    stub_checkpoint(monkeypatch, names=["person", "truck"])
     return d
+
+
+@pytest.fixture
+def lib(client, app):
+    return app.state.library
 
 
 def test_the_catalogue_marks_local_weights_and_missing_files(folder):
@@ -23,22 +30,28 @@ def test_the_catalogue_marks_local_weights_and_missing_files(folder):
     assert all(i["name"] and i["description"] for i in items)
 
 
-def test_import_registers_an_imported_model_with_the_truck_alias(handle, folder):
-    row = starter.import_starter(handle, folder, "yolo11n", None)
-    assert row.kind == "imported" and row.name == "yolo11n-coco"
-    assert row.class_aliases == {"truck": "dump_truck"}  # the default project has dump_truck
-    assert (handle.folder / row.weights_path).is_file()
+def test_import_adds_a_starter_model_to_the_library_with_the_truck_alias(lib, folder):
+    row = starter.import_starter(lib, folder, "yolo11n", None)
+    assert row.origin == "starter" and row.name == "yolo11n-coco"
+    assert row.class_names == ["person", "truck"]
+    assert row.class_aliases == {"truck": "dump_truck"}  # never filtered by a project's classes
+    assert library.weights_file(lib, row).is_file()
     assert (folder / "yolo11n.pt").is_file()  # the bundled file stays
 
 
-def test_import_without_a_dump_truck_class_sets_no_alias(handle, folder, monkeypatch):
-    monkeypatch.setattr(starter, "project_class_names", lambda h: ["excavator"])
-    assert starter.import_starter(handle, folder, "yolo11n", "mine").class_aliases == {}
+def test_a_model_without_a_truck_class_gets_no_alias(lib, folder, monkeypatch):
+    stub_checkpoint(monkeypatch, names=["person", "car"])
+    assert starter.import_starter(lib, folder, "yolo11n", "mine").class_aliases == {}
 
 
-def test_a_missing_file_is_a_404_that_names_the_fix(handle, folder):
+def test_importing_the_same_starter_again_returns_the_library_model(lib, folder):
+    first = starter.import_starter(lib, folder, "yolo11n", None)
+    assert starter.import_starter(lib, folder, "yolo11n", "other name").id == first.id
+
+
+def test_a_missing_file_is_a_404_that_names_the_fix(lib, folder):
     with pytest.raises(AppError) as e:
-        starter.import_starter(handle, folder, "yolo11m", None)
+        starter.import_starter(lib, folder, "yolo11m", None)
     assert e.value.status == 404
     assert e.value.message == "The starter model yolo11m is not included in this copy of the app."
 
@@ -70,21 +83,12 @@ def test_weights_dir_falls_back_to_the_checkout_if_a_frozen_process_somehow_has_
     assert result.parent.name == "backend"
 
 
-def test_the_api_lists_and_imports(client, project_id, folder, monkeypatch):
+def test_the_api_lists_the_catalogue(client, folder, monkeypatch):
     monkeypatch.setattr(starter, "weights_dir", lambda settings: folder)
     r = client.get("/api/v1/starter-models")
     assert r.status_code == 200, r.text
     assert sum(i["available"] for i in r.json()["items"]) == 1
     assert r.json()["next_cursor"] is None
-
-    r = client.post(f"/api/v1/projects/{project_id}/models/import-starter", json={"key": "yolo11n"})
-    assert r.status_code == 201, r.text
-    assert r.json()["kind"] == "imported" and r.json()["name"] == "yolo11n-coco"
-
-    r = client.post(f"/api/v1/projects/{project_id}/models/import-starter", json={"key": "yolo11m"})
-    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
-    r = client.post(f"/api/v1/projects/{project_id}/models/import-starter", json={"key": "yolo99"})
-    assert r.status_code == 422
 
 
 def test_catalogue_covers_compatible_coco_detection_families_without_loading_weights(folder):
@@ -99,29 +103,3 @@ def test_catalogue_covers_compatible_coco_detection_families_without_loading_wei
     expected |= {"yolov3u", "yolov3-tinyu", "yolov3-sppu"}
     assert keys == expected
     assert all(i["task"] == "detect" and i["family"] for i in items)
-
-
-def test_acquire_starter_is_background_import_and_reuses_bundled_weights(
-    client, project_id, folder, monkeypatch
-):
-    import time
-
-    monkeypatch.setattr(starter, "weights_dir", lambda settings: folder)
-    response = client.post(f"/api/v1/projects/{project_id}/models/acquire-starter", json={"key": "yolo11n"})
-    assert response.status_code == 202, response.text
-    job = response.json()["job"]
-    assert job["type"] == "import" and job["params"]["purpose"] == "starter_model"
-    for _ in range(100):
-        job = client.get(f"/api/v1/projects/{project_id}/jobs/{job['id']}").json()
-        if job["state"] in ("succeeded", "failed", "cancelled"):
-            break
-        time.sleep(0.02)
-    assert job["state"] == "succeeded", job
-    model = client.get(f"/api/v1/projects/{project_id}/models/{job['result']['model_id']}").json()
-    assert model["name"] == "yolo11n-coco"
-    assert (
-        client.post(
-            f"/api/v1/projects/{project_id}/models/acquire-starter", json={"key": "../../evil"}
-        ).status_code
-        == 422
-    )

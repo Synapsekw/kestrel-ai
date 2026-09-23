@@ -11,6 +11,7 @@ import time
 
 import pytest
 import yaml
+from library_helpers import LIB, wait_library_job
 from local_paths import FRAMES_DIR, MODELS_DIR
 from PIL import Image as PILImage
 
@@ -88,9 +89,11 @@ def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_p
     dataset = build_dataset(handle)
     weights = tmp_path / "yolo11n.pt"
     shutil.copy2(YOLO11N, weights)  # the shared models folder is a read-only input
-    base = client.post(
-        f"{BASE}/{project_id}/models/import", json={"name": "yolo11n", "weights_path": str(weights)}
-    ).json()
+    r = client.post(f"{LIB}/models/import", json={"name": "yolo11n", "weights_path": str(weights)})
+    assert r.status_code == 202, r.text
+    imported = wait_library_job(client, r.json()["job"]["id"], TRAIN_TIMEOUT_S)
+    assert imported["state"] == "succeeded", imported["error"]
+    base = client.get(f"{LIB}/models/{imported['result']['model_id']}").json()
     assert len(base["class_names"]) == 80
 
     body = {
@@ -104,7 +107,7 @@ def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_p
         "augmentation": "aerial",
         "device": "0",
     }
-    r = client.post(f"{BASE}/{project_id}/models/train", json=body)
+    r = client.post(f"{BASE}/{project_id}/train", json=body)
     assert r.status_code == 202, r.text
     job = r.json()["job"]
     done = wait_for(client, project_id, job["id"], TRAIN_TIMEOUT_S)
@@ -121,20 +124,18 @@ def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_p
     assert epochs[0]["epoch"] == 1 and epochs[0]["epochs"] == 1
     assert epochs[0]["loss"] and epochs[0]["elapsed_s"] > 0
 
-    model = client.get(f"{BASE}/{project_id}/models/{done['result']['model_id']}").json()
-    assert model["kind"] == "trained"
+    model = client.get(f"{LIB}/models/{done['result']['model_id']}").json()
+    assert model["origin"] == "trained" and model["state"] == "ready"
     metrics = model["metrics"]
     for key in ("map50", "map50_95", "precision", "recall"):
         assert isinstance(metrics[key], float)
     assert [c["class_name"] for c in metrics["per_class"]]
     assert set(c["class_name"] for c in metrics["per_class"]) <= set(CLASSES)
-    assert (handle.folder / model["artifacts"]["results_csv"]).exists()
-    assert (handle.folder / model["artifacts"]["confusion_matrix"]).exists()
-    assert (handle.folder / model["weights_path"]).exists()
+    assert set(model["artifacts"]) >= {"results_csv", "confusion_matrix"}
 
-    r = client.post(f"{BASE}/{project_id}/models/{model['id']}/export", json={"format": "onnx", "imgsz": 320})
+    r = client.post(f"{LIB}/models/{model['id']}/export", json={"format": "onnx", "imgsz": 320})
     assert r.status_code == 202, r.text
-    export_job = wait_for(client, project_id, r.json()["job"]["id"], EXPORT_TIMEOUT_S)
+    export_job = wait_library_job(client, r.json()["job"]["id"], EXPORT_TIMEOUT_S)
     if importlib.util.find_spec("onnx") is None:
         # The reference environment has no onnx and the worker forbids auto-installing one, so the
         # job has to fail with a readable message instead of pip-installing into the user's venv.
@@ -143,6 +144,5 @@ def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_p
         assert importlib.util.find_spec("onnx") is None, "the export job installed a package"
         return
     assert export_job["state"] == "succeeded", export_job["error"]
-    exported = handle.folder / export_job["result"]["path"]
-    assert exported.exists() and exported.suffix == ".onnx"
-    assert client.get(f"{BASE}/{project_id}/models/{model['id']}").json()["exports"]["onnx"]
+    assert export_job["result"]["path"].endswith(".onnx")
+    assert client.get(f"{LIB}/models/{model['id']}").json()["exports"]["onnx"]

@@ -55,6 +55,8 @@ hiddenimports = (
 
 datas = (
     [(str(Path(SPECPATH) / "app" / "db" / "migrations"), "app/db/migrations")]
+    # The model library's own Alembic history (library.db), read from disk like the project one.
+    + [(str(Path(SPECPATH) / "app" / "library" / "migrations"), "app/library/migrations")]
     + collect_data_files("ultralytics")  # cfg/*.yaml, the default trackers and assets
     + collect_data_files("torch", include_py_files=False)
     # Starter weights (usability gap G1): yolo11n/s/m.pt, fetched by scripts/fetch_starter_weights.ps1.

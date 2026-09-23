@@ -39,11 +39,16 @@ def _config(request: Request):
     return request.app.state.provider_config
 
 
+def _library(request: Request):
+    """The model library, or None when it could not be opened (a local run then answers 503)."""
+    return getattr(request.app.state, "library", None)
+
+
 @router.post("/query-runs/estimate", response_model=CostEstimate, dependencies=QUERY_RUN_KINDS)
 def estimate_query_run(
     body: QueryRunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> CostEstimate:
-    return CostEstimate(**service.estimate(handle, _config(request), body))
+    return CostEstimate(**service.estimate(handle, _config(request), body, _library(request)))
 
 
 @router.get("/query-runs", response_model=QueryRunPage, dependencies=QUERY_RUN_KINDS)
@@ -62,7 +67,7 @@ def list_query_runs(
 def create_query_run(
     body: QueryRunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> QueryRunWithJob:
-    run = service.create_query_run(handle, request.app.state.keys, _config(request), body)
+    run = service.create_query_run(handle, request.app.state.keys, _config(request), body, _library(request))
     job = request.app.state.jobs.submit(handle, "infer", {"query_run_id": run.id})
     run = service.set_job(handle, run.id, job.id)
     return QueryRunWithJob(query_run=QueryRunOut.from_row(run, 0), job=JobOut.from_row(job, handle.id))
@@ -116,9 +121,12 @@ def unpromote_query_run(
 @router.post("/images/{imageId}/preannotate", response_model=PreannotateResult, dependencies=TRAIN_ONLY)
 def preannotate_image(
     imageId: str,  # noqa: N803
+    request: Request,
     handle: ProjectHandle = Depends(get_project),
     body: PreannotateRequest | None = Body(None),
 ) -> PreannotateResult:
     """Synchronous by design: the editor opens an image and wants its proposals in that response."""
-    skipped, model_id, rows = service.preannotate(handle, imageId, body or PreannotateRequest())
+    skipped, model_id, rows = service.preannotate(
+        handle, imageId, body or PreannotateRequest(), _library(request)
+    )
     return PreannotateResult(skipped=skipped, model_id=model_id, items=[BoxOut.from_row(r) for r in rows])

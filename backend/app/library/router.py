@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
 
 from app.errors import AppError, not_found
@@ -20,10 +20,18 @@ from app.library.schemas import (
     LibraryModelPatch,
     LibraryStatus,
     ModelUsage,
+    StarterAcquire,
 )
-from app.training.schemas import ExportRequest, JobRef
+from app.projects.service import ProjectHandle, get_project
+from app.training import (
+    starter,
+    starter_download,  # noqa: F401 - the import registers the library_starter job type
+)
+from app.training.jobs import check_materialised, get_dataset  # the import registers the train job type
+from app.training.schemas import ExportRequest, JobRef, TrainRequest
 
 router = APIRouter(prefix="/library", tags=["library"])
+project_router = APIRouter(prefix="/projects/{projectId}", tags=["library"])
 
 ARTIFACT_MEDIA = {"results_csv": "text/csv", "confusion_matrix": "image/png", "pr_curve": "image/png"}
 
@@ -128,6 +136,27 @@ def export_model(
     return JobRef(job=JobOut.from_row(job, lib.id))
 
 
+@router.post("/starters/{key}/acquire", response_model=JobRef, status_code=202)
+def acquire_starter(
+    key: str,
+    request: Request,
+    lib: LibraryHandle = Depends(get_library),
+    body: StarterAcquire | None = Body(None),
+) -> JobRef:
+    """Bundled or cached weights are reused; otherwise the job downloads them, then adds them."""
+    if key not in starter.STARTER_KEYS:
+        raise not_found("starter model", key)
+    settings = request.app.state.settings
+    params = {
+        "key": key,
+        "name": body.name if body is not None else None,
+        "bundle_dir": str(starter.weights_dir(settings)),
+        "cache_dir": str(settings.data_dir / "starter_weights"),
+    }
+    job = request.app.state.jobs.submit(lib, "library_starter", params)
+    return JobRef(job=JobOut.from_row(job, lib.id))
+
+
 # ---------------------------------------------------------------- library jobs
 # The project job endpoints, pointed at the library handle: same rows, same pagination, same log.
 
@@ -162,3 +191,20 @@ def library_job_log(
     tail: int = Query(200, ge=1, le=10000),
 ) -> JobLog:
     return jobs_router.job_log(jobId, request, lib, tail)
+
+
+# ------------------------------------------------------------------- training
+
+
+@project_router.post("/train", response_model=JobRef, status_code=202)
+def train_model(
+    body: TrainRequest,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+    lib: LibraryHandle = Depends(get_library),
+) -> JobRef:
+    """Train in this project; the finished weights are registered in the library."""
+    service.require_ready(lib, body.base_model_id)  # 404 unknown, 409 unavailable, before queueing
+    check_materialised(handle, get_dataset(handle, body.dataset_id))
+    job = request.app.state.jobs.submit(handle, "train", body.model_dump())
+    return JobRef(job=JobOut.from_row(job, handle.id))

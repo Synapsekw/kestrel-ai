@@ -1,21 +1,34 @@
-"""The `train` and `export` job functions (spec section 7). Registered with the S0 job runner."""
+"""The `train` job (spec section 7): trains in a training project and registers the result in the
+model library (spec 2026-09-23 section 4.3). Registered with the S0 job runner."""
 
-import shutil
+from dataclasses import asdict
 from pathlib import Path
 
 import yaml
 
-from app.errors import AppError
+from app.db.models import Dataset
+from app.errors import AppError, not_found
+from app.jobs.cancellation import JobFailure
 from app.jobs.gpu import hold_gpu
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.library import service as library
 from app.projects.service import ProjectHandle
-from app.training import registry
 from app.training.presets import TrainParams
 from app.training.trainer import get_trainer
 
-# ONNX exports fine on the CPU; TensorRT engines have to be built on the GPU they run on.
-EXPORT_DEVICE = {"onnx": "cpu", "engine": "0"}
+# Paths that are only meaningful inside this run; they are not kept as the model's hyperparameters.
+PATH_PARAMS = ("data_yaml", "base_weights", "run_dir")
+LIBRARY_GONE = "The model library is not available, so training cannot start. Restart the app."
+
+
+def get_dataset(handle: ProjectHandle, dataset_id: str) -> Dataset:
+    with handle.session() as s:
+        row = s.get(Dataset, dataset_id)
+        if row is None:
+            raise not_found("dataset", dataset_id)
+        s.expunge(row)
+        return row
 
 
 def data_yaml_path(handle: ProjectHandle, dataset) -> Path:
@@ -58,11 +71,17 @@ def check_materialised(handle: ProjectHandle, dataset) -> Path:
 @register_job_type("train")
 def run_train(ctx: JobContext) -> dict:
     handle, p = ctx.project, ctx.params
-    base_model = registry.get_model(handle, p["base_model_id"])
-    dataset = registry.get_dataset(handle, p["dataset_id"])
+    lib = ctx.runner.library
+    if lib is None:
+        raise JobFailure(LIBRARY_GONE)
+    try:
+        base_model = library.require_ready(lib, p["base_model_id"])
+    except AppError as e:
+        raise JobFailure(e.message) from e
+    dataset = get_dataset(handle, p["dataset_id"])
     params = TrainParams(
         data_yaml=str(check_materialised(handle, dataset)),
-        base_weights=str(handle.folder / base_model.weights_path),
+        base_weights=str(library.weights_file(lib, base_model)),
         run_dir=str(handle.runs_dir / ctx.job_id),
         epochs=int(p.get("epochs", 50)),
         imgsz=int(p.get("imgsz", 1280)),
@@ -75,45 +94,39 @@ def run_train(ctx: JobContext) -> dict:
     with hold_gpu(ctx.log, "train", cancelled=ctx.cancelled):
         result = get_trainer().train(params, ctx.progress, ctx.cancelled, ctx.log)
     ctx.check_cancelled()
-    model = registry.register_trained(
-        handle,
-        name=p["name"],
-        base_model=base_model,
-        dataset=dataset,
-        params=params,
-        result=result,
-        job_id=ctx.job_id,
-    )
-    ctx.log.info("registered model %s (%s)", model.id, model.weights_path)
-    return {"model_id": model.id, "metrics": model.metrics}
-
-
-@register_job_type("export")
-def run_export(ctx: JobContext) -> dict:
-    handle, p = ctx.project, ctx.params
-    model = registry.get_model(handle, p["model_id"])
-    fmt = p["format"]
-    with hold_gpu(ctx.log, "export", cancelled=ctx.cancelled):
-        exported = get_trainer().export(
-            handle.folder / model.weights_path,
-            fmt,
-            int(p.get("imgsz", 1280)),
-            bool(p.get("half", False)),
-            EXPORT_DEVICE.get(fmt, "0"),
-            handle.runs_dir / ctx.job_id,
-            ctx.cancelled,
-            ctx.log,
+    with handle.session() as s:
+        project = handle.row(s)
+        project_name = project.name
+    artifacts = {
+        "results_csv": result.results_csv,
+        "confusion_matrix": result.confusion_matrix,
+        "pr_curve": result.pr_curve,
+    }
+    try:
+        model = library.add_model(
+            lib,
+            source_weights=Path(result.best_weights),
+            name=p["name"],
+            origin="trained",
+            # Datasets record no task yet: every dataset is axis-aligned boxes. An OBB dataset
+            # would register an `obb` model here.
+            task=getattr(dataset, "task", None) or "detect",
+            class_names=[str(c.get("name")) for c in (dataset.classes or [])],
+            metrics=result.final_metrics or None,
+            hyperparameters={k: v for k, v in asdict(params).items() if k not in PATH_PARAMS},
+            artifacts={k: Path(v) for k, v in artifacts.items() if v is not None},
+            provenance={
+                "project_id": handle.id,
+                "project_name": project_name,
+                "project_folder": str(handle.folder),
+                "dataset_id": dataset.id,
+                "dataset_name": dataset.name,
+                "run_id": ctx.job_id,
+                "base_model_id": base_model.id,
+                "base_model_name": base_model.name,
+            },
         )
-    ctx.check_cancelled()
-    target = handle.models_dir / f"{Path(model.weights_path).stem}.{fmt}"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if Path(exported).resolve() != target.resolve():
-        shutil.move(str(exported), str(target))
-    row = registry.set_export(handle, model.id, fmt, target)
-    # A TensorRT build goes through ONNX and leaves that file next to the weights; register it so it
-    # is not an orphan when the model is deleted.
-    intermediate = target.with_suffix(".onnx")
-    if fmt != "onnx" and intermediate.is_file() and "onnx" not in row.exports:
-        row = registry.set_export(handle, model.id, "onnx", intermediate)
-    ctx.log.info("exported %s to %s", model.id, row.exports[fmt])
-    return {"format": fmt, "path": row.exports[fmt]}
+    except AppError as e:  # the run produced weights identical to a library model
+        raise JobFailure(e.message) from e
+    ctx.log.info("registered library model %s (%s)", model.id, model.weights_path)
+    return {"model_id": model.id, "metrics": model.metrics}

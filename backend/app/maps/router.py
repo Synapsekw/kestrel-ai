@@ -164,14 +164,16 @@ def list_map_runs(mapId: str, handle: ProjectHandle = Depends(get_project)) -> M
 def estimate_map_run(
     body: MapRunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> MapRunEstimate:
-    return MapRunEstimate(**service.estimate_run(handle, request.app.state.provider_config, body))
+    lib = getattr(request.app.state, "library", None)
+    return MapRunEstimate(**service.estimate_run(handle, request.app.state.provider_config, body, lib))
 
 
 @router.post("/map-runs", response_model=MapRunWithJob, status_code=202, dependencies=DETECT_WRITE)
 def create_map_run(
     body: MapRunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> MapRunWithJob:
-    run = service.create_run(handle, request.app.state.keys, request.app.state.provider_config, body)
+    lib = getattr(request.app.state, "library", None)
+    run = service.create_run(handle, request.app.state.keys, request.app.state.provider_config, body, lib)
     job = _submit_detect(request, handle, run.id)
     run = service.set_run_job(handle, run.id, job.id)
     return MapRunWithJob(run=MapRunOut.from_row(run, job.state, 0), job=JobOut.from_row(job, handle.id))

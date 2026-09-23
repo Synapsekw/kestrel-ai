@@ -25,10 +25,10 @@ from app.inference.ratelimit import bucket_for
 from app.inference.service import class_ids_by_name, class_names, tiles_dir
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.library import service as library
 from app.providers.base import Detection, ProviderError, Tile, TileResult, TilingSpec
 from app.providers.factory import get_provider
 from app.providers.tiling import make_tiles, nms_per_class, not_covered_by
-from app.training import registry
 
 RETRY_DELAYS_S = (1, 2, 4, 8, 16)
 MAX_ATTEMPTS = len(RETRY_DELAYS_S)
@@ -177,19 +177,19 @@ def _build_provider(ctx: JobContext, run: QueryRun, names: list[str]):
         config = _wiring(ctx, "provider_config").get(run.provider)
         return get_provider(
             "cloud_provider",
-            handle=ctx.project,
             keys=_wiring(ctx, "keys"),
             config=config,
             provider_name=run.provider,
             project_class_names=names,
             imgsz=tile_size,
         )
+    lib, model = library.model_for_job(ctx.runner.library, run.model_id)
     return get_provider(
         "local_model",
-        handle=ctx.project,
+        weights=library.weights_file(lib, model),
         keys=None,
         config=None,
-        model_row=registry.get_model(ctx.project, run.model_id),
+        model_row=model,
         project_class_names=names,
         imgsz=tile_size,
         cancelled=ctx.cancelled,  # a cancelled run stops waiting for a training run to free the GPU

@@ -138,9 +138,9 @@ BUSY = ("queued", "running")
 _RESUME_LOCK = threading.Lock()
 
 
-def create_run(handle: ProjectHandle, keys, config, body: MapRunCreate) -> MapRun:
+def create_run(handle: ProjectHandle, keys, config, body: MapRunCreate, lib=None) -> MapRun:
     require_ready(handle, body.map_id)
-    model_name = _validate(handle, config, body, check_key=True, keys=keys)
+    model_name = _validate(handle, config, body, check_key=True, keys=keys, lib=lib)
     with handle.session() as s:
         row = MapRun(
             map_id=body.map_id,
@@ -161,9 +161,9 @@ def create_run(handle: ProjectHandle, keys, config, body: MapRunCreate) -> MapRu
     return row
 
 
-def estimate_run(handle: ProjectHandle, config, body: MapRunCreate) -> dict:
+def estimate_run(handle: ProjectHandle, config, body: MapRunCreate, lib=None) -> dict:
     gmap = require_ready(handle, body.map_id)
-    _validate(handle, config, body, check_key=False, keys=None)
+    _validate(handle, config, body, check_key=False, keys=None, lib=lib)
     scale = gsd_scale(gmap.gsd_cm, body.target_gsd_cm)
     wins = plan_windows(gmap.width, gmap.height, body.tile_size, body.overlap, scale)
     with rasterio.open(map_raster_path(handle, gmap.id)) as src:

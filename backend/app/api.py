@@ -9,13 +9,12 @@ from app.exports.router import router as exports_router
 from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
+from app.library.router import project_router as train_router
 from app.library.router import router as library_router
 from app.project_agent.router import router as project_agent_router
 from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
-from app.training.router import router as training_router
-from app.training.starter_router import project_router as starter_project_router
 from app.training.starter_router import router as starter_router
 
 log = logging.getLogger(__name__)
@@ -27,6 +26,7 @@ for r in (
     projects_router,
     library_router,
     datasets_router,
+    train_router,
     starter_router,
     providers_router,
     inference_router,
@@ -44,7 +44,7 @@ for r in (jobs_router, exports_router, training_router, starter_project_router):
 # raster, the job modules). A broken GDAL in the frozen bundle must not stop the whole backend from
 # starting (AGENTS.md: "the app must start even when startup work fails") - so this import is
 # guarded the same way the other heavy native deps are kept out of module scope elsewhere
-# (`providers/local_yolo.py`, `training/registry.py`). On failure the map endpoints simply 404
+# (`providers/local_yolo.py`, `library/service.py`). On failure the map endpoints simply 404
 # instead of existing, and the rest of the app works normally.
 try:
     from app.maps.router import router as maps_router

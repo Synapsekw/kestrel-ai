@@ -25,6 +25,7 @@ from app.inference.jobs import _call_with_retries, _rate_limiter, _wiring, _writ
 from app.inference.service import class_ids_by_name, class_names
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.library import service as library
 from app.maps import raster
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.windows import (
@@ -40,7 +41,6 @@ from app.maps.windows import (
 )
 from app.providers.base import Detection, Tile
 from app.providers.factory import get_provider
-from app.training import registry
 
 
 def windows_dir(handle, run: MapRun) -> Path:
@@ -64,19 +64,19 @@ def _provider(ctx: JobContext, run: MapRun, names: list[str]):
     if run.kind == "cloud_provider":
         return get_provider(
             "cloud_provider",
-            handle=ctx.project,
             keys=_wiring(ctx, "keys"),
             config=_wiring(ctx, "provider_config").get(run.provider),
             provider_name=run.provider,
             project_class_names=names,
             imgsz=run.tile_size,
         )
+    lib, model = library.model_for_job(ctx.runner.library, run.model_id)
     return get_provider(
         "local_model",
-        handle=ctx.project,
+        weights=library.weights_file(lib, model),
         keys=None,
         config=None,
-        model_row=registry.get_model(ctx.project, run.model_id),
+        model_row=model,
         project_class_names=names,
         imgsz=run.tile_size,
         cancelled=ctx.cancelled,

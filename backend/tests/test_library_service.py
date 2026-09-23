@@ -152,3 +152,9 @@ def test_set_export_records_a_path_relative_to_the_model_folder(lib, tmp_path):
     target.parent.mkdir()
     target.write_bytes(b"x")
     assert service.set_export(lib, row.id, "onnx", target).exports == {"onnx": "exports/weights.onnx"}
+
+
+def test_slug_makes_a_file_safe_stem():
+    assert service.slug("yolo11n coco") == "yolo11n-coco"
+    assert service.slug("Ahmadia v1 / n") == "ahmadia-v1-n"
+    assert service.slug("   ") == "model"

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from app.db.models import Job, Model
+from app.db.models import Job
 
 BASE = "/api/v1/projects"
 FLIGHTS = {"0031": 6, "0033": 3}
@@ -67,22 +67,23 @@ def test_delete_is_refused_while_a_training_job_uses_the_dataset(client, project
     assert (handle.folder / labeled_dataset["path"]).is_dir()
 
 
-def test_a_model_trained_on_a_deleted_dataset_still_lists(client, project_id, handle, labeled_dataset):
-    with handle.session() as s:
-        s.add(
-            Model(
-                name="m1",
-                kind="trained",
-                weights_path="models/m1.pt",
-                dataset_id=labeled_dataset["id"],
-                class_names=["excavator"],
-            )
-        )
+def test_a_model_trained_on_a_deleted_dataset_stays_in_the_library(
+    client, app, tmp_path, project_id, labeled_dataset
+):
+    """Library models keep a provenance snapshot, never a link: deleting the dataset changes nothing."""
+    from library_helpers import add_library_model
+
+    m = add_library_model(
+        app,
+        tmp_path,
+        origin="trained",
+        provenance={"dataset_id": labeled_dataset["id"], "dataset_name": labeled_dataset["name"]},
+    )
     r = client.delete(f"{BASE}/{project_id}/datasets/{labeled_dataset['id']}")
     assert r.status_code == 204, r.text
-    page = client.get(f"{BASE}/{project_id}/models").json()
-    assert len(page["items"]) == 1
-    assert page["items"][0]["dataset_id"] == labeled_dataset["id"]
+    got = client.get(f"/api/v1/library/models/{m.id}").json()
+    assert got["state"] == "ready"
+    assert got["provenance"]["dataset_id"] == labeled_dataset["id"]
 
 
 def test_delete_unknown_is_404(client, project_id):

@@ -21,8 +21,9 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.base import new_id
 from app.errors import AppError, not_found
+from app.jobs.cancellation import JobFailure
 from app.library.db import LibraryModel
-from app.library.handle import LibraryHandle
+from app.library.handle import LIBRARY_UNAVAILABLE, LibraryHandle
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 
 if TYPE_CHECKING:
@@ -254,6 +255,18 @@ def require_ready(lib: LibraryHandle, model_id: str) -> LibraryModel:
             {"model_id": row.id},
         )
     return row
+
+
+def model_for_job(lib: LibraryHandle | None, model_id: str) -> tuple[LibraryHandle, LibraryModel]:
+    """A job's library model, with the operator-facing reason as a JobFailure when it cannot run."""
+    if lib is None:
+        raise JobFailure(LIBRARY_UNAVAILABLE)
+    try:
+        return lib, require_ready(lib, model_id)
+    except AppError as e:
+        if e.status == 404:
+            raise JobFailure("The model this run uses is no longer in the library.") from e
+        raise JobFailure(e.message) from e
 
 
 def set_export(lib: LibraryHandle, model_id: str, fmt: str, path: Path) -> LibraryModel:

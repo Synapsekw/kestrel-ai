@@ -1,4 +1,5 @@
-"""On-demand, cancellable starter acquisition. No network work occurs on catalogue reads."""
+"""On-demand, cancellable starter acquisition (the `library_starter` job). No network work occurs on
+catalogue reads."""
 
 import threading
 import uuid
@@ -6,6 +7,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from app.jobs.cancellation import JobFailure
+from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.training import starter
 
@@ -45,7 +47,9 @@ def download_weights(ctx: JobContext, target: Path) -> None:
         temporary.unlink(missing_ok=True)
 
 
+@register_job_type("library_starter")
 def run_acquire_starter(ctx: JobContext) -> dict:
+    """`ctx.project` is the library handle: the job and the model both live in the library."""
     key = ctx.params["key"]
     if key not in starter.STARTER_KEYS:
         raise JobFailure("Choose a supported detection starter model.")
