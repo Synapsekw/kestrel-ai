@@ -35,7 +35,8 @@ export type IconName =
   | "jobs"
   | "refresh"
   | "eye"
-  | "download";
+  | "download"
+  | "map";
 
 /** 24-unit line icons, one path each, drawn with the current colour. */
 const PATHS: Record<IconName, string> = {
@@ -80,6 +81,7 @@ const PATHS: Record<IconName, string> = {
   refresh: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
   download: "M12 3v12M7 10l5 5 5-5M4 19h16",
+  map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
 };
 
 export interface IconProps {

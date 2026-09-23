@@ -7,6 +7,9 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   infer: "Detection run",
   export: "Export",
   results_export: "Results export",
+  map_import: "Map import",
+  map_detect: "Map detection",
+  map_export: "Map export",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -83,6 +86,10 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return { label: "Open images", to: `${p}/data` };
     case "results_export":
       return null; // it already lives on the Export screen that started it
+    case "map_import":
+    case "map_detect":
+    case "map_export":
+      return { label: "Open maps", to: `${p}/maps` };
   }
 }
 

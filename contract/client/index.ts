@@ -36,6 +36,13 @@ export type JobType = Schemas["JobType"];
 export type JobLog = Schemas["JobLog"];
 export type ApiError = Schemas["Error"];
 export type AppEvent = Schemas["Event"];
+export type GeoMap = Schemas["GeoMap"];
+export type MapRun = Schemas["MapRun"];
+export type MapRunCreate = Schemas["MapRunCreate"];
+export type MapDetection = Schemas["MapDetection"];
+export type MapZone = Schemas["MapZone"];
+export type MapLabel = Schemas["MapLabel"];
+export type MapScore = Schemas["MapScore"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */
@@ -79,4 +86,17 @@ export function imageFileUrl(baseUrl: string, token: string, projectId: string, 
 export function thumbnailUrl(baseUrl: string, token: string, projectId: string, imageId: string): string {
   const base = baseUrl.replace(/\/$/, "");
   return `${base}/api/v1/projects/${projectId}/images/${imageId}/thumbnail?token=${encodeURIComponent(token)}`;
+}
+
+/** OpenLayers tile URL template for a map: `{z}`, `{x}` and `{y}` are left for the source to fill. */
+export function mapTileUrl(baseUrl: string, token: string, projectId: string, mapId: string): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/maps/${mapId}/tiles/{z}/{x}/{y}?${q}`;
+}
+
+export function mapPreviewUrl(baseUrl: string, token: string, projectId: string, mapId: string): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/maps/${mapId}/preview?${q}`;
 }

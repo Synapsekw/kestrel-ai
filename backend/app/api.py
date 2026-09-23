@@ -7,6 +7,7 @@ from app.exports.router import router as exports_router
 from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
+from app.maps.router import router as maps_router
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
 from app.training.router import router as training_router
@@ -26,5 +27,6 @@ for r in (
     providers_router,
     inference_router,
     exports_router,
+    maps_router,
 ):
     api_router.include_router(r)

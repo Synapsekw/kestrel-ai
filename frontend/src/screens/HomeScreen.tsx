@@ -48,6 +48,9 @@ const TYPE_VERB: Record<Job["type"], string> = {
   infer: "Detecting",
   export: "Exporting",
   results_export: "Exporting results",
+  map_import: "Importing a map",
+  map_detect: "Detecting on a map",
+  map_export: "Exporting map results",
 };
 
 function Row({ label, value }: { label: string; value: string }) {
