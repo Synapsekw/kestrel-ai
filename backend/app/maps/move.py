@@ -19,6 +19,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from app.db.base import new_id
 from app.db.models import GeoMap, MapLabel, MapZone
 from app.errors import AppError
 from app.jobs.cancellation import JobFailure
@@ -36,9 +37,10 @@ _MOVE_LOCK = threading.Lock()
 
 
 def submit_move(registry, runner, source, map_id: str, target_id: str):
-    """404 for an unknown map or target, 409 `wrong_project_kind` for a target that is not a
-    detection project; otherwise the `map_move` job, queued in the target project."""
-    service.get_map(source, map_id)
+    """404 for an unknown map or target, 409 `conflict` for a map that has not finished importing,
+    409 `wrong_project_kind` for a target that is not a detection project; otherwise the `map_move`
+    job, queued in the target project."""
+    service.require_ready(source, map_id)
     target = registry.get(target_id)
     kind = project_kind(target)
     if kind != DETECT:
@@ -81,9 +83,11 @@ def _copy_folder(ctx, src: Path, dst: Path) -> None:
 
 def _class_mapping(source_classes: list[dict], target_classes: list[dict], used: set[str]):
     """Old class id -> target class id for the classes the labels use, and the target's new class
-    list: a class with the same name is joined, any other is added (keeping its id, without a hotkey)."""
+    list: a class with the same name is joined, any other is added (keeping its id, without a hotkey,
+    unless the target already uses that id for another class: then it gets a new one)."""
     by_id = {c["id"]: c for c in source_classes}
     by_name = {c["name"].casefold(): c["id"] for c in target_classes}
+    ids = {c["id"] for c in target_classes}
     classes = [dict(c) for c in target_classes]
     mapping: dict[str, str] = {}
     for class_id in sorted(used):
@@ -93,8 +97,10 @@ def _class_mapping(source_classes: list[dict], target_classes: list[dict], used:
             continue
         key = src["name"].casefold()
         if key not in by_name:
-            classes.append({"id": src["id"], "name": src["name"], "colour": src.get("colour")})
-            by_name[key] = src["id"]
+            added = src["id"] if src["id"] not in ids else new_id()
+            classes.append({"id": added, "name": src["name"], "colour": src.get("colour")})
+            by_name[key] = added
+            ids.add(added)
         mapping[class_id] = by_name[key]
     return mapping, classes
 
@@ -128,8 +134,13 @@ def run_map_move(ctx) -> dict:
             _columns(lab) for lab in s.execute(select(MapLabel).where(MapLabel.map_id == map_id)).scalars()
         ]
         source_classes = list(source.row(s).classes or [])
-    with _MOVE_LOCK:
+    if not _MOVE_LOCK.acquire(blocking=False):
+        ctx.progress(0, "Waiting for another move to finish")
+        _MOVE_LOCK.acquire()
+    try:
         return _copy_into_target(ctx, source, target, map_id, map_row, zones, labels, source_classes)
+    finally:
+        _MOVE_LOCK.release()
 
 
 def _copy_into_target(ctx, source, target, map_id, map_row, zones, labels, source_classes) -> dict:

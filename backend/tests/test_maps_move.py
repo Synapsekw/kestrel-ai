@@ -7,6 +7,7 @@ from geotiffs import make_geotiff
 from sqlalchemy import select
 
 from app.db.models import MapLabel, MapRun, MapZone
+from app.maps import move
 from app.maps import service as maps_service
 from app.maps.schemas import GeoMapCreate
 
@@ -121,3 +122,21 @@ def test_moving_from_a_detection_project_is_409(client, detect_project, tmp_path
 def test_unknown_map_or_target_is_404(client, project_id, past_map, detect_project):
     assert _move(client, project_id, "no-such-map", detect_project["id"]).status_code == 404
     assert _move(client, project_id, past_map, "no-such-project").status_code == 404
+
+
+def test_a_map_that_has_not_finished_importing_is_409(client, project_id, handle, detect_project, tmp_path):
+    src = make_geotiff(tmp_path / "late.tif", 300, 200)
+    row = maps_service.create_map(handle, GeoMapCreate(path=str(src), name="Late"))
+    r = _move(client, project_id, row.id, detect_project["id"])
+    assert r.status_code == 409, r.text
+    assert r.json()["error"]["code"] == "conflict"
+
+
+def test_a_class_id_the_target_already_uses_for_another_name_gets_a_new_id():
+    source = [{"id": "c1", "name": "crane", "colour": "#00ff00"}]
+    target = [{"id": "c1", "name": "excavator", "colour": "#ff0000"}]
+    mapping, classes = move._class_mapping(source, target, {"c1"})
+    assert [c["name"] for c in classes] == ["excavator", "crane"]
+    crane = classes[1]["id"]
+    assert crane != "c1"
+    assert mapping == {"c1": crane}

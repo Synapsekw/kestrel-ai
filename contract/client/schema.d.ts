@@ -6044,7 +6044,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description this project is not a training project, or the target is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`) */
+            /** @description this project is not a training project, or the target is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`); or the map has not finished importing (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
