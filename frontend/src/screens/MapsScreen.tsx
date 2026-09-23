@@ -127,8 +127,14 @@ function MapFacts({ m }: { m: GeoMap }) {
   );
 }
 
-export function MapsScreen() {
+/**
+ * The Maps screen. `readOnly` shows a training project's maps from before the split: maps, runs,
+ * results, scores and export stay; importing, new runs, labeling, zones and deleting are gone.
+ */
+export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   const { projectId = "", mapId } = useParams();
+  const mapsBase = readOnly ? `/p/${projectId}/past/maps` : `/p/${projectId}/maps`;
+  const Heading = readOnly ? "h2" : "h1";
   const api = useApi();
   const navigate = useNavigate();
   const { baseUrl, token } = useBackend();
@@ -600,6 +606,14 @@ export function MapsScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, [popover]);
 
+  if (maps && maps.length === 0 && readOnly) {
+    return (
+      <EmptyState icon="map" title="No past maps">
+        This project has no maps from before training and detection were split.
+      </EmptyState>
+    );
+  }
+
   if (maps && maps.length === 0 && !importing) {
     return (
       <EmptyState
@@ -621,13 +635,15 @@ export function MapsScreen() {
     <div className="flex h-full min-h-0 w-full">
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">Maps</h1>
-          <Button size="sm" icon="import" onClick={() => setImporting(true)}>
-            Import map
-          </Button>
+          <Heading className="text-xl font-semibold tracking-tight">Maps</Heading>
+          {!readOnly && (
+            <Button size="sm" icon="import" onClick={() => setImporting(true)}>
+              Import map
+            </Button>
+          )}
         </div>
         {maps ? (
-          <MapList projectId={projectId} maps={maps} activeId={mapId} />
+          <MapList projectId={projectId} maps={maps} activeId={mapId} basePath={mapsBase} />
         ) : (
           mapsError && (
             <Alert
@@ -646,15 +662,17 @@ export function MapsScreen() {
           <div className="flex flex-col gap-2 border-t border-line pt-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink">Runs</h2>
-              <Button
-                size="sm"
-                variant="primary"
-                icon="detect"
-                disabled={active.status !== "ready"}
-                onClick={() => setNewRun(true)}
-              >
-                New run
-              </Button>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="detect"
+                  disabled={active.status !== "ready"}
+                  onClick={() => setNewRun(true)}
+                >
+                  New run
+                </Button>
+              )}
             </div>
             <RunList
               projectId={projectId}
@@ -662,6 +680,7 @@ export function MapsScreen() {
               selected={selected}
               onToggle={(id) => setSelected((s) => toggleCompare(s, id))}
               onChanged={reloadRuns}
+              readOnly={readOnly}
             />
           </div>
         )}
@@ -692,7 +711,8 @@ export function MapsScreen() {
           </>
         ) : (
           <EmptyState icon="map" title={active ? `${active.name} is ${active.status}` : "Choose a map"}>
-            {active?.error ?? "Pick a map on the left, or import one."}
+            {active?.error ??
+              (readOnly ? "Pick a map on the left." : "Pick a map on the left, or import one.")}
           </EmptyState>
         )}
       </section>
@@ -720,11 +740,18 @@ export function MapsScreen() {
               size="sm"
               value={rightTab}
               onChange={setRightTab}
-              options={[
-                { value: "results", label: "Results" },
-                { value: "labels", label: "Labels" },
-                { value: "score", label: "Score" },
-              ]}
+              options={
+                readOnly
+                  ? [
+                      { value: "results", label: "Results" },
+                      { value: "score", label: "Score" },
+                    ]
+                  : [
+                      { value: "results", label: "Results" },
+                      { value: "labels", label: "Labels" },
+                      { value: "score", label: "Score" },
+                    ]
+              }
             />
             {rightTab === "results" ? (
               liveSelected.length > 0 ? (
@@ -812,7 +839,7 @@ export function MapsScreen() {
           onStarted={(m) => {
             setImporting(false);
             reload();
-            navigate(`/p/${projectId}/maps/${m.id}`);
+            navigate(`${mapsBase}/${m.id}`);
           }}
         />
       )}

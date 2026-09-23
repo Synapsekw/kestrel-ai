@@ -31,7 +31,63 @@ import { Alert, Button, SkeletonRows, cx, focusRing } from "@/ui";
 const EMPTY: string[] = [];
 const link = cx("rounded-sm font-medium text-accent hover:underline", focusRing);
 
-export function QueryScreen() {
+type RunHistoryState = ReturnType<typeof useQueryRuns>;
+
+/** The project's detection runs, newest first; choosing one opens it above. */
+function RunHistorySection({
+  history,
+  runId,
+  onSelect,
+}: {
+  history: RunHistoryState;
+  runId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <section className="flex flex-col gap-2">
+      <h2 className="text-base font-semibold">Run history</h2>
+      {history.error && <Alert tone="danger">{history.error}</Alert>}
+      {history.unavailable ? (
+        <p role="note" className="text-sm text-muted">
+          Detection runs are not available yet (they arrive with the inference backend).
+        </p>
+      ) : history.loading && history.runs.length === 0 ? (
+        <SkeletonRows rows={3} columns={4} />
+      ) : (
+        <RunHistory runs={history.runs} selectedId={runId} onSelect={onSelect} />
+      )}
+    </section>
+  );
+}
+
+/** Past runs only: each opens read-only, and nothing here starts, accepts or changes a run. */
+function PastRuns() {
+  const { projectId = "" } = useParams();
+  const [params, setParams] = useSearchParams();
+  const runId = params.get("run");
+  const history = useQueryRuns(projectId);
+  const select = (id: string) =>
+    setParams((p) => {
+      p.set("run", id);
+      return p;
+    });
+  return (
+    <section className="flex max-w-5xl flex-col gap-6">
+      {runId && <RunCard projectId={projectId} runId={runId} readOnly />}
+      <RunHistorySection history={history} runId={runId} onSelect={select} />
+    </section>
+  );
+}
+
+/**
+ * The Detect screen. `readOnly` shows the project's past runs only (a training project's
+ * detections from before the split), without the form or any control that changes a run.
+ */
+export function QueryScreen({ readOnly = false }: { readOnly?: boolean }) {
+  return readOnly ? <PastRuns /> : <DetectWorkspace />;
+}
+
+function DetectWorkspace() {
   const { projectId = "" } = useParams();
   const api = useApi();
   const [params, setParams] = useSearchParams();
@@ -206,19 +262,7 @@ export function QueryScreen() {
           {error}
         </Alert>
       )}
-      <section className="flex flex-col gap-2">
-        <h2 className="text-base font-semibold">Run history</h2>
-        {history.error && <Alert tone="danger">{history.error}</Alert>}
-        {history.unavailable ? (
-          <p role="note" className="text-sm text-muted">
-            Detection runs are not available yet (they arrive with the inference backend).
-          </p>
-        ) : history.loading && history.runs.length === 0 ? (
-          <SkeletonRows rows={3} columns={4} />
-        ) : (
-          <RunHistory runs={history.runs} selectedId={runId} onSelect={(id) => setParams({ run: id })} />
-        )}
-      </section>
+      <RunHistorySection history={history} runId={runId} onSelect={(id) => setParams({ run: id })} />
     </section>
   );
 }

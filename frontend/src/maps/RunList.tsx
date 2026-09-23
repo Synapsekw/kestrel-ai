@@ -19,12 +19,15 @@ export function RunList({
   selected,
   onToggle,
   onChanged,
+  readOnly = false,
 }: {
   projectId: string;
   runs: MapRun[];
   selected: string[];
   onToggle: (runId: string) => void;
   onChanged: () => void;
+  /** Hide Resume and Delete: the runs can be shown, not changed. */
+  readOnly?: boolean;
 }) {
   const api = useApi();
   const jobs = useJobsStore((s) => s.jobs);
@@ -50,7 +53,7 @@ export function RunList({
             {(state === "running" || state === "queued") && (
               <Progress value={job?.progress} running label={`Detecting: ${runTitle(r)}`} thin />
             )}
-            {(state === "failed" || state === "cancelled") && (
+            {!readOnly && (state === "failed" || state === "cancelled") && (
               <div className="flex gap-1">
                 <IconButton
                   icon="refresh"
