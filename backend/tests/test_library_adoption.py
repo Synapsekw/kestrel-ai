@@ -1,9 +1,13 @@
 """Adopting a training project's old models into the library (spec 2026-09-23 section 6, unit BM)."""
 
+import json
+import sqlite3
 import time
 from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from conftest import COLOURS, EIGHT_CLASSES
 from library_helpers import stub_checkpoint
 from sqlalchemy import func, select
@@ -20,8 +24,10 @@ from app.db.models import (
     QueryRun,
     Source,
 )
+from app.db.session import MIGRATIONS
 from app.library import adoption
 from app.library.db import LibraryModel
+from app.projects.service import DEFAULT_IMPORT_SETTINGS, SUBDIRS, normalise_classes
 
 BASE = "/api/v1/projects"
 WEIGHTS = b"old project weights, identical bytes in every project"
@@ -306,3 +312,88 @@ def test_retry_without_a_library_is_503(app, client, project_id):
     app.state.library = None
     r = client.post(f"{BASE}/{project_id}/adoption/retry")
     assert r.status_code == 503 and r.json()["error"]["code"] == "library_unavailable"
+
+
+# --- a real project copy, from before the library ------------------------------------------------
+
+
+def _project_at_0005(folder: Path, weights: bytes) -> dict[str, str]:
+    """A project folder as the app left it before the library: schema 0005, an old `model` row with
+    its weights file under `models/`, and a detection run made with that model."""
+    for sub in SUBDIRS:
+        (folder / sub).mkdir(parents=True, exist_ok=True)
+    db = folder / "project.db"
+    cfg = Config(str(MIGRATIONS / "alembic.ini"))
+    cfg.set_main_option("script_location", str(MIGRATIONS))
+    cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db.as_posix()}")
+    command.upgrade(cfg, "0005")
+
+    rel = "models/ahmadia-v1/weights/best.pt"
+    (folder / rel).parent.mkdir(parents=True, exist_ok=True)
+    (folder / rel).write_bytes(weights)
+    pairs = zip(EIGHT_CLASSES[:2], COLOURS[:2], strict=True)
+    classes = normalise_classes([{"name": n, "colour": c} for n, c in pairs])
+    ids = {"project": "p0000000-0005-4000-8000-000000000001", "model": "m0000000-0005-4000-8000-000000000001"}
+    ids["run"] = "q0000000-0005-4000-8000-000000000001"
+    now = "2026-09-01 10:00:00"
+    conn = sqlite3.connect(db)
+    try:
+        conn.execute(
+            "INSERT INTO project (id, name, classes, schema_version, preannotation_model_id, "
+            "import_defaults, created_at) VALUES (?, 'Old Ahmadia', ?, 1, ?, ?, ?)",
+            (ids["project"], json.dumps(classes), ids["model"], json.dumps(DEFAULT_IMPORT_SETTINGS), now),
+        )
+        conn.execute(
+            "INSERT INTO model (id, name, kind, weights_path, base_weights, dataset_id, hyperparameters, "
+            "metrics, class_names, class_aliases, exports, artifacts, run_id, created_at) VALUES "
+            "(?, 'ahmadia-v1', 'trained', ?, NULL, NULL, '{}', ?, ?, '{}', '{}', '{}', NULL, ?)",
+            (ids["model"], rel, json.dumps(METRICS), json.dumps(EIGHT_CLASSES[:2]), now),
+        )
+        conn.execute(
+            "INSERT INTO query_run (id, kind, model_id, provider, model_name, query, image_ids, tiling, "
+            "conf, job_id, promoted_at, created_at) VALUES "
+            "(?, 'local_model', ?, NULL, NULL, '', '[]', '{}', 0.25, NULL, NULL, ?)",
+            (ids["run"], ids["model"], now),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return ids
+
+
+def test_real_project_copy(app, client, tmp_path, wait_job, monkeypatch):
+    """Opening a pre-library project through the API migrates it, adopts its model into the library
+    and points its old detection run at the library model; the old weights stay where they were."""
+    stub_checkpoint(monkeypatch)
+    folder = tmp_path / "Old Ahmadia"
+    weights = b"weights trained before the library existed"
+    ids = _project_at_0005(folder, weights)
+
+    r = client.post(f"{BASE}/open", json={"folder": str(folder)})
+    assert r.status_code == 200, r.text
+    project = r.json()
+    assert project["id"] == ids["project"] and project["kind"] == "train"
+
+    jobs = client.get(f"{BASE}/{ids['project']}/jobs").json()["items"]
+    adopt = [j for j in jobs if j["type"] == adoption.ADOPT_JOB]
+    assert len(adopt) == 1, jobs
+    assert wait_job(ids["project"], adopt[0]["id"])["state"] == "succeeded"
+
+    models = client.get("/api/v1/library/models").json()["items"]
+    [adopted] = [m for m in models if m["name"] == "ahmadia-v1"]
+    assert adopted["origin"] == "trained"
+    assert adopted["class_names"] == EIGHT_CLASSES[:2]
+    assert adopted["provenance"]["project_id"] == ids["project"]
+    assert adopted["provenance"]["project_name"] == "Old Ahmadia"
+
+    runs = client.get(f"{BASE}/{ids['project']}/query-runs").json()["items"]
+    assert [(q["id"], q["model_id"]) for q in runs] == [(ids["run"], adopted["id"])]
+    assert client.get(f"{BASE}/{ids['project']}").json()["preannotation_model_id"] == adopted["id"]
+    assert client.get(f"{BASE}/{ids['project']}/adoption").json() == {
+        "pending": 0,
+        "adopted": 1,
+        "missing": [],
+        "job_id": None,
+    }
+    # Nothing from the old models folder is ever deleted.
+    assert (folder / "models/ahmadia-v1/weights/best.pt").read_bytes() == weights
