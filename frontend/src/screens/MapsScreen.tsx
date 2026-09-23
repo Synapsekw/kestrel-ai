@@ -48,7 +48,7 @@ import { ScorePanel } from "@/maps/ScorePanel";
 import { makeReadout, type Readout } from "@/maps/coords";
 import { fromOl, toOl } from "@/maps/grid";
 import { useLabelLayers, type Tool } from "@/maps/labelLayers";
-import { LabelHistory, outsideZones, type LabelApi } from "@/maps/labelModel";
+import { LabelHistory, outsideZones, pickClassCommand, type LabelApi } from "@/maps/labelModel";
 import { type Match, type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
 import { matchLookup } from "@/maps/scoreView";
 import {
@@ -59,7 +59,21 @@ import {
   type BoxFacts,
   type BoxGeom,
 } from "@/maps/runModel";
-import { Alert, Button, EmptyState, Segmented } from "@/ui";
+import { Alert, Button, EmptyState, Segmented, toast } from "@/ui";
+
+/**
+ * Logs and toasts an async failure once, at the point it happens. Almost every mutating or
+ * list-loading call on this screen used to be a `void x.then(...)` with no `.catch`: a failed
+ * request simply vanished, leaving state (like `maps`) stuck forever with no message and no
+ * retry. Returns the message so a caller that also needs it inline (the map list's own alert)
+ * doesn't call `messageOf` a second time.
+ */
+function reportFailure(action: string, err: unknown): string {
+  const message = messageOf(err, `could not ${action}`);
+  pushLog(`${action} failed: ${message}`);
+  toast("danger", message);
+  return message;
+}
 
 type RightTab = "results" | "labels" | "score";
 
@@ -119,6 +133,7 @@ export function MapsScreen() {
   const { baseUrl, token } = useBackend();
   const { project } = useProject(projectId);
   const [maps, setMaps] = useState<GeoMap[] | null>(null);
+  const [mapsError, setMapsError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [olMap, setOlMap] = useState<OlMap | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
@@ -132,7 +147,7 @@ export function MapsScreen() {
   const [scope, setScope] = useState<CountScope>("map");
   const [wholeMap, setWholeMap] = useState<Record<string, Record<string, number>>>({});
   const [inView, setInView] = useState<Record<string, Record<string, number>>>({});
-  const [inViewTruncated, setInViewTruncated] = useState(false);
+  const [inViewTruncated, setInViewTruncated] = useState<Record<string, boolean>>({});
   const [popover, setPopover] = useState<{ x: number; y: number; facts: BoxFacts } | null>(null);
 
   const [rightTab, setRightTab] = useState<RightTab>("results");
@@ -161,7 +176,12 @@ export function MapsScreen() {
   }, []);
 
   const reload = useCallback(() => {
-    void listMaps(api, projectId).then(setMaps);
+    void listMaps(api, projectId)
+      .then((ms) => {
+        setMaps(ms);
+        setMapsError(null);
+      })
+      .catch((err: unknown) => setMapsError(reportFailure("load maps", err)));
   }, [api, projectId]);
   useEffect(reload, [reload]);
   useOnJobsFinished("map_import", reload);
@@ -175,19 +195,21 @@ export function MapsScreen() {
   const priorStates = useRef<Record<string, string | null>>({});
   const reloadRuns = useCallback(() => {
     if (!active) return;
-    void listMapRuns(api, projectId, active.id).then((rs) => {
-      const prior = priorStates.current;
-      priorStates.current = Object.fromEntries(rs.map((r) => [r.id, r.state]));
-      setRuns(rs);
-      const justFinished = rs.find(
-        (r) => r.state === "succeeded" && prior[r.id] !== undefined && prior[r.id] !== "succeeded",
-      );
-      if (justFinished) {
-        setSelected((sel) =>
-          sel.length < MAX_COMPARE && !sel.includes(justFinished.id) ? [...sel, justFinished.id] : sel,
+    void listMapRuns(api, projectId, active.id)
+      .then((rs) => {
+        const prior = priorStates.current;
+        priorStates.current = Object.fromEntries(rs.map((r) => [r.id, r.state]));
+        setRuns(rs);
+        const justFinished = rs.find(
+          (r) => r.state === "succeeded" && prior[r.id] !== undefined && prior[r.id] !== "succeeded",
         );
-      }
-    });
+        if (justFinished) {
+          setSelected((sel) =>
+            sel.length < MAX_COMPARE && !sel.includes(justFinished.id) ? [...sel, justFinished.id] : sel,
+          );
+        }
+      })
+      .catch((err: unknown) => reportFailure("load runs", err));
   }, [api, projectId, active]);
   // Switching the active map clears the comparison and run list for the new map: a render-phase
   // state adjustment (React's "reset state on a changed key" pattern), not an effect, since it is
@@ -209,17 +231,25 @@ export function MapsScreen() {
 
   const reloadZones = useCallback(() => {
     if (!active) return Promise.resolve();
-    return listZones(api, projectId, active.id).then((zs) => {
-      setZones(zs);
-      setEditVersion((v) => v + 1);
-    });
+    return listZones(api, projectId, active.id)
+      .then((zs) => {
+        setZones(zs);
+        setEditVersion((v) => v + 1);
+      })
+      .catch((err: unknown) => {
+        reportFailure("load zones", err);
+      });
   }, [api, projectId, active]);
   const reloadLabels = useCallback(() => {
     if (!active) return Promise.resolve();
-    return listLabels(api, projectId, active.id).then((ls) => {
-      setLabels(ls);
-      setEditVersion((v) => v + 1);
-    });
+    return listLabels(api, projectId, active.id)
+      .then((ls) => {
+        setLabels(ls);
+        setEditVersion((v) => v + 1);
+      })
+      .catch((err: unknown) => {
+        reportFailure("load labels", err);
+      });
   }, [api, projectId, active]);
   useEffect(() => {
     void reloadZones();
@@ -287,9 +317,13 @@ export function MapsScreen() {
     if (liveSelected.length === 0) return;
     let cancelled = false;
     for (const runId of liveSelected) {
-      void fetchDensity(api, projectId, runId, 1, minConf).then((d) => {
-        if (!cancelled) setWholeMap((w) => ({ ...w, [runId]: countsFromDensity(d) }));
-      });
+      void fetchDensity(api, projectId, runId, 1, minConf)
+        .then((d) => {
+          if (!cancelled) setWholeMap((w) => ({ ...w, [runId]: countsFromDensity(d) }));
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) reportFailure("load whole-map counts", err);
+        });
     }
     return () => {
       cancelled = true;
@@ -366,7 +400,7 @@ export function MapsScreen() {
         density: (c) => fetchDensity(api, projectId, runId, 128, c),
         onViewCounts: (counts, truncated) => {
           setInView((v) => ({ ...v, [runId]: counts }));
-          setInViewTruncated(truncated);
+          setInViewTruncated((t) => ({ ...t, [runId]: truncated }));
         },
       };
     },
@@ -399,6 +433,29 @@ export function MapsScreen() {
   const effectiveClassId = activeClassId || classes[0]?.id || "";
   const warnIds = useMemo(() => outsideZones(labels, zones), [labels, zones]);
   const seededCount = useMemo(() => labels.filter((l) => l.source.startsWith("from_run:")).length, [labels]);
+  const selectedLabel = useMemo(() => labels.find((l) => l.id === selectedId) ?? null, [labels, selectedId]);
+
+  // Picking a class (hotkey or class-row click): reclass the selected label in place when one is
+  // selected, or fall back to setting the drawing class for the next box (spec section on boxes:
+  // "draw, move and resize, delete, reclass"). `pickClassCommand` is the pure decision so it can be
+  // unit-tested without an OpenLayers selection.
+  const pickClass = useCallback(
+    (classId: string) => {
+      const cmd = pickClassCommand(selectedLabel, classId);
+      if (cmd.kind === "set-active") {
+        setActiveClassId(classId);
+        return;
+      }
+      void labelApi
+        .update(cmd.id, cmd.after)
+        .then(() => {
+          history.current.record({ kind: "update", id: cmd.id, before: cmd.before, after: cmd.after });
+          bumpHistory();
+        })
+        .catch((err: unknown) => reportFailure("reclass label", err));
+    },
+    [selectedLabel, labelApi, bumpHistory],
+  );
 
   useLabelLayers(olMap, active ?? EMPTY_GEOMAP, {
     labels,
@@ -411,26 +468,32 @@ export function MapsScreen() {
     onBox: (box) => {
       if (!active || !effectiveClassId) return;
       const body: MapLabelCreate = { class_id: effectiveClassId, x: box.x, y: box.y, w: box.w, h: box.h };
-      void labelApi.create(body).then((id) => {
-        history.current.record({ kind: "create", id, body });
-        bumpHistory();
-      });
+      void labelApi
+        .create(body)
+        .then((id) => {
+          history.current.record({ kind: "create", id, body });
+          bumpHistory();
+        })
+        .catch((err: unknown) => reportFailure("create label", err));
     },
     onZone: (polygon) => {
       if (!active) return;
-      void createZone(api, projectId, active.id, { name: `Zone ${zones.length + 1}`, polygon }).then(() =>
-        reloadZones(),
-      );
+      void createZone(api, projectId, active.id, { name: `Zone ${zones.length + 1}`, polygon })
+        .then(() => reloadZones())
+        .catch((err: unknown) => reportFailure("create zone", err));
     },
     onEdit: (id, box) => {
       const existing = labels.find((l) => l.id === id);
       if (!existing) return;
       const before: MapLabelUpdate = { x: existing.x, y: existing.y, w: existing.w, h: existing.h };
       const after: MapLabelUpdate = { x: box.x, y: box.y, w: box.w, h: box.h };
-      void labelApi.update(id, after).then(() => {
-        history.current.record({ kind: "update", id, before, after });
-        bumpHistory();
-      });
+      void labelApi
+        .update(id, after)
+        .then(() => {
+          history.current.record({ kind: "update", id, before, after });
+          bumpHistory();
+        })
+        .catch((err: unknown) => reportFailure("update label", err));
     },
     onSelect: setSelectedId,
   });
@@ -471,10 +534,13 @@ export function MapsScreen() {
           h: existing.h,
         };
         setSelectedId(null);
-        void labelApi.remove(id).then(() => {
-          history.current.record({ kind: "delete", id, body });
-          bumpHistory();
-        });
+        void labelApi
+          .remove(id)
+          .then(() => {
+            history.current.record({ kind: "delete", id, body });
+            bumpHistory();
+          })
+          .catch((err: unknown) => reportFailure("delete label", err));
         return;
       }
       const lower = e.key.toLowerCase();
@@ -487,11 +553,11 @@ export function MapsScreen() {
         return;
       }
       const cls = classes.find((c) => c.hotkey === e.key);
-      if (cls) setActiveClassId(cls.id);
+      if (cls) pickClass(cls.id);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rightTab, labelApi, selectedId, labels, classes, bumpHistory, doUndo, doRedo]);
+  }, [rightTab, labelApi, selectedId, labels, classes, bumpHistory, doUndo, doRedo, pickClass]);
 
   // The box popover (spec section 7): the class, confidence, centre readout and size of whatever
   // detection box sits under the pointer.
@@ -558,7 +624,22 @@ export function MapsScreen() {
             Import map
           </Button>
         </div>
-        {maps && <MapList projectId={projectId} maps={maps} activeId={mapId} />}
+        {maps ? (
+          <MapList projectId={projectId} maps={maps} activeId={mapId} />
+        ) : (
+          mapsError && (
+            <Alert
+              tone="danger"
+              actions={
+                <Button size="sm" icon="refresh" onClick={reload}>
+                  Retry
+                </Button>
+              }
+            >
+              {mapsError}
+            </Alert>
+          )
+        )}
         {active && (
           <div className="flex flex-col gap-2 border-t border-line pt-3">
             <div className="flex items-center justify-between">
@@ -686,24 +767,32 @@ export function MapsScreen() {
                 onTool={setTool}
                 classes={classes}
                 activeClassId={effectiveClassId}
-                onClass={setActiveClassId}
+                onClass={pickClass}
+                selectedClassId={selectedLabel?.class_id ?? null}
                 zones={zones}
                 labels={labels}
                 warnCount={warnIds.size}
                 seededCount={seededCount}
                 runs={runs}
+                minConf={minConf}
                 onSeed={(runId, zoneId, minConfSeed) =>
                   void seedLabels(api, projectId, active.id, {
                     run_id: runId,
                     zone_id: zoneId,
                     min_conf: minConfSeed,
-                  }).then(() => reloadLabels())
+                  })
+                    .then(() => reloadLabels())
+                    .catch((err: unknown) => reportFailure("seed labels", err))
                 }
                 onRenameZone={(id, name) =>
-                  void updateZone(api, projectId, active.id, id, { name }).then(() => reloadZones())
+                  void updateZone(api, projectId, active.id, id, { name })
+                    .then(() => reloadZones())
+                    .catch((err: unknown) => reportFailure("rename zone", err))
                 }
                 onDeleteZone={(id) =>
-                  void deleteZone(api, projectId, active.id, id).then(() => reloadZones())
+                  void deleteZone(api, projectId, active.id, id)
+                    .then(() => reloadZones())
+                    .catch((err: unknown) => reportFailure("delete zone", err))
                 }
                 canUndo={canUndo && !historyBusyState}
                 canRedo={canRedo && !historyBusyState}

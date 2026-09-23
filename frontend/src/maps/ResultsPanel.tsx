@@ -10,7 +10,9 @@ export interface ResultsPanelProps {
   classes: ClassDef[];
   wholeMap: Record<string, Record<string, number>>;
   inView: Record<string, Record<string, number>>;
-  inViewTruncated: boolean;
+  /** Keyed by run id: a report from that run's own layer can be truncated (too many boxes in
+   * view) independently of any other ticked run's. */
+  inViewTruncated: Record<string, boolean>;
   scope: CountScope;
   onScope: (s: CountScope) => void;
   minConf: number;
@@ -25,6 +27,9 @@ export function ResultsPanel(p: ResultsPanelProps) {
   const shown = p.selected.map((id) => p.runs.find((r) => r.id === id)).filter((r): r is MapRun => !!r);
   const source = p.scope === "map" ? p.wholeMap : p.inView;
   const total = (runId: string) => Object.values(source[runId] ?? {}).reduce((a, b) => a + b, 0);
+  const truncated = (runId: string) => p.scope === "view" && (p.inViewTruncated[runId] ?? false);
+  const truncatedRuns = shown.filter((r) => truncated(r.id));
+  const allTruncated = shown.length > 0 && truncatedRuns.length === shown.length;
   return (
     <section className="flex flex-col gap-3" aria-label="Detection results">
       <Segmented
@@ -37,7 +42,7 @@ export function ResultsPanel(p: ResultsPanelProps) {
           { value: "view", label: "In view" },
         ]}
       />
-      {p.scope === "view" && p.inViewTruncated ? (
+      {allTruncated ? (
         <p className="text-sm text-muted">Zoom in to count what is in view.</p>
       ) : (
         <table className="w-full text-sm tabular-nums">
@@ -72,7 +77,7 @@ export function ResultsPanel(p: ResultsPanelProps) {
                 </td>
                 {shown.map((r) => (
                   <td key={r.id} className="py-1.5 text-right text-ink">
-                    {fmt(source[r.id]?.[c.id] ?? 0)}
+                    {truncated(r.id) ? <span className="text-muted">—</span> : fmt(source[r.id]?.[c.id] ?? 0)}
                   </td>
                 ))}
               </tr>
@@ -81,12 +86,17 @@ export function ResultsPanel(p: ResultsPanelProps) {
               <td className="py-1.5">Total</td>
               {shown.map((r) => (
                 <td key={r.id} className="py-1.5 text-right">
-                  {fmt(total(r.id))}
+                  {truncated(r.id) ? <span className="text-muted">—</span> : fmt(total(r.id))}
                 </td>
               ))}
             </tr>
           </tbody>
         </table>
+      )}
+      {!allTruncated && truncatedRuns.length > 0 && (
+        <p className="text-sm text-muted">
+          Zoom in to count {truncatedRuns.length === 1 ? "that run" : "those runs"} in view.
+        </p>
       )}
       <Field
         label="Minimum confidence"

@@ -12,7 +12,7 @@ function renderPanel(over = {}) {
     classes: exampleClasses,
     wholeMap: { [exampleMapRun.id]: { [CLASS_ID(1)]: 42, [CLASS_ID(4)]: 17 }, r2: { [CLASS_ID(1)]: 40 } },
     inView: { [exampleMapRun.id]: { [CLASS_ID(1)]: 3 } },
-    inViewTruncated: false,
+    inViewTruncated: {},
     scope: "map" as const,
     onScope: vi.fn(),
     minConf: 0.25,
@@ -44,8 +44,25 @@ describe("ResultsPanel", () => {
   it("shows in-view counts, or says to zoom in when the view is truncated", () => {
     renderPanel({ scope: "view" });
     expect(screen.getByRole("row", { name: /excavator/ })).toHaveTextContent("3");
-    renderPanel({ scope: "view", inViewTruncated: true });
+  });
+
+  it("says to zoom in when every ticked run's view is truncated", () => {
+    renderPanel({ scope: "view", inViewTruncated: { [exampleMapRun.id]: true } });
     expect(screen.getByText("Zoom in to count what is in view.")).toBeInTheDocument();
+  });
+
+  it("keys truncation by run id, so one truncated run never hides another's in-view counts", () => {
+    renderPanel({
+      selected: [exampleMapRun.id, "r2"],
+      inView: { [exampleMapRun.id]: { [CLASS_ID(1)]: 3 }, r2: { [CLASS_ID(1)]: 9 } },
+      scope: "view",
+      inViewTruncated: { [exampleMapRun.id]: true }, // r2 is not truncated
+    });
+    const row = screen.getByRole("row", { name: /excavator/ });
+    // the truncated run's own cell shows a dash, but r2's real count still comes through
+    expect(row).toHaveTextContent("—");
+    expect(row).toHaveTextContent("9");
+    expect(screen.getByText("Zoom in to count that run in view.")).toBeInTheDocument();
   });
 
   it("hides a class and changes the confidence", () => {

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import {
   CLASS_ID,
+  errorBody,
   exampleGeoMap,
   exampleLabel,
   exampleMapRun,
@@ -15,13 +16,24 @@ import {
 } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
+import { useToastStore } from "@/ui";
 import { boxFacts } from "@/maps/runModel";
+import type { LabelLayerOptions } from "@/maps/labelLayers";
+import { useLabelLayers } from "@/maps/labelLayers";
 import { MapsScreen } from "./MapsScreen";
 
 // OpenLayers needs a real canvas; the screen's own behaviour is what is under test here.
 vi.mock("@/maps/MapView", () => ({
   MapView: ({ geoMap }: { geoMap: { name: string } }) => <div data-testid="map-view">{geoMap.name}</div>,
 }));
+
+// A real OL map never exists in this test environment (MapView is mocked above), so the label
+// layer's own Select interaction never fires. Mocking the hook lets a test call `onSelect` itself
+// to simulate the operator having clicked a label, and drive the reclass flow that follows.
+vi.mock("@/maps/labelLayers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/maps/labelLayers")>();
+  return { ...actual, useLabelLayers: vi.fn() };
+});
 
 const base = [
   { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
@@ -31,6 +43,15 @@ const base = [
   { method: "GET", path: /\/zones$/, body: { items: [] } },
   { method: "GET", path: /\/labels$/, body: { items: [] } },
 ];
+
+/** The options `useLabelLayers` was last called with (the hook is mocked above); a test drives
+ * `onSelect`/`onZone` directly through it to stand in for an OpenLayers interaction that never
+ * fires in this environment (`MapView` is mocked too, so there is never a real map). */
+function latestLabelLayerOpts(): LabelLayerOptions {
+  const opts = vi.mocked(useLabelLayers).mock.calls.at(-1)?.[2];
+  if (!opts) throw new Error("useLabelLayers was not called");
+  return opts;
+}
 
 describe("MapsScreen", () => {
   beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
@@ -155,7 +176,7 @@ describe("MapsScreen", () => {
   });
 
   it("shows zones in the Labels tab and picks a class by hotkey", async () => {
-    const { api } = fakeClient([
+    const { api, requests } = fakeClient([
       ...base.slice(0, 3),
       { method: "GET", path: /\/runs$/, body: { items: [] } },
       { method: "GET", path: /\/zones$/, body: { items: [exampleZone] } },
@@ -172,6 +193,90 @@ describe("MapsScreen", () => {
 
     fireEvent.keyDown(window, { key: "4" });
     expect(screen.getByRole("button", { name: /dump_truck/ })).toHaveAttribute("aria-pressed", "true");
+    // nothing selected: this only changed the drawing class, no label was patched
+    expect(requests.some((r) => r.method === "PATCH")).toBe(false);
+  });
+
+  it("reclasses the selected label when a class is picked, and records history for undo", async () => {
+    const { api, requests } = fakeClient([
+      ...base.slice(0, 3),
+      { method: "GET", path: /\/runs$/, body: { items: [] } },
+      { method: "GET", path: /\/zones$/, body: { items: [exampleZone] } },
+      { method: "GET", path: /\/labels$/, body: { items: [exampleLabel] } },
+      { method: "PATCH", path: /\/labels\/[^/]+$/, body: { ...exampleLabel, class_id: CLASS_ID(4) } },
+    ]);
+    renderWithProviders(<MapsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/maps/${MAP_ID}`,
+      path: "/p/:projectId/maps/:mapId",
+    });
+    await screen.findByTestId("map-view");
+    fireEvent.click(await screen.findByRole("radio", { name: "Labels" }));
+    await screen.findByDisplayValue("Zone 1");
+
+    act(() => {
+      latestLabelLayerOpts().onSelect(exampleLabel.id);
+    });
+    expect(await screen.findByText("A class here recolours the selected label.")).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "4" }); // dump_truck's hotkey
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (r) =>
+            r.method === "PATCH" &&
+            r.url.includes(`/labels/${exampleLabel.id}`) &&
+            (r.body as { class_id?: string } | null)?.class_id === CLASS_ID(4),
+        ),
+      ).toBe(true),
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).not.toBeDisabled();
+  });
+
+  it("shows a retry when the map list fails to load, instead of an empty rail", async () => {
+    useToastStore.setState({ toasts: [] });
+    const { api, requests } = fakeClient([
+      base[0],
+      { method: "GET", path: /\/maps$/, status: 500, body: errorBody("internal_error", "disk full") },
+    ]);
+    renderWithProviders(<MapsScreen />, { api, route: `/p/${PROJECT_ID}/maps`, path: "/p/:projectId/maps" });
+    expect(await screen.findByRole("alert")).toHaveTextContent("disk full");
+    expect(useToastStore.getState().toasts.some((t) => t.text.includes("disk full"))).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(requests.filter((r) => /\/maps$/.test(r.url)).length).toBe(2));
+  });
+
+  it("reports a failed zone create instead of leaving it silent", async () => {
+    useToastStore.setState({ toasts: [] });
+    const { api } = fakeClient([
+      ...base.slice(0, 3),
+      { method: "GET", path: /\/runs$/, body: { items: [] } },
+      { method: "GET", path: /\/zones$/, body: { items: [] } },
+      { method: "GET", path: /\/labels$/, body: { items: [] } },
+      { method: "POST", path: /\/zones$/, status: 500, body: errorBody("internal_error", "disk full") },
+    ]);
+    renderWithProviders(<MapsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/maps/${MAP_ID}`,
+      path: "/p/:projectId/maps/:mapId",
+    });
+    await screen.findByTestId("map-view");
+    fireEvent.click(await screen.findByRole("radio", { name: "Labels" }));
+    await screen.findByText(/Draw a zone around an area/);
+
+    act(() => {
+      latestLabelLayerOpts().onZone([
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+      ]);
+    });
+
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.some((t) => t.text.includes("disk full"))).toBe(true),
+    );
   });
 });
 

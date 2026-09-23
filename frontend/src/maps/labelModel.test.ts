@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { exampleLabel, exampleZone } from "@/test/fixtures";
-import { boxFromExtent, LabelHistory, outsideZones, pointInPolygon, type LabelApi } from "./labelModel";
+import { CLASS_ID, exampleLabel, exampleZone } from "@/test/fixtures";
+import {
+  boxFromExtent,
+  LabelHistory,
+  outsideZones,
+  pickClassCommand,
+  pointInPolygon,
+  type LabelApi,
+} from "./labelModel";
 
 function fakeApi(): LabelApi & { calls: string[] } {
   let n = 0;
@@ -100,6 +107,21 @@ describe("label history", () => {
     // The command survived the failed attempt under its original id and can still be undone.
     expect(await h.undo(api)).toBe(true);
     expect(api.calls).toEqual(["create"]);
+  });
+});
+
+describe("pickClassCommand", () => {
+  it("sets the drawing class when nothing is selected", () => {
+    expect(pickClassCommand(null, CLASS_ID(4))).toEqual({ kind: "set-active" });
+  });
+
+  it("reclasses the selected label instead, carrying enough to undo", () => {
+    expect(pickClassCommand(exampleLabel, CLASS_ID(4))).toEqual({
+      kind: "reclass",
+      id: exampleLabel.id,
+      before: { class_id: exampleLabel.class_id },
+      after: { class_id: CLASS_ID(4) },
+    });
   });
 });
 

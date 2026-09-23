@@ -100,6 +100,24 @@ export class LabelHistory {
   }
 }
 
+export type ClassPick =
+  { kind: "reclass"; id: string; before: MapLabelUpdate; after: MapLabelUpdate } | { kind: "set-active" };
+
+/**
+ * What picking a class (hotkey or class-row click) should do (spec: "Boxes: draw, move and
+ * resize, delete, reclass"). A selected label gets reclassed in place; with nothing selected, the
+ * caller falls back to setting the drawing class for the next box.
+ */
+export function pickClassCommand(selected: MapLabel | null, classId: string): ClassPick {
+  if (!selected) return { kind: "set-active" };
+  return {
+    kind: "reclass",
+    id: selected.id,
+    before: { class_id: selected.class_id },
+    after: { class_id: classId },
+  };
+}
+
 export function pointInPolygon(x: number, y: number, poly: number[][]): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
