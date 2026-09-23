@@ -3,7 +3,7 @@ import type { SurveyTimeline } from "@/api/surveys";
 export type Dot = { x: number; y: number; comparable: boolean };
 export type Line = { classId: string; name: string; colour: string; points: string; dots: Dot[] };
 
-const PAD = 8;
+const PAD = 24; // room for the gridline labels, as the training curve does
 
 /** Survey rows to SVG coordinates: oldest on the left, the highest count at the top. */
 export function chartLines(timeline: SurveyTimeline, size: { w: number; h: number }): Line[] {

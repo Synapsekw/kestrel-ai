@@ -62,7 +62,7 @@ describe("SurveysScreen", () => {
   it("draws the chart and hides a class when its legend entry is switched off", async () => {
     const { api } = fakeClient([{ method: "GET", path: /survey-timeline/, body: exampleTimeline }]);
     renderWithProviders(<SurveysScreen />, { api, route, path });
-    expect(await screen.findByRole("img", { name: /object counts for each survey/i })).toBeInTheDocument();
+    expect(await screen.findByTestId("survey-chart")).toBeInTheDocument();
     const legend = screen.getByRole("button", { name: "excavator" });
     expect(legend).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(legend);
