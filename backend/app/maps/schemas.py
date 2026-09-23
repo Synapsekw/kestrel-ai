@@ -226,11 +226,22 @@ class MapDetectionOut(BaseModel):
     w: float
     h: float
     angle: float | None
+    review_state: Literal["unreviewed", "accepted", "rejected", "edited"]
+    provenance_kind: Literal["person", "local_model", "cloud_provider"]
 
     @classmethod
     def from_row(cls, r: MapDetection) -> MapDetectionOut:
         return cls(
-            id=r.id, class_id=r.class_id, confidence=r.confidence, x=r.x, y=r.y, w=r.w, h=r.h, angle=r.angle
+            id=r.id,
+            class_id=r.class_id,
+            confidence=r.confidence,
+            x=r.x,
+            y=r.y,
+            w=r.w,
+            h=r.h,
+            angle=r.angle,
+            review_state=r.review_state or "unreviewed",
+            provenance_kind=r.provenance_kind or "local_model",
         )
 
 

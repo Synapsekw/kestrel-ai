@@ -1,33 +1,25 @@
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
-import { useSourceNames } from "@/api/project";
-import { useProjectKind } from "@/app/useProjectKind";
-import { ImageTable } from "@/data/ImageTable";
-import { keyboardAction, REVIEW_COLUMNS } from "@/data/listModel";
-import {
-  clearSelection,
-  clickSelect,
-  EMPTY_SELECTION,
-  pruneSelection,
-  selectAll,
-  toggleSelect,
-} from "@/data/selection";
+import { useProjectKind, type ProjectKind } from "@/app/useProjectKind";
 import { useImageList } from "@/data/useImageList";
-import { isTypingTarget } from "@/editor/hotkeys";
-import { useNavigationStore } from "@/store/navigation";
-import { Alert, EmptyState, SkeletonRows } from "@/ui";
+import { DetectReview } from "@/review/DetectReview";
+import { ImageReviewQueue } from "@/review/ImageReviewQueue";
+import { EmptyState } from "@/ui";
 
 const linkClass = "font-medium text-accent hover:underline";
 
-/** Spec section 6 screen 4: images with unreviewed suggestions sorted by suggestion confidence, same editor. */
+/** Review: a detection project reviews one source's run at a time; otherwise the image queue. */
 export function ReviewScreen() {
   const { projectId = "" } = useParams();
   const kind = useProjectKind(projectId);
-  const navigate = useNavigate();
-  const sourceNames = useSourceNames(projectId);
+  if (kind === "detect") return <DetectReview projectId={projectId} />;
+  return <SuggestionReview projectId={projectId} kind={kind} />;
+}
+
+/** Spec section 6 screen 4: images with unreviewed suggestions sorted by suggestion confidence, same editor. */
+function SuggestionReview({ projectId, kind }: { projectId: string; kind: ProjectKind | null }) {
   const [params] = useSearchParams();
-  const location = useLocation();
   // `?ids=` narrows the queue to one query run's images (contract gap 2: `ids` overrides the filters).
   const runIds = params.get("ids");
   const query = useMemo(
@@ -35,35 +27,6 @@ export function ReviewScreen() {
     [runIds],
   );
   const list = useImageList(projectId, query);
-  const ids = useMemo(() => list.items.map((i) => i.id), [list.items]);
-  const rowContext = useMemo(() => ({ sourceNames }), [sourceNames]);
-  const [selection, setSelection] = useState(EMPTY_SELECTION);
-  const [rawFocus, setFocusIndex] = useState(0);
-  const focusIndex = Math.min(rawFocus, Math.max(0, ids.length - 1));
-  const pruned = useMemo(() => pruneSelection(selection, ids), [selection, ids]);
-  const firstLoad = list.loading && list.items.length === 0;
-  const empty = !list.loading && !list.error && list.items.length === 0;
-
-  const open = useCallback(
-    (id: string) => {
-      useNavigationStore.getState().setContext(ids, "review", location.pathname + location.search);
-      void navigate(`/p/${projectId}/edit/${id}`);
-    },
-    [ids, navigate, projectId, location.pathname, location.search],
-  );
-
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (isTypingTarget(e.target)) return;
-    const action = keyboardAction(e);
-    if (!action) return;
-    e.preventDefault();
-    if (action.type === "move") setFocusIndex((i) => Math.max(0, Math.min(ids.length - 1, i + action.delta)));
-    else if (action.type === "open" && ids[focusIndex]) open(ids[focusIndex]);
-    else if (action.type === "toggle" && ids[focusIndex])
-      setSelection((s) => toggleSelect(s, ids[focusIndex]));
-    else if (action.type === "select-all") setSelection(selectAll(ids));
-    else if (action.type === "clear") setSelection(clearSelection());
-  };
 
   return (
     <section className="flex h-full min-h-0 flex-col gap-4">
@@ -87,10 +50,10 @@ export function ReviewScreen() {
         )}
       </div>
 
-      {list.error && <Alert tone="danger">{list.error}</Alert>}
-
-      {empty && (
-        <div data-testid="review-empty" className="animate-reveal motion-reduce:animate-none">
+      <ImageReviewQueue
+        projectId={projectId}
+        list={list}
+        empty={
           <EmptyState icon="review" title="Nothing to review">
             {kind === "train" ? (
               <>
@@ -107,54 +70,16 @@ export function ReviewScreen() {
                 <Link to={`/p/${projectId}/query`} className={linkClass}>
                   Detect screen
                 </Link>
-                {kind === "detect" ? (
-                  "."
-                ) : (
-                  <>
-                    , or when the editor opens an image while a pre-annotation model is set in the{" "}
-                    <Link to={`/p/${projectId}/settings`} className={linkClass}>
-                      Project settings
-                    </Link>
-                    .
-                  </>
-                )}
+                , or when the editor opens an image while a pre-annotation model is set in the{" "}
+                <Link to={`/p/${projectId}/settings`} className={linkClass}>
+                  Project settings
+                </Link>
+                .
               </>
             )}
           </EmptyState>
-        </div>
-      )}
-
-      {firstLoad ? (
-        <SkeletonRows rows={8} columns={5} />
-      ) : (
-        !empty && (
-          <ImageTable
-            items={list.items}
-            columns={REVIEW_COLUMNS}
-            rowContext={rowContext}
-            sort={{ key: "max_pending_confidence", order: "desc" }}
-            selected={pruned.selected}
-            focusIndex={focusIndex}
-            onRowClick={(id, index, mod) => {
-              setFocusIndex(index);
-              setSelection((s) => clickSelect(s, ids, id, mod));
-            }}
-            onOpen={open}
-            onToggle={(id) => setSelection((s) => toggleSelect(s, id))}
-            onNearEnd={list.hasMore ? list.loadMore : undefined}
-            onKeyDown={onKeyDown}
-          />
-        )
-      )}
-
-      {!firstLoad && !empty && (
-        <p className="flex flex-wrap gap-x-3 text-xs text-muted">
-          <span className="tabular-nums">
-            {list.loading ? "Loading more…" : `${list.total} images waiting`}
-          </span>
-          <span>Enter opens the editor; A and R there accept or reject.</span>
-        </p>
-      )}
+        }
+      />
     </section>
   );
 }

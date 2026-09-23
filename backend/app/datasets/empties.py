@@ -14,7 +14,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.datasets.images import ImageRow, get_image
-from app.db.models import Box, Image
+from app.db.models import Box, Image, QueryRun
 from app.errors import AppError, not_found
 from app.projects.service import ProjectHandle
 
@@ -54,6 +54,28 @@ def _reject_pending(s: Session, image_id: str, now: datetime) -> bool:
     return bool(pending)
 
 
+def recount_runs_of(s: Session, image_ids: Iterable[str]) -> None:
+    """Rebuild the counts of every photo run with boxes on these images (spec 2026-09-23 section
+    9.1), after their pending boxes were rejected, in the same transaction. Grouped counts only."""
+    from app.detect.counts import recount_query_run
+
+    ids = list(image_ids)
+    run_ids: set[str] = set()
+    for chunk in _chunks(ids):
+        run_ids.update(
+            s.execute(
+                select(Box.query_run_id)
+                .where(Box.image_id.in_(chunk), Box.query_run_id.is_not(None))
+                .distinct()
+            ).scalars()
+        )
+    s.flush()
+    for run_id in sorted(run_ids):
+        run = s.get(QueryRun, run_id)
+        if run is not None:
+            recount_query_run(s, run)
+
+
 def count_marked_empty(s: Session, image_ids: Iterable[str]) -> int:
     """How many of `image_ids` are currently marked empty (for a caller that wants to log it)."""
     ids = list(image_ids)
@@ -88,6 +110,7 @@ def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple
                 raise AppError("conflict", ground_truth_message(gt), 409)
             if _reject_pending(s, image_id, datetime.now(UTC)):
                 rejected_ids.append(image_id)
+                recount_runs_of(s, rejected_ids)
         image.marked_empty = value
         s.flush()
     return get_image(handle, image_id), rejected_ids
@@ -136,4 +159,5 @@ def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) ->
             )
         for chunk in _chunks(to_mark):
             s.execute(update(Image).where(Image.id.in_(chunk)).values(marked_empty=True))
+        recount_runs_of(s, rejected_ids)
         return len(to_mark), len(has_ground_truth), rejected_ids
