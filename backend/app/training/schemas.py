@@ -41,6 +41,7 @@ class ModelOut(BaseModel):
     exports: dict[str, str]
     artifacts: dict[str, str]
     run_id: str | None
+    train_gsd_cm: float | None
     created_at: datetime
 
     @classmethod
@@ -60,8 +61,27 @@ class ModelOut(BaseModel):
             exports=dict(row.exports or {}),
             artifacts=artifacts,
             run_id=row.run_id,
+            train_gsd_cm=row.train_gsd_cm,
             created_at=row.created_at,
         )
+
+
+class ModelGsdEstimate(BaseModel):
+    train_gsd_cm: float
+    image_gsd_cm: float
+    median_alt_m: float
+    focal_mm: float
+    sensor_width_mm: float
+    sensor_source: Literal["focal_plane", "crop_factor"]
+    sample_size: int
+    imgsz: int
+    median_object_m: float
+    per_class_m: dict[str, float]
+    plausible: bool
+
+
+class ModelPatch(BaseModel):
+    train_gsd_cm: float | None = Field(default=None, gt=0)
 
 
 class ModelPage(BaseModel):

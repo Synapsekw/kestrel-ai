@@ -4,23 +4,35 @@ Reading class names is the one operation here that needs ultralytics; it imports
 API process only pays for torch when a user imports weights.
 """
 
+import logging
 import re
 import shutil
+import statistics
 import uuid
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
 
-from sqlalchemy import select, tuple_
+from PIL import Image as PILImage
+from sqlalchemy import func, select, tuple_
 
-from app.db.models import Dataset, Model
+from app.db.models import Box, Dataset, DatasetImage, Image, Model
 from app.errors import AppError, not_found
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
+from app.training.gsd import (
+    EXIF_SAMPLE,
+    image_gsd_cm,
+    intrinsics_from_exif,
+    model_gsd_cm,
+    plausible,
+)
 from app.training.presets import TrainParams
 from app.training.trainer import TrainResult
 
 PATH_PARAMS = ("data_yaml", "base_weights", "run_dir")
+
+log = logging.getLogger(__name__)
 
 
 def slug(name: str) -> str:
@@ -144,6 +156,112 @@ def get_dataset(handle: ProjectHandle, dataset_id: str) -> Dataset:
         return row
 
 
+@dataclass(frozen=True)
+class GsdEstimate:
+    train_gsd_cm: float
+    image_gsd_cm: float
+    median_alt_m: float
+    focal_mm: float
+    sensor_width_mm: float
+    sensor_source: str
+    sample_size: int
+    imgsz: int
+    median_object_m: float
+    per_class_m: dict[str, float]
+    plausible: bool
+
+
+def estimate_train_gsd(handle: ProjectHandle, model: Model) -> GsdEstimate | None:
+    """The scale `model` was trained at, derived from its dataset (spec section 3).
+
+    Altitude is already on every image row, so the expensive input costs no file I/O. Only the
+    camera intrinsics need EXIF, and those are a property of the camera: at most EXIF_SAMPLE
+    headers are opened, however large the dataset.
+    """
+    if not model.dataset_id:
+        return None
+    imgsz = int((model.hyperparameters or {}).get("imgsz") or 0)
+    if imgsz <= 0:
+        return None
+
+    with handle.session() as s:
+        dataset = s.get(Dataset, model.dataset_id)
+        if dataset is None:
+            return None
+        rows = list(
+            s.execute(
+                select(Image.path, Image.width, Image.height, Image.alt)
+                .join(DatasetImage, DatasetImage.image_id == Image.id)
+                .where(DatasetImage.dataset_id == model.dataset_id)
+            )
+        )
+        sizes = list(
+            s.execute(
+                select(Box.class_id, func.avg(Box.w), func.count())
+                .join(DatasetImage, DatasetImage.image_id == Box.image_id)
+                .where(DatasetImage.dataset_id == model.dataset_id)
+                .group_by(Box.class_id)
+            )
+        )
+        names = {str(c.get("id")): str(c.get("name")) for c in (dataset.classes or [])}
+
+    alts = [r.alt for r in rows if r.alt is not None]
+    if not alts or not rows:
+        return None
+    median_alt = statistics.median(alts)
+
+    intr = None
+    read = 0
+    for r in rows[:EXIF_SAMPLE]:
+        try:
+            with PILImage.open(handle.folder / r.path) as im:
+                read += 1
+                intr = intrinsics_from_exif(im.getexif())
+        except OSError:
+            continue
+        if intr:
+            break
+    if intr is None:
+        return None
+
+    stored_w = rows[0].width
+    stored_h = rows[0].height
+    img_gsd = image_gsd_cm(median_alt, intr, stored_w)
+    train_gsd = model_gsd_cm(img_gsd, stored_w, stored_h, imgsz)
+
+    per_class = {
+        names.get(str(cid), str(cid)): round(float(avg_w) * img_gsd / 100.0, 2)
+        for cid, avg_w, _n in sizes
+        if avg_w
+    }
+    median_object = statistics.median(per_class.values()) if per_class else 0.0
+
+    return GsdEstimate(
+        train_gsd_cm=round(train_gsd, 2),
+        image_gsd_cm=round(img_gsd, 3),
+        median_alt_m=round(median_alt, 2),
+        focal_mm=round(intr.focal_mm, 2),
+        sensor_width_mm=round(intr.sensor_width_mm, 3),
+        sensor_source=intr.source,
+        sample_size=read,
+        imgsz=imgsz,
+        median_object_m=round(median_object, 2),
+        per_class_m=per_class,
+        plausible=bool(per_class) and plausible(median_object),
+    )
+
+
+def set_train_gsd(handle: ProjectHandle, model_id: str, value: float | None) -> Model:
+    with handle.session() as s:
+        row = s.get(Model, model_id)
+        if row is None:
+            raise not_found("model", model_id)
+        row.train_gsd_cm = value
+        s.flush()
+        s.expunge(row)
+    return row
+
+
 def delete_model(handle: ProjectHandle, model_id: str) -> None:
     """Drop the row, the weights and every export file. Boxes keep their model_id provenance."""
     with handle.session() as s:
@@ -200,9 +318,20 @@ def register_trained(
         exports={},
         artifacts={k: relative(handle, v) for k, v in artifacts.items() if v is not None},
         run_id=job_id,
+        train_gsd_cm=None,  # set below, once the row exists to estimate from
     )
     with handle.session() as s:
         s.add(row)
         s.flush()
         s.expunge(row)
+    # Best effort: a model that cannot be measured is registered anyway, and the operator is asked
+    # the first time they start a run with it. Registration must never fail because the estimate
+    # could not be computed.
+    try:
+        estimate = estimate_train_gsd(handle, row)
+    except Exception:
+        log.exception("gsd estimate failed for newly registered model %s", row.id)
+        estimate = None
+    if estimate and estimate.plausible:
+        row = set_train_gsd(handle, row.id, estimate.train_gsd_cm)
     return row

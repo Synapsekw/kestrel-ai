@@ -1,5 +1,6 @@
 """Model registry and training endpoints (spec section 7)."""
 
+from dataclasses import asdict
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
@@ -13,9 +14,11 @@ from app.training.jobs import check_materialised  # importing it registers the t
 from app.training.schemas import (
     ExportRequest,
     JobRef,
+    ModelGsdEstimate,
     ModelImport,
     ModelOut,
     ModelPage,
+    ModelPatch,
     TrainRequest,
 )
 
@@ -49,6 +52,24 @@ def train_model(body: TrainRequest, request: Request, handle: ProjectHandle = De
 @router.get("/{modelId}", response_model=ModelOut)
 def get_model(modelId: str, handle: ProjectHandle = Depends(get_project)) -> ModelOut:  # noqa: N803
     return ModelOut.from_row(registry.get_model(handle, modelId))
+
+
+@router.patch("/{modelId}", response_model=ModelOut)
+def patch_model(  # noqa: N803
+    modelId: str, body: ModelPatch, handle: ProjectHandle = Depends(get_project)
+) -> ModelOut:
+    registry.get_model(handle, modelId)
+    return ModelOut.from_row(registry.set_train_gsd(handle, modelId, body.train_gsd_cm))
+
+
+@router.get("/{modelId}/gsd-estimate", response_model=ModelGsdEstimate)
+def get_model_gsd_estimate(  # noqa: N803
+    modelId: str, handle: ProjectHandle = Depends(get_project)
+) -> ModelGsdEstimate:
+    estimate = registry.estimate_train_gsd(handle, registry.get_model(handle, modelId))
+    if estimate is None:
+        raise not_found("gsd estimate", modelId)
+    return ModelGsdEstimate(**asdict(estimate))
 
 
 @router.delete("/{modelId}", status_code=204)
