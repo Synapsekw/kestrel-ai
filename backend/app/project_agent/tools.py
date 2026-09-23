@@ -64,7 +64,8 @@ SCREENS = Literal[
 JOB_STATES = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 # The model library's routes are app-wide, outside this project's path.
 LIBRARY = "/api/v1/library"
-JOB_TYPES = Literal["import", "dataset", "train", "infer", "export", "results_export"]
+# Project job types. A model export is a library job (`library_export`), not one of these.
+JOB_TYPES = Literal["import", "dataset", "train", "infer", "results_export"]
 
 
 # --------------------------------------------------------------------- types
@@ -643,7 +644,7 @@ class ListJobs(Tool):
     risk = "read"
     Args = ListJobsArgs
     description = (
-        "List the 20 newest background jobs (import, dataset, train, infer = labeling, export, "
+        "List the 20 newest background jobs (import, dataset, train, infer = labeling, "
         "results_export), optionally filtered by state or type: id, state, progress 0-1, "
         "message and error."
     )

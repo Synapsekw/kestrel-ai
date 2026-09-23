@@ -732,3 +732,11 @@ def test_get_project_lists_the_cloud_providers_with_a_key(tool, app, image_ids):
     ]
     assert "sk-fake-key" not in out.result
     assert "provider" in REGISTRY["get_project"].description
+
+
+def test_list_jobs_offers_only_project_job_types():
+    # exports are library jobs (`library_export`) now; a project job list never holds a new one
+    job_type = json.dumps(tools.ListJobsArgs.model_json_schema()["properties"]["type"])
+    assert '"export"' not in job_type
+    assert '"results_export"' in job_type
+    assert "export," not in REGISTRY["list_jobs"].description
