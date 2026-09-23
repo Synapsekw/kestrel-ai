@@ -13,7 +13,8 @@ import rasterio
 from sqlalchemy import Integer, cast, delete, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import GeoMap, Job, MapDetection, MapLabel, MapRun, MapZone
+from app.datasets.grouping import slugify
+from app.db.models import GeoMap, Job, MapDetection, MapLabel, MapRun, MapZone, Source
 from app.errors import AppError, not_found
 
 # Reused rather than duplicated: `_validate`/`_cost_per_request` are duck-typed on `kind`,
@@ -45,12 +46,25 @@ def create_map(handle: ProjectHandle, body: GeoMapCreate) -> GeoMap:
         # resource, and the contract's positive-data-acceptance check forbids rejecting schema-valid
         # bodies with 422 (same rule as app/datasets/router.py::create_source for a missing folder).
         raise not_found("map file", str(path))
+    name = body.name or path.stem
     with handle.session() as s:
+        # A map is a detection source of its own (spec 2026-09-23 section 7.1): the source carries the
+        # label and mirrors the map's survey date, and the map points back at it.
+        source = Source(
+            kind="map",
+            label=name,
+            folder=str(path.resolve()),
+            site=slugify(path.stem) or "map",
+            settings={},
+        )
+        s.add(source)
+        s.flush()
         row = GeoMap(
-            name=body.name or path.stem,
+            name=name,
             status="importing",
             source_path=str(path.resolve()),
             source_size=path.stat().st_size,
+            source_id=source.id,
         )
         s.add(row)
         s.flush()
@@ -97,9 +111,19 @@ def set_captured_on(handle: ProjectHandle, map_id: str, captured_on: date | None
     with handle.session() as s:
         row = _get(s, map_id)
         row.captured_on = captured_on
+        sync_source_date(s, row)
         s.flush()
         s.expunge(row)
     return row
+
+
+def sync_source_date(s: Session, gmap: GeoMap) -> None:
+    """Keep the map source's survey date equal to the map's: the map is the one truth."""
+    if gmap.source_id is None:
+        return
+    source = s.get(Source, gmap.source_id)
+    if source is not None:
+        source.captured_on = gmap.captured_on
 
 
 def require_ready(handle: ProjectHandle, map_id: str) -> GeoMap:
@@ -129,7 +153,10 @@ def delete_map(handle: ProjectHandle, map_id: str, is_live: Callable[[str], bool
         job_ids = [row.job_id, *run_job_ids]
         if any(j and is_live(j) for j in job_ids):
             raise AppError("conflict", "the map has a job queued or running; cancel it first", 409)
+        source = s.get(Source, row.source_id) if row.source_id else None
         s.delete(row)  # runs, detections, zones and labels go with it (ON DELETE CASCADE)
+        if source is not None and source.kind == "map":
+            s.delete(source)  # the map source only ever stood for this map
     TILE_CACHE.drop_map(map_id)
     shutil.rmtree(map_dir(handle, map_id), ignore_errors=True)
 

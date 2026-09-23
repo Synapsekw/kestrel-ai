@@ -15,4 +15,11 @@ describe("screenName", () => {
     expect(screenName("/p/abc/maps/m1")).toBe("Maps");
     expect(screenName("/p/abc/query")).toBe("Detect");
   });
+
+  it("names the detection screens", () => {
+    expect(screenName("/p/abc/sources")).toBe("Sources");
+    expect(screenName("/p/abc/runs")).toBe("Runs");
+    expect(screenName("/p/abc/analytics")).toBe("Analytics");
+    expect(screenName("/p/abc/site-areas")).toBe("Site areas");
+  });
 });

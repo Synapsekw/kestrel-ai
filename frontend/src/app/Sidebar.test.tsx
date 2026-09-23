@@ -141,40 +141,58 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "Past detections" })).toBeInTheDocument();
   });
 
-  it("a detection project shows Images, Detect, Maps, Review and Export, and no Label", () => {
+  it("a detection project shows Sources, Runs, Review, Analytics and Export, then Site areas", () => {
     useProjectKindStore.getState().set(PROJECT_ID, "detect");
-    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12, models: 1, queryRuns: 3, maps: 2 });
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12, models: 1, maps: 2, hasRuns: true });
     const { api } = fakeClient([]);
     renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="North site" />, { api });
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     const nav = screen.getByRole("navigation");
-    const order = ["Home", "Images", "Detect", "Maps", "Review", "Export", "Surveys", "Project settings"].map(
-      (label) => within(nav).getByText(label),
-    );
+    const order = [
+      "Home",
+      "Sources",
+      "Runs",
+      "Review",
+      "Analytics",
+      "Export",
+      "Site areas",
+      "Project settings",
+    ].map((label) => within(nav).getByText(label));
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     }
-    expect(within(nav).getByRole("link", { name: /^Maps/ })).toHaveAttribute("href", `/p/${PROJECT_ID}/maps`);
-    expect(within(nav).getByRole("link", { name: "Surveys" })).toHaveAttribute(
-      "href",
-      `/p/${PROJECT_ID}/surveys`,
-    );
-    for (const name of ["Label", "Datasets", "Train", "Past detections", "Models"]) {
+    const href = (name: RegExp | string) => within(nav).getByRole("link", { name }).getAttribute("href");
+    expect(href(/^Sources/)).toBe(`/p/${PROJECT_ID}/sources`);
+    expect(href(/^Runs/)).toBe(`/p/${PROJECT_ID}/runs`);
+    expect(href(/^Analytics/)).toBe(`/p/${PROJECT_ID}/analytics`);
+    expect(href("Site areas")).toBe(`/p/${PROJECT_ID}/site-areas`);
+    for (const name of [
+      "Images",
+      "Detect",
+      "Maps",
+      "Surveys",
+      "Label",
+      "Datasets",
+      "Train",
+      "Past detections",
+    ]) {
       expect(within(nav).queryByRole("link", { name: new RegExp(`^${name}`) })).toBeNull();
     }
     expect(within(nav).getByRole("link", { name: "Library" })).toBeInTheDocument();
   });
 
-  it("a detection project with no model points Detect at the library", () => {
+  it("an empty detection project locks Runs until a source exists, with the reason", () => {
     useProjectKindStore.getState().set(PROJECT_ID, "detect");
-    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12 });
+    useProgressStore.getState().set(PROJECT_ID, { ...base, models: 1 });
     const { api } = fakeClient([]);
     renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="North site" />, { api });
-    const detect = screen.getByRole("link", { name: /^Detect/ });
-    expect(detect).toHaveAttribute("href", "/library");
-    expect(detect).not.toHaveAttribute("aria-disabled");
-    act(() => detect.focus());
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Add a model to the library first");
+    const runs = screen.getByRole("link", { name: /^Runs/ });
+    expect(runs).toHaveAttribute("aria-disabled", "true");
+    act(() => runs.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Add photos or a map first");
+    const analytics = screen.getByRole("link", { name: /^Analytics/ });
+    act(() => analytics.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Run a model first");
   });
 
   it("shows no steps until the project's kind is known", () => {

@@ -12,6 +12,11 @@ export interface ProjectProgress {
   queryRuns: number;
   /** GeoTIFF maps of the project, any state (a count only). */
   maps: number;
+  /**
+   * Detection projects: whether any run exists, photo or map (`GET /runs`, one row). Undefined when
+   * that list is not known; `queryRuns` then stands in.
+   */
+  hasRuns?: boolean;
 }
 
 export interface NextStep {

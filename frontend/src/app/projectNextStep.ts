@@ -8,38 +8,40 @@ function detectNextStep(projectId: string, p: ProjectProgress): NextStep {
   const at = (screen: string) => `/p/${projectId}/${screen}`;
   if (p.pendingReview > 0)
     return {
-      text: `Review ${plural(p.pendingReview, "suggestion", "suggestions")}`,
-      detail: "Suggested boxes from detection runs wait until you accept or reject them.",
+      text: `Review ${plural(p.pendingReview, "detection", "detections")}`,
+      detail: "Detections from your runs count as verified once you accept them.",
       to: at("review"),
     };
   if (p.images === 0 && p.maps === 0)
     return {
-      text: "Add images or a map",
+      text: "Add photos or a map",
       detail:
-        "Import a folder of drone images, or a GeoTIFF map of the site. The originals are never modified.",
-      to: at("data"),
+        "Import a folder of drone photos, or a GeoTIFF map of the site. The originals are never modified.",
+      to: at("sources"),
     };
   if (p.models === 0)
     return {
       text: "Add a model to the library",
-      detail: "A detection runs a model from your library. Import a model file or add a starter model.",
+      detail: "A run uses a model from your library. Import a model file or add a starter model.",
       to: "/library",
     };
-  if (p.queryRuns === 0 && p.images > 0)
+  const hasRuns = p.hasRuns ?? p.queryRuns > 0;
+  if (!hasRuns)
     return {
-      text: "Run a detection",
-      detail: "Pick a model from your library and run it over the images; it suggests boxes to review.",
-      to: at("query"),
+      text: "Run a model",
+      detail: "Pick your photos or map and a model from your library; it finds the objects to count.",
+      to: at("runs"),
     };
-  if (p.queryRuns === 0 && p.maps > 0 && p.images === 0)
+  // Only photo runs report what waits for review; a map run is reviewed on the map.
+  if (p.queryRuns === 0)
     return {
-      text: "Run a detection on your map",
-      detail: "Open the map and start a run with a model from your library.",
-      to: at("maps"),
+      text: "Review the detections",
+      detail: "Accept or reject what the model found, so the counts become verified.",
+      to: at("review"),
     };
   return {
     text: "Export the results",
-    detail: "Take the counts and the reviewed boxes out of the app as tables or a report.",
+    detail: "Take the counts out of the app as a table or a report.",
     to: at("export"),
   };
 }

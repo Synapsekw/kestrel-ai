@@ -92,7 +92,8 @@ def compute_stats(handle: ProjectHandle, source_id: str | None = None) -> Stats:
         source_rows = s.execute(
             select(Source.id, Source.site, Source.duplicate_count, func.count(Image.id))
             .outerjoin(Image, Image.source_id == Source.id)
-            .where(*([Source.id == source_id] if source_id else []))
+            # Photo sources only: a map source holds no images (spec section 7.1).
+            .where(Source.kind == "images", *([Source.id == source_id] if source_id else []))
             .group_by(Source.id)
             .order_by(Source.created_at)
         ).all()

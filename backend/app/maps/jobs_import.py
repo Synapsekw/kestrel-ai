@@ -15,6 +15,7 @@ from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.maps import raster
 from app.maps.georef import Georef
+from app.maps.service import sync_source_date
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.tiles import TILE_CACHE
 
@@ -94,6 +95,7 @@ def run_map_import(ctx: JobContext) -> dict:
         # Only fill it in; never overwrite a date the operator has corrected by hand.
         if row.captured_on is None:
             row.captured_on = info.captured_on
+        sync_source_date(s, row)
         row.source_sha256, row.stretch = sha, stretch.to_dict()
         row.status, row.error = "ready", None
     TILE_CACHE.drop_map(map_id)

@@ -1,7 +1,8 @@
 import type { ProjectProgress } from "./nextStep";
 import type { ProjectKind } from "./useProjectKind";
 
-export type StepId = "images" | "label" | "datasets" | "train" | "detect" | "maps" | "review" | "export";
+export type StepId =
+  "images" | "label" | "datasets" | "train" | "sources" | "runs" | "review" | "analytics" | "export";
 export type StepState = "done" | "current" | "upcoming" | "locked";
 
 export interface Step {
@@ -21,16 +22,17 @@ export interface Step {
 /** The steps of a training project, in order. */
 export const TRAIN_STEPS: StepId[] = ["images", "label", "datasets", "train", "review", "export"];
 /** The steps of a detection project, in order. */
-export const DETECT_STEPS: StepId[] = ["images", "detect", "maps", "review", "export"];
+export const DETECT_STEPS: StepId[] = ["sources", "runs", "review", "analytics", "export"];
 
 const LABEL: Record<StepId, string> = {
   images: "Images",
   label: "Label",
   datasets: "Datasets",
   train: "Train",
-  detect: "Detect",
-  maps: "Maps",
+  sources: "Sources",
+  runs: "Runs",
   review: "Review",
+  analytics: "Analytics",
   export: "Export",
 };
 
@@ -39,9 +41,10 @@ const PATH: Record<StepId, string> = {
   label: "label",
   datasets: "datasets",
   train: "train",
-  detect: "query",
-  maps: "maps",
+  sources: "sources",
+  runs: "runs",
   review: "review",
+  analytics: "analytics",
   export: "export",
 };
 
@@ -78,21 +81,22 @@ function trainRules(p: ProjectProgress): Rules {
 }
 
 function detectRules(p: ProjectProgress): Rules {
+  const hasSources = p.images > 0 || p.maps > 0;
+  const hasRuns = p.hasRuns ?? p.queryRuns > 0;
+  const noRun = hasRuns ? null : "Run a model first";
   return {
     done: {
-      images: p.images > 0,
-      detect: p.queryRuns > 0,
-      maps: p.maps > 0,
+      sources: hasSources,
+      runs: hasRuns,
+      // Only photo runs report what waits for review; a map-only project keeps Review current.
       review: p.queryRuns > 0 && p.pendingReview === 0,
     },
     locked: {
-      detect: p.models === 0 ? "Add a model to the library first" : null,
-      review: p.queryRuns === 0 && p.pendingReview === 0 ? "Run a detection first" : null,
-      export: p.queryRuns === 0 && p.maps === 0 ? "Run a detection first" : null,
+      runs: hasSources ? null : "Add photos or a map first",
+      review: p.pendingReview > 0 ? null : noRun,
+      analytics: noRun,
     },
     count: {
-      images: String(p.images),
-      maps: String(p.maps),
       review: p.pendingReview > 0 ? String(p.pendingReview) : null,
     },
   };
@@ -114,16 +118,14 @@ export function stepStates(projectId: string, kind: ProjectKind, p: ProjectProgr
   return order.map((id) => {
     const reason = locked[id] ?? null;
     const state: StepState = id === current ? "current" : done[id] ? "done" : reason ? "locked" : "upcoming";
-    // Detection without a model: the entry leads to the library, where a model is added.
-    const toLibrary = state === "locked" && id === "detect";
     return {
       id,
       label: LABEL[id],
-      path: toLibrary ? "/library" : `/p/${projectId}/${PATH[id]}`,
+      path: `/p/${projectId}/${PATH[id]}`,
       state,
       count: count[id] ?? null,
       lockedReason: state === "locked" ? reason : null,
-      opensWhenLocked: toLibrary,
+      opensWhenLocked: false,
     };
   });
 }

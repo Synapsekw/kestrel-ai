@@ -122,3 +122,16 @@ def test_duplicate_count_comes_from_the_import(client, project, import_source, t
     source_id = import_source(pid, folder)
     assert _stats(client, pid)["duplicate_count"] == 1
     assert _stats(client, pid, source_id)["duplicate_count"] == 1
+
+
+def test_a_map_source_is_not_listed_among_photo_sources(client, project, import_source, ahmadia_sample):
+    from app.db.models import Source
+
+    pid = project["id"]
+    source_id = import_source(pid, ahmadia_sample, site="ahmadia")
+    handle = client.app.state.projects.get(pid)
+    with handle.session() as s:
+        s.add(Source(folder="C:/maps/flight.tif", site="flight", kind="map", label="Flight 14 Sep"))
+        s.commit()
+    s = _stats(client, pid)
+    assert s["sources"] == [{"source_id": source_id, "site": "ahmadia", "image_count": 20}]
