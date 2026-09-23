@@ -15,7 +15,8 @@ function detectNextStep(projectId: string, p: ProjectProgress): NextStep {
   if (p.images === 0 && p.maps === 0)
     return {
       text: "Add photos or a map",
-      detail: "Import a folder of drone photos, or a GeoTIFF map of the site. The originals are never modified.",
+      detail:
+        "Import a folder of drone photos, or a GeoTIFF map of the site. The originals are never modified.",
       to: at("sources"),
     };
   if (p.models === 0)

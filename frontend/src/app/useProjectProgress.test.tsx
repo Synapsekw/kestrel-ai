@@ -137,7 +137,9 @@ describe("useProjectProgress", () => {
     renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
     await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
     expect(JSON.parse(screen.getByTestId("progress").textContent ?? "")).toMatchObject({ hasRuns: true });
-    expect(requests.find((r) => r.url.includes("/runs?"))?.url).toBe(`/api/v1/projects/${PROJECT_ID}/runs?limit=1`);
+    expect(requests.find((r) => r.url.includes("/runs?"))?.url).toBe(
+      `/api/v1/projects/${PROJECT_ID}/runs?limit=1`,
+    );
   });
 
   it("leaves hasRuns unknown when the runs list cannot be read", async () => {

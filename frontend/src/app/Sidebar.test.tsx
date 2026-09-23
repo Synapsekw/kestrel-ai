@@ -166,7 +166,16 @@ describe("Sidebar", () => {
     expect(href(/^Runs/)).toBe(`/p/${PROJECT_ID}/runs`);
     expect(href(/^Analytics/)).toBe(`/p/${PROJECT_ID}/analytics`);
     expect(href("Site areas")).toBe(`/p/${PROJECT_ID}/site-areas`);
-    for (const name of ["Images", "Detect", "Maps", "Surveys", "Label", "Datasets", "Train", "Past detections"]) {
+    for (const name of [
+      "Images",
+      "Detect",
+      "Maps",
+      "Surveys",
+      "Label",
+      "Datasets",
+      "Train",
+      "Past detections",
+    ]) {
       expect(within(nav).queryByRole("link", { name: new RegExp(`^${name}`) })).toBeNull();
     }
     expect(within(nav).getByRole("link", { name: "Library" })).toBeInTheDocument();

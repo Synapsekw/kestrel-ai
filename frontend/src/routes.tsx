@@ -15,7 +15,11 @@ import { TrainScreen } from "@/screens/TrainScreen";
 import { QueryScreen } from "@/screens/QueryScreen";
 import { MapsScreen } from "@/screens/MapsScreen";
 import { PastDetectionsScreen } from "@/screens/PastDetectionsScreen";
-import { SurveysScreen } from "@/screens/SurveysScreen";
+import { SourcesScreen } from "@/screens/SourcesScreen";
+import { RunsScreen } from "@/screens/RunsScreen";
+import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
+import { SiteAreasScreen } from "@/screens/SiteAreasScreen";
+import { SurveysRedirect } from "@/sources/SurveysRedirect";
 import { ExportScreen } from "@/screens/ExportScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
@@ -48,11 +52,18 @@ export const router = createBrowserRouter([
       { path: "p/:projectId/train", element: only(TRAIN, <TrainScreen />) },
       { path: "p/:projectId/past", element: only(TRAIN, <PastDetectionsScreen />) },
       { path: "p/:projectId/past/maps/:mapId", element: only(TRAIN, <PastDetectionsScreen />) },
-      // Detection projects.
+      // Detection projects: Sources, Runs, Review (above, it branches on kind), Analytics, Export;
+      // Site areas below the divider. A map opens in the viewer from Sources.
+      { path: "p/:projectId/sources", element: only(DETECT, <SourcesScreen />) },
+      { path: "p/:projectId/runs", element: only(DETECT, <RunsScreen />) },
+      { path: "p/:projectId/analytics", element: only(DETECT, <AnalyticsScreen />) },
+      { path: "p/:projectId/site-areas", element: only(DETECT, <SiteAreasScreen />) },
+      { path: "p/:projectId/maps/:mapId", element: only(DETECT, <MapsScreen />) },
+      // No longer steps; kept so earlier links and past detections still open.
       { path: "p/:projectId/query", element: only(DETECT, <QueryScreen />) },
       { path: "p/:projectId/maps", element: only(DETECT, <MapsScreen />) },
-      { path: "p/:projectId/maps/:mapId", element: only(DETECT, <MapsScreen />) },
-      { path: "p/:projectId/surveys", element: only(DETECT, <SurveysScreen />) },
+      // The survey timeline moved into Analytics.
+      { path: "p/:projectId/surveys", element: <SurveysRedirect /> },
     ],
   },
 ]);

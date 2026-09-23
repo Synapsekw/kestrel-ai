@@ -2,15 +2,7 @@ import type { ProjectProgress } from "./nextStep";
 import type { ProjectKind } from "./useProjectKind";
 
 export type StepId =
-  | "images"
-  | "label"
-  | "datasets"
-  | "train"
-  | "sources"
-  | "runs"
-  | "review"
-  | "analytics"
-  | "export";
+  "images" | "label" | "datasets" | "train" | "sources" | "runs" | "review" | "analytics" | "export";
 export type StepState = "done" | "current" | "upcoming" | "locked";
 
 export interface Step {
