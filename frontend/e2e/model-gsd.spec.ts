@@ -100,6 +100,11 @@ test("a model with no training scale offers its derived one, with the evidence f
   const use = dialog.getByRole("button", { name: "Use 18.92" });
   await expect(use).toBeVisible();
 
+  // The scale is still unknown at this exact moment (empty field, offer pending): the run's
+  // central guarantee — cannot start without a scale — must hold right here, not just in theory.
+  const start = dialog.getByRole("button", { name: "Start detection" });
+  await expect(start).toBeDisabled();
+
   await page.screenshot({
     path: evidencePath("model-gsd", "2026-09-23-scale-offer.png"),
     animations: "disabled",
@@ -107,4 +112,5 @@ test("a model with no training scale offers its derived one, with the evidence f
 
   await use.click();
   await expect(dialog.getByLabel("Model trained at (cm / px)")).toHaveValue("18.92");
+  await expect(start).toBeEnabled();
 });
