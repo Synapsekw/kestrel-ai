@@ -9,9 +9,14 @@ from app.project_agent.schemas import (
     AgentTurnCreate,
     AgentTurnOut,
 )
+from app.projects.kinds import require_kind
 from app.projects.service import ProjectHandle, get_project
 
-router = APIRouter(prefix="/projects/{projectId}/agent", tags=["agent"])
+router = APIRouter(
+    prefix="/projects/{projectId}/agent",
+    tags=["agent"],
+    dependencies=[Depends(require_kind(("train",)))],
+)
 
 
 def _runner(request: Request):

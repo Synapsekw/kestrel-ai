@@ -27,7 +27,7 @@ class AppData:
             return []
         return [r for r in items if isinstance(r, dict) and {"id", "name", "folder"} <= set(r)]
 
-    def remember(self, project_id: str, name: str, folder: str) -> None:
+    def remember(self, project_id: str, name: str, folder: str, kind: str = "train") -> None:
         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
         items.insert(
             0,
@@ -35,6 +35,7 @@ class AppData:
                 "id": project_id,
                 "name": name,
                 "folder": folder,
+                "kind": kind,
                 "last_opened_at": datetime.now(UTC).isoformat(),
             },
         )

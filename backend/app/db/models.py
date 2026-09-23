@@ -19,6 +19,19 @@ class Project(Base):
     preannotation_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     import_defaults: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # "train" | "detect": set at creation, never changed (spec 2026-09-23 section 5.1).
+    kind: Mapped[str] = mapped_column(String, default="train", server_default="train")
+
+
+class ModelAdoption(Base):
+    """Old project `model` id -> app-wide library model id (spec 2026-09-23 section 6)."""
+
+    __tablename__ = "model_adoption"
+    old_model_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    library_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    status: Mapped[str] = mapped_column(String)  # "adopted" | "missing" | "failed"
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
 class Source(Base):

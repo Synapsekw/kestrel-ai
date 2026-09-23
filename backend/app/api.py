@@ -10,6 +10,7 @@ from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
 from app.project_agent.router import router as project_agent_router
+from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
 from app.training.router import router as training_router
@@ -23,17 +24,19 @@ for r in (
     agent_router,
     health_router,
     projects_router,
-    jobs_router,
     datasets_router,
-    training_router,
     starter_router,
-    starter_project_router,
     providers_router,
     inference_router,
-    exports_router,
     project_agent_router,
 ):
     api_router.include_router(r)
+
+# Project routers that serve both kinds of project and declare no kind in their own module.
+# Every route under /projects/{projectId} must declare its kinds (spec 2026-09-23 section 5.2);
+# tests/test_project_kinds.py walks the routes and fails on one that does not.
+for r in (jobs_router, exports_router, training_router, starter_project_router):
+    api_router.include_router(r, dependencies=[Depends(require_kind(ANY_KIND))])
 
 # The maps router's import chain pulls in `rasterio` at module scope (router -> service/tiles ->
 # raster, the job modules). A broken GDAL in the frozen bundle must not stop the whole backend from

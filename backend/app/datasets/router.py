@@ -41,10 +41,15 @@ from app.errors import AppError, not_found
 from app.events_util import publish_image_ids_event
 from app.jobs.schemas import JobOut
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
+from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.schemas import ImportSettings, Stats
 from app.projects.service import ProjectHandle, get_project
 
-router = APIRouter(prefix="/projects/{projectId}", tags=["datasets"])
+# Images, sources and boxes are shared storage (both kinds); datasets are training work only.
+router = APIRouter(
+    prefix="/projects/{projectId}", tags=["datasets"], dependencies=[Depends(require_kind(ANY_KIND))]
+)
+TRAIN_ONLY = [Depends(require_kind(("train",)))]
 
 
 def _cursor_datetime(value) -> datetime:
@@ -263,7 +268,7 @@ def review_boxes(body: BoxReview, handle: ProjectHandle = Depends(get_project)) 
     return BoxReviewResult(updated=boxes.review_boxes(handle, body.box_ids, body.action))
 
 
-@router.get("/datasets", response_model=DatasetPage)
+@router.get("/datasets", response_model=DatasetPage, dependencies=TRAIN_ONLY)
 def list_datasets(
     handle: ProjectHandle = Depends(get_project),
     limit: int | None = Query(None, ge=1, le=1000),
@@ -286,7 +291,7 @@ def list_datasets(
     return DatasetPage(items=_datasets_out(handle, rows), next_cursor=next_cursor)
 
 
-@router.post("/datasets", response_model=DatasetWithJob, status_code=202)
+@router.post("/datasets", response_model=DatasetWithJob, status_code=202, dependencies=TRAIN_ONLY)
 def create_dataset(
     body: DatasetCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> DatasetWithJob:
@@ -302,7 +307,7 @@ def create_dataset(
     )
 
 
-@router.get("/datasets/{datasetId}", response_model=DatasetOut)
+@router.get("/datasets/{datasetId}", response_model=DatasetOut, dependencies=TRAIN_ONLY)
 def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetOut:  # noqa: N803
     with handle.session() as s:
         row = s.get(Dataset, datasetId)
@@ -312,11 +317,11 @@ def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) ->
     return _datasets_out(handle, [row])[0]
 
 
-@router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
+@router.get("/datasets/{datasetId}/stats", response_model=DatasetStats, dependencies=TRAIN_ONLY)
 def get_dataset_stats(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetStats:  # noqa: N803
     return stats.dataset_stats(handle, datasetId)
 
 
-@router.delete("/datasets/{datasetId}", status_code=204)
+@router.delete("/datasets/{datasetId}", status_code=204, dependencies=TRAIN_ONLY)
 def delete_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> None:  # noqa: N803
     materialise.delete_dataset(handle, datasetId)
