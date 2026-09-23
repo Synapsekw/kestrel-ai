@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-22
+last-updated: 2026-09-23
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -68,6 +68,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Rotated boxes (OBB) wave 1 — annotate, store, export | merged to `main` (`249262b`) | gate green on the merged result; 2 cross-cutting defects found by the whole-branch review and fixed before merge; wave 2 (OBB training) unplanned |
 | Cleanup batch A | merged/pushed to `main` (`8823d95`); rebuilt, installed, acceptance at `93892bd` | Select width fix (cramped class fields), G3 report label tags, CI actions on Node 24 majors, portable GPU-test paths; G2/M3 ledger closed. See [[2026-09-22-1758-cleanup-a-and-acceptance]] |
 | CI green (GitHub Actions `ci`) | merged/pushed to `main` (`afba411`) | red on all 14 push runs since publishing; four stacked causes fixed and the local gate now runs `ruff format --check` and e2e as CI does; 3/3 dispatch runs green on all four jobs including `sidecar-smoke`. See [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]] |
+| Project agent (in-project AI drawer with tool access) | merged to `main` (`b606360`); rebuilt and installed 2026-09-22 | plain-language operation of the app through ~35 tools over the existing API, approvals for spend/train/delete; 854 backend, 564 frontend, 62 browser and 8 Rust tests; frozen-sidecar route smoke and an installed-build CDP check. No live provider turn yet. See [[2026-09-22-1930-project-agent]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -79,7 +80,18 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Cleanup batch A, rebuilt, installed and accepted 8/8** — `f59007b..93892bd`
+**Shipped last:** **Project agent — an in-project AI drawer that operates the app** —
+`fcb9420..ef2ef21` (21 commits, worktree removed, branch deleted, not yet pushed). The turn loop
+runs in the sidecar so keys stay in Credential Manager; ~35 tools call the existing API routes
+in-process, so validation, background jobs and events are the UI's own. Image work is selected by
+a server-resolved selector, so "the first 500 images" never sends 500 ids through the model. Cloud
+labeling, training and deletes pause with an Approve/Deny card carrying the cost estimate. Four
+real defects were caught by review before merge (a hard kill broke the conversation permanently; a
+model-chosen `..` id reached `DELETE /projects/{id}`; an approval card could dead-end without a
+key; a 120 s model timeout). Gate green, installer rebuilt and installed, drawer verified in the
+installed build over CDP. **No live provider turn has run yet.** See [[2026-09-22-1930-project-agent]].
+
+Previously shipped: **Cleanup batch A, rebuilt, installed and accepted 8/8** — `f59007b..93892bd`
 (10 commits, two task worktrees, both removed). Fixed the cramped class-name fields (`Select`
 dropped the caller's width because `cx()` does not resolve Tailwind conflicts), made HTML-report
 labels readable filled tags (G3), moved every CI action to its Node 24 major, and made the GPU/live
@@ -158,6 +170,16 @@ bound the pytest step in `finish-task.ps1`, see
 folder rename when the operator is ready (§5).
 
 ## 5. Owed
+
+### Project agent: a live turn, and a push (opened 2026-09-22)
+
+The feature is merged and installed, but every test fakes the provider SDKs, so no real model has
+ever driven the loop. Owed:
+- One live turn on the installed build against a small batch (read-only question first, then
+  "label the first 20 images…" through the approval card), watching what the model actually calls.
+- `git push`: `origin/main` is still at `e6e5f7d`.
+- Deferred minors, triaged can-wait, are listed in
+  `.superpowers/sdd/2026-09-22-project-agent/progress.md`.
 
 ### Setup agent/catalog desktop distribution — CLOSED; live provider check remains
 
