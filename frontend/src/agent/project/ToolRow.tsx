@@ -25,6 +25,10 @@ const JOB_NAME: Record<Job["type"], string> = {
   library_starter: "Model download",
   library_adopt: "Moving models to the library",
   map_move: "Map move",
+  accept_above: "Bulk accept",
+  recount: "Recount",
+  area_recount: "Site-area recount",
+  detect_export: "Detection export",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

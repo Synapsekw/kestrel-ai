@@ -18,6 +18,10 @@ const TYPE_NAME: Record<Job["type"], string> = {
   library_starter: "Model download",
   library_adopt: "Moving models to the library",
   map_move: "Map move",
+  accept_above: "Bulk accept",
+  recount: "Recount",
+  area_recount: "Site-area recount",
+  detect_export: "Detection export",
 };
 
 function num(v: unknown): number | null {
@@ -71,6 +75,18 @@ export function jobToastText(job: Job): string {
       return "Models moved to the library";
     case "map_move":
       return "Map moved";
+    case "accept_above": {
+      const accepted = num(r.accepted);
+      return accepted === null
+        ? "Bulk accept finished"
+        : `Bulk accept finished: ${accepted} ${accepted === 1 ? "detection" : "detections"} accepted`;
+    }
+    case "recount":
+      return "Recount finished";
+    case "area_recount":
+      return "Site-area counts updated";
+    case "detect_export":
+      return "Export finished";
   }
 }
 
