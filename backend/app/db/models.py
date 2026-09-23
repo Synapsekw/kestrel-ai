@@ -139,6 +139,94 @@ class Job(Base):
     __table_args__ = (Index("ix_job_state", "state"), Index("ix_job_created", "created_at"))
 
 
+class GeoMap(Base):
+    """A georeferenced raster the operator imported (spec 2026-09-22-geotiff-maps section 3)."""
+
+    __tablename__ = "geo_map"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="importing")  # importing | ready | failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_path: Mapped[str] = mapped_column(String)  # absolute; only ever read
+    source_size: Mapped[int] = mapped_column(Integer)
+    source_sha256: Mapped[str] = mapped_column(String, default="")
+    width: Mapped[int] = mapped_column(Integer, default=0)
+    height: Mapped[int] = mapped_column(Integer, default=0)
+    band_count: Mapped[int] = mapped_column(Integer, default=0)
+    dtype: Mapped[str] = mapped_column(String, default="")
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    proj4: Mapped[str | None] = mapped_column(String, nullable=True)
+    geotransform: Mapped[list | None] = mapped_column(JSON, nullable=True)  # GDAL order, 6 floats
+    bounds_native: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    bounds_wgs84: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    stretch: Mapped[dict] = mapped_column(JSON, default=dict)
+    labels_version: Mapped[int] = mapped_column(Integer, default=0)
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class MapRun(Base):
+    __tablename__ = "map_run"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    map_id: Mapped[str] = mapped_column(String(36), ForeignKey("geo_map.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # local_model | cloud_provider
+    model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    provider: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    query: Mapped[str] = mapped_column(String, default="")
+    tile_size: Mapped[int] = mapped_column(Integer, default=1280)
+    overlap: Mapped[float] = mapped_column(Float, default=0.2)
+    nms_iou: Mapped[float] = mapped_column(Float, default=0.5)
+    conf: Mapped[float] = mapped_column(Float, default=0.25)
+    target_gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    counts: Mapped[dict] = mapped_column(JSON, default=dict)  # {class_id: n}
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_map_run_map", "map_id"),)
+
+
+class MapDetection(Base):
+    __tablename__ = "map_detection"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    run_id: Mapped[str] = mapped_column(String(36), ForeignKey("map_run.id", ondelete="CASCADE"))
+    class_id: Mapped[str] = mapped_column(String(36))
+    confidence: Mapped[float] = mapped_column(Float)
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    w: Mapped[float] = mapped_column(Float)
+    h: Mapped[float] = mapped_column(Float)
+    angle: Mapped[float | None] = mapped_column(Float, nullable=True)  # reserved for OBB wave 2
+    __table_args__ = (Index("ix_map_detection_run_xy", "run_id", "x", "y"),)
+
+
+class MapZone(Base):
+    __tablename__ = "map_zone"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    map_id: Mapped[str] = mapped_column(String(36), ForeignKey("geo_map.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String)
+    polygon: Mapped[list] = mapped_column(JSON)  # [[x, y], ...] in map pixels
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_map_zone_map", "map_id"),)
+
+
+class MapLabel(Base):
+    __tablename__ = "map_label"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    map_id: Mapped[str] = mapped_column(String(36), ForeignKey("geo_map.id", ondelete="CASCADE"))
+    class_id: Mapped[str] = mapped_column(String(36))
+    x: Mapped[float] = mapped_column(Float)
+    y: Mapped[float] = mapped_column(Float)
+    w: Mapped[float] = mapped_column(Float)
+    h: Mapped[float] = mapped_column(Float)
+    angle: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String, default="manual")  # manual | from_run:<id>
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_map_label_map", "map_id"),)
+
+
 class QueryRun(Base):
     __tablename__ = "query_run"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)

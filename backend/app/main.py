@@ -26,12 +26,14 @@ def project_opened(handle, runner) -> None:
     from app.datasets import materialise
     from app.exports import job as exports_job
     from app.jobs import startup
+    from app.maps import startup as maps_startup
 
     log = logging.getLogger(__name__)
     for step, run in (
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
+        ("interrupted map import sweep", lambda: maps_startup.sweep_interrupted_imports(handle, runner)),
     ):
         try:
             run()
