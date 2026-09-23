@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type OlMap from "ol/Map";
+import { boundingExtent } from "ol/extent";
 import {
   mapTileUrl,
   type ClassDef,
   type GeoMap,
   type MapLabel,
   type MapRun,
+  type MapScore,
   type MapZone,
 } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
@@ -17,6 +19,7 @@ import {
   deleteZone,
   fetchDensity,
   fetchDetections,
+  fetchScore,
   listLabels,
   listMapRuns,
   listMaps,
@@ -31,6 +34,7 @@ import { useProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
+import { ExportMapDialog } from "@/maps/ExportMapDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
 import { LabelPanel } from "@/maps/LabelPanel";
 import { MapList } from "@/maps/MapList";
@@ -39,11 +43,13 @@ import { MapView } from "@/maps/MapView";
 import { NewRunDialog } from "@/maps/NewRunDialog";
 import { ResultsPanel, type CountScope } from "@/maps/ResultsPanel";
 import { RunList } from "@/maps/RunList";
+import { ScorePanel } from "@/maps/ScorePanel";
 import { makeReadout, type Readout } from "@/maps/coords";
-import { fromOl } from "@/maps/grid";
+import { fromOl, toOl } from "@/maps/grid";
 import { useLabelLayers, type Tool } from "@/maps/labelLayers";
 import { LabelHistory, outsideZones, type LabelApi } from "@/maps/labelModel";
-import { type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
+import { type Match, type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
+import { matchLookup } from "@/maps/scoreView";
 import {
   MAX_COMPARE,
   boxFacts,
@@ -54,7 +60,7 @@ import {
 } from "@/maps/runModel";
 import { Alert, Button, EmptyState, Segmented } from "@/ui";
 
-type RightTab = "results" | "labels";
+type RightTab = "results" | "labels" | "score";
 
 const nf = new Intl.NumberFormat("en-GB").format;
 const px = (n: number) => nf(n).replace(/,/g, " ");
@@ -131,6 +137,13 @@ export function MapsScreen() {
   const [rightTab, setRightTab] = useState<RightTab>("results");
   const [zones, setZones] = useState<MapZone[]>([]);
   const [labels, setLabels] = useState<MapLabel[]>([]);
+  const [scores, setScores] = useState<Record<string, MapScore | null>>({});
+  const [overlay, setOverlay] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  // Bumped every time a label or zone edit round-trips (create/update/delete/seed/undo/redo), so the
+  // score effect below can refetch without needing `active.labels_version` to have round-tripped
+  // through a full map reload first.
+  const [editVersion, setEditVersion] = useState(0);
   const [tool, setTool] = useState<Tool>("pan");
   const [activeClassId, setActiveClassId] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -179,6 +192,7 @@ export function MapsScreen() {
     setTrackedMapId(active?.id);
     setSelected([]);
     setRuns([]);
+    setScores({});
     // `priorStates` itself resets naturally: run ids are UUIDs, so a leftover entry from the
     // previous map never matches one of the new map's run ids.
   }
@@ -189,11 +203,17 @@ export function MapsScreen() {
 
   const reloadZones = useCallback(() => {
     if (!active) return Promise.resolve();
-    return listZones(api, projectId, active.id).then(setZones);
+    return listZones(api, projectId, active.id).then((zs) => {
+      setZones(zs);
+      setEditVersion((v) => v + 1);
+    });
   }, [api, projectId, active]);
   const reloadLabels = useCallback(() => {
     if (!active) return Promise.resolve();
-    return listLabels(api, projectId, active.id).then(setLabels);
+    return listLabels(api, projectId, active.id).then((ls) => {
+      setLabels(ls);
+      setEditVersion((v) => v + 1);
+    });
   }, [api, projectId, active]);
   useEffect(() => {
     void reloadZones();
@@ -273,8 +293,39 @@ export function MapsScreen() {
   const classes = useMemo(() => project?.classes ?? EMPTY_CLASSES, [project]);
   const colours = useMemo(() => Object.fromEntries(classes.map((c) => [c.id, c.colour])), [classes]);
 
+  // Scores for every ticked run (spec section 8): a run can only be scored once it has finished, so
+  // this reuses `liveSelected` (a finished run's id is only in `selected` after `RunList` lets it be
+  // ticked). Refetches on a label/zone edit (`editVersion`) and whenever the run list itself changes
+  // (a `map_detect` job finishing updates `runs`, which `reloadRuns` already listens for). `scores`
+  // itself is never cleared here: a deselected run's stale entry is simply filtered out below, so
+  // this effect body never needs a synchronous `setState` of its own (only inside the fetch callback).
+  useEffect(() => {
+    if (liveSelected.length === 0) return;
+    let cancelled = false;
+    for (const runId of liveSelected) {
+      void fetchScore(api, projectId, runId).then((s) => {
+        if (!cancelled) setScores((sc) => ({ ...sc, [runId]: s }));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, liveSelected, editVersion]);
+  // The scores actually relevant right now: a run just deselected, or left over from a previous map,
+  // still has an entry in `scores` until this effect above refetches it, so callers key off this
+  // filtered view instead of `scores` directly.
+  const liveScores = useMemo(() => {
+    const out: Record<string, MapScore | null> = {};
+    for (const id of liveSelected) if (id in scores) out[id] = scores[id];
+    return out;
+  }, [scores, liveSelected]);
+
   const specFor = useCallback(
-    (runId: string | undefined, dashed: boolean): RunLayerSpec | null => {
+    (
+      runId: string | undefined,
+      dashed: boolean,
+      matchOf?: (id: string) => Match | undefined,
+    ): RunLayerSpec | null => {
       if (!runId) return null;
       return {
         runId,
@@ -282,6 +333,7 @@ export function MapsScreen() {
         minConf,
         hidden,
         colours,
+        matchOf,
         load: (bbox, c) => fetchDetections(api, projectId, runId, bbox, c),
         density: (c) => fetchDensity(api, projectId, runId, 128, c),
         onViewCounts: (counts, truncated) => {
@@ -292,10 +344,29 @@ export function MapsScreen() {
     },
     [api, projectId, minConf, hidden, colours],
   );
-  const spec1 = useMemo(() => specFor(liveSelected[0], false), [specFor, liveSelected]);
+  // Only the first (primary) run is coloured by match status: it is the run the Score tab's mistake
+  // list and per-class table are built from, so it is the only one whose overlay stays coherent with
+  // what "Next mistake" steps through. A second, comparison run keeps its ordinary/dashed colours.
+  const primaryScore = liveScores[liveSelected[0]] ?? null;
+  const spec1 = useMemo(
+    () => specFor(liveSelected[0], false, overlay ? matchLookup(primaryScore, "detection") : undefined),
+    [specFor, liveSelected, overlay, primaryScore],
+  );
   const spec2 = useMemo(() => specFor(liveSelected[1], true), [specFor, liveSelected]);
   useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec1);
   useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec2);
+
+  const onStepMistake = useCallback(
+    (m: MapScore["matches"][number]) => {
+      if (!olMap || !active) return;
+      olMap.getView().fit(boundingExtent([toOl(m.x, m.y), toOl(m.x + m.w, m.y + m.h)]), {
+        padding: [120, 120, 120, 120],
+        maxZoom: active.tile_grid.max_zoom,
+        duration: 250,
+      });
+    },
+    [olMap, active],
+  );
 
   const effectiveClassId = activeClassId || classes[0]?.id || "";
   const warnIds = useMemo(() => outsideZones(labels, zones), [labels, zones]);
@@ -308,6 +379,7 @@ export function MapsScreen() {
     tool: rightTab === "labels" ? tool : "pan",
     selectedId,
     warnIds,
+    matchOf: overlay ? matchLookup(primaryScore, "label") : undefined,
     onBox: (box) => {
       if (!active || !effectiveClassId) return;
       const body: MapLabelCreate = { class_id: effectiveClassId, x: box.x, y: box.y, w: box.w, h: box.h };
@@ -519,7 +591,12 @@ export function MapsScreen() {
       >
         {active && (
           <>
-            <h2 className="truncate text-base font-semibold">{active.name}</h2>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="min-w-0 truncate text-base font-semibold">{active.name}</h2>
+              <Button size="sm" icon="download" onClick={() => setExporting(true)}>
+                Export
+              </Button>
+            </div>
             <MapFacts m={active} />
             {!active.crs_wkt && (
               <Alert tone="warn">
@@ -535,6 +612,7 @@ export function MapsScreen() {
               options={[
                 { value: "results", label: "Results" },
                 { value: "labels", label: "Labels" },
+                { value: "score", label: "Score" },
               ]}
             />
             {rightTab === "results" ? (
@@ -563,6 +641,15 @@ export function MapsScreen() {
               ) : (
                 <p className="text-sm text-muted">Tick a finished run to see its boxes and counts.</p>
               )
+            ) : rightTab === "score" ? (
+              <ScorePanel
+                runs={runs}
+                scores={liveScores}
+                classes={classes}
+                overlay={overlay}
+                onOverlay={setOverlay}
+                onStep={onStepMistake}
+              />
             ) : (
               <LabelPanel
                 tool={tool}
@@ -618,6 +705,15 @@ export function MapsScreen() {
             setNewRun(false);
             reloadRuns();
           }}
+        />
+      )}
+      {exporting && active && (
+        <ExportMapDialog
+          projectId={projectId}
+          geoMap={active}
+          runs={runs}
+          selectedRunId={selected[0] ?? null}
+          onClose={() => setExporting(false)}
         />
       )}
     </div>

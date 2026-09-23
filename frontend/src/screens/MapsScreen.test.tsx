@@ -5,6 +5,7 @@ import {
   exampleGeoMap,
   exampleLabel,
   exampleMapRun,
+  exampleMapScore,
   exampleProject,
   exampleZone,
   fakeClient,
@@ -117,6 +118,8 @@ describe("MapsScreen", () => {
         path: /\/density$/,
         body: { cell_size: 80000, cells: [{ gx: 0, gy: 0, class_id: CLASS_ID(1), count: 42 }] },
       },
+      // Ticking a run also scores it in the background (Task 14), regardless of which tab is open.
+      { method: "GET", path: /\/score/, body: exampleMapScore },
     ]);
     renderWithProviders(<MapsScreen />, {
       api,
@@ -128,6 +131,27 @@ describe("MapsScreen", () => {
     expect(
       requests.some((r) => r.method === "GET" && /\/density\?/.test(r.url) && r.url.includes("cells=1")),
     ).toBe(true);
+  });
+
+  it("scores a ticked run and opens the export dialog", async () => {
+    const { api } = fakeClient([
+      ...base.slice(0, 3),
+      { method: "GET", path: /\/runs$/, body: { items: [exampleMapRun] } },
+      ...base.slice(4),
+      { method: "GET", path: /\/density$/, body: { cell_size: 80000, cells: [] } },
+      { method: "GET", path: /\/score/, body: exampleMapScore },
+    ]);
+    renderWithProviders(<MapsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/maps/${MAP_ID}`,
+      path: "/p/:projectId/maps/:mapId",
+    });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Show machinery-v3/ }));
+    fireEvent.click(await screen.findByRole("radio", { name: "Score" }));
+    expect(await screen.findByRole("row", { name: "Precision" })).toHaveTextContent("90.0 %");
+
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    expect(await screen.findByText("Export boxes with coordinates")).toBeInTheDocument();
   });
 
   it("shows zones in the Labels tab and picks a class by hotkey", async () => {
