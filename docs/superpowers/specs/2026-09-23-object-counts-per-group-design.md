@@ -27,6 +27,8 @@ list, agent placeholders. Making those neutral is a separate task, agreed with t
 ## 2. What this is not (v1)
 
 - No Excel export and no trend across survey dates. Both were considered and deferred.
+- The CSV and HTML report keep their existing sighting totals; feeding object counts into exports is
+  a later change, so this one stays a screen plus its job.
 - No manual merge or split of objects. A wrong count is fixed by fixing the boxes, in the editor and
   review screens that already exist, and recounting.
 - No tower or facade geometry. Projection assumes each class sits at a known height above a flat
@@ -158,8 +160,17 @@ committed in the same change. `JobType` gains `count` and `pose_backfill`.
 1. A 622-frame group counts in under 30 s, as a job with progress, and can be cancelled.
 2. Every counted object can be traced to the frames that saw it, and a wrong box is fixed with the
    existing editor/review tools; recounting updates the number.
-3. On flight `0033` of the reference dataset, with the operator's trained model, the projected count
-   is within 15% of a hand count of that flight, and the difference is explainable.
+3. Accuracy is demonstrated on flight `0033` of the reference dataset with a trained model, without
+   asking anyone to hand-count 622 frames:
+   - **Patch check.** One bounded ground patch (about 200 x 200 m, covered by a handful of frames) is
+     counted by hand from those frames; the projected count for that patch matches it, and every
+     difference is named.
+   - **Stability check.** Counting the same group from every second frame changes the total by no
+     more than 10%. A correct de-duplication does not depend on how often an object was seen; a
+     count that tracks frame density is really counting sightings.
+   - **Placement check.** Sightings of the same object from different frames land within the class
+     tolerance of each other (reported as a spread statistic per run), which is what makes merging
+     trustworthy.
 4. A group without pose data still produces a labelled lower bound, and the app never claims a
    precision it does not have.
 5. No screen, string or default in this feature assumes the objects are machinery.
@@ -176,7 +187,7 @@ committed in the same change. `JobType` gains `count` and `pose_backfill`.
 - **U6 counts API handlers** — depends on U4, U5.
 - **U7 Counts screen** — table, state pills, settings, job progress. Depends on U5 (mock-driven).
 - **U8 map and object inspection** — depends on U7, U6.
-- **U9 real-data check** — flight `0033` count versus a hand count. Depends on U6, U2.
+- **U9 real-data check** — flight `0033`: patch, stability and placement checks (§10.3). Depends on U6, U2.
 
 **Parallel batches**
 
@@ -190,7 +201,8 @@ committed in the same change. `JobType` gains `count` and `pose_backfill`.
 ## 12. Risks
 
 - **Attitude error.** 10° yaw uncertainty displaces a sighting near the frame edge by tens of metres.
-  Mitigated by growing the tolerance with distance from the frame centre, and measured in U9.
+  Mitigated by growing the tolerance with distance from the frame centre, and measured in U9 by the
+  placement check (the spread of one object's sightings).
 - **Migration order.** The parallel `task/project-agent` branch adds migration `0004_agent` and edits
   `openapi.yaml`. Whichever merges second rebases: the new revision chains onto the head on `main`,
   and the contract is regenerated after the merge, never hand-edited.
