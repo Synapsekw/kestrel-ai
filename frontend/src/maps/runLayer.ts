@@ -66,6 +66,11 @@ function boxStyle(spec: RunLayerSpec, f: FeatureLike, resolution: number): Style
         radius: (MIN_SCREEN_PX / 2) * Math.SQRT2,
         fill,
         stroke,
+        // The layer declutters so overlapping *labels* drop out (spec section 7). OpenLayers
+        // declutters images by the same rule, which would drop the clamped marks themselves —
+        // at the zoom they exist for, where 14 screen px spans tens of metres and any two nearby
+        // machines collide. Opting the mark out leaves decluttering to the Text below.
+        declutterMode: "none",
       }),
     });
   }
@@ -77,7 +82,10 @@ function boxStyle(spec: RunLayerSpec, f: FeatureLike, resolution: number): Style
       mark === "labelled"
         ? new Text({
             text: spec.nameOf?.(classId) ?? "",
-            font: "12px Instrument Sans, sans-serif",
+            // The registered family is 'Instrument Sans Variable' (tailwind.config.ts, from
+            // @fontsource-variable/instrument-sans); the unquoted two-word name resolved to
+            // nothing and fell through to the generic sans-serif.
+            font: '12px "Instrument Sans Variable", system-ui, sans-serif',
             fill: new Fill({ color: tokenColour("ink") }),
             stroke: new Stroke({ color: tokenColour("inverse", 0.8), width: 3 }),
             offsetY: -LABEL_SCREEN_PX / 4,
