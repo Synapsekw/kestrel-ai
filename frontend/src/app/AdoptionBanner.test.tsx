@@ -63,6 +63,46 @@ describe("AdoptionBanner", () => {
     expect(await screen.findByText(/Moving this project's models into your library/)).toBeInTheDocument();
   });
 
+  it("reloads the status when the job had already finished by the time it was read", async () => {
+    let calls = 0;
+    render([
+      {
+        method: "GET",
+        path: /\/adoption$/,
+        body: () =>
+          calls++ === 0
+            ? { pending: 1, adopted: 0, missing: [], job_id: adoptJob.id }
+            : {
+                pending: 0,
+                adopted: 0,
+                missing: [{ old_model_id: "old-1", name: "yard-v1", error: "weights file not found" }],
+                job_id: null,
+              },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...adoptJob, state: "succeeded", progress: 1 } },
+    ]);
+    expect(await screen.findByText("yard-v1")).toBeInTheDocument();
+    expect(calls).toBe(2);
+  });
+
+  it("shows progress right after a retry even when nothing is counted as pending", async () => {
+    render([
+      {
+        method: "GET",
+        path: /\/adoption$/,
+        body: {
+          pending: 0,
+          adopted: 2,
+          missing: [{ old_model_id: "old-1", name: "yard-v1", error: "weights file not found" }],
+          job_id: null,
+        },
+      },
+      { method: "POST", path: /\/adoption\/retry$/, status: 202, body: { job: adoptJob } },
+    ]);
+    fireEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(/Moving this project's models into your library/)).toBeInTheDocument();
+  });
+
   it("shows nothing once every model is in the library", async () => {
     const { requests } = render([
       { method: "GET", path: /\/adoption$/, body: { pending: 0, adopted: 3, missing: [], job_id: null } },

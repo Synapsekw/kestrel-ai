@@ -32,14 +32,17 @@ export function AdoptionBanner({ projectId }: { projectId: string }) {
         setStatus(s);
         if (s.job_id && !useJobsStore.getState().jobs[s.job_id]) {
           const job = await fetchJob(api, projectId, s.job_id);
-          if (!cancelled) useJobsStore.getState().upsert(job);
+          if (cancelled) return;
+          useJobsStore.getState().upsert(job);
+          // It finished between the two reads, so no finish event will come: read the status again.
+          if (!isActiveJob(job)) reload();
         }
       })
       .catch((e: unknown) => pushLog(`adoption status unavailable: ${messageOf(e, String(e))}`));
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, kind, revision]);
+  }, [api, projectId, kind, revision, reload]);
 
   const job = useJobsStore((s) => (status?.job_id ? s.jobs[status.job_id] : undefined));
 
@@ -62,7 +65,8 @@ export function AdoptionBanner({ projectId }: { projectId: string }) {
   if (kind !== "train" || !status) return null;
 
   const running = status.job_id !== null && (!job || isActiveJob(job));
-  if (running && status.pending > 0) {
+  // `job_id` is set only while the adoption job is queued or running.
+  if (running) {
     return (
       <Alert tone="info" role="status" title="Moving this project's models into your library…">
         <div className="mt-2 flex max-w-md flex-col gap-1.5">
