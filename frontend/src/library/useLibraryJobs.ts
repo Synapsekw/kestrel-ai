@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Job } from "@contract/client";
 import { useApi } from "@/api/client";
-import { messageOf } from "@/api/errors";
-import { fetchLibraryJobs, isLibraryUnavailable, LIBRARY_JOBS } from "@/api/library";
+import { codeOf, messageOf } from "@/api/errors";
+import { fetchLibraryJob, fetchLibraryJobs, isLibraryUnavailable, LIBRARY_JOBS } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 
@@ -18,7 +18,7 @@ export interface LibraryJobs {
 
 /**
  * Library jobs (import, export, starter download): lists `/library/jobs` on mount and every 2 s while
- * any is queued or running, upserts them into the jobs store so the header's Jobs button counts them,
+ * any is queued or running (a tracked job missing from that page is fetched by id), upserts them into the jobs store so the header's Jobs button counts them,
  * and calls `onFinished` once for each job it saw active that reached a terminal state.
  */
 export function useLibraryJobs(
@@ -38,22 +38,43 @@ export function useLibraryJobs(
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    const settle = (job: Job) => {
+      if (isActiveJob(job)) {
+        seenActive.current.add(job.id);
+        return true;
+      }
+      if (seenActive.current.delete(job.id)) callback.current?.(job);
+      return false;
+    };
+    // A tracked job missing from the list's first page is asked for by id; one the backend no longer
+    // knows (404) is dropped, so it cannot keep the poller alive forever.
+    const fetchMissing = async (listed: Set<string>) => {
+      const missing = [...seenActive.current].filter((id) => !listed.has(id));
+      const found: Job[] = [];
+      await Promise.all(
+        missing.map((id) =>
+          fetchLibraryJob(api, id).then(
+            (job) => void found.push(job),
+            (e: unknown) => {
+              if (codeOf(e) !== "not_found") throw e;
+              pushLog(`library job ${id} dropped: ${messageOf(e, String(e))}`);
+              seenActive.current.delete(id);
+            },
+          ),
+        ),
+      );
+      return found;
+    };
     const poll = () => {
       fetchLibraryJobs(api)
-        .then((jobs) => {
+        .then(async (listed) => {
+          if (cancelled) return;
+          const jobs = [...listed, ...(await fetchMissing(new Set(listed.map((j) => j.id))))];
           if (cancelled) return;
           setError(null);
           useJobsStore.getState().upsertMany(jobs);
           let running = false;
-          for (const job of jobs) {
-            if (isActiveJob(job)) {
-              running = true;
-              seenActive.current.add(job.id);
-            } else if (seenActive.current.delete(job.id)) {
-              callback.current?.(job);
-            }
-          }
-          // A tracked job the list has not caught up with yet keeps the poller alive.
+          for (const job of jobs) if (settle(job)) running = true;
           if (running || seenActive.current.size > 0) timer = setTimeout(poll, intervalMs);
         })
         .catch((e: unknown) => {

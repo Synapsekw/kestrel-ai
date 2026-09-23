@@ -87,4 +87,42 @@ describe("useLibraryJobs", () => {
     await waitFor(() => expect(onFinished).toHaveBeenCalledTimes(1));
     expect(onFinished.mock.calls[0][0]).toMatchObject({ state: "failed", error: "not a YOLO file" });
   });
+  it("fetches a tracked job the list does not show directly, and reports it when it ends", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/library\/jobs$/, body: { items: [], next_cursor: null } },
+      {
+        method: "GET",
+        path: /\/library\/jobs\/j-lib-1$/,
+        body: { ...importJob, state: "succeeded", progress: 1, result: { model_id: "m-new" } },
+      },
+    ]);
+    const onFinished = vi.fn();
+    const { result } = renderHook(() => useLibraryJobs(onFinished, { intervalMs: 20 }), {
+      wrapper: wrapperFor(api),
+    });
+    await waitFor(() => expect(requests).toHaveLength(1));
+    act(() => result.current.track(importJob));
+    await waitFor(() => expect(onFinished).toHaveBeenCalledTimes(1));
+    expect(onFinished.mock.calls[0][0]).toMatchObject({ id: importJob.id, state: "succeeded" });
+    const settled = requests.length;
+    await new Promise((r) => setTimeout(r, 80));
+    expect(requests.length).toBe(settled);
+  });
+
+  it("stops polling for a tracked job the backend no longer knows", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/library\/jobs$/, body: { items: [], next_cursor: null } },
+      // No route for /library/jobs/j-lib-1: the fake answers 404.
+    ]);
+    const { result } = renderHook(() => useLibraryJobs(undefined, { intervalMs: 20 }), {
+      wrapper: wrapperFor(api),
+    });
+    await waitFor(() => expect(requests).toHaveLength(1));
+    act(() => result.current.track(importJob));
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/library/jobs/j-lib-1"))).toBe(true));
+    await new Promise((r) => setTimeout(r, 80));
+    const settled = requests.length;
+    await new Promise((r) => setTimeout(r, 80));
+    expect(requests.length).toBe(settled);
+  });
 });
