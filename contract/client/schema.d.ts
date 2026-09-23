@@ -6010,6 +6010,39 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    patchMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "captured_on": "2026-04-15"
+                 *     }
+                 */
+                "application/json": components["schemas"]["GeoMapPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated map */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMap"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     moveMapToProject: {
         parameters: {
             query?: never;
@@ -6051,39 +6084,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    patchMap: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                mapId: components["parameters"]["mapId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                /**
-                 * @example {
-                 *       "captured_on": "2026-04-15"
-                 *     }
-                 */
-                "application/json": components["schemas"]["GeoMapPatch"];
-            };
-        };
-        responses: {
-            /** @description the updated map */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["GeoMap"];
                 };
             };
             default: components["responses"]["Error"];
