@@ -111,6 +111,8 @@ def create_runs(
         if lib is None:
             raise library_unavailable()
         model = library.require_ready(lib, body.model_id)
+        # Seeding an empty project's classes commits first, on purpose: it maps every class, so it
+        # can never cause a refusal, and a project that later refuses keeps useful classes.
         mapping, unmapped = class_maps.resolve(handle, model, seed=True)
         if unmapped:
             raise AppError(
@@ -186,13 +188,15 @@ def _drop_unsubmitted(handle: ProjectHandle, rows: list[tuple[_Target, str, str,
 # ----------------------------------------------------------------------------- list
 
 
-def _labels(s: Session) -> tuple[dict[str, str], dict[str, str]]:
-    """Source labels (label, else folder) and map names: small tables, read once per page."""
-    sources = {
-        sid: label or folder
-        for sid, label, folder in s.execute(select(Source.id, Source.label, Source.folder))
-    }
-    maps = dict(s.execute(select(GeoMap.id, GeoMap.name)).all())
+def _labels(s: Session, source_ids: set[str], map_ids: set[str]) -> tuple[dict[str, str], dict[str, str]]:
+    """Source labels (label, else folder) and map names for one page's runs only."""
+    sources: dict[str, str] = {}
+    if source_ids:
+        q = select(Source.id, Source.label, Source.folder).where(Source.id.in_(source_ids))
+        sources = {sid: label or folder for sid, label, folder in s.execute(q)}
+    maps: dict[str, str] = {}
+    if map_ids:
+        maps = dict(s.execute(select(GeoMap.id, GeoMap.name).where(GeoMap.id.in_(map_ids))).all())
     return sources, maps
 
 
@@ -275,7 +279,11 @@ def list_runs(
 
 
 def _summaries(s: Session, page: list[tuple[str, object]]) -> list[RunSummary]:
-    sources, maps = _labels(s)
+    sources, maps = _labels(
+        s,
+        {r.source_id for _, r in page if r.source_id},
+        {r.map_id for k, r in page if k == "map"},
+    )
     q_ids = [r.id for k, r in page if k == "images"]
     m_ids = [r.id for k, r in page if k == "map"]
     progress = {
