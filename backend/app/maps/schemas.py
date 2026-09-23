@@ -317,3 +317,10 @@ class MapScoreOut(BaseModel):
     per_class: list[MapScoreRow]
     per_zone: list[MapScoreZoneRow]
     matches: list[MapScoreMatch]
+
+
+class MapExportRequest(BaseModel):
+    map_id: str
+    content: Literal["run", "labels", "run_score"]
+    run_id: str | None = None
+    formats: list[Literal["geojson", "gpkg", "csv"]] = Field(min_length=1)

@@ -11,6 +11,7 @@ from app.events_util import publish_map_labels_changed_event
 from app.jobs.schemas import JobOut
 from app.maps import service
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers map_detect
+from app.maps.jobs_export import run_map_export  # noqa: F401 - registers `map_export`
 from app.maps.jobs_import import run_map_import  # noqa: F401 - registers `map_import`
 from app.maps.schemas import (
     GeoMapCreate,
@@ -21,6 +22,7 @@ from app.maps.schemas import (
     MapDensityCell,
     MapDetectionOut,
     MapDetectionPage,
+    MapExportRequest,
     MapLabelCreate,
     MapLabelList,
     MapLabelOut,
@@ -41,7 +43,6 @@ from app.maps.schemas import (
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.tiles import TILE_CACHE, render_tile
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["maps"])
@@ -258,8 +259,10 @@ def delete_map_label(
     return Response(status_code=204)
 
 
-STUBS: list[tuple[str, str, str]] = [
-    ("POST", "/map-exports", "createMapExport"),
-]
-
-add_stubs(router, STUBS)
+@router.post("/map-exports", response_model=JobRef, status_code=202)
+def create_map_export(
+    body: MapExportRequest, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> JobRef:
+    gmap = service.validate_export(handle, body)
+    job = request.app.state.jobs.submit(handle, "map_export", {**body.model_dump(), "name": gmap.name})
+    return JobRef(job=JobOut.from_row(job, handle.id))

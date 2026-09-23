@@ -520,3 +520,20 @@ def score_run(handle: ProjectHandle, run_id: str, iou: float) -> dict:
         while len(_SCORE_CACHE) > _SCORE_CACHE_ITEMS:
             _SCORE_CACHE.popitem(last=False)
     return result
+
+
+def validate_export(handle: ProjectHandle, body) -> GeoMap:
+    gmap = require_ready(handle, body.map_id)
+    if len(set(body.formats)) != len(body.formats):
+        raise AppError("validation_error", "each format may be listed once", 422)
+    if body.content in ("run", "run_score"):
+        if not body.run_id:
+            raise AppError("validation_error", "a run export needs run_id", 422)
+        run, _, _ = get_run(handle, body.run_id)
+        if run.map_id != gmap.id:
+            raise AppError("validation_error", "the run belongs to another map", 422)
+    if gmap.crs_wkt is None and set(body.formats) - {"csv"}:
+        raise AppError(
+            "validation_error", "this map has no coordinates: only the pixel CSV can be exported", 422
+        )
+    return gmap
