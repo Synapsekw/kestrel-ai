@@ -286,7 +286,7 @@ def density(
 
 MAX_LABELS = 20000
 _SCORE_CACHE: OrderedDict[tuple, dict] = OrderedDict()
-_SCORE_CACHE_ITEMS = 64
+_SCORE_CACHE_ITEMS = 8
 _SCORE_LOCK = threading.Lock()
 
 
@@ -359,9 +359,19 @@ def _check_box(s: Session, handle: ProjectHandle, gmap: GeoMap, class_id: str, x
 
 
 def list_labels(handle: ProjectHandle, map_id: str) -> list[MapLabel]:
+    """Every label of the map. Raises rather than silently truncating past `MAX_LABELS`: this feeds
+    both the labels API and `jobs_export._boxes`, and a truncated ground-truth export would be a
+    silently wrong file, not just an incomplete UI list (the export job can afford a loud failure;
+    the UI list can afford telling the operator to split the map into smaller zones)."""
     with handle.session() as s:
         _get(s, map_id)
-        rows = list(s.execute(select(MapLabel).where(MapLabel.map_id == map_id).limit(MAX_LABELS)).scalars())
+        rows = list(
+            s.execute(select(MapLabel).where(MapLabel.map_id == map_id).limit(MAX_LABELS + 1)).scalars()
+        )
+        if len(rows) > MAX_LABELS:
+            raise AppError(
+                "conflict", "this map has too many labels to list at once; use zone-scoped views", 409
+            )
         for r in rows:
             s.expunge(r)
     return rows
@@ -408,7 +418,12 @@ def seed_labels(handle: ProjectHandle, map_id: str, body: MapLabelSeed) -> int:
     """Ground truth from a run's detections. Idempotent: a detection that already has a label of
     the same class overlapping it at or above `DEDUPE_IOU` is skipped, so seeding the same run and
     zone twice does not double up the ground truth (which would silently corrupt precision/recall,
-    not just leave a duplicate row around)."""
+    not just leave a duplicate row around).
+
+    Both queries are narrowed to the named zone's bounding box (the same four intersection
+    predicates `score_run` uses), with the same `MAX_DETECTIONS`/`MAX_LABELS` backstop: an
+    unbounded read here on an 80k x 60k ortho would pull six figures of detections for a synchronous
+    POST while the zone covers a sliver of the map."""
     with handle.session() as s:
         _get(s, map_id)
         zone = _zone(s, map_id, body.zone_id)
@@ -416,17 +431,45 @@ def seed_labels(handle: ProjectHandle, map_id: str, body: MapLabelSeed) -> int:
         if run.map_id != map_id:
             raise AppError("validation_error", "the run belongs to another map", 422)
         area = [scoring.Zone(zone.id, [tuple(p) for p in zone.polygon])]
-        existing = [
-            scoring.ScoreBox(lab.id, lab.class_id, lab.x, lab.y, lab.w, lab.h)
-            for lab in s.execute(select(MapLabel).where(MapLabel.map_id == map_id)).scalars()
-        ]
-        rows = []
-        dets = s.execute(
-            select(MapDetection).where(
-                MapDetection.run_id == run.id, MapDetection.confidence >= body.min_conf
+        x0, y0, x1, y1 = _zones_bbox([zone])
+        existing_rows = list(
+            s.execute(
+                select(MapLabel)
+                .where(
+                    MapLabel.map_id == map_id,
+                    MapLabel.x < x1,
+                    MapLabel.x + MapLabel.w > x0,
+                    MapLabel.y < y1,
+                    MapLabel.y + MapLabel.h > y0,
+                )
+                .limit(MAX_LABELS + 1)
+            ).scalars()
+        )
+        if len(existing_rows) > MAX_LABELS:
+            raise AppError(
+                "conflict", "the zone holds too many existing labels to seed; use a smaller zone", 409
             )
-        ).scalars()
-        for d in dets:
+        existing = [
+            scoring.ScoreBox(lab.id, lab.class_id, lab.x, lab.y, lab.w, lab.h) for lab in existing_rows
+        ]
+        det_rows = list(
+            s.execute(
+                select(MapDetection)
+                .where(
+                    MapDetection.run_id == run.id,
+                    MapDetection.confidence >= body.min_conf,
+                    MapDetection.x < x1,
+                    MapDetection.x + MapDetection.w > x0,
+                    MapDetection.y < y1,
+                    MapDetection.y + MapDetection.h > y0,
+                )
+                .limit(MAX_DETECTIONS + 1)
+            ).scalars()
+        )
+        if len(det_rows) > MAX_DETECTIONS:
+            raise AppError("conflict", "the zone covers too many detections to seed; use a smaller zone", 409)
+        rows = []
+        for d in det_rows:
             box = scoring.ScoreBox(d.id, d.class_id, d.x, d.y, d.w, d.h)
             if not scoring.zone_of(box, area):
                 continue

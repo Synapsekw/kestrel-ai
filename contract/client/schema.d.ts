@@ -3300,7 +3300,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed";
             project_id: string;
             job_id: string | null;
             progress: number | null;

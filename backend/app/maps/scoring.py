@@ -8,6 +8,7 @@ false positives, unmatched labels are misses.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 
 
@@ -83,12 +84,19 @@ def score(
 ) -> dict:
     dets = [(b, z) for b in detections if (z := zone_of(b, zones))]
     labs = [(b, z) for b in labels if (z := zone_of(b, zones))]
+    # Bucketed by class once so each detection only scans candidates it could ever match, rather
+    # than the whole zone's labels with a per-iteration class filter (O(detections) instead of
+    # O(detections x labels); the greedy confidence-first order and per-class candidate order are
+    # unchanged, so the matches made are identical).
+    labs_by_class: dict[str, list[tuple[ScoreBox, str]]] = defaultdict(list)
+    for lab, z in labs:
+        labs_by_class[lab.class_id].append((lab, z))
     matches: list[dict] = []
     taken: set[str] = set()
     for det, zone in sorted(dets, key=lambda p: -(p[0].confidence or 0.0)):
         best, best_iou = None, iou_threshold
-        for lab, _ in labs:
-            if lab.class_id != det.class_id or lab.id in taken:
+        for lab, _ in labs_by_class.get(det.class_id, ()):
+            if lab.id in taken:
                 continue
             v = _iou(det, lab)
             if v >= best_iou:

@@ -38,6 +38,9 @@ x-websocket:
     - `job.state`: `payload` is `{state, result, error}` for the job.
     - `images.changed`: `payload` is `{source_id, count}` after an import batch lands.
     - `boxes.changed`: `payload` is `{image_ids: [...]}` after proposals or reviews are written by a job.
+    - `maps.changed`: `payload` is `{map_ids: [...]}` after a GeoTIFF map is imported or updated.
+    - `map_runs.changed`: `payload` is `{map_id, run_ids: [...]}` after a map detection run finishes.
+    - `map_labels.changed`: `payload` is `{map_id}` after a zone or ground-truth label changes.
   message: "#/components/schemas/Event"
 
 tags:
@@ -3168,7 +3171,16 @@ components:
       properties:
         type:
           type: string
-          enum: [job.progress, job.state, images.changed, boxes.changed]
+          enum:
+            [
+              job.progress,
+              job.state,
+              images.changed,
+              boxes.changed,
+              maps.changed,
+              map_runs.changed,
+              map_labels.changed,
+            ]
         project_id: { type: string }
         job_id: { type: [string, "null"] }
         progress: { type: [number, "null"] }

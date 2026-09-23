@@ -209,6 +209,32 @@ def test_geo_formats_need_coordinates(client, project_id, wait_job, tmp_path):
     assert ok.status_code == 202
 
 
+def test_export_fails_loudly_when_labels_exceed_the_cap(
+    client, project_id, wait_job, tmp_path, project, monkeypatch
+):
+    """`jobs_export._boxes` calls `service.list_labels`; a map with more labels than the cap must
+    fail the export job rather than silently write a short (wrong) ground-truth file."""
+    r = client.post(
+        f"{BASE}/{project_id}/maps", json={"path": str(make_geotiff(tmp_path / "a.tif", 3000, 3000))}
+    )
+    map_id = r.json()["map"]["id"]
+    wait_job(project_id, r.json()["job"]["id"])
+    cls = project["classes"][0]["id"]
+    for i in range(3):
+        r = client.post(
+            f"{BASE}/{project_id}/maps/{map_id}/labels",
+            json={"class_id": cls, "x": i * 10, "y": 0, "w": 5, "h": 5},
+        )
+        assert r.status_code == 201
+    monkeypatch.setattr("app.maps.service.MAX_LABELS", 2)
+    body = {"map_id": map_id, "content": "labels", "formats": ["csv"]}
+    r = client.post(f"{BASE}/{project_id}/map-exports", json=body)
+    assert r.status_code == 202, r.text
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "failed"
+    assert "too many labels" in job["error"]
+
+
 def test_run_content_needs_a_run_of_this_map(client, project_id, wait_job, tmp_path):
     r = client.post(
         f"{BASE}/{project_id}/maps", json={"path": str(make_geotiff(tmp_path / "a.tif", 300, 300))}

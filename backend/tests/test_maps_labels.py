@@ -131,3 +131,55 @@ def test_seeding_twice_does_not_duplicate_labels(client, project_id, ready_map, 
     second = client.post(f"{url}/labels/seed", json=body)
     assert second.json()["created"] == 0
     assert len(client.get(f"{url}/labels").json()["items"]) == count
+
+
+def test_seed_only_loads_detections_from_the_zone(
+    client, project_id, ready_map, run_id, handle, project, monkeypatch
+):
+    """A run may hold detections far outside the seeding zone; `seed_labels` must narrow its
+    detection query to the zone's bounding box rather than loading the whole run's detections and
+    discarding what falls outside (the last unbounded hot-path read on the branch: an 80k x 60k
+    ortho can hold six figures of detections while a zone covers a sliver of the map). Proven
+    behaviourally rather than by inspecting SQL text: pile far-away detections onto the run until
+    an unbounded query would blow a low cap, and confirm the zone-scoped seed still gets through
+    and only ever creates labels for the squares actually inside the zone."""
+    cls = project["classes"][0]["id"]
+    with handle.session() as s:
+        from app.db.models import MapDetection
+
+        s.add_all(
+            MapDetection(run_id=run_id, class_id=cls, confidence=0.9, x=2800 + i * 5, y=1000, w=4, h=4)
+            for i in range(10)
+        )
+    url = f"{BASE}/{project_id}/maps/{ready_map}"
+    zid = client.post(f"{url}/zones", json={"name": "Z", "polygon": ZONE}).json()["id"]
+    # 2 real squares sit in the zone; 10 more detections sit far outside it. An unbounded query
+    # would see 12 and trip this cap; the zone-narrowed query must see only the 2 and pass.
+    monkeypatch.setattr("app.maps.service.MAX_DETECTIONS", 5)
+    r = client.post(f"{url}/labels/seed", json={"run_id": run_id, "zone_id": zid})
+    assert r.status_code == 200 and r.json()["created"] == 2
+    labels = client.get(f"{url}/labels").json()["items"]
+    assert labels and all(lab["x"] < 1500 for lab in labels)
+
+
+def test_seed_over_the_detection_cap_is_409(client, project_id, ready_map, run_id, monkeypatch):
+    """Even the zone-narrowed query must respect the cap: real detections inside the zone alone
+    exceeding it must fail loudly (409) rather than silently seed a truncated set of ground truth."""
+    url = f"{BASE}/{project_id}/maps/{ready_map}"
+    zid = client.post(f"{url}/zones", json={"name": "Z", "polygon": ZONE}).json()["id"]
+    monkeypatch.setattr("app.maps.service.MAX_DETECTIONS", 1)  # the zone alone holds 2 real squares
+    r = client.post(f"{url}/labels/seed", json={"run_id": run_id, "zone_id": zid})
+    assert r.status_code == 409
+
+
+def test_list_labels_over_the_cap_is_409(client, project_id, ready_map, project, monkeypatch):
+    """`list_labels` feeds both the labels API and the ground-truth export (`jobs_export._boxes`);
+    truncating past the cap would silently ship an incomplete export, so it must fail loudly
+    instead of quietly returning a short page."""
+    url = f"{BASE}/{project_id}/maps/{ready_map}/labels"
+    cls = project["classes"][0]["id"]
+    for i in range(3):
+        r = client.post(url, json={"class_id": cls, "x": i * 10, "y": 0, "w": 5, "h": 5})
+        assert r.status_code == 201
+    monkeypatch.setattr("app.maps.service.MAX_LABELS", 2)
+    assert client.get(url).status_code == 409

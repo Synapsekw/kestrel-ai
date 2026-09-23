@@ -149,7 +149,7 @@ def resume_map_run(runId: str, request: Request, handle: ProjectHandle = Depends
 @router.get("/map-runs/{runId}/detections", response_model=MapDetectionPage)
 def list_map_detections(
     runId: str,  # noqa: N803
-    bbox: str | None = None,
+    bbox: str | None = Query(None, pattern=r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$"),
     min_conf: float | None = Query(None, ge=0, le=1),
     class_id: str | None = None,
     handle: ProjectHandle = Depends(get_project),
