@@ -50,8 +50,8 @@ export function ExportScreen() {
         <>
           <DetectExportForm projectId={projectId} />
           <p className="max-w-prose text-sm text-muted">
-            A map&apos;s detections with their coordinates export from the map viewer as GeoPackage, GeoJSON or
-            CSV; the GeoPackage also carries the review state and the site areas.
+            A map&apos;s detections with their coordinates export from the map viewer as GeoPackage, GeoJSON
+            or CSV; the GeoPackage also carries the review state and the site areas.
           </p>
         </>
       )}
