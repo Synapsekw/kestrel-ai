@@ -94,6 +94,25 @@ def test_a_finished_training_run_is_registered_in_the_library(
     assert list(handle.models_dir.glob("*")) == []
 
 
+def test_a_run_whose_weights_are_already_in_the_library_returns_that_model(
+    client, app, tmp_path, train_project, fake_trainer
+):
+    # The FakeTrainer writes the same bytes every run, so the second run's weights are a sha hit.
+    handle = app.state.projects.get(train_project["id"])
+    dataset = make_dataset(handle)
+    base = add_library_model(app, tmp_path, name="yolo11n-coco", origin="starter")
+    results = []
+    for name in ("first", "second"):
+        r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, base.id, name=name))
+        assert r.status_code == 202, r.text
+        done = wait_for(client, train_project["id"], r.json()["job"]["id"])
+        assert done["state"] == "succeeded", done["error"]
+        results.append(done["result"])
+    assert results[1]["model_id"] == results[0]["model_id"]
+    trained = [m for m in client.get(f"{LIB}/models").json()["items"] if m["origin"] == "trained"]
+    assert [m["name"] for m in trained] == ["first"]
+
+
 def test_training_from_an_unknown_base_model_is_a_404(client, app, train_project):
     dataset = make_dataset(app.state.projects.get(train_project["id"]))
     r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, "nope"))

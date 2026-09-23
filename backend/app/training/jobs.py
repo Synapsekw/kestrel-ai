@@ -126,7 +126,13 @@ def run_train(ctx: JobContext) -> dict:
                 "base_model_name": base_model.name,
             },
         )
-    except AppError as e:  # the run produced weights identical to a library model
-        raise JobFailure(e.message) from e
+    except AppError as e:
+        if e.code != "already_exists":
+            raise JobFailure(e.message) from e
+        # The run produced weights identical to a library model. Same weights are one library
+        # model (as for starters), so the finished run is not thrown away: it returns that model.
+        existing = library.get_model(lib, e.details["model_id"])
+        ctx.log.info("these weights are already in the library as %s (%s)", existing.name, existing.id)
+        return {"model_id": existing.id, "metrics": existing.metrics}
     ctx.log.info("registered library model %s (%s)", model.id, model.weights_path)
     return {"model_id": model.id, "metrics": model.metrics}
