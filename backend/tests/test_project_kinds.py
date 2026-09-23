@@ -26,7 +26,7 @@ def _create(client, folder: Path, kind: str | None) -> dict:
 # --- migration -----------------------------------------------------------------------------------
 
 
-def test_migration_0006_marks_existing_projects_train_and_adds_model_adoption(tmp_path):
+def test_migration_0007_marks_existing_projects_train_and_adds_model_adoption(tmp_path):
     folder = tmp_path / "old"
     folder.mkdir()
     url = f"sqlite:///{(folder / 'project.db').as_posix()}"

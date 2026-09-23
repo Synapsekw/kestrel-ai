@@ -24,7 +24,7 @@ What changed:
   the project `JobRunner`, through a project-shaped `LibraryHandle`
   (`vault/decisions/2026-09-23-library-jobs-reuse-the-project-jobrunner.md`). If the library
   cannot open, the app still starts and every library route answers `503 library_unavailable`.
-- **Two kinds of project.** Projects are `train` or `detect` (migration `0006_project_kind`). A
+- **Two kinds of project.** Projects are `train` or `detect` (migration `0007_project_kind`). A
   server-side `require_kind` guards every project route, and a route-walk test fails when a route
   declares no kind. Each kind gets its own sidebar steps. Training projects show their old runs
   and maps under a read-only **Past detections**.
@@ -61,13 +61,12 @@ Verified in the integration worktree (2026-09-23), with the gate lines from `AGE
 - e2e: 67 browser tests, on free ports as `scripts\finish-task.ps1` runs them
 - `cargo test`: skipped, because this worktree has no frozen sidecar
 
-**Open before merging to `main`:** `main` already has the survey timeline's
-`0006_map_captured_on`, and this branch adds `0006_project_kind`, also with down_revision
-`"0005"`. The rebase in `finish-task.ps1` will leave two Alembic heads. Renumber one migration so
-the two chain (the plan says the survey timeline rebases onto `0006_project_kind`, but it merged
-first). Then rerun the gate. `map_move` copies every `GeoMap` column, so `captured_on` moves
-with the map once the two branches are combined. `MoveMapDialog` already says the capture date is
-copied.
+**Migration renumbered at merge:** `main` already had the survey timeline's `0006_map_captured_on`
+(down_revision `"0005"`), so this branch's migration became `0007_project_kind` (revision `"0007"`,
+down_revision `"0006"`); a single Alembic head `0007`, chain `0001..0007`. `map_move` copies every
+`GeoMap` column, so `captured_on` moves with the map. The Surveys screen is a detection-project
+screen (sidebar entry and `KindRoute` for `detect` only; the timeline read stays open to both kinds on
+the server).
 
 ## Project agent — 2026-09-22 (merged, installed)
 
