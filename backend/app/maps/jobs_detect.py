@@ -83,15 +83,42 @@ def _provider(ctx: JobContext, run: MapRun, names: list[str]):
     )
 
 
+def _skip_map(mask, mscale, wins: list[MapWindow]) -> dict[int, bool]:
+    """Which windows are ≥99 % nodata, computed once so neighbours can be judged before they run."""
+    return {w.index: masked_fraction(mask, mscale, w) >= SKIP_MASKED for w in wins}
+
+
+def _open_sides(
+    strip_list: list[list[MapWindow]], i: int, j: int, skipped: dict[int, bool]
+) -> frozenset[str]:
+    """Edges of window `(i, j)` whose neighbour exists and was not skipped for nodata.
+
+    `plan_windows` lays windows out row-major with the same column origins in every row (they only
+    depend on width, not height), so a window's neighbours are its left/right in `strip_list[i]` and
+    the same column index in the strips above and below.
+    """
+    row = strip_list[i]
+    sides = set()
+    if j > 0 and not skipped[row[j - 1].index]:
+        sides.add("left")
+    if j < len(row) - 1 and not skipped[row[j + 1].index]:
+        sides.add("right")
+    if i > 0 and j < len(strip_list[i - 1]) and not skipped[strip_list[i - 1][j].index]:
+        sides.add("top")
+    if i < len(strip_list) - 1 and j < len(strip_list[i + 1]) and not skipped[strip_list[i + 1][j].index]:
+        sides.add("bottom")
+    return frozenset(sides)
+
+
 def _window_result(
-    ctx, run, provider, names, src, mask, mscale, win: MapWindow, gmap: GeoMap
+    ctx, run, provider, names, src, win: MapWindow, gmap: GeoMap, *, skipped: bool, sides: frozenset[str]
 ) -> tuple[dict, bool]:
     path = windows_dir(ctx.project, run) / f"{win.index}.json"
     if path.exists():
         payload = json.loads(path.read_text("utf-8"))
         if not payload.get("failed"):
             return payload, True
-    if masked_fraction(mask, mscale, win) >= SKIP_MASKED:
+    if skipped:
         payload = {"window": asdict(win), "skipped": True, "failed": False, "error": None, "detections": []}
         _write_atomic(path, payload)
         return payload, False
@@ -105,7 +132,10 @@ def _window_result(
     result, error = _call_with_retries(ctx, provider, image, tile, run, names, raw_ref)
     dets = [to_map(d, win) for d in (result.detections if result else [])]
     overlap_px = round(run.tile_size * run.overlap)
-    dets = drop_cut_boxes(dets, win, gmap.width, gmap.height, overlap_px)
+    dets = drop_cut_boxes(dets, win, gmap.width, gmap.height, overlap_px, sides)
+    dets = [
+        d for d in dets if d.w > 0 and d.h > 0
+    ]  # a box clamped to nothing at a window edge is not a detection
     payload = {
         "window": asdict(win),
         "skipped": False,
@@ -126,7 +156,7 @@ def _insert(ctx: JobContext, run_id: str, dets: list[Detection], by_name: dict[s
         for d in dets
         if d.label in by_name
         and d.w > 0
-        and d.h > 0  # a box clamped to nothing at a window edge is not a detection
+        and d.h > 0  # belt-and-braces: zero-area boxes are already dropped in _window_result
     ]
     if rows:
         with ctx.project.session() as s:
@@ -153,11 +183,24 @@ def run_map_detect(ctx: JobContext) -> dict:
     done = 0
     with rasterio.open(map_raster_path(ctx.project, gmap.id)) as src:
         mask, mscale = raster.low_res_mask(src)
-        for strip in strips(wins):
+        strip_list = strips(wins)
+        skipped_by_index = _skip_map(mask, mscale, wins)
+        for i, strip in enumerate(strip_list):
             strip_dets: list[Detection] = []
-            for win in strip:
+            for j, win in enumerate(strip):
                 ctx.check_cancelled()
-                payload, cached = _window_result(ctx, run, provider, names, src, mask, mscale, win, gmap)
+                sides = _open_sides(strip_list, i, j, skipped_by_index)
+                payload, cached = _window_result(
+                    ctx,
+                    run,
+                    provider,
+                    names,
+                    src,
+                    win,
+                    gmap,
+                    skipped=skipped_by_index[win.index],
+                    sides=sides,
+                )
                 totals["cached_windows"] += cached
                 totals["skipped_windows"] += payload.get("skipped", False)
                 totals["failed_windows"] += payload.get("failed", False)

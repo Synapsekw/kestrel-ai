@@ -106,6 +106,17 @@ def test_drop_cut_boxes_only_on_interior_edges_and_only_small_slivers():
     assert kept == [cut_right_big, inside, at_map_top]
 
 
+def test_drop_cut_boxes_keeps_a_cut_box_when_its_side_is_excluded():
+    """A neighbour skipped for nodata never reports the rest of the object, so its edge must not
+    drop the sliver here — the sliver is all there is."""
+    win = MapWindow(1, 1024, 0, 1280, 1280, 1280, 1280)
+    cut_left = det(1024, 100, w=30)  # would be dropped by default (see the test above)
+    kept = drop_cut_boxes([cut_left], win, 4000, 1280, 256, sides=frozenset({"right", "top", "bottom"}))
+    assert kept == [cut_left]
+    dropped = drop_cut_boxes([cut_left], win, 4000, 1280, 256, sides=frozenset({"left"}))
+    assert dropped == []
+
+
 def test_merger_keeps_different_classes_apart():
     m = StripMerger(0.5)
     m.add_strip(0, [det(100, 100, label="excavator"), det(100, 100, label="dump_truck", conf=0.8)])

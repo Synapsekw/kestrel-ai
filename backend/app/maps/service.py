@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 import shutil
 import threading
 from collections.abc import Callable
@@ -219,22 +218,19 @@ def delete_run(handle: ProjectHandle, run_id: str, is_live: Callable[[str], bool
     shutil.rmtree(map_dir(handle, map_id) / "runs" / run_id, ignore_errors=True)
 
 
-# The contract's pattern (digits and dots, four comma-separated groups) is looser than "four real
-# floats": something like "1.2.3,4,5,6" matches it but is not parseable. A string that fails this
-# pattern is a genuine format error (422); one that matches but still fails float() (rare, only
-# hit by the contract fuzzer) is treated as no filter rather than rejecting schema-valid input.
-BBOX_PATTERN = re.compile(r"^-?[0-9.]+,-?[0-9.]+,-?[0-9.]+,-?[0-9.]+$")
-
-
 def _parse_bbox(bbox: str | None) -> tuple[float, float, float, float] | None:
+    """`x0,y0,x1,y1`, matching the contract's pattern exactly (four signed decimals): a filter a
+    caller cannot parse is rejected rather than silently ignored, which would answer with boxes
+    from the whole map while the caller believes it asked for one viewport."""
     if not bbox:
         return None
-    if not BBOX_PATTERN.match(bbox):
+    parts = bbox.split(",")
+    if len(parts) != 4:
         raise AppError("validation_error", "bbox must be x0,y0,x1,y1", 422)
     try:
-        x0, y0, x1, y1 = (float(v) for v in bbox.split(","))
+        x0, y0, x1, y1 = (float(v) for v in parts)
     except ValueError:
-        return None
+        raise AppError("validation_error", "bbox must be x0,y0,x1,y1", 422) from None
     return x0, y0, x1, y1
 
 

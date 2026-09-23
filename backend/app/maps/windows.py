@@ -82,16 +82,28 @@ def masked_fraction(mask: np.ndarray, mask_scale: float, win: MapWindow) -> floa
 
 
 EDGE_MARGIN = 2.0  # model pixels: a box within this of a window edge is cut by it
+ALL_SIDES = frozenset({"left", "right", "top", "bottom"})
 
 
 def drop_cut_boxes(
-    dets: list[Detection], win: MapWindow, width: int, height: int, overlap_px: int
+    dets: list[Detection],
+    win: MapWindow,
+    width: int,
+    height: int,
+    overlap_px: int,
+    sides: frozenset[str] = ALL_SIDES,
 ) -> list[Detection]:
     """Drop boxes cut by an interior window edge when the neighbour must hold the whole object.
 
     A sliver at a seam and the neighbour's full box rarely reach the NMS IoU, so without this a
     machine on a seam counts twice. The neighbour window starts `overlap` before this one ends, so
     an object whose visible part is shorter than the overlap lies entirely inside the neighbour.
+
+    This only holds when the neighbour actually looked: a skipped (nodata) neighbour never reports
+    anything, so dropping the sliver on that edge would lose the object rather than merge it. The
+    caller passes `sides` naming only the edges whose neighbour exists and was not skipped; any
+    other edge — including a true map edge, which has no neighbour at all — is left alone, exactly
+    like a map outer edge.
     """
     sx, sy = win.w / win.out_w, win.h / win.out_h
     mx, my = EDGE_MARGIN * sx, EDGE_MARGIN * sy
@@ -100,10 +112,10 @@ def drop_cut_boxes(
     kept = []
     for d in dets:
         cut = (
-            (left > 0 and d.x <= left + mx and d.w < ox)
-            or (right < width and d.x + d.w >= right - mx and d.w < ox)
-            or (top > 0 and d.y <= top + my and d.h < oy)
-            or (bottom < height and d.y + d.h >= bottom - my and d.h < oy)
+            ("left" in sides and left > 0 and d.x <= left + mx and d.w < ox)
+            or ("right" in sides and right < width and d.x + d.w >= right - mx and d.w < ox)
+            or ("top" in sides and top > 0 and d.y <= top + my and d.h < oy)
+            or ("bottom" in sides and bottom < height and d.y + d.h >= bottom - my and d.h < oy)
         )
         if not cut:
             kept.append(d)

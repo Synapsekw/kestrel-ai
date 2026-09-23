@@ -1182,7 +1182,7 @@ paths:
       operationId: listMapDetections
       summary: Boxes intersecting `bbox` (map pixels), at most 5000.
       parameters:
-        - { name: bbox, in: query, required: false, schema: { type: string, pattern: "^-?[0-9.]+,-?[0-9.]+,-?[0-9.]+,-?[0-9.]+$" }, description: "x0,y0,x1,y1" }
+        - { name: bbox, in: query, required: false, schema: { type: string, pattern: "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$" }, description: "x0,y0,x1,y1" }
         - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
         - { name: class_id, in: query, required: false, schema: { type: string } }
       responses:

@@ -101,6 +101,28 @@ def test_nodata_windows_are_never_sent(client, project_id, wait_job, squares_map
     assert len(provider.calls) == est["requests"]
 
 
+def test_a_machine_at_the_edge_of_coverage_is_still_counted(
+    client, project_id, wait_job, tmp_path, use_provider, with_key
+):
+    """A square mostly inside a skipped (nodata) window must still be found once, from the sliver
+    visible in the neighbouring window that did run. Windows for this 3000 x 1500 map at the
+    default tile_size/overlap are columns at x=0, 1024, 1720 (see test_maps_windows.py); with
+    nodata_left=1280 the x=0 column is 100 % nodata (skipped) and the x=1024 column is only 20 %
+    nodata (runs). A square at x=1000..1060 sits almost entirely in the skipped column; only its
+    x=1024..1060 sliver (36 px) is visible to the x=1024 window. The old "neighbour holds the rest"
+    assumption would drop that sliver as a cut box and the square would never be counted at all.
+    """
+    path = make_squares_geotiff(tmp_path / "edge.tif", 3000, 1500, [(1000, 200, 60)], nodata_left=1280)
+    r = client.post(f"{BASE}/{project_id}/maps", json={"path": str(path)})
+    assert wait_job(project_id, r.json()["job"]["id"])["state"] == "succeeded"
+    map_id = r.json()["map"]["id"]
+    use_provider(SquareProvider())
+    run_id, job = start(client, project_id, wait_job, run_body(map_id))
+    assert job["state"] == "succeeded", job
+    assert job["result"]["skipped_windows"] >= 1
+    assert client.get(f"{BASE}/{project_id}/map-runs/{run_id}").json()["detection_count"] == 1
+
+
 def test_gsd_scaling_keeps_boxes_in_map_pixels(
     client, project_id, wait_job, squares_map, use_provider, with_key
 ):
@@ -140,6 +162,9 @@ def test_bbox_query_and_truncation(
     assert len(client.get(url, params={"bbox": "0,0,1000,1000"}).json()["items"]) == 1
     assert client.get(url, params={"min_conf": 0.95}).json()["items"] == []
     assert client.get(url, params={"bbox": "a,b,c,d"}).status_code == 422
+    # Four comma-separated groups, digits and dots only, but not four real floats: a filter the
+    # caller cannot have meant is a 422, never a silent "no filter" that returns the whole map.
+    assert client.get(url, params={"bbox": "1.2.3,4,5,6"}).status_code == 422
     monkeypatch.setattr("app.maps.service.MAX_DETECTIONS", 2)
     page = client.get(url).json()
     assert len(page["items"]) == 2 and page["truncated"] is True
