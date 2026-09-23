@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+   makeTileGrid is a pure helper exported next to the component that uses it, so a pinning test can
+   build the identical grid; not a fast-refresh boundary. */
 import { useEffect, useRef } from "react";
 import OlMap from "ol/Map";
 import View from "ol/View";
@@ -9,6 +12,21 @@ import type { GeoMap } from "@contract/client";
 import { fromOl, olExtent, resolutions, TILE, type Extent } from "./grid";
 
 const OVERZOOM = [0.5, 0.25]; // past full resolution: pixels get bigger, never blurrier than the source
+
+/**
+ * The tile grid the backend serves: 256 px tiles in the map's own pixel space (`olExtent`), origin
+ * at the top-left (`toOl`'s y flip), one tile pixel covering `2^(maxZoom - z)` map pixels at zoom
+ * `z` (`resolutions`). Exported so `MapView.tileGrid.test.ts` can pin this exact convention against
+ * `ol`'s own tile-coordinate math without a canvas, instead of re-deriving it independently.
+ */
+export function makeTileGrid(geoMap: Pick<GeoMap, "width" | "height" | "tile_grid">): TileGrid {
+  return new TileGrid({
+    extent: olExtent(geoMap),
+    origin: [0, 0],
+    resolutions: resolutions(geoMap.tile_grid.max_zoom),
+    tileSize: TILE,
+  });
+}
 
 export interface MapViewProps {
   geoMap: GeoMap;
@@ -38,7 +56,7 @@ export function MapView({ geoMap, tileUrl, onReady, onPointer, onViewChange }: M
     const res = resolutions(geoMap.tile_grid.max_zoom);
     const source = new TileImage({
       projection,
-      tileGrid: new TileGrid({ extent, origin: [0, 0], resolutions: res, tileSize: TILE }),
+      tileGrid: makeTileGrid(geoMap),
       tileUrlFunction: (c) =>
         c
           ? tileUrl.replace("{z}", String(c[0])).replace("{x}", String(c[1])).replace("{y}", String(c[2]))
