@@ -39,7 +39,8 @@ class Georef:
 
     def wgs84_to_pixel(self, lon, lat) -> tuple:
         """The inverse of `pixel_to_wgs84`: scalars give `(px, py)` floats, equal-length sequences
-        (lists, tuples or numpy arrays) give `(xs, ys)` lists. Rotation terms included, through the inverted affine."""
+        (lists, tuples or numpy arrays) give `(xs, ys)` lists. Rotation terms included, through the
+        inverted affine."""
         if self._to_native is None:
             self._to_native = Transformer.from_crs(CRS.from_epsg(4326), self.crs, always_xy=True)
         inverse = ~self.affine
