@@ -99,6 +99,16 @@ Packaging changes additionally require `backend\scripts\build.ps1`,
 `backend\scripts\smoke_frozen.ps1` and `pnpm -C frontend build:installer` — see `README.md` →
 "Build".
 
+**reportlab (the detection PDF report).** `reportlab==5.0.1` (BSD, pure Python on top of Pillow)
+was added to `backend/requirements.txt` and the lock for the detection export. It is installed in
+the shared `backend/.venv`; a venv built before 2026-09-23 needs
+`.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt` (or `uv pip sync`) before
+`pytest` passes. `kestrel_backend.spec` bundles its data with `collect_data_files("reportlab")`;
+the standard-font metric modules come in through pyinstaller-hooks-contrib's
+`hook-reportlab.pdfbase._fontdata`. The frozen sidecar has not yet been rebuilt with it, so the
+next packaging run must check that a `detect_export` with `format: pdf` succeeds in the frozen
+build (not just in `pytest`).
+
 ## Dev memory
 
 This repo keeps a tracked Obsidian vault at `vault/`: `00-north-star.md` (the homepage), `sessions/`
