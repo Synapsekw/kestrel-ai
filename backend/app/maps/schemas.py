@@ -116,6 +116,10 @@ class GeoMapPatch(BaseModel):
     captured_on: date | None = None
 
 
+class MapMoveRequest(BaseModel):
+    target_project_id: str
+
+
 class GeoMapWithJob(BaseModel):
     map: GeoMapOut
     job: JobOut

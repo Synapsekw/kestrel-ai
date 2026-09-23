@@ -9,7 +9,7 @@ from fastapi import Path as PathParam
 
 from app.events_util import publish_map_labels_changed_event
 from app.jobs.schemas import JobOut
-from app.maps import service, timeline
+from app.maps import move, service, timeline
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers map_detect
 from app.maps.jobs_export import run_map_export  # noqa: F401 - registers `map_export`
 from app.maps.jobs_import import run_map_import  # noqa: F401 - registers `map_import`
@@ -30,6 +30,7 @@ from app.maps.schemas import (
     MapLabelSeed,
     MapLabelSeedResult,
     MapLabelUpdate,
+    MapMoveRequest,
     MapRunCreate,
     MapRunEstimate,
     MapRunList,
@@ -121,6 +122,25 @@ def patch_map(  # noqa: N803
 def delete_map(mapId: str, request: Request, handle: ProjectHandle = Depends(get_project)) -> Response:  # noqa: N803
     service.delete_map(handle, mapId, request.app.state.jobs.is_live)
     return Response(status_code=204)
+
+
+@router.post(
+    "/maps/{mapId}/move",
+    response_model=JobRef,
+    status_code=202,
+    dependencies=[Depends(require_kind(("train",)))],
+)
+def move_map(
+    mapId: str,  # noqa: N803
+    body: MapMoveRequest,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> JobRef:
+    """Copy a past map into a detection project; the `map_move` job lives in the target project."""
+    target, job = move.submit_move(
+        request.app.state.projects, request.app.state.jobs, handle, mapId, body.target_project_id
+    )
+    return JobRef(job=JobOut.from_row(job, target.id))
 
 
 @router.get("/maps/{mapId}/preview", response_class=Response, dependencies=DETECT_WRITE)

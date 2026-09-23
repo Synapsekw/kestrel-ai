@@ -85,6 +85,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys
         app.state.jobs.provider_config = app.state.provider_config
+        # A `map_move` job runs in the target project and reads the map from the source project.
+        app.state.jobs.projects = app.state.projects
         open_model_library(app, settings)
         app.state.jobs.start()
         if app.state.library is not None:

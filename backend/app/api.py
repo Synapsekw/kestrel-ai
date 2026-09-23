@@ -16,7 +16,6 @@ from app.project_agent.router import router as project_agent_router
 from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
-from app.stubs import add_stubs
 from app.training.starter_router import router as starter_router
 
 log = logging.getLogger(__name__)
@@ -57,9 +56,5 @@ try:
     from app.maps.router import router as maps_router
 
     api_router.include_router(maps_router)
-    # A map endpoint like the rest: it is dropped with them when the maps router cannot load.
-    _move_stub = APIRouter(prefix="/projects/{projectId}", tags=["maps"])
-    add_stubs(_move_stub, [("POST", "/maps/{mapId}/move", "moveMapToProject")])
-    api_router.include_router(_move_stub, dependencies=[Depends(require_kind(("train",)))])
 except Exception:
     log.exception("maps router failed to load; map endpoints will be unavailable")
