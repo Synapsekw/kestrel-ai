@@ -17,8 +17,10 @@ import {
   exportModel,
   fetchAllModels,
   fetchModel,
+  fetchModelGsdEstimate,
   fetchResultsCsv,
   importModel,
+  patchModel,
   trainModel,
 } from "./models";
 
@@ -112,6 +114,27 @@ describe("models api", () => {
     await expect(fetchAllModels(api, PROJECT_ID)).rejects.toMatchObject({
       code: "not_implemented",
       status: 501,
+    });
+  });
+
+  it("fetches a model's derived training scale", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/gsd-estimate$/, body: { train_gsd_cm: 18.92, plausible: true } },
+    ]);
+    const e = await fetchModelGsdEstimate(api, PROJECT_ID, MODEL_ID);
+    expect(e.train_gsd_cm).toBe(18.92);
+  });
+
+  it("patches a model's training scale", async () => {
+    const { api, requests } = fakeClient([
+      { method: "PATCH", path: /\/models\/[^/]+$/, body: { ...exampleModel, train_gsd_cm: 18.92 } },
+    ]);
+    const m = await patchModel(api, PROJECT_ID, MODEL_ID, { train_gsd_cm: 18.92 });
+    expect(m.train_gsd_cm).toBe(18.92);
+    expect(requests[0]).toMatchObject({
+      method: "PATCH",
+      url: `/api/v1/projects/${PROJECT_ID}/models/${MODEL_ID}`,
+      body: { train_gsd_cm: 18.92 },
     });
   });
 });

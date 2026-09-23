@@ -160,6 +160,7 @@ export const exampleModel: Model = {
   exports: {},
   artifacts: {},
   run_id: null,
+  train_gsd_cm: null,
   created_at: "2026-09-17T10:10:00Z",
 };
 
@@ -211,6 +212,7 @@ export const exampleTrainedModel: Model = {
     pr_curve: "runs/j1/PR_curve.png",
   },
   run_id: "j0000000-4444-4000-8000-000000000009",
+  train_gsd_cm: null,
   created_at: "2026-09-17T15:00:00Z",
 };
 

@@ -37,6 +37,7 @@ const trained = {
     pr_curve: "runs/j1/pr.png",
   },
   run_id: null,
+  train_gsd_cm: null,
   created_at: "2026-09-17T15:00:00Z",
 };
 
@@ -54,6 +55,7 @@ const importedModel = {
   exports: {},
   artifacts: {},
   run_id: null,
+  train_gsd_cm: null,
   created_at: "2026-09-17T10:10:00Z",
 };
 

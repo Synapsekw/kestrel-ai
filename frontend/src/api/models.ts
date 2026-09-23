@@ -35,6 +35,36 @@ export function importModel(api: ApiClient, projectId: string, body: ModelImport
   );
 }
 
+export type ModelGsdEstimate = components["schemas"]["ModelGsdEstimate"];
+
+/** Derives the scale the model was trained at from its dataset; 404 when it has no dataset or no usable EXIF. */
+export function fetchModelGsdEstimate(
+  api: ApiClient,
+  projectId: string,
+  modelId: string,
+): Promise<ModelGsdEstimate> {
+  return unwrap(
+    api.GET("/api/v1/projects/{projectId}/models/{modelId}/gsd-estimate", {
+      params: { path: { projectId, modelId } },
+    }),
+  );
+}
+
+/** Sets what is editable on a model: the scale (cm/px) it was trained at. */
+export function patchModel(
+  api: ApiClient,
+  projectId: string,
+  modelId: string,
+  body: { train_gsd_cm: number | null },
+): Promise<Model> {
+  return unwrap(
+    api.PATCH("/api/v1/projects/{projectId}/models/{modelId}", {
+      params: { path: { projectId, modelId } },
+      body,
+    }),
+  );
+}
+
 /** 202 with the training job; the model row appears when the job succeeds (`job.result.model_id`). */
 export async function trainModel(api: ApiClient, projectId: string, body: TrainRequest): Promise<Job> {
   const r = await unwrap(
