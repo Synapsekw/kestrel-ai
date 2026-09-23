@@ -408,3 +408,12 @@ def test_bulk_marking_images_empty_keeps_the_run_counts(handle, photo_run):
     empties.bulk_mark_empty(handle, ["i1"], True)
     stored, fresh = _query_counts(handle)
     assert stored == fresh == ({}, {})
+
+
+def test_deleting_images_of_a_photo_run_updates_the_run_counts(handle, photo_run, cls):
+    from app.datasets import images
+
+    boxes.review_boxes(handle, ["b1"], "accept")
+    assert images.bulk_delete(handle, ["i1"]) == 1
+    stored, fresh = _query_counts(handle)
+    assert stored == fresh == ({}, {})
