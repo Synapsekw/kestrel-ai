@@ -23,7 +23,13 @@ def _bundle_base() -> Path | None:
 def configure_gdal_env(
     base: Path | None = None, environ: MutableMapping[str, str] | None = None
 ) -> dict[str, str]:
-    """Set GDAL_DATA, PROJ_DATA and PROJ_LIB from the bundle; returns what was set."""
+    """Set GDAL_DATA, PROJ_DATA and PROJ_LIB from the bundle; returns what was set.
+
+    Never raises: the app must start even when startup work fails (AGENTS.md), and this runs
+    before anything else at process start, too early for logging to be configured. Any failure
+    while probing or setting the folders is swallowed silently and whatever was already applied
+    (or `{}`) is returned.
+    """
     env = os.environ if environ is None else environ
     base = base if base is not None else _bundle_base()
     if base is None:
@@ -34,9 +40,12 @@ def configure_gdal_env(
         "PROJ_LIB": base / "rasterio" / "proj_data",
     }
     applied: dict[str, str] = {}
-    for key, folder in wanted.items():
-        if key in env or not folder.is_dir():
-            continue
-        env[key] = str(folder)
-        applied[key] = str(folder)
+    try:
+        for key, folder in wanted.items():
+            if key in env or not folder.is_dir():
+                continue
+            env[key] = str(folder)
+            applied[key] = str(folder)
+    except Exception:
+        pass
     return applied

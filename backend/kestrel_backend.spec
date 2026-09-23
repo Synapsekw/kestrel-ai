@@ -40,15 +40,15 @@ hiddenimports = (
         "websockets",
         "anyio._backends._asyncio",
         # maps: rasterio's Cython modules import each other at runtime; PyInstaller misses these
-        "rasterio._shim",
         "rasterio.sample",
         "rasterio.vrt",
         "rasterio._features",
         "rasterio.crs",
         "pyproj.database",
-        # fix attempt 1 (2026-09-23): rasterio._base is a compiled .pyx that imports this pure
-        # Python module at init; PyInstaller's static analysis cannot see into the .pyx, so the
-        # frozen build raised `ModuleNotFoundError: No module named 'rasterio.serde'` at startup.
+        # rasterio._base is a compiled .pyx that imports this pure Python module at init time;
+        # PyInstaller's static analysis cannot see into a compiled extension, so without this the
+        # frozen build raises `ModuleNotFoundError: No module named 'rasterio.serde'` at startup
+        # (found during the freeze spike, ADR 2026-09-22).
         "rasterio.serde",
     ]
 )

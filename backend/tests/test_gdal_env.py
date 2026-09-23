@@ -38,3 +38,18 @@ def test_not_frozen_is_a_no_op(monkeypatch):
     monkeypatch.delattr("sys.frozen", raising=False)
     env: dict[str, str] = {}
     assert configure_gdal_env(None, env) == {}
+
+
+class _ExplodingEnviron(dict):
+    """A mapping that blows up on write, as a hostile `os.environ` might in some embedder."""
+
+    def __setitem__(self, key, value):
+        raise OSError("simulated: cannot set environment variable")
+
+
+def test_a_broken_environ_never_propagates(tmp_path):
+    # The startup invariant (AGENTS.md): the app must start even when startup work fails. This
+    # runs before logging exists, so the only contract is "never raise, return what you managed".
+    base = _bundle(tmp_path)
+    env = _ExplodingEnviron()
+    assert configure_gdal_env(base, env) == {}
