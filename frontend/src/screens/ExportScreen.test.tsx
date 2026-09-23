@@ -71,6 +71,16 @@ describe("ExportScreen", () => {
     expect(screen.queryByTestId(`export-job-${otherProjectsJob.id}`)).not.toBeInTheDocument();
   });
 
+  it("shows neither kind's section while the project kind is still loading", async () => {
+    useProjectKindStore.setState({ byProject: {} });
+    // No project route, so the kind never loads: the screen stays as it is while the request is out.
+    renderScreen([]);
+    expect(screen.queryByRole("heading", { name: "Model for other applications" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Past exports" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Model for other applications" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Counts" })).not.toBeInTheDocument();
+  });
+
   describe("in a detection project", () => {
     beforeEach(() => useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "detect" } }));
 
