@@ -147,7 +147,9 @@ def test_train_project_still_labels_with_query_runs(client, tmp_path):
     r = client.post(
         f"{BASE}/{pid}/query-runs", json={"kind": "local_model", "image_ids": ["x"], "model_id": "m"}
     )
-    assert r.status_code != 409 or _error(r)["code"] != "wrong_project_kind", r.text
+    # The guard lets it through to the route, which rejects the unknown image on its own terms.
+    assert r.status_code == 404, r.text
+    assert _error(r)["code"] == "not_found", r.text
     assert client.get(f"{BASE}/{pid}/query-runs").status_code == 200
 
 
