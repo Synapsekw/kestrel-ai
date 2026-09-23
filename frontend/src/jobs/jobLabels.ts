@@ -15,6 +15,10 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   library_starter: "Model download",
   library_adopt: "Moving models to the library",
   map_move: "Map move",
+  accept_above: "Bulk accept",
+  recount: "Recount",
+  area_recount: "Site-area recount",
+  detect_export: "Detection export",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -98,6 +102,13 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "map_export":
       // Its files and "show in folder" live in `ExportJobs` on the Export screen (widened to list
       // map exports alongside results exports), not on the Maps screen that started it.
+      return { label: "Open export", to: `${p}/export` };
+    case "accept_above":
+    case "recount":
+      return { label: "Open runs", to: `${p}/runs` };
+    case "area_recount":
+      return { label: "Open analytics", to: `${p}/analytics` };
+    case "detect_export":
       return { label: "Open export", to: `${p}/export` };
   }
 }

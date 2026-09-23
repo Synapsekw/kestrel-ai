@@ -46,6 +46,10 @@ const TYPE_VERB: Record<Job["type"], string> = {
   library_starter: "Adding a starter model",
   library_adopt: "Moving models into the library",
   map_move: "Moving a map",
+  accept_above: "Accepting detections",
+  recount: "Recounting a run",
+  area_recount: "Recounting site areas",
+  detect_export: "Exporting counts",
 };
 
 /** The newest active job as a live pill; nothing when the project is idle. */
