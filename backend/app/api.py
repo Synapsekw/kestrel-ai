@@ -58,3 +58,12 @@ try:
     api_router.include_router(maps_router)
 except Exception:
     log.exception("maps router failed to load; map endpoints will be unavailable")
+
+# Site areas and analytics (plan 2 unit A): detection projects only. Guarded like the maps router:
+# the site-area geometry needs pyproj, and a broken native dependency must not stop the backend.
+try:
+    from app.detect.analytics_router import router as detect_analytics_router
+
+    api_router.include_router(detect_analytics_router, dependencies=[Depends(require_kind(("detect",)))])
+except Exception:
+    log.exception("site-area and analytics router failed to load; those endpoints will be unavailable")
