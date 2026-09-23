@@ -6,12 +6,14 @@ import { fetchJobs } from "@/api/jobs";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
 
-/** This project's file-producing exports (a `results_export` from the Export screen or a
- * `map_export` from the Maps screen), newest first across both kinds; kept fresh by the jobs
- * panel's websocket too. */
+const EXPORT_TYPES = new Set<Job["type"]>(["results_export", "map_export", "detect_export"]);
+
+/** This project's file-producing exports (a `results_export` or a `detect_export` from the Export
+ * screen, or a `map_export` from the Maps screen), newest first across every kind; kept fresh by
+ * the jobs panel's websocket too. */
 function selectExportJobs(jobs: Record<string, Job>, projectId: string): Job[] {
   return Object.values(jobs)
-    .filter((j) => (j.type === "results_export" || j.type === "map_export") && j.project_id === projectId)
+    .filter((j) => EXPORT_TYPES.has(j.type) && j.project_id === projectId)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
@@ -37,6 +39,7 @@ export function useResultsExportJobs(projectId: string): {
     const kinds = [
       { type: "results_export" as const, label: "results exports" },
       { type: "map_export" as const, label: "map exports" },
+      { type: "detect_export" as const, label: "detection exports" },
     ];
     Promise.allSettled(kinds.map((k) => fetchJobs(api, projectId, { type: k.type }))).then((results) => {
       if (cancelled) return;

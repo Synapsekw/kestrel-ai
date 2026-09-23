@@ -75,6 +75,10 @@ class ExportBox:
     w: float
     h: float
     angle: float | None
+    # The detection's review state (unreviewed | accepted | rejected | edited); "" for a label.
+    review_state: str = ""
+    # The project class the box belongs to (a detection's class after the run's class mapping).
+    class_id: str = ""
 
 
 def _native(georef: Georef, box: ExportBox) -> tuple[list[tuple[float, float]], tuple[float, float]]:
