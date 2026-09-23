@@ -6,7 +6,7 @@ import { evidencePath } from "./evidence";
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 
 const TRAIN_STEPS = ["Images", "Label", "Datasets", "Train", "Review", "Export"];
-const DETECT_STEPS = ["Images", "Detect", "Maps", "Review", "Export"];
+const DETECT_STEPS = ["Sources", "Runs", "Review", "Analytics", "Export", "Site areas"];
 
 /** The pipeline entries of the sidebar, by their leading label. */
 async function expectSteps(page: Page, shown: string[], hidden: string[]) {
@@ -48,7 +48,7 @@ test("creating a detection project opens it with the detection steps", async ({ 
     classes: [],
   });
   await expect(page).toHaveURL(new RegExp(`/p/${P}$`));
-  await expectSteps(page, DETECT_STEPS, ["Label", "Datasets", "Train", "Past detections"]);
+  await expectSteps(page, DETECT_STEPS, ["Images", "Label", "Datasets", "Train", "Past detections"]);
   await page.screenshot({
     path: evidencePath("model-library", "detection-project-sidebar.png"),
     fullPage: true,
@@ -59,7 +59,7 @@ test("a training project shows the training steps, and a detection screen sends 
   page,
 }) => {
   await page.goto(`/p/${P}`);
-  await expectSteps(page, TRAIN_STEPS, ["Detect", "Maps"]);
+  await expectSteps(page, TRAIN_STEPS, ["Sources", "Runs", "Analytics", "Site areas", "Detect", "Maps"]);
   await page.screenshot({
     path: evidencePath("model-library", "training-project-sidebar.png"),
     fullPage: true,

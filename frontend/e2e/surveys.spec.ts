@@ -8,18 +8,21 @@ test.beforeEach(async ({ page }) => {
   await asDetectionProject(page, P);
 });
 
-test("the surveys screen lists each survey with its change", async ({ page }) => {
+test("the survey timeline lives in Analytics, and its old address still opens it", async ({ page }) => {
   await page.goto(`/p/${P}/surveys`);
-  await expect(page.getByRole("heading", { name: "Surveys", exact: true })).toBeVisible();
-  const rows = page.getByRole("row");
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/analytics$`));
+  const section = page.getByTestId("surveys-section");
+  await expect(section.getByRole("heading", { name: "Surveys", exact: true })).toBeVisible();
+  const rows = section.getByRole("row");
   await expect(rows.nth(1)).toContainText("May survey");
   await expect(rows.nth(1)).toContainText("+3");
   await expect(rows.nth(2)).toContainText("April survey");
-  await expect(page.getByTestId("survey-chart")).toBeVisible();
+  await expect(section.getByTestId("survey-chart")).toBeVisible();
 });
 
-test("the sidebar reaches the surveys screen", async ({ page }) => {
-  await page.goto(`/p/${P}/maps`);
-  await page.getByRole("link", { name: "Surveys" }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/surveys$`));
+test("a detection project has no separate Surveys entry any more", async ({ page }) => {
+  await page.goto(`/p/${P}/sources`);
+  const nav = page.getByRole("navigation", { name: "Main navigation" });
+  await expect(nav.getByRole("link", { name: /^Analytics/ })).toBeVisible();
+  await expect(nav.getByRole("link", { name: "Surveys" })).toHaveCount(0);
 });
