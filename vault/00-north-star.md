@@ -70,6 +70,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | CI green (GitHub Actions `ci`) | merged/pushed to `main` (`afba411`) | red on all 14 push runs since publishing; four stacked causes fixed and the local gate now runs `ruff format --check` and e2e as CI does; 3/3 dispatch runs green on all four jobs including `sidecar-smoke`. See [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]] |
 | Project agent (in-project AI drawer with tool access) | merged to `main` (`b606360`); rebuilt and installed 2026-09-22 | plain-language operation of the app through ~35 tools over the existing API, approvals for spend/train/delete; 854 backend, 564 frontend, 62 browser and 8 Rust tests; frozen-sidecar route smoke and an installed-build CDP check. No live provider turn yet. See [[2026-09-22-1930-project-agent]] |
 | GeoTIFF maps — import, view, detect, label, score, export | merged to `main` (`759015a`, + `8dbb55e` layout fix); rebuilt and installed 2026-09-23 | an orthomosaic of any size and projection: bounded 256 px tiles, whole-map detection (windowed, resumable, seam-merged) with counts per class, evaluation zones and labels, precision/recall/F1 and count error, and GeoJSON/GeoPackage/CSV export with coordinates. 973 backend, 634 frontend, 63 browser and 8 Rust tests on the merged tree; frozen smoke green including `geo ok`. **Unrun on a real orthomosaic; the GeoPackage has never been opened by GIS software.** See [[2026-09-23-1655-geotiff-maps]] |
+| Survey timeline — counts over time across a site's maps | merged/pushed to `main` (`ddc95f6`) | a map carries the date it was flown (read from `TIFFTAG_DATETIME`, correctable); `GET /survey-timeline` gives each survey's counts and the change since the previous **comparable** one; a Surveys screen draws the chart and table. A survey counted with another model or confidence is marked and excluded from the deltas. 995 backend, 644 frontend, 65 browser tests. **Not in any installed build, and never run on two real orthomosaics.** Superseded the frame-projection design with measurements. See [[2026-09-23-1703-survey-timeline]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -81,7 +82,24 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **GeoTIFF maps — judge a model on the artefact the customer delivers** —
+**Shipped last:** **The survey timeline — counts over time across a site's maps** —
+`d92441d..ddc95f6` (8 tasks in a task worktree, merged and pushed `e6e5f7d..ddc95f6`, worktree
+removed and branch deleted). Maps already counted objects per class; nothing compared one survey
+with the next. Now a map carries the date its imagery was flown, `GET /survey-timeline` returns every
+survey oldest first with the change since the previous **comparable** one, and a Surveys screen draws
+it. The guard is the point: a survey counted with another model or confidence is marked, drawn hollow
+and left out of the arithmetic, so a change of model cannot read as a change on the ground. Gate green
+on the merged result (995 backend, 644 frontend, 65 browser). A bug caught on the way: the new date
+broke the `source.json` sidecar, which had failed **every** map import. See
+[[2026-09-23-1703-survey-timeline]].
+
+The design that preceded it was killed by measurement rather than opinion: counting distinct objects
+from overlapping frames put the same object 10-17 m from itself between frames (28 m unprojected),
+and the best-fitting angle convention differed between flights.
+`docs/superpowers/specs/2026-09-23-object-counts-per-group-design.md` is marked superseded and carries
+the numbers.
+
+Previously shipped: **GeoTIFF maps — judge a model on the artefact the customer delivers** —
 `cf01fa8..449ecd3` (32 commits in a task worktree, merged `759015a`, worktree removed and branch
 deleted, not pushed), plus `8dbb55e` after the operator found the map squished in the installed
 build. Import an orthomosaic of any size and projection; every tile is one bounded windowed read,
@@ -175,13 +193,17 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing from this block — the maps worktree is removed and its branch deleted.
-Another session shipped the **survey timeline** on top of maps while this block was finishing
-(`d92441d..ddc95f6`: a map carries its flight date, a timeline endpoint, a Surveys screen and a
-chart of counts over time); its state is not recorded here, and the installer built this block
-predates it.
+**In flight:** nothing from this block — the worktree is removed and its branch deleted. Two other
+sessions hold worktrees as this is written (`pointcloud-spike`, `train-detect-spec`); their state is
+not recorded here. The operator has decided to rebuild and install once that work lands, so the
+survey timeline waits for that build.
 
-**Next:** run the maps walkthrough on a real orthomosaic
+**Next:** rebuild and install once `pointcloud-spike` and `train-detect-spec` land — the installed
+build carries maps and the project agent but **not** the survey timeline — then walk the operator
+through Surveys on two real orthomosaics of one site. Then the **de-machinery pass** the operator
+approved on 2026-09-23: the editor's "No machinery (N)", the preset class list on the Projects
+screen and the agent placeholders all assume construction machinery, and the app is meant for any
+detector (plants, power-line anomalies). Also: run the maps walkthrough on a real orthomosaic
 (`docs/usability/2026-09-22-maps-walkthrough.md`) — step 8, opening the exported GeoPackage in
 QGIS, is the one check no software has ever run — then dispatch CI `sidecar-smoke`, since the
 bundle now carries GDAL and PROJ. A **point cloud viewer** (Potree/COPC) is researched and has a
@@ -196,6 +218,25 @@ bound the pytest step in `finish-task.ps1`, see
 folder rename when the operator is ready (§5).
 
 ## 5. Owed
+
+### Survey timeline: not installed, and unproven on real surveys (opened 2026-09-23)
+
+Merged and pushed at `ddc95f6`; the installed build predates it. Owed:
+- Rebuild and install once `pointcloud-spike` and `train-detect-spec` land (the operator's decision).
+- Put two real orthomosaics of one site in a project, run the same model over both, and read the
+  trend. Every test so far uses synthetic rows or the Prism mock.
+- The comparison basis defaults to the newest run's model, so importing an older map after training a
+  newer model marks it not comparable until it is re-run. Honest, but watch whether it surprises.
+
+### The app still assumes construction machinery (opened 2026-09-23)
+
+The operator's instruction: the app is for any detector — machinery today, plants or trees or
+power-line anomalies next. These still name the domain and were agreed as a separate pass after the
+survey timeline: the editor's "No machinery (N)" toolbar action and hotkey text
+(`frontend/src/editor/EmptyToggle.tsx`, `RegionList.tsx`), the eight preset classes on the Projects
+screen (`frontend/src/screens/ProjectsScreen.tsx`), the agent placeholders
+(`frontend/src/agent/*`, `backend/app/project_agent/tools.py`) and `AddToDatasetDialog`'s wording.
+`PRODUCT.md` also describes only the construction audience.
 
 ### GeoTIFF maps: a real orthomosaic, a GIS check, and a CI dispatch (opened 2026-09-23)
 
