@@ -161,12 +161,26 @@ def create_runs(
             s.flush()
             rows.append((t, row.id, job_type, key))
     out = []
-    for t, run_id, job_type, key in rows:
-        job = submit(job_type, {key: run_id})
+    for i, (t, run_id, job_type, key) in enumerate(rows):
+        try:
+            job = submit(job_type, {key: run_id})
+        except Exception:
+            _drop_unsubmitted(handle, rows[i:])
+            raise
         with handle.session() as s:
             (s.get(QueryRun, run_id) if t.kind == "images" else s.get(MapRun, run_id)).job_id = job.id
         out.append((t, run_id, job))
     return out
+
+
+def _drop_unsubmitted(handle: ProjectHandle, rows: list[tuple[_Target, str, str, str]]) -> None:
+    """A submit failed: delete the runs that never got a job, so the list shows no run that will
+    never start. Runs already queued keep their job and stay."""
+    with handle.session() as s:
+        for t, run_id, _, _ in rows:
+            row = s.get(QueryRun, run_id) if t.kind == "images" else s.get(MapRun, run_id)
+            if row is not None and row.job_id is None:
+                s.delete(row)
 
 
 # ----------------------------------------------------------------------------- list

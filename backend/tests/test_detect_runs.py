@@ -490,3 +490,32 @@ def test_the_timeline_api_takes_verified_only(client, handle, project_id):
     [verified] = client.get(url, params={"verified_only": True}).json()["surveys"]
     assert total["counts"] == {"c1": 5} and total["verified_counts"] == {"c1": 2} and total["pinned"] is True
     assert verified["counts"] == {"c1": 2}
+
+
+def test_a_failed_submit_leaves_no_run_that_will_never_start(app, handle, make_jpeg, tmp_path):
+    """A job-queue failure part-way through keeps the runs already queued and removes the rest,
+    so the runs list never shows a 'Not started' row with no job behind it."""
+    from types import SimpleNamespace
+
+    from app.detect import runs
+    from app.detect.schemas import RunCreate
+
+    first = _add_images_source(handle, make_jpeg, label="A")
+    second = _add_images_source(handle, make_jpeg, label="B")
+    third = _add_images_source(handle, make_jpeg, label="C")
+    app.state.keys.set("anthropic", "sk-fake")
+    calls: list[dict] = []
+
+    def submit(job_type, params):
+        calls.append(params)
+        if len(calls) == 2:
+            raise RuntimeError("queue is down")
+        return SimpleNamespace(id=f"job-{len(calls)}")
+
+    body = RunCreate(source_ids=[first, second, third], provider="anthropic", query="trucks")
+    with pytest.raises(RuntimeError, match="queue is down"):
+        runs.create_runs(handle, None, app.state.keys, app.state.provider_config, body, submit)
+
+    with handle.session() as s:
+        left = s.query(QueryRun).all()
+        assert [(r.source_id, r.job_id) for r in left] == [(first, "job-1")]
