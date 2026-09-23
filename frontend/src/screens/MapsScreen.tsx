@@ -602,6 +602,7 @@ export function MapsScreen() {
   if (maps && maps.length === 0 && !importing) {
     return (
       <EmptyState
+        className="h-full p-6"
         icon="map"
         title="Import a GeoTIFF map"
         action={
@@ -616,8 +617,8 @@ export function MapsScreen() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <section className="flex w-64 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3">
+    <div className="flex h-full min-h-0 w-full">
+      <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold tracking-tight">Maps</h1>
           <Button size="sm" icon="import" onClick={() => setImporting(true)}>
@@ -696,7 +697,7 @@ export function MapsScreen() {
       </section>
       <aside
         data-testid="map-panel"
-        className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-l border-line p-4"
+        className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-line p-4 xl:w-80"
       >
         {active && (
           <>

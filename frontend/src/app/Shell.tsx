@@ -48,15 +48,20 @@ export function Shell() {
   useJobToasts(projectId, pathnameRef);
   const isHome = !!projectId && pathname.replace(/\/$/, "") === `/p/${projectId}`;
   const editor = !!imageId;
+  // Work surfaces fill the viewport themselves: no page padding, no scrolling shell, and no step
+  // bar stealing height from the image or the map. Everything else is a padded, scrollable page.
+  const workSurface = editor || /\/maps(\/|$)/.test(pathname);
 
   return (
     <div className="flex h-full w-full bg-ground text-ink">
       <Sidebar projectId={projectId} projectName={projectName} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Header projectId={projectId} projectName={projectName} />
-        {projectId && !editor && !isHome && <NextStepBar projectId={projectId} />}
+        {projectId && !workSurface && !isHome && <NextStepBar projectId={projectId} />}
         <main
-          className={editor ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-4 lg:p-6"}
+          className={
+            workSurface ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-auto p-4 lg:p-6"
+          }
         >
           <Outlet />
         </main>
