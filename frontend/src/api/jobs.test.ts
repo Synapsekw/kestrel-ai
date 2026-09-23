@@ -41,4 +41,20 @@ describe("jobs api", () => {
       message: "job j1 not found",
     });
   });
+
+  it("routes the pseudo project `library` to the library job endpoints", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/library\/jobs\/[^/]+\/log$/, body: exampleJobLog },
+      { method: "GET", path: /\/library\/jobs\/[^/]+$/, body: { ...runningJob, project_id: "library" } },
+      { method: "POST", path: /\/library\/jobs\/[^/]+\/cancel$/, body: { ...runningJob, state: "cancelled" } },
+    ]);
+    expect((await fetchJob(api, "library", JOB_ID)).project_id).toBe("library");
+    expect((await cancelJob(api, "library", JOB_ID)).state).toBe("cancelled");
+    expect((await fetchJobLog(api, "library", JOB_ID, 50)).lines).toHaveLength(2);
+    expect(requests.map((r) => `${r.method} ${r.url}`)).toEqual([
+      `GET /api/v1/library/jobs/${JOB_ID}`,
+      `POST /api/v1/library/jobs/${JOB_ID}/cancel`,
+      `GET /api/v1/library/jobs/${JOB_ID}/log?tail=50`,
+    ]);
+  });
 });
