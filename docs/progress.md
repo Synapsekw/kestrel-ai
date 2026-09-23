@@ -381,6 +381,10 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
     there); each relies on a pattern already audited elsewhere in the codebase. The label/zone
     refetch after each edit is un-batched (one request per edit) but correct. This task's e2e run
     exercises only the happy path for all of these, by design (decided for Task 15).
+  - Score/export UI (Task 14): `ExportJobs` now lists results exports and map exports together
+    with no grouping between the two kinds; `useResultsExportJobs` covers both kinds and its name
+    is stale; the overlay recolouring and the mistake stepper's view-fit have no automated coverage
+    (jsdom has no canvas).
 - Task 15 (this task): `frontend/e2e/maps.spec.ts` opens a map, sees the first tile requested, reads
   the pixel/native/lat-lon cursor readout, ticks a run and reads its whole-map count from the
   Results table, draws an evaluation zone, opens the Score tab and reads Precision, opens the export
