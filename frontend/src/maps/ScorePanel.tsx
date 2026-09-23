@@ -17,11 +17,14 @@ const METRICS: [string, (r: Row) => string][] = [
 
 /**
  * Precision/recall/F1/count-error per selected run, a per-class breakdown, the overlay toggle and
- * mistake stepping. One run drives the mistake list (the first ticked run); a second run only adds
- * a comparison column to the table.
+ * mistake stepping. One run drives the mistake list, the per-class table and the map overlay: the
+ * run the operator ticked *first*, not whichever comes first in `runs`. `selected` (tick order) is
+ * the single source of truth for that, the same way `ResultsPanel` orders its own columns from it;
+ * `runs` is only consulted here to look up a ticked id's display name.
  */
 export function ScorePanel({
   runs,
+  selected,
   scores,
   classes,
   overlay,
@@ -29,14 +32,17 @@ export function ScorePanel({
   onStep,
 }: {
   runs: MapRun[];
+  /** Run ids in tick order (as `RunList`/`toggleCompare` produce them); index 0 is primary. */
+  selected: string[];
   scores: Record<string, MapScore | null>;
   classes: ClassDef[];
   overlay: boolean;
   onOverlay: (on: boolean) => void;
   onStep: (m: MatchRow) => void;
 }) {
-  const shown = runs.filter((r) => scores[r.id]);
-  const first = shown[0] ? scores[shown[0].id]! : null;
+  const shownIds = selected.filter((id) => scores[id]);
+  const shown = shownIds.map((id) => runs.find((r) => r.id === id)).filter((r): r is MapRun => !!r);
+  const first = shownIds[0] ? scores[shownIds[0]]! : null;
   const list = useMemo(() => (first ? mistakes(first) : []), [first]);
   const [at, setAt] = useState(-1);
   const name = (id: string) => classes.find((c) => c.id === id)?.name ?? "unknown class";
@@ -104,7 +110,7 @@ export function ScorePanel({
       />
       <div className="flex items-center gap-2">
         <IconButton
-          icon="arrow-left"
+          icon="chevron-left"
           size="sm"
           label="Previous mistake"
           disabled={!list.length}

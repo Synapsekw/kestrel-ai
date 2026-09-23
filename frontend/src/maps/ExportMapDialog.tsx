@@ -68,7 +68,7 @@ export function ExportMapDialog({
       };
       const job = await createMapExport(api, projectId, body);
       useJobsStore.getState().upsert(job);
-      toast("info", "Export started: the folder opens from the jobs panel when it is done.");
+      toast("info", "Export started: find it under Past exports on the Export screen when it is done.");
       onClose();
     } catch (err) {
       setError(messageOf(err, "could not start the export"));

@@ -78,6 +78,29 @@ describe("ExportJobs", () => {
     expect(row).toHaveTextContent("and 3 more");
   });
 
+  it("renders a finished map export's folder and files, with no broken summary line", () => {
+    const mapExport = {
+      ...runningJob,
+      id: "map-export-1",
+      type: "map_export" as const,
+      state: "succeeded" as const,
+      progress: 1,
+      result: {
+        folder: "exports/2026-09-22_120000",
+        files: ["map-a-labels.csv"],
+        box_count: 1,
+      },
+    };
+    render([mapExport]);
+    const row = screen.getByTestId(`export-job-${mapExport.id}`);
+    // resultsExportSummary returns null for a map export by design (it counts images; a map export
+    // has none): the row must simply omit that span, not render an empty or malformed one.
+    expect(row).not.toHaveTextContent("undefined");
+    expect(row).not.toHaveTextContent("NaN");
+    expect(row).toHaveTextContent("map-a-labels.csv");
+    expect(screen.getByRole("button", { name: "Show in folder" })).toBeInTheDocument();
+  });
+
   it("shows a running export as a job card instead of the summary row", () => {
     const running = { ...runningJob, type: "results_export" as const, state: "running" as const };
     render([running]);

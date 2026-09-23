@@ -88,8 +88,11 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return null; // it already lives on the Export screen that started it
     case "map_import":
     case "map_detect":
-    case "map_export":
       return { label: "Open maps", to: `${p}/maps` };
+    case "map_export":
+      // Its files and "show in folder" live in `ExportJobs` on the Export screen (widened to list
+      // map exports alongside results exports), not on the Maps screen that started it.
+      return { label: "Open export", to: `${p}/export` };
   }
 }
 

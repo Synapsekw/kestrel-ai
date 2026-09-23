@@ -70,6 +70,17 @@ describe("job labels", () => {
         "p",
       ),
     ).toBeNull();
+    expect(
+      resultTarget({ ...runningJob, type: "map_import", state: "succeeded", result: { map_id: "m1" } }, "p"),
+    ).toEqual({ label: "Open maps", to: "/p/p/maps" });
+    // A map export's files live in the Export screen's job list (widened to include map exports),
+    // not on the Maps screen that started it.
+    expect(
+      resultTarget(
+        { ...runningJob, type: "map_export", state: "succeeded", result: { folder: "exports/x" } },
+        "p",
+      ),
+    ).toEqual({ label: "Open export", to: "/p/p/export" });
   });
 
   it("titles a results export and summarises its result", () => {

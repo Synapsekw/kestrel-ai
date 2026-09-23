@@ -644,6 +644,7 @@ export function MapsScreen() {
             ) : rightTab === "score" ? (
               <ScorePanel
                 runs={runs}
+                selected={liveSelected}
                 scores={liveScores}
                 classes={classes}
                 overlay={overlay}
