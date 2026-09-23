@@ -21,13 +21,14 @@ from app.providers.keys import KeyringKeyStore
 def project_opened(handle, runner) -> None:
     """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
     their folders back, sweep partial exports a crash left behind, fail agent turns the last process
-    left running. Each step on its own, so one
-    failing never skips the others."""
+    left running, and start moving a training project's old models into the library. Each step on
+    its own, so one failing never skips the others."""
     import logging
 
     from app.datasets import materialise
     from app.exports import job as exports_job
     from app.jobs import startup
+    from app.library import adoption
     from app.maps import startup as maps_startup
     from app.project_agent import store as agent_store
 
@@ -38,6 +39,8 @@ def project_opened(handle, runner) -> None:
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
         ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),
         ("interrupted map import sweep", lambda: maps_startup.sweep_interrupted_imports(handle, runner)),
+        # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
+        ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),
     ):
         try:
             run()

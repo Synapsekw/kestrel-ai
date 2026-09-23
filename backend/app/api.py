@@ -9,6 +9,7 @@ from app.exports.router import router as exports_router
 from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
+from app.library.adoption_router import router as adoption_router
 from app.library.router import project_router as train_router
 from app.library.router import router as library_router
 from app.project_agent.router import router as project_agent_router
@@ -43,19 +44,8 @@ for r in (jobs_router, exports_router):
 # Training writes into a train project's dataset and weights: a detect project has none.
 api_router.include_router(train_router, dependencies=[Depends(require_kind(("train",)))])
 
-# Contract operations whose unit (plan 2026-09-23, unit BM) has not landed yet: routed as 501
-# stubs so the contract stays fully routed. BM replaces each one and drops it from here and from
-# EXPECTED_STUBS in tests/test_contract.py. All are training-only (plan, unit BK route table).
-TRAIN_ONLY = [Depends(require_kind(("train",)))]
-_adoption_stubs = APIRouter(prefix="/projects/{projectId}", tags=["library"])
-add_stubs(
-    _adoption_stubs,
-    [
-        ("GET", "/adoption", "getModelAdoption"),
-        ("POST", "/adoption/retry", "retryModelAdoption"),
-    ],
-)
-api_router.include_router(_adoption_stubs, dependencies=TRAIN_ONLY)
+# Moving a training project's old models into the library: training projects only.
+api_router.include_router(adoption_router, dependencies=[Depends(require_kind(("train",)))])
 
 # The maps router's import chain pulls in `rasterio` at module scope (router -> service/tiles ->
 # raster, the job modules). A broken GDAL in the frozen bundle must not stop the whole backend from
@@ -70,6 +60,6 @@ try:
     # A map endpoint like the rest: it is dropped with them when the maps router cannot load.
     _move_stub = APIRouter(prefix="/projects/{projectId}", tags=["maps"])
     add_stubs(_move_stub, [("POST", "/maps/{mapId}/move", "moveMapToProject")])
-    api_router.include_router(_move_stub, dependencies=TRAIN_ONLY)
+    api_router.include_router(_move_stub, dependencies=[Depends(require_kind(("train",)))])
 except Exception:
     log.exception("maps router failed to load; map endpoints will be unavailable")

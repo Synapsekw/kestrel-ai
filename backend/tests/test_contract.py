@@ -51,7 +51,7 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 
 # Operations still served by 501 stubs (app/api.py); any other 501 fails `test_responses_conform`.
 # Unit BM (plan 2026-09-23) builds these and empties the set again.
-EXPECTED_STUBS: set[str] = {"getModelAdoption", "retryModelAdoption", "moveMapToProject"}
+EXPECTED_STUBS: set[str] = {"moveMapToProject"}
 
 
 @pytest.fixture
