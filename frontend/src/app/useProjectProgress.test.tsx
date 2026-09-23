@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import {
+  errorBody,
   exampleDataset,
   exampleGeoMap,
   exampleModel,
@@ -93,6 +94,23 @@ describe("useProjectProgress", () => {
       maps: 2,
     });
     expect(requests.some((r) => r.url.includes("/datasets"))).toBe(false);
+  });
+
+  it("still fills the counts when the kind failed to load and the datasets read is refused", async () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "failed");
+    const { api } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: { ...exampleStats, image_count: 9 } },
+      { method: "GET", path: /\/datasets$/, status: 409, body: errorBody("wrong_project_kind", "no") },
+      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, body: { items: [] } },
+    ]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
+    expect(JSON.parse(screen.getByTestId("progress").textContent ?? "")).toMatchObject({
+      images: 9,
+      datasets: 0,
+    });
   });
 
   it("waits for the project's kind before loading", async () => {

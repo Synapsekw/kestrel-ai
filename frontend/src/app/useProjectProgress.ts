@@ -46,7 +46,9 @@ export function useProjectProgress(projectId: string | undefined): {
     let cancelled = false;
     Promise.all([
       fetchProjectStats(api, projectId),
-      kind === "detect" ? Promise.resolve([]) : fetchDatasets(api, projectId),
+      // Datasets are train-only: a detection project refuses the read (409). When the kind could
+      // not be loaded, a refused count must not blank every other count, so it falls back to none.
+      kind === "detect" ? Promise.resolve([]) : fetchDatasets(api, projectId).catch(() => []),
       fetchModels(api, projectId),
       fetchQueryRuns(api, projectId),
       listMaps(api, projectId),
