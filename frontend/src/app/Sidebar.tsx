@@ -2,8 +2,23 @@ import { useState, type MouseEvent, type ReactNode } from "react";
 import { Link, NavLink, useLocation } from "react-router-dom";
 import { Icon, IconButton, Tooltip, cx, focusRing, transition, type IconName } from "@/ui";
 import { Brand } from "./Brand";
-import { stepStates, type Step, type StepState } from "./pipeline";
+import { stepStates, type Step, type StepId, type StepState } from "./pipeline";
+import { useProjectKind } from "./useProjectKind";
 import { useProgress } from "./useProjectProgress";
+
+/** Step ids that are not also icon names. */
+const STEP_ICON: Partial<Record<StepId, IconName>> = { export: "download", maps: "map" };
+
+const NO_PROGRESS = {
+  images: 0,
+  labeled: 0,
+  pendingReview: 0,
+  datasets: 0,
+  models: 0,
+  trainedModels: 0,
+  queryRuns: 0,
+  maps: 0,
+};
 
 const entryClass = (isActive: boolean, locked = false, compact = false) =>
   cx(
@@ -39,6 +54,8 @@ function StepMark({ state, n }: { state: StepState; n: number }) {
 
 function StepEntry({ step, n, compact }: { step: Step; n: number; compact: boolean }) {
   const locked = step.state === "locked";
+  // A locked entry that leads to where the step is unlocked stays a working link.
+  const blocked = locked && !step.opensWhenLocked;
   // The editor has its own route; it is where the Label step happens, so Label stays lit there.
   const { pathname } = useLocation();
   const inEditor = step.id === "label" && pathname.includes("/edit/");
@@ -46,17 +63,17 @@ function StepEntry({ step, n, compact }: { step: Step; n: number; compact: boole
   const link = (
     <Link
       to={step.path}
-      aria-disabled={locked || undefined}
+      aria-disabled={blocked || undefined}
       aria-current={active ? "page" : undefined}
       onClick={(e: MouseEvent) => {
-        if (locked) e.preventDefault();
+        if (blocked) e.preventDefault();
       }}
       className={entryClass(active && !locked, locked, compact)}
     >
       {compact ? (
         <span className="relative">
           <Icon
-            name={step.id === "export" ? "download" : step.id}
+            name={STEP_ICON[step.id] ?? (step.id as IconName)}
             size={18}
             className={step.state === "current" ? "text-accent" : undefined}
           />
@@ -124,12 +141,17 @@ interface Props {
   projectName: string | null;
 }
 
-/** The left rail: Projects, then the open project's pipeline, then Models and the settings. */
+/**
+ * The left rail: Projects and Library, then the open project's steps for its kind, then Past
+ * detections (training projects that have some) and the settings.
+ */
 export function Sidebar({ projectId, projectName }: Props) {
   const [expanded, setExpanded] = useState(false);
   const compact = !!projectId && !expanded;
   const progress = useProgress(projectId);
-  const steps = projectId && progress ? stepStates(projectId, progress) : null;
+  const kind = useProjectKind(projectId);
+  const steps = projectId && kind ? stepStates(projectId, kind, progress ?? NO_PROGRESS) : null;
+  const hasPast = kind === "train" && !!progress && (progress.queryRuns > 0 || progress.maps > 0);
   return (
     <nav
       aria-label="Main navigation"
@@ -153,6 +175,9 @@ export function Sidebar({ projectId, projectName }: Props) {
       <PlainEntry to="/" icon="folder" end compact={compact}>
         Projects
       </PlainEntry>
+      <PlainEntry to="/library" icon="models" compact={compact}>
+        Library
+      </PlainEntry>
       {projectId ? (
         <>
           <p
@@ -167,27 +192,20 @@ export function Sidebar({ projectId, projectName }: Props) {
           <PlainEntry to={`/p/${projectId}`} icon="home" end compact={compact}>
             Home
           </PlainEntry>
-          {steps
-            ? steps.map((step, i) => <StepEntry key={step.id} step={step} n={i + 1} compact={compact} />)
-            : stepStates(projectId, {
-                images: 0,
-                labeled: 0,
-                pendingReview: 0,
-                datasets: 0,
-                models: 0,
-                trainedModels: 0,
-                queryRuns: 0,
-              }).map((step, i) => <StepEntry key={step.id} step={step} n={i + 1} compact={compact} />)}
+          {steps?.map((step, i) => (
+            <StepEntry key={step.id} step={step} n={i + 1} compact={compact} />
+          ))}
           <div className="my-2 border-t border-line" />
-          <PlainEntry to={`/p/${projectId}/models`} icon="models" compact={compact}>
-            Models
-          </PlainEntry>
-          <PlainEntry to={`/p/${projectId}/maps`} icon="map" compact={compact}>
-            Maps
-          </PlainEntry>
-          <PlainEntry to={`/p/${projectId}/surveys`} icon="trend" compact={compact}>
-            Surveys
-          </PlainEntry>
+          {kind === "detect" && (
+            <PlainEntry to={`/p/${projectId}/surveys`} icon="trend" compact={compact}>
+              Surveys
+            </PlainEntry>
+          )}
+          {hasPast && (
+            <PlainEntry to={`/p/${projectId}/past`} icon="detect" compact={compact} shortLabel="Past">
+              Past detections
+            </PlainEntry>
+          )}
           <PlainEntry to={`/p/${projectId}/settings`} icon="settings" compact={compact} shortLabel="Project">
             Project settings
           </PlainEntry>

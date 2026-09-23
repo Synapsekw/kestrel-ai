@@ -4,6 +4,7 @@ import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useProgressStore } from "@/store/progress";
 import { Sidebar } from "./Sidebar";
+import { useProjectKindStore } from "./useProjectKind";
 
 const base = {
   images: 0,
@@ -13,10 +14,14 @@ const base = {
   models: 0,
   trainedModels: 0,
   queryRuns: 0,
+  maps: 0,
 };
 
 describe("Sidebar", () => {
-  beforeEach(() => useProgressStore.setState({ byProject: {} }));
+  beforeEach(() => {
+    useProgressStore.setState({ byProject: {} });
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
+  });
 
   it("expands the compact rail without losing routes or locked explanations", () => {
     useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
@@ -39,11 +44,12 @@ describe("Sidebar", () => {
     expect(screen.getByRole("link", { name: "App settings" })).toBeVisible();
   });
 
-  it("with no project open it shows Projects, the hint and App settings only", () => {
+  it("with no project open it shows Projects, Library, the hint and App settings only", () => {
     const { api } = fakeClient([]);
     renderWithProviders(<Sidebar projectId={undefined} projectName={null} />, { api });
     const nav = screen.getByRole("navigation");
     expect(within(nav).getByRole("link", { name: "Projects" })).toHaveAttribute("href", "/");
+    expect(within(nav).getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
     expect(within(nav).getByText("Open or create a project to use these.")).toBeInTheDocument();
     expect(within(nav).getByRole("link", { name: "App settings" })).toHaveAttribute("href", "/settings");
     expect(within(nav).queryByText("Images")).toBeNull();
@@ -56,14 +62,15 @@ describe("Sidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
     const nav = screen.getByRole("navigation");
     const labels = [
+      "Projects",
+      "Library",
       "Home",
       "Images",
       "Label",
       "Datasets",
       "Train",
-      "Detect",
       "Review",
-      "Models",
+      "Export",
       "Project settings",
     ];
     const order = labels.map((label) => within(nav).getByText(label));
@@ -84,7 +91,7 @@ describe("Sidebar", () => {
     expect(within(nav).getByRole("link", { name: /^Label/ })).not.toHaveAttribute("aria-disabled");
   });
 
-  it("names Review's waiting count and keeps Detect reachable once a model exists", () => {
+  it("names Review's waiting count", () => {
     useProgressStore.getState().set(PROJECT_ID, {
       ...base,
       images: 40,
@@ -97,7 +104,82 @@ describe("Sidebar", () => {
     renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
     const nav = screen.getByRole("navigation");
     expect(within(nav).getByRole("link", { name: /^Review/ })).toHaveTextContent("5");
-    expect(within(nav).getByRole("link", { name: /^Detect/ })).not.toHaveAttribute("aria-disabled");
+  });
+
+  it("a training project shows the training steps: no Detect, no Maps, no Models", () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    const nav = screen.getByRole("navigation");
+    for (const name of ["Images", "Label", "Datasets", "Train", "Review", "Export"]) {
+      expect(within(nav).getByRole("link", { name: new RegExp(`^${name}`) })).toBeInTheDocument();
+    }
+    expect(within(nav).queryByRole("link", { name: /^Detect/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /^Maps/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /^Models/ })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: /Past detections/ })).toBeNull();
+    expect(within(nav).getByRole("link", { name: "Library" })).toHaveAttribute("href", "/library");
+  });
+
+  it("a training project with earlier detections shows Past detections above Project settings", () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40, queryRuns: 2 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+    const nav = screen.getByRole("navigation");
+    const past = within(nav).getByRole("link", { name: "Past detections" });
+    expect(past).toHaveAttribute("href", `/p/${PROJECT_ID}/past`);
+    const settings = within(nav).getByRole("link", { name: "Project settings" });
+    expect(past.compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("a training project with only an earlier map also shows Past detections", () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40, maps: 1 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    expect(screen.getByRole("link", { name: "Past detections" })).toBeInTheDocument();
+  });
+
+  it("a detection project shows Images, Detect, Maps, Review and Export, and no Label", () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "detect");
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12, models: 1, queryRuns: 3, maps: 2 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="North site" />, { api });
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+    const nav = screen.getByRole("navigation");
+    const order = ["Home", "Images", "Detect", "Maps", "Review", "Export", "Project settings"].map((label) =>
+      within(nav).getByText(label),
+    );
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(within(nav).getByRole("link", { name: /^Maps/ })).toHaveAttribute("href", `/p/${PROJECT_ID}/maps`);
+    for (const name of ["Label", "Datasets", "Train", "Past detections", "Models"]) {
+      expect(within(nav).queryByRole("link", { name: new RegExp(`^${name}`) })).toBeNull();
+    }
+    expect(within(nav).getByRole("link", { name: "Library" })).toBeInTheDocument();
+  });
+
+  it("a detection project with no model points Detect at the library", () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "detect");
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="North site" />, { api });
+    const detect = screen.getByRole("link", { name: /^Detect/ });
+    expect(detect).toHaveAttribute("href", "/library");
+    expect(detect).not.toHaveAttribute("aria-disabled");
+    act(() => detect.focus());
+    expect(screen.getByRole("tooltip")).toHaveTextContent("Add a model to the library first");
+  });
+
+  it("shows no steps until the project's kind is known", () => {
+    useProjectKindStore.setState({ byProject: {} });
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).getByRole("link", { name: "Home" })).toBeInTheDocument();
+    expect(within(nav).queryByRole("link", { name: /^Images/ })).toBeNull();
   });
 
   it("keeps Label lit while an image is open in the editor", () => {

@@ -4,6 +4,7 @@ import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useProgressStore } from "@/store/progress";
 import { NextStepBar } from "./NextStepBar";
+import { useProjectKindStore } from "./useProjectKind";
 
 const base = {
   images: 0,
@@ -13,10 +14,14 @@ const base = {
   models: 0,
   trainedModels: 0,
   queryRuns: 0,
+  maps: 0,
 };
 
 describe("NextStepBar", () => {
-  beforeEach(() => useProgressStore.setState({ byProject: {} }));
+  beforeEach(() => {
+    useProgressStore.setState({ byProject: {} });
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
+  });
 
   it("names the next step of the project and links to where it is done", () => {
     useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
@@ -55,6 +60,17 @@ describe("NextStepBar", () => {
     expect(screen.getByRole("link", { name: "Export the results" })).toHaveAttribute(
       "href",
       `/p/${PROJECT_ID}/export`,
+    );
+  });
+
+  it("follows a detection project's own steps", () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "detect");
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<NextStepBar projectId={PROJECT_ID} />, { api });
+    expect(screen.getByRole("link", { name: "Add a model to the library" })).toHaveAttribute(
+      "href",
+      "/library",
     );
   });
 });

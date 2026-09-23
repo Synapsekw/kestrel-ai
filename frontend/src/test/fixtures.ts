@@ -53,6 +53,7 @@ export const exampleProject: Project = {
   id: PROJECT_ID,
   name: "Ahmadia",
   folder: "E:\\Projects\\Ahmadia",
+  kind: "train",
   classes: exampleClasses,
   preannotation_model_id: MODEL_ID,
   import_defaults: {
