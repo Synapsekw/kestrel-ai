@@ -126,6 +126,17 @@ def make_jpeg():
             if "alt" in exif:
                 gps[piexif.GPSIFD.GPSAltitudeRef] = 0
                 gps[piexif.GPSIFD.GPSAltitude] = (int(exif["alt"] * 100), 100)
+            if "focal_mm" in exif:
+                exif_ifd[piexif.ExifIFD.FocalLength] = (int(exif["focal_mm"] * 100), 100)
+            if "focal_35mm" in exif:
+                exif_ifd[piexif.ExifIFD.FocalLengthIn35mmFilm] = int(exif["focal_35mm"])
+            if "sensor_px_per_cm" in exif:
+                exif_ifd[piexif.ExifIFD.PixelXDimension] = int(exif["exif_width"])
+                exif_ifd[piexif.ExifIFD.FocalPlaneXResolution] = (
+                    int(exif["sensor_px_per_cm"] * 100),
+                    100,
+                )
+                exif_ifd[piexif.ExifIFD.FocalPlaneResolutionUnit] = 3
             kwargs["exif"] = piexif.dump({"0th": zeroth, "Exif": exif_ifd, "GPS": gps})
         path.parent.mkdir(parents=True, exist_ok=True)
         im.save(path, "JPEG", **kwargs)
