@@ -199,6 +199,11 @@ def test_gsd_estimate_endpoint_returns_the_scale_and_its_evidence(
     assert body["train_gsd_cm"] == pytest.approx(18.92, rel=0.02)
     assert body["sample_size"] <= 8
     assert body["plausible"] is True
+    # Pins the arithmetic (Box.w, not Box.h -- the fixture's h values of 110/120 px would compute
+    # to ~6.66/~7.27 m instead, still inside the plausible band but nowhere near these numbers)
+    # and the name-keying of per_class_m (a class-id key would not match "excavator"/"dump_truck").
+    assert body["per_class_m"] == pytest.approx({"excavator": 7.99, "dump_truck": 9.5}, abs=0.05)
+    assert body["median_object_m"] == pytest.approx(8.75, abs=0.05)
 
 
 def test_gsd_estimate_is_404_for_a_model_with_no_dataset(client, project_id, imported_model):
