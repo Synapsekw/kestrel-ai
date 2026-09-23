@@ -108,3 +108,16 @@ def test_captured_on_is_set_cleared_and_validated(client, project_id, handle):
 
     assert client.patch(url, json={"captured_on": None}).json()["captured_on"] is None
     assert client.patch(url, json={"captured_on": "15/04/2026"}).status_code == 422
+
+
+def test_importing_a_geotiff_with_a_capture_tag_fills_the_survey_date(
+    client, project_id, import_map, tmp_path
+):
+    import rasterio
+
+    path = make_geotiff(tmp_path / "dated.tif", 300, 300)
+    with rasterio.open(path, "r+") as dst:
+        dst.update_tags(TIFFTAG_DATETIME="2026:04:15 07:30:00")
+    map_id, job = import_map(project_id, path)
+    assert job["state"] == "succeeded", job
+    assert client.get(f"{BASE}/{project_id}/maps/{map_id}").json()["captured_on"] == "2026-04-15"

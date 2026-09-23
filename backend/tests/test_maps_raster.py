@@ -1,3 +1,5 @@
+from datetime import date
+
 import numpy as np
 import pytest
 import rasterio
@@ -102,3 +104,21 @@ def test_preview(tmp_path):
         raster.write_preview(src, tmp_path / "p.jpg", max_side=300)
     with Image.open(tmp_path / "p.jpg") as im:
         assert im.size == (300, 100)
+
+
+def test_inspect_raster_reads_the_survey_date_from_tifftag_datetime(tmp_path):
+    path = make_geotiff(tmp_path / "ortho.tif", 8, 8)
+    with rasterio.open(path, "r+") as dst:
+        dst.update_tags(TIFFTAG_DATETIME="2026:04:15 07:30:00")
+    assert raster.inspect_raster(path).captured_on == date(2026, 4, 15)
+
+
+def test_inspect_raster_without_the_tag_reports_no_survey_date(tmp_path):
+    assert raster.inspect_raster(make_geotiff(tmp_path / "plain.tif", 8, 8)).captured_on is None
+
+
+def test_an_unreadable_capture_tag_is_no_date_rather_than_an_error(tmp_path):
+    path = make_geotiff(tmp_path / "odd.tif", 8, 8)
+    with rasterio.open(path, "r+") as dst:
+        dst.update_tags(TIFFTAG_DATETIME="last tuesday")
+    assert raster.inspect_raster(path).captured_on is None

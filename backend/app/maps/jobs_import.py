@@ -71,7 +71,8 @@ def run_map_import(ctx: JobContext) -> dict:
             "sha256": sha,
             "info": info.__dict__,
         }
-        (folder / "source.json").write_text(json.dumps(source_record, indent=2), "utf-8")
+        # `default=str` because RasterInfo carries a date; a sidecar must never fail the import.
+        (folder / "source.json").write_text(json.dumps(source_record, indent=2, default=str), "utf-8")
     except JobCancelled:
         _fail(ctx, map_id, "import cancelled")
         raise
@@ -90,6 +91,9 @@ def run_map_import(ctx: JobContext) -> dict:
         row.bounds_native = geo.bounds_native(info.width, info.height) if geo else None
         row.bounds_wgs84 = geo.bounds_wgs84(info.width, info.height) if geo else None
         row.gsd_cm = geo.gsd_cm(info.width, info.height) if geo else None
+        # Only fill it in; never overwrite a date the operator has corrected by hand.
+        if row.captured_on is None:
+            row.captured_on = info.captured_on
         row.source_sha256, row.stretch = sha, stretch.to_dict()
         row.status, row.error = "ready", None
     TILE_CACHE.drop_map(map_id)

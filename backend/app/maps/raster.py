@@ -10,6 +10,7 @@ import os
 import warnings
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -40,6 +41,7 @@ class RasterInfo:
     epsg: int | None
     proj4: str | None
     geotransform: tuple[float, ...] | None
+    captured_on: date | None = None
 
 
 @dataclass(frozen=True)
@@ -56,6 +58,15 @@ class Stretch:
         return cls(tuple(d["bands"]), tuple(float(v) for v in d["lo"]), tuple(float(v) for v in d["hi"]))
 
 
+def _captured_on(tags: dict) -> date | None:
+    """TIFFTAG_DATETIME is "YYYY:MM:DD HH:MM:SS". An unreadable value is no date, never an error."""
+    raw = (tags.get("TIFFTAG_DATETIME") or "").strip()
+    try:
+        return datetime.strptime(raw[:10], "%Y:%m:%d").date()
+    except ValueError:
+        return None
+
+
 def inspect_raster(path: Path) -> RasterInfo:
     try:
         with warnings.catch_warnings():
@@ -66,6 +77,7 @@ def inspect_raster(path: Path) -> RasterInfo:
                 epsg = src.crs.to_epsg() if georeferenced else None
                 geotransform = tuple(src.transform.to_gdal()) if georeferenced else None
                 info = (src.width, src.height, src.count, src.dtypes[0])
+                captured_on = _captured_on(src.tags())
     except RasterioIOError as e:
         raise RasterError(f"{Path(path).name} is not a readable raster ({e})") from None
     proj4 = None
@@ -73,7 +85,9 @@ def inspect_raster(path: Path) -> RasterInfo:
         from pyproj import CRS
 
         proj4 = CRS.from_wkt(crs_wkt).to_proj4()
-    return RasterInfo(*info, crs_wkt=crs_wkt, epsg=epsg, proj4=proj4, geotransform=geotransform)
+    return RasterInfo(
+        *info, crs_wkt=crs_wkt, epsg=epsg, proj4=proj4, geotransform=geotransform, captured_on=captured_on
+    )
 
 
 def _rgb_bands(src) -> tuple[int, int, int]:
