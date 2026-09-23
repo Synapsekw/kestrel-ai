@@ -1,8 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { exampleGeoMap, exampleProject, fakeClient, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
+import {
+  CLASS_ID,
+  exampleGeoMap,
+  exampleMapRun,
+  exampleProject,
+  fakeClient,
+  MAP_ID,
+  PROJECT_ID,
+  runningJob,
+} from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
+import { boxFacts } from "@/maps/runModel";
 import { MapsScreen } from "./MapsScreen";
 
 // OpenLayers needs a real canvas; the screen's own behaviour is what is under test here.
@@ -93,5 +103,41 @@ describe("MapsScreen", () => {
     expect(
       await within(screen.getByTestId("map-panel")).findByText(/No coordinates in this file/),
     ).toBeInTheDocument();
+  });
+
+  it("shows the whole-map count for a ticked run", async () => {
+    const { api, requests } = fakeClient([
+      ...base.slice(0, 3),
+      { method: "GET", path: /\/runs$/, body: { items: [exampleMapRun] } },
+      ...base.slice(4),
+      {
+        method: "GET",
+        path: /\/density$/,
+        body: { cell_size: 80000, cells: [{ gx: 0, gy: 0, class_id: CLASS_ID(1), count: 42 }] },
+      },
+    ]);
+    renderWithProviders(<MapsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/maps/${MAP_ID}`,
+      path: "/p/:projectId/maps/:mapId",
+    });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /Show machinery-v3/ }));
+    await waitFor(() => expect(screen.getByRole("row", { name: /excavator/ })).toHaveTextContent("42"));
+    expect(
+      requests.some((r) => r.method === "GET" && /\/density\?/.test(r.url) && r.url.includes("cells=1")),
+    ).toBe(true);
+  });
+});
+
+describe("boxFacts", () => {
+  it("gives the popover's size and native centre for the UTM example map", () => {
+    const facts = boxFacts(
+      exampleGeoMap,
+      { x: 1000, y: 2000, w: 100, h: 50, classId: CLASS_ID(1) },
+      exampleProject.classes,
+      0.91,
+    );
+    expect(facts.size).toBe("3.0 × 1.5 m");
+    expect(facts.readout.native).toBe("500031.50, 4982939.25 · EPSG:32633");
   });
 });
