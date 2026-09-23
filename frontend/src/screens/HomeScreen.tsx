@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { imageFileUrl, thumbnailUrl, type Job, type Image } from "@contract/client";
 import { useBackend } from "@/api/client";
 import { useProject } from "@/api/project";
-import { nextStep } from "@/app/nextStep";
+import { projectNextStep } from "@/app/projectNextStep";
 import { StepTicks } from "@/app/NextStepBar";
 import { useProgress } from "@/app/useProjectProgress";
 import { useHomePreviews } from "@/app/useHomePreviews";
@@ -51,7 +51,14 @@ const TYPE_VERB: Record<Job["type"], string> = {
   map_import: "Importing a map",
   map_detect: "Detecting on a map",
   map_export: "Exporting map results",
+  library_import: "Importing a model",
+  library_export: "Exporting a model",
+  library_starter: "Adding a starter model",
+  library_adopt: "Moving models into the library",
+  map_move: "Moving a map",
 };
+
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -74,7 +81,9 @@ export function HomeScreen() {
   const running = Object.values(jobs)
     .filter((j) => j.project_id === projectId && isActiveJob(j))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const step = progress ? nextStep(projectId, progress) : null;
+  const kind = project?.kind ?? null;
+  const detect = kind === "detect";
+  const step = progress && kind ? projectNextStep(projectId, kind, progress) : null;
 
   if (error) return <Alert tone="danger">{error}</Alert>;
 
@@ -82,7 +91,9 @@ export function HomeScreen() {
     <section className="mx-auto flex max-w-7xl flex-col gap-7 py-2 lg:px-3">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex min-w-0 flex-col gap-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">Project workspace</p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+            {kind === null ? "Project" : detect ? "Detection project" : "Training project"}
+          </p>
           {project ? (
             <h1 className="truncate text-[28px] font-semibold leading-tight tracking-tight">
               {project.name}
@@ -98,7 +109,7 @@ export function HomeScreen() {
         </Link>
       </div>
 
-      {!progress ? (
+      {!progress || !kind ? (
         <Skeleton className="h-28 w-full rounded-lg" />
       ) : step ? (
         <div
@@ -128,7 +139,9 @@ export function HomeScreen() {
       {progress && (
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line pb-5 text-xs text-muted">
           <span>
-            {progress.labeled} of {progress.images} images labeled
+            {detect
+              ? `${plural(progress.images, "image", "images")} and ${plural(progress.maps, "map", "maps")}`
+              : `${progress.labeled} of ${progress.images} images labeled`}
           </span>
           <StepTicks projectId={projectId} />
         </div>
@@ -176,13 +189,23 @@ export function HomeScreen() {
           {progress ? (
             <dl className="flex flex-col">
               <Row label="Images" value={String(progress.images)} />
-              <Row label="Labeled" value={`${progress.labeled} of ${progress.images}`} />
-              <Row label="Datasets" value={String(progress.datasets)} />
-              <Row
-                label="Models"
-                value={progress.models === 0 ? "0" : `${progress.models} (${progress.trainedModels} trained)`}
-              />
-              <Row label="Detection runs" value={String(progress.queryRuns)} />
+              {detect ? (
+                <>
+                  <Row label="Maps" value={String(progress.maps)} />
+                  <Row label="Detection runs" value={String(progress.queryRuns)} />
+                </>
+              ) : (
+                <>
+                  <Row label="Labeled" value={`${progress.labeled} of ${progress.images}`} />
+                  <Row label="Datasets" value={String(progress.datasets)} />
+                  <Row
+                    label="Models"
+                    value={
+                      progress.models === 0 ? "0" : `${progress.models} (${progress.trainedModels} trained)`
+                    }
+                  />
+                </>
+              )}
               <Row label="Waiting for review" value={String(progress.pendingReview)} />
             </dl>
           ) : (

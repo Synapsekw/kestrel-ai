@@ -76,11 +76,31 @@ describe("HomeScreen", () => {
     expect(screen.getByText(exampleProject.folder)).toBeInTheDocument();
     expect(screen.getByText("14 of 40")).toBeInTheDocument();
     expect(screen.getByText("2 (1 trained)")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Run detection on 26 unlabeled images/ })).toHaveAttribute(
+    expect(screen.getByText("Training project")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Label 26 more images/ })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/query`,
+      `/p/${PROJECT_ID}/label`,
     );
+    expect(screen.queryByText("Detection runs")).toBeNull();
     expect(screen.getByText("Nothing is running.")).toBeInTheDocument();
+  });
+
+  it("speaks of sources, runs and maps in a detection project", async () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12, maps: 2, queryRuns: 3 });
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: { ...exampleProject, kind: "detect", classes: [] } },
+    ]);
+    renderWithProviders(<HomeScreen />, { api, route: `/p/${PROJECT_ID}`, path: "/p/:projectId" });
+    expect(await screen.findByText("Detection project")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Add a model to the library/ })).toHaveAttribute(
+      "href",
+      "/library",
+    );
+    expect(screen.getByText("Maps")).toBeInTheDocument();
+    expect(screen.getByText("Detection runs")).toBeInTheDocument();
+    expect(screen.queryByText("Labeled")).toBeNull();
+    expect(screen.queryByText("Datasets")).toBeNull();
+    expect(screen.getByText("12 images and 2 maps")).toBeInTheDocument();
   });
 
   it("lists running jobs with their progress", async () => {
