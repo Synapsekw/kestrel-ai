@@ -2,17 +2,27 @@
 
 Every box converts through its four real corners, so a rotated box (OBB wave 2) needs no
 special case. CSV carries both the map's CRS and WGS84; GeoJSON is WGS84 only, as RFC 7946 says.
+
+Box sizes (`width_m`, `height_m`, `area_m2`) are measured on the WGS84 ellipsoid via
+`pyproj.Geod`, never in the map's native CRS units: a native-unit distance is only metres for a
+metric projected CRS, and is silently wrong (about 3.28x too small) for a foot-based projected
+CRS such as EPSG:2278 (Texas State Plane, ftUS) while still being written into a column named
+`_m`. Measuring on the ellipsoid is correct for a metric projected CRS, a foot-based projected
+CRS and a geographic CRS alike, with no unit factor and no latitude sampling required.
 """
 
 from __future__ import annotations
 
 import csv
 import json
-import math
 from dataclasses import dataclass
 from pathlib import Path
 
+from pyproj import Geod
+
 from app.maps.georef import Georef, box_corners
+
+_GEOD = Geod(ellps="WGS84")
 
 CSV_COLUMNS = [
     "kind",
@@ -104,12 +114,10 @@ def write_csv(path: Path, boxes: list[ExportBox], georef: Georef | None, epsg: i
                     row[f"x{i}"], row[f"y{i}"] = x, y
                     row[f"lon{i}"], row[f"lat{i}"] = lons[i - 1], lats[i - 1]
                 row.update({"epsg": epsg or "", "cx": cx, "cy": cy, "clon": lons[4], "clat": lats[4]})
-                w_m = math.dist(corners[0], corners[1])
-                h_m = math.dist(corners[1], corners[2])
-                if georef.crs.is_geographic:  # corner distances are in degrees: use the GSD instead
-                    mpp = georef.metres_per_pixel(1, 1)
-                    w_m, h_m = b.w * mpp, b.h * mpp
-                row.update({"width_m": w_m, "height_m": h_m, "area_m2": w_m * h_m})
+                _, _, w_m = _GEOD.inv(lons[0], lats[0], lons[1], lats[1])
+                _, _, h_m = _GEOD.inv(lons[1], lats[1], lons[2], lats[2])
+                area_m2, _ = _GEOD.polygon_area_perimeter(lons[:4], lats[:4])
+                row.update({"width_m": w_m, "height_m": h_m, "area_m2": abs(area_m2)})
             writer.writerow(row)
 
 

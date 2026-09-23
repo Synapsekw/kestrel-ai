@@ -9,8 +9,8 @@ import pytest
 from geotiffs import make_geotiff
 from pyproj import CRS, Transformer
 
-from app.maps import geo_out, gpkg
-from app.maps.georef import Georef
+from app.maps import geo_out, gpkg, service
+from app.maps.georef import Georef, box_corners
 
 UTM33 = CRS.from_epsg(32633).to_wkt()
 GT = (500000.0, 0.03, 0.0, 4983000.0, 0.0, -0.03)
@@ -30,13 +30,78 @@ def test_csv_has_native_and_wgs84_corners(tmp_path):
         lat, abs=1e-9
     )
     assert row["epsg"] == "32633"
-    assert float(row["width_m"]) == pytest.approx(3.0) and float(row["area_m2"]) == pytest.approx(4.5)
+    # Geodesic size vs. the naive planar (native-CRS-unit) size differ by UTM's central-meridian
+    # scale factor k0=0.9996 (the box sits ~30 m from the zone's central meridian, essentially at
+    # k0): true ground width = 3.0 / 0.9996 (~0.04% larger), true area = 4.5 / 0.9996**2 (~0.08%
+    # larger). rel=2e-3 comfortably covers that well-understood, exact effect.
+    assert float(row["width_m"]) == pytest.approx(3.0, rel=2e-3)
+    assert float(row["area_m2"]) == pytest.approx(4.5, rel=2e-3)
 
 
 def test_csv_without_coordinates_keeps_pixels_only(tmp_path):
     geo_out.write_csv(tmp_path / "b.csv", [BOX], None, None)
     row = next(csv.DictReader((tmp_path / "b.csv").open(encoding="utf-8")))
     assert row["px_x"] == "1000.0" and row["cx"] == "" and row["clon"] == ""
+
+
+def test_csv_threads_rotation_through_the_four_corners(tmp_path):
+    """A rotated box (OBB wave 2): the exported corners must be the *rotated* ones, not the
+    axis-aligned box's, cross-checked against `box_corners` plus an independent `Transformer`."""
+    rotated = geo_out.ExportBox("detection", "d2", "dozer", 0.8, "", "", 1000.0, 2000.0, 100.0, 50.0, 30.0)
+    georef = Georef(GT, UTM33)
+    geo_out.write_csv(tmp_path / "r.csv", [rotated], georef, 32633)
+    row = next(csv.DictReader((tmp_path / "r.csv").open(encoding="utf-8")))
+    expected_native = [
+        georef.pixel_to_native(px, py) for px, py in box_corners(1000.0, 2000.0, 100.0, 50.0, 30.0)
+    ]
+    for i, (nx, ny) in enumerate(expected_native, start=1):
+        assert float(row[f"x{i}"]) == pytest.approx(nx)
+        assert float(row[f"y{i}"]) == pytest.approx(ny)
+        lon, lat = REF.transform(nx, ny)
+        assert float(row[f"lon{i}"]) == pytest.approx(lon, abs=1e-9)
+        assert float(row[f"lat{i}"]) == pytest.approx(lat, abs=1e-9)
+    # The rotated box's corners must differ from the axis-aligned ones (angle actually threaded).
+    axis_aligned = [
+        georef.pixel_to_native(px, py) for px, py in box_corners(1000.0, 2000.0, 100.0, 50.0, None)
+    ]
+    assert expected_native != axis_aligned
+
+
+def test_csv_size_is_measured_on_the_ellipsoid_not_native_crs_units(
+    client, project_id, wait_job, tmp_path, handle
+):
+    """EPSG:2278 (NAD83 / Texas South Central, US survey feet): a native-CRS-unit distance is in
+    feet, not metres, so `math.dist` over native corners would report a size about 3.28x too
+    large if mislabelled as metres. 1 US survey foot = 1200/3937 m exactly (0.3048006096012192...).
+    A 100 x 50 px box at 2.0 ftUS/px is 200 x 100 ftUS = (200, 100) * 1200/3937 m in truth.
+
+    The raster is placed near this CRS's own false origin (1968500, 13123333 ftUS, lat_0=27.83,
+    lon_0=-99: the projection's own reference point), where the Lambert Conformal Conic's scale
+    distortion is at its minimum by construction (State Plane zones are designed for <1:10000
+    distortion inside their true extent) -- placing it at an arbitrary UTM-style coordinate like
+    (500000, 4983000) instead would put the box hundreds of kilometres outside the zone's actual
+    area of use, where the projection is still mathematically defined but genuinely distorts by
+    several percent, which would make this test's "expected" arithmetic itself unreliable."""
+    pixel_ft = 2.0
+    path = make_geotiff(
+        tmp_path / "tx.tif", 300, 300, crs="EPSG:2278", pixel=pixel_ft, origin=(1968500.0, 13200000.0)
+    )
+    r = client.post(f"{BASE}/{project_id}/maps", json={"path": str(path)})
+    map_id = r.json()["map"]["id"]
+    wait_job(project_id, r.json()["job"]["id"])
+    gmap = service.get_map(handle, map_id)
+    georef = Georef(gmap.geotransform, gmap.crs_wkt)
+    box = geo_out.ExportBox("detection", "d3", "excavator", 0.9, "tp", "", 0.0, 0.0, 100.0, 50.0, None)
+    out = tmp_path / "tx.csv"
+    geo_out.write_csv(out, [box], georef, gmap.epsg)
+    row = next(csv.DictReader(out.open(encoding="utf-8")))
+    ftus_to_m = 1200 / 3937  # the exact US survey foot, ~0.3048006096012192 m
+    expected_w = 100 * pixel_ft * ftus_to_m
+    expected_h = 50 * pixel_ft * ftus_to_m
+    assert float(row["width_m"]) == pytest.approx(expected_w, rel=1e-3)
+    assert float(row["height_m"]) == pytest.approx(expected_h, rel=1e-3)
+    # The old (buggy) native-unit reading would have been ~3.28x these values; assert we are not it.
+    assert float(row["width_m"]) < expected_w * 1.5
 
 
 def test_geojson_is_wgs84_closed_polygons(tmp_path):
