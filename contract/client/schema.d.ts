@@ -6040,6 +6040,7 @@ export interface operations {
                     "application/json": components["schemas"]["GeoMap"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
