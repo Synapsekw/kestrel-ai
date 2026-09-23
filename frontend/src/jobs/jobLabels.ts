@@ -123,13 +123,16 @@ export function resultsExportSummary(job: Job): string | null {
   return `${imageCount} image${imageCount === 1 ? "" : "s"}, ${boxCount} box${boxCount === 1 ? "" : "es"}`;
 }
 
+/** A job that writes files under `exports/`: a results export, a map export or a detection export. */
+function isFileExport(job: Job): boolean {
+  return job.type === "results_export" || job.type === "map_export" || job.type === "detect_export";
+}
+
 /** The file list of a finished results or map export, project-relative to its folder; [] when not
  * available. */
 export function resultsExportFiles(job: Job): string[] {
   const files = job.result?.files;
-  return (job.type === "results_export" || job.type === "map_export") &&
-    job.state === "succeeded" &&
-    Array.isArray(files)
+  return isFileExport(job) && job.state === "succeeded" && Array.isArray(files)
     ? files.filter((f): f is string => typeof f === "string")
     : [];
 }
@@ -137,9 +140,5 @@ export function resultsExportFiles(job: Job): string[] {
 /** The folder a finished results or map export wrote into (project-relative), or null. */
 export function resultsExportFolder(job: Job): string | null {
   const folder = job.result?.folder;
-  return (job.type === "results_export" || job.type === "map_export") &&
-    job.state === "succeeded" &&
-    typeof folder === "string"
-    ? folder
-    : null;
+  return isFileExport(job) && job.state === "succeeded" && typeof folder === "string" ? folder : null;
 }
