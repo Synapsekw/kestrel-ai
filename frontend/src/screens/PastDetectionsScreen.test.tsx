@@ -97,6 +97,20 @@ describe("PastDetectionsScreen", () => {
     expect(requests.every((r) => r.method === "GET")).toBe(true);
   });
 
+  it("offers to move the open past map into a detection project", async () => {
+    renderPast(`/p/${PROJECT_ID}/past/maps/${MAP_ID}`, "/p/:projectId/past/maps/:mapId");
+    fireEvent.click(await screen.findByRole("button", { name: "Move to a detection project" }));
+    expect(
+      await screen.findByRole("dialog", { name: `Move ${exampleGeoMap.name} to a detection project` }),
+    ).toBeInTheDocument();
+  });
+
+  it("offers no move until a map is open", async () => {
+    renderPast(`/p/${PROJECT_ID}/past?view=maps`, "/p/:projectId/past");
+    expect(await screen.findByRole("list", { name: "Maps" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Move to a detection project" })).toBeNull();
+  });
+
   it("switches between the detection runs and the maps", async () => {
     renderPast(`/p/${PROJECT_ID}/past`, "/p/:projectId/past");
     expect(await screen.findByTestId("run-history")).toBeInTheDocument();
