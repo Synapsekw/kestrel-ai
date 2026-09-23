@@ -37,6 +37,9 @@ export function MoveMapDialog({
   const [folder, setFolder] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** A project made by this dialog: pinned, so a retry never creates another. */
+  const [created, setCreated] = useState<Target | null>(null);
+  /** Where the current move job copies to. */
   const [target, setTarget] = useState<Target | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const job = useJobsStore((s) => (jobId ? s.jobs[jobId] : undefined));
@@ -80,7 +83,7 @@ export function MoveMapDialog({
     e.preventDefault();
     if (running) return;
     const creating = choice === NEW;
-    if (creating && !target && (!name.trim() || !folder.trim())) {
+    if (creating && !created && (!name.trim() || !folder.trim())) {
       setError("Name the new detection project and choose its folder.");
       return;
     }
@@ -88,19 +91,20 @@ export function MoveMapDialog({
     setError(null);
     setJobId(null);
     try {
-      let to: Target | undefined = target ?? undefined;
+      let to: Target | undefined = created ?? undefined;
       if (!to) {
         if (creating) {
           const made = await createDetectionProject(api, name.trim(), folder.trim());
           useProjectKindStore.getState().set(made.id, made.kind);
+          // Keep a project created here even if the move below fails: a retry must not create another.
+          setCreated(made);
           to = made;
         } else {
           to = projects?.find((p) => p.id === choice);
         }
         if (!to) return;
-        // Keep a project created here even if the move below fails: a retry must not create another.
-        setTarget(to);
       }
+      setTarget(to);
       const started = await moveMap(api, projectId, geoMap.id, to.id);
       useJobsStore.getState().upsert(started);
       setJobId(started.id);
@@ -114,7 +118,7 @@ export function MoveMapDialog({
 
   const done = job?.state === "succeeded";
   const failed = job && !isActiveJob(job) && !done;
-  const locked = busy || running || target !== null;
+  const locked = busy || running || done || created !== null;
 
   return (
     <Dialog
@@ -153,11 +157,13 @@ export function MoveMapDialog({
         <Field label="Detection project" htmlFor="move-map-target">
           <Select
             id="move-map-target"
-            value={target?.id ?? choice}
+            value={created?.id ?? choice}
             disabled={projects === null || locked}
             onChange={(e) => {
               setChoice(e.target.value);
               setError(null);
+              setJobId(null);
+              setTarget(null);
             }}
           >
             {projects === null ? (
@@ -169,8 +175,8 @@ export function MoveMapDialog({
                     {p.name}
                   </option>
                 ))}
-                {target && !projects.some((p) => p.id === target.id) && (
-                  <option value={target.id}>{target.name}</option>
+                {created && !projects.some((p) => p.id === created.id) && (
+                  <option value={created.id}>{created.name}</option>
                 )}
                 <option value={NEW}>New detection project…</option>
               </>
@@ -178,7 +184,7 @@ export function MoveMapDialog({
           </Select>
         </Field>
 
-        {choice === NEW && projects !== null && !target && (
+        {choice === NEW && projects !== null && !created && (
           <div className="flex flex-col gap-4">
             <Field label="Name" htmlFor="move-map-name">
               <Input

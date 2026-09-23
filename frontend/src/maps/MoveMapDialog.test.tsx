@@ -141,6 +141,37 @@ describe("MoveMapDialog", () => {
     expect(requests.filter((r) => r.method === "POST" && r.url === "/api/v1/projects")).toHaveLength(1);
   });
 
+  it("lets another detection project be chosen after a move into an existing one fails", async () => {
+    const { requests } = renderDialog([
+      { method: "GET", path: /\/projects$/, body: { items: [NORTH, SOUTH], next_cursor: null } },
+      {
+        method: "POST",
+        path: /\/move$/,
+        status: 202,
+        body: (req) => ({ job: moveJob((req.body as { target_project_id: string }).target_project_id) }),
+      },
+      {
+        method: "GET",
+        path: /\/jobs\/[^/]+$/,
+        body: (req) =>
+          req.url.includes(NORTH.id)
+            ? { ...moveJob(NORTH.id, "failed"), error: "North site already has this map" }
+            : moveJob(SOUTH.id, "succeeded"),
+      },
+    ]);
+    await screen.findByRole("option", { name: "South yard" });
+    fireEvent.click(screen.getByRole("button", { name: "Move map" }));
+    expect(await screen.findByText("North site already has this map")).toBeInTheDocument();
+    const select = screen.getByLabelText("Detection project");
+    expect(select).not.toBeDisabled();
+    fireEvent.change(select, { target: { value: SOUTH.id } });
+    expect(screen.queryByText("North site already has this map")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Move map" }));
+    expect(await screen.findByRole("link", { name: "Open South yard" })).toBeInTheDocument();
+    const moves = requests.filter((r) => r.url.endsWith("/move")).map((r) => r.body);
+    expect(moves).toEqual([{ target_project_id: NORTH.id }, { target_project_id: SOUTH.id }]);
+  });
+
   it("asks for a name and a folder before creating a project", async () => {
     const { requests } = renderDialog([
       { method: "GET", path: /\/projects$/, body: { items: [], next_cursor: null } },
