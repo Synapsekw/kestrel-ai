@@ -8,6 +8,8 @@ export interface ProjectProgress {
   trainedModels: number;
   /** Detection runs of the project, any state. */
   queryRuns: number;
+  /** GeoTIFF maps of the project, any state (a count only). */
+  maps: number;
 }
 
 export interface NextStep {
