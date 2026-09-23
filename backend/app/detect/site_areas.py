@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db.models import GeoMap, MapRun, SiteArea
 from app.detect.areas import areas_for_map
@@ -142,6 +142,9 @@ def run_area_recount(ctx: JobContext) -> dict:
     for i, (run_id, map_id) in enumerate(run_ids):
         ctx.check_cancelled()
         with ctx.project.session() as s:
+            # Take SQLite's write lock before reading: a review write that lands mid-recount then
+            # waits and applies on top, instead of being overwritten by the rebuilt counts.
+            s.execute(update(MapRun).where(MapRun.id == run_id).values(id=MapRun.id))
             run, gmap = s.get(MapRun, run_id), s.get(GeoMap, map_id)
             if run is None or gmap is None:  # deleted while the job ran
                 continue

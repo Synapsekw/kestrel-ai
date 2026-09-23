@@ -222,3 +222,59 @@ class TestTrainingProject:
         assert r.json()["error"]["code"] == "wrong_project_kind"
         body = {"name": "A", "polygon_wgs84": [[15.0, 45.0], [15.1, 45.0], [15.1, 45.1]]}
         assert client.post(f"{BASE}/{project_id}/site-areas", json=body).status_code == 409
+
+
+def test_a_review_write_during_the_recount_is_not_lost(
+    client, project_id, handle, two_maps, wait_job, monkeypatch
+):
+    """The recount holds the write lock from its first read, so a review write that lands while it
+    counts waits for it and applies on top, instead of being overwritten by the stale recount."""
+    import threading
+
+    from sqlalchemy import text
+
+    import app.detect.counts as counts
+
+    real = counts._grouped
+    writers: list[threading.Thread] = []
+
+    def review_write() -> None:  # a new unreviewed c1 detection on run-1, counted in SQL
+        with handle.session() as s:
+            s.add(
+                MapDetection(
+                    id="run-1-late",
+                    run_id="run-1",
+                    class_id="c1",
+                    confidence=0.9,
+                    x=500,
+                    y=500,
+                    w=10,
+                    h=10,
+                    review_state="unreviewed",
+                )
+            )
+            s.execute(
+                text(
+                    "UPDATE map_run SET counts = json_set(counts, '$.c1', "
+                    "coalesce(json_extract(counts, '$.c1'), 0) + 1) WHERE id = 'run-1'"
+                )
+            )
+
+    def count_then_race(s, *args):
+        out = real(s, *args)  # the recount has read run-1's counts and not yet written them
+        if not writers:
+            t = threading.Thread(target=review_write)
+            writers.append(t)
+            t.start()
+            t.join(timeout=1.0)  # without the lock it commits here, and the recount overwrites it
+        return out
+
+    monkeypatch.setattr(counts, "_grouped", count_then_race)
+    body = {"name": "A", "polygon_wgs84": _wgs(_square(100, 100, 200, 200))}
+    client.post(f"{BASE}/{project_id}/site-areas", json=body)
+    job = _latest_recount(client, project_id, wait_job)
+    assert job["state"] == "succeeded", job
+    writers[0].join(timeout=10)
+    assert not writers[0].is_alive()
+    with handle.session() as s:
+        assert s.get(MapRun, "run-1").counts == {"c1": 3, "c2": 1}
