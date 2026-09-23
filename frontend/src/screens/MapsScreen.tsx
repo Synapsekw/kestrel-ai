@@ -397,6 +397,7 @@ export function MapsScreen() {
         hidden,
         colours,
         matchOf,
+        nameOf: (id: string) => classes.find((c) => c.id === id)?.name,
         load: (bbox, c) => fetchDetections(api, projectId, runId, bbox, c),
         density: (c) => fetchDensity(api, projectId, runId, 128, c),
         onViewCounts: (counts, truncated) => {
@@ -405,7 +406,7 @@ export function MapsScreen() {
         },
       };
     },
-    [api, projectId, minConf, hidden, colours],
+    [api, projectId, minConf, hidden, colours, classes],
   );
   // Only the first (primary) run is coloured by match status: it is the run the Score tab's mistake
   // list and per-class table are built from, so it is the only one whose overlay stays coherent with

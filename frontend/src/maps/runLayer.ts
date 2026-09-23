@@ -7,11 +7,15 @@ import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
 import { bbox as bboxStrategy } from "ol/loadingstrategy";
 import { Circle, Fill, Stroke, Style } from "ol/style";
+import RegularShape from "ol/style/RegularShape";
+import Text from "ol/style/Text";
+import { getCenter } from "ol/extent";
 import type { FeatureLike } from "ol/Feature";
 import type { GeoMap } from "@contract/client";
 import type { MapDensity, MapDetectionPage } from "@/api/maps";
 import { bboxParam, boxRing, toOl, type Extent } from "./grid";
 import { tokenColour, withAlpha } from "./styles";
+import { LABEL_SCREEN_PX, MIN_SCREEN_PX, markFor } from "./detectionMark";
 
 export type Match = "tp" | "fp" | "fn";
 
@@ -25,6 +29,8 @@ export interface RunLayerSpec {
   load: (bbox: string, minConf: number) => Promise<MapDetectionPage>;
   density: (minConf: number) => Promise<MapDensity>;
   onViewCounts?: (counts: Record<string, number>, truncated: boolean) => void;
+  /** Class id to display name, for the on-canvas label. */
+  nameOf?: (classId: string) => string | undefined;
 }
 
 const MATCH_TOKEN: Record<Match, string> = { tp: "ok", fp: "danger", fn: "warn" };
@@ -36,16 +42,48 @@ function classFill(spec: RunLayerSpec, classId: string, alpha: number): string {
   return hex ? withAlpha(hex, alpha) : tokenColour("accent", alpha);
 }
 
-function boxStyle(spec: RunLayerSpec, f: FeatureLike): Style | undefined {
+function boxStyle(spec: RunLayerSpec, f: FeatureLike, resolution: number): Style | undefined {
   const classId = f.get("classId") as string;
   if (spec.hidden.has(classId)) return undefined;
   const match = spec.matchOf?.(String(f.getId()));
   const colour = match ? tokenColour(MATCH_TOKEN[match]) : (spec.colours[classId] ?? tokenColour("accent"));
+  const fill = new Fill({
+    color: match ? tokenColour(MATCH_TOKEN[match], 0.12) : classFill(spec, classId, 0.08),
+  });
+  const stroke = new Stroke({ color: colour, width: 2, lineDash: spec.dashed ? [6, 4] : undefined });
+
+  const extent = f.getGeometry()?.getExtent();
+  const mark = extent ? markFor(extent[2] - extent[0], extent[3] - extent[1], resolution) : "box";
+
+  if (mark === "clamped") {
+    // A screen-constant square on the box's centre: at this zoom the true footprint is smaller
+    // than the stroke that would draw it, so nothing truthful is lost by holding a minimum size.
+    return new Style({
+      geometry: new Point(getCenter(extent!)),
+      image: new RegularShape({
+        points: 4,
+        angle: Math.PI / 4,
+        radius: (MIN_SCREEN_PX / 2) * Math.SQRT2,
+        fill,
+        stroke,
+      }),
+    });
+  }
+
   return new Style({
-    stroke: new Stroke({ color: colour, width: 2, lineDash: spec.dashed ? [6, 4] : undefined }),
-    fill: new Fill({
-      color: match ? tokenColour(MATCH_TOKEN[match], 0.12) : classFill(spec, classId, 0.08),
-    }),
+    stroke,
+    fill,
+    text:
+      mark === "labelled"
+        ? new Text({
+            text: spec.nameOf?.(classId) ?? "",
+            font: "12px Instrument Sans, sans-serif",
+            fill: new Fill({ color: tokenColour("ink") }),
+            stroke: new Stroke({ color: tokenColour("inverse", 0.8), width: 3 }),
+            offsetY: -LABEL_SCREEN_PX / 4,
+            overflow: true,
+          })
+        : undefined,
   });
 }
 
@@ -126,7 +164,8 @@ export function useRunLayer(
     const dots = new VectorSource();
     const boxLayer = new VectorLayer({
       source: boxes,
-      style: (f) => boxStyle(specRef.current!, f),
+      style: (f, resolution) => boxStyle(specRef.current!, f, resolution),
+      declutter: true,
       zIndex: 10,
     });
     const dotLayer = new VectorLayer({
