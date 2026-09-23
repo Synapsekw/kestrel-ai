@@ -55,3 +55,37 @@ def make_geotiff(
             dst.write(alpha, bands)
             dst.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
     return path
+
+
+def make_squares_geotiff(
+    path: Path,
+    width: int,
+    height: int,
+    squares: list[tuple[int, int, int]],
+    *,
+    pixel: float = 0.03,
+    nodata_left: int = 0,
+) -> Path:
+    """Dark ground (30) with bright squares (250) at (x, y, side): a scene a fake detector can
+    actually "see", so window seams, scaling and nodata skipping are tested end to end."""
+    data = np.full((3, height, width), 30, dtype=np.uint8)
+    for x, y, side in squares:
+        data[:, y : y + side, x : x + side] = 250
+    transform = Affine.translation(500000.0, 4983000.0) * Affine.scale(pixel, -pixel)
+    profile = dict(
+        driver="GTiff",
+        width=width,
+        height=height,
+        count=4,
+        dtype="uint8",
+        transform=transform,
+        crs="EPSG:32633",
+    )
+    alpha = np.full((height, width), 255, dtype=np.uint8)
+    alpha[:, :nodata_left] = 0
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with rasterio.open(path, "w", **profile) as dst:
+        dst.write(data, indexes=[1, 2, 3])
+        dst.write(alpha, 4)
+        dst.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
+    return path
