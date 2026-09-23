@@ -69,6 +69,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Cleanup batch A | merged/pushed to `main` (`8823d95`); rebuilt, installed, acceptance at `93892bd` | Select width fix (cramped class fields), G3 report label tags, CI actions on Node 24 majors, portable GPU-test paths; G2/M3 ledger closed. See [[2026-09-22-1758-cleanup-a-and-acceptance]] |
 | CI green (GitHub Actions `ci`) | merged/pushed to `main` (`afba411`) | red on all 14 push runs since publishing; four stacked causes fixed and the local gate now runs `ruff format --check` and e2e as CI does; 3/3 dispatch runs green on all four jobs including `sidecar-smoke`. See [[2026-09-21-gotcha-ci-ran-checks-the-local-gate-did-not]] |
 | Project agent (in-project AI drawer with tool access) | merged to `main` (`b606360`); rebuilt and installed 2026-09-22 | plain-language operation of the app through ~35 tools over the existing API, approvals for spend/train/delete; 854 backend, 564 frontend, 62 browser and 8 Rust tests; frozen-sidecar route smoke and an installed-build CDP check. No live provider turn yet. See [[2026-09-22-1930-project-agent]] |
+| GeoTIFF maps — import, view, detect, label, score, export | merged to `main` (`759015a`, + `8dbb55e` layout fix); rebuilt and installed 2026-09-23 | an orthomosaic of any size and projection: bounded 256 px tiles, whole-map detection (windowed, resumable, seam-merged) with counts per class, evaluation zones and labels, precision/recall/F1 and count error, and GeoJSON/GeoPackage/CSV export with coordinates. 973 backend, 634 frontend, 63 browser and 8 Rust tests on the merged tree; frozen smoke green including `geo ok`. **Unrun on a real orthomosaic; the GeoPackage has never been opened by GIS software.** See [[2026-09-23-1655-geotiff-maps]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -80,7 +81,24 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Project agent — an in-project AI drawer that operates the app** —
+**Shipped last:** **GeoTIFF maps — judge a model on the artefact the customer delivers** —
+`cf01fa8..449ecd3` (32 commits in a task worktree, merged `759015a`, worktree removed and branch
+deleted, not pushed), plus `8dbb55e` after the operator found the map squished in the installed
+build. Import an orthomosaic of any size and projection; every tile is one bounded windowed read,
+so a 3 GB map costs what a small one costs. A run walks the map in overlapping windows through the
+existing provider interface, resumes from per-window checkpoints, skips nodata, and merges boxes
+across seams; counts land per class. Evaluation zones plus labels give precision, recall, F1 and
+count error, with mistakes coloured on the map and a stepper that flies to each. Export writes
+GeoJSON (WGS84), GeoPackage (map CRS) and CSV (both). Reviews caught five silent defects before
+merge — the one worth remembering is that a machine at the edge of coverage was dropped entirely,
+because the window that would have reported it whole had been skipped as nodata. The merge was not
+a fast-forward: the project agent had landed, and both branches had claimed migration `0004`
+([[2026-09-23-gotcha-parallel-branches-collide-on-migration-ids]]). Gate green on the merged tree;
+sidecar re-frozen and its smoke green including `geo ok`; installer rebuilt and handed over.
+**Nothing has been run against a real orthomosaic, and no GIS tool has opened the GeoPackage.**
+See [[2026-09-23-1655-geotiff-maps]].
+
+Previously shipped: **Project agent — an in-project AI drawer that operates the app** —
 `fcb9420..ef2ef21` (21 commits, worktree removed, branch deleted, not yet pushed). The turn loop
 runs in the sidecar so keys stay in Credential Manager; ~35 tools call the existing API routes
 in-process, so validation, background jobs and events are the UI's own. Image work is selected by
@@ -157,10 +175,18 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing from this block. Another session's worktree `.claude/worktrees/project-agent`
-(`task/project-agent`) exists; its state is not recorded here.
+**In flight:** nothing from this block — the maps worktree is removed and its branch deleted.
+Another session shipped the **survey timeline** on top of maps while this block was finishing
+(`d92441d..ddc95f6`: a map carries its flight date, a timeline endpoint, a Surveys screen and a
+chart of counts over time); its state is not recorded here, and the installer built this block
+predates it.
 
-**Next:** brainstorm direction **D, counts per flight** — per-flight/per-date machinery counts, a
+**Next:** run the maps walkthrough on a real orthomosaic
+(`docs/usability/2026-09-22-maps-walkthrough.md`) — step 8, opening the exported GeoPackage in
+QGIS, is the one check no software has ever run — then dispatch CI `sidecar-smoke`, since the
+bundle now carries GDAL and PROJ. A **point cloud viewer** (Potree/COPC) is researched and has a
+kickoff prompt but is unstarted. Previously agreed and now partly overtaken by the survey
+timeline: brainstorm direction **D, counts per flight** — per-flight/per-date machinery counts, a
 trend, an Excel export and a GPS map for site managers — agreed with the operator on 2026-09-22 as
 the next feature. Keep `ci` green (`gh run list --branch main` after each merge; dispatch
 `sidecar-smoke` after packaging changes). Backlog unchanged: plan wave 2 of rotated boxes (spec §5
@@ -171,13 +197,29 @@ folder rename when the operator is ready (§5).
 
 ## 5. Owed
 
+### GeoTIFF maps: a real orthomosaic, a GIS check, and a CI dispatch (opened 2026-09-23)
+
+The feature is merged and installed, but every test used synthetic GeoTIFFs, a fake provider and
+the Prism mock. Owed:
+- The operator walkthrough on a real multi-GB ortho:
+  `docs/usability/2026-09-22-maps-walkthrough.md`.
+- **Open the exported `.gpkg` in QGIS.** No QGIS or `ogrinfo` exists on this machine, so the
+  GeoPackage writer is verified only byte-by-byte against the OGC layout by
+  `test_geopackage_structure_and_geometry`. This is the feature's biggest untested assumption.
+- Dispatch CI `sidecar-smoke`: packaging changed (rasterio's GDAL and PROJ are now in the bundle).
+- Parked minors, triaged can-wait, are listed in
+  `.superpowers/sdd/2026-09-22-geotiff-maps/progress.md` — the one an operator would notice is a
+  map with >20 000 labels showing a toast that fades rather than a persistent error.
+
 ### Project agent: a live turn, and a push (opened 2026-09-22)
 
 The feature is merged and installed, but every test fakes the provider SDKs, so no real model has
 ever driven the loop. Owed:
 - One live turn on the installed build against a small batch (read-only question first, then
   "label the first 20 images…" through the approval card), watching what the model actually calls.
-- `git push`: `origin/main` is still at `e6e5f7d`.
+- ~~`git push`~~ — closed: `origin/main` is at `ddc95f6` and `main` is 0 ahead (checked
+  2026-09-23), so the agent work, the maps merge and the survey timeline are all pushed. Pushed by
+  another session, not this one.
 - Deferred minors, triaged can-wait, are listed in
   `.superpowers/sdd/2026-09-22-project-agent/progress.md`.
 
