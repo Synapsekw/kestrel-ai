@@ -49,7 +49,7 @@ describe("reportedInline", () => {
     expect(reportedInline(base, "/p/p1/train")).toBe(false);
     expect(reportedInline({ ...base, type: "train" }, "/p/p1/train")).toBe(true);
     expect(reportedInline({ ...base, type: "infer" }, "/p/p1/query")).toBe(true);
-    expect(reportedInline({ ...base, type: "export" }, "/p/p1/models")).toBe(false);
+    expect(reportedInline({ ...base, type: "export" }, "/library")).toBe(false);
     expect(reportedInline(base, "/p/other/data")).toBe(false);
   });
 });
