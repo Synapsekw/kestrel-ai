@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import type { ProjectKind } from "@/app/useProjectKind";
 import { useChangesStore } from "@/store/changes";
 import { Alert, Button } from "@/ui";
 import { AddToDatasetDialog } from "./AddToDatasetDialog";
@@ -26,6 +27,8 @@ interface Props {
   /** The selection is cleared after marking (E4), like a delete, so the message is handed to the screen to show. */
   onMarked: (message: string) => void;
   onClear: () => void;
+  /** The project's kind: a training project has no Run model, a detection project no datasets. */
+  kind?: ProjectKind | null;
 }
 
 /** A secondary button redrawn for the dark bar (important: it overrides the variant's colours). */
@@ -43,6 +46,7 @@ export function SelectionBar({
   onDeleted,
   onMarked,
   onClear,
+  kind = null,
 }: Props) {
   const api = useApi();
   const [busy, setBusy] = useState(false);
@@ -109,24 +113,28 @@ export function SelectionBar({
           <Button variant="primary" size="sm" icon="label" onClick={onLabel} disabled={busy}>
             Label selected
           </Button>
-          <Button
-            size="sm"
-            className={onInverse}
-            onClick={onRunModel}
-            disabled={busy}
-            title="Open Detect with these images selected"
-          >
-            Run model
-          </Button>
-          <Button
-            size="sm"
-            className={onInverse}
-            aria-haspopup="dialog"
-            onClick={() => setMode(mode === "dataset" ? "idle" : "dataset")}
-            disabled={busy}
-          >
-            Add to dataset
-          </Button>
+          {kind !== "train" && (
+            <Button
+              size="sm"
+              className={onInverse}
+              onClick={onRunModel}
+              disabled={busy}
+              title="Open Detect with these images selected"
+            >
+              Run model
+            </Button>
+          )}
+          {kind !== "detect" && (
+            <Button
+              size="sm"
+              className={onInverse}
+              aria-haspopup="dialog"
+              onClick={() => setMode(mode === "dataset" ? "idle" : "dataset")}
+              disabled={busy}
+            >
+              Add to dataset
+            </Button>
+          )}
           <Button
             size="sm"
             className={onInverse}

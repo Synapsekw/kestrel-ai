@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
 import { useSourceNames } from "@/api/project";
+import { useProjectKind } from "@/app/useProjectKind";
 import { ImageTable } from "@/data/ImageTable";
 import { keyboardAction, REVIEW_COLUMNS } from "@/data/listModel";
 import {
@@ -22,6 +23,7 @@ const linkClass = "font-medium text-accent hover:underline";
 /** Spec section 6 screen 4: images with unreviewed suggestions sorted by suggestion confidence, same editor. */
 export function ReviewScreen() {
   const { projectId = "" } = useParams();
+  const kind = useProjectKind(projectId);
   const navigate = useNavigate();
   const sourceNames = useSourceNames(projectId);
   const [params] = useSearchParams();
@@ -90,15 +92,34 @@ export function ReviewScreen() {
       {empty && (
         <div data-testid="review-empty" className="animate-reveal motion-reduce:animate-none">
           <EmptyState icon="review" title="Nothing to review">
-            Suggestions appear here after a detection run on the{" "}
-            <Link to={`/p/${projectId}/query`} className={linkClass}>
-              Detect screen
-            </Link>
-            , or when the editor opens an image while a pre-annotation model is set in the{" "}
-            <Link to={`/p/${projectId}/settings`} className={linkClass}>
-              Project settings
-            </Link>
-            .
+            {kind === "train" ? (
+              <>
+                Suggestions appear here when the editor opens an image while a pre-annotation model is set in
+                the{" "}
+                <Link to={`/p/${projectId}/settings`} className={linkClass}>
+                  Project settings
+                </Link>
+                .
+              </>
+            ) : (
+              <>
+                Suggestions appear here after a detection run on the{" "}
+                <Link to={`/p/${projectId}/query`} className={linkClass}>
+                  Detect screen
+                </Link>
+                {kind === "detect" ? (
+                  "."
+                ) : (
+                  <>
+                    , or when the editor opens an image while a pre-annotation model is set in the{" "}
+                    <Link to={`/p/${projectId}/settings`} className={linkClass}>
+                      Project settings
+                    </Link>
+                    .
+                  </>
+                )}
+              </>
+            )}
           </EmptyState>
         </div>
       )}

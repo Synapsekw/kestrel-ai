@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useProject, useSourceNames } from "@/api/project";
+import { useProjectKind } from "@/app/useProjectKind";
 import { useJobsStore } from "@/store/jobs";
 import { EmptyImages } from "@/data/EmptyImages";
 import { importNotice, type Notice } from "@/data/importNotice";
@@ -129,6 +130,7 @@ function GridSkeleton() {
 
 export function DataManagerScreen() {
   const { projectId = "" } = useParams();
+  const kind = useProjectKind(projectId);
   const navigate = useNavigate();
   const { project } = useProject(projectId);
   const sourceNames = useSourceNames(projectId);
@@ -283,6 +285,7 @@ export function DataManagerScreen() {
             unlabeledCount={selectedUnlabeledCount}
             pendingCount={selectedPendingCount}
             onLabel={labelSelected}
+            kind={kind}
             onRunModel={() => {
               useNavigationStore.getState().setContext(selectedIds, "query");
               void navigate(`/p/${projectId}/query`);

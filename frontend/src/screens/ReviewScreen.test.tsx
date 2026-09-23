@@ -4,10 +4,31 @@ import { Route, Routes } from "react-router-dom";
 import { exampleImagePage, fakeClient, PROJECT_ID, IMAGE_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useNavigationStore } from "@/store/navigation";
+import { useProjectKindStore } from "@/app/useProjectKind";
 import { ReviewScreen } from "./ReviewScreen";
 
 describe("ReviewScreen", () => {
-  beforeEach(() => useNavigationStore.getState().setContext([], null));
+  beforeEach(() => {
+    useNavigationStore.getState().setContext([], null);
+    useProjectKindStore.setState({ byProject: {} });
+  });
+
+  it("in a training project, suggestions come from pre-annotation, not from a Detect screen", async () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "train");
+    const { api } = fakeClient([
+      { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
+      { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
+    ]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/p/:projectId/review" element={<ReviewScreen />} />
+      </Routes>,
+      { api, route: `/p/${PROJECT_ID}/review` },
+    );
+    const empty = await screen.findByTestId("review-empty");
+    expect(empty).toHaveTextContent("Suggestions appear here when the editor opens an image");
+    expect(screen.queryByRole("link", { name: "Detect screen" })).toBeNull();
+  });
 
   it("requests the review queue query, shows confidence and opens the editor with a review context", async () => {
     const { api, requests } = fakeClient([
