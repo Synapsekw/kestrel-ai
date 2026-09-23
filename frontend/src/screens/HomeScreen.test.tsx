@@ -113,7 +113,9 @@ describe("HomeScreen", () => {
         body: {
           pending: 1,
           adopted: 0,
-          missing: [{ old_model_id: "old-1", name: "yard-v1", error: "weights file not found: models/yard-v1.pt" }],
+          missing: [
+            { old_model_id: "old-1", name: "yard-v1", error: "weights file not found: models/yard-v1.pt" },
+          ],
           job_id: null,
         },
       },

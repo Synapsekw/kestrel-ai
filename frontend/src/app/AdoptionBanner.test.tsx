@@ -23,7 +23,11 @@ describe("AdoptionBanner", () => {
 
   it("shows progress while the project's models are moving into the library", async () => {
     render([
-      { method: "GET", path: /\/adoption$/, body: { pending: 2, adopted: 1, missing: [], job_id: adoptJob.id } },
+      {
+        method: "GET",
+        path: /\/adoption$/,
+        body: { pending: 2, adopted: 1, missing: [], job_id: adoptJob.id },
+      },
       { method: "GET", path: /\/jobs\/[^/]+$/, body: adoptJob },
     ]);
     expect(await screen.findByText(/Moving this project's models into your library/)).toBeInTheDocument();
@@ -40,7 +44,9 @@ describe("AdoptionBanner", () => {
         body: {
           pending: 1,
           adopted: 2,
-          missing: [{ old_model_id: "old-1", name: "yard-v1", error: "weights file not found: models/yard-v1.pt" }],
+          missing: [
+            { old_model_id: "old-1", name: "yard-v1", error: "weights file not found: models/yard-v1.pt" },
+          ],
           job_id: null,
         },
       },

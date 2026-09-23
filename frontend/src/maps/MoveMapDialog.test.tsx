@@ -6,9 +6,25 @@ import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { MoveMapDialog } from "./MoveMapDialog";
 
-const NORTH: Project = { ...exampleProject, id: "d0000000-1111-4000-8000-000000000002", name: "North site", kind: "detect", classes: [] };
-const SOUTH: Project = { ...exampleProject, id: "d0000000-1111-4000-8000-000000000003", name: "South yard", kind: "detect", classes: [] };
-const TRAIN_OTHER: Project = { ...exampleProject, id: "t0000000-1111-4000-8000-000000000004", name: "Other training" };
+const NORTH: Project = {
+  ...exampleProject,
+  id: "d0000000-1111-4000-8000-000000000002",
+  name: "North site",
+  kind: "detect",
+  classes: [],
+};
+const SOUTH: Project = {
+  ...exampleProject,
+  id: "d0000000-1111-4000-8000-000000000003",
+  name: "South yard",
+  kind: "detect",
+  classes: [],
+};
+const TRAIN_OTHER: Project = {
+  ...exampleProject,
+  id: "t0000000-1111-4000-8000-000000000004",
+  name: "Other training",
+};
 
 const moveJob = (projectId: string, state: Job["state"] = "running"): Job => ({
   ...runningJob,
@@ -23,10 +39,9 @@ const moveJob = (projectId: string, state: Job["state"] = "running"): Job => ({
 
 function renderDialog(routes: Parameters<typeof fakeClient>[0]) {
   const client = fakeClient(routes);
-  renderWithProviders(
-    <MoveMapDialog projectId={PROJECT_ID} geoMap={exampleGeoMap} onClose={() => {}} />,
-    { api: client.api },
-  );
+  renderWithProviders(<MoveMapDialog projectId={PROJECT_ID} geoMap={exampleGeoMap} onClose={() => {}} />, {
+    api: client.api,
+  });
   return client;
 }
 
@@ -67,7 +82,9 @@ describe("MoveMapDialog", () => {
       url: `/api/v1/projects/${PROJECT_ID}/maps/${MAP_ID}/move`,
       body: { target_project_id: NORTH.id },
     });
-    expect(requests.some((r) => r.url === `/api/v1/projects/${NORTH.id}/jobs/${moveJob(NORTH.id).id}`)).toBe(true);
+    expect(requests.some((r) => r.url === `/api/v1/projects/${NORTH.id}/jobs/${moveJob(NORTH.id).id}`)).toBe(
+      true,
+    );
     expect(requests.some((r) => r.method === "POST" && r.url === "/api/v1/projects")).toBe(false);
   });
 
@@ -89,7 +106,12 @@ describe("MoveMapDialog", () => {
       "/api/v1/projects",
       `/api/v1/projects/${PROJECT_ID}/maps/${MAP_ID}/move`,
     ]);
-    expect(posts[0].body).toEqual({ name: "North site", folder: "E:/Projects/North", kind: "detect", classes: [] });
+    expect(posts[0].body).toEqual({
+      name: "North site",
+      folder: "E:/Projects/North",
+      kind: "detect",
+      classes: [],
+    });
     expect(posts[1].body).toEqual({ target_project_id: NORTH.id });
   });
 
@@ -101,7 +123,12 @@ describe("MoveMapDialog", () => {
     const { requests } = renderDialog([
       { method: "GET", path: /\/projects$/, body: { items: [], next_cursor: null } },
       { method: "POST", path: /\/projects$/, status: 201, body: NORTH },
-      { method: "POST", path: failOnce, status: 500, body: { error: { code: "internal", message: "disk busy" } } },
+      {
+        method: "POST",
+        path: failOnce,
+        status: 500,
+        body: { error: { code: "internal", message: "disk busy" } },
+      },
       { method: "POST", path: /\/move$/, status: 202, body: { job: moveJob(NORTH.id) } },
       { method: "GET", path: /\/jobs\/[^/]+$/, body: moveJob(NORTH.id, "succeeded") },
     ]);
@@ -120,7 +147,9 @@ describe("MoveMapDialog", () => {
     ]);
     await screen.findByLabelText("Name");
     fireEvent.click(screen.getByRole("button", { name: "Move map" }));
-    expect(await screen.findByText("Name the new detection project and choose its folder.")).toBeInTheDocument();
+    expect(
+      await screen.findByText("Name the new detection project and choose its folder."),
+    ).toBeInTheDocument();
     expect(requests.filter((r) => r.method === "POST")).toHaveLength(0);
   });
 
