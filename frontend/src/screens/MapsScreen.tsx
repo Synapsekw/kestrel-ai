@@ -422,6 +422,9 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   }, [scoreErrors, liveSelected]);
 
   const reviewSelectedId = reviewRun ? (reviewCurrent?.id ?? null) : null;
+  // Review walks every unreviewed detection, whatever its confidence, so the map under review draws
+  // them all: a detection filtered off the map could be framed but never shown or highlighted.
+  const layerMinConf = reviewRun ? 0 : minConf;
   const specFor = useCallback(
     (
       runId: string | undefined,
@@ -432,7 +435,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
       return {
         runId,
         dashed,
-        minConf,
+        minConf: layerMinConf,
         hidden,
         colours,
         matchOf,
@@ -445,7 +448,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
         },
       };
     },
-    [api, projectId, minConf, hidden, colours, reviewSelectedId],
+    [api, projectId, layerMinConf, hidden, colours, reviewSelectedId],
   );
   // Only the first (primary) run is coloured by match status: it is the run the Score tab's mistake
   // list and per-class table are built from, so it is the only one whose overlay stays coherent with

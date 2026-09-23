@@ -20,6 +20,7 @@ import { useToastStore } from "@/ui";
 import { boxFacts } from "@/maps/runModel";
 import type { LabelLayerOptions } from "@/maps/labelLayers";
 import { useLabelLayers } from "@/maps/labelLayers";
+import { useRunLayer } from "@/maps/runLayer";
 import { MapsScreen } from "./MapsScreen";
 
 // OpenLayers needs a real canvas; the screen's own behaviour is what is under test here.
@@ -33,6 +34,12 @@ vi.mock("@/maps/MapView", () => ({
 vi.mock("@/maps/labelLayers", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/maps/labelLayers")>();
   return { ...actual, useLabelLayers: vi.fn() };
+});
+
+// A pass-through spy: a test reads the spec the screen hands the run layer (its confidence floor).
+vi.mock("@/maps/runLayer", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/maps/runLayer")>();
+  return { ...actual, useRunLayer: vi.fn(actual.useRunLayer) };
 });
 
 const base = [
@@ -339,6 +346,21 @@ describe("MapsScreen", () => {
       expect(screen.queryByRole("radio", { name: "Labels" })).not.toBeInTheDocument();
       // The reviewed run is the one drawn on the map.
       expect(screen.getByRole("checkbox", { name: /Show machinery-v3/ })).toBeChecked();
+    });
+
+    it("draws every detection of the run under review, whatever the confidence filter", async () => {
+      const { api } = fakeClient(reviewRoutes);
+      renderReview(api);
+      await screen.findByText("39 of 59 reviewed");
+      // The primary run layer: the last non-empty spec (the second layer is empty with one run).
+      const spec = vi
+        .mocked(useRunLayer)
+        .mock.calls.map((c) => c[2])
+        .filter((s) => s !== null)
+        .at(-1);
+      expect(spec?.runId).toBe(exampleMapRun.id);
+      // The review walk visits every unreviewed detection, so none may be filtered off the map.
+      expect(spec?.minConf).toBe(0);
     });
 
     it("draws a missed object into the run", async () => {
