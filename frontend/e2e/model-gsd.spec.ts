@@ -64,6 +64,16 @@ const model = {
   created_at: "2026-09-10T09:00:00Z",
 };
 
+// The run that produced the reported failure: ICVD_V4 against this map at the map's own
+// 2.296 cm/px, which found 1.5 m of gravel. It has to be present for this test to prove anything —
+// mocking `/runs` as empty is the one state in which a past run cannot be handed back.
+const pastRun = {
+  id: "r0000000-3333-4000-8000-000000000001", map_id: MAP, kind: "local_model", model_id: MODEL,
+  provider: null, model_name: "ICVD_V4", query: "", tile_size: 1280, overlap: 0.2, nms_iou: 0.5,
+  conf: 0.25, target_gsd_cm: 2.296, job_id: null, state: "succeeded",
+  counts: { excavator: 3 }, detection_count: 3, created_at: "2026-09-22T11:00:00Z",
+};
+
 async function json(page: Page, pattern: (u: URL) => boolean, body: unknown, status = 200) {
   await page.route(pattern, (route) =>
     route.fulfill({ status, contentType: "application/json", headers: CORS, body: JSON.stringify(body) }),
@@ -78,9 +88,11 @@ test("a model with no training scale offers its derived one, with the evidence f
     r.fulfill({ status: 200, contentType: "image/png", headers: CORS, body: PNG }),
   );
   await json(page, (u) => u.pathname === `/api/v1/projects/${P}/maps`, { items: [map] });
-  await json(page, (u) => u.pathname.endsWith(`/maps/${MAP}/runs`), { items: [] });
+  await json(page, (u) => u.pathname.endsWith(`/maps/${MAP}/runs`), { items: [pastRun] });
   await json(page, (u) => u.pathname.endsWith(`/maps/${MAP}/labels`), { items: [] });
   await json(page, (u) => u.pathname.endsWith(`/maps/${MAP}/zones`), { items: [] });
+  await json(page, (u) => u.pathname.endsWith("/density"), { cell_size: 8000, cells: [] });
+  await json(page, (u) => u.pathname.endsWith("/detections"), { items: [], truncated: false });
   await json(page, (u) => u.pathname === `/api/v1/projects/${P}/models`, { items: [model], next_cursor: null });
   await json(page, (u) => u.pathname.endsWith(`/models/${MODEL}/gsd-estimate`), gsdEstimate);
 
@@ -100,8 +112,11 @@ test("a model with no training scale offers its derived one, with the evidence f
   const use = dialog.getByRole("button", { name: "Use 18.92" });
   await expect(use).toBeVisible();
 
-  // The scale is still unknown at this exact moment (empty field, offer pending): the run's
+  // The scale is still unknown at this exact moment, and this map already carries a run recorded
+  // at 2.296 cm/px. The field must stay empty rather than reinstate that number, and the run's
   // central guarantee — cannot start without a scale — must hold right here, not just in theory.
+  const field = dialog.getByLabel("Model trained at (cm / px)");
+  await expect(field).toHaveValue("");
   const start = dialog.getByRole("button", { name: "Start detection" });
   await expect(start).toBeDisabled();
 
@@ -111,6 +126,6 @@ test("a model with no training scale offers its derived one, with the evidence f
   });
 
   await use.click();
-  await expect(dialog.getByLabel("Model trained at (cm / px)")).toHaveValue("18.92");
+  await expect(field).toHaveValue("18.92");
   await expect(start).toBeEnabled();
 });

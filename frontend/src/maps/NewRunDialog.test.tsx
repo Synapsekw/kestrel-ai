@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Model } from "@contract/client";
+import type { MapRun, Model } from "@contract/client";
 import type { ModelGsdEstimate } from "@/api/models";
 import {
   errorBody,
@@ -19,7 +19,9 @@ import { NewRunDialog } from "./NewRunDialog";
 
 /** Renders the dialog behind a fake API: a model list, providers, and (optionally) a gsd-estimate
  * and patch route. Returns the recorded requests so a test can inspect what the dialog sent. */
-function renderDialog(opts: { models?: Model[]; estimate?: Partial<ModelGsdEstimate> } = {}) {
+function renderDialog(
+  opts: { models?: Model[]; estimate?: Partial<ModelGsdEstimate>; runs?: MapRun[] } = {},
+) {
   const models = opts.models ?? [exampleModel];
   const routes: FakeRoute[] = [
     { method: "GET", path: /\/models$/, body: { items: models, next_cursor: null } },
@@ -39,7 +41,7 @@ function renderDialog(opts: { models?: Model[]; estimate?: Partial<ModelGsdEstim
     <NewRunDialog
       projectId={PROJECT_ID}
       geoMap={exampleGeoMap}
-      runs={[]}
+      runs={opts.runs ?? []}
       onClose={() => {}}
       onStarted={onStarted}
     />,
@@ -122,6 +124,52 @@ describe("NewRunDialog", () => {
       }),
     );
     expect(screen.getByLabelText(/Model trained at/)).toHaveValue(18.92);
+  });
+
+  // The reported failure, as a state rather than as a pure function: ICVD_V4 has a null
+  // `train_gsd_cm`, a dataset to measure, and a past run recorded at the map's own 2.296 cm/px —
+  // the number that found 1.5 m of gravel. Every other test of this gate uses `runs: []`, the one
+  // state in which the bug cannot appear.
+  const icvdV4 = { ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: "d1" };
+  const runAt2296: MapRun[] = [{ ...exampleMapRun, model_id: "m1", target_gsd_cm: 2.296 }];
+
+  it("does not hand back a past run at the map's native scale when a scale can be derived", async () => {
+    renderDialog({
+      models: [icvdV4],
+      runs: runAt2296,
+      estimate: {
+        train_gsd_cm: 18.92,
+        median_alt_m: 191,
+        median_object_m: 8.39,
+        plausible: true,
+        sensor_source: "focal_plane",
+      },
+    });
+    // The offer resolves; the field beside it is still empty and the run still cannot start.
+    await screen.findByRole("button", { name: /use 18.92/i });
+    expect(screen.getByLabelText(/Model trained at/)).toHaveValue(null);
+    expect(screen.getByRole("button", { name: /start detection/i })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole("button", { name: /use 18.92/i }));
+    expect(screen.getByLabelText(/Model trained at/)).toHaveValue(18.92);
+  });
+
+  it("keeps the field empty when the derive fails but the model still has a dataset", async () => {
+    // No estimate route means a 404. A past run is the operator's choice from when nothing could
+    // be derived; here something can be, so it is not a default.
+    renderDialog({ models: [icvdV4], runs: runAt2296 });
+    expect(await screen.findByLabelText(/Model trained at/)).toHaveValue(null);
+    expect(screen.getByRole("button", { name: /start detection/i })).toBeDisabled();
+  });
+
+  it("falls back to the last run only when nothing can be derived", async () => {
+    // No dataset to measure (an imported model): the operator's own prior choice is all there is,
+    // and it does carry information — spec section 5, precedence (3).
+    renderDialog({
+      models: [{ ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: null }],
+      runs: runAt2296,
+    });
+    expect(await screen.findByLabelText(/Model trained at/)).toHaveValue(2.296);
   });
 
   it("will not start a run whose scale is unknown", async () => {

@@ -48,9 +48,17 @@ export function NewRunDialog({
   const [gsdKeySeen, setGsdKeySeen] = useState("");
   if (gsdKey !== gsdKeySeen) {
     setGsdKeySeen(gsdKey);
+    // Spec section 5: a past run is the LAST resort, reached only when nothing can be derived.
+    // The derived estimate arrives asynchronously, so it cannot be consulted here; what stands in
+    // for it is the one fact this render does know — whether a derivation is even possible, i.e.
+    // whether the model has a dataset to measure. With a dataset, the field stays empty (Start
+    // disabled) until the offer resolves and is accepted or the operator types a value. Falling
+    // back to the last run here would hand ICVD_V4 its recorded 2.296 cm/px straight back, which
+    // is the exact failure this spec exists to remove.
     const d =
       kind === "local_model"
-        ? (defaultTargetGsd(selected) ?? lastRunTargetGsd(runs, effectiveModel))
+        ? (defaultTargetGsd(selected) ??
+          (selected?.dataset_id ? null : lastRunTargetGsd(runs, effectiveModel)))
         : lastRunTargetGsd(runs, null);
     setGsd(d ? String(d) : "");
     setOffer(null);
