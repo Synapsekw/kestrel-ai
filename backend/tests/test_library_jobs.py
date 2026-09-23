@@ -103,7 +103,8 @@ def test_a_run_whose_weights_are_already_in_the_library_returns_that_model(
     base = add_library_model(app, tmp_path, name="yolo11n-coco", origin="starter")
     results = []
     for name in ("first", "second"):
-        r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, base.id, name=name))
+        body = train_body(dataset.id, base.id, name=name)
+        r = client.post(f"{BASE}/{train_project['id']}/train", json=body)
         assert r.status_code == 202, r.text
         done = wait_for(client, train_project["id"], r.json()["job"]["id"])
         assert done["state"] == "succeeded", done["error"]

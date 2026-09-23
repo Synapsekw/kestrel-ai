@@ -19,6 +19,7 @@ from app.errors import AppError, not_found
 # Reused rather than duplicated: `_validate`/`_cost_per_request` are duck-typed on `kind`,
 # `model_id`, `provider`, `query` and `conf`, which `MapRunCreate` carries under the same names.
 from app.inference.service import _cost_per_request, _validate, class_ids_by_name
+from app.library.handle import LibraryHandle
 from app.maps import raster, scoring
 from app.maps.schemas import (
     GeoMapCreate,
@@ -138,7 +139,9 @@ BUSY = ("queued", "running")
 _RESUME_LOCK = threading.Lock()
 
 
-def create_run(handle: ProjectHandle, keys, config, body: MapRunCreate, lib=None) -> MapRun:
+def create_run(
+    handle: ProjectHandle, keys, config, body: MapRunCreate, *, lib: LibraryHandle | None
+) -> MapRun:
     require_ready(handle, body.map_id)
     model_name = _validate(handle, config, body, check_key=True, keys=keys, lib=lib)
     with handle.session() as s:
@@ -161,7 +164,7 @@ def create_run(handle: ProjectHandle, keys, config, body: MapRunCreate, lib=None
     return row
 
 
-def estimate_run(handle: ProjectHandle, config, body: MapRunCreate, lib=None) -> dict:
+def estimate_run(handle: ProjectHandle, config, body: MapRunCreate, *, lib: LibraryHandle | None) -> dict:
     gmap = require_ready(handle, body.map_id)
     _validate(handle, config, body, check_key=False, keys=None, lib=lib)
     scale = gsd_scale(gmap.gsd_cm, body.target_gsd_cm)
