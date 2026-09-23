@@ -17,10 +17,12 @@ const METRICS: [string, (r: Row) => string][] = [
 
 /**
  * Precision/recall/F1/count-error per selected run, a per-class breakdown, the overlay toggle and
- * mistake stepping. One run drives the mistake list, the per-class table and the map overlay: the
- * run the operator ticked *first*, not whichever comes first in `runs`. `selected` (tick order) is
- * the single source of truth for that, the same way `ResultsPanel` orders its own columns from it;
- * `runs` is only consulted here to look up a ticked id's display name.
+ * mistake stepping. `selected` (tick order) is the single source of truth for which run is primary
+ * — the same array `MapsScreen` derives its overlay's `matchOf` from — so the panel can never
+ * describe a different run than the map is colouring; `runs` is only consulted to look up a ticked
+ * id's display name. The primary is always `selected[0]`, whether or not its score has arrived yet:
+ * while it is still loading, its column reads "scoring…" and the stepper stays disabled, rather
+ * than silently falling through to a comparison run's numbers.
  */
 export function ScorePanel({
   runs,
@@ -40,15 +42,17 @@ export function ScorePanel({
   onOverlay: (on: boolean) => void;
   onStep: (m: MatchRow) => void;
 }) {
-  const shownIds = selected.filter((id) => scores[id]);
-  const shown = shownIds.map((id) => runs.find((r) => r.id === id)).filter((r): r is MapRun => !!r);
-  const first = shownIds[0] ? scores[shownIds[0]]! : null;
-  const list = useMemo(() => (first ? mistakes(first) : []), [first]);
+  const runById = (id: string) => runs.find((r) => r.id === id);
+  const primaryId = selected[0];
+  const secondaryId = selected[1];
+  const primaryScore = primaryId !== undefined ? (scores[primaryId] ?? null) : null;
+  const secondaryScore = secondaryId !== undefined ? (scores[secondaryId] ?? null) : null;
+  const list = useMemo(() => (primaryScore ? mistakes(primaryScore) : []), [primaryScore]);
   const [at, setAt] = useState(-1);
   const name = (id: string) => classes.find((c) => c.id === id)?.name ?? "unknown class";
 
-  if (!first) return <p className="text-sm text-muted">Tick a finished run to score it.</p>;
-  if (!first.has_zones) {
+  if (selected.length === 0) return <p className="text-sm text-muted">Tick a finished run to score it.</p>;
+  if (primaryScore && !primaryScore.has_zones) {
     return (
       <EmptyState icon="label" title="Label a zone to score this run">
         Draw a zone on the Labels tab and label every machine inside it; the run is then scored inside it.
@@ -62,15 +66,25 @@ export function ScorePanel({
     onStep(list[next]);
   };
   const current = at >= 0 ? list[at] : null;
+  const columns = [
+    { id: primaryId, score: primaryScore, run: runById(primaryId) },
+    ...(secondaryId !== undefined
+      ? [{ id: secondaryId, score: secondaryScore, run: runById(secondaryId) }]
+      : []),
+  ];
   return (
     <section className="flex flex-col gap-4" aria-label="Score">
       <table className="w-full text-sm tabular-nums">
         <thead>
           <tr className="text-left text-xs text-muted">
-            <th className="py-1 font-medium">IoU ≥ {first.iou}</th>
-            {shown.map((r) => (
-              <th key={r.id} className="py-1 text-right font-medium" title={runTitle(r)}>
-                {r.model_name ?? r.provider}
+            <th className="py-1 font-medium">{primaryScore ? `IoU ≥ ${primaryScore.iou}` : "Scoring…"}</th>
+            {columns.map((c) => (
+              <th
+                key={c.id}
+                className="py-1 text-right font-medium"
+                title={c.run ? runTitle(c.run) : undefined}
+              >
+                {c.run?.model_name ?? c.run?.provider ?? "—"}
               </th>
             ))}
           </tr>
@@ -79,30 +93,32 @@ export function ScorePanel({
           {METRICS.map(([label, fmt]) => (
             <tr key={label} aria-label={label} className="border-t border-line">
               <td className="py-1.5 text-muted">{label}</td>
-              {shown.map((r) => (
-                <td key={r.id} className="py-1.5 text-right text-ink">
-                  {fmt(scores[r.id]!.overall)}
+              {columns.map((c) => (
+                <td key={c.id} className="py-1.5 text-right text-ink">
+                  {c.score ? fmt(c.score.overall) : <span className="text-muted">scoring…</span>}
                 </td>
               ))}
             </tr>
           ))}
         </tbody>
       </table>
-      <details className="text-sm">
-        <summary className="cursor-pointer text-muted">Per class</summary>
-        <table className="mt-2 w-full tabular-nums">
-          <tbody>
-            {first.per_class.map((r) => (
-              <tr key={r.class_id} className="border-t border-line">
-                <td className="py-1">{name(r.class_id ?? "")}</td>
-                <td className="py-1 text-right">{pct(r.precision)}</td>
-                <td className="py-1 text-right">{pct(r.recall)}</td>
-                <td className="py-1 text-right">{signed(r.count_error)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+      {primaryScore && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-muted">Per class</summary>
+          <table className="mt-2 w-full tabular-nums">
+            <tbody>
+              {primaryScore.per_class.map((r) => (
+                <tr key={r.class_id} className="border-t border-line">
+                  <td className="py-1">{name(r.class_id ?? "")}</td>
+                  <td className="py-1 text-right">{pct(r.precision)}</td>
+                  <td className="py-1 text-right">{pct(r.recall)}</td>
+                  <td className="py-1 text-right">{signed(r.count_error)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
       <Switch
         checked={overlay}
         onChange={onOverlay}
@@ -113,20 +129,22 @@ export function ScorePanel({
           icon="chevron-left"
           size="sm"
           label="Previous mistake"
-          disabled={!list.length}
+          disabled={!primaryScore || !list.length}
           onClick={() => step(-1)}
         />
         <IconButton
           icon="chevron-right"
           size="sm"
           label="Next mistake"
-          disabled={!list.length}
+          disabled={!primaryScore || !list.length}
           onClick={() => step(1)}
         />
         <span className="text-sm text-muted">
-          {current
-            ? `${at + 1} of ${list.length} · ${current.match === "fp" ? "false alarm" : "missed"}: ${name(current.class_id)}`
-            : `${list.length} mistakes`}
+          {!primaryScore
+            ? "Scoring the primary run…"
+            : current
+              ? `${at + 1} of ${list.length} · ${current.match === "fp" ? "false alarm" : "missed"}: ${name(current.class_id)}`
+              : `${list.length} mistakes`}
         </span>
       </div>
     </section>

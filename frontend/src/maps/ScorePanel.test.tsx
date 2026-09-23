@@ -62,6 +62,35 @@ describe("ScorePanel", () => {
     expect(onStep).toHaveBeenLastCalledWith(expect.objectContaining({ id: "d2", match: "fp" }));
   });
 
+  it("keeps the primary column pending until its own score arrives, even when a second run's score is already in", () => {
+    // Both runs are ticked, but only the SECOND one's score has resolved. The primary (ticked-first)
+    // column must show a pending state, not fall through to the second run's numbers, and the
+    // stepper must stay disabled — never step through a comparison run's mistakes as if they were
+    // the primary's.
+    const onStep = vi.fn();
+    render(
+      <ScorePanel
+        runs={[exampleMapRun, second]}
+        selected={[exampleMapRun.id, "r2"]}
+        scores={{ r2: exampleMapScore }}
+        classes={exampleClasses}
+        overlay
+        onOverlay={() => {}}
+        onStep={onStep}
+      />,
+    );
+    const precisionCells = screen.getByRole("row", { name: "Precision" }).querySelectorAll("td");
+    expect(precisionCells[1]).toHaveTextContent("scoring…");
+    expect(precisionCells[2]).toHaveTextContent("90.0 %");
+    expect(screen.queryByText("2 mistakes")).not.toBeInTheDocument();
+    const next = screen.getByRole("button", { name: "Next mistake" });
+    const prev = screen.getByRole("button", { name: "Previous mistake" });
+    expect(next).toBeDisabled();
+    expect(prev).toBeDisabled();
+    fireEvent.click(next);
+    expect(onStep).not.toHaveBeenCalled();
+  });
+
   it("steps through mistakes", () => {
     const onStep = vi.fn();
     render(

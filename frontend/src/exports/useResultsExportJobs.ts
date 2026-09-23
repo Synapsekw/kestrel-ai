@@ -33,20 +33,27 @@ export function useResultsExportJobs(projectId: string): {
     let cancelled = false;
     // The list endpoint's `type` filter takes one value, so a map export (a different job type)
     // needs its own request; both land in the same job store and are merged by `selectExportJobs`.
-    Promise.all([
-      fetchJobs(api, projectId, { type: "results_export" }),
-      fetchJobs(api, projectId, { type: "map_export" }),
-    ])
-      .then(([resultsExports, mapExports]) => {
-        if (cancelled) return;
-        useJobsStore.getState().upsertMany([...resultsExports, ...mapExports]);
-        setStatus({ key, error: null });
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        pushLog(`load past exports failed: ${messageOf(e, String(e))}`);
-        setStatus({ key, error: messageOf(e, "could not load past exports") });
+    // `allSettled`, not `all`: one kind failing must not hide the other kind's jobs that DID load.
+    const kinds = [
+      { type: "results_export" as const, label: "results exports" },
+      { type: "map_export" as const, label: "map exports" },
+    ];
+    Promise.allSettled(kinds.map((k) => fetchJobs(api, projectId, { type: k.type }))).then((results) => {
+      if (cancelled) return;
+      const loaded: Job[] = [];
+      const failedLabels: string[] = [];
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          loaded.push(...r.value);
+        } else {
+          failedLabels.push(kinds[i].label);
+          pushLog(`load past ${kinds[i].label} failed: ${messageOf(r.reason, String(r.reason))}`);
+        }
       });
+      if (loaded.length > 0) useJobsStore.getState().upsertMany(loaded);
+      const error = failedLabels.length > 0 ? `could not load past ${failedLabels.join(" or ")}` : null;
+      setStatus({ key, error });
+    });
     return () => {
       cancelled = true;
     };

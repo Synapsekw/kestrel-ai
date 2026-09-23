@@ -51,6 +51,14 @@ describe("ExportJobs", () => {
     expect(screen.getByText("No exports yet")).toBeInTheDocument();
   });
 
+  it("still renders a partial list alongside the error, instead of hiding it", () => {
+    // e.g. results exports loaded fine but the map-export request failed (or vice versa): the
+    // operator must still see what DID load, with the failure named rather than a blanket message.
+    render([succeeded], { error: "could not load past map exports" });
+    expect(screen.getByRole("alert")).toHaveTextContent("could not load past map exports");
+    expect(screen.getByTestId(`export-job-${succeeded.id}`)).toBeInTheDocument();
+  });
+
   it("renders a finished export's summary and files, and reveals its folder", async () => {
     const { requests } = render([succeeded]);
     const row = screen.getByTestId(`export-job-${succeeded.id}`);
