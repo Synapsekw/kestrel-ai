@@ -7,6 +7,7 @@ import rasterio
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi import Path as PathParam
 
+from app.events_util import publish_map_labels_changed_event
 from app.jobs.schemas import JobOut
 from app.maps import service
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers map_detect
@@ -20,11 +21,22 @@ from app.maps.schemas import (
     MapDensityCell,
     MapDetectionOut,
     MapDetectionPage,
+    MapLabelCreate,
+    MapLabelList,
+    MapLabelOut,
+    MapLabelSeed,
+    MapLabelSeedResult,
+    MapLabelUpdate,
     MapRunCreate,
     MapRunEstimate,
     MapRunList,
     MapRunOut,
     MapRunWithJob,
+    MapScoreOut,
+    MapZoneCreate,
+    MapZoneList,
+    MapZoneOut,
+    MapZoneUpdate,
 )
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.tiles import TILE_CACHE, render_tile
@@ -156,17 +168,97 @@ def get_map_density(
     return MapDensity(cell_size=cell, cells=[MapDensityCell(**r) for r in rows])
 
 
+@router.get("/map-runs/{runId}/score", response_model=MapScoreOut)
+def get_map_run_score(
+    runId: str,  # noqa: N803
+    iou: float = Query(0.5, ge=0.05, le=0.95),
+    handle: ProjectHandle = Depends(get_project),
+) -> MapScoreOut:
+    return MapScoreOut(**service.score_run(handle, runId, iou))
+
+
+@router.get("/maps/{mapId}/zones", response_model=MapZoneList)
+def list_map_zones(mapId: str, handle: ProjectHandle = Depends(get_project)) -> MapZoneList:  # noqa: N803
+    return MapZoneList(items=[MapZoneOut.from_row(z) for z in service.list_zones(handle, mapId)])
+
+
+@router.post("/maps/{mapId}/zones", response_model=MapZoneOut, status_code=201)
+def create_map_zone(
+    mapId: str, body: MapZoneCreate, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> MapZoneOut:  # noqa: N803
+    row = service.create_zone(handle, mapId, body)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return MapZoneOut.from_row(row)
+
+
+@router.patch("/maps/{mapId}/zones/{zoneId}", response_model=MapZoneOut)
+def update_map_zone(
+    mapId: str,
+    zoneId: str,
+    body: MapZoneUpdate,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> MapZoneOut:  # noqa: N803
+    row = service.update_zone(handle, mapId, zoneId, body)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return MapZoneOut.from_row(row)
+
+
+@router.delete("/maps/{mapId}/zones/{zoneId}", status_code=204)
+def delete_map_zone(
+    mapId: str, zoneId: str, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> Response:  # noqa: N803
+    service.delete_zone(handle, mapId, zoneId)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return Response(status_code=204)
+
+
+@router.get("/maps/{mapId}/labels", response_model=MapLabelList)
+def list_map_labels(mapId: str, handle: ProjectHandle = Depends(get_project)) -> MapLabelList:  # noqa: N803
+    return MapLabelList(items=[MapLabelOut.from_row(r) for r in service.list_labels(handle, mapId)])
+
+
+@router.post("/maps/{mapId}/labels", response_model=MapLabelOut, status_code=201)
+def create_map_label(
+    mapId: str, body: MapLabelCreate, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> MapLabelOut:  # noqa: N803
+    row = service.create_label(handle, mapId, body)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return MapLabelOut.from_row(row)
+
+
+@router.post("/maps/{mapId}/labels/seed", response_model=MapLabelSeedResult)
+def seed_map_labels(
+    mapId: str, body: MapLabelSeed, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> MapLabelSeedResult:  # noqa: N803
+    created = service.seed_labels(handle, mapId, body)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return MapLabelSeedResult(created=created)
+
+
+@router.patch("/maps/{mapId}/labels/{labelId}", response_model=MapLabelOut)
+def update_map_label(
+    mapId: str,
+    labelId: str,
+    body: MapLabelUpdate,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> MapLabelOut:  # noqa: N803
+    row = service.update_label(handle, mapId, labelId, body)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return MapLabelOut.from_row(row)
+
+
+@router.delete("/maps/{mapId}/labels/{labelId}", status_code=204)
+def delete_map_label(
+    mapId: str, labelId: str, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> Response:  # noqa: N803
+    service.delete_label(handle, mapId, labelId)
+    publish_map_labels_changed_event(request, handle, mapId)
+    return Response(status_code=204)
+
+
 STUBS: list[tuple[str, str, str]] = [
-    ("GET", "/map-runs/{runId}/score", "getMapRunScore"),
-    ("GET", "/maps/{mapId}/zones", "listMapZones"),
-    ("POST", "/maps/{mapId}/zones", "createMapZone"),
-    ("PATCH", "/maps/{mapId}/zones/{zoneId}", "updateMapZone"),
-    ("DELETE", "/maps/{mapId}/zones/{zoneId}", "deleteMapZone"),
-    ("GET", "/maps/{mapId}/labels", "listMapLabels"),
-    ("POST", "/maps/{mapId}/labels", "createMapLabel"),
-    ("POST", "/maps/{mapId}/labels/seed", "seedMapLabels"),
-    ("PATCH", "/maps/{mapId}/labels/{labelId}", "updateMapLabel"),
-    ("DELETE", "/maps/{mapId}/labels/{labelId}", "deleteMapLabel"),
     ("POST", "/map-exports", "createMapExport"),
 ]
 

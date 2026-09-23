@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import threading
+from collections import OrderedDict
 from collections.abc import Callable
 from pathlib import Path
 
@@ -11,14 +12,22 @@ import rasterio
 from sqlalchemy import Integer, cast, delete, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import GeoMap, Job, MapDetection, MapRun
+from app.db.models import GeoMap, Job, MapDetection, MapLabel, MapRun, MapZone
 from app.errors import AppError, not_found
 
 # Reused rather than duplicated: `_validate`/`_cost_per_request` are duck-typed on `kind`,
 # `model_id`, `provider`, `query` and `conf`, which `MapRunCreate` carries under the same names.
-from app.inference.service import _cost_per_request, _validate
-from app.maps import raster
-from app.maps.schemas import GeoMapCreate, MapRunCreate
+from app.inference.service import _cost_per_request, _validate, class_ids_by_name
+from app.maps import raster, scoring
+from app.maps.schemas import (
+    GeoMapCreate,
+    MapLabelCreate,
+    MapLabelSeed,
+    MapLabelUpdate,
+    MapRunCreate,
+    MapZoneCreate,
+    MapZoneUpdate,
+)
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.tiles import TILE_CACHE
 from app.maps.windows import SKIP_MASKED, gsd_scale, masked_fraction, plan_windows
@@ -273,3 +282,184 @@ def density(
             q = q.where(MapDetection.confidence >= min_conf)
         rows = s.execute(q.group_by(gx, gy, MapDetection.class_id)).all()
     return cell, [{"gx": a, "gy": b, "class_id": c, "count": n} for a, b, c, n in rows]
+
+
+MAX_LABELS = 20000
+_SCORE_CACHE: OrderedDict[tuple, dict] = OrderedDict()
+_SCORE_CACHE_ITEMS = 64
+_SCORE_LOCK = threading.Lock()
+
+
+def _check_polygon(polygon: list[list[float]]) -> list[list[float]]:
+    if any(len(p) != 2 for p in polygon):
+        raise AppError("validation_error", "each polygon point is [x, y]", 422)
+    return [[float(x), float(y)] for x, y in polygon]
+
+
+def _zone(s: Session, map_id: str, zone_id: str) -> MapZone:
+    row = s.get(MapZone, zone_id)
+    if row is None or row.map_id != map_id:
+        raise not_found("zone", zone_id)
+    return row
+
+
+def list_zones(handle: ProjectHandle, map_id: str) -> list[MapZone]:
+    with handle.session() as s:
+        _get(s, map_id)
+        rows = list(
+            s.execute(select(MapZone).where(MapZone.map_id == map_id).order_by(MapZone.created_at)).scalars()
+        )
+        for r in rows:
+            s.expunge(r)
+    return rows
+
+
+def create_zone(handle: ProjectHandle, map_id: str, body: MapZoneCreate) -> MapZone:
+    with handle.session() as s:
+        _get(s, map_id)
+        row = MapZone(map_id=map_id, name=body.name, polygon=_check_polygon(body.polygon))
+        s.add(row)
+        bump_labels_version(s, map_id)
+        s.flush()
+        s.expunge(row)
+    return row
+
+
+def update_zone(handle: ProjectHandle, map_id: str, zone_id: str, body: MapZoneUpdate) -> MapZone:
+    with handle.session() as s:
+        row = _zone(s, map_id, zone_id)
+        if body.name is not None:
+            row.name = body.name
+        if body.polygon is not None:
+            row.polygon = _check_polygon(body.polygon)
+        bump_labels_version(s, map_id)
+        s.flush()
+        s.expunge(row)
+    return row
+
+
+def delete_zone(handle: ProjectHandle, map_id: str, zone_id: str) -> None:
+    with handle.session() as s:
+        s.delete(_zone(s, map_id, zone_id))
+        bump_labels_version(s, map_id)
+
+
+def _label(s: Session, map_id: str, label_id: str) -> MapLabel:
+    row = s.get(MapLabel, label_id)
+    if row is None or row.map_id != map_id:
+        raise not_found("label", label_id)
+    return row
+
+
+def _check_box(s: Session, handle: ProjectHandle, gmap: GeoMap, class_id: str, x, y, w, h) -> None:
+    if class_id not in set(class_ids_by_name(handle, s).values()):
+        raise AppError("validation_error", f"unknown class {class_id}", 422)
+    if x + w > gmap.width or y + h > gmap.height:
+        raise AppError("validation_error", "the box leaves the map", 422)
+
+
+def list_labels(handle: ProjectHandle, map_id: str) -> list[MapLabel]:
+    with handle.session() as s:
+        _get(s, map_id)
+        rows = list(s.execute(select(MapLabel).where(MapLabel.map_id == map_id).limit(MAX_LABELS)).scalars())
+        for r in rows:
+            s.expunge(r)
+    return rows
+
+
+def create_label(handle: ProjectHandle, map_id: str, body: MapLabelCreate) -> MapLabel:
+    with handle.session() as s:
+        gmap = _get(s, map_id)
+        _check_box(s, handle, gmap, body.class_id, body.x, body.y, body.w, body.h)
+        row = MapLabel(
+            map_id=map_id, class_id=body.class_id, x=body.x, y=body.y, w=body.w, h=body.h, source="manual"
+        )
+        s.add(row)
+        bump_labels_version(s, map_id)
+        s.flush()
+        s.expunge(row)
+    return row
+
+
+def update_label(handle: ProjectHandle, map_id: str, label_id: str, body: MapLabelUpdate) -> MapLabel:
+    with handle.session() as s:
+        gmap = _get(s, map_id)
+        row = _label(s, map_id, label_id)
+        for field, value in body.model_dump(exclude_none=True).items():
+            setattr(row, field, value)
+        _check_box(s, handle, gmap, row.class_id, row.x, row.y, row.w, row.h)
+        row.source = "manual"  # a person looked at it
+        bump_labels_version(s, map_id)
+        s.flush()
+        s.expunge(row)
+    return row
+
+
+def delete_label(handle: ProjectHandle, map_id: str, label_id: str) -> None:
+    with handle.session() as s:
+        s.delete(_label(s, map_id, label_id))
+        bump_labels_version(s, map_id)
+
+
+def seed_labels(handle: ProjectHandle, map_id: str, body: MapLabelSeed) -> int:
+    with handle.session() as s:
+        _get(s, map_id)
+        zone = _zone(s, map_id, body.zone_id)
+        run = _run(s, body.run_id)
+        if run.map_id != map_id:
+            raise AppError("validation_error", "the run belongs to another map", 422)
+        area = [scoring.Zone(zone.id, [tuple(p) for p in zone.polygon])]
+        rows = []
+        dets = s.execute(
+            select(MapDetection).where(
+                MapDetection.run_id == run.id, MapDetection.confidence >= body.min_conf
+            )
+        ).scalars()
+        for d in dets:
+            box = scoring.ScoreBox(d.id, d.class_id, d.x, d.y, d.w, d.h)
+            if scoring.zone_of(box, area):
+                rows.append(
+                    MapLabel(
+                        map_id=map_id,
+                        class_id=d.class_id,
+                        x=d.x,
+                        y=d.y,
+                        w=d.w,
+                        h=d.h,
+                        source=f"from_run:{run.id}",
+                    )
+                )
+        s.add_all(rows)
+        bump_labels_version(s, map_id)
+    return len(rows)
+
+
+def score_run(handle: ProjectHandle, run_id: str, iou: float) -> dict:
+    with handle.session() as s:
+        run = _run(s, run_id)
+        gmap = _get(s, run.map_id)
+        key = (handle.id, run_id, gmap.labels_version, round(iou, 4), run.job_id)
+        with _SCORE_LOCK:
+            if key in _SCORE_CACHE:
+                return _SCORE_CACHE[key]
+        zones = [
+            scoring.Zone(z.id, [tuple(p) for p in z.polygon])
+            for z in s.execute(select(MapZone).where(MapZone.map_id == gmap.id)).scalars()
+        ]
+        dets = [
+            scoring.ScoreBox(d.id, d.class_id, d.x, d.y, d.w, d.h, d.confidence)
+            for d in s.execute(
+                select(MapDetection).where(MapDetection.run_id == run_id, MapDetection.confidence >= run.conf)
+            ).scalars()
+        ]
+        labels = [
+            scoring.ScoreBox(lab.id, lab.class_id, lab.x, lab.y, lab.w, lab.h)
+            for lab in s.execute(select(MapLabel).where(MapLabel.map_id == gmap.id)).scalars()
+        ]
+        version = gmap.labels_version
+    result = {"run_id": run_id, "labels_version": version, **scoring.score(dets, labels, zones, iou)}
+    with _SCORE_LOCK:
+        _SCORE_CACHE[key] = result
+        while len(_SCORE_CACHE) > _SCORE_CACHE_ITEMS:
+            _SCORE_CACHE.popitem(last=False)
+    return result

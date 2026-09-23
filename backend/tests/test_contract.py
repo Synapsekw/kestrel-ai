@@ -52,16 +52,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 # Operations still served by 501 stubs: the GeoTIFF maps plan lands them task by task, and each
 # task removes its operation ids here. Anything else answering 501 fails `test_responses_conform`.
 EXPECTED_STUBS: set[str] = {
-    "getMapRunScore",
-    "listMapZones",
-    "createMapZone",
-    "updateMapZone",
-    "deleteMapZone",
-    "listMapLabels",
-    "createMapLabel",
-    "seedMapLabels",
-    "updateMapLabel",
-    "deleteMapLabel",
     "createMapExport",
 }
 

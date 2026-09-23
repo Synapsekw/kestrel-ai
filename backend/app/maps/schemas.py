@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.db.models import GeoMap, MapDetection, MapRun
+from app.db.models import GeoMap, MapDetection, MapLabel, MapRun, MapZone
 from app.inference.schemas import QueryRunKind
 from app.jobs.schemas import JobOut
 from app.maps.tiles import TILE, max_zoom
@@ -188,3 +188,132 @@ class MapDensityCell(BaseModel):
 class MapDensity(BaseModel):
     cell_size: float
     cells: list[MapDensityCell]
+
+
+Point = list[float]
+
+
+class MapZoneOut(BaseModel):
+    id: str
+    map_id: str
+    name: str
+    polygon: list[Point]
+
+    @classmethod
+    def from_row(cls, r: MapZone) -> MapZoneOut:
+        return cls(id=r.id, map_id=r.map_id, name=r.name, polygon=r.polygon)
+
+
+class MapZoneCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    polygon: list[Point] = Field(min_length=3, max_length=1000)
+
+
+class MapZoneUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    polygon: list[Point] | None = Field(default=None, min_length=3, max_length=1000)
+
+
+class MapZoneList(BaseModel):
+    items: list[MapZoneOut]
+
+
+class MapLabelOut(BaseModel):
+    id: str
+    map_id: str
+    class_id: str
+    x: float
+    y: float
+    w: float
+    h: float
+    angle: float | None
+    source: str
+    created_at: datetime
+    updated_at: datetime
+
+    @classmethod
+    def from_row(cls, r: MapLabel) -> MapLabelOut:
+        return cls(
+            id=r.id,
+            map_id=r.map_id,
+            class_id=r.class_id,
+            x=r.x,
+            y=r.y,
+            w=r.w,
+            h=r.h,
+            angle=r.angle,
+            source=r.source,
+            created_at=r.created_at,
+            updated_at=r.updated_at,
+        )
+
+
+class MapLabelCreate(BaseModel):
+    class_id: str
+    x: float = Field(ge=0)
+    y: float = Field(ge=0)
+    w: float = Field(gt=0)
+    h: float = Field(gt=0)
+
+
+class MapLabelUpdate(BaseModel):
+    class_id: str | None = None
+    x: float | None = Field(default=None, ge=0)
+    y: float | None = Field(default=None, ge=0)
+    w: float | None = Field(default=None, gt=0)
+    h: float | None = Field(default=None, gt=0)
+
+
+class MapLabelList(BaseModel):
+    items: list[MapLabelOut]
+
+
+class MapLabelSeed(BaseModel):
+    run_id: str
+    zone_id: str
+    min_conf: float = Field(default=0.25, ge=0, le=1)
+
+
+class MapLabelSeedResult(BaseModel):
+    created: int
+
+
+class MapScoreRow(BaseModel):
+    class_id: str | None
+    tp: int
+    fp: int
+    fn: int
+    precision: float | None
+    recall: float | None
+    f1: float | None
+    predicted: int
+    actual: int
+    count_error: int
+    count_error_pct: float | None
+
+
+class MapScoreZoneRow(MapScoreRow):
+    zone_id: str
+
+
+class MapScoreMatch(BaseModel):
+    kind: Literal["detection", "label"]
+    id: str
+    match: Literal["tp", "fp", "fn"]
+    zone_id: str
+    class_id: str
+    x: float
+    y: float
+    w: float
+    h: float
+
+
+class MapScoreOut(BaseModel):
+    run_id: str
+    iou: float
+    labels_version: int
+    has_zones: bool
+    overall: MapScoreRow
+    per_class: list[MapScoreRow]
+    per_zone: list[MapScoreZoneRow]
+    matches: list[MapScoreMatch]
