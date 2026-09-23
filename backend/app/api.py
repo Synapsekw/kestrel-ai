@@ -15,6 +15,7 @@ from app.project_agent.router import router as project_agent_router
 from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
+from app.stubs import add_stubs
 from app.training.starter_router import router as starter_router
 
 log = logging.getLogger(__name__)
@@ -26,7 +27,6 @@ for r in (
     projects_router,
     library_router,
     datasets_router,
-    train_router,
     starter_router,
     providers_router,
     inference_router,
@@ -37,8 +37,25 @@ for r in (
 # Project routers that serve both kinds of project and declare no kind in their own module.
 # Every route under /projects/{projectId} must declare its kinds (spec 2026-09-23 section 5.2);
 # tests/test_project_kinds.py walks the routes and fails on one that does not.
-for r in (jobs_router, exports_router, training_router, starter_project_router):
+for r in (jobs_router, exports_router):
     api_router.include_router(r, dependencies=[Depends(require_kind(ANY_KIND))])
+
+# Training writes into a train project's dataset and weights: a detect project has none.
+api_router.include_router(train_router, dependencies=[Depends(require_kind(("train",)))])
+
+# Contract operations whose unit (plan 2026-09-23, unit BM) has not landed yet: routed as 501
+# stubs so the contract stays fully routed. BM replaces each one and drops it from here and from
+# EXPECTED_STUBS in tests/test_contract.py. All are training-only (plan, unit BK route table).
+TRAIN_ONLY = [Depends(require_kind(("train",)))]
+_adoption_stubs = APIRouter(prefix="/projects/{projectId}", tags=["library"])
+add_stubs(
+    _adoption_stubs,
+    [
+        ("GET", "/adoption", "getModelAdoption"),
+        ("POST", "/adoption/retry", "retryModelAdoption"),
+    ],
+)
+api_router.include_router(_adoption_stubs, dependencies=TRAIN_ONLY)
 
 # The maps router's import chain pulls in `rasterio` at module scope (router -> service/tiles ->
 # raster, the job modules). A broken GDAL in the frozen bundle must not stop the whole backend from
@@ -50,5 +67,9 @@ try:
     from app.maps.router import router as maps_router
 
     api_router.include_router(maps_router)
+    # A map endpoint like the rest: it is dropped with them when the maps router cannot load.
+    _move_stub = APIRouter(prefix="/projects/{projectId}", tags=["maps"])
+    add_stubs(_move_stub, [("POST", "/maps/{mapId}/move", "moveMapToProject")])
+    api_router.include_router(_move_stub, dependencies=TRAIN_ONLY)
 except Exception:
     log.exception("maps router failed to load; map endpoints will be unavailable")
