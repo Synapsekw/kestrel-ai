@@ -1,5 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { classMapping, formatDate, formatLocalDate, formatMetric, originLabel, taskLabel } from "./modelLabels";
+import {
+  classMapping,
+  formatDate,
+  formatLocalDate,
+  formatMetric,
+  originLabel,
+  taskLabel,
+} from "./modelLabels";
 
 describe("model labels", () => {
   it("formats metrics as percentages and dates as UTC minutes", () => {

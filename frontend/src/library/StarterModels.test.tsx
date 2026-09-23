@@ -29,7 +29,12 @@ describe("StarterModels", () => {
   it("selects another family and starts a library job for just the chosen model", async () => {
     const { api, requests } = fakeClient([
       { method: "GET", path: /\/starter-models$/, body: { items: starters, next_cursor: null } },
-      { method: "POST", path: /\/library\/starters\/[^/]+\/acquire$/, status: 202, body: { job: starterJob } },
+      {
+        method: "POST",
+        path: /\/library\/starters\/[^/]+\/acquire$/,
+        status: 202,
+        body: { job: starterJob },
+      },
     ]);
     const onStarted = vi.fn();
     renderWithProviders(<StarterModels existingNames={[]} onStarted={onStarted} />, { api });

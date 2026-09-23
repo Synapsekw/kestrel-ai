@@ -36,7 +36,10 @@ export function fetchLibraryStatus(api: ApiClient): Promise<LibraryStatus> {
 }
 
 /** Every library model, newest first as the backend orders them. */
-export function fetchLibraryModels(api: ApiClient, query: { task?: ModelTask } = {}): Promise<LibraryModel[]> {
+export function fetchLibraryModels(
+  api: ApiClient,
+  query: { task?: ModelTask } = {},
+): Promise<LibraryModel[]> {
   return collectPages((cursor) =>
     unwrap(
       api.GET("/api/v1/library/models", {
@@ -61,7 +64,9 @@ export function updateLibraryModel(
   modelId: string,
   patch: LibraryModelPatch,
 ): Promise<LibraryModel> {
-  return unwrap(api.PATCH("/api/v1/library/models/{modelId}", { params: { path: { modelId } }, body: patch }));
+  return unwrap(
+    api.PATCH("/api/v1/library/models/{modelId}", { params: { path: { modelId } }, body: patch }),
+  );
 }
 
 export async function deleteLibraryModel(api: ApiClient, modelId: string): Promise<void> {
@@ -81,7 +86,7 @@ export async function exportLibraryModel(api: ApiClient, modelId: string, body: 
 }
 
 /** Downloads the starter weights if needed and adds them to the library in a background job. */
-export async function acquireStarter(api: ApiClient, key: StarterModelKey | string, name?: string): Promise<Job> {
+export async function acquireStarter(api: ApiClient, key: StarterModelKey, name?: string): Promise<Job> {
   const r = await unwrap(
     api.POST("/api/v1/library/starters/{key}/acquire", {
       params: { path: { key } },
@@ -93,7 +98,9 @@ export async function acquireStarter(api: ApiClient, key: StarterModelKey | stri
 
 /** One page of library jobs, newest first. */
 export async function fetchLibraryJobs(api: ApiClient, query: { state?: JobState } = {}): Promise<Job[]> {
-  const r = await unwrap(api.GET("/api/v1/library/jobs", { params: { query: { limit: JOB_LIMIT, ...query } } }));
+  const r = await unwrap(
+    api.GET("/api/v1/library/jobs", { params: { query: { limit: JOB_LIMIT, ...query } } }),
+  );
   return r.items;
 }
 
@@ -106,7 +113,12 @@ export function cancelLibraryJob(api: ApiClient, jobId: string): Promise<Job> {
 }
 
 /** For `<img src>`: the token goes in the query because images cannot send headers. */
-export function libraryArtifactUrl(baseUrl: string, token: string, modelId: string, artifact: Artifact): string {
+export function libraryArtifactUrl(
+  baseUrl: string,
+  token: string,
+  modelId: string,
+  artifact: Artifact,
+): string {
   const base = baseUrl.replace(/\/$/, "");
   const q = new URLSearchParams({ token });
   return `${base}/api/v1/library/models/${modelId}/artifacts/${artifact}?${q}`;
@@ -125,6 +137,8 @@ export function fetchResultsCsv(api: ApiClient, modelId: string): Promise<string
 
 /** 202 with the training job; the trained model is registered in the library when it succeeds. */
 export async function trainModel(api: ApiClient, projectId: string, body: TrainRequest): Promise<Job> {
-  const r = await unwrap(api.POST("/api/v1/projects/{projectId}/train", { params: { path: { projectId } }, body }));
+  const r = await unwrap(
+    api.POST("/api/v1/projects/{projectId}/train", { params: { path: { projectId } }, body }),
+  );
   return r.job;
 }

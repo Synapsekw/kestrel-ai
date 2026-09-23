@@ -46,7 +46,11 @@ describe("jobs api", () => {
     const { api, requests } = fakeClient([
       { method: "GET", path: /\/library\/jobs\/[^/]+\/log$/, body: exampleJobLog },
       { method: "GET", path: /\/library\/jobs\/[^/]+$/, body: { ...runningJob, project_id: "library" } },
-      { method: "POST", path: /\/library\/jobs\/[^/]+\/cancel$/, body: { ...runningJob, state: "cancelled" } },
+      {
+        method: "POST",
+        path: /\/library\/jobs\/[^/]+\/cancel$/,
+        body: { ...runningJob, state: "cancelled" },
+      },
     ]);
     expect((await fetchJob(api, "library", JOB_ID)).project_id).toBe("library");
     expect((await cancelJob(api, "library", JOB_ID)).state).toBe("cancelled");

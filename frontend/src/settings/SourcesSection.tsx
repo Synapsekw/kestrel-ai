@@ -5,7 +5,7 @@ import { isNotImplemented, messageOf } from "@/api/errors";
 import { createSource, fetchAllSources, fetchSourceStats } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { formatDate, formatLocalDate } from "@/models/modelLabels";
+import { formatDate, formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Skeleton } from "@/ui";
 

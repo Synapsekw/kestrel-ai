@@ -41,7 +41,12 @@ describe("useLibraryModels", () => {
     await waitFor(() => expect(result.current.unavailable).toBe(true));
     expect(result.current.error).toBeNull();
     const broken = fakeClient([
-      { method: "GET", path: /\/library\/models$/, status: 500, body: errorBody("internal_error", "disk full") },
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        status: 500,
+        body: errorBody("internal_error", "disk full"),
+      },
     ]);
     const bad = renderHook(() => useLibraryModels(), { wrapper: wrapperFor(broken.api) });
     await waitFor(() => expect(bad.result.current.error).toBe("disk full"));

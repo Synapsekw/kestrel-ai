@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
-import { exampleStats, exampleTrainedModel, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
+import { exampleStats, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { ExportScreen } from "./ExportScreen";
@@ -8,7 +8,6 @@ import { ExportScreen } from "./ExportScreen";
 function renderScreen(routes: Parameters<typeof fakeClient>[0]) {
   const { api, requests } = fakeClient([
     { method: "GET", path: /\/stats$/, body: exampleStats },
-    { method: "GET", path: /\/models$/, body: { items: [exampleTrainedModel], next_cursor: null } },
     { method: "GET", path: /\/jobs$/, body: { items: [], next_cursor: null } },
     ...routes,
   ]);
@@ -23,7 +22,7 @@ function renderScreen(routes: Parameters<typeof fakeClient>[0]) {
 describe("ExportScreen", () => {
   beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
 
-  it("shows the Export heading, the results form and the model export section", async () => {
+  it("shows the Export heading, the results form and points model exports to the library", async () => {
     renderScreen([]);
     expect(screen.getByRole("heading", { name: "Export" })).toBeInTheDocument();
     expect(
@@ -32,6 +31,7 @@ describe("ExportScreen", () => {
     expect(screen.getByRole("heading", { name: "Past exports" })).toBeInTheDocument();
     expect(screen.getByText("No exports yet")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Model for other applications" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open the library" })).toHaveAttribute("href", "/library");
   });
 
   it("starts an export from the form and it appears under Past exports (via the shared jobs store)", async () => {

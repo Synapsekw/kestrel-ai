@@ -134,10 +134,20 @@ it("links a downloaded starter to the model and labels it clearly", () => {
 
 it("titles and links library jobs", () => {
   const lib = { ...runningJob, project_id: "library", state: "succeeded" as const };
-  const imported = { ...lib, type: "library_import" as const, params: { name: "client-x" }, result: { model_id: "m2" } };
+  const imported = {
+    ...lib,
+    type: "library_import" as const,
+    params: { name: "client-x" },
+    result: { model_id: "m2" },
+  };
   expect(jobTitle(imported)).toBe("Model import: client-x");
   expect(resultTarget(imported, "library")).toEqual({ label: "Open model", to: "/library?model=m2" });
-  const starter = { ...lib, type: "library_starter" as const, params: { key: "yolo11n" }, result: { model_id: "m3" } };
+  const starter = {
+    ...lib,
+    type: "library_starter" as const,
+    params: { key: "yolo11n" },
+    result: { model_id: "m3" },
+  };
   expect(jobTitle(starter)).toBe("Model download: yolo11n");
   expect(resultTarget(starter, "library")).toEqual({ label: "Open model", to: "/library?model=m3" });
   const exported = { ...lib, type: "library_export" as const, params: { model_id: "m4", format: "onnx" } };

@@ -35,7 +35,9 @@ describe("ModelArtifacts", () => {
       fetch: async () => new Response("", { status: 404 }),
     });
     renderWithProviders(<ModelArtifacts model={exampleModel} />, { api });
-    expect(screen.getByText("No training charts: this model was not trained in the app.")).toBeInTheDocument();
+    expect(
+      screen.getByText("No training charts: this model was not trained in the app."),
+    ).toBeInTheDocument();
     expect(screen.queryByTestId("training-curve")).not.toBeInTheDocument();
   });
 });

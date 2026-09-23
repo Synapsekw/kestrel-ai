@@ -2,7 +2,7 @@ import type { Job } from "@contract/client";
 import { RevealButton } from "@/exports/RevealButton";
 import { JobCard } from "@/jobs/JobCard";
 import { resultsExportFiles, resultsExportFolder, resultsExportSummary, stateLabel } from "@/jobs/jobLabels";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob } from "@/store/jobs";
 import { Alert, EmptyState, Pill, SkeletonRows } from "@/ui";
 

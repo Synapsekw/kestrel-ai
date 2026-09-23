@@ -4,7 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { createMapRun, estimateMapRun, type MapRunEstimate } from "@/api/maps";
 import { useProviders } from "@/api/providers";
-import { useModels } from "@/models/useModels";
+import { useLibraryModels } from "@/library/useLibraryModels";
 import { useJobsStore } from "@/store/jobs";
 import { Button, Dialog, Field, Input, Segmented, Select } from "@/ui";
 import { DEFAULT_MAP_RUN, defaultTargetGsd, validateRunForm } from "./runModel";
@@ -25,7 +25,7 @@ export function NewRunDialog({
   onStarted: (run: MapRun) => void;
 }) {
   const api = useApi();
-  const registry = useModels(projectId);
+  const registry = useLibraryModels();
   const providers = useProviders();
   const [kind, setKind] = useState<"local_model" | "cloud_provider">("local_model");
   const [modelId, setModelId] = useState("");
@@ -37,7 +37,9 @@ export function NewRunDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const effectiveModel = modelId || registry.models[0]?.id || "";
+  const effectiveModel =
+    modelId || registry.models.find((m) => m.state === "ready")?.id || registry.models[0]?.id || "";
+  const chosenModel = registry.models.find((m) => m.id === effectiveModel);
   // Re-prefills the GSD field when the detector or model changes, without fighting a value the
   // operator is mid-typing: a render-phase state adjustment (React's "reset state on a changed key"
   // pattern), not an effect, so it only fires on an actual key change.
@@ -45,7 +47,9 @@ export function NewRunDialog({
   const [gsdKeySeen, setGsdKeySeen] = useState("");
   if (gsdKey !== gsdKeySeen) {
     setGsdKeySeen(gsdKey);
-    const d = defaultTargetGsd(runs, kind === "local_model" ? effectiveModel : null, geoMap.gsd_cm);
+    // Last run with this model, else the ground size the model was trained at, else the map's own.
+    const fallback = (kind === "local_model" ? chosenModel?.train_gsd_cm : null) ?? geoMap.gsd_cm;
+    const d = defaultTargetGsd(runs, kind === "local_model" ? effectiveModel : null, fallback);
     setGsd(d ? String(d) : "");
   }
 
@@ -120,11 +124,14 @@ export function NewRunDialog({
         {kind === "local_model" ? (
           <Field label="Model" htmlFor="run-model">
             <Select id="run-model" value={effectiveModel} onChange={(e) => setModelId(e.target.value)}>
-              {registry.models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}
-                </option>
-              ))}
+              <optgroup label="Models in your library">
+                {registry.models.map((m) => (
+                  <option key={m.id} value={m.id} disabled={m.state === "unavailable"}>
+                    {m.name}
+                    {m.state === "unavailable" ? " (file missing)" : ""}
+                  </option>
+                ))}
+              </optgroup>
             </Select>
           </Field>
         ) : (

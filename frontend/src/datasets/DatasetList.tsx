@@ -1,5 +1,5 @@
 import type { Dataset, Job } from "@contract/client";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Button, Pill, cx } from "@/ui";
 

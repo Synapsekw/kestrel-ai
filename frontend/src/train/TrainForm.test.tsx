@@ -173,9 +173,9 @@ describe("TrainForm", () => {
       />,
       { api },
     );
-    expect(screen.queryByText(/Any registry model, including imported COCO weights/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Any model in your library, including starter models/)).not.toBeInTheDocument();
     const link = screen.getByRole("link", { name: "Add a starter model" });
-    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/models`);
+    expect(link).toHaveAttribute("href", "/library");
   });
 
   it("shows the usual base model help text once the registry has a model", () => {
@@ -194,7 +194,7 @@ describe("TrainForm", () => {
       />,
       { api },
     );
-    expect(screen.getByText(/Any registry model, including imported COCO weights/)).toBeInTheDocument();
+    expect(screen.getByText(/Any model in your library, including starter models/)).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
   });
 

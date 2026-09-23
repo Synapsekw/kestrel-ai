@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { exampleDataset, runningJob } from "@/test/fixtures";
 import { useJobsStore } from "@/store/jobs";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { DatasetList } from "./DatasetList";
 
 describe("DatasetList", () => {

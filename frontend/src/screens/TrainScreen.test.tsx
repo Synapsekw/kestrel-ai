@@ -15,7 +15,7 @@ import { TrainScreen } from "./TrainScreen";
 
 const lists = [
   { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset], next_cursor: null } },
-  { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
+  { method: "GET", path: /\/library\/models$/, body: { items: [exampleModel], next_cursor: null } },
 ];
 
 describe("TrainScreen", () => {
@@ -26,7 +26,7 @@ describe("TrainScreen", () => {
       ...lists,
       {
         method: "POST",
-        path: /\/models\/train$/,
+        path: /\/projects\/[^/]+\/train$/,
         status: 202,
         body: { job: { ...runningJob, type: "train" } },
       },
@@ -43,9 +43,10 @@ describe("TrainScreen", () => {
     fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "3" } });
     fireEvent.click(screen.getByRole("button", { name: "Start training" }));
     await waitFor(() => expect(screen.getByTestId("train-progress")).toBeInTheDocument());
+    expect(requests.find((r) => r.url.startsWith("/api/v1/library/models"))?.url).toContain("task=detect");
     const post = requests.find((r) => r.method === "POST");
     expect(post).toMatchObject({
-      url: `/api/v1/projects/${PROJECT_ID}/models/train`,
+      url: `/api/v1/projects/${PROJECT_ID}/train`,
       body: {
         name: "v1-yolo11m-coco",
         dataset_id: exampleDataset.id,
@@ -69,7 +70,7 @@ describe("TrainScreen", () => {
     const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
     const { api } = fakeClient([
       { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset, older], next_cursor: null } },
-      { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
+      { method: "GET", path: /\/library\/models$/, body: { items: [exampleModel], next_cursor: null } },
     ]);
     renderWithProviders(<TrainScreen />, {
       api,
@@ -84,7 +85,7 @@ describe("TrainScreen", () => {
       ...lists,
       {
         method: "POST",
-        path: /\/models\/train$/,
+        path: /\/projects\/[^/]+\/train$/,
         status: 501,
         body: errorBody("not_implemented", "S3 later"),
       },

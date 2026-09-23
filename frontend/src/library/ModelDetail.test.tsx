@@ -24,10 +24,7 @@ function renderDetail(
     onJobStarted: (j: typeof runningJob) => void;
   }> = {},
 ) {
-  const fake = fakeClient([
-    { method: "GET", path: /\/artifacts\//, raw: true, body: "" },
-    ...routes,
-  ]);
+  const fake = fakeClient([{ method: "GET", path: /\/artifacts\//, raw: true, body: "" }, ...routes]);
   renderWithProviders(
     <ModelDetail
       model={model}
@@ -141,7 +138,12 @@ describe("ModelDetail", () => {
 
   it("shows the reason when the usage cannot be checked", async () => {
     renderDetail(exampleTrainedModel, [
-      { method: "GET", path: /\/usage$/, status: 503, body: errorBody("library_unavailable", "library is down") },
+      {
+        method: "GET",
+        path: /\/usage$/,
+        status: 503,
+        body: errorBody("library_unavailable", "library is down"),
+      },
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Delete model" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("library is down");

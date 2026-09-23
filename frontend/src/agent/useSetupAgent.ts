@@ -223,8 +223,7 @@ export function useSetupAgent(open: boolean) {
     });
   const acquire = () =>
     act("starter", async () => {
-      if (project && plan)
-        remember("starter", await acquireStarter(api, plan.starter_model_key));
+      if (project && plan) remember("starter", await acquireStarter(api, plan.starter_model_key));
     });
   const importImages = () =>
     act("import", async () => {

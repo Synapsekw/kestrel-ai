@@ -21,7 +21,7 @@ import { QueryScreen } from "./QueryScreen";
 
 const base = [
   { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
-  { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
+  { method: "GET", path: /\/library\/models$/, body: { items: [exampleModel], next_cursor: null } },
   { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
   { method: "GET", path: /\/images$/, body: exampleImagePage },
   { method: "GET", path: /\/query-runs\/[^/]+$/, body: exampleQueryRun },
@@ -191,13 +191,13 @@ describe("QueryScreen", () => {
       expect(screen.getByRole("note")).toHaveTextContent("Detection runs are not available yet"),
     );
     expect(screen.getByRole("heading", { name: "Detect" })).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Add a model to the library" })).not.toBeInTheDocument();
   });
 
-  it("points to a starter model once the registry has loaded and is empty, not before", async () => {
+  it("points to the library once it has loaded and is empty, not before", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
-      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/library\/models$/, body: { items: [], next_cursor: null } },
       { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
       { method: "GET", path: /\/images$/, body: exampleImagePage },
       { method: "GET", path: /\/query-runs$/, body: { items: [], next_cursor: null } },
@@ -208,29 +208,39 @@ describe("QueryScreen", () => {
       path: "/p/:projectId/query",
     });
     // Synchronous: the models request has not resolved yet, so the hint must not appear early.
-    expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
-    const link = await screen.findByRole("link", { name: "Add a starter model" });
-    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/models`);
+    expect(screen.queryByRole("link", { name: "Add a model to the library" })).not.toBeInTheDocument();
+    const link = await screen.findByRole("link", { name: "Add a model to the library" });
+    expect(link).toHaveAttribute("href", "/library");
   });
 
-  it("says so when the model registry is unavailable or failed, and offers no starter hint", async () => {
-    const withoutModels = base.filter((r) => !r.path.test("/api/v1/projects/p/models"));
+  it("says so when the model library is unavailable or failed, and offers no library hint", async () => {
+    const withoutModels = base.filter((r) => !r.path.test("/api/v1/library/models"));
     const notYet = fakeClient([
       ...withoutModels,
-      { method: "GET", path: /\/models$/, status: 501, body: errorBody("not_implemented", "later") },
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        status: 503,
+        body: errorBody("library_unavailable", "down"),
+      },
     ]);
     const first = renderWithProviders(<QueryScreen />, {
       api: notYet.api,
       route: `/p/${PROJECT_ID}/query`,
       path: "/p/:projectId/query",
     });
-    expect(await screen.findByText("The model registry is not available yet.")).toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: "Add a starter model" })).toBeNull();
+    expect(await screen.findByText(/The model library could not be opened/)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Add a model to the library" })).toBeNull();
     first.unmount();
 
     const broken = fakeClient([
       ...withoutModels,
-      { method: "GET", path: /\/models$/, status: 500, body: errorBody("internal", "database is locked") },
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        status: 500,
+        body: errorBody("internal", "database is locked"),
+      },
     ]);
     renderWithProviders(<QueryScreen />, {
       api: broken.api,
@@ -238,6 +248,6 @@ describe("QueryScreen", () => {
       path: "/p/:projectId/query",
     });
     expect(await screen.findByRole("alert")).toHaveTextContent("database is locked");
-    expect(screen.queryByRole("link", { name: "Add a starter model" })).toBeNull();
+    expect(screen.queryByRole("link", { name: "Add a model to the library" })).toBeNull();
   });
 });

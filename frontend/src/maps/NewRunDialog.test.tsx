@@ -5,6 +5,7 @@ import {
   exampleMapRun,
   exampleModel,
   exampleProviders,
+  exampleTrainedModel,
   fakeClient,
   PROJECT_ID,
   runningJob,
@@ -15,7 +16,7 @@ import { NewRunDialog } from "./NewRunDialog";
 describe("NewRunDialog", () => {
   it("prefills the GSD, shows the estimate and starts a local run", async () => {
     const { api, requests } = fakeClient([
-      { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
+      { method: "GET", path: /\/library\/models$/, body: { items: [exampleModel], next_cursor: null } },
       { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
       {
         method: "POST",
@@ -60,5 +61,33 @@ describe("NewRunDialog", () => {
       model_id: exampleModel.id,
       target_gsd_cm: 2,
     });
+  });
+
+  it("lists library models and defaults the GSD to the size the model was trained at", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        body: { items: [{ ...exampleTrainedModel, train_gsd_cm: 4 }, exampleModel], next_cursor: null },
+      },
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "POST", path: /\/map-runs\/estimate$/, status: 500, body: {} },
+    ]);
+    const { container } = renderWithProviders(
+      <NewRunDialog
+        projectId={PROJECT_ID}
+        geoMap={exampleGeoMap}
+        runs={[]}
+        onClose={() => {}}
+        onStarted={() => {}}
+      />,
+      { api },
+    );
+    expect(await screen.findByRole("option", { name: "ahmadia-v1-n" })).toBeInTheDocument();
+    expect(container.ownerDocument.querySelector("optgroup")).toHaveAttribute(
+      "label",
+      "Models in your library",
+    );
+    await waitFor(() => expect(screen.getByLabelText("Model trained at (cm / px)")).toHaveValue(4));
   });
 });

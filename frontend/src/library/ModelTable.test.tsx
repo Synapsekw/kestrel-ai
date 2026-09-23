@@ -7,7 +7,11 @@ describe("ModelTable", () => {
   it("shows name, origin, task and class count per model, and selects on click", () => {
     const onSelect = vi.fn();
     render(
-      <ModelTable models={[exampleTrainedModel, exampleModel]} selectedId={TRAINED_MODEL_ID} onSelect={onSelect} />,
+      <ModelTable
+        models={[exampleTrainedModel, exampleModel]}
+        selectedId={TRAINED_MODEL_ID}
+        onSelect={onSelect}
+      />,
     );
     const rows = within(screen.getByTestId("model-table")).getAllByRole("row").slice(1);
     expect(rows[0]).toHaveTextContent("ahmadia-v1-n");
@@ -23,7 +27,11 @@ describe("ModelTable", () => {
 
   it("flags a model whose weights file is missing", () => {
     render(
-      <ModelTable models={[{ ...exampleModel, state: "unavailable" }]} selectedId={null} onSelect={vi.fn()} />,
+      <ModelTable
+        models={[{ ...exampleModel, state: "unavailable" }]}
+        selectedId={null}
+        onSelect={vi.fn()}
+      />,
     );
     expect(screen.getByText("File missing")).toBeInTheDocument();
   });

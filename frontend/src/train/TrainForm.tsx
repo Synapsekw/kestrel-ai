@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import type { Dataset, Model, TrainRequest } from "@contract/client";
-import { kindLabel } from "@/models/modelLabels";
+import type { Dataset, LibraryModel, TrainRequest } from "@contract/client";
+import { originLabel } from "@/library/modelLabels";
 import { Alert, Button, Checkbox, Disclosure, Field, Input, Select } from "@/ui";
 import {
   DEFAULT_TRAIN_FORM,
@@ -15,7 +15,7 @@ import {
 interface Props {
   projectId: string;
   datasets: Dataset[];
-  models: Model[];
+  models: LibraryModel[];
   datasetsUnavailable: boolean;
   modelsUnavailable: boolean;
   modelsLoading: boolean;
@@ -169,13 +169,13 @@ export function TrainForm({
 
   const modelHint =
     models.length > 0
-      ? "Any registry model, including imported COCO weights."
+      ? "Any model in your library, including starter models."
       : !modelsLoading &&
         !modelsUnavailable &&
         !modelsError && (
           <>
             No models yet.{" "}
-            <Link to={`/p/${projectId}/models`} className={link}>
+            <Link to="/library" className={link}>
               Add a starter model
             </Link>{" "}
             to get started.
@@ -208,11 +208,13 @@ export function TrainForm({
             disabled={modelsUnavailable}
           >
             <option value="">Choose a base model</option>
-            {models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name} ({kindLabel(m.kind)})
-              </option>
-            ))}
+            <optgroup label="Models in your library">
+              {models.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name} ({originLabel(m.origin)})
+                </option>
+              ))}
+            </optgroup>
           </Select>
         </Field>
         <Field label="Model name" htmlFor={`${id}-name`}>
@@ -226,8 +228,9 @@ export function TrainForm({
       )}
       {modelsUnavailable && (
         <div role="note">
-          <Alert tone="info">
-            The model registry is not available yet (it arrives with the training backend).
+          <Alert tone="warn">
+            The model library could not be opened, so there is no base model to start from. The Library screen
+            shows why.
           </Alert>
         </div>
       )}

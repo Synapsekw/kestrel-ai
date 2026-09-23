@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ApiClient, ClassDefInput, Model, Project, Source, components } from "@contract/client";
+import type { ApiClient, ClassDefInput, Project, Source, components } from "@contract/client";
 import { useApi } from "./client";
 import { messageOf, unwrap } from "./errors";
 import { pushLog } from "@/app/diagnostics";
@@ -20,12 +20,6 @@ export function saveClasses(api: ApiClient, projectId: string, classes: ClassDef
 
 export function patchProject(api: ApiClient, projectId: string, patch: ProjectUpdate): Promise<Project> {
   return unwrap(api.PATCH("/api/v1/projects/{projectId}", { params: { path: { projectId } }, body: patch }));
-}
-
-/** May reject with 501 until S3 lands; callers decide how to degrade. */
-export async function fetchModels(api: ApiClient, projectId: string): Promise<Model[]> {
-  const r = await unwrap(api.GET("/api/v1/projects/{projectId}/models", { params: { path: { projectId } } }));
-  return r.items;
 }
 
 /** May reject with 501 until S1 lands. */

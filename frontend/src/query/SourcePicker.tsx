@@ -1,16 +1,17 @@
 import { useId } from "react";
 import { Link } from "react-router-dom";
-import type { Model, Provider, ProviderName } from "@contract/client";
+import type { LibraryModel, Provider, ProviderName } from "@contract/client";
 import { providerLabel } from "@/api/providers";
-import { kindLabel } from "@/models/modelLabels";
+import { originLabel } from "@/library/modelLabels";
 import { Alert, Field, Input, Segmented, Select, cx, focusRing } from "@/ui";
 import type { QueryForm, QueryKind } from "./queryModel";
 
 interface Props {
-  projectId: string;
+  /** Kept for callers; library models are app-wide, so the picker no longer needs it. */
+  projectId?: string;
   form: QueryForm;
   onChange: (patch: Partial<QueryForm>) => void;
-  models: Model[];
+  models: LibraryModel[];
   modelsUnavailable: boolean;
   modelsLoading: boolean;
   modelsError: string | null;
@@ -21,12 +22,11 @@ interface Props {
 const link = cx("rounded-sm font-medium text-accent hover:underline", focusRing);
 
 const SOURCES: { value: QueryKind; label: string }[] = [
-  { value: "local_model", label: "This project's models" },
+  { value: "local_model", label: "Library model" },
   { value: "cloud_provider", label: "Cloud provider" },
 ];
 
 export function SourcePicker({
-  projectId,
   form,
   onChange,
   models,
@@ -54,12 +54,12 @@ export function SourcePicker({
             htmlFor={`${id}-model`}
             hint={
               modelsUnavailable ? (
-                <span role="note">The model registry is not available yet.</span>
+                <span role="note">The model library could not be opened. The Library screen shows why.</span>
               ) : !modelsLoading && !modelsError && models.length === 0 ? (
                 <span>
                   No models yet.{" "}
-                  <Link to={`/p/${projectId}/models`} className={link}>
-                    Add a starter model
+                  <Link to="/library" className={link}>
+                    Add a model to the library
                   </Link>{" "}
                   to get started.
                 </span>
@@ -74,11 +74,13 @@ export function SourcePicker({
               disabled={modelsUnavailable}
             >
               <option value="">Choose a model</option>
-              {models.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.name} ({kindLabel(m.kind)})
-                </option>
-              ))}
+              <optgroup label="Models in your library">
+                {models.map((m) => (
+                  <option key={m.id} value={m.id} disabled={m.state === "unavailable"}>
+                    {m.name} ({originLabel(m.origin)}){m.state === "unavailable" ? " (file missing)" : ""}
+                  </option>
+                ))}
+              </optgroup>
             </Select>
           </Field>
           {modelsError && (

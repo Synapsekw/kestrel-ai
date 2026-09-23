@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import type { Model, Project } from "@contract/client";
+import type { LibraryModel, Project } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { fetchModels, patchProject } from "@/api/project";
+import { fetchLibraryModels, isLibraryUnavailable } from "@/api/library";
+import { patchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { originLabel } from "@/library/modelLabels";
 import { Alert, Field, Select } from "@/ui";
 
 interface Props {
@@ -13,7 +15,7 @@ interface Props {
 
 export function PreannotationSection({ project, onSaved }: Props) {
   const api = useApi();
-  const [models, setModels] = useState<Model[] | null>(null);
+  const [models, setModels] = useState<LibraryModel[] | null>(null);
   const [unavailable, setUnavailable] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
@@ -21,23 +23,25 @@ export function PreannotationSection({ project, onSaved }: Props) {
 
   useEffect(() => {
     let cancelled = false;
-    fetchModels(api, project.id)
+    fetchLibraryModels(api)
       .then((items) => {
         if (!cancelled) setModels(items);
       })
       .catch((e: unknown) => {
-        pushLog(`models unavailable: ${messageOf(e, String(e))}`);
+        pushLog(`library models unavailable: ${messageOf(e, String(e))}`);
         if (!cancelled) {
           setModels([]);
           setUnavailable(
-            "The model registry is not available yet (it arrives with the training backend). The current setting is kept.",
+            isLibraryUnavailable(e)
+              ? "The model library could not be opened. The current setting is kept."
+              : `The library models could not be loaded: ${messageOf(e, "unknown error")}. The current setting is kept.`,
           );
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [api, project.id]);
+  }, [api]);
 
   async function choose(value: string) {
     if (busy) return;
@@ -74,12 +78,14 @@ export function PreannotationSection({ project, onSaved }: Props) {
           onChange={(e) => void choose(e.target.value)}
         >
           <option value="">None</option>
-          {!known && current && <option value={current}>{current}</option>}
-          {(models ?? []).map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.name} ({m.kind})
-            </option>
-          ))}
+          {!known && current && <option value={current}>Not in the library ({current.slice(0, 8)})</option>}
+          <optgroup label="Models in your library">
+            {(models ?? []).map((m) => (
+              <option key={m.id} value={m.id} disabled={m.state === "unavailable"}>
+                {m.name} ({originLabel(m.origin)}){m.state === "unavailable" ? " (file missing)" : ""}
+              </option>
+            ))}
+          </optgroup>
         </Select>
       </Field>
       {unavailable && (

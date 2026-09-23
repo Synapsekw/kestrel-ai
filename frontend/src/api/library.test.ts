@@ -90,7 +90,10 @@ describe("library api", () => {
       body: { notes: "Weak on trucks." },
     });
     await deleteLibraryModel(api, TRAINED_MODEL_ID);
-    expect(requests[3]).toMatchObject({ method: "DELETE", url: `/api/v1/library/models/${TRAINED_MODEL_ID}` });
+    expect(requests[3]).toMatchObject({
+      method: "DELETE",
+      url: `/api/v1/library/models/${TRAINED_MODEL_ID}`,
+    });
     const usage = await fetchModelUsage(api, TRAINED_MODEL_ID);
     expect(usage.projects[0].name).toBe("Ahmadia");
     expect(requests[4].url).toBe(`/api/v1/library/models/${TRAINED_MODEL_ID}/usage`);
@@ -98,7 +101,12 @@ describe("library api", () => {
 
   it("starts export, starter and training jobs", async () => {
     const { api, requests } = fakeClient([
-      { method: "POST", path: /\/export$/, status: 202, body: { job: { ...libraryJob, type: "library_export" } } },
+      {
+        method: "POST",
+        path: /\/export$/,
+        status: 202,
+        body: { job: { ...libraryJob, type: "library_export" } },
+      },
       { method: "POST", path: /\/starters\/[^/]+\/acquire$/, status: 202, body: { job: libraryJob } },
       { method: "POST", path: /\/projects\/[^/]+\/train$/, status: 202, body: { job: runningJob } },
     ]);
@@ -135,14 +143,21 @@ describe("library api", () => {
       { method: "GET", path: /\/library\/status$/, body: exampleLibraryStatus },
       { method: "GET", path: /\/library\/jobs$/, body: { items: [libraryJob], next_cursor: null } },
       { method: "GET", path: /\/library\/jobs\/[^/]+$/, body: libraryJob },
-      { method: "POST", path: /\/library\/jobs\/[^/]+\/cancel$/, body: { ...libraryJob, state: "cancelled" } },
+      {
+        method: "POST",
+        path: /\/library\/jobs\/[^/]+\/cancel$/,
+        body: { ...libraryJob, state: "cancelled" },
+      },
     ]);
     expect((await fetchLibraryStatus(api)).available).toBe(true);
     expect((await fetchLibraryJobs(api, { state: "running" }))[0].id).toBe(libraryJob.id);
     expect(requests[1].url).toBe("/api/v1/library/jobs?limit=100&state=running");
     expect((await fetchLibraryJob(api, libraryJob.id)).type).toBe("library_import");
     expect((await cancelLibraryJob(api, libraryJob.id)).state).toBe("cancelled");
-    expect(requests[3]).toMatchObject({ method: "POST", url: `/api/v1/library/jobs/${libraryJob.id}/cancel` });
+    expect(requests[3]).toMatchObject({
+      method: "POST",
+      url: `/api/v1/library/jobs/${libraryJob.id}/cancel`,
+    });
   });
 
   it("builds artifact URLs with the token in the query and fetches results.csv as text", async () => {

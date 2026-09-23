@@ -9,7 +9,7 @@ import { pushLog } from "@/app/diagnostics";
 import { elapsedSeconds, formatDuration, jobTitle, stateLabel } from "@/jobs/jobLabels";
 import { JobLogView } from "@/jobs/JobLogView";
 import { useNow } from "@/jobs/useNow";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Field, Input, Pill, Progress, Skeleton, buttonClass, type PillTone } from "@/ui";
 import { REVIEW_LINK_MAX_IDS, reviewLink, runTitle } from "./queryModel";

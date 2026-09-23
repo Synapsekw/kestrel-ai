@@ -88,7 +88,9 @@ describe("LibraryScreen", () => {
             if (polls === 1) return { items: [], next_cursor: null };
             if (polls === 2) return { items: [queued], next_cursor: null };
             return {
-              items: [{ ...queued, state: "succeeded", progress: 1, result: { model_id: IMPORTED_MODEL_ID } }],
+              items: [
+                { ...queued, state: "succeeded", progress: 1, result: { model_id: IMPORTED_MODEL_ID } },
+              ],
               next_cursor: null,
             };
           },
@@ -111,7 +113,9 @@ describe("LibraryScreen", () => {
     fireEvent.change(screen.getByLabelText("Model file"), { target: { value: "E:/Models/best.pt" } });
     fireEvent.change(screen.getByLabelText("Supplier"), { target: { value: "Client X" } });
     fireEvent.click(screen.getByRole("button", { name: "Add to library" }));
-    expect(await screen.findByRole("progressbar", { name: /Model import: client-x-machinery/ })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("progressbar", { name: /Model import: client-x-machinery/ }),
+    ).toBeInTheDocument();
     expect(requests.find((r) => r.method === "POST")?.body).toEqual({
       name: "client-x-machinery",
       weights_path: "E:/Models/best.pt",
@@ -157,7 +161,9 @@ describe("LibraryScreen", () => {
   });
 
   it("teaches the first step when the library is empty", async () => {
-    renderScreen(base([{ method: "GET", path: /\/library\/models$/, body: { items: [], next_cursor: null } }]));
+    renderScreen(
+      base([{ method: "GET", path: /\/library\/models$/, body: { items: [], next_cursor: null } }]),
+    );
     expect(await screen.findByText("No models in the library yet")).toBeInTheDocument();
   });
 });

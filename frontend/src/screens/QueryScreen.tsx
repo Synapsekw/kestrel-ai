@@ -7,7 +7,7 @@ import { useGroups, useProject } from "@/api/project";
 import { useProviders } from "@/api/providers";
 import { createQueryRun, estimateQueryRun } from "@/api/queryRuns";
 import { pushLog } from "@/app/diagnostics";
-import { useModels } from "@/models/useModels";
+import { useLibraryModels } from "@/library/useLibraryModels";
 import { EstimateCard } from "@/query/EstimateCard";
 import { ImagePicker } from "@/query/ImagePicker";
 import {
@@ -93,7 +93,7 @@ function DetectWorkspace() {
   const [params, setParams] = useSearchParams();
   const runId = params.get("run");
   const { project } = useProject(projectId);
-  const registry = useModels(projectId);
+  const registry = useLibraryModels();
   const providers = useProviders();
   const groups = useGroups(projectId);
   const history = useQueryRuns(projectId);

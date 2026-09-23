@@ -347,7 +347,8 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
                     <span className="text-muted">
                       {[
                         u.preannotation && "pre-annotation",
-                        u.query_runs > 0 && `${u.query_runs} detection ${u.query_runs === 1 ? "run" : "runs"}`,
+                        u.query_runs > 0 &&
+                          `${u.query_runs} detection ${u.query_runs === 1 ? "run" : "runs"}`,
                         u.map_runs > 0 && `${u.map_runs} map ${u.map_runs === 1 ? "run" : "runs"}`,
                       ]
                         .filter(Boolean)

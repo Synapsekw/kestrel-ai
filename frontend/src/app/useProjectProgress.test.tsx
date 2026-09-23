@@ -39,8 +39,15 @@ describe("useProjectProgress", () => {
       { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset], next_cursor: null } },
       {
         method: "GET",
-        path: /\/models$/,
-        body: { items: [exampleModel, exampleTrainedModel], next_cursor: null },
+        path: /\/library\/models$/,
+        body: {
+          items: [
+            exampleModel,
+            exampleTrainedModel,
+            { ...exampleTrainedModel, id: "m-elsewhere", provenance: { project_id: "another-project" } },
+          ],
+          next_cursor: null,
+        },
       },
       { method: "GET", path: /\/query-runs/, body: { items: [exampleQueryRun], next_cursor: null } },
       { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap] } },
@@ -52,12 +59,33 @@ describe("useProjectProgress", () => {
       labeled: 14,
       pendingReview: 3,
       datasets: 1,
-      models: 2,
+      models: 3,
       trainedModels: 1,
       queryRuns: 1,
       maps: 1,
     });
     expect(useProgressStore.getState().byProject[PROJECT_ID]?.images).toBe(40);
+  });
+
+  it("counts no models when the library cannot be opened, and still loads the rest", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: { ...exampleStats, image_count: 40 } },
+      { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        status: 503,
+        body: { error: { code: "library_unavailable", message: "down", details: {} } },
+      },
+      { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+    ]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
+    expect(JSON.parse(screen.getByTestId("progress").textContent ?? "")).toMatchObject({
+      images: 40,
+      models: 0,
+      trainedModels: 0,
+    });
   });
 
   it("keeps the last value when a reload fails", async () => {

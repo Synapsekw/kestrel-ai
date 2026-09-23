@@ -3,8 +3,9 @@ import { useLocation } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { fetchDatasets } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
+import { fetchLibraryModels } from "@/api/library";
 import { listMaps } from "@/api/maps";
-import { fetchModels, fetchProjectStats } from "@/api/project";
+import { fetchProjectStats } from "@/api/project";
 import { fetchQueryRuns } from "@/api/queryRuns";
 import { pushLog } from "@/app/diagnostics";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
@@ -37,6 +38,8 @@ export function useProjectProgress(projectId: string | undefined): {
   useOnJobsFinished("train", refresh);
   useOnJobsFinished("infer", refresh);
   useOnJobsFinished("map_import", refresh);
+  useOnJobsFinished("library_import", refresh);
+  useOnJobsFinished("library_starter", refresh);
   const progress = useProgress(projectId);
   const { kind, failed } = useProjectKindState(projectId);
   const known = kind !== null || failed;
@@ -49,7 +52,11 @@ export function useProjectProgress(projectId: string | undefined): {
       // Datasets are train-only: a detection project refuses the read (409). When the kind could
       // not be loaded, a refused count must not blank every other count, so it falls back to none.
       kind === "detect" ? Promise.resolve([]) : fetchDatasets(api, projectId).catch(() => []),
-      fetchModels(api, projectId),
+      // An unopened library must not blank the pipeline: it counts as no models.
+      fetchLibraryModels(api).catch((e: unknown) => {
+        pushLog(`library models unavailable: ${messageOf(e, String(e))}`);
+        return [];
+      }),
       fetchQueryRuns(api, projectId),
       listMaps(api, projectId),
     ])
@@ -61,7 +68,8 @@ export function useProjectProgress(projectId: string | undefined): {
           pendingReview: stats.pending_review_count,
           datasets: datasets.length,
           models: models.length,
-          trainedModels: models.filter((m) => m.kind === "trained").length,
+          trainedModels: models.filter((m) => m.origin === "trained" && m.provenance.project_id === projectId)
+            .length,
           queryRuns: runs.length,
           maps: maps.length,
         });
