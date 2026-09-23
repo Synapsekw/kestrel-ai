@@ -9,7 +9,7 @@
   runs, the `worker` subcommand trains with DataLoader workers (freeze_support), ONNX export
   works, and keyring reaches Windows Credential Manager without setuptools entry points.
 
-  Prints `geo ok 32633 <lon> <lat>`, `health ok`, `cuda True <gpu name>`, `starter ok 3`,
+  Prints `geo ok 32633 <lon> <lat>`, `health ok`, `cuda True <gpu name>`, `starter ok 3`, `library ok`,
   `predict ok <n> boxes` and `worker ok`, and exits non-zero on any failure. Sample frames are
   copied out of the read-only source folder first.
 
@@ -88,10 +88,12 @@ function Invoke-Api([string] $Method, [string] $Path, $Body, [int] $TimeoutSec =
   return $null
 }
 
-function Wait-ApiJob([string] $ProjectId, [string] $JobId, [int] $TimeoutSec = 1800) {
+# $Jobs is the job collection: "/projects/<id>/jobs" for project jobs, "/library/jobs" for library
+# jobs (starter acquire, import, export).
+function Wait-ApiJob([string] $Jobs, [string] $JobId, [int] $TimeoutSec = 1800) {
   $deadline = (Get-Date).AddSeconds($TimeoutSec)
   while ((Get-Date) -lt $deadline) {
-    $job = Invoke-Api GET "/projects/$ProjectId/jobs/$JobId"
+    $job = Invoke-Api GET "$Jobs/$JobId"
     if ($job.state -in @("succeeded", "failed", "cancelled")) { return $job }
     Start-Sleep -Milliseconds 500
   }
@@ -158,6 +160,12 @@ try {
   Complete-Step "starter_models"
   Write-Host "starter ok $($available.Count)"
 
+  # 4b. the app-wide model library opened: its migrations are inside the bundle
+  $library = Invoke-Api GET "/library/status"
+  if (-not $library.available) { throw "the model library did not open: $($library.error)" }
+  Complete-Step "library"
+  Write-Host "library ok $($library.root)"
+
   # 5. project, import, weights
   $names = @("excavator", "wheel_loader", "bulldozer", "dump_truck", "crane", "concrete_mixer", "roller", "backhoe")
   $colours = @("#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#ef4444")
@@ -167,14 +175,17 @@ try {
   Complete-Step "create_project"
 
   $imported = Invoke-Api POST "/projects/$pid1/sources" @{ folder = $sample; site = "ahmadia" }
-  $job = Wait-ApiJob $pid1 $imported.job.id
+  $job = Wait-ApiJob "/projects/$pid1/jobs" $imported.job.id
   if ($job.state -ne "succeeded") { throw "import failed: $($job.error)" }
   $stats = Invoke-Api GET "/projects/$pid1/stats"
   if ($stats.image_count -ne $Frames) { throw "imported $($stats.image_count) images, expected $Frames" }
   Complete-Step "import"
   Write-Host "import ok $($stats.image_count) images"
 
-  $model = Invoke-Api POST "/projects/$pid1/models/import-starter" @{ key = "yolo11n" }
+  $acquire = Invoke-Api POST "/library/starters/yolo11n/acquire" @{}
+  $job = Wait-ApiJob "/library/jobs" $acquire.job.id
+  if ($job.state -ne "succeeded") { throw "starter acquire failed: $($job.error)" }
+  $model = Invoke-Api GET "/library/models/$($job.result.model_id)"
   if ($model.class_aliases.truck -ne "dump_truck") {
     throw "expected truck aliased to dump_truck, got $($model.class_aliases | ConvertTo-Json -Compress)"
   }
@@ -197,22 +208,22 @@ try {
   }
   $dataset = Invoke-Api POST "/projects/$pid1/datasets" `
     @{ name = "v1"; split_method = "random"; val_fraction = 0.34; seed = 42 }
-  $job = Wait-ApiJob $pid1 $dataset.job.id
+  $job = Wait-ApiJob "/projects/$pid1/jobs" $dataset.job.id
   if ($job.state -ne "succeeded") { throw "dataset failed: $($job.error)" }
   $frozen = Invoke-Api GET "/projects/$pid1/datasets/$($dataset.dataset.id)"
   Complete-Step "dataset"
   Write-Host "dataset ok train $($frozen.train_count) val $($frozen.val_count)"
 
-  $training = Invoke-Api POST "/projects/$pid1/models/train" @{
+  $training = Invoke-Api POST "/projects/$pid1/train" @{
     name = "smoke"; dataset_id = $frozen.id; base_model_id = $model.id
     epochs = 1; imgsz = $Imgsz; batch = 2; patience = 5; augmentation = "aerial"; device = "0"
   }
-  $job = Wait-ApiJob $pid1 $training.job.id
+  $job = Wait-ApiJob "/projects/$pid1/jobs" $training.job.id
   if ($job.state -ne "succeeded") {
     $log = Invoke-Api GET "/projects/$pid1/jobs/$($training.job.id)/log?tail=40"
     throw "training failed: $($job.error)`n$($log.lines -join "`n")"
   }
-  $trained = Invoke-Api GET "/projects/$pid1/models/$($job.result.model_id)"
+  $trained = Invoke-Api GET "/library/models/$($job.result.model_id)"
   Complete-Step "worker_train"
   Write-Host "worker ok mAP50 $([math]::Round($trained.metrics.map50, 4))"
 
@@ -221,11 +232,15 @@ try {
   Write-Host "font ok $($env:APP_DATA_DIR)\ultralytics\Arial.ttf"
 
   # 8. ONNX export, again through the frozen worker
-  $export = Invoke-Api POST "/projects/$pid1/models/$($trained.id)/export" @{ format = "onnx"; imgsz = $Imgsz }
-  $job = Wait-ApiJob $pid1 $export.job.id
+  $export = Invoke-Api POST "/library/models/$($trained.id)/export" @{ format = "onnx"; imgsz = $Imgsz }
+  $job = Wait-ApiJob "/library/jobs" $export.job.id
   if ($job.state -ne "succeeded") { throw "export failed: $($job.error)" }
-  $trained = Invoke-Api GET "/projects/$pid1/models/$($trained.id)"
-  $onnx = Join-Path $projectFolder $trained.exports.onnx
+  $trained = Invoke-Api GET "/library/models/$($trained.id)"
+  # exports are relative to the model's own folder, `<library>/models/<slug>-<id8>/`
+  $modelDir = Get-ChildItem (Join-Path $library.root "models") -Directory -Filter "*-$($trained.id.Substring(0, 8))" |
+    Select-Object -First 1
+  if (-not $modelDir) { throw "no library folder for model $($trained.id) under $($library.root)" }
+  $onnx = Join-Path $modelDir.FullName $trained.exports.onnx
   Complete-Step "export_onnx"
   Write-Host "export ok $onnx $([math]::Round((Get-Item $onnx).Length / 1MB, 1)) MB"
 
