@@ -554,7 +554,8 @@ export interface paths {
         delete: operations["deleteModel"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Set what is editable on a model (today, the scale it was trained at). */
+        patch: operations["patchModel"];
         trace?: never;
     };
     "/api/v1/projects/{projectId}/models/{modelId}/artifacts/{artifact}": {
@@ -592,6 +593,29 @@ export interface paths {
         put?: never;
         /** Export to ONNX or TensorRT through a job; the path lands in `model.exports[format]`. */
         post: operations["exportModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/models/{modelId}/gsd-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Derive the scale this model was trained at from its dataset.
+         * @description Reads the median GPS altitude already stored on the dataset's images and the camera intrinsics from at most 8 EXIF headers. 404 when the model has no dataset or no usable EXIF.
+         */
+        get: operations["getModelGsdEstimate"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2353,7 +2377,8 @@ export interface components {
          *       "exports": {},
          *       "artifacts": {},
          *       "run_id": null,
-         *       "created_at": "2026-09-17T10:10:00Z"
+         *       "created_at": "2026-09-17T10:10:00Z",
+         *       "train_gsd_cm": null
          *     }
          */
         Model: {
@@ -2388,6 +2413,50 @@ export interface components {
             run_id: string | null;
             /** Format: date-time */
             created_at: string;
+            /** @description Ground distance in cm that one model-input pixel covered during training. A map run resamples the map to this scale. Null when it has never been established. */
+            train_gsd_cm: number | null;
+        };
+        /**
+         * @description A training scale derived from the model's dataset, with the evidence for it.
+         * @example {
+         *       "train_gsd_cm": 18.92,
+         *       "image_gsd_cm": 6.055,
+         *       "median_alt_m": 191.02,
+         *       "focal_mm": 18.5,
+         *       "sensor_width_mm": 23.456,
+         *       "sensor_source": "focal_plane",
+         *       "sample_size": 8,
+         *       "imgsz": 1280,
+         *       "median_object_m": 8.39,
+         *       "per_class_m": {
+         *         "excavator": 8.39,
+         *         "dump_truck": 8.9,
+         *         "roller": 5.07
+         *       },
+         *       "plausible": true
+         *     }
+         */
+        ModelGsdEstimate: {
+            /** @description cm of ground per model-input pixel */
+            train_gsd_cm: number;
+            /** @description cm of ground per stored training-image pixel */
+            image_gsd_cm: number;
+            median_alt_m: number;
+            focal_mm: number;
+            sensor_width_mm: number;
+            /** @enum {string} */
+            sensor_source: "focal_plane" | "crop_factor";
+            /** @description images whose EXIF was read */
+            sample_size: number;
+            imgsz: number;
+            /** @description median labelled object size implied by image_gsd_cm */
+            median_object_m: number;
+            /** @description class name to implied average object size in metres */
+            per_class_m: {
+                [key: string]: number;
+            };
+            /** @description median_object_m falls in 2-25 m */
+            plausible: boolean;
         };
         /**
          * @example {
@@ -4622,6 +4691,45 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    patchModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    train_gsd_cm?: number | null;
+                };
+            };
+        };
+        responses: {
+            /** @description the updated model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Model"];
+                };
+            };
+            /** @description no model with that id */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
     getModelArtifact: {
         parameters: {
             query?: never;
@@ -4680,6 +4788,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getModelGsdEstimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the estimate and its evidence */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGsdEstimate"];
+                };
+            };
+            /** @description the model has no dataset, or no usable EXIF */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

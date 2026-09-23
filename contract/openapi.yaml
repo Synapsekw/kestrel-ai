@@ -715,6 +715,30 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Model" }
         default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [models]
+      operationId: patchModel
+      summary: Set what is editable on a model (today, the scale it was trained at).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                train_gsd_cm: { type: [number, "null"], exclusiveMinimum: 0 }
+      responses:
+        "200":
+          description: the updated model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Model" }
+        "404":
+          description: no model with that id
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [models]
       operationId: deleteModel
@@ -770,6 +794,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/models/{modelId}/gsd-estimate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/modelId"
+    get:
+      tags: [models]
+      operationId: getModelGsdEstimate
+      summary: Derive the scale this model was trained at from its dataset.
+      description: >
+        Reads the median GPS altitude already stored on the dataset's images and the camera
+        intrinsics from at most 8 EXIF headers. 404 when the model has no dataset or no usable EXIF.
+      responses:
+        "200":
+          description: the estimate and its evidence
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelGsdEstimate" }
+        "404":
+          description: the model has no dataset, or no usable EXIF
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   /api/v1/starter-models:
@@ -2448,7 +2495,7 @@ components:
           - { class_name: excavator, map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }
     Model:
       type: object
-      required: [id, name, kind, weights_path, base_weights, dataset_id, hyperparameters, metrics, class_names, class_aliases, exports, artifacts, run_id, created_at]
+      required: [id, name, kind, weights_path, base_weights, dataset_id, hyperparameters, metrics, class_names, class_aliases, exports, artifacts, run_id, created_at, train_gsd_cm]
       properties:
         id: { type: string }
         name: { type: string }
@@ -2484,6 +2531,11 @@ components:
             pr_curve: { type: string }
         run_id: { type: [string, "null"], description: training job id }
         created_at: { type: string, format: date-time }
+        train_gsd_cm:
+          type: [number, "null"]
+          description: >
+            Ground distance in cm that one model-input pixel covered during training.
+            A map run resamples the map to this scale. Null when it has never been established.
       example:
         id: "m0000000-2222-4000-8000-000000000001"
         name: yolo11m-coco
@@ -2499,6 +2551,44 @@ components:
         artifacts: {}
         run_id: null
         created_at: "2026-09-17T10:10:00Z"
+        train_gsd_cm: null
+    ModelGsdEstimate:
+      type: object
+      description: A training scale derived from the model's dataset, with the evidence for it.
+      required:
+        [train_gsd_cm, image_gsd_cm, median_alt_m, focal_mm, sensor_width_mm,
+         sensor_source, sample_size, imgsz, median_object_m, per_class_m, plausible]
+      properties:
+        train_gsd_cm: { type: number, description: cm of ground per model-input pixel }
+        image_gsd_cm: { type: number, description: cm of ground per stored training-image pixel }
+        median_alt_m: { type: number }
+        focal_mm: { type: number }
+        sensor_width_mm: { type: number }
+        sensor_source: { type: string, enum: [focal_plane, crop_factor] }
+        sample_size: { type: integer, description: images whose EXIF was read }
+        imgsz: { type: integer }
+        median_object_m:
+          type: number
+          description: median labelled object size implied by image_gsd_cm
+        per_class_m:
+          type: object
+          description: class name to implied average object size in metres
+          additionalProperties: { type: number }
+        plausible:
+          type: boolean
+          description: median_object_m falls in 2-25 m
+      example:
+        train_gsd_cm: 18.92
+        image_gsd_cm: 6.055
+        median_alt_m: 191.02
+        focal_mm: 18.5
+        sensor_width_mm: 23.456
+        sensor_source: focal_plane
+        sample_size: 8
+        imgsz: 1280
+        median_object_m: 8.39
+        per_class_m: { excavator: 8.39, dump_truck: 8.9, roller: 5.07 }
+        plausible: true
     ModelImport:
       type: object
       required: [name, weights_path]
