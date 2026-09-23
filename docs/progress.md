@@ -9,6 +9,32 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Project agent — 2026-09-22 (merged, installed)
+
+An in-project AI drawer that operates the app with the user's own OpenAI or Anthropic key. The
+turn loop runs in the sidecar (keys never leave it) as a cancellable asyncio task; ~35 tools call
+the existing API routes in-process through httpx `ASGITransport`, so validation, background jobs
+and websocket events are the ones the UI already uses. Image-targeting tools take a *selector*
+(filters, sort, offset, limit) resolved server-side, so "the first 500 images" never sends 500 ids
+through the model. The transcript lives in the project DB (`agent_turn`, `agent_item`, migration
+`0004_agent`). Cloud labeling, training and every delete pause the turn with an Approve/Deny card
+carrying the cost estimate. Design `docs/superpowers/specs/2026-09-22-project-agent-design.md`,
+plan `docs/superpowers/plans/2026-09-22-project-agent.md`, SDD records under
+`.superpowers/sdd/2026-09-22-project-agent/`.
+
+Reviews caught and fixed, before merge: a hard kill mid-reply used to replay tool calls with no
+result and break the conversation permanently; a model-chosen `..` id could reach
+`DELETE /projects/{id}`; an approval card could dead-end when the key was removed; the 120 s model
+timeout was too short for adaptive thinking (now 300 s); mutating tools defaulted to "the first
+100 images" when the model omitted a selection.
+
+Verified on the reference machine: contract check clean, Ruff clean, 854 backend tests, frontend
+lint, 564 unit tests, build, 62 browser tests, 8 Rust tests (the frozen sidecar was present).
+The frozen sidecar was smoke-tested for the new routes (startup, health, `GET /agent`, 422 on a
+bad body). The installer was rebuilt (1.85 GB, 472 s) and installed over the operator's app; the
+drawer was then driven over CDP in the installed build: it opens inside a real project and reports
+`gpt-5 · Ready`. No test or check called a paid provider.
+
 ## Contour UI — 2026-09-21
 
 The operator selected Contour after the standalone visual study. Source implementation is in
