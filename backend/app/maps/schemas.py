@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -37,6 +37,7 @@ class GeoMapOut(BaseModel):
     bounds_native: list[float] | None
     bounds_wgs84: list[float] | None
     gsd_cm: float | None
+    captured_on: date | None
     tile_grid: TileGrid
     labels_version: int
     job_id: str | None
@@ -62,6 +63,7 @@ class GeoMapOut(BaseModel):
             bounds_native=row.bounds_native,
             bounds_wgs84=row.bounds_wgs84,
             gsd_cm=row.gsd_cm,
+            captured_on=row.captured_on,
             tile_grid=TileGrid(max_zoom=max_zoom(row.width, row.height)),
             labels_version=row.labels_version,
             job_id=row.job_id,
@@ -72,6 +74,12 @@ class GeoMapOut(BaseModel):
 class GeoMapCreate(BaseModel):
     path: str = Field(min_length=1)
     name: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class GeoMapPatch(BaseModel):
+    """Only the survey date is editable; the operator corrects it by hand."""
+
+    captured_on: date | None = None
 
 
 class GeoMapWithJob(BaseModel):

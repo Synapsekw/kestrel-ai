@@ -1,10 +1,10 @@
 """SQLite tables for one project (spec section 4). UUID string primary keys, JSON for lists and dicts."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, Boolean, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import JSON, Boolean, Date, Float, ForeignKey, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, UTCDateTime, new_id, utcnow
@@ -162,6 +162,8 @@ class GeoMap(Base):
     bounds_native: Mapped[list | None] = mapped_column(JSON, nullable=True)
     bounds_wgs84: Mapped[list | None] = mapped_column(JSON, nullable=True)
     gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # When the imagery was flown, not when the file was imported. Null until known.
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     stretch: Mapped[dict] = mapped_column(JSON, default=dict)
     labels_version: Mapped[int] = mapped_column(Integer, default=0)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

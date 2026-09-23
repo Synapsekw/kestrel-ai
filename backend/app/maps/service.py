@@ -6,6 +6,7 @@ import shutil
 import threading
 from collections import OrderedDict
 from collections.abc import Callable
+from datetime import date
 from pathlib import Path
 
 import rasterio
@@ -74,6 +75,15 @@ def _get(s: Session, map_id: str) -> GeoMap:
 def get_map(handle: ProjectHandle, map_id: str) -> GeoMap:
     with handle.session() as s:
         row = _get(s, map_id)
+        s.expunge(row)
+    return row
+
+
+def set_captured_on(handle: ProjectHandle, map_id: str, captured_on: date | None) -> GeoMap:
+    with handle.session() as s:
+        row = _get(s, map_id)
+        row.captured_on = captured_on
+        s.flush()
         s.expunge(row)
     return row
 

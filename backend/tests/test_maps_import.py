@@ -87,3 +87,24 @@ def test_delete_removes_the_folder(client, project_id, import_map, tmp_path, han
     assert client.delete(f"{BASE}/{project_id}/maps/{map_id}").status_code == 204
     assert client.get(f"{BASE}/{project_id}/maps/{map_id}").status_code == 404
     assert not (handle.folder / "maps" / map_id).exists()
+
+
+def test_captured_on_is_set_cleared_and_validated(client, project_id, handle):
+    """The survey date: when the imagery was flown, which is not when the file was imported."""
+    from app.db.models import GeoMap
+
+    with handle.session() as s:
+        row = GeoMap(name="survey A", status="ready", source_path="E:/nowhere/a.tif", source_size=1)
+        s.add(row)
+        s.flush()
+        map_id = row.id
+    url = f"{BASE}/{project_id}/maps/{map_id}"
+    assert client.get(url).json()["captured_on"] is None
+
+    r = client.patch(url, json={"captured_on": "2026-04-15"})
+    assert r.status_code == 200, r.text
+    assert r.json()["captured_on"] == "2026-04-15"
+    assert client.get(url).json()["captured_on"] == "2026-04-15"
+
+    assert client.patch(url, json={"captured_on": None}).json()["captured_on"] is None
+    assert client.patch(url, json={"captured_on": "15/04/2026"}).status_code == 422

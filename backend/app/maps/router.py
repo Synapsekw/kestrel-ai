@@ -17,6 +17,7 @@ from app.maps.schemas import (
     GeoMapCreate,
     GeoMapList,
     GeoMapOut,
+    GeoMapPatch,
     GeoMapWithJob,
     MapDensity,
     MapDensityCell,
@@ -67,6 +68,15 @@ def create_map(
 @router.get("/maps/{mapId}", response_model=GeoMapOut)
 def get_map(mapId: str, handle: ProjectHandle = Depends(get_project)) -> GeoMapOut:  # noqa: N803
     return GeoMapOut.from_row(service.get_map(handle, mapId))
+
+
+@router.patch("/maps/{mapId}", response_model=GeoMapOut)
+def patch_map(  # noqa: N803
+    mapId: str,
+    body: GeoMapPatch,
+    handle: ProjectHandle = Depends(get_project),
+) -> GeoMapOut:
+    return GeoMapOut.from_row(service.set_captured_on(handle, mapId, body.captured_on))
 
 
 @router.delete("/maps/{mapId}", status_code=204)
