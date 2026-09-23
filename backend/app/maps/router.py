@@ -1,7 +1,4 @@
-"""GeoTIFF maps: import, tiles, runs, zones, labels, scoring, export (spec 2026-09-22-geotiff-maps).
-
-Operations not built yet are 501 stubs; each task that lands one removes it from STUBS.
-"""
+"""GeoTIFF maps: import, tiles, runs, zones, labels, scoring, export (spec 2026-09-22-geotiff-maps)."""
 
 import rasterio
 from fastapi import APIRouter, Depends, Query, Request, Response

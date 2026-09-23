@@ -1,4 +1,9 @@
-"""Helper to mount 501 placeholders so the contract is fully routed before a sub-project lands."""
+"""Helper to mount 501 placeholders so the contract is fully routed before a sub-project lands.
+
+No router uses it right now: every contract operation is built. It is kept on purpose as the way a
+future unit routes its operations as 501 stubs before it lands (as the C x BM fix did for BM);
+`tests/test_contract.py` then lists those operations as expected 501s.
+"""
 
 from fastapi import APIRouter, Body, Depends
 
