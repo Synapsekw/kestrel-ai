@@ -124,3 +124,25 @@ def put(handle: ProjectHandle, model: LibraryModel, mapping: Mapping, new_classe
             s.add(ModelClassMap(library_model_id=model.id, mapping=merged))
         else:
             row.mapping = merged
+
+
+def label_map(run_class_map: Mapping | None, classes: list[dict]) -> dict[str, str] | None:
+    """A run's `{model class: project class id | None}` as the provider's `{model class: project
+    class name}`. Ignored classes and ids no longer in the project are left out, so the provider
+    drops them. None when the run has no mapping of its own (older runs, cloud runs)."""
+    if not run_class_map:
+        return None
+    names = {c["id"]: c["name"] for c in classes}
+    return {model: names[cid] for model, cid in run_class_map.items() if cid is not None and cid in names}
+
+
+def model_snapshot(model: LibraryModel) -> dict:
+    """The library model as it is now, kept on a run so the run reads after the model is gone."""
+    return {
+        "id": model.id,
+        "name": model.name,
+        "task": model.task,
+        "format": model.format,
+        "class_names": list(model.class_names or []),
+        "origin": model.origin,
+    }

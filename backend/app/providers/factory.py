@@ -45,15 +45,21 @@ def get_provider(
     device: str = "0",
     gpu_timeout: float | None = None,
     cancelled: threading.Event | None = None,
+    class_map: dict[str, str] | None = None,
 ) -> Provider:
     """`local_model` builds from a library model and its weights file (`library.service.weights_file`),
-    `cloud_provider` from the stored key and config."""
+    `cloud_provider` from the stored key and config.
+
+    `class_map` (model class name -> project class name) is a run's own mapping; without one the
+    model's classes map by exact name and then by its aliases (`build_class_map`)."""
     if kind == "local_model":
         if weights is None or model_row is None:
             raise ProviderError("a local model run needs a model and its weights", retryable=False)
         return LocalYoloProvider(
             weights=weights,
-            class_map=build_class_map(
+            class_map=class_map
+            if class_map is not None
+            else build_class_map(
                 model_row.class_names or [], project_class_names, model_row.class_aliases or {}
             ),
             imgsz=imgsz,
