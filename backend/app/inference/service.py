@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.datasets.empties import clear_mark_for_ground_truth, count_marked_empty
 from app.db.models import Box, Image, Job, QueryRun
+from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
 from app.inference.schemas import PreannotateRequest, QueryRunCreate
 from app.jobs.gpu import GpuBusy
@@ -251,6 +252,8 @@ def promote(
         for box in pending:
             box.review_state, box.reviewed_at = "accepted", now
         row.promoted_at = now
+        s.flush()
+        recount_query_run(s, row)  # the run's counts follow in the same transaction
         image_ids = sorted({b.image_id for b in pending})
         cleared = count_marked_empty(s, image_ids)
         clear_mark_for_ground_truth(s, image_ids)
@@ -282,6 +285,8 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
         for box in promoted:
             box.review_state, box.reviewed_at = "unreviewed", None
         row.promoted_at = None
+        s.flush()
+        recount_query_run(s, row)
         image_ids = sorted({b.image_id for b in promoted})
         s.flush()
         count = box_count(s, run_id)

@@ -378,3 +378,33 @@ def test_accept_above_on_a_photo_run_goes_through_box_review(
     stored, fresh = _query_counts(handle)
     assert stored == fresh
     assert stored[1] == {cls[0]: 1, cls[1]: 1}
+
+
+def test_accepting_a_photo_run_as_labels_and_undoing_it_keep_the_run_counts(handle, photo_run, cls):
+    from app.inference import service as inference
+
+    inference.promote(handle, photo_run, 0.8)
+    stored, fresh = _query_counts(handle)
+    assert stored == fresh
+    assert stored[1] == {cls[0]: 1, cls[1]: 1}
+    inference.unpromote(handle, photo_run)
+    stored, fresh = _query_counts(handle)
+    assert stored == fresh
+    assert stored[1] == {}
+
+
+def test_marking_an_image_empty_rejects_its_run_boxes_out_of_the_counts(handle, photo_run):
+    from app.datasets import empties
+
+    empties.set_marked_empty(handle, "i1", True)
+    stored, fresh = _query_counts(handle)
+    assert stored == fresh == ({}, {})
+
+
+def test_bulk_marking_images_empty_keeps_the_run_counts(handle, photo_run):
+    from app.datasets import empties
+
+    empties.set_marked_empty(handle, "i1", False)
+    empties.bulk_mark_empty(handle, ["i1"], True)
+    stored, fresh = _query_counts(handle)
+    assert stored == fresh == ({}, {})
