@@ -19,6 +19,7 @@ function renderShell(route: string) {
     { method: "GET", path: /\/datasets$/, body: { items: [], next_cursor: null } },
     { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
     { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+    { method: "GET", path: /\/maps$/, body: { items: [] } },
   ]);
   return renderWithProviders(
     <Routes>

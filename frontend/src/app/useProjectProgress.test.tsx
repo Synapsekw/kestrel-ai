@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
 import {
   exampleDataset,
+  exampleGeoMap,
   exampleModel,
   exampleQueryRun,
   exampleStats,
@@ -12,6 +13,7 @@ import {
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { useProgressStore } from "@/store/progress";
+import { useProjectKindStore } from "./useProjectKind";
 import { useProjectProgress } from "./useProjectProgress";
 
 function Probe({ projectId }: { projectId: string }) {
@@ -23,6 +25,7 @@ describe("useProjectProgress", () => {
   beforeEach(() => {
     useJobsStore.setState({ jobs: {}, panelOpen: false });
     useProgressStore.setState({ byProject: {} });
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
   });
 
   it("loads the counts into the store", async () => {
@@ -39,6 +42,7 @@ describe("useProjectProgress", () => {
         body: { items: [exampleModel, exampleTrainedModel], next_cursor: null },
       },
       { method: "GET", path: /\/query-runs/, body: { items: [exampleQueryRun], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap] } },
     ]);
     renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
     await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
@@ -50,6 +54,7 @@ describe("useProjectProgress", () => {
       models: 2,
       trainedModels: 1,
       queryRuns: 1,
+      maps: 1,
     });
     expect(useProgressStore.getState().byProject[PROJECT_ID]?.images).toBe(40);
   });
@@ -63,11 +68,39 @@ describe("useProjectProgress", () => {
       models: 0,
       trainedModels: 0,
       queryRuns: 0,
+      maps: 0,
     });
     const { api, requests } = fakeClient([]);
     renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
     await waitFor(() => expect(requests.length).toBeGreaterThan(0));
     await new Promise((r) => setTimeout(r, 30));
     expect(screen.getByTestId("progress")).toHaveTextContent('"images":7');
+  });
+
+  it("never asks a detection project for datasets, and counts its maps", async () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "detect");
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: { ...exampleStats, image_count: 12, labeled_count: 0 } },
+      { method: "GET", path: /\/models$/, body: { items: [exampleModel], next_cursor: null } },
+      { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap, { ...exampleGeoMap, id: "m2" }] } },
+    ]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
+    expect(JSON.parse(screen.getByTestId("progress").textContent ?? "")).toMatchObject({
+      images: 12,
+      datasets: 0,
+      maps: 2,
+    });
+    expect(requests.some((r) => r.url.includes("/datasets"))).toBe(false);
+  });
+
+  it("waits for the project's kind before loading", async () => {
+    useProjectKindStore.setState({ byProject: {} });
+    const { api, requests } = fakeClient([]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(requests.length).toBeGreaterThan(0));
+    // The kind comes first; the counts follow once it is known (or could not be loaded).
+    expect(requests[0].url).toBe(`/api/v1/projects/${PROJECT_ID}`);
   });
 });
