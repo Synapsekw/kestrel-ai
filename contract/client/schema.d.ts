@@ -177,7 +177,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename a source or correct its survey date. For a map source the survey date is the map's
+         *     `captured_on`; patching it here writes the map too, so both stay equal.
+         */
+        patch: operations["updateSource"];
         trace?: never;
     };
     "/api/v1/projects/{projectId}/sources/{sourceId}/stats": {
@@ -1189,7 +1193,8 @@ export interface paths {
         /** Boxes intersecting `bbox` (map pixels), at most 5000. */
         get: operations["listMapDetections"];
         put?: never;
-        post?: never;
+        /** Draw a missed object. It is stored with `provenance_kind` `person` and `review_state` `accepted`, and counts as verified. */
+        post: operations["addMapDetection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1368,6 +1373,286 @@ export interface paths {
         put?: never;
         /** Write GeoJSON (WGS84), GeoPackage (map CRS) and/or CSV (both) to `exports/<stamp>/` (a `map_export` job). */
         post: operations["createMapExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Photo runs (query runs) and map runs of a detection project in one list, newest first
+         *     (`created_at desc, id desc`). Review progress comes from grouped counts.
+         */
+        get: operations["listRuns"];
+        put?: never;
+        /**
+         * Start one run per source: a photo source gets a query run (an `infer` job), a map source a
+         *     map run (a `map_detect` job). The model's classes must all map onto project classes (or be
+         *     ignored); otherwise nothing is queued and the answer is `422 unmapped_classes`. The first
+         *     run in a project with no classes seeds the class list from the model. Cloud-provider runs
+         *     (`provider` and `query`) skip the mapping.
+         */
+        post: operations["createRuns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Pin or unpin a run. Pinning a run unpins the other runs of its source; a pinned run represents its source in analytics and the survey timeline. */
+        patch: operations["updateRun"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs/{runId}/accept-above": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept every unreviewed detection of the run at or above `min_confidence` (an `accept_above` job, in batches; the counts follow). */
+        post: operations["acceptRunAbove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs/{runId}/recount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebuild the run's `counts`, `verified_counts` and (map runs) `area_counts` from its detections (a `recount` job). */
+        post: operations["recountRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/model-class-maps/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        /** How a library model's classes map onto this project's classes (the remembered mapping, else by name and aliases), and which are still unmapped. */
+        get: operations["getModelClassMap"];
+        /**
+         * Remember the mapping for this model. Every mapped id must be a project class. Each name
+         *     in `new_classes` is added as a project class and mapped to itself.
+         */
+        put: operations["putModelClassMap"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
+         *     state `edited`. The run's counts change in the same transaction.
+         */
+        post: operations["reviewMapDetections"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/next-unreviewed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /** The next unreviewed detection in reading order (`y`, then `x`) after `after_id`, and how many remain. */
+        get: operations["nextUnreviewedMapDetection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listSiteAreas"];
+        put?: never;
+        /**
+         * Add a site area, given in WGS84 or as a polygon drawn in one map's pixels (converted with
+         *     that map's georeference). Starts an `area_recount` job over every map run.
+         */
+        post: operations["createSiteArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-areas/{areaId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                areaId: components["parameters"]["areaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a site area. Starts an `area_recount` job. */
+        delete: operations["deleteSiteArea"];
+        options?: never;
+        head?: never;
+        /** Rename or redraw a site area. A new polygon starts an `area_recount` job. */
+        patch: operations["updateSiteArea"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/analytics/sources/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        /** Counts per class for one source from its chosen run (pinned, else the comparison rule for maps and the newest run for photos). Reads run rows only. */
+        get: operations["getSourceAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/analytics/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Counts per site area and class for every survey, in survey-timeline order and on the same comparison basis. Reads run rows only. */
+        get: operations["getAreaAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/analytics/photo-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Detections per class for every photo source. These are detections, not objects - the same object appears in several photos - and never enter a trend. */
+        get: operations["getPhotoBatchAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/detect-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write the detection numbers to `exports/` (a `detect_export` job): a CSV with one row per
+         *     source, class and site area, or a PDF report per source (`source_id` picks one; omitted
+         *     means every source).
+         */
+        post: operations["createDetectExport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1591,7 +1876,9 @@ export interface components {
                  *     class_in_use, conflict, not_implemented, provider_error, internal_error,
                  *     wrong_project_kind (409: the operation does not belong to this kind of project;
                  *     details `{kind, allowed}`), library_unavailable (503: the model library could not
-                 *     be opened), model_unavailable (409: the library model's weights file is missing)
+                 *     be opened), model_unavailable (409: the library model's weights file is missing),
+                 *     unmapped_classes (422: the run's model has classes with no project class and no
+                 *     remembered mapping; details `{model_id, unmapped}`)
                  */
                 code: string;
                 message: string;
@@ -1931,6 +2218,10 @@ export interface components {
         /**
          * @example {
          *       "id": "50000000-3333-4000-8000-000000000001",
+         *       "kind": "images",
+         *       "label": "Flight 15 Apr",
+         *       "captured_on": "2019-04-15",
+         *       "map_id": null,
          *       "folder": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
          *       "site": "ahmadia",
          *       "settings": {
@@ -1948,6 +2239,16 @@ export interface components {
          */
         Source: {
             id: string;
+            kind: components["schemas"]["SourceKind"];
+            /** @description the operator's name for the source, e.g. Flight 14 Sep; a map source starts with the map's name */
+            label: string | null;
+            /**
+             * Format: date
+             * @description the survey date. Photos: the earliest capture time in the import, editable. Maps: the map's `captured_on`, kept equal to it. Null means date not set, and it is never guessed.
+             */
+            captured_on: string | null;
+            /** @description the map a `map` source owns; null for photos */
+            map_id: string | null;
             /** @description the imported folder; originals there are never modified */
             folder: string;
             site: string;
@@ -1960,6 +2261,26 @@ export interface components {
             imported_at: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description `images` owns the photos of one import; `map` owns one map (`video` is reserved)
+         * @enum {string}
+         */
+        SourceKind: "images" | "map";
+        /**
+         * @example {
+         *       "label": "Flight 14 Sep",
+         *       "captured_on": "2026-09-14"
+         *     }
+         */
+        SourcePatch: {
+            /** @description null clears it */
+            label?: string | null;
+            /**
+             * Format: date
+             * @description the survey date; on a map source it is written to the map too; null clears it
+             */
+            captured_on?: string | null;
         };
         /**
          * @example {
@@ -3236,6 +3557,14 @@ export interface components {
          *       "conf": 0.25,
          *       "job_id": "j0000000-4444-4000-8000-000000000003",
          *       "box_count": 7,
+         *       "source_id": "50000000-3333-4000-8000-000000000001",
+         *       "model_snapshot": {},
+         *       "class_map": {},
+         *       "pinned": false,
+         *       "counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 7
+         *       },
+         *       "verified_counts": {},
          *       "promoted_at": null,
          *       "created_at": "2026-09-17T13:00:00Z"
          *     }
@@ -3243,6 +3572,20 @@ export interface components {
         QueryRun: {
             id: string;
             kind: components["schemas"]["QueryRunKind"];
+            /** @description the photo source the run covers; null for runs started before runs belonged to sources */
+            source_id: string | null;
+            model_snapshot: components["schemas"]["ModelSnapshot"];
+            class_map: components["schemas"]["RunClassMap"];
+            /** @description the operator's choice of this run to represent its source */
+            pinned: boolean;
+            /** @description detections per project class id, every review state except rejected */
+            counts: {
+                [key: string]: number;
+            };
+            /** @description detections per project class id that are accepted, edited or drawn by a person */
+            verified_counts: {
+                [key: string]: number;
+            };
             model_id: string | null;
             provider: string | null;
             model_name: string | null;
@@ -3350,7 +3693,14 @@ export interface components {
             run_id: string | null;
             model_name: string | null;
             conf: number | null;
+            /** @description the run was pinned by the operator rather than picked by the comparison rule */
+            pinned: boolean;
+            /** @description per class id: the total, or the verified count when `verified_only` was asked for */
             counts: {
+                [key: string]: number;
+            };
+            /** @description per class id: accepted, edited or drawn by a person */
+            verified_counts: {
                 [key: string]: number;
             };
             /** @description change since the previous comparable survey; absent for a class that survey did not have */
@@ -3513,6 +3863,34 @@ export interface components {
          *         "c1a2b3c4-0000-4000-8000-000000000001": 42,
          *         "c1a2b3c4-0000-4000-8000-000000000004": 17
          *       },
+         *       "source_id": "50000000-3333-4000-8000-000000000002",
+         *       "model_snapshot": {
+         *         "id": "m0000000-2222-4000-8000-000000000001",
+         *         "name": "machinery-v3",
+         *         "task": "detect",
+         *         "format": "pt",
+         *         "class_names": [
+         *           "excavator",
+         *           "dump truck"
+         *         ],
+         *         "origin": "trained"
+         *       },
+         *       "class_map": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump truck": "c1a2b3c4-0000-4000-8000-000000000004"
+         *       },
+         *       "pinned": false,
+         *       "verified_counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 30
+         *       },
+         *       "area_counts": {
+         *         "5a000000-aaaa-4000-8000-000000000001": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": {
+         *             "total": 12,
+         *             "verified": 9
+         *           }
+         *         }
+         *       },
          *       "detection_count": 59,
          *       "created_at": "2026-09-22T11:00:00Z"
          *     }
@@ -3520,6 +3898,22 @@ export interface components {
         MapRun: {
             id: string;
             map_id: string;
+            /** @description the map source; null for runs on maps imported before maps had sources */
+            source_id: string | null;
+            model_snapshot: components["schemas"]["ModelSnapshot"];
+            class_map: components["schemas"]["RunClassMap"];
+            /** @description the operator's choice of this run to represent its map in analytics and the survey timeline */
+            pinned: boolean;
+            /** @description objects per project class id that are accepted, edited or drawn by a person */
+            verified_counts: {
+                [key: string]: number;
+            };
+            /** @description per site area id, per class id: `{total, verified}`; an area that does not overlap the map has no key */
+            area_counts: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["CountPair"];
+                };
+            };
             kind: components["schemas"]["QueryRunKind"];
             model_id: string | null;
             provider: string | null;
@@ -3533,7 +3927,7 @@ export interface components {
             job_id: string | null;
             /** @description the state of the run's latest job; null before one exists */
             state: components["schemas"]["JobState"] | null;
-            /** @description detections per class id, filled when the run finishes */
+            /** @description detections per class id in every review state except rejected (the total); filled when the run finishes and kept current by review */
             counts: {
                 [key: string]: number;
             };
@@ -3570,6 +3964,8 @@ export interface components {
         };
         MapDetection: {
             id: string;
+            review_state: components["schemas"]["ReviewState"];
+            provenance_kind: components["schemas"]["ProvenanceKind"];
             class_id: string;
             confidence: number;
             /** @description full-resolution map pixels */
@@ -3590,7 +3986,9 @@ export interface components {
          *           "y": 800,
          *           "w": 180,
          *           "h": 120,
-         *           "angle": null
+         *           "angle": null,
+         *           "review_state": "unreviewed",
+         *           "provenance_kind": "local_model"
          *         }
          *       ],
          *       "truncated": false
@@ -3847,6 +4245,488 @@ export interface components {
             target_project_id: string;
         };
         /**
+         * @description a count shown as total (verified): total is every state except rejected; verified is accepted, edited or drawn by a person
+         * @example {
+         *       "total": 6,
+         *       "verified": 4
+         *     }
+         */
+        CountPair: {
+            total: number;
+            verified: number;
+        };
+        /**
+         * @description the library model as it was when the run started, so the run still reads after the model is deleted; empty for cloud-provider runs and runs made before snapshots
+         * @example {
+         *       "id": "m0000000-2222-4000-8000-000000000001",
+         *       "name": "yolo11m-coco",
+         *       "task": "detect",
+         *       "format": "pt",
+         *       "class_names": [
+         *         "truck",
+         *         "car"
+         *       ],
+         *       "origin": "starter"
+         *     }
+         */
+        ModelSnapshot: {
+            id?: string;
+            name?: string;
+            /** @enum {string} */
+            task?: "detect" | "obb";
+            /** @enum {string} */
+            format?: "pt" | "onnx";
+            class_names?: string[];
+            /** @enum {string} */
+            origin?: "trained" | "imported" | "starter";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * @description model class name to project class id; null ignores that class (its detections are not written); empty when the run used no mapping
+         * @example {
+         *       "truck": "c1a2b3c4-0000-4000-8000-000000000004",
+         *       "car": null
+         *     }
+         */
+        RunClassMap: {
+            [key: string]: string | null;
+        };
+        /**
+         * @description `images` is a photo run (a query run over one photo source); `map` is a map run
+         * @enum {string}
+         */
+        RunKind: "images" | "map";
+        /**
+         * @example {
+         *       "total": 530,
+         *       "reviewed": 412
+         *     }
+         */
+        ReviewProgress: {
+            /** @description detections of the run */
+            total: number;
+            /** @description detections no longer unreviewed */
+            reviewed: number;
+        };
+        /**
+         * @example {
+         *       "id": "r0000000-7777-4000-8000-000000000001",
+         *       "kind": "map",
+         *       "source_id": "50000000-3333-4000-8000-000000000002",
+         *       "source_label": "May survey",
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "model_name": "machinery-v3",
+         *       "conf": 0.25,
+         *       "job_state": "succeeded",
+         *       "pinned": false,
+         *       "counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 42,
+         *         "c1a2b3c4-0000-4000-8000-000000000004": 17
+         *       },
+         *       "verified_counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 30
+         *       },
+         *       "review": {
+         *         "total": 59,
+         *         "reviewed": 34
+         *       },
+         *       "created_at": "2026-09-22T11:00:00Z"
+         *     }
+         */
+        RunSummary: {
+            /** @description the query run or map run id */
+            id: string;
+            kind: components["schemas"]["RunKind"];
+            source_id: string | null;
+            /** @description the source's label, else its folder or map name */
+            source_label: string | null;
+            model_id: string | null;
+            /** @description from the run's model snapshot, or the cloud provider's model */
+            model_name: string | null;
+            conf: number;
+            /** @description the state of the run's latest job; null before one exists */
+            job_state: components["schemas"]["JobState"] | null;
+            pinned: boolean;
+            /** @description per project class id; every state except rejected */
+            counts: {
+                [key: string]: number;
+            };
+            /** @description per project class id; accepted */
+            verified_counts: {
+                [key: string]: number;
+            };
+            review: components["schemas"]["ReviewProgress"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        RunSummaryPage: {
+            items: components["schemas"]["RunSummary"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @description one run per source. A library model (`model_id`), or a cloud provider (`provider` and `query`).
+         * @example {
+         *       "source_ids": [
+         *         "50000000-3333-4000-8000-000000000001",
+         *         "50000000-3333-4000-8000-000000000002"
+         *       ],
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "conf": 0.25
+         *     }
+         */
+        RunCreate: {
+            source_ids: string[];
+            /** @description a library model id */
+            model_id?: string;
+            provider?: components["schemas"]["ProviderName"];
+            /** @description free text for a cloud provider, e.g. dump trucks */
+            query?: string;
+            /** @default 0.25 */
+            conf: number;
+            tiling?: components["schemas"]["Tiling"];
+            /** @description map runs: resample windows to this GSD; defaults to the model's training GSD */
+            target_gsd_cm?: number | null;
+        };
+        RunCreatedItem: {
+            run_id: string;
+            source_id: string;
+            kind: components["schemas"]["RunKind"];
+            job: components["schemas"]["Job"];
+        };
+        RunCreated: {
+            runs: components["schemas"]["RunCreatedItem"][];
+        };
+        /**
+         * @example {
+         *       "pinned": true
+         *     }
+         */
+        RunPatch: {
+            /** @description true pins this run and unpins the other runs of its source */
+            pinned: boolean;
+        };
+        /**
+         * @description the `Error` envelope for `unmapped_classes`
+         * @example {
+         *       "error": {
+         *         "code": "unmapped_classes",
+         *         "message": "2 of the model's classes are not mapped to project classes.",
+         *         "details": {
+         *           "model_id": "m0000000-2222-4000-8000-000000000001",
+         *           "unmapped": [
+         *             "crane",
+         *             "concrete mixer"
+         *           ]
+         *         }
+         *       }
+         *     }
+         */
+        UnmappedClassesError: {
+            error: {
+                /** @description `unmapped_classes`, or `validation_error` for a malformed body */
+                code: string;
+                message: string;
+                details: {
+                    model_id?: string;
+                    /** @description model class names with no project class */
+                    unmapped?: string[];
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        /**
+         * @example {
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "model_classes": [
+         *         "excavator",
+         *         "dump truck",
+         *         "crane"
+         *       ],
+         *       "mapping": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump truck": "c1a2b3c4-0000-4000-8000-000000000004"
+         *       },
+         *       "unmapped": [
+         *         "crane"
+         *       ]
+         *     }
+         */
+        ModelClassMapOut: {
+            model_id: string;
+            /** @description the model's class names, in index order */
+            model_classes: string[];
+            /** @description model class name to project class id, or null to ignore it */
+            mapping: {
+                [key: string]: string | null;
+            };
+            /** @description model class names that have no entry in `mapping` yet */
+            unmapped: string[];
+        };
+        /**
+         * @example {
+         *       "mapping": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump truck": null
+         *       },
+         *       "new_classes": [
+         *         "crane"
+         *       ]
+         *     }
+         */
+        ModelClassMapPut: {
+            /** @description model class name to project class id, or null to ignore it */
+            mapping: {
+                [key: string]: string | null;
+            };
+            /**
+             * @description model class names to add as project classes, each mapped to itself
+             * @default []
+             */
+            new_classes: string[];
+        };
+        /**
+         * @example {
+         *       "detection_ids": [
+         *         "d0000000-1111-4000-8000-000000000001"
+         *       ],
+         *       "action": "accept"
+         *     }
+         */
+        MapDetectionReview: {
+            detection_ids: string[];
+            /**
+             * @description `unreview` puts a detection back to unreviewed; `reclass` needs `class_id` and sets the state `edited`
+             * @enum {string}
+             */
+            action: "accept" | "reject" | "unreview" | "reclass";
+            /** @description required for reclass */
+            class_id?: string;
+        };
+        /**
+         * @example {
+         *       "updated": 1
+         *     }
+         */
+        MapDetectionReviewResult: {
+            updated: number;
+        };
+        /**
+         * @example {
+         *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *       "x": 2400,
+         *       "y": 1300,
+         *       "w": 170,
+         *       "h": 110
+         *     }
+         */
+        MapDetectionCreate: {
+            class_id: string;
+            /** @description full-resolution map pixels */
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            angle?: number | null;
+        };
+        /**
+         * @example {
+         *       "detection": {
+         *         "id": "d0000000-1111-4000-8000-000000000002",
+         *         "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "confidence": 0.64,
+         *         "x": 3000,
+         *         "y": 2400,
+         *         "w": 170,
+         *         "h": 110,
+         *         "angle": null,
+         *         "review_state": "unreviewed",
+         *         "provenance_kind": "local_model"
+         *       },
+         *       "remaining": 118
+         *     }
+         */
+        NextUnreviewed: {
+            detection: components["schemas"]["MapDetection"] | null;
+            /** @description unreviewed detections left in the run */
+            remaining: number;
+        };
+        /**
+         * @example {
+         *       "min_confidence": 0.8
+         *     }
+         */
+        AcceptAbove: {
+            min_confidence: number;
+        };
+        /** @description [longitude, latitude] in WGS84 degrees */
+        LonLat: number[];
+        /** @description [x, y] in full-resolution map pixels */
+        PixelPoint: number[];
+        /**
+         * @example {
+         *       "id": "5a000000-aaaa-4000-8000-000000000001",
+         *       "name": "North laydown yard",
+         *       "polygon_wgs84": [
+         *         [
+         *           47.761,
+         *           29.496
+         *         ],
+         *         [
+         *           47.764,
+         *           29.496
+         *         ],
+         *         [
+         *           47.764,
+         *           29.498
+         *         ],
+         *         [
+         *           47.761,
+         *           29.498
+         *         ]
+         *       ],
+         *       "created_at": "2026-09-23T09:00:00Z"
+         *     }
+         */
+        SiteArea: {
+            id: string;
+            name: string;
+            /** @description the outline, not closed (the first point is not repeated) */
+            polygon_wgs84: components["schemas"]["LonLat"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description either `polygon_wgs84`, or `map_id` with `polygon_px` drawn on that map (the server converts it with the map's georeference)
+         * @example {
+         *       "name": "North laydown yard",
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "polygon_px": [
+         *         [
+         *           1000,
+         *           800
+         *         ],
+         *         [
+         *           4000,
+         *           800
+         *         ],
+         *         [
+         *           4000,
+         *           3000
+         *         ],
+         *         [
+         *           1000,
+         *           3000
+         *         ]
+         *       ]
+         *     }
+         */
+        SiteAreaCreate: {
+            name: string;
+            polygon_wgs84?: components["schemas"]["LonLat"][];
+            map_id?: string;
+            polygon_px?: components["schemas"]["PixelPoint"][];
+        };
+        /**
+         * @description a new outline is either `polygon_wgs84`, or `map_id` with `polygon_px`
+         * @example {
+         *       "name": "North yard"
+         *     }
+         */
+        SiteAreaPatch: {
+            name?: string;
+            polygon_wgs84?: components["schemas"]["LonLat"][];
+            map_id?: string;
+            polygon_px?: components["schemas"]["PixelPoint"][];
+        };
+        SiteAreaList: {
+            items: components["schemas"]["SiteArea"][];
+        };
+        /**
+         * @example {
+         *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *       "name": "excavator",
+         *       "colour": "#f97316",
+         *       "total": 6,
+         *       "verified": 4
+         *     }
+         */
+        ClassCountRow: {
+            class_id: string;
+            name: string;
+            colour: string;
+            total: number;
+            verified: number;
+        };
+        SourceAnalytics: {
+            source: components["schemas"]["Source"];
+            /**
+             * @description `objects` for a map source; `detections` for photos, where one object can appear in several photos
+             * @enum {string}
+             */
+            unit: "objects" | "detections";
+            /** @description photos in a photo source; null for a map */
+            image_count: number | null;
+            /** @description the run that represents the source; null before any run */
+            run: components["schemas"]["RunSummary"] | null;
+            classes: components["schemas"]["ClassCountRow"][];
+            review: components["schemas"]["ReviewProgress"];
+        };
+        AreaRef: {
+            id: string;
+            name: string;
+        };
+        AreaSurveyCell: {
+            /** @description part of the area lies outside this map */
+            partial: boolean;
+            /** @description per class id */
+            counts: {
+                [key: string]: components["schemas"]["CountPair"];
+            };
+        };
+        AreaSurvey: {
+            map_id: string;
+            map_name: string;
+            /** Format: date */
+            captured_on: string | null;
+            /**
+             * @description as in the survey timeline
+             * @enum {string}
+             */
+            state: "ok" | "not_comparable" | "not_counted";
+            /** @description per site area id; an area that does not overlap this map has no key */
+            per_area: {
+                [key: string]: components["schemas"]["AreaSurveyCell"];
+            };
+        };
+        AreaAnalytics: {
+            areas: components["schemas"]["AreaRef"][];
+            /** @description oldest first, as in the survey timeline */
+            surveys: components["schemas"]["AreaSurvey"][];
+        };
+        PhotoBatch: {
+            source: components["schemas"]["Source"];
+            run: components["schemas"]["RunSummary"] | null;
+            /** @description detections, not objects */
+            classes: components["schemas"]["ClassCountRow"][];
+        };
+        PhotoBatchAnalytics: {
+            batches: components["schemas"]["PhotoBatch"][];
+        };
+        /**
+         * @example {
+         *       "format": "pdf",
+         *       "source_id": "50000000-3333-4000-8000-000000000002"
+         *     }
+         */
+        DetectExportRequest: {
+            /** @enum {string} */
+            format: "csv" | "pdf";
+            /** @description PDF: report this source only; omitted or null reports every source. CSV: this source only, else every source. */
+            source_id?: string | null;
+        };
+        /**
          * @example {
          *       "min_confidence": 0.5
          *     }
@@ -3881,6 +4761,16 @@ export interface components {
          *         "conf": 0.25,
          *         "job_id": "j0000000-4444-4000-8000-000000000003",
          *         "box_count": 7,
+         *         "source_id": "50000000-3333-4000-8000-000000000001",
+         *         "model_snapshot": {},
+         *         "class_map": {},
+         *         "pinned": false,
+         *         "counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 7
+         *         },
+         *         "verified_counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 6
+         *         },
          *         "promoted_at": "2026-09-17T13:30:00Z",
          *         "created_at": "2026-09-17T13:00:00Z"
          *       },
@@ -3912,6 +4802,16 @@ export interface components {
          *         "conf": 0.25,
          *         "job_id": "j0000000-4444-4000-8000-000000000003",
          *         "box_count": 7,
+         *         "source_id": "50000000-3333-4000-8000-000000000001",
+         *         "model_snapshot": {},
+         *         "class_map": {},
+         *         "pinned": false,
+         *         "counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 7
+         *         },
+         *         "verified_counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 6
+         *         },
          *         "promoted_at": null,
          *         "created_at": "2026-09-17T13:00:00Z"
          *       },
@@ -3953,7 +4853,7 @@ export interface components {
             path: string;
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -3988,7 +4888,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths} */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -4092,6 +4992,48 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description the project or the named resource does not exist (`code` is `not_found`) */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "not_found",
+                 *         "message": "run r0000000… not found",
+                 *         "details": {}
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued. Map them with `PUT /model-class-maps/{modelId}` and retry. A malformed body answers `validation_error`. */
+        UnmappedClasses: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "unmapped_classes",
+                 *         "message": "2 of the model's classes are not mapped to project classes.",
+                 *         "details": {
+                 *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                 *           "unmapped": [
+                 *             "crane",
+                 *             "concrete mixer"
+                 *           ]
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["UnmappedClassesError"];
+            };
+        };
     };
     parameters: {
         projectId: string;
@@ -4110,6 +5052,7 @@ export interface components {
         mapId: string;
         zoneId: string;
         labelId: string;
+        areaId: string;
     };
     requestBodies: never;
     headers: never;
@@ -4407,6 +5350,51 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "50000000-3333-4000-8000-000000000001",
+                     *           "kind": "images",
+                     *           "label": "Flight 14 Sep",
+                     *           "captured_on": "2026-09-14",
+                     *           "map_id": null,
+                     *           "folder": "D:\\Surveys\\2026-09-14 flight",
+                     *           "site": "north-yard",
+                     *           "settings": {
+                     *             "max_side": 4000,
+                     *             "quality": 95,
+                     *             "dedupe_threshold": 4
+                     *           },
+                     *           "image_count": 240,
+                     *           "duplicate_count": 0,
+                     *           "job_id": "j0000000-4444-4000-8000-000000000001",
+                     *           "imported_at": "2026-09-15T08:30:00Z",
+                     *           "created_at": "2026-09-15T08:05:00Z"
+                     *         },
+                     *         {
+                     *           "id": "50000000-3333-4000-8000-000000000002",
+                     *           "kind": "map",
+                     *           "label": "May survey",
+                     *           "captured_on": "2026-05-20",
+                     *           "map_id": "a0000000-6666-4000-8000-000000000001",
+                     *           "folder": "D:\\Surveys\\may-ortho.tif",
+                     *           "site": "may-ortho",
+                     *           "settings": {
+                     *             "max_side": 4000,
+                     *             "quality": 95,
+                     *             "dedupe_threshold": 4
+                     *           },
+                     *           "image_count": 0,
+                     *           "duplicate_count": 0,
+                     *           "job_id": "j0000000-4444-4000-8000-000000000002",
+                     *           "imported_at": "2026-05-21T10:00:00Z",
+                     *           "created_at": "2026-05-21T09:55:00Z"
+                     *         }
+                     *       ],
+                     *       "next_cursor": null
+                     *     }
+                     */
                     "application/json": components["schemas"]["SourcePage"];
                 };
             };
@@ -4461,6 +5449,42 @@ export interface operations {
                     "application/json": components["schemas"]["Source"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "label": "Flight 14 Sep",
+                 *       "captured_on": "2026-09-14"
+                 *     }
+                 */
+                "application/json": components["schemas"]["SourcePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Source"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6339,6 +7363,36 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    addMapDetection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapDetectionCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapDetection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
     getMapDensity: {
         parameters: {
             query?: {
@@ -6399,6 +7453,8 @@ export interface operations {
                 model_id?: string;
                 /** @description compare at this confidence instead of the newest run's */
                 conf?: number;
+                /** @description count only verified detections (accepted, edited or drawn by a person): `counts` and `deltas` are built from each run's `verified_counts` */
+                verified_only?: boolean;
             };
             header?: never;
             path: {
@@ -6440,6 +7496,10 @@ export interface operations {
                      *           "counts": {
                      *             "c1a2b3c4-0000-4000-8000-000000000001": 12
                      *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 9
+                     *           },
+                     *           "pinned": false,
                      *           "deltas": {},
                      *           "state": "ok",
                      *           "reason": null
@@ -6455,6 +7515,10 @@ export interface operations {
                      *           "counts": {
                      *             "c1a2b3c4-0000-4000-8000-000000000001": 15
                      *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 15
+                     *           },
+                     *           "pinned": true,
                      *           "deltas": {
                      *             "c1a2b3c4-0000-4000-8000-000000000001": 3
                      *           },
@@ -6737,6 +7801,841 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                /** @description only this source's runs */
+                source_id?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description runs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "r0000000-7777-4000-8000-000000000001",
+                     *           "kind": "map",
+                     *           "source_id": "50000000-3333-4000-8000-000000000002",
+                     *           "source_label": "May survey",
+                     *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *           "model_name": "machinery-v3",
+                     *           "conf": 0.25,
+                     *           "job_state": "succeeded",
+                     *           "pinned": false,
+                     *           "counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 42,
+                     *             "c1a2b3c4-0000-4000-8000-000000000004": 17
+                     *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 30
+                     *           },
+                     *           "review": {
+                     *             "total": 59,
+                     *             "reviewed": 34
+                     *           },
+                     *           "created_at": "2026-09-22T11:00:00Z"
+                     *         },
+                     *         {
+                     *           "id": "q0000000-8888-4000-8000-000000000001",
+                     *           "kind": "images",
+                     *           "source_id": "50000000-3333-4000-8000-000000000001",
+                     *           "source_label": "Flight 14 Sep",
+                     *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *           "model_name": "machinery-v3",
+                     *           "conf": 0.25,
+                     *           "job_state": "succeeded",
+                     *           "pinned": false,
+                     *           "counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 31,
+                     *             "c1a2b3c4-0000-4000-8000-000000000004": 9
+                     *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 12
+                     *           },
+                     *           "review": {
+                     *             "total": 40,
+                     *             "reviewed": 12
+                     *           },
+                     *           "created_at": "2026-09-21T15:00:00Z"
+                     *         }
+                     *       ],
+                     *       "next_cursor": null
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RunSummaryPage"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"];
+            };
+        };
+        responses: {
+            /** @description runs created, one job per run queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "runs": [
+                     *         {
+                     *           "run_id": "q0000000-8888-4000-8000-000000000002",
+                     *           "source_id": "50000000-3333-4000-8000-000000000001",
+                     *           "kind": "images",
+                     *           "job": {
+                     *             "id": "j0000000-4444-4000-8000-000000000010",
+                     *             "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+                     *             "type": "infer",
+                     *             "state": "queued",
+                     *             "progress": 0,
+                     *             "message": "",
+                     *             "log_path": "runs/j0000000-4444-4000-8000-000000000010/job.log",
+                     *             "params": {
+                     *               "query_run_id": "q0000000-8888-4000-8000-000000000002"
+                     *             },
+                     *             "result": null,
+                     *             "error": null,
+                     *             "created_at": "2026-09-23T10:00:00Z",
+                     *             "started_at": null,
+                     *             "finished_at": null
+                     *           }
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RunCreated"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            422: components["responses"]["UnmappedClasses"];
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    acceptRunAbove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptAbove"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    recountRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getModelClassMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelClassMapOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putModelClassMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelClassMapPut"];
+            };
+        };
+        responses: {
+            /** @description the stored mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelClassMapOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            /** @description a mapped id is not a project class, or a name is not one of the model's classes (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    reviewMapDetections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapDetectionReview"];
+            };
+        };
+        responses: {
+            /** @description detections updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapDetectionReviewResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    nextUnreviewedMapDetection: {
+        parameters: {
+            query?: {
+                /** @description the detection the viewer is on; omitted starts from the top */
+                after_id?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the next detection, or null when none is left */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextUnreviewed"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSiteAreas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description site areas, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000001",
+                     *           "name": "North laydown yard",
+                     *           "polygon_wgs84": [
+                     *             [
+                     *               47.761,
+                     *               29.496
+                     *             ],
+                     *             [
+                     *               47.764,
+                     *               29.496
+                     *             ],
+                     *             [
+                     *               47.764,
+                     *               29.498
+                     *             ],
+                     *             [
+                     *               47.761,
+                     *               29.498
+                     *             ]
+                     *           ],
+                     *           "created_at": "2026-09-23T09:00:00Z"
+                     *         },
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000002",
+                     *           "name": "Batching plant",
+                     *           "polygon_wgs84": [
+                     *             [
+                     *               47.765,
+                     *               29.493
+                     *             ],
+                     *             [
+                     *               47.768,
+                     *               29.493
+                     *             ],
+                     *             [
+                     *               47.768,
+                     *               29.495
+                     *             ]
+                     *           ],
+                     *           "created_at": "2026-09-23T09:05:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SiteAreaList"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createSiteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteAreaCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteArea"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSiteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                areaId: components["parameters"]["areaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSiteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                areaId: components["parameters"]["areaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteAreaPatch"];
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteArea"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSourceAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the source's counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "source": {
+                     *         "id": "50000000-3333-4000-8000-000000000002",
+                     *         "kind": "map",
+                     *         "label": "May survey",
+                     *         "captured_on": "2026-05-20",
+                     *         "map_id": "a0000000-6666-4000-8000-000000000001",
+                     *         "folder": "D:\\Surveys\\may-ortho.tif",
+                     *         "site": "may-ortho",
+                     *         "settings": {
+                     *           "max_side": 4000,
+                     *           "quality": 95,
+                     *           "dedupe_threshold": 4
+                     *         },
+                     *         "image_count": 0,
+                     *         "duplicate_count": 0,
+                     *         "job_id": "j0000000-4444-4000-8000-000000000002",
+                     *         "imported_at": "2026-05-21T10:00:00Z",
+                     *         "created_at": "2026-05-21T09:55:00Z"
+                     *       },
+                     *       "unit": "objects",
+                     *       "image_count": null,
+                     *       "run": {
+                     *         "id": "r0000000-7777-4000-8000-000000000001",
+                     *         "kind": "map",
+                     *         "source_id": "50000000-3333-4000-8000-000000000002",
+                     *         "source_label": "May survey",
+                     *         "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *         "model_name": "machinery-v3",
+                     *         "conf": 0.25,
+                     *         "job_state": "succeeded",
+                     *         "pinned": false,
+                     *         "counts": {
+                     *           "c1a2b3c4-0000-4000-8000-000000000001": 42,
+                     *           "c1a2b3c4-0000-4000-8000-000000000004": 17
+                     *         },
+                     *         "verified_counts": {
+                     *           "c1a2b3c4-0000-4000-8000-000000000001": 30
+                     *         },
+                     *         "review": {
+                     *           "total": 59,
+                     *           "reviewed": 34
+                     *         },
+                     *         "created_at": "2026-09-22T11:00:00Z"
+                     *       },
+                     *       "classes": [
+                     *         {
+                     *           "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+                     *           "name": "excavator",
+                     *           "colour": "#f97316",
+                     *           "total": 42,
+                     *           "verified": 30
+                     *         },
+                     *         {
+                     *           "class_id": "c1a2b3c4-0000-4000-8000-000000000004",
+                     *           "name": "dump truck",
+                     *           "colour": "#0ea5e9",
+                     *           "total": 17,
+                     *           "verified": 0
+                     *         }
+                     *       ],
+                     *       "review": {
+                     *         "total": 59,
+                     *         "reviewed": 34
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SourceAnalytics"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAreaAnalytics: {
+        parameters: {
+            query?: {
+                /** @description compare on this model instead of the newest run's */
+                model_id?: string;
+                /** @description compare at this confidence instead of the newest run's */
+                conf?: number;
+                /** @description pick surveys as the verified-only timeline does */
+                verified_only?: boolean;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description per-area counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "areas": [
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000001",
+                     *           "name": "North laydown yard"
+                     *         },
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000002",
+                     *           "name": "Batching plant"
+                     *         }
+                     *       ],
+                     *       "surveys": [
+                     *         {
+                     *           "map_id": "7c9e1b2a-5555-4000-8000-000000000001",
+                     *           "map_name": "April survey",
+                     *           "captured_on": "2026-04-15",
+                     *           "state": "ok",
+                     *           "per_area": {
+                     *             "5a000000-aaaa-4000-8000-000000000001": {
+                     *               "partial": false,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 5,
+                     *                   "verified": 5
+                     *                 },
+                     *                 "c1a2b3c4-0000-4000-8000-000000000004": {
+                     *                   "total": 2,
+                     *                   "verified": 1
+                     *                 }
+                     *               }
+                     *             },
+                     *             "5a000000-aaaa-4000-8000-000000000002": {
+                     *               "partial": true,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 1,
+                     *                   "verified": 0
+                     *                 }
+                     *               }
+                     *             }
+                     *           }
+                     *         },
+                     *         {
+                     *           "map_id": "7c9e1b2a-5555-4000-8000-000000000002",
+                     *           "map_name": "May survey",
+                     *           "captured_on": "2026-05-20",
+                     *           "state": "ok",
+                     *           "per_area": {
+                     *             "5a000000-aaaa-4000-8000-000000000001": {
+                     *               "partial": false,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 7,
+                     *                   "verified": 6
+                     *                 },
+                     *                 "c1a2b3c4-0000-4000-8000-000000000004": {
+                     *                   "total": 3,
+                     *                   "verified": 3
+                     *                 }
+                     *               }
+                     *             },
+                     *             "5a000000-aaaa-4000-8000-000000000002": {
+                     *               "partial": false,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 2,
+                     *                   "verified": 2
+                     *                 }
+                     *               }
+                     *             }
+                     *           }
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AreaAnalytics"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPhotoBatchAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description one row per photo source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "batches": [
+                     *         {
+                     *           "source": {
+                     *             "id": "50000000-3333-4000-8000-000000000001",
+                     *             "kind": "images",
+                     *             "label": "Flight 14 Sep",
+                     *             "captured_on": "2026-09-14",
+                     *             "map_id": null,
+                     *             "folder": "D:\\Surveys\\2026-09-14 flight",
+                     *             "site": "north-yard",
+                     *             "settings": {
+                     *               "max_side": 4000,
+                     *               "quality": 95,
+                     *               "dedupe_threshold": 4
+                     *             },
+                     *             "image_count": 240,
+                     *             "duplicate_count": 0,
+                     *             "job_id": "j0000000-4444-4000-8000-000000000001",
+                     *             "imported_at": "2026-09-15T08:30:00Z",
+                     *             "created_at": "2026-09-15T08:05:00Z"
+                     *           },
+                     *           "run": {
+                     *             "id": "q0000000-8888-4000-8000-000000000001",
+                     *             "kind": "images",
+                     *             "source_id": "50000000-3333-4000-8000-000000000001",
+                     *             "source_label": "Flight 14 Sep",
+                     *             "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *             "model_name": "machinery-v3",
+                     *             "conf": 0.25,
+                     *             "job_state": "succeeded",
+                     *             "pinned": false,
+                     *             "counts": {
+                     *               "c1a2b3c4-0000-4000-8000-000000000001": 31,
+                     *               "c1a2b3c4-0000-4000-8000-000000000004": 9
+                     *             },
+                     *             "verified_counts": {
+                     *               "c1a2b3c4-0000-4000-8000-000000000001": 12
+                     *             },
+                     *             "review": {
+                     *               "total": 40,
+                     *               "reviewed": 12
+                     *             },
+                     *             "created_at": "2026-09-21T15:00:00Z"
+                     *           },
+                     *           "classes": [
+                     *             {
+                     *               "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+                     *               "name": "excavator",
+                     *               "colour": "#f97316",
+                     *               "total": 31,
+                     *               "verified": 12
+                     *             },
+                     *             {
+                     *               "class_id": "c1a2b3c4-0000-4000-8000-000000000004",
+                     *               "name": "dump truck",
+                     *               "colour": "#0ea5e9",
+                     *               "total": 9,
+                     *               "verified": 0
+                     *             }
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PhotoBatchAnalytics"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDetectExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetectExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };

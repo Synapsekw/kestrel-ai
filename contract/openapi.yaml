@@ -59,6 +59,7 @@ tags:
   - name: jobs
   - name: agent
   - name: maps
+  - name: detect
 
 paths:
   /api/v1/agent/chat:
@@ -250,6 +251,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/SourcePage" }
+              example:
+                items:
+                    - id: "50000000-3333-4000-8000-000000000001"
+                      kind: images
+                      label: "Flight 14 Sep"
+                      captured_on: "2026-09-14"
+                      map_id: null
+                      folder: "D:\\Surveys\\2026-09-14 flight"
+                      site: north-yard
+                      settings: { max_side: 4000, quality: 95, dedupe_threshold: 4 }
+                      image_count: 240
+                      duplicate_count: 0
+                      job_id: "j0000000-4444-4000-8000-000000000001"
+                      imported_at: "2026-09-15T08:30:00Z"
+                      created_at: "2026-09-15T08:05:00Z"
+                    - id: "50000000-3333-4000-8000-000000000002"
+                      kind: map
+                      label: "May survey"
+                      captured_on: "2026-05-20"
+                      map_id: "a0000000-6666-4000-8000-000000000001"
+                      folder: "D:\\Surveys\\may-ortho.tif"
+                      site: may-ortho
+                      settings: { max_side: 4000, quality: 95, dedupe_threshold: 4 }
+                      image_count: 0
+                      duplicate_count: 0
+                      job_id: "j0000000-4444-4000-8000-000000000002"
+                      imported_at: "2026-05-21T10:00:00Z"
+                      created_at: "2026-05-21T09:55:00Z"
+                next_cursor: null
         default: { $ref: "#/components/responses/Error" }
     post:
       tags: [sources]
@@ -282,6 +312,27 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Source" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [sources]
+      operationId: updateSource
+      summary: |
+        Rename a source or correct its survey date. For a map source the survey date is the map's
+        `captured_on`; patching it here writes the map too, so both stay equal.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SourcePatch" }
+            example: { label: "Flight 14 Sep", captured_on: "2026-09-14" }
+      responses:
+        "200":
+          description: the updated source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Source" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/sources/{sourceId}/stats:
     parameters:
@@ -1509,6 +1560,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MapDetectionPage" }
         default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [detect]
+      operationId: addMapDetection
+      summary: Draw a missed object. It is stored with `provenance_kind` `person` and `review_state` `accepted`, and counts as verified.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapDetectionCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapDetection" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}/density:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -1554,6 +1623,7 @@ paths:
       parameters:
         - { name: model_id, in: query, required: false, schema: { type: string }, description: compare on this model instead of the newest run's }
         - { name: conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 }, description: compare at this confidence instead of the newest run's }
+        - { name: verified_only, in: query, required: false, schema: { type: boolean, default: false }, description: "count only verified detections (accepted, edited or drawn by a person): `counts` and `deltas` are built from each run's `verified_counts`" }
       responses:
         "200":
           description: the timeline
@@ -1573,6 +1643,8 @@ paths:
                     model_name: "yolo11m-coco"
                     conf: 0.25
                     counts: { "c1a2b3c4-0000-4000-8000-000000000001": 12 }
+                    verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 9 }
+                    pinned: false
                     deltas: {}
                     state: ok
                     reason: null
@@ -1584,6 +1656,8 @@ paths:
                     model_name: "yolo11m-coco"
                     conf: 0.25
                     counts: { "c1a2b3c4-0000-4000-8000-000000000001": 15 }
+                    verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 15 }
+                    pinned: true
                     deltas: { "c1a2b3c4-0000-4000-8000-000000000001": 3 }
                     state: ok
                     reason: null
@@ -1745,6 +1819,497 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ detect
+  /api/v1/projects/{projectId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [detect]
+      operationId: listRuns
+      summary: |
+        Photo runs (query runs) and map runs of a detection project in one list, newest first
+        (`created_at desc, id desc`). Review progress comes from grouped counts.
+      parameters:
+        - { name: source_id, in: query, required: false, schema: { type: string }, description: only this source's runs }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummaryPage" }
+              example:
+                items:
+                  - id: "r0000000-7777-4000-8000-000000000001"
+                    kind: map
+                    source_id: "50000000-3333-4000-8000-000000000002"
+                    source_label: "May survey"
+                    model_id: "m0000000-2222-4000-8000-000000000001"
+                    model_name: "machinery-v3"
+                    conf: 0.25
+                    job_state: succeeded
+                    pinned: false
+                    counts: { "c1a2b3c4-0000-4000-8000-000000000001": 42, "c1a2b3c4-0000-4000-8000-000000000004": 17 }
+                    verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 30 }
+                    review: { total: 59, reviewed: 34 }
+                    created_at: "2026-09-22T11:00:00Z"
+                  - id: "q0000000-8888-4000-8000-000000000001"
+                    kind: images
+                    source_id: "50000000-3333-4000-8000-000000000001"
+                    source_label: "Flight 14 Sep"
+                    model_id: "m0000000-2222-4000-8000-000000000001"
+                    model_name: "machinery-v3"
+                    conf: 0.25
+                    job_state: succeeded
+                    pinned: false
+                    counts: { "c1a2b3c4-0000-4000-8000-000000000001": 31, "c1a2b3c4-0000-4000-8000-000000000004": 9 }
+                    verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 12 }
+                    review: { total: 40, reviewed: 12 }
+                    created_at: "2026-09-21T15:00:00Z"
+                next_cursor: null
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [detect]
+      operationId: createRuns
+      summary: |
+        Start one run per source: a photo source gets a query run (an `infer` job), a map source a
+        map run (a `map_detect` job). The model's classes must all map onto project classes (or be
+        ignored); otherwise nothing is queued and the answer is `422 unmapped_classes`. The first
+        run in a project with no classes seeds the class list from the model. Cloud-provider runs
+        (`provider` and `query`) skip the mapping.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunCreate" }
+      responses:
+        "202":
+          description: runs created, one job per run queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunCreated" }
+              example:
+                runs:
+                  - run_id: "q0000000-8888-4000-8000-000000000002"
+                    source_id: "50000000-3333-4000-8000-000000000001"
+                    kind: images
+                    job:
+                      id: "j0000000-4444-4000-8000-000000000010"
+                      project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+                      type: infer
+                      state: queued
+                      progress: 0
+                      message: ""
+                      log_path: "runs/j0000000-4444-4000-8000-000000000010/job.log"
+                      params: { query_run_id: "q0000000-8888-4000-8000-000000000002" }
+                      result: null
+                      error: null
+                      created_at: "2026-09-23T10:00:00Z"
+                      started_at: null
+                      finished_at: null
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422": { $ref: "#/components/responses/UnmappedClasses" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    patch:
+      tags: [detect]
+      operationId: updateRun
+      summary: Pin or unpin a run. Pinning a run unpins the other runs of its source; a pinned run represents its source in analytics and the survey timeline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunPatch" }
+      responses:
+        "200":
+          description: the updated run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/runs/{runId}/accept-above:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [detect]
+      operationId: acceptRunAbove
+      summary: Accept every unreviewed detection of the run at or above `min_confidence` (an `accept_above` job, in batches; the counts follow).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AcceptAbove" }
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/runs/{runId}/recount:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [detect]
+      operationId: recountRun
+      summary: Rebuild the run's `counts`, `verified_counts` and (map runs) `area_counts` from its detections (a `recount` job).
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/model-class-maps/{modelId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/modelId"
+    get:
+      tags: [detect]
+      operationId: getModelClassMap
+      summary: How a library model's classes map onto this project's classes (the remembered mapping, else by name and aliases), and which are still unmapped.
+      responses:
+        "200":
+          description: the mapping
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelClassMapOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [detect]
+      operationId: putModelClassMap
+      summary: |
+        Remember the mapping for this model. Every mapped id must be a project class. Each name
+        in `new_classes` is added as a project class and mapped to itself.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ModelClassMapPut" }
+      responses:
+        "200":
+          description: the stored mapping
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ModelClassMapOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: a mapped id is not a project class, or a name is not one of the model's classes (`code` is `validation_error`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}/review:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [detect]
+      operationId: reviewMapDetections
+      summary: |
+        Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
+        state `edited`. The run's counts change in the same transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapDetectionReview" }
+      responses:
+        "200":
+          description: detections updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapDetectionReviewResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}/next-unreviewed:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [detect]
+      operationId: nextUnreviewedMapDetection
+      summary: The next unreviewed detection in reading order (`y`, then `x`) after `after_id`, and how many remain.
+      parameters:
+        - { name: after_id, in: query, required: false, schema: { type: string }, description: the detection the viewer is on; omitted starts from the top }
+      responses:
+        "200":
+          description: the next detection, or null when none is left
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/NextUnreviewed" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/site-areas:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [detect]
+      operationId: listSiteAreas
+      responses:
+        "200":
+          description: site areas, oldest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SiteAreaList" }
+              example:
+                items:
+                  - id: "5a000000-aaaa-4000-8000-000000000001"
+                    name: "North laydown yard"
+                    polygon_wgs84: [[47.7610, 29.4960], [47.7640, 29.4960], [47.7640, 29.4980], [47.7610, 29.4980]]
+                    created_at: "2026-09-23T09:00:00Z"
+                  - id: "5a000000-aaaa-4000-8000-000000000002"
+                    name: "Batching plant"
+                    polygon_wgs84: [[47.7650, 29.4930], [47.7680, 29.4930], [47.7680, 29.4950]]
+                    created_at: "2026-09-23T09:05:00Z"
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [detect]
+      operationId: createSiteArea
+      summary: |
+        Add a site area, given in WGS84 or as a polygon drawn in one map's pixels (converted with
+        that map's georeference). Starts an `area_recount` job over every map run.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SiteAreaCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SiteArea" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/site-areas/{areaId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/areaId"
+    patch:
+      tags: [detect]
+      operationId: updateSiteArea
+      summary: Rename or redraw a site area. A new polygon starts an `area_recount` job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SiteAreaPatch" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SiteArea" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [detect]
+      operationId: deleteSiteArea
+      summary: Delete a site area. Starts an `area_recount` job.
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/analytics/sources/{sourceId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/sourceId"
+    get:
+      tags: [detect]
+      operationId: getSourceAnalytics
+      summary: Counts per class for one source from its chosen run (pinned, else the comparison rule for maps and the newest run for photos). Reads run rows only.
+      responses:
+        "200":
+          description: the source's counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SourceAnalytics" }
+              example:
+                source:
+                  id: "50000000-3333-4000-8000-000000000002"
+                  kind: map
+                  label: "May survey"
+                  captured_on: "2026-05-20"
+                  map_id: "a0000000-6666-4000-8000-000000000001"
+                  folder: "D:\\Surveys\\may-ortho.tif"
+                  site: may-ortho
+                  settings: { max_side: 4000, quality: 95, dedupe_threshold: 4 }
+                  image_count: 0
+                  duplicate_count: 0
+                  job_id: "j0000000-4444-4000-8000-000000000002"
+                  imported_at: "2026-05-21T10:00:00Z"
+                  created_at: "2026-05-21T09:55:00Z"
+                unit: objects
+                image_count: null
+                run:
+                  id: "r0000000-7777-4000-8000-000000000001"
+                  kind: map
+                  source_id: "50000000-3333-4000-8000-000000000002"
+                  source_label: "May survey"
+                  model_id: "m0000000-2222-4000-8000-000000000001"
+                  model_name: "machinery-v3"
+                  conf: 0.25
+                  job_state: succeeded
+                  pinned: false
+                  counts: { "c1a2b3c4-0000-4000-8000-000000000001": 42, "c1a2b3c4-0000-4000-8000-000000000004": 17 }
+                  verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 30 }
+                  review: { total: 59, reviewed: 34 }
+                  created_at: "2026-09-22T11:00:00Z"
+                classes:
+                  - { class_id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", total: 42, verified: 30 }
+                  - { class_id: "c1a2b3c4-0000-4000-8000-000000000004", name: "dump truck", colour: "#0ea5e9", total: 17, verified: 0 }
+                review: { total: 59, reviewed: 34 }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/analytics/areas:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [detect]
+      operationId: getAreaAnalytics
+      summary: Counts per site area and class for every survey, in survey-timeline order and on the same comparison basis. Reads run rows only.
+      parameters:
+        - { name: model_id, in: query, required: false, schema: { type: string }, description: compare on this model instead of the newest run's }
+        - { name: conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 }, description: compare at this confidence instead of the newest run's }
+        - { name: verified_only, in: query, required: false, schema: { type: boolean, default: false }, description: pick surveys as the verified-only timeline does }
+      responses:
+        "200":
+          description: per-area counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AreaAnalytics" }
+              example:
+                areas:
+                  - { id: "5a000000-aaaa-4000-8000-000000000001", name: "North laydown yard" }
+                  - { id: "5a000000-aaaa-4000-8000-000000000002", name: "Batching plant" }
+                surveys:
+                  - map_id: "7c9e1b2a-5555-4000-8000-000000000001"
+                    map_name: "April survey"
+                    captured_on: "2026-04-15"
+                    state: ok
+                    per_area:
+                      "5a000000-aaaa-4000-8000-000000000001":
+                        partial: false
+                        counts: { "c1a2b3c4-0000-4000-8000-000000000001": { total: 5, verified: 5 }, "c1a2b3c4-0000-4000-8000-000000000004": { total: 2, verified: 1 } }
+                      "5a000000-aaaa-4000-8000-000000000002":
+                        partial: true
+                        counts: { "c1a2b3c4-0000-4000-8000-000000000001": { total: 1, verified: 0 } }
+                  - map_id: "7c9e1b2a-5555-4000-8000-000000000002"
+                    map_name: "May survey"
+                    captured_on: "2026-05-20"
+                    state: ok
+                    per_area:
+                      "5a000000-aaaa-4000-8000-000000000001":
+                        partial: false
+                        counts: { "c1a2b3c4-0000-4000-8000-000000000001": { total: 7, verified: 6 }, "c1a2b3c4-0000-4000-8000-000000000004": { total: 3, verified: 3 } }
+                      "5a000000-aaaa-4000-8000-000000000002":
+                        partial: false
+                        counts: { "c1a2b3c4-0000-4000-8000-000000000001": { total: 2, verified: 2 } }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/analytics/photo-batches:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [detect]
+      operationId: getPhotoBatchAnalytics
+      summary: Detections per class for every photo source. These are detections, not objects - the same object appears in several photos - and never enter a trend.
+      responses:
+        "200":
+          description: one row per photo source
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PhotoBatchAnalytics" }
+              example:
+                batches:
+                  - source:
+                      id: "50000000-3333-4000-8000-000000000001"
+                      kind: images
+                      label: "Flight 14 Sep"
+                      captured_on: "2026-09-14"
+                      map_id: null
+                      folder: "D:\\Surveys\\2026-09-14 flight"
+                      site: north-yard
+                      settings: { max_side: 4000, quality: 95, dedupe_threshold: 4 }
+                      image_count: 240
+                      duplicate_count: 0
+                      job_id: "j0000000-4444-4000-8000-000000000001"
+                      imported_at: "2026-09-15T08:30:00Z"
+                      created_at: "2026-09-15T08:05:00Z"
+                    run:
+                      id: "q0000000-8888-4000-8000-000000000001"
+                      kind: images
+                      source_id: "50000000-3333-4000-8000-000000000001"
+                      source_label: "Flight 14 Sep"
+                      model_id: "m0000000-2222-4000-8000-000000000001"
+                      model_name: "machinery-v3"
+                      conf: 0.25
+                      job_state: succeeded
+                      pinned: false
+                      counts: { "c1a2b3c4-0000-4000-8000-000000000001": 31, "c1a2b3c4-0000-4000-8000-000000000004": 9 }
+                      verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 12 }
+                      review: { total: 40, reviewed: 12 }
+                      created_at: "2026-09-21T15:00:00Z"
+                    classes:
+                      - { class_id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", total: 31, verified: 12 }
+                      - { class_id: "c1a2b3c4-0000-4000-8000-000000000004", name: "dump truck", colour: "#0ea5e9", total: 9, verified: 0 }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/detect-exports:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [detect]
+      operationId: createDetectExport
+      summary: |
+        Write the detection numbers to `exports/` (a `detect_export` job): a CSV with one row per
+        source, class and site area, or a PDF report per source (`source_id` picks one; omitted
+        means every source).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DetectExportRequest" }
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
 
@@ -2028,6 +2593,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    areaId:
+      name: areaId
+      in: path
+      required: true
+      schema: { type: string }
 
   responses:
     Error:
@@ -2056,6 +2626,24 @@ components:
               message: "The model library could not be opened."
               details: {}
 
+    NotFound:
+      description: "the project or the named resource does not exist (`code` is `not_found`)"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: { code: not_found, message: "run r0000000… not found", details: {} }
+    UnmappedClasses:
+      description: "the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued. Map them with `PUT /model-class-maps/{modelId}` and retry. A malformed body answers `validation_error`."
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/UnmappedClassesError" }
+          example:
+            error:
+              code: unmapped_classes
+              message: "2 of the model's classes are not mapped to project classes."
+              details: { model_id: "m0000000-2222-4000-8000-000000000001", unmapped: [crane, "concrete mixer"] }
+
   schemas:
     Error:
       type: object
@@ -2072,7 +2660,9 @@ components:
                 class_in_use, conflict, not_implemented, provider_error, internal_error,
                 wrong_project_kind (409: the operation does not belong to this kind of project;
                 details `{kind, allowed}`), library_unavailable (503: the model library could not
-                be opened), model_unavailable (409: the library model's weights file is missing)
+                be opened), model_unavailable (409: the library model's weights file is missing),
+                unmapped_classes (422: the run's model has classes with no project class and no
+                remembered mapping; details `{model_id, unmapped}`)
             message: { type: string }
             details:
               type: object
@@ -2301,9 +2891,16 @@ components:
 
     Source:
       type: object
-      required: [id, folder, site, settings, image_count, duplicate_count, job_id, imported_at, created_at]
+      required: [id, kind, label, captured_on, map_id, folder, site, settings, image_count, duplicate_count, job_id, imported_at, created_at]
       properties:
         id: { type: string }
+        kind: { $ref: "#/components/schemas/SourceKind" }
+        label: { type: [string, "null"], description: "the operator's name for the source, e.g. Flight 14 Sep; a map source starts with the map's name" }
+        captured_on:
+          type: [string, "null"]
+          format: date
+          description: "the survey date. Photos: the earliest capture time in the import, editable. Maps: the map's `captured_on`, kept equal to it. Null means date not set, and it is never guessed."
+        map_id: { type: [string, "null"], description: the map a `map` source owns; null for photos }
         folder: { type: string, description: the imported folder; originals there are never modified }
         site: { type: string }
         settings: { $ref: "#/components/schemas/ImportSettings" }
@@ -2314,6 +2911,10 @@ components:
         created_at: { type: string, format: date-time }
       example:
         id: "50000000-3333-4000-8000-000000000001"
+        kind: images
+        label: "Flight 15 Apr"
+        captured_on: "2019-04-15"
+        map_id: null
         folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data"
         site: ahmadia
         settings: { max_side: 4000, quality: 95, dedupe_threshold: 4, group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)" }
@@ -2322,6 +2923,17 @@ components:
         job_id: "j0000000-4444-4000-8000-000000000001"
         imported_at: "2026-09-17T10:30:00Z"
         created_at: "2026-09-17T10:05:00Z"
+    SourceKind:
+      type: string
+      description: "`images` owns the photos of one import; `map` owns one map (`video` is reserved)"
+      enum: [images, map]
+    SourcePatch:
+      type: object
+      additionalProperties: false
+      properties:
+        label: { type: [string, "null"], maxLength: 200, description: null clears it }
+        captured_on: { type: [string, "null"], format: date, description: "the survey date; on a map source it is written to the map too; null clears it" }
+      example: { label: "Flight 14 Sep", captured_on: "2026-09-14" }
     SourceCreate:
       type: object
       required: [folder]
@@ -3323,10 +3935,16 @@ components:
       enum: [local_model, cloud_provider]
     QueryRun:
       type: object
-      required: [id, kind, model_id, provider, model_name, query, image_ids, tiling, conf, job_id, box_count, promoted_at, created_at]
+      required: [id, kind, source_id, model_id, provider, model_name, model_snapshot, class_map, query, image_ids, tiling, conf, job_id, box_count, pinned, counts, verified_counts, promoted_at, created_at]
       properties:
         id: { type: string }
         kind: { $ref: "#/components/schemas/QueryRunKind" }
+        source_id: { type: [string, "null"], description: the photo source the run covers; null for runs started before runs belonged to sources }
+        model_snapshot: { $ref: "#/components/schemas/ModelSnapshot" }
+        class_map: { $ref: "#/components/schemas/RunClassMap" }
+        pinned: { type: boolean, description: "the operator's choice of this run to represent its source" }
+        counts: { type: object, additionalProperties: { type: integer }, description: "detections per project class id, every review state except rejected" }
+        verified_counts: { type: object, additionalProperties: { type: integer }, description: "detections per project class id that are accepted, edited or drawn by a person" }
         model_id: { type: [string, "null"] }
         provider: { type: [string, "null"] }
         model_name: { type: [string, "null"] }
@@ -3352,6 +3970,12 @@ components:
         conf: 0.25
         job_id: "j0000000-4444-4000-8000-000000000003"
         box_count: 7
+        source_id: "50000000-3333-4000-8000-000000000001"
+        model_snapshot: {}
+        class_map: {}
+        pinned: false
+        counts: { "c1a2b3c4-0000-4000-8000-000000000001": 7 }
+        verified_counts: {}
         promoted_at: null
         created_at: "2026-09-17T13:00:00Z"
     QueryRunCreate:
@@ -3424,7 +4048,7 @@ components:
         colour: { type: string }
     Survey:
       type: object
-      required: [map_id, map_name, captured_on, date_is_import_date, run_id, model_name, conf, counts, deltas, state, reason]
+      required: [map_id, map_name, captured_on, date_is_import_date, run_id, model_name, conf, pinned, counts, verified_counts, deltas, state, reason]
       properties:
         map_id: { type: string }
         map_name: { type: string }
@@ -3433,7 +4057,9 @@ components:
         run_id: { type: [string, "null"] }
         model_name: { type: [string, "null"] }
         conf: { type: [number, "null"] }
-        counts: { type: object, additionalProperties: { type: integer } }
+        pinned: { type: boolean, description: the run was pinned by the operator rather than picked by the comparison rule }
+        counts: { type: object, additionalProperties: { type: integer }, description: "per class id: the total, or the verified count when `verified_only` was asked for" }
+        verified_counts: { type: object, additionalProperties: { type: integer }, description: "per class id: accepted, edited or drawn by a person" }
         deltas: { type: object, additionalProperties: { type: integer }, description: change since the previous comparable survey; absent for a class that survey did not have }
         state: { type: string, enum: [ok, not_comparable, not_counted] }
         reason: { type: [string, "null"], description: why this survey cannot be compared }
@@ -3552,10 +4178,21 @@ components:
       example: { map_id: "a0000000-6666-4000-8000-000000000001", kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", tile_size: 1280, overlap: 0.2, nms_iou: 0.5, conf: 0.25, target_gsd_cm: 2.0 }
     MapRun:
       type: object
-      required: [id, map_id, kind, model_id, provider, model_name, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, counts, detection_count, created_at]
+      required: [id, map_id, source_id, kind, model_id, provider, model_name, model_snapshot, class_map, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, pinned, counts, verified_counts, area_counts, detection_count, created_at]
       properties:
         id: { type: string }
         map_id: { type: string }
+        source_id: { type: [string, "null"], description: the map source; null for runs on maps imported before maps had sources }
+        model_snapshot: { $ref: "#/components/schemas/ModelSnapshot" }
+        class_map: { $ref: "#/components/schemas/RunClassMap" }
+        pinned: { type: boolean, description: "the operator's choice of this run to represent its map in analytics and the survey timeline" }
+        verified_counts: { type: object, additionalProperties: { type: integer }, description: "objects per project class id that are accepted, edited or drawn by a person" }
+        area_counts:
+          type: object
+          description: "per site area id, per class id: `{total, verified}`; an area that does not overlap the map has no key"
+          additionalProperties:
+            type: object
+            additionalProperties: { $ref: "#/components/schemas/CountPair" }
         kind: { $ref: "#/components/schemas/QueryRunKind" }
         model_id: { type: [string, "null"] }
         provider: { type: [string, "null"] }
@@ -3574,7 +4211,7 @@ components:
             - { type: "null" }
         counts:
           type: object
-          description: detections per class id, filled when the run finishes
+          description: "detections per class id in every review state except rejected (the total); filled when the run finishes and kept current by review"
           additionalProperties: { type: integer }
         detection_count: { type: integer }
         created_at: { type: string, format: date-time }
@@ -3594,6 +4231,14 @@ components:
         job_id: "j0000000-4444-4000-8000-000000000001"
         state: succeeded
         counts: { "c1a2b3c4-0000-4000-8000-000000000001": 42, "c1a2b3c4-0000-4000-8000-000000000004": 17 }
+        source_id: "50000000-3333-4000-8000-000000000002"
+        model_snapshot: { id: "m0000000-2222-4000-8000-000000000001", name: "machinery-v3", task: detect, format: pt, class_names: [excavator, "dump truck"], origin: trained }
+        class_map: { "excavator": "c1a2b3c4-0000-4000-8000-000000000001", "dump truck": "c1a2b3c4-0000-4000-8000-000000000004" }
+        pinned: false
+        verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 30 }
+        area_counts:
+          "5a000000-aaaa-4000-8000-000000000001":
+            "c1a2b3c4-0000-4000-8000-000000000001": { total: 12, verified: 9 }
         detection_count: 59
         created_at: "2026-09-22T11:00:00Z"
     MapRunWithJob:
@@ -3622,9 +4267,11 @@ components:
       example: { windows: 8900, skipped_windows: 2100, requests: 6800, scale: 1.5, cost_per_request: 0, estimated_cost: 0 }
     MapDetection:
       type: object
-      required: [id, class_id, confidence, x, y, w, h, angle]
+      required: [id, class_id, confidence, x, y, w, h, angle, review_state, provenance_kind]
       properties:
         id: { type: string }
+        review_state: { $ref: "#/components/schemas/ReviewState" }
+        provenance_kind: { $ref: "#/components/schemas/ProvenanceKind" }
         class_id: { type: string }
         confidence: { type: number }
         x: { type: number, description: full-resolution map pixels }
@@ -3641,7 +4288,7 @@ components:
           items: { $ref: "#/components/schemas/MapDetection" }
         truncated: { type: boolean, description: more than 5000 boxes matched; the client should switch to density }
       example:
-        items: [{ id: "d0000000-1111-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000001", confidence: 0.91, x: 1200, y: 800, w: 180, h: 120, angle: null }]
+        items: [{ id: "d0000000-1111-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000001", confidence: 0.91, x: 1200, y: 800, w: 180, h: 120, angle: null, review_state: unreviewed, provenance_kind: local_model }]
         truncated: false
     MapDensityCell:
       type: object
@@ -3844,6 +4491,403 @@ components:
       properties:
         target_project_id: { type: string, description: an open or recently opened detection project }
       example: { target_project_id: "7f1c2e3a-1111-4000-8000-000000000002" }
+    # ------------------------------------------------------------ detection workspace
+    CountPair:
+      type: object
+      description: "a count shown as total (verified): total is every state except rejected; verified is accepted, edited or drawn by a person"
+      required: [total, verified]
+      properties:
+        total: { type: integer, minimum: 0 }
+        verified: { type: integer, minimum: 0 }
+      example: { total: 6, verified: 4 }
+    ModelSnapshot:
+      type: object
+      description: "the library model as it was when the run started, so the run still reads after the model is deleted; empty for cloud-provider runs and runs made before snapshots"
+      additionalProperties: true
+      properties:
+        id: { type: string }
+        name: { type: string }
+        task: { type: string, enum: [detect, obb] }
+        format: { type: string, enum: [pt, onnx] }
+        class_names:
+          type: array
+          items: { type: string }
+        origin: { type: string, enum: [trained, imported, starter] }
+      example: { id: "m0000000-2222-4000-8000-000000000001", name: "yolo11m-coco", task: detect, format: pt, class_names: [truck, car], origin: starter }
+    RunClassMap:
+      type: object
+      description: "model class name to project class id; null ignores that class (its detections are not written); empty when the run used no mapping"
+      additionalProperties: { type: [string, "null"] }
+      example: { truck: "c1a2b3c4-0000-4000-8000-000000000004", car: null }
+    RunKind:
+      type: string
+      description: "`images` is a photo run (a query run over one photo source); `map` is a map run"
+      enum: [images, map]
+    ReviewProgress:
+      type: object
+      required: [total, reviewed]
+      properties:
+        total: { type: integer, minimum: 0, description: detections of the run }
+        reviewed: { type: integer, minimum: 0, description: detections no longer unreviewed }
+      example: { total: 530, reviewed: 412 }
+    RunSummary:
+      type: object
+      required: [id, kind, source_id, source_label, model_id, model_name, conf, job_state, pinned, counts, verified_counts, review, created_at]
+      properties:
+        id: { type: string, description: the query run or map run id }
+        kind: { $ref: "#/components/schemas/RunKind" }
+        source_id: { type: [string, "null"] }
+        source_label: { type: [string, "null"], description: "the source's label, else its folder or map name" }
+        model_id: { type: [string, "null"] }
+        model_name: { type: [string, "null"], description: "from the run's model snapshot, or the cloud provider's model" }
+        conf: { type: number }
+        job_state:
+          description: the state of the run's latest job; null before one exists
+          oneOf:
+            - { $ref: "#/components/schemas/JobState" }
+            - { type: "null" }
+        pinned: { type: boolean }
+        counts: { type: object, additionalProperties: { type: integer }, description: per project class id; every state except rejected }
+        verified_counts: { type: object, additionalProperties: { type: integer }, description: per project class id; accepted, edited or drawn by a person }
+        review: { $ref: "#/components/schemas/ReviewProgress" }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "r0000000-7777-4000-8000-000000000001"
+        kind: map
+        source_id: "50000000-3333-4000-8000-000000000002"
+        source_label: "May survey"
+        model_id: "m0000000-2222-4000-8000-000000000001"
+        model_name: "machinery-v3"
+        conf: 0.25
+        job_state: succeeded
+        pinned: false
+        counts: { "c1a2b3c4-0000-4000-8000-000000000001": 42, "c1a2b3c4-0000-4000-8000-000000000004": 17 }
+        verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 30 }
+        review: { total: 59, reviewed: 34 }
+        created_at: "2026-09-22T11:00:00Z"
+    RunSummaryPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RunSummary" }
+        next_cursor: { type: [string, "null"] }
+    RunCreate:
+      type: object
+      description: "one run per source. A library model (`model_id`), or a cloud provider (`provider` and `query`)."
+      required: [source_ids]
+      properties:
+        source_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string }
+        model_id: { type: string, description: a library model id }
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        query: { type: string, minLength: 1, description: "free text for a cloud provider, e.g. dump trucks" }
+        conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
+        tiling: { $ref: "#/components/schemas/Tiling" }
+        target_gsd_cm:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: "map runs: resample windows to this GSD; defaults to the model's training GSD"
+      example: { source_ids: ["50000000-3333-4000-8000-000000000001", "50000000-3333-4000-8000-000000000002"], model_id: "m0000000-2222-4000-8000-000000000001", conf: 0.25 }
+    RunCreatedItem:
+      type: object
+      required: [run_id, source_id, kind, job]
+      properties:
+        run_id: { type: string }
+        source_id: { type: string }
+        kind: { $ref: "#/components/schemas/RunKind" }
+        job: { $ref: "#/components/schemas/Job" }
+    RunCreated:
+      type: object
+      required: [runs]
+      properties:
+        runs:
+          type: array
+          items: { $ref: "#/components/schemas/RunCreatedItem" }
+    RunPatch:
+      type: object
+      required: [pinned]
+      additionalProperties: false
+      properties:
+        pinned: { type: boolean, description: true pins this run and unpins the other runs of its source }
+      example: { pinned: true }
+    UnmappedClassesError:
+      type: object
+      description: the `Error` envelope for `unmapped_classes`
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, details]
+          properties:
+            code: { type: string, description: "`unmapped_classes`, or `validation_error` for a malformed body" }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+              properties:
+                model_id: { type: string }
+                unmapped:
+                  type: array
+                  description: model class names with no project class
+                  items: { type: string }
+      example:
+        error:
+          code: unmapped_classes
+          message: "2 of the model's classes are not mapped to project classes."
+          details: { model_id: "m0000000-2222-4000-8000-000000000001", unmapped: [crane, "concrete mixer"] }
+    ModelClassMapOut:
+      type: object
+      required: [model_id, model_classes, mapping, unmapped]
+      properties:
+        model_id: { type: string }
+        model_classes:
+          type: array
+          description: the model's class names, in index order
+          items: { type: string }
+        mapping:
+          type: object
+          description: model class name to project class id, or null to ignore it
+          additionalProperties: { type: [string, "null"] }
+        unmapped:
+          type: array
+          description: model class names that have no entry in `mapping` yet
+          items: { type: string }
+      example:
+        model_id: "m0000000-2222-4000-8000-000000000001"
+        model_classes: [excavator, "dump truck", crane]
+        mapping: { excavator: "c1a2b3c4-0000-4000-8000-000000000001", "dump truck": "c1a2b3c4-0000-4000-8000-000000000004" }
+        unmapped: [crane]
+    ModelClassMapPut:
+      type: object
+      required: [mapping]
+      properties:
+        mapping:
+          type: object
+          description: model class name to project class id, or null to ignore it
+          additionalProperties: { type: [string, "null"] }
+        new_classes:
+          type: array
+          default: []
+          uniqueItems: true
+          description: model class names to add as project classes, each mapped to itself
+          items: { type: string, minLength: 1 }
+      example: { mapping: { excavator: "c1a2b3c4-0000-4000-8000-000000000001", "dump truck": null }, new_classes: [crane] }
+    MapDetectionReview:
+      type: object
+      required: [detection_ids, action]
+      properties:
+        detection_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string }
+        action:
+          type: string
+          enum: [accept, reject, unreview, reclass]
+          description: "`unreview` puts a detection back to unreviewed; `reclass` needs `class_id` and sets the state `edited`"
+        class_id: { type: string, description: required for reclass }
+      example: { detection_ids: ["d0000000-1111-4000-8000-000000000001"], action: accept }
+    MapDetectionReviewResult:
+      type: object
+      required: [updated]
+      properties:
+        updated: { type: integer, minimum: 0 }
+      example: { updated: 1 }
+    MapDetectionCreate:
+      type: object
+      required: [class_id, x, y, w, h]
+      properties:
+        class_id: { type: string }
+        x: { type: number, description: full-resolution map pixels }
+        y: { type: number }
+        w: { type: number, exclusiveMinimum: 0 }
+        h: { type: number, exclusiveMinimum: 0 }
+        angle: { type: [number, "null"] }
+      example: { class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 2400, y: 1300, w: 170, h: 110 }
+    NextUnreviewed:
+      type: object
+      required: [detection, remaining]
+      properties:
+        detection:
+          oneOf:
+            - { $ref: "#/components/schemas/MapDetection" }
+            - { type: "null" }
+        remaining: { type: integer, minimum: 0, description: unreviewed detections left in the run }
+      example:
+        detection: { id: "d0000000-1111-4000-8000-000000000002", class_id: "c1a2b3c4-0000-4000-8000-000000000001", confidence: 0.64, x: 3000, y: 2400, w: 170, h: 110, angle: null, review_state: unreviewed, provenance_kind: local_model }
+        remaining: 118
+    AcceptAbove:
+      type: object
+      required: [min_confidence]
+      properties:
+        min_confidence: { type: number, minimum: 0, maximum: 1 }
+      example: { min_confidence: 0.8 }
+    LonLat:
+      type: array
+      description: "[longitude, latitude] in WGS84 degrees"
+      minItems: 2
+      maxItems: 2
+      items: { type: number }
+    PixelPoint:
+      type: array
+      description: "[x, y] in full-resolution map pixels"
+      minItems: 2
+      maxItems: 2
+      items: { type: number }
+    SiteArea:
+      type: object
+      required: [id, name, polygon_wgs84, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        polygon_wgs84:
+          type: array
+          minItems: 3
+          description: the outline, not closed (the first point is not repeated)
+          items: { $ref: "#/components/schemas/LonLat" }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "5a000000-aaaa-4000-8000-000000000001"
+        name: "North laydown yard"
+        polygon_wgs84: [[47.7610, 29.4960], [47.7640, 29.4960], [47.7640, 29.4980], [47.7610, 29.4980]]
+        created_at: "2026-09-23T09:00:00Z"
+    SiteAreaCreate:
+      type: object
+      description: "either `polygon_wgs84`, or `map_id` with `polygon_px` drawn on that map (the server converts it with the map's georeference)"
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        polygon_wgs84:
+          type: array
+          minItems: 3
+          items: { $ref: "#/components/schemas/LonLat" }
+        map_id: { type: string }
+        polygon_px:
+          type: array
+          minItems: 3
+          items: { $ref: "#/components/schemas/PixelPoint" }
+      example: { name: "North laydown yard", map_id: "a0000000-6666-4000-8000-000000000001", polygon_px: [[1000, 800], [4000, 800], [4000, 3000], [1000, 3000]] }
+    SiteAreaPatch:
+      type: object
+      description: "a new outline is either `polygon_wgs84`, or `map_id` with `polygon_px`"
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        polygon_wgs84:
+          type: array
+          minItems: 3
+          items: { $ref: "#/components/schemas/LonLat" }
+        map_id: { type: string }
+        polygon_px:
+          type: array
+          minItems: 3
+          items: { $ref: "#/components/schemas/PixelPoint" }
+      example: { name: "North yard" }
+    SiteAreaList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SiteArea" }
+    ClassCountRow:
+      type: object
+      required: [class_id, name, colour, total, verified]
+      properties:
+        class_id: { type: string }
+        name: { type: string }
+        colour: { type: string }
+        total: { type: integer, minimum: 0 }
+        verified: { type: integer, minimum: 0 }
+      example: { class_id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", total: 6, verified: 4 }
+    SourceAnalytics:
+      type: object
+      required: [source, unit, image_count, run, classes, review]
+      properties:
+        source: { $ref: "#/components/schemas/Source" }
+        unit:
+          type: string
+          enum: [objects, detections]
+          description: "`objects` for a map source; `detections` for photos, where one object can appear in several photos"
+        image_count: { type: [integer, "null"], description: photos in a photo source; null for a map }
+        run:
+          description: the run that represents the source; null before any run
+          oneOf:
+            - { $ref: "#/components/schemas/RunSummary" }
+            - { type: "null" }
+        classes:
+          type: array
+          items: { $ref: "#/components/schemas/ClassCountRow" }
+        review: { $ref: "#/components/schemas/ReviewProgress" }
+    AreaRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+    AreaSurveyCell:
+      type: object
+      required: [partial, counts]
+      properties:
+        partial: { type: boolean, description: part of the area lies outside this map }
+        counts:
+          type: object
+          description: per class id
+          additionalProperties: { $ref: "#/components/schemas/CountPair" }
+    AreaSurvey:
+      type: object
+      required: [map_id, map_name, captured_on, state, per_area]
+      properties:
+        map_id: { type: string }
+        map_name: { type: string }
+        captured_on: { type: [string, "null"], format: date }
+        state: { type: string, enum: [ok, not_comparable, not_counted], description: as in the survey timeline }
+        per_area:
+          type: object
+          description: "per site area id; an area that does not overlap this map has no key"
+          additionalProperties: { $ref: "#/components/schemas/AreaSurveyCell" }
+    AreaAnalytics:
+      type: object
+      required: [areas, surveys]
+      properties:
+        areas:
+          type: array
+          items: { $ref: "#/components/schemas/AreaRef" }
+        surveys:
+          type: array
+          description: oldest first, as in the survey timeline
+          items: { $ref: "#/components/schemas/AreaSurvey" }
+    PhotoBatch:
+      type: object
+      required: [source, run, classes]
+      properties:
+        source: { $ref: "#/components/schemas/Source" }
+        run:
+          oneOf:
+            - { $ref: "#/components/schemas/RunSummary" }
+            - { type: "null" }
+        classes:
+          type: array
+          description: detections, not objects
+          items: { $ref: "#/components/schemas/ClassCountRow" }
+    PhotoBatchAnalytics:
+      type: object
+      required: [batches]
+      properties:
+        batches:
+          type: array
+          items: { $ref: "#/components/schemas/PhotoBatch" }
+    DetectExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format: { type: string, enum: [csv, pdf] }
+        source_id: { type: [string, "null"], description: "PDF: report this source only; omitted or null reports every source. CSV: this source only, else every source." }
+      example: { format: pdf, source_id: "50000000-3333-4000-8000-000000000002" }
     PromoteRequest:
       type: object
       properties:
@@ -3872,6 +4916,12 @@ components:
           conf: 0.25
           job_id: "j0000000-4444-4000-8000-000000000003"
           box_count: 7
+          source_id: "50000000-3333-4000-8000-000000000001"
+          model_snapshot: {}
+          class_map: {}
+          pinned: false
+          counts: { "c1a2b3c4-0000-4000-8000-000000000001": 7 }
+          verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 6 }
           promoted_at: "2026-09-17T13:30:00Z"
           created_at: "2026-09-17T13:00:00Z"
         accepted: 6
@@ -3895,6 +4945,12 @@ components:
           conf: 0.25
           job_id: "j0000000-4444-4000-8000-000000000003"
           box_count: 7
+          source_id: "50000000-3333-4000-8000-000000000001"
+          model_snapshot: {}
+          class_map: {}
+          pinned: false
+          counts: { "c1a2b3c4-0000-4000-8000-000000000001": 7 }
+          verified_counts: { "c1a2b3c4-0000-4000-8000-000000000001": 6 }
           promoted_at: null
           created_at: "2026-09-17T13:00:00Z"
         reverted: 6
@@ -3925,7 +4981,7 @@ components:
       example: { path: "exports/2026-09-19_101500" }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -3946,7 +5002,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
