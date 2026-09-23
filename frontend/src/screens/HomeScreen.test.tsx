@@ -103,6 +103,26 @@ describe("HomeScreen", () => {
     expect(screen.getByText("12 images and 2 maps")).toBeInTheDocument();
   });
 
+  it("shows the models that could not move into the library, above the next step", async () => {
+    useProgressStore.getState().set(PROJECT_ID, base);
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
+      {
+        method: "GET",
+        path: /\/adoption$/,
+        body: {
+          pending: 1,
+          adopted: 0,
+          missing: [{ old_model_id: "old-1", name: "yard-v1", error: "weights file not found: models/yard-v1.pt" }],
+          job_id: null,
+        },
+      },
+    ]);
+    renderWithProviders(<HomeScreen />, { api, route: `/p/${PROJECT_ID}`, path: "/p/:projectId" });
+    expect(await screen.findByText("One model could not be moved into your library")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
   it("lists running jobs with their progress", async () => {
     useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
     useJobsStore.getState().upsert({ ...runningJob, project_id: PROJECT_ID, type: "train", progress: 0.4 });

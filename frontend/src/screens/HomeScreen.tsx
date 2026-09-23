@@ -4,6 +4,7 @@ import { imageFileUrl, thumbnailUrl, type Job, type Image } from "@contract/clie
 import { useBackend } from "@/api/client";
 import { useProject } from "@/api/project";
 import { projectNextStep } from "@/app/projectNextStep";
+import { AdoptionBanner } from "@/app/AdoptionBanner";
 import { StepTicks } from "@/app/NextStepBar";
 import { useProgress } from "@/app/useProjectProgress";
 import { useHomePreviews } from "@/app/useHomePreviews";
@@ -108,6 +109,8 @@ export function HomeScreen() {
           Browse images
         </Link>
       </div>
+
+      <AdoptionBanner projectId={projectId} />
 
       {!progress || !kind ? (
         <Skeleton className="h-28 w-full rounded-lg" />
