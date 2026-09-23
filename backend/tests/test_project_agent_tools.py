@@ -8,6 +8,7 @@ import base64
 import io
 import json
 import time
+import typing
 
 import pytest
 from library_helpers import add_library_model
@@ -736,7 +737,8 @@ def test_get_project_lists_the_cloud_providers_with_a_key(tool, app, image_ids):
 
 def test_list_jobs_offers_only_project_job_types():
     # exports are library jobs (`library_export`) now; a project job list never holds a new one
-    job_type = json.dumps(tools.ListJobsArgs.model_json_schema()["properties"]["type"])
-    assert '"export"' not in job_type
-    assert '"results_export"' in job_type
-    assert "export," not in REGISTRY["list_jobs"].description
+    project_types = {"import", "dataset", "train", "infer", "results_export"}
+    assert set(typing.get_args(tools.JOB_TYPES)) == project_types
+    job_type = tools.ListJobsArgs.model_json_schema()["properties"]["type"]
+    offered = {v for option in job_type["anyOf"] for v in option.get("enum", [])}
+    assert offered == project_types
