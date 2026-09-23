@@ -200,6 +200,17 @@ def test_csv_export_job_writes_the_file(client, project_id, handle, wait_job, si
     assert list(rows[0]) == export_csv.COLUMNS
 
 
+@pytest.mark.parametrize("fmt", ["csv", "pdf"])
+def test_an_export_with_no_run_yet_fails_plainly_and_leaves_no_folder(client, project_id, handle, wait_job, fmt):
+    r = client.post(f"{BASE}/{project_id}/detect-exports", json={"format": fmt})
+    assert r.status_code == 202, r.text
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "failed", job
+    assert job["error"] == "No source has a detection run yet, so there is nothing to export."
+    exports = handle.exports_dir
+    assert not exports.exists() or not any(exports.iterdir())
+
+
 def test_export_of_an_unknown_source_is_404(client, project_id, site):
     r = client.post(f"{BASE}/{project_id}/detect-exports", json={"format": "pdf", "source_id": "nope"})
     assert r.status_code == 404

@@ -17,6 +17,7 @@ import shutil
 
 from app.detect import export_csv
 from app.exports.job import _now_local, _promote, _reserve_partial_folder
+from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 
@@ -36,6 +37,11 @@ def _unique(name: str, taken: set[str]) -> str:
     return candidate
 
 
+def _pdf_reports(reports: list, source_id: str | None) -> list:
+    """Every source that has a run; a source asked for by name gets its report regardless."""
+    return [r for r in reports if r.run is not None or source_id is not None]
+
+
 @register_job_type("detect_export")
 def run_detect_export(ctx: JobContext) -> dict:
     handle = ctx.project
@@ -44,6 +50,12 @@ def run_detect_export(ctx: JobContext) -> dict:
 
     ctx.progress(0.0, "reading the counts")
     reports = export_csv.gather(handle, source_id)
+    # A source asked for by name gets its PDF even without a run; otherwise an export needs a run.
+    has_content = bool(export_csv.rows(reports)) if fmt == "csv" else bool(_pdf_reports(reports, source_id))
+    if not has_content:
+        # Fail before reserving a folder, so a "succeeded" export never holds nothing.
+        what = "This source has" if source_id is not None else "No source has"
+        raise JobFailure(f"{what} a detection run yet, so there is nothing to export.")
     with handle.session() as s:
         project_name = handle.row(s).name
 
@@ -61,8 +73,7 @@ def run_detect_export(ctx: JobContext) -> dict:
         else:
             from app.detect import export_pdf  # reportlab loads only when a PDF is asked for
 
-            # Every source that has a run; a source asked for by name gets its report regardless.
-            wanted = [r for r in reports if r.run is not None or source_id is not None]
+            wanted = _pdf_reports(reports, source_id)
             taken: set[str] = set()
             for i, report in enumerate(wanted):
                 ctx.check_cancelled()
