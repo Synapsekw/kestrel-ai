@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import type { ApiClient } from "@contract/client";
 import { useApi } from "@/api/client";
 import { fetchDatasets } from "@/api/datasets";
-import { messageOf } from "@/api/errors";
+import { messageOf, unwrap } from "@/api/errors";
 import { fetchLibraryModels } from "@/api/library";
 import { listMaps } from "@/api/maps";
 import { fetchProjectStats } from "@/api/project";
@@ -12,6 +13,17 @@ import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useProgressStore } from "@/store/progress";
 import type { ProjectProgress } from "./nextStep";
 import { useProjectKindState } from "./useProjectKind";
+
+function hasAnyRun(api: ApiClient, projectId: string): Promise<boolean | undefined> {
+  return unwrap(
+    api.GET("/api/v1/projects/{projectId}/runs", { params: { path: { projectId }, query: { limit: 1 } } }),
+  )
+    .then((page) => page.items.length > 0)
+    .catch((e: unknown) => {
+      pushLog(`runs unavailable: ${messageOf(e, String(e))}`);
+      return undefined;
+    });
+}
 
 /** The last known counts of a project; null until the shell has loaded them once. */
 export function useProgress(projectId: string | undefined): ProjectProgress | null {
@@ -37,6 +49,7 @@ export function useProjectProgress(projectId: string | undefined): {
   useOnJobsFinished("dataset", refresh);
   useOnJobsFinished("train", refresh);
   useOnJobsFinished("infer", refresh);
+  useOnJobsFinished("map_detect", refresh);
   useOnJobsFinished("map_import", refresh);
   useOnJobsFinished("library_import", refresh);
   useOnJobsFinished("library_starter", refresh);
@@ -64,10 +77,14 @@ export function useProjectProgress(projectId: string | undefined): {
         pushLog(`maps unavailable: ${messageOf(e, String(e))}`);
         return [];
       }),
+      // Whether a detection project has any run, photo or map: one row of `GET /runs` is enough.
+      // Unknown (undefined) when it cannot be read; the pipeline then goes by the photo runs.
+      kind === "detect" ? hasAnyRun(api, projectId) : Promise.resolve(undefined),
     ])
-      .then(([stats, datasets, models, runs, maps]) => {
+      .then(([stats, datasets, models, runs, maps, hasRuns]) => {
         if (cancelled) return;
         useProgressStore.getState().set(projectId, {
+          ...(hasRuns === undefined ? {} : { hasRuns }),
           images: stats.image_count,
           labeled: stats.labeled_count,
           pendingReview: stats.pending_review_count,

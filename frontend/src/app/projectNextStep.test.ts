@@ -35,14 +35,14 @@ describe("projectNextStep, training project", () => {
 });
 
 describe("projectNextStep, detection project", () => {
-  it("starts by adding images or a map", () => {
+  it("starts by adding photos or a map on Sources", () => {
     expect(projectNextStep("p", "detect", base)).toMatchObject({
-      text: "Add images or a map",
-      to: "/p/p/data",
+      text: "Add photos or a map",
+      to: "/p/p/sources",
     });
   });
 
-  it("asks for a library model before a detection can run", () => {
+  it("asks for a library model before a run can start", () => {
     expect(projectNextStep("p", "detect", { ...base, images: 12 })).toMatchObject({
       text: "Add a model to the library",
       to: "/library",
@@ -50,24 +50,26 @@ describe("projectNextStep, detection project", () => {
     expect(projectNextStep("p", "detect", { ...base, maps: 1 })).toMatchObject({ to: "/library" });
   });
 
-  it("runs a detection once there are images and a model", () => {
-    expect(projectNextStep("p", "detect", { ...base, images: 12, models: 1 })).toMatchObject({
-      text: "Run a detection",
-      to: "/p/p/query",
+  it("runs a model once there are sources and a model, photos or a map alike", () => {
+    for (const p of [{ images: 12 }, { maps: 1 }]) {
+      expect(projectNextStep("p", "detect", { ...base, ...p, models: 1 })).toMatchObject({
+        text: "Run a model",
+        to: "/p/p/runs",
+      });
+    }
+  });
+
+  it("a map run counts: it moves on to review and the analytics", () => {
+    expect(projectNextStep("p", "detect", { ...base, maps: 1, models: 1, hasRuns: true })).toMatchObject({
+      text: "Review the detections",
+      to: "/p/p/review",
     });
   });
 
-  it("with only a map, a detection is started on the map", () => {
-    expect(projectNextStep("p", "detect", { ...base, maps: 1, models: 1 })).toMatchObject({
-      text: "Run a detection on your map",
-      to: "/p/p/maps",
-    });
-  });
-
-  it("puts waiting suggestions first and ends on the export", () => {
+  it("puts waiting detections first and ends on the export", () => {
     expect(
       projectNextStep("p", "detect", { ...base, images: 12, models: 1, queryRuns: 1, pendingReview: 4 }),
-    ).toMatchObject({ text: "Review 4 suggestions", to: "/p/p/review" });
+    ).toMatchObject({ text: "Review 4 detections", to: "/p/p/review" });
     expect(projectNextStep("p", "detect", { ...base, images: 12, models: 1, queryRuns: 1 })).toMatchObject({
       text: "Export the results",
       to: "/p/p/export",

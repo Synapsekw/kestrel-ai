@@ -71,57 +71,54 @@ describe("stepStates, training project", () => {
 });
 
 describe("stepStates, detection project", () => {
-  it("lists the detection steps only: no Label, Datasets or Train", () => {
-    expect(DETECT_STEPS).toEqual(["images", "detect", "maps", "review", "export"]);
-    const steps = stepStates("p1", "detect", { ...empty, models: 1 });
+  it("lists Sources, Runs, Review, Analytics and Export, at their own routes", () => {
+    expect(DETECT_STEPS).toEqual(["sources", "runs", "review", "analytics", "export"]);
+    const steps = stepStates("p1", "detect", { ...empty, images: 5, hasRuns: true });
     expect(steps.map((s) => s.id)).toEqual(DETECT_STEPS);
+    expect(steps.map((s) => s.label)).toEqual(["Sources", "Runs", "Review", "Analytics", "Export"]);
     expect(steps.map((s) => s.path)).toEqual([
-      "/p/p1/data",
-      "/p/p1/query",
-      "/p/p1/maps",
+      "/p/p1/sources",
+      "/p/p1/runs",
       "/p/p1/review",
+      "/p/p1/analytics",
       "/p/p1/export",
     ]);
   });
 
-  it("with no model in the library, Detect is locked and points at the library", () => {
-    const detect = stepStates("p1", "detect", { ...empty, images: 5 }).find((s) => s.id === "detect");
-    expect(detect).toMatchObject({
-      state: "locked",
-      lockedReason: "Add a model to the library first",
-      path: "/library",
-    });
-  });
-
-  it("Maps is never locked, and an empty project starts at Images", () => {
+  it("an empty project starts at Sources; Runs waits for a source, Review and Analytics for a run", () => {
     expect(detectStates({})).toEqual({
-      images: "current",
-      detect: "locked",
-      maps: "upcoming",
+      sources: "current",
+      runs: "locked",
       review: "locked",
-      export: "locked",
+      analytics: "locked",
+      export: "upcoming",
     });
+    const steps = stepStates("p1", "detect", empty);
+    expect(steps.find((s) => s.id === "runs")?.lockedReason).toBe("Add photos or a map first");
+    expect(steps.find((s) => s.id === "review")?.lockedReason).toBe("Run a model first");
+    expect(steps.find((s) => s.id === "analytics")?.lockedReason).toBe("Run a model first");
+    expect(steps.every((s) => !s.opensWhenLocked)).toBe(true);
   });
 
-  it("a model and images but no run: Detect is current; a map counts on the Maps step", () => {
-    expect(detectStates({ images: 5, models: 1 })).toMatchObject({ images: "done", detect: "current" });
-    const maps = stepStates("p1", "detect", { ...empty, maps: 2 }).find((s) => s.id === "maps");
-    expect(maps).toMatchObject({ state: "done", count: "2" });
+  it("photos or a map alone make Sources done and Runs current", () => {
+    expect(detectStates({ images: 5 })).toMatchObject({ sources: "done", runs: "current" });
+    expect(detectStates({ maps: 1 })).toMatchObject({ sources: "done", runs: "current" });
   });
 
-  it("runs finished and nothing waiting: Export is current", () => {
-    expect(detectStates({ images: 5, models: 1, queryRuns: 1, maps: 1 })).toEqual({
-      images: "done",
-      detect: "done",
-      maps: "done",
-      review: "done",
-      export: "current",
-    });
-  });
-
-  it("suggestions waiting make Review current", () => {
-    expect(detectStates({ images: 5, models: 1, queryRuns: 1, pendingReview: 3 })).toMatchObject({
+  it("a map run counts as a run; with no photo run to go by, Review stays current", () => {
+    expect(detectStates({ maps: 1, hasRuns: true })).toMatchObject({
+      runs: "done",
       review: "current",
+      analytics: "upcoming",
     });
+  });
+
+  it("without the runs list, a photo run still unlocks Review and Analytics", () => {
+    expect(detectStates({ images: 5, queryRuns: 1 })).toMatchObject({ runs: "done", analytics: "current" });
+  });
+
+  it("detections waiting make Review current and counted", () => {
+    const steps = stepStates("p1", "detect", { ...empty, images: 5, queryRuns: 1, pendingReview: 3 });
+    expect(steps.find((s) => s.id === "review")).toMatchObject({ state: "current", count: "3" });
   });
 });

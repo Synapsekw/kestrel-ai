@@ -7,7 +7,12 @@ import { useProjectKind } from "./useProjectKind";
 import { useProgress } from "./useProjectProgress";
 
 /** Step ids that are not also icon names. */
-const STEP_ICON: Partial<Record<StepId, IconName>> = { export: "download", maps: "map" };
+const STEP_ICON: Partial<Record<StepId, IconName>> = {
+  export: "download",
+  sources: "images",
+  runs: "detect",
+  analytics: "trend",
+};
 
 const NO_PROGRESS = {
   images: 0,
@@ -142,8 +147,8 @@ interface Props {
 }
 
 /**
- * The left rail: Projects and Library, then the open project's steps for its kind, then Past
- * detections (training projects that have some) and the settings.
+ * The left rail: Projects and Library, then the open project's steps for its kind, then Site areas
+ * (detection projects), Past detections (training projects that have some) and the settings.
  */
 export function Sidebar({ projectId, projectName }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -197,8 +202,8 @@ export function Sidebar({ projectId, projectName }: Props) {
           ))}
           <div className="my-2 border-t border-line" />
           {kind === "detect" && (
-            <PlainEntry to={`/p/${projectId}/surveys`} icon="trend" compact={compact}>
-              Surveys
+            <PlainEntry to={`/p/${projectId}/site-areas`} icon="map" compact={compact} shortLabel="Areas">
+              Site areas
             </PlainEntry>
           )}
           {hasPast && (

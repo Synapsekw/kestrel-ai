@@ -17,6 +17,10 @@ const SCREEN: Record<string, string> = {
   query: "Detect",
   maps: "Maps",
   past: "Past detections",
+  sources: "Sources",
+  runs: "Runs",
+  analytics: "Analytics",
+  "site-areas": "Site areas",
   settings: "Project settings",
   export: "Export",
 };

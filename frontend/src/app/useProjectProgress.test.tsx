@@ -125,6 +125,36 @@ describe("useProjectProgress", () => {
     expect(requests.some((r) => r.url.includes("/datasets"))).toBe(false);
   });
 
+  it("asks a detection project for one run, photo or map, to know whether any exists", async () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "detect");
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: { ...exampleStats, image_count: 0 } },
+      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap] } },
+      { method: "GET", path: /\/runs$/, body: { items: [{ id: "r1" }], next_cursor: null } },
+    ]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
+    expect(JSON.parse(screen.getByTestId("progress").textContent ?? "")).toMatchObject({ hasRuns: true });
+    expect(requests.find((r) => r.url.includes("/runs?"))?.url).toBe(`/api/v1/projects/${PROJECT_ID}/runs?limit=1`);
+  });
+
+  it("leaves hasRuns unknown when the runs list cannot be read", async () => {
+    useProjectKindStore.getState().set(PROJECT_ID, "detect");
+    const { api } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: { ...exampleStats, image_count: 3 } },
+      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, body: { items: [] } },
+    ]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
+    const progress = JSON.parse(screen.getByTestId("progress").textContent ?? "");
+    expect(progress.images).toBe(3);
+    expect(progress).not.toHaveProperty("hasRuns");
+  });
+
   it("still fills the counts when the kind failed to load and the datasets read is refused", async () => {
     useProjectKindStore.getState().set(PROJECT_ID, "failed");
     const { api } = fakeClient([
