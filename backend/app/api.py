@@ -59,9 +59,11 @@ try:
 except Exception:
     log.exception("maps router failed to load; map endpoints will be unavailable")
 
-# Reviewing detection runs (plan 2 unit V). It imports the map schemas, so it is guarded like the
-# maps router: a broken native stack costs the review endpoints, never the app.
+# Reviewing detection runs (plan 2 unit V). It serves map runs and imports the map schemas, so it
+# goes with the maps router: a broken native stack costs the review endpoints, never the app.
 try:
+    if "maps_router" not in globals():
+        raise ImportError("the maps router did not load")
     from app.detect.review_router import router as review_router
 
     api_router.include_router(review_router, dependencies=[Depends(require_kind(("detect",), ANY_KIND))])
