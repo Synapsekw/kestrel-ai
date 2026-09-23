@@ -1,6 +1,12 @@
 import { test, expect } from "@playwright/test";
+import { asDetectionProject } from "./kinds";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
+
+// Surveys belong to detection projects; the mock's example project is a training project.
+test.beforeEach(async ({ page }) => {
+  await asDetectionProject(page, P);
+});
 
 test("the surveys screen lists each survey with its change", async ({ page }) => {
   await page.goto(`/p/${P}/surveys`);
