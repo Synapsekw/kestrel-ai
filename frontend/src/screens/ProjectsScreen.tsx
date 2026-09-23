@@ -5,7 +5,23 @@ import { useAgentPanel } from "@/agent/panelStore";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf, unwrap } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
-import { Alert, Button, Disclosure, EmptyState, Field, Input, Pill, SkeletonRows, Textarea } from "@/ui";
+import { useProjectKindStore, type ProjectKind } from "@/app/useProjectKind";
+import {
+  Alert,
+  Button,
+  Disclosure,
+  EmptyState,
+  Field,
+  Input,
+  Pill,
+  Segmented,
+  SkeletonRows,
+  Textarea,
+} from "@/ui";
+
+type KindFilter = "all" | ProjectKind;
+
+const KIND_PILL: Record<ProjectKind, string> = { train: "Training", detect: "Detection" };
 
 const DEFAULT_CLASSES = [
   "excavator",
@@ -93,6 +109,12 @@ export function ProjectsScreen() {
   const [classes, setClasses] = useState(DEFAULT_CLASSES.join("\n"));
   const [openFolder, setOpenFolder] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
+  const [kind, setKind] = useState<ProjectKind>("train");
+  const [filter, setFilter] = useState<KindFilter>("all");
+  const shown = useMemo(
+    () => (projects ?? []).filter((p) => filter === "all" || p.kind === filter),
+    [projects, filter],
+  );
   const classNames = useMemo(() => parseClasses(classes).map((c) => c.name), [classes]);
 
   useEffect(() => {
@@ -121,6 +143,8 @@ export function ProjectsScreen() {
   const openProject = useCallback(
     (project: Project) => {
       pushLog(`open project ${project.id}`);
+      // The kind never changes: the shell and the kind routes need not load it again.
+      useProjectKindStore.getState().set(project.id, project.kind);
       void navigate(`/p/${project.id}`);
     },
     [navigate],
@@ -136,7 +160,8 @@ export function ProjectsScreen() {
     setError(null);
     try {
       const { data, error: err } = await api.POST("/api/v1/projects", {
-        body: { name, folder, classes: parseClasses(classes) },
+        // A detection project starts without classes: its first run fills them in.
+        body: { name, folder, kind, classes: kind === "train" ? parseClasses(classes) : [] },
       });
       if (data) openProject(data);
       else setError(messageOf(err, "could not create the project"));
@@ -192,7 +217,8 @@ export function ProjectsScreen() {
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
         <p className="text-sm text-muted">
-          A project is a folder on disk: the images, labels, datasets and models of one site or one campaign.
+          A project is a folder on disk. A training project turns labeled images into a model for your
+          library; a detection project runs models from the library over a site&apos;s images and maps.
         </p>
       </div>
 
@@ -204,22 +230,48 @@ export function ProjectsScreen() {
 
       <div className="grid gap-10 lg:grid-cols-[1fr_minmax(20rem,26rem)]">
         <div className="flex min-w-0 flex-col gap-3">
-          <h2 className="text-base font-semibold">Recent projects</h2>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="recent-projects" className="text-base font-semibold">
+              Recent projects
+            </h2>
+            {projects && projects.length > 0 && (
+              <Segmented
+                label="Show projects"
+                size="sm"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "train", label: "Training" },
+                  { value: "detect", label: "Detection" },
+                ]}
+              />
+            )}
+          </div>
           {projects === null ? (
             <SkeletonRows rows={3} columns={2} />
           ) : projects.length === 0 ? (
             <EmptyState icon="folder" title="No projects yet">
               Create one on the right, or open a folder that already holds a project.
             </EmptyState>
+          ) : shown.length === 0 ? (
+            <p className="py-6 text-sm text-muted">
+              No {filter === "detect" ? "detection" : "training"} projects in the list.
+            </p>
           ) : (
-            <ul className="flex flex-col gap-2">
-              {projects.map((p) => (
+            <ul aria-labelledby="recent-projects" className="flex flex-col gap-2">
+              {shown.map((p) => (
                 <li
                   key={p.id}
                   className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-panel px-4 py-3 transition-[border-color,box-shadow] duration-140 ease-out hover:border-line-strong hover:shadow-sm motion-reduce:transition-none"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{p.name}</span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-medium">{p.name}</span>
+                      <Pill size="sm" tone={p.kind === "detect" ? "accent" : "neutral"}>
+                        {KIND_PILL[p.kind]}
+                      </Pill>
+                    </span>
                     <span className="block truncate font-mono text-xs text-muted">{p.folder}</span>
                   </span>
                   <span className="flex shrink-0 items-center gap-1.5">
@@ -265,7 +317,28 @@ export function ProjectsScreen() {
         <div className="flex flex-col gap-10">
           <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-4" noValidate>
             <h2 className="text-base font-semibold">Create a project</h2>
-            <Button onClick={() => useAgentPanel.getState().setOpen(true)}>Plan with the setup agent</Button>
+            <div className="flex flex-col gap-2">
+              <Segmented
+                label="Kind of project"
+                value={kind}
+                onChange={setKind}
+                options={[
+                  { value: "train", label: "Training project", icon: "train" },
+                  { value: "detect", label: "Detection project", icon: "detect" },
+                ]}
+                className="self-start"
+              />
+              <p className="text-[13px] leading-relaxed text-muted">
+                {kind === "train"
+                  ? "Label images, build datasets and train a model. Every model you train goes into your library."
+                  : "Run a model from your library over a site's images and maps, and review what it finds. The class list comes from the first model you run."}
+              </p>
+            </div>
+            {kind === "train" && (
+              <Button onClick={() => useAgentPanel.getState().setOpen(true)} className="self-start">
+                Plan with the setup agent
+              </Button>
+            )}
             <Field label="Name" htmlFor="project-name">
               <Input
                 id="project-name"
@@ -282,31 +355,33 @@ export function ProjectsScreen() {
               onChange={setFolder}
               hint="A new or empty folder. Imported images are copied here; the originals are never touched."
             />
-            <div className="flex flex-col gap-2">
-              <p className="text-[13px] font-medium">Classes</p>
-              <div className="flex flex-wrap gap-1.5">
-                {classNames.length === 0 ? (
-                  <span className="text-xs text-danger">Add at least one class.</span>
-                ) : (
-                  classNames.map((c) => <Pill key={c}>{c}</Pill>)
-                )}
+            {kind === "train" ? (
+              <div className="flex flex-col gap-2">
+                <p className="text-[13px] font-medium">Classes</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {classNames.length === 0 ? (
+                    <span className="text-xs text-danger">Add at least one class.</span>
+                  ) : (
+                    classNames.map((c) => <Pill key={c}>{c}</Pill>)
+                  )}
+                </div>
+                <Disclosure label="Edit the class list">
+                  <Field
+                    label="Classes (one per line)"
+                    htmlFor="project-classes"
+                    hint="Each class gets a colour and a number key in the editor. Classes can be changed later in Project settings."
+                  >
+                    <Textarea
+                      id="project-classes"
+                      value={classes}
+                      onChange={(e) => setClasses(e.target.value)}
+                      rows={8}
+                      className="font-mono"
+                    />
+                  </Field>
+                </Disclosure>
               </div>
-              <Disclosure label="Edit the class list">
-                <Field
-                  label="Classes (one per line)"
-                  htmlFor="project-classes"
-                  hint="Each class gets a colour and a number key in the editor. Classes can be changed later in Project settings."
-                >
-                  <Textarea
-                    id="project-classes"
-                    value={classes}
-                    onChange={(e) => setClasses(e.target.value)}
-                    rows={8}
-                    className="font-mono"
-                  />
-                </Field>
-              </Disclosure>
-            </div>
+            ) : null}
             <Button type="submit" variant="primary" loading={busy} icon="plus" className="self-start">
               Create project
             </Button>
