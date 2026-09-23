@@ -238,7 +238,7 @@ export function DataManagerScreen() {
           </Button>
         </div>
       </div>
-      {allLabeled && (
+      {allLabeled && kind !== "detect" && (
         <Alert
           tone="ok"
           onDismiss={() => setAllLabeled(false)}
