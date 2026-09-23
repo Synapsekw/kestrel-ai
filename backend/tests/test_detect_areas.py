@@ -45,8 +45,9 @@ def test_an_area_inside_the_map_is_fully_covered(gt):
     assert p.polygon_px == [pytest.approx(v, abs=1e-6) for v in _square(100, 100, 200, 300)]
 
 
-def test_an_area_crossing_the_edge_is_partly_covered():
-    p = project_area(_map(), _area(_square(900, 100, 1100, 200)))
+@pytest.mark.parametrize("gt", [GT, ROTATED_GT], ids=["utm", "rotated"])
+def test_an_area_crossing_the_edge_is_partly_covered(gt):
+    p = project_area(_map(gt), _area(_square(900, 100, 1100, 200), gt))
     assert p is not None and p.partial is True
 
 
@@ -65,8 +66,9 @@ def test_an_area_elsewhere_on_earth_is_none():
     assert project_area(_map(), far) is None
 
 
-def test_an_area_just_beside_the_map_is_none():
-    assert project_area(_map(), _area(_square(1100, 100, 1200, 200))) is None
+@pytest.mark.parametrize("gt", [GT, ROTATED_GT], ids=["utm", "rotated"])
+def test_an_area_just_beside_the_map_is_none(gt):
+    assert project_area(_map(gt), _area(_square(1100, 100, 1200, 200), gt)) is None
 
 
 def test_a_map_without_georeferencing_projects_nothing():
