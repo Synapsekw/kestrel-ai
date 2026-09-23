@@ -75,7 +75,7 @@ that binary is git-ignored, so a fresh worktree or clone never has it and the st
 failed. `scripts\finish-task.ps1` checks for it under the worktree being gated and prints a clear
 message when it skips.
 
-Two things that trip people up:
+Three things that trip people up:
 
 - **A worktree has no venv of its own.** `backend/.venv` is not created per worktree; backend
   commands run against the main checkout's interpreter, e.g.
@@ -83,6 +83,13 @@ Two things that trip people up:
   worktree.
 - **`cargo` is not on PATH** in every shell. If `cargo test` fails to resolve, call the real binary
   directly: `%USERPROFILE%\.cargo\bin\cargo.exe test --manifest-path frontend/src-tauri/Cargo.toml`.
+- **There are two databases, each with its own migrations.** Each project has `project.db`, with its
+  migrations in `backend/app/db/migrations/`. The app-wide model library
+  (`%APPDATA%\kestrel-ai\library`) has `library.db`, with its migrations in
+  `backend/app/library/migrations/`. Library jobs use the project `JobRunner` and the same `Job`
+  ORM class (see `vault/decisions/2026-09-23-library-jobs-reuse-the-project-jobrunner.md`). A new
+  column on `app.db.models.Job` therefore needs a migration in **both** histories. Tests point the
+  library at a temporary data folder. Never run them against your real `%APPDATA%`.
 
 The GPU (`pytest -m gpu`), live-provider and real-frame tests read weights from
 `KESTREL_MODELS_DIR` (default `E:/Dev/Yolo/models`) and aerial frames from `KESTREL_FRAMES_DIR`
