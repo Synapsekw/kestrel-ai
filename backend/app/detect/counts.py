@@ -17,6 +17,7 @@ track in-place changes, so a caller works on copies and assigns them back (or ca
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from sqlalchemy import func, select
@@ -27,6 +28,8 @@ from app.db.models import Box, MapDetection, MapRun, QueryRun
 if TYPE_CHECKING:
     from app.detect.areas import ProjectedArea
 
+log = logging.getLogger(__name__)
+
 VERIFIED_STATES = ("accepted", "edited")
 REJECTED = "rejected"
 AREA_STREAM_BATCH = 5000
@@ -36,6 +39,9 @@ Entry = tuple[str, str] | None  # (class_id, review_state); None = the detection
 
 def _bump(counts: dict, key: str, delta: int) -> None:
     value = counts.get(key, 0) + delta
+    if value < 0:  # the old entry was never counted: a caller bug; a recount repairs it
+        log.warning("count for %s went below zero (%d); clamped to 0", key, value)
+        value = 0
     if value:
         counts[key] = value
     else:
@@ -74,6 +80,9 @@ def apply_area_transition(area_counts: dict, area_ids: list[str], old: Entry, ne
             cell = per_class.setdefault(entry[0], {"total": 0, "verified": 0})
             cell["total"] += sign * total
             cell["verified"] += sign * ver
+            if cell["total"] < 0 or cell["verified"] < 0:  # the old entry was never counted
+                log.warning("area %s count for %s went below zero; clamped to 0", area_id, entry[0])
+                cell["total"], cell["verified"] = max(cell["total"], 0), max(cell["verified"], 0)
             if cell["total"] == 0:
                 per_class.pop(entry[0])
         if not per_class:

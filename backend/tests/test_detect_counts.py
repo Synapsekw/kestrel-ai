@@ -80,6 +80,22 @@ def test_unreviewing_a_rejected_detection_counts_it_again():
     assert counts == {"c1": 1} and verified == {}
 
 
+def test_a_decrement_below_zero_is_logged_and_clamped(caplog):
+    counts, verified = {}, {}
+    with caplog.at_level("WARNING", logger="app.detect.counts"):
+        apply_transition(counts, verified, ("c1", "accepted"), None)
+    assert counts == {} and verified == {}
+    assert "below zero" in caplog.text
+
+
+def test_an_area_decrement_below_zero_is_logged_and_clamped(caplog):
+    area_counts: dict = {}
+    with caplog.at_level("WARNING", logger="app.detect.counts"):
+        apply_area_transition(area_counts, ["a1"], ("c1", "accepted"), None)
+    assert area_counts == {}
+    assert "below zero" in caplog.text
+
+
 def test_area_transition_writes_total_and_verified_into_each_area():
     area_counts: dict = {}
     apply_area_transition(area_counts, ["a1", "a2"], None, ("c1", "unreviewed"))
