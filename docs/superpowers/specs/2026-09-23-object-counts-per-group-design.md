@@ -1,7 +1,25 @@
 # Object counts per group (flight) — design
 
 **Date:** 2026-09-23
-**Status:** approved by the operator in brainstorming; no plan written yet
+**Status:** **SUPERSEDED on 2026-09-23, never implemented.** Two reasons, both found before any code
+was written:
+
+1. The georeferenced maps feature (`2026-09-22-geotiff-maps-design.md`, merged at `759015a`) already
+   counts objects per class across an orthomosaic, scored against labelled zones and exportable. On
+   an ortho there are no overlapping frames, so those counts need no de-duplication. This design
+   would have rebuilt a weaker version of it. The brainstorming that produced this spec ran against
+   a `main` that predated that merge.
+2. The projection this design rests on does not hold up on real data. Measured on the operator's
+   project (flight `0033`, camera attitude from the original senseFly XMP), the median distance from
+   a sighting to the nearest sighting of the same class in the next frame was 28.4 m with no
+   projection, 16.7 m projected with model detections, and 10.9 m projected with human-verified boxes
+   only - where a few metres is needed for merging to be trustworthy. The best-scoring angle
+   convention also differed between flights `0031` and `0033`, which means the fit was following
+   noise rather than recovering geometry. Doing this properly is bundle adjustment and lens
+   distortion work - photogrammetry, which is what produces an orthomosaic in the first place.
+
+Successor: `2026-09-23-survey-timeline-design.md` (counts over time across surveys, built on maps).
+Kept as the record of the investigation; do not implement.
 **Related:** `docs/superpowers/specs/2026-09-17-kestrel-ai-app-design.md` (§1 "a trained detector and a
 report", §5 import/grouping), `PRODUCT.md`, `vault/00-north-star.md` §4
 
