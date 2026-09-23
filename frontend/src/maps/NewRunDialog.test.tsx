@@ -1,16 +1,52 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import type { Model } from "@contract/client";
+import type { ModelGsdEstimate } from "@/api/models";
 import {
+  errorBody,
   exampleGeoMap,
   exampleMapRun,
   exampleModel,
   exampleProviders,
   fakeClient,
+  type FakeRoute,
   PROJECT_ID,
   runningJob,
 } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { NewRunDialog } from "./NewRunDialog";
+
+/** Renders the dialog behind a fake API: a model list, providers, and (optionally) a gsd-estimate
+ * and patch route. Returns the recorded requests so a test can inspect what the dialog sent. */
+function renderDialog(opts: { models?: Model[]; estimate?: Partial<ModelGsdEstimate> } = {}) {
+  const models = opts.models ?? [exampleModel];
+  const routes: FakeRoute[] = [
+    { method: "GET", path: /\/models$/, body: { items: models, next_cursor: null } },
+    { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+    opts.estimate
+      ? { method: "GET", path: /\/gsd-estimate$/, body: opts.estimate }
+      : { method: "GET", path: /\/gsd-estimate$/, status: 404, body: errorBody("not_found", "no dataset") },
+    {
+      method: "PATCH",
+      path: /\/models\/[^/]+$/,
+      body: (req) => ({ ...models[0], ...(req.body as object) }),
+    },
+  ];
+  const { api, requests } = fakeClient(routes);
+  const onStarted = vi.fn();
+  renderWithProviders(
+    <NewRunDialog
+      projectId={PROJECT_ID}
+      geoMap={exampleGeoMap}
+      runs={[]}
+      onClose={() => {}}
+      onStarted={onStarted}
+    />,
+    { api },
+  );
+  return { requests, onStarted };
+}
 
 describe("NewRunDialog", () => {
   it("prefills the GSD, shows the estimate and starts a local run", async () => {
@@ -60,5 +96,42 @@ describe("NewRunDialog", () => {
       model_id: exampleModel.id,
       target_gsd_cm: 2,
     });
+  });
+
+  it("defaults the scale to the model's training GSD", async () => {
+    renderDialog({ models: [{ ...exampleModel, id: "m1", train_gsd_cm: 18.92 }] });
+    expect(await screen.findByLabelText(/Model trained at/)).toHaveValue(18.92);
+  });
+
+  it("offers a derived scale when the model has none, and stores it once accepted", async () => {
+    const { requests } = renderDialog({
+      models: [{ ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: "d1" }],
+      estimate: {
+        train_gsd_cm: 18.92,
+        median_alt_m: 191,
+        median_object_m: 8.39,
+        plausible: true,
+        sensor_source: "focal_plane",
+      },
+    });
+    await userEvent.click(await screen.findByRole("button", { name: /use 18.92/i }));
+    await waitFor(() =>
+      expect(requests.find((r) => r.method === "PATCH")).toMatchObject({
+        url: `/api/v1/projects/${PROJECT_ID}/models/m1`,
+        body: { train_gsd_cm: 18.92 },
+      }),
+    );
+    expect(screen.getByLabelText(/Model trained at/)).toHaveValue(18.92);
+  });
+
+  it("will not start a run whose scale is unknown", async () => {
+    renderDialog({ models: [{ ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: null }] });
+    expect(await screen.findByRole("button", { name: /start detection/i })).toBeDisabled();
+  });
+
+  it("enables Start once a scale is typed", async () => {
+    renderDialog({ models: [{ ...exampleModel, id: "m1", train_gsd_cm: null, dataset_id: null }] });
+    await userEvent.type(await screen.findByLabelText(/Model trained at/), "19");
+    expect(screen.getByRole("button", { name: /start detection/i })).toBeEnabled();
   });
 });

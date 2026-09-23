@@ -3,11 +3,12 @@ import type { GeoMap, MapRun, ProviderName } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { createMapRun, estimateMapRun, type MapRunEstimate } from "@/api/maps";
+import { fetchModelGsdEstimate, patchModel, type ModelGsdEstimate } from "@/api/models";
 import { useProviders } from "@/api/providers";
 import { useModels } from "@/models/useModels";
 import { useJobsStore } from "@/store/jobs";
 import { Button, Dialog, Field, Input, Segmented, Select } from "@/ui";
-import { DEFAULT_MAP_RUN, defaultTargetGsd, validateRunForm } from "./runModel";
+import { DEFAULT_MAP_RUN, defaultTargetGsd, lastRunTargetGsd, validateRunForm } from "./runModel";
 
 const fmt = (n: number) => new Intl.NumberFormat("en-GB").format(n).replace(/,/g, " ");
 
@@ -36,8 +37,10 @@ export function NewRunDialog({
   const [estimate, setEstimate] = useState<MapRunEstimate | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [offer, setOffer] = useState<ModelGsdEstimate | null>(null);
 
   const effectiveModel = modelId || registry.models[0]?.id || "";
+  const selected = registry.models.find((m) => m.id === effectiveModel) ?? null;
   // Re-prefills the GSD field when the detector or model changes, without fighting a value the
   // operator is mid-typing: a render-phase state adjustment (React's "reset state on a changed key"
   // pattern), not an effect, so it only fires on an actual key change.
@@ -45,8 +48,35 @@ export function NewRunDialog({
   const [gsdKeySeen, setGsdKeySeen] = useState("");
   if (gsdKey !== gsdKeySeen) {
     setGsdKeySeen(gsdKey);
-    const d = defaultTargetGsd(runs, kind === "local_model" ? effectiveModel : null, geoMap.gsd_cm);
+    const d =
+      kind === "local_model"
+        ? (defaultTargetGsd(selected) ?? lastRunTargetGsd(runs, effectiveModel))
+        : lastRunTargetGsd(runs, null);
     setGsd(d ? String(d) : "");
+    setOffer(null);
+  }
+
+  // A model with no training scale but a dataset to measure: derive it once and offer it.
+  useEffect(() => {
+    if (kind !== "local_model" || !selected || selected.train_gsd_cm || !selected.dataset_id) return;
+    let cancelled = false;
+    fetchModelGsdEstimate(api, projectId, selected.id)
+      .then((e) => !cancelled && e.plausible && setOffer(e))
+      .catch(() => !cancelled && setOffer(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, kind, selected]);
+
+  async function acceptOffer() {
+    if (!offer || !selected) return;
+    setGsd(String(offer.train_gsd_cm));
+    setOffer(null);
+    try {
+      registry.replace(await patchModel(api, projectId, selected.id, { train_gsd_cm: offer.train_gsd_cm }));
+    } catch {
+      // The field is already filled; failing to remember it must not block this run.
+    }
   }
 
   const body = {
@@ -101,7 +131,7 @@ export function NewRunDialog({
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" icon="detect" loading={busy}>
+          <Button type="submit" variant="primary" icon="detect" loading={busy} disabled={!gsd}>
             Start detection
           </Button>
         </>
@@ -157,9 +187,11 @@ export function NewRunDialog({
             label="Model trained at (cm / px)"
             htmlFor="run-gsd"
             hint={
-              geoMap.gsd_cm
-                ? `This map is ${geoMap.gsd_cm.toFixed(1)} cm / px. Different by over 15 % means the map is rescaled.`
-                : "The map has no ground resolution; no rescaling."
+              !gsd
+                ? "Set the scale this model was trained at — a run at the wrong scale finds nothing, or finds the wrong thing."
+                : geoMap.gsd_cm
+                  ? `This map is ${geoMap.gsd_cm.toFixed(1)} cm / px. Different by over 15 % means the map is rescaled.`
+                  : "The map has no ground resolution; no rescaling."
             }
           >
             <Input
@@ -183,6 +215,14 @@ export function NewRunDialog({
             />
           </Field>
         </div>
+        {offer && (
+          <div className="flex items-center gap-3 rounded-md border border-line p-3" aria-live="polite">
+            <p className="text-sm text-muted flex-1">
+              {`This model was trained at about ${offer.train_gsd_cm} cm / px — its imagery was flown at ${offer.median_alt_m} m, which makes its labelled machines ${offer.median_object_m} m across.`}
+            </p>
+            <Button onClick={() => void acceptOffer()}>{`Use ${offer.train_gsd_cm}`}</Button>
+          </div>
+        )}
         {estimate && (
           <p className="text-sm text-muted" aria-live="polite">
             {`${fmt(estimate.requests)} windows to check · ${fmt(estimate.skipped_windows)} empty skipped${estimate.scale !== 1 ? ` · scaled ×${estimate.scale}` : ""}`}
