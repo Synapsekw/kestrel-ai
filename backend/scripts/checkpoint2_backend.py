@@ -59,6 +59,33 @@ def wait_job(api: httpx.Client, pid: str | None, jid: str, timeout: float = 900)
     raise SystemExit(f"job {jid} timed out")
 
 
+def sha256_file(path: Path) -> str:
+    """Streamed in chunks, like the library's own hash: weights files run to hundreds of megabytes."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while chunk := fh.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def base_model_id(api: httpx.Client, job: dict, weights: Path) -> str:
+    """The library model a finished import job stands for.
+
+    The library is app-wide, so an earlier run may have imported these weights already: that
+    duplicate refusal reuses the existing model. Any other failure stops the script with its error.
+    """
+    if job["state"] == "succeeded":
+        return job["result"]["model_id"]
+    if "already in the library" not in (job.get("error") or ""):
+        raise SystemExit(f"model import {job['state']}: {job.get('error')}")
+    digest = sha256_file(weights)
+    library = check(api.get("/api/v1/library/models", params={"limit": 1000}))["items"]
+    base_id = next((m["id"] for m in library if m["sha256"] == digest), None)
+    if base_id is None:
+        raise SystemExit(f"import refused as a duplicate, but no library model has sha256 {digest}")
+    return base_id
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://127.0.0.1:8765")
@@ -176,13 +203,7 @@ def main() -> int:
         )
     )
     job = wait_job(api, None, imp["job"]["id"])
-    if job["state"] == "succeeded":
-        base_id = job["result"]["model_id"]
-    else:  # the library is app-wide: an earlier run may have imported these weights already
-        digest = hashlib.sha256(Path(a.weights).read_bytes()).hexdigest()
-        library = check(api.get("/api/v1/library/models", params={"limit": 1000}))["items"]
-        base_id = next((m["id"] for m in library if m["sha256"] == digest), None)
-        assert base_id, job
+    base_id = base_model_id(api, job, Path(a.weights))
     base = check(api.get(f"/api/v1/library/models/{base_id}"))
     step("import model", {"id": base["id"], "class_names": len(base["class_names"])})
     tr = check(
