@@ -401,7 +401,14 @@ def delete_label(handle: ProjectHandle, map_id: str, label_id: str) -> None:
         bump_labels_version(s, map_id)
 
 
+DEDUPE_IOU = 0.5
+
+
 def seed_labels(handle: ProjectHandle, map_id: str, body: MapLabelSeed) -> int:
+    """Ground truth from a run's detections. Idempotent: a detection that already has a label of
+    the same class overlapping it at or above `DEDUPE_IOU` is skipped, so seeding the same run and
+    zone twice does not double up the ground truth (which would silently corrupt precision/recall,
+    not just leave a duplicate row around)."""
     with handle.session() as s:
         _get(s, map_id)
         zone = _zone(s, map_id, body.zone_id)
@@ -409,6 +416,10 @@ def seed_labels(handle: ProjectHandle, map_id: str, body: MapLabelSeed) -> int:
         if run.map_id != map_id:
             raise AppError("validation_error", "the run belongs to another map", 422)
         area = [scoring.Zone(zone.id, [tuple(p) for p in zone.polygon])]
+        existing = [
+            scoring.ScoreBox(lab.id, lab.class_id, lab.x, lab.y, lab.w, lab.h)
+            for lab in s.execute(select(MapLabel).where(MapLabel.map_id == map_id)).scalars()
+        ]
         rows = []
         dets = s.execute(
             select(MapDetection).where(
@@ -417,21 +428,31 @@ def seed_labels(handle: ProjectHandle, map_id: str, body: MapLabelSeed) -> int:
         ).scalars()
         for d in dets:
             box = scoring.ScoreBox(d.id, d.class_id, d.x, d.y, d.w, d.h)
-            if scoring.zone_of(box, area):
-                rows.append(
-                    MapLabel(
-                        map_id=map_id,
-                        class_id=d.class_id,
-                        x=d.x,
-                        y=d.y,
-                        w=d.w,
-                        h=d.h,
-                        source=f"from_run:{run.id}",
-                    )
+            if not scoring.zone_of(box, area):
+                continue
+            if any(lab.class_id == d.class_id and scoring._iou(box, lab) >= DEDUPE_IOU for lab in existing):
+                continue
+            rows.append(
+                MapLabel(
+                    map_id=map_id,
+                    class_id=d.class_id,
+                    x=d.x,
+                    y=d.y,
+                    w=d.w,
+                    h=d.h,
+                    source=f"from_run:{run.id}",
                 )
+            )
+            existing.append(scoring.ScoreBox("", d.class_id, d.x, d.y, d.w, d.h))
         s.add_all(rows)
         bump_labels_version(s, map_id)
     return len(rows)
+
+
+def _zones_bbox(zones: list[MapZone]) -> tuple[float, float, float, float]:
+    xs = [p[0] for z in zones for p in z.polygon]
+    ys = [p[1] for z in zones for p in z.polygon]
+    return min(xs), min(ys), max(xs), max(ys)
 
 
 def score_run(handle: ProjectHandle, run_id: str, iou: float) -> dict:
@@ -442,22 +463,58 @@ def score_run(handle: ProjectHandle, run_id: str, iou: float) -> dict:
         with _SCORE_LOCK:
             if key in _SCORE_CACHE:
                 return _SCORE_CACHE[key]
-        zones = [
-            scoring.Zone(z.id, [tuple(p) for p in z.polygon])
-            for z in s.execute(select(MapZone).where(MapZone.map_id == gmap.id)).scalars()
-        ]
-        dets = [
-            scoring.ScoreBox(d.id, d.class_id, d.x, d.y, d.w, d.h, d.confidence)
-            for d in s.execute(
-                select(MapDetection).where(MapDetection.run_id == run_id, MapDetection.confidence >= run.conf)
-            ).scalars()
-        ]
-        labels = [
-            scoring.ScoreBox(lab.id, lab.class_id, lab.x, lab.y, lab.w, lab.h)
-            for lab in s.execute(select(MapLabel).where(MapLabel.map_id == gmap.id)).scalars()
-        ]
         version = gmap.labels_version
-    result = {"run_id": run_id, "labels_version": version, **scoring.score(dets, labels, zones, iou)}
+        zone_rows = list(s.execute(select(MapZone).where(MapZone.map_id == gmap.id)).scalars())
+        if not zone_rows:
+            # Nothing outside a zone can score: loading detections or labels to score zero of them
+            # is pure waste, and a freshly imported (zone-less) map is the common case.
+            result = {"run_id": run_id, "labels_version": version, **scoring.score([], [], [], iou)}
+        else:
+            zones = [scoring.Zone(z.id, [tuple(p) for p in z.polygon]) for z in zone_rows]
+            bbox = _zones_bbox(zone_rows)
+            x0, y0, x1, y1 = bbox
+            det_rows = list(
+                s.execute(
+                    select(MapDetection)
+                    .where(
+                        MapDetection.run_id == run_id,
+                        MapDetection.confidence >= run.conf,
+                        MapDetection.x < x1,
+                        MapDetection.x + MapDetection.w > x0,
+                        MapDetection.y < y1,
+                        MapDetection.y + MapDetection.h > y0,
+                    )
+                    .limit(MAX_DETECTIONS + 1)
+                ).scalars()
+            )
+            if len(det_rows) > MAX_DETECTIONS:
+                raise AppError(
+                    "conflict",
+                    "the evaluation zones cover too much of the map to score; use smaller zones",
+                    409,
+                )
+            lab_rows = list(
+                s.execute(
+                    select(MapLabel)
+                    .where(
+                        MapLabel.map_id == gmap.id,
+                        MapLabel.x < x1,
+                        MapLabel.x + MapLabel.w > x0,
+                        MapLabel.y < y1,
+                        MapLabel.y + MapLabel.h > y0,
+                    )
+                    .limit(MAX_LABELS + 1)
+                ).scalars()
+            )
+            if len(lab_rows) > MAX_LABELS:
+                raise AppError(
+                    "conflict",
+                    "the evaluation zones cover too much of the map to score; use smaller zones",
+                    409,
+                )
+            dets = [scoring.ScoreBox(d.id, d.class_id, d.x, d.y, d.w, d.h, d.confidence) for d in det_rows]
+            labels = [scoring.ScoreBox(lab.id, lab.class_id, lab.x, lab.y, lab.w, lab.h) for lab in lab_rows]
+            result = {"run_id": run_id, "labels_version": version, **scoring.score(dets, labels, zones, iou)}
     with _SCORE_LOCK:
         _SCORE_CACHE[key] = result
         while len(_SCORE_CACHE) > _SCORE_CACHE_ITEMS:

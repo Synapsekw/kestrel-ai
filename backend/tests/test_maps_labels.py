@@ -1,7 +1,10 @@
 """Zones, labels, seeding from a run, and a run's score through the API (spec section 8)."""
 
+import re
+
 import pytest
 from geotiffs import make_squares_geotiff
+from sqlalchemy import event
 from test_maps_detect import SQUARES, SquareProvider, run_body, start  # reuse the detect fixtures' helpers
 
 BASE = "/api/v1/projects"
@@ -74,3 +77,57 @@ def test_seed_then_edit_then_score(client, project_id, ready_map, run_id, projec
 def test_score_without_zones(client, project_id, run_id):
     s = client.get(f"{BASE}/{project_id}/map-runs/{run_id}/score").json()
     assert s["has_zones"] is False and s["overall"]["predicted"] == 0
+
+
+def test_score_with_no_zones_never_queries_detections_or_labels(client, project_id, run_id, handle):
+    """The no-zones path must short-circuit before loading rows: a spy on the SQL that actually
+    reaches the database, not just an assertion on the answer, so a regression that loads-then-
+    discards would still fail this test."""
+    seen: list[str] = []
+
+    def _capture(conn, cursor, statement, parameters, context, executemany):
+        seen.append(statement)
+
+    event.listen(handle.engine, "before_cursor_execute", _capture)
+    try:
+        r = client.get(f"{BASE}/{project_id}/map-runs/{run_id}/score")
+    finally:
+        event.remove(handle.engine, "before_cursor_execute", _capture)
+    assert r.status_code == 200 and r.json()["has_zones"] is False
+    # word-boundary, not substring: `geo_map.labels_version` must not count as `map_label`
+    touched = re.compile(r"\bmap_detection\b|\bmap_label\b", re.IGNORECASE)
+    assert not any(touched.search(s) for s in seen)
+
+
+def test_far_outside_detection_is_still_excluded_from_the_score(client, project_id, ready_map, run_id):
+    """Squares 3 and 4 sit outside `ZONE`; the bbox narrowing in `score_run` must not change which
+    boxes end up in the score, only how many rows are fetched to get there."""
+    url = f"{BASE}/{project_id}/maps/{ready_map}"
+    client.post(f"{url}/zones", json={"name": "Z", "polygon": ZONE})
+    dets = client.get(f"{BASE}/{project_id}/map-runs/{run_id}/detections").json()["items"]
+    outside_ids = {d["id"] for d in dets if d["x"] >= 1500}
+    assert outside_ids
+    s = client.get(f"{BASE}/{project_id}/map-runs/{run_id}/score").json()
+    assert not (outside_ids & {m["id"] for m in s["matches"]})
+
+
+def test_score_over_the_cap_is_409(client, project_id, ready_map, run_id, monkeypatch):
+    """A zone covering the whole map is a pathological case the bbox narrowing cannot help with;
+    the hard cap must refuse to score rather than silently truncate and report a wrong precision."""
+    url = f"{BASE}/{project_id}/maps/{ready_map}"
+    whole = [[0, 0], [3000, 0], [3000, 1500], [0, 1500]]
+    client.post(f"{url}/zones", json={"name": "All", "polygon": whole})
+    monkeypatch.setattr("app.maps.service.MAX_DETECTIONS", 1)
+    assert client.get(f"{BASE}/{project_id}/map-runs/{run_id}/score").status_code == 409
+
+
+def test_seeding_twice_does_not_duplicate_labels(client, project_id, ready_map, run_id):
+    url = f"{BASE}/{project_id}/maps/{ready_map}"
+    zid = client.post(f"{url}/zones", json={"name": "Z", "polygon": ZONE}).json()["id"]
+    body = {"run_id": run_id, "zone_id": zid}
+    first = client.post(f"{url}/labels/seed", json=body)
+    assert first.json()["created"] == 2
+    count = len(client.get(f"{url}/labels").json()["items"])
+    second = client.post(f"{url}/labels/seed", json=body)
+    assert second.json()["created"] == 0
+    assert len(client.get(f"{url}/labels").json()["items"]) == count
