@@ -69,3 +69,18 @@ def test_wgs84_to_pixel_takes_sequences():
     lons, lats = zip(*(g.pixel_to_wgs84(*p) for p in pts), strict=True)
     xs, ys = g.wgs84_to_pixel(list(lons), list(lats))
     assert list(zip(xs, ys, strict=True)) == [pytest.approx(p, abs=1e-6) for p in pts]
+
+
+def test_wgs84_to_pixel_takes_numpy_arrays_and_raises_no_affine_warning():
+    import warnings
+
+    import numpy as np
+
+    g = Georef(ROTATED_GT, UTM33)
+    pts = [(0.0, 0.0), (100.0, 50.0), (400.0, 900.0)]
+    lons, lats = zip(*(g.pixel_to_wgs84(*p) for p in pts), strict=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        xs, ys = g.wgs84_to_pixel(np.array(lons), np.array(lats))
+        assert g.pixel_to_native(1, 1)
+    assert list(zip(xs, ys, strict=True)) == [pytest.approx(p, abs=1e-6) for p in pts]
