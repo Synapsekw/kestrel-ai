@@ -58,7 +58,12 @@ export function useProjectProgress(projectId: string | undefined): {
         return [];
       }),
       fetchQueryRuns(api, projectId),
-      listMaps(api, projectId),
+      // The maps router may fail to load (a broken GDAL in the frozen bundle) and then every map
+      // route answers 404. That must not blank every other count, so it falls back to no maps.
+      listMaps(api, projectId).catch((e: unknown) => {
+        pushLog(`maps unavailable: ${messageOf(e, String(e))}`);
+        return [];
+      }),
     ])
       .then(([stats, datasets, models, runs, maps]) => {
         if (cancelled) return;

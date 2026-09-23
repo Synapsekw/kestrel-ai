@@ -142,6 +142,23 @@ describe("useProjectProgress", () => {
     });
   });
 
+  it("counts no maps, and still fills the rest, when the maps feature is unavailable", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/stats$/, body: { ...exampleStats, image_count: 5 } },
+      { method: "GET", path: /\/datasets$/, body: { items: [exampleDataset], next_cursor: null } },
+      { method: "GET", path: /\/models$/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/query-runs/, body: { items: [], next_cursor: null } },
+      { method: "GET", path: /\/maps$/, status: 404, body: errorBody("not_found", "Not Found") },
+    ]);
+    renderWithProviders(<Probe projectId={PROJECT_ID} />, { api });
+    await waitFor(() => expect(screen.getByTestId("progress")).not.toHaveTextContent("none"));
+    expect(JSON.parse(screen.getByTestId("progress").textContent ?? "")).toMatchObject({
+      images: 5,
+      datasets: 1,
+      maps: 0,
+    });
+  });
+
   it("waits for the project's kind before loading", async () => {
     useProjectKindStore.setState({ byProject: {} });
     const { api, requests } = fakeClient([]);
