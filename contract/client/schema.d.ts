@@ -4233,6 +4233,7 @@ export interface components {
             content: components["schemas"]["MapExportContent"];
             /** @description required for run and run_score */
             run_id?: string;
+            /** @description gpkg (GeoPackage) includes review_state, the mapped class and a site_areas layer */
             formats: components["schemas"]["MapExportFormat"][];
         };
         /**

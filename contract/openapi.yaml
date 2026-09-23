@@ -4482,6 +4482,7 @@ components:
         run_id: { type: string, description: required for run and run_score }
         formats:
           type: array
+          description: "gpkg (GeoPackage) includes review_state, the mapped class and a site_areas layer"
           items: { $ref: "#/components/schemas/MapExportFormat" }
           minItems: 1
           uniqueItems: true
