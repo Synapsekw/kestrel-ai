@@ -40,7 +40,7 @@ def open_or_create_project(client: httpx.Client, folder: Path) -> dict:
         return _check(client.post("/api/v1/projects/open", json={"folder": str(folder)}))
     folder.mkdir(parents=True, exist_ok=True)
     classes = [{"name": n, "colour": c, "hotkey": str(i + 1)} for i, (n, c) in enumerate(CLASSES)]
-    body = {"name": folder.name, "folder": str(folder), "classes": classes}
+    body = {"name": folder.name, "folder": str(folder), "classes": classes, "kind": "train"}
     return _check(client.post("/api/v1/projects", json=body))
 
 

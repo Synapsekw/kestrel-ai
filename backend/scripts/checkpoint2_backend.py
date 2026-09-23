@@ -101,7 +101,10 @@ def main() -> int:
         for i, (n, c) in enumerate(zip(CLASSES, COLOURS, strict=True))
     ]
     project = check(
-        api.post("/api/v1/projects", json={"name": "Checkpoint 2", "folder": str(folder), "classes": classes})
+        api.post(
+            "/api/v1/projects",
+            json={"name": "Checkpoint 2", "folder": str(folder), "classes": classes, "kind": "train"},
+        )
     )
     pid = project["id"]
     step("create project", {"id": pid, "classes": len(project["classes"])})
