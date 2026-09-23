@@ -5356,21 +5356,22 @@ export interface operations {
                      *         {
                      *           "id": "50000000-3333-4000-8000-000000000001",
                      *           "kind": "images",
-                     *           "label": "Flight 14 Sep",
-                     *           "captured_on": "2026-09-14",
+                     *           "label": "Flight 15 Apr",
+                     *           "captured_on": "2019-04-15",
                      *           "map_id": null,
-                     *           "folder": "D:\\Surveys\\2026-09-14 flight",
-                     *           "site": "north-yard",
+                     *           "folder": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+                     *           "site": "ahmadia",
                      *           "settings": {
                      *             "max_side": 4000,
                      *             "quality": 95,
-                     *             "dedupe_threshold": 4
+                     *             "dedupe_threshold": 4,
+                     *             "group_regex": "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)"
                      *           },
-                     *           "image_count": 240,
+                     *           "image_count": 3299,
                      *           "duplicate_count": 0,
                      *           "job_id": "j0000000-4444-4000-8000-000000000001",
-                     *           "imported_at": "2026-09-15T08:30:00Z",
-                     *           "created_at": "2026-09-15T08:05:00Z"
+                     *           "imported_at": "2026-09-17T10:30:00Z",
+                     *           "created_at": "2026-09-17T10:05:00Z"
                      *         },
                      *         {
                      *           "id": "50000000-3333-4000-8000-000000000002",
@@ -7858,7 +7859,7 @@ export interface operations {
                      *           "id": "q0000000-8888-4000-8000-000000000001",
                      *           "kind": "images",
                      *           "source_id": "50000000-3333-4000-8000-000000000001",
-                     *           "source_label": "Flight 14 Sep",
+                     *           "source_label": "Flight 15 Apr",
                      *           "model_id": "m0000000-2222-4000-8000-000000000001",
                      *           "model_name": "machinery-v3",
                      *           "conf": 0.25,
@@ -8545,27 +8546,27 @@ export interface operations {
                      *           "source": {
                      *             "id": "50000000-3333-4000-8000-000000000001",
                      *             "kind": "images",
-                     *             "label": "Flight 14 Sep",
-                     *             "captured_on": "2026-09-14",
+                     *             "label": "Flight 15 Apr",
+                     *             "captured_on": "2019-04-15",
                      *             "map_id": null,
-                     *             "folder": "D:\\Surveys\\2026-09-14 flight",
-                     *             "site": "north-yard",
+                     *             "folder": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+                     *             "site": "ahmadia",
                      *             "settings": {
                      *               "max_side": 4000,
                      *               "quality": 95,
                      *               "dedupe_threshold": 4
                      *             },
-                     *             "image_count": 240,
+                     *             "image_count": 3299,
                      *             "duplicate_count": 0,
                      *             "job_id": "j0000000-4444-4000-8000-000000000001",
-                     *             "imported_at": "2026-09-15T08:30:00Z",
-                     *             "created_at": "2026-09-15T08:05:00Z"
+                     *             "imported_at": "2026-09-17T10:30:00Z",
+                     *             "created_at": "2026-09-17T10:05:00Z"
                      *           },
                      *           "run": {
                      *             "id": "q0000000-8888-4000-8000-000000000001",
                      *             "kind": "images",
                      *             "source_id": "50000000-3333-4000-8000-000000000001",
-                     *             "source_label": "Flight 14 Sep",
+                     *             "source_label": "Flight 15 Apr",
                      *             "model_id": "m0000000-2222-4000-8000-000000000001",
                      *             "model_name": "machinery-v3",
                      *             "conf": 0.25,
