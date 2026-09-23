@@ -395,6 +395,7 @@ export const MAP_RUN_ID = "r0000000-7777-4000-8000-000000000001";
 export const exampleGeoMap: GeoMap = {
   id: MAP_ID,
   name: "Site north ortho",
+  captured_on: "2026-04-15",
   status: "ready",
   error: null,
   source_path: "D:/orthos/site-north.tif",
@@ -517,6 +518,39 @@ export const exampleMapScore: MapScore = {
       y: 3300,
       w: 200,
       h: 140,
+    },
+  ],
+};
+
+export const exampleTimeline = {
+  basis: { model_id: MODEL_ID, model_name: "yolo11m-coco", conf: 0.25 },
+  classes: [{ id: CLASS_ID(1), name: "excavator", colour: "#f97316" }],
+  surveys: [
+    {
+      map_id: MAP_ID,
+      map_name: "April survey",
+      captured_on: "2026-04-15",
+      date_is_import_date: false,
+      run_id: "5e4d3c2b-0000-4000-8000-000000000001",
+      model_name: "yolo11m-coco",
+      conf: 0.25,
+      counts: { [CLASS_ID(1)]: 12 },
+      deltas: {},
+      state: "ok" as const,
+      reason: null,
+    },
+    {
+      map_id: "7c9e1b2a-5555-4000-8000-000000000002",
+      map_name: "May survey",
+      captured_on: "2026-05-20",
+      date_is_import_date: false,
+      run_id: "5e4d3c2b-0000-4000-8000-000000000002",
+      model_name: "yolo11m-coco",
+      conf: 0.25,
+      counts: { [CLASS_ID(1)]: 15 },
+      deltas: { [CLASS_ID(1)]: 3 },
+      state: "ok" as const,
+      reason: null,
     },
   ],
 };

@@ -11,6 +11,7 @@ import { ModelsScreen } from "@/screens/ModelsScreen";
 import { TrainScreen } from "@/screens/TrainScreen";
 import { QueryScreen } from "@/screens/QueryScreen";
 import { MapsScreen } from "@/screens/MapsScreen";
+import { SurveysScreen } from "./screens/SurveysScreen";
 import { ExportScreen } from "@/screens/ExportScreen";
 import { SettingsScreen } from "@/screens/SettingsScreen";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
       { path: "p/:projectId/query", element: <QueryScreen /> },
       { path: "p/:projectId/maps", element: <MapsScreen /> },
       { path: "p/:projectId/maps/:mapId", element: <MapsScreen /> },
+      { path: "p/:projectId/surveys", element: <SurveysScreen /> },
       { path: "p/:projectId/export", element: <ExportScreen /> },
       { path: "p/:projectId/settings", element: <SettingsScreen /> },
     ],

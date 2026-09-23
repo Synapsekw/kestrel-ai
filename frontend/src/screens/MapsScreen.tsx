@@ -87,6 +87,7 @@ const EMPTY_CLASSES: ClassDef[] = [];
 const EMPTY_GEOMAP: GeoMap = {
   id: "",
   name: "",
+  captured_on: null,
   status: "ready",
   error: null,
   source_path: "",
