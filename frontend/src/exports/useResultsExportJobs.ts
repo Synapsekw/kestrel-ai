@@ -6,10 +6,12 @@ import { fetchJobs } from "@/api/jobs";
 import { pushLog } from "@/app/diagnostics";
 import { useJobsStore } from "@/store/jobs";
 
-/** This project's `results_export` jobs, newest first; kept fresh by the jobs panel's websocket too. */
-function selectResultsExportJobs(jobs: Record<string, Job>, projectId: string): Job[] {
+/** This project's file-producing exports (a `results_export` from the Export screen or a
+ * `map_export` from the Maps screen), newest first across both kinds; kept fresh by the jobs
+ * panel's websocket too. */
+function selectExportJobs(jobs: Record<string, Job>, projectId: string): Job[] {
   return Object.values(jobs)
-    .filter((j) => j.type === "results_export" && j.project_id === projectId)
+    .filter((j) => (j.type === "results_export" || j.type === "map_export") && j.project_id === projectId)
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
@@ -24,22 +26,34 @@ export function useResultsExportJobs(projectId: string): {
   const key = `${projectId}|${attempt}`;
   const [status, setStatus] = useState<{ key: string; error: string | null }>({ key: "", error: null });
   const stored = useJobsStore((s) => s.jobs);
-  const jobs = useMemo(() => selectResultsExportJobs(stored, projectId), [stored, projectId]);
+  const jobs = useMemo(() => selectExportJobs(stored, projectId), [stored, projectId]);
 
   useEffect(() => {
     if (!projectId) return;
     let cancelled = false;
-    fetchJobs(api, projectId, { type: "results_export" })
-      .then((loaded) => {
-        if (cancelled) return;
-        useJobsStore.getState().upsertMany(loaded);
-        setStatus({ key, error: null });
-      })
-      .catch((e: unknown) => {
-        if (cancelled) return;
-        pushLog(`load past exports failed: ${messageOf(e, String(e))}`);
-        setStatus({ key, error: messageOf(e, "could not load past exports") });
+    // The list endpoint's `type` filter takes one value, so a map export (a different job type)
+    // needs its own request; both land in the same job store and are merged by `selectExportJobs`.
+    // `allSettled`, not `all`: one kind failing must not hide the other kind's jobs that DID load.
+    const kinds = [
+      { type: "results_export" as const, label: "results exports" },
+      { type: "map_export" as const, label: "map exports" },
+    ];
+    Promise.allSettled(kinds.map((k) => fetchJobs(api, projectId, { type: k.type }))).then((results) => {
+      if (cancelled) return;
+      const loaded: Job[] = [];
+      const failedLabels: string[] = [];
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") {
+          loaded.push(...r.value);
+        } else {
+          failedLabels.push(kinds[i].label);
+          pushLog(`load past ${kinds[i].label} failed: ${messageOf(r.reason, String(r.reason))}`);
+        }
       });
+      if (loaded.length > 0) useJobsStore.getState().upsertMany(loaded);
+      const error = failedLabels.length > 0 ? `could not load past ${failedLabels.join(" or ")}` : null;
+      setStatus({ key, error });
+    });
     return () => {
       cancelled = true;
     };

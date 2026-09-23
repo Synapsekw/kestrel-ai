@@ -11,6 +11,7 @@ export type IconName =
   | "home"
   | "search"
   | "chevron-down"
+  | "chevron-left"
   | "chevron-right"
   | "check"
   | "x"
@@ -35,7 +36,9 @@ export type IconName =
   | "jobs"
   | "refresh"
   | "eye"
-  | "download";
+  | "download"
+  | "map"
+  | "minus";
 
 /** 24-unit line icons, one path each, drawn with the current colour. */
 const PATHS: Record<IconName, string> = {
@@ -55,6 +58,7 @@ const PATHS: Record<IconName, string> = {
   home: "M3 11 12 4l9 7M5 10v10h5v-6h4v6h5V10",
   search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-3.5-3.5",
   "chevron-down": "m6 9 6 6 6-6",
+  "chevron-left": "m15 6-6 6 6 6",
   "chevron-right": "m9 6 6 6-6 6",
   check: "M5 13l4 4L19 7",
   x: "M6 6l12 12M18 6 6 18",
@@ -80,6 +84,8 @@ const PATHS: Record<IconName, string> = {
   refresh: "M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5",
   eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z",
   download: "M12 3v12M7 10l5 5 5-5M4 19h16",
+  map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
+  minus: "M5 12h14",
 };
 
 export interface IconProps {

@@ -27,6 +27,7 @@ def project_opened(handle, runner) -> None:
     from app.datasets import materialise
     from app.exports import job as exports_job
     from app.jobs import startup
+    from app.maps import startup as maps_startup
     from app.project_agent import store as agent_store
 
     log = logging.getLogger(__name__)
@@ -35,6 +36,7 @@ def project_opened(handle, runner) -> None:
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
         ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),
+        ("interrupted map import sweep", lambda: maps_startup.sweep_interrupted_imports(handle, runner)),
     ):
         try:
             run()

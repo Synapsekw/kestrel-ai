@@ -7,6 +7,9 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   infer: "Detection run",
   export: "Export",
   results_export: "Results export",
+  map_import: "Map import",
+  map_detect: "Map detection",
+  map_export: "Map export",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -83,6 +86,13 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return { label: "Open images", to: `${p}/data` };
     case "results_export":
       return null; // it already lives on the Export screen that started it
+    case "map_import":
+    case "map_detect":
+      return { label: "Open maps", to: `${p}/maps` };
+    case "map_export":
+      // Its files and "show in folder" live in `ExportJobs` on the Export screen (widened to list
+      // map exports alongside results exports), not on the Maps screen that started it.
+      return { label: "Open export", to: `${p}/export` };
   }
 }
 
@@ -95,18 +105,23 @@ export function resultsExportSummary(job: Job): string | null {
   return `${imageCount} image${imageCount === 1 ? "" : "s"}, ${boxCount} box${boxCount === 1 ? "" : "es"}`;
 }
 
-/** The file list of a finished results export, project-relative to its folder; [] when not available. */
+/** The file list of a finished results or map export, project-relative to its folder; [] when not
+ * available. */
 export function resultsExportFiles(job: Job): string[] {
   const files = job.result?.files;
-  return job.type === "results_export" && job.state === "succeeded" && Array.isArray(files)
+  return (job.type === "results_export" || job.type === "map_export") &&
+    job.state === "succeeded" &&
+    Array.isArray(files)
     ? files.filter((f): f is string => typeof f === "string")
     : [];
 }
 
-/** The folder a finished results export wrote into (project-relative), or null. */
+/** The folder a finished results or map export wrote into (project-relative), or null. */
 export function resultsExportFolder(job: Job): string | null {
   const folder = job.result?.folder;
-  return job.type === "results_export" && job.state === "succeeded" && typeof folder === "string"
+  return (job.type === "results_export" || job.type === "map_export") &&
+    job.state === "succeeded" &&
+    typeof folder === "string"
     ? folder
     : null;
 }

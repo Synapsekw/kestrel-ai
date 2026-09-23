@@ -16,6 +16,7 @@ const SCREEN: Record<string, string> = {
   models: "Models",
   train: "Train",
   query: "Detect",
+  maps: "Maps",
   settings: "Project settings",
   export: "Export",
 };
@@ -36,6 +37,9 @@ const TYPE_VERB: Record<Job["type"], string> = {
   infer: "Detecting",
   export: "Exporting",
   results_export: "Exporting results",
+  map_import: "Importing a map",
+  map_detect: "Detecting on a map",
+  map_export: "Exporting map results",
 };
 
 /** The newest active job as a live pill; nothing when the project is idle. */

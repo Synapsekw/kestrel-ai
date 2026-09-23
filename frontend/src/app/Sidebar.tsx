@@ -182,6 +182,9 @@ export function Sidebar({ projectId, projectName }: Props) {
           <PlainEntry to={`/p/${projectId}/models`} icon="models" compact={compact}>
             Models
           </PlainEntry>
+          <PlainEntry to={`/p/${projectId}/maps`} icon="map" compact={compact}>
+            Maps
+          </PlainEntry>
           <PlainEntry to={`/p/${projectId}/settings`} icon="settings" compact={compact} shortLabel="Project">
             Project settings
           </PlainEntry>

@@ -39,6 +39,17 @@ hiddenimports = (
         "uvicorn.lifespan.on",
         "websockets",
         "anyio._backends._asyncio",
+        # maps: rasterio's Cython modules import each other at runtime; PyInstaller misses these
+        "rasterio.sample",
+        "rasterio.vrt",
+        "rasterio._features",
+        "rasterio.crs",
+        "pyproj.database",
+        # rasterio._base is a compiled .pyx that imports this pure Python module at init time;
+        # PyInstaller's static analysis cannot see into a compiled extension, so without this the
+        # frozen build raises `ModuleNotFoundError: No module named 'rasterio.serde'` at startup
+        # (found during the freeze spike, ADR 2026-09-22).
+        "rasterio.serde",
     ]
 )
 
@@ -49,12 +60,16 @@ datas = (
     # Starter weights (usability gap G1): yolo11n/s/m.pt, fetched by scripts/fetch_starter_weights.ps1.
     # Relative to this spec file (SPECPATH), not the cwd PyInstaller happens to be run from.
     + [(str(p), "starter_weights") for p in sorted((Path(SPECPATH) / "starter_weights").glob("yolo11*.pt"))]
+    + collect_data_files("rasterio")  # gdal_data/ and proj_data/ (ADR 2026-09-22)
+    + collect_data_files("pyproj")  # proj_dir/share/proj/proj.db
 )
 
 binaries = (
     collect_dynamic_libs("torch")  # torch/lib: the CUDA runtime, cuDNN and cuBLAS DLLs
     + collect_dynamic_libs("torchvision")
     + collect_dynamic_libs("onnxruntime")
+    + collect_dynamic_libs("rasterio")  # rasterio.libs/: GDAL, PROJ, GEOS, libjpeg ...
+    + collect_dynamic_libs("pyproj")
 )
 
 a = Analysis(

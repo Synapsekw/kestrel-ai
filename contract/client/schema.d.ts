@@ -834,6 +834,364 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/maps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every map in the project, newest first. */
+        get: operations["listMaps"];
+        put?: never;
+        /** Import a GeoTIFF (a `map_import` job). The source file is only read. A file without coordinates imports with `crs_wkt` null. */
+        post: operations["createMap"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getMap"];
+        put?: never;
+        post?: never;
+        /** Delete the map, its runs, zones and labels, and its folder under `maps/`. 409 while one of its jobs is queued or running. */
+        delete: operations["deleteMap"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        /** About 1024 px long-side JPEG of the whole map. */
+        get: operations["getMapPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /** One 256 px tile of the map's pixel grid; one bounded read. PNG with alpha when the tile holds nodata. */
+        get: operations["getMapTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listMapRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["estimateMapRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Detect across the whole map (a `map_detect` job). */
+        post: operations["createMapRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getMapRun"];
+        put?: never;
+        post?: never;
+        /** Delete the run and its detections. 409 while its job is queued or running. */
+        delete: operations["deleteMapRun"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a new job for the run; finished windows are reused. */
+        post: operations["resumeMapRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/detections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /** Boxes intersecting `bbox` (map pixels), at most 5000. */
+        get: operations["listMapDetections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/density": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /** Detection counts per class on a grid over the whole map; for zoomed-out views. */
+        get: operations["getMapDensity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/score": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /** The run scored against the map's labels inside its zones. */
+        get: operations["getMapRunScore"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/zones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listMapZones"];
+        put?: never;
+        post: operations["createMapZone"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/zones/{zoneId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                zoneId: components["parameters"]["zoneId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMapZone"];
+        options?: never;
+        head?: never;
+        patch: operations["updateMapZone"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/labels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        /** Every ground-truth box on the map (at most 20000). */
+        get: operations["listMapLabels"];
+        put?: never;
+        post: operations["createMapLabel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/labels/{labelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                labelId: components["parameters"]["labelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteMapLabel"];
+        options?: never;
+        head?: never;
+        /** Edit a label; its `source` becomes `manual`. */
+        patch: operations["updateMapLabel"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/maps/{mapId}/labels/seed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Copy a run's detections whose centre is inside a zone into labels (`source` `from_run:<id>`). */
+        post: operations["seedMapLabels"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write GeoJSON (WGS84), GeoPackage (map CRS) and/or CSV (both) to `exports/<stamp>/` (a `map_export` job). */
+        post: operations["createMapExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/exports": {
         parameters: {
             query?: never;
@@ -2493,6 +2851,477 @@ export interface components {
             /** @description USD; 0 for local models */
             estimated_cost: number;
         };
+        /** @enum {string} */
+        GeoMapStatus: "importing" | "ready" | "failed";
+        /** @description 256 px tiles in the map's pixel grid. At zoom z one tile pixel covers 2^(max_zoom - z) map pixels. */
+        TileGrid: {
+            /** @enum {integer} */
+            tile_size: 256;
+            max_zoom: number;
+        };
+        /**
+         * @example {
+         *       "id": "a0000000-6666-4000-8000-000000000001",
+         *       "name": "Site north ortho",
+         *       "status": "ready",
+         *       "error": null,
+         *       "source_path": "D:/orthos/site-north.tif",
+         *       "source_size": 3221225472,
+         *       "width": 80000,
+         *       "height": 60000,
+         *       "band_count": 4,
+         *       "dtype": "uint8",
+         *       "crs_wkt": "PROJCS[\"WGS 84 / UTM zone 33N\"]",
+         *       "epsg": 32633,
+         *       "proj4": "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs",
+         *       "geotransform": [
+         *         500000,
+         *         0.03,
+         *         0,
+         *         4983000,
+         *         0,
+         *         -0.03
+         *       ],
+         *       "bounds_native": [
+         *         500000,
+         *         4981200,
+         *         502400,
+         *         4983000
+         *       ],
+         *       "bounds_wgs84": [
+         *         15,
+         *         44.98,
+         *         15.03,
+         *         45
+         *       ],
+         *       "gsd_cm": 3,
+         *       "tile_grid": {
+         *         "tile_size": 256,
+         *         "max_zoom": 9
+         *       },
+         *       "labels_version": 3,
+         *       "job_id": "j0000000-4444-4000-8000-000000000001",
+         *       "created_at": "2026-09-22T10:00:00Z"
+         *     }
+         */
+        GeoMap: {
+            id: string;
+            name: string;
+            status: components["schemas"]["GeoMapStatus"];
+            error: string | null;
+            /** @description the original file; never copied or modified */
+            source_path: string;
+            source_size: number;
+            width: number;
+            height: number;
+            band_count: number;
+            dtype: string;
+            /** @description null when the file has no coordinates */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description for the client-side coordinate readout */
+            proj4: string | null;
+            /** @description GDAL order (x0, px_w, row_rot, y0, col_rot, px_h) */
+            geotransform: number[] | null;
+            /** @description minx, miny, maxx, maxy in the map CRS */
+            bounds_native: number[] | null;
+            /** @description west, south, east, north */
+            bounds_wgs84: number[] | null;
+            /** @description ground size of one pixel in centimetres */
+            gsd_cm: number | null;
+            tile_grid: components["schemas"]["TileGrid"];
+            labels_version: number;
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        GeoMapCreate: {
+            /** @description absolute path of a .tif/.tiff file */
+            path: string;
+            name?: string;
+        };
+        GeoMapWithJob: {
+            map: components["schemas"]["GeoMap"];
+            job: components["schemas"]["Job"];
+        };
+        GeoMapList: {
+            items: components["schemas"]["GeoMap"][];
+        };
+        /**
+         * @example {
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "kind": "local_model",
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "tile_size": 1280,
+         *       "overlap": 0.2,
+         *       "nms_iou": 0.5,
+         *       "conf": 0.25,
+         *       "target_gsd_cm": 2
+         *     }
+         */
+        MapRunCreate: {
+            map_id: string;
+            kind: components["schemas"]["QueryRunKind"];
+            /** @description required for local_model */
+            model_id?: string;
+            provider?: components["schemas"]["ProviderName"];
+            /** @description required for cloud_provider */
+            query?: string;
+            /** @default 1280 */
+            tile_size: number;
+            /** @default 0.2 */
+            overlap: number;
+            /** @default 0.5 */
+            nms_iou: number;
+            /** @default 0.25 */
+            conf: number;
+            /** @description the model's training GSD; windows are resampled to it when it differs from the map's by more than 15 % */
+            target_gsd_cm?: number | null;
+        };
+        /**
+         * @example {
+         *       "id": "r0000000-7777-4000-8000-000000000001",
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "kind": "local_model",
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "provider": null,
+         *       "model_name": "machinery-v3",
+         *       "query": "",
+         *       "tile_size": 1280,
+         *       "overlap": 0.2,
+         *       "nms_iou": 0.5,
+         *       "conf": 0.25,
+         *       "target_gsd_cm": 2,
+         *       "job_id": "j0000000-4444-4000-8000-000000000001",
+         *       "state": "succeeded",
+         *       "counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 42,
+         *         "c1a2b3c4-0000-4000-8000-000000000004": 17
+         *       },
+         *       "detection_count": 59,
+         *       "created_at": "2026-09-22T11:00:00Z"
+         *     }
+         */
+        MapRun: {
+            id: string;
+            map_id: string;
+            kind: components["schemas"]["QueryRunKind"];
+            model_id: string | null;
+            provider: string | null;
+            model_name: string | null;
+            query: string;
+            tile_size: number;
+            overlap: number;
+            nms_iou: number;
+            conf: number;
+            target_gsd_cm: number | null;
+            job_id: string | null;
+            /** @description the state of the run's latest job; null before one exists */
+            state: components["schemas"]["JobState"] | null;
+            /** @description detections per class id, filled when the run finishes */
+            counts: {
+                [key: string]: number;
+            };
+            detection_count: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        MapRunWithJob: {
+            run: components["schemas"]["MapRun"];
+            job: components["schemas"]["Job"];
+        };
+        MapRunList: {
+            items: components["schemas"]["MapRun"][];
+        };
+        /**
+         * @example {
+         *       "windows": 8900,
+         *       "skipped_windows": 2100,
+         *       "requests": 6800,
+         *       "scale": 1.5,
+         *       "cost_per_request": 0,
+         *       "estimated_cost": 0
+         *     }
+         */
+        MapRunEstimate: {
+            windows: number;
+            /** @description windows at least 99 % nodata */
+            skipped_windows: number;
+            requests: number;
+            /** @description map pixels are resampled by this factor before detection (1 = none) */
+            scale: number;
+            cost_per_request: number;
+            estimated_cost: number;
+        };
+        MapDetection: {
+            id: string;
+            class_id: string;
+            confidence: number;
+            /** @description full-resolution map pixels */
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            angle: number | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "d0000000-1111-4000-8000-000000000001",
+         *           "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "confidence": 0.91,
+         *           "x": 1200,
+         *           "y": 800,
+         *           "w": 180,
+         *           "h": 120,
+         *           "angle": null
+         *         }
+         *       ],
+         *       "truncated": false
+         *     }
+         */
+        MapDetectionPage: {
+            items: components["schemas"]["MapDetection"][];
+            /** @description more than 5000 boxes matched; the client should switch to density */
+            truncated: boolean;
+        };
+        MapDensityCell: {
+            gx: number;
+            gy: number;
+            class_id: string;
+            count: number;
+        };
+        MapDensity: {
+            /** @description cell edge in map pixels; cell (gx */
+            cell_size: number;
+            cells: components["schemas"]["MapDensityCell"][];
+        };
+        MapPoint: number[];
+        /**
+         * @example {
+         *       "id": "z0000000-9999-4000-8000-000000000001",
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "name": "Zone 1",
+         *       "polygon": [
+         *         [
+         *           1000,
+         *           1000
+         *         ],
+         *         [
+         *           6000,
+         *           1000
+         *         ],
+         *         [
+         *           6000,
+         *           5000
+         *         ],
+         *         [
+         *           1000,
+         *           5000
+         *         ]
+         *       ]
+         *     }
+         */
+        MapZone: {
+            id: string;
+            map_id: string;
+            name: string;
+            polygon: components["schemas"]["MapPoint"][];
+        };
+        MapZoneCreate: {
+            name: string;
+            polygon: components["schemas"]["MapPoint"][];
+        };
+        MapZoneUpdate: {
+            name?: string;
+            polygon?: components["schemas"]["MapPoint"][];
+        };
+        MapZoneList: {
+            items: components["schemas"]["MapZone"][];
+        };
+        /**
+         * @example {
+         *       "id": "l0000000-1212-4000-8000-000000000001",
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *       "x": 1210,
+         *       "y": 805,
+         *       "w": 175,
+         *       "h": 118,
+         *       "angle": null,
+         *       "source": "manual",
+         *       "created_at": "2026-09-22T12:00:00Z",
+         *       "updated_at": "2026-09-22T12:00:00Z"
+         *     }
+         */
+        MapLabel: {
+            id: string;
+            map_id: string;
+            class_id: string;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            angle: number | null;
+            /** @description `manual`, or `from_run:<run id>` until a person edits it */
+            source: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        MapLabelCreate: {
+            class_id: string;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        };
+        MapLabelUpdate: {
+            class_id?: string;
+            x?: number;
+            y?: number;
+            w?: number;
+            h?: number;
+        };
+        MapLabelList: {
+            items: components["schemas"]["MapLabel"][];
+        };
+        MapLabelSeed: {
+            run_id: string;
+            zone_id: string;
+            /** @default 0.25 */
+            min_conf: number;
+        };
+        MapLabelSeedResult: {
+            created: number;
+        };
+        MapScoreRow: {
+            /** @description null on the overall row */
+            class_id: string | null;
+            tp: number;
+            fp: number;
+            fn: number;
+            precision: number | null;
+            recall: number | null;
+            f1: number | null;
+            predicted: number;
+            actual: number;
+            /** @description predicted minus actual */
+            count_error: number;
+            count_error_pct: number | null;
+        };
+        MapScoreZoneRow: components["schemas"]["MapScoreRow"] & {
+            zone_id: string;
+        };
+        /** @description one scored box; its geometry is included so the client can step to any mistake without loading that part of the map first */
+        MapScoreMatch: {
+            /** @enum {string} */
+            kind: "detection" | "label";
+            id: string;
+            /** @enum {string} */
+            match: "tp" | "fp" | "fn";
+            zone_id: string;
+            class_id: string;
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        };
+        /**
+         * @example {
+         *       "run_id": "r0000000-7777-4000-8000-000000000001",
+         *       "iou": 0.5,
+         *       "labels_version": 3,
+         *       "has_zones": true,
+         *       "overall": {
+         *         "class_id": null,
+         *         "tp": 18,
+         *         "fp": 2,
+         *         "fn": 3,
+         *         "precision": 0.9,
+         *         "recall": 0.857,
+         *         "f1": 0.878,
+         *         "predicted": 20,
+         *         "actual": 21,
+         *         "count_error": -1,
+         *         "count_error_pct": -4.76
+         *       },
+         *       "per_class": [
+         *         {
+         *           "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "tp": 18,
+         *           "fp": 2,
+         *           "fn": 3,
+         *           "precision": 0.9,
+         *           "recall": 0.857,
+         *           "f1": 0.878,
+         *           "predicted": 20,
+         *           "actual": 21,
+         *           "count_error": -1,
+         *           "count_error_pct": -4.76
+         *         }
+         *       ],
+         *       "per_zone": [],
+         *       "matches": [
+         *         {
+         *           "kind": "detection",
+         *           "id": "d0000000-1111-4000-8000-000000000001",
+         *           "match": "tp",
+         *           "zone_id": "z0000000-9999-4000-8000-000000000001",
+         *           "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "x": 1200,
+         *           "y": 1200,
+         *           "w": 180,
+         *           "h": 120
+         *         },
+         *         {
+         *           "kind": "detection",
+         *           "id": "d0000000-1111-4000-8000-000000000002",
+         *           "match": "fp",
+         *           "zone_id": "z0000000-9999-4000-8000-000000000001",
+         *           "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "x": 3000,
+         *           "y": 2400,
+         *           "w": 170,
+         *           "h": 110
+         *         },
+         *         {
+         *           "kind": "label",
+         *           "id": "l0000000-1212-4000-8000-000000000001",
+         *           "match": "fn",
+         *           "zone_id": "z0000000-9999-4000-8000-000000000001",
+         *           "class_id": "c1a2b3c4-0000-4000-8000-000000000004",
+         *           "x": 4100,
+         *           "y": 3300,
+         *           "w": 200,
+         *           "h": 140
+         *         }
+         *       ]
+         *     }
+         */
+        MapScore: {
+            run_id: string;
+            iou: number;
+            labels_version: number;
+            has_zones: boolean;
+            overall: components["schemas"]["MapScoreRow"];
+            per_class: components["schemas"]["MapScoreRow"][];
+            per_zone: components["schemas"]["MapScoreZoneRow"][];
+            matches: components["schemas"]["MapScoreMatch"][];
+        };
+        /** @enum {string} */
+        MapExportFormat: "geojson" | "gpkg" | "csv";
+        /** @enum {string} */
+        MapExportContent: "run" | "labels" | "run_score";
+        MapExportRequest: {
+            map_id: string;
+            content: components["schemas"]["MapExportContent"];
+            /** @description required for run and run_score */
+            run_id?: string;
+            formats: components["schemas"]["MapExportFormat"][];
+        };
         /**
          * @example {
          *       "min_confidence": 0.5
@@ -2600,7 +3429,7 @@ export interface components {
             path: string;
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -2676,7 +3505,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed";
             project_id: string;
             job_id: string | null;
             progress: number | null;
@@ -2711,6 +3540,9 @@ export interface components {
         limit: number;
         /** @description opaque cursor from the previous page's `next_cursor` */
         cursor: string;
+        mapId: string;
+        zoneId: string;
+        labelId: string;
     };
     requestBodies: never;
     headers: never;
@@ -4132,6 +4964,654 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnpromoteResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMaps: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description maps */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMapList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeoMapCreate"];
+            };
+        };
+        responses: {
+            /** @description map created in `importing`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMapWithJob"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the map */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeoMap"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG bytes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapTile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description the tile is outside the map or entirely nodata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the map's runs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapRunList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    estimateMapRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapRunCreate"];
+            };
+        };
+        responses: {
+            /** @description windows, skipped windows and cost */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapRunEstimate"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMapRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapRunCreate"];
+            };
+        };
+        responses: {
+            /** @description run created, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapRunWithJob"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapRun"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMapRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    resumeMapRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapDetections: {
+        parameters: {
+            query?: {
+                /** @description x0,y0,x1,y1 */
+                bbox?: string;
+                min_conf?: number;
+                class_id?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description boxes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapDetectionPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapDensity: {
+        parameters: {
+            query?: {
+                cells?: number;
+                min_conf?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description grid counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapDensity"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapRunScore: {
+        parameters: {
+            query?: {
+                iou?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description score */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapScore"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapZones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description zones */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapZoneList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMapZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapZoneCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapZone"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMapZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                zoneId: components["parameters"]["zoneId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMapZone: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                zoneId: components["parameters"]["zoneId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapZoneUpdate"];
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapZone"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description labels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapLabelList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMapLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapLabelCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapLabel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMapLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                labelId: components["parameters"]["labelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateMapLabel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+                labelId: components["parameters"]["labelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapLabelUpdate"];
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapLabel"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    seedMapLabels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapLabelSeed"];
+            };
+        };
+        responses: {
+            /** @description labels created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapLabelSeedResult"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMapExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
                 };
             };
             default: components["responses"]["Error"];

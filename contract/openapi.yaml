@@ -39,6 +39,9 @@ x-websocket:
     - `images.changed`: `payload` is `{source_id, count}` after an import batch lands.
     - `boxes.changed`: `payload` is `{image_ids: [...]}` after proposals or reviews are written by a job.
     - `agent.changed`: `payload` is `{turn_id, state}` whenever the project agent's turn or transcript changes.
+    - `maps.changed`: `payload` is `{map_ids: [...]}` after a GeoTIFF map is imported or updated.
+    - `map_runs.changed`: `payload` is `{map_id, run_ids: [...]}` after a map detection run finishes.
+    - `map_labels.changed`: `payload` is `{map_id}` after a zone or ground-truth label changes.
   message: "#/components/schemas/Event"
 
 tags:
@@ -54,6 +57,7 @@ tags:
   - name: exports
   - name: jobs
   - name: agent
+  - name: maps
 
 paths:
   /api/v1/agent/chat:
@@ -998,6 +1002,387 @@ paths:
               schema: { $ref: "#/components/schemas/UnpromoteResult" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ---------------------------------------------------------------------- maps
+  /api/v1/projects/{projectId}/maps:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [maps]
+      operationId: listMaps
+      summary: Every map in the project, newest first.
+      responses:
+        "200":
+          description: maps
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoMapList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [maps]
+      operationId: createMap
+      summary: Import a GeoTIFF (a `map_import` job). The source file is only read. A file without coordinates imports with `crs_wkt` null.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeoMapCreate" }
+      responses:
+        "202":
+          description: map created in `importing`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoMapWithJob" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    get:
+      tags: [maps]
+      operationId: getMap
+      responses:
+        "200":
+          description: the map
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeoMap" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [maps]
+      operationId: deleteMap
+      summary: Delete the map, its runs, zones and labels, and its folder under `maps/`. 409 while one of its jobs is queued or running.
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/preview:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    get:
+      tags: [maps]
+      operationId: getMapPreview
+      summary: About 1024 px long-side JPEG of the whole map.
+      responses:
+        "200":
+          description: JPEG bytes
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/tiles/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+      - { name: z, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 30 } }
+      - { name: x, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: y, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      tags: [maps]
+      operationId: getMapTile
+      summary: One 256 px tile of the map's pixel grid; one bounded read. PNG with alpha when the tile holds nodata.
+      responses:
+        "200":
+          description: tile image
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the tile is outside the map or entirely nodata }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/runs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    get:
+      tags: [maps]
+      operationId: listMapRuns
+      responses:
+        "200":
+          description: the map's runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapRunList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/estimate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [maps]
+      operationId: estimateMapRun
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapRunCreate" }
+      responses:
+        "200":
+          description: windows, skipped windows and cost
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapRunEstimate" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [maps]
+      operationId: createMapRun
+      summary: Detect across the whole map (a `map_detect` job).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapRunCreate" }
+      responses:
+        "202":
+          description: run created, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapRunWithJob" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [maps]
+      operationId: getMapRun
+      responses:
+        "200":
+          description: the run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapRun" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [maps]
+      operationId: deleteMapRun
+      summary: Delete the run and its detections. 409 while its job is queued or running.
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}/resume:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    post:
+      tags: [maps]
+      operationId: resumeMapRun
+      summary: Start a new job for the run; finished windows are reused.
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}/detections:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [maps]
+      operationId: listMapDetections
+      summary: Boxes intersecting `bbox` (map pixels), at most 5000.
+      parameters:
+        - { name: bbox, in: query, required: false, schema: { type: string, pattern: "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$" }, description: "x0,y0,x1,y1" }
+        - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
+        - { name: class_id, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: boxes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapDetectionPage" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}/density:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [maps]
+      operationId: getMapDensity
+      summary: Detection counts per class on a grid over the whole map; for zoomed-out views.
+      parameters:
+        - { name: cells, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 256, default: 128 } }
+        - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
+      responses:
+        "200":
+          description: grid counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapDensity" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-runs/{runId}/score:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [maps]
+      operationId: getMapRunScore
+      summary: The run scored against the map's labels inside its zones.
+      parameters:
+        - { name: iou, in: query, required: false, schema: { type: number, minimum: 0.05, maximum: 0.95, default: 0.5 } }
+      responses:
+        "200":
+          description: score
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapScore" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/zones:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    get:
+      tags: [maps]
+      operationId: listMapZones
+      responses:
+        "200":
+          description: zones
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapZoneList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [maps]
+      operationId: createMapZone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapZoneCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapZone" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/zones/{zoneId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+      - $ref: "#/components/parameters/zoneId"
+    patch:
+      tags: [maps]
+      operationId: updateMapZone
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapZoneUpdate" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapZone" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [maps]
+      operationId: deleteMapZone
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/labels:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    get:
+      tags: [maps]
+      operationId: listMapLabels
+      summary: Every ground-truth box on the map (at most 20000).
+      responses:
+        "200":
+          description: labels
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapLabelList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [maps]
+      operationId: createMapLabel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapLabelCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapLabel" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/labels/{labelId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+      - $ref: "#/components/parameters/labelId"
+    patch:
+      tags: [maps]
+      operationId: updateMapLabel
+      summary: Edit a label; its `source` becomes `manual`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapLabelUpdate" }
+      responses:
+        "200":
+          description: updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapLabel" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [maps]
+      operationId: deleteMapLabel
+      responses:
+        "204": { description: deleted }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/maps/{mapId}/labels/seed:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapId"
+    post:
+      tags: [maps]
+      operationId: seedMapLabels
+      summary: Copy a run's detections whose centre is inside a zone into labels (`source` `from_run:<id>`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapLabelSeed" }
+      responses:
+        "200":
+          description: labels created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapLabelSeedResult" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-exports:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [maps]
+      operationId: createMapExport
+      summary: Write GeoJSON (WGS84), GeoPackage (map CRS) and/or CSV (both) to `exports/<stamp>/` (a `map_export` job).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapExportRequest" }
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        default: { $ref: "#/components/responses/Error" }
+
   # ------------------------------------------------------------------ exports
   /api/v1/projects/{projectId}/exports:
     parameters:
@@ -1257,6 +1642,21 @@ components:
       name: cursor
       in: query
       description: opaque cursor from the previous page's `next_cursor`
+      schema: { type: string }
+    mapId:
+      name: mapId
+      in: path
+      required: true
+      schema: { type: string }
+    zoneId:
+      name: zoneId
+      in: path
+      required: true
+      schema: { type: string }
+    labelId:
+      name: labelId
+      in: path
+      required: true
       schema: { type: string }
 
   responses:
@@ -2429,6 +2829,403 @@ components:
         cost_per_request: { type: number }
         estimated_cost: { type: number, description: USD; 0 for local models }
       example: { images: 5, tiles: 40, requests: 40, cost_per_request: 0.02, estimated_cost: 0.8 }
+    GeoMapStatus:
+      type: string
+      enum: [importing, ready, failed]
+    TileGrid:
+      type: object
+      description: 256 px tiles in the map's pixel grid. At zoom z one tile pixel covers 2^(max_zoom - z) map pixels.
+      required: [tile_size, max_zoom]
+      properties:
+        tile_size: { type: integer, enum: [256] }
+        max_zoom: { type: integer, minimum: 0 }
+    GeoMap:
+      type: object
+      required: [id, name, status, error, source_path, source_size, width, height, band_count, dtype, crs_wkt, epsg, proj4, geotransform, bounds_native, bounds_wgs84, gsd_cm, tile_grid, labels_version, job_id, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/GeoMapStatus" }
+        error: { type: [string, "null"] }
+        source_path: { type: string, description: the original file; never copied or modified }
+        source_size: { type: integer }
+        width: { type: integer }
+        height: { type: integer }
+        band_count: { type: integer }
+        dtype: { type: string }
+        crs_wkt: { type: [string, "null"], description: null when the file has no coordinates }
+        epsg: { type: [integer, "null"] }
+        proj4: { type: [string, "null"], description: for the client-side coordinate readout }
+        geotransform:
+          type: [array, "null"]
+          description: GDAL order (x0, px_w, row_rot, y0, col_rot, px_h)
+          items: { type: number }
+          minItems: 6
+          maxItems: 6
+        bounds_native:
+          type: [array, "null"]
+          description: minx, miny, maxx, maxy in the map CRS
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+        bounds_wgs84:
+          type: [array, "null"]
+          description: west, south, east, north
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+        gsd_cm: { type: [number, "null"], description: ground size of one pixel in centimetres }
+        tile_grid: { $ref: "#/components/schemas/TileGrid" }
+        labels_version: { type: integer }
+        job_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "a0000000-6666-4000-8000-000000000001"
+        name: "Site north ortho"
+        status: ready
+        error: null
+        source_path: "D:/orthos/site-north.tif"
+        source_size: 3221225472
+        width: 80000
+        height: 60000
+        band_count: 4
+        dtype: uint8
+        crs_wkt: "PROJCS[\"WGS 84 / UTM zone 33N\"]"
+        epsg: 32633
+        proj4: "+proj=utm +zone=33 +datum=WGS84 +units=m +no_defs"
+        geotransform: [500000, 0.03, 0, 4983000, 0, -0.03]
+        bounds_native: [500000, 4981200, 502400, 4983000]
+        bounds_wgs84: [15.0, 44.98, 15.03, 45.0]
+        gsd_cm: 3.0
+        tile_grid: { tile_size: 256, max_zoom: 9 }
+        labels_version: 3
+        job_id: "j0000000-4444-4000-8000-000000000001"
+        created_at: "2026-09-22T10:00:00Z"
+    GeoMapCreate:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: absolute path of a .tif/.tiff file }
+        name: { type: string, minLength: 1, maxLength: 200 }
+    GeoMapWithJob:
+      type: object
+      required: [map, job]
+      properties:
+        map: { $ref: "#/components/schemas/GeoMap" }
+        job: { $ref: "#/components/schemas/Job" }
+    GeoMapList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/GeoMap" }
+    MapRunCreate:
+      type: object
+      required: [map_id, kind]
+      properties:
+        map_id: { type: string }
+        kind: { $ref: "#/components/schemas/QueryRunKind" }
+        model_id: { type: string, description: required for local_model }
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        query: { type: string, minLength: 1, description: required for cloud_provider }
+        tile_size: { type: integer, minimum: 256, maximum: 4096, default: 1280 }
+        overlap: { type: number, minimum: 0, maximum: 0.5, default: 0.2 }
+        nms_iou: { type: number, minimum: 0, maximum: 1, default: 0.5 }
+        conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
+        target_gsd_cm:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          description: the model's training GSD; windows are resampled to it when it differs from the map's by more than 15 %
+      example: { map_id: "a0000000-6666-4000-8000-000000000001", kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", tile_size: 1280, overlap: 0.2, nms_iou: 0.5, conf: 0.25, target_gsd_cm: 2.0 }
+    MapRun:
+      type: object
+      required: [id, map_id, kind, model_id, provider, model_name, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, counts, detection_count, created_at]
+      properties:
+        id: { type: string }
+        map_id: { type: string }
+        kind: { $ref: "#/components/schemas/QueryRunKind" }
+        model_id: { type: [string, "null"] }
+        provider: { type: [string, "null"] }
+        model_name: { type: [string, "null"] }
+        query: { type: string }
+        tile_size: { type: integer }
+        overlap: { type: number }
+        nms_iou: { type: number }
+        conf: { type: number }
+        target_gsd_cm: { type: [number, "null"] }
+        job_id: { type: [string, "null"] }
+        state:
+          description: the state of the run's latest job; null before one exists
+          oneOf:
+            - { $ref: "#/components/schemas/JobState" }
+            - { type: "null" }
+        counts:
+          type: object
+          description: detections per class id, filled when the run finishes
+          additionalProperties: { type: integer }
+        detection_count: { type: integer }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "r0000000-7777-4000-8000-000000000001"
+        map_id: "a0000000-6666-4000-8000-000000000001"
+        kind: local_model
+        model_id: "m0000000-2222-4000-8000-000000000001"
+        provider: null
+        model_name: "machinery-v3"
+        query: ""
+        tile_size: 1280
+        overlap: 0.2
+        nms_iou: 0.5
+        conf: 0.25
+        target_gsd_cm: 2.0
+        job_id: "j0000000-4444-4000-8000-000000000001"
+        state: succeeded
+        counts: { "c1a2b3c4-0000-4000-8000-000000000001": 42, "c1a2b3c4-0000-4000-8000-000000000004": 17 }
+        detection_count: 59
+        created_at: "2026-09-22T11:00:00Z"
+    MapRunWithJob:
+      type: object
+      required: [run, job]
+      properties:
+        run: { $ref: "#/components/schemas/MapRun" }
+        job: { $ref: "#/components/schemas/Job" }
+    MapRunList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MapRun" }
+    MapRunEstimate:
+      type: object
+      required: [windows, skipped_windows, requests, scale, cost_per_request, estimated_cost]
+      properties:
+        windows: { type: integer }
+        skipped_windows: { type: integer, description: windows at least 99 % nodata, never sent to the model }
+        requests: { type: integer }
+        scale: { type: number, description: map pixels are resampled by this factor before detection (1 = none) }
+        cost_per_request: { type: number }
+        estimated_cost: { type: number }
+      example: { windows: 8900, skipped_windows: 2100, requests: 6800, scale: 1.5, cost_per_request: 0, estimated_cost: 0 }
+    MapDetection:
+      type: object
+      required: [id, class_id, confidence, x, y, w, h, angle]
+      properties:
+        id: { type: string }
+        class_id: { type: string }
+        confidence: { type: number }
+        x: { type: number, description: full-resolution map pixels }
+        y: { type: number }
+        w: { type: number }
+        h: { type: number }
+        angle: { type: [number, "null"] }
+    MapDetectionPage:
+      type: object
+      required: [items, truncated]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MapDetection" }
+        truncated: { type: boolean, description: more than 5000 boxes matched; the client should switch to density }
+      example:
+        items: [{ id: "d0000000-1111-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000001", confidence: 0.91, x: 1200, y: 800, w: 180, h: 120, angle: null }]
+        truncated: false
+    MapDensityCell:
+      type: object
+      required: [gx, gy, class_id, count]
+      properties:
+        gx: { type: integer }
+        gy: { type: integer }
+        class_id: { type: string }
+        count: { type: integer }
+    MapDensity:
+      type: object
+      required: [cell_size, cells]
+      properties:
+        cell_size: { type: number, description: cell edge in map pixels; cell (gx, gy) starts at (gx*cell_size, gy*cell_size) }
+        cells:
+          type: array
+          items: { $ref: "#/components/schemas/MapDensityCell" }
+    MapPoint:
+      type: array
+      items: { type: number }
+      minItems: 2
+      maxItems: 2
+    MapZone:
+      type: object
+      required: [id, map_id, name, polygon]
+      properties:
+        id: { type: string }
+        map_id: { type: string }
+        name: { type: string }
+        polygon:
+          type: array
+          items: { $ref: "#/components/schemas/MapPoint" }
+          minItems: 3
+      example: { id: "z0000000-9999-4000-8000-000000000001", map_id: "a0000000-6666-4000-8000-000000000001", name: "Zone 1", polygon: [[1000, 1000], [6000, 1000], [6000, 5000], [1000, 5000]] }
+    MapZoneCreate:
+      type: object
+      required: [name, polygon]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        polygon:
+          type: array
+          items: { $ref: "#/components/schemas/MapPoint" }
+          minItems: 3
+          maxItems: 1000
+    MapZoneUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        polygon:
+          type: array
+          items: { $ref: "#/components/schemas/MapPoint" }
+          minItems: 3
+          maxItems: 1000
+    MapZoneList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MapZone" }
+    MapLabel:
+      type: object
+      required: [id, map_id, class_id, x, y, w, h, angle, source, created_at, updated_at]
+      properties:
+        id: { type: string }
+        map_id: { type: string }
+        class_id: { type: string }
+        x: { type: number }
+        y: { type: number }
+        w: { type: number }
+        h: { type: number }
+        angle: { type: [number, "null"] }
+        source: { type: string, description: "`manual`, or `from_run:<run id>` until a person edits it" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+      example: { id: "l0000000-1212-4000-8000-000000000001", map_id: "a0000000-6666-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 1210, y: 805, w: 175, h: 118, angle: null, source: manual, created_at: "2026-09-22T12:00:00Z", updated_at: "2026-09-22T12:00:00Z" }
+    MapLabelCreate:
+      type: object
+      required: [class_id, x, y, w, h]
+      properties:
+        class_id: { type: string }
+        x: { type: number, minimum: 0 }
+        y: { type: number, minimum: 0 }
+        w: { type: number, exclusiveMinimum: 0 }
+        h: { type: number, exclusiveMinimum: 0 }
+    MapLabelUpdate:
+      type: object
+      properties:
+        class_id: { type: string }
+        x: { type: number, minimum: 0 }
+        y: { type: number, minimum: 0 }
+        w: { type: number, exclusiveMinimum: 0 }
+        h: { type: number, exclusiveMinimum: 0 }
+    MapLabelList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/MapLabel" }
+    MapLabelSeed:
+      type: object
+      required: [run_id, zone_id]
+      properties:
+        run_id: { type: string }
+        zone_id: { type: string }
+        min_conf: { type: number, minimum: 0, maximum: 1, default: 0.25 }
+    MapLabelSeedResult:
+      type: object
+      required: [created]
+      properties:
+        created: { type: integer }
+    MapScoreRow:
+      type: object
+      required: [class_id, tp, fp, fn, precision, recall, f1, predicted, actual, count_error, count_error_pct]
+      properties:
+        class_id: { type: [string, "null"], description: null on the overall row }
+        tp: { type: integer }
+        fp: { type: integer }
+        fn: { type: integer }
+        precision: { type: [number, "null"] }
+        recall: { type: [number, "null"] }
+        f1: { type: [number, "null"] }
+        predicted: { type: integer }
+        actual: { type: integer }
+        count_error: { type: integer, description: predicted minus actual }
+        count_error_pct: { type: [number, "null"] }
+    MapScoreZoneRow:
+      allOf:
+        - { $ref: "#/components/schemas/MapScoreRow" }
+        - type: object
+          required: [zone_id]
+          properties:
+            zone_id: { type: string }
+    MapScoreMatch:
+      type: object
+      description: one scored box; its geometry is included so the client can step to any mistake without loading that part of the map first
+      required: [kind, id, match, zone_id, class_id, x, y, w, h]
+      properties:
+        kind: { type: string, enum: [detection, label] }
+        id: { type: string }
+        match: { type: string, enum: [tp, fp, fn] }
+        zone_id: { type: string }
+        class_id: { type: string }
+        x: { type: number }
+        y: { type: number }
+        w: { type: number }
+        h: { type: number }
+    MapScore:
+      type: object
+      required: [run_id, iou, labels_version, has_zones, overall, per_class, per_zone, matches]
+      properties:
+        run_id: { type: string }
+        iou: { type: number }
+        labels_version: { type: integer }
+        has_zones: { type: boolean }
+        overall: { $ref: "#/components/schemas/MapScoreRow" }
+        per_class:
+          type: array
+          items: { $ref: "#/components/schemas/MapScoreRow" }
+        per_zone:
+          type: array
+          items: { $ref: "#/components/schemas/MapScoreZoneRow" }
+        matches:
+          type: array
+          items: { $ref: "#/components/schemas/MapScoreMatch" }
+      example:
+        run_id: "r0000000-7777-4000-8000-000000000001"
+        iou: 0.5
+        labels_version: 3
+        has_zones: true
+        overall: { class_id: null, tp: 18, fp: 2, fn: 3, precision: 0.9, recall: 0.857, f1: 0.878, predicted: 20, actual: 21, count_error: -1, count_error_pct: -4.76 }
+        per_class: [{ class_id: "c1a2b3c4-0000-4000-8000-000000000001", tp: 18, fp: 2, fn: 3, precision: 0.9, recall: 0.857, f1: 0.878, predicted: 20, actual: 21, count_error: -1, count_error_pct: -4.76 }]
+        per_zone: []
+        matches:
+          - { kind: detection, id: "d0000000-1111-4000-8000-000000000001", match: tp, zone_id: "z0000000-9999-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 1200, y: 1200, w: 180, h: 120 }
+          - { kind: detection, id: "d0000000-1111-4000-8000-000000000002", match: fp, zone_id: "z0000000-9999-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 3000, y: 2400, w: 170, h: 110 }
+          - { kind: label, id: "l0000000-1212-4000-8000-000000000001", match: fn, zone_id: "z0000000-9999-4000-8000-000000000001", class_id: "c1a2b3c4-0000-4000-8000-000000000004", x: 4100, y: 3300, w: 200, h: 140 }
+    MapExportFormat:
+      type: string
+      enum: [geojson, gpkg, csv]
+    MapExportContent:
+      type: string
+      enum: [run, labels, run_score]
+    MapExportRequest:
+      type: object
+      required: [map_id, content, formats]
+      properties:
+        map_id: { type: string }
+        content: { $ref: "#/components/schemas/MapExportContent" }
+        run_id: { type: string, description: required for run and run_score }
+        formats:
+          type: array
+          items: { $ref: "#/components/schemas/MapExportFormat" }
+          minItems: 1
+          uniqueItems: true
     PromoteRequest:
       type: object
       properties:
@@ -2510,7 +3307,7 @@ components:
       example: { path: "exports/2026-09-19_101500" }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -2577,7 +3374,17 @@ components:
       properties:
         type:
           type: string
-          enum: [job.progress, job.state, images.changed, boxes.changed, agent.changed]
+          enum:
+            [
+              job.progress,
+              job.state,
+              images.changed,
+              boxes.changed,
+              agent.changed,
+              maps.changed,
+              map_runs.changed,
+              map_labels.changed,
+            ]
         project_id: { type: string }
         job_id: { type: [string, "null"] }
         progress: { type: [number, "null"] }

@@ -343,6 +343,87 @@ SDD ledger (rulings, deferred minors): `.superpowers/sdd/2026-09-17-s0-contract-
 
 ## Log
 
+### 2026-09-22 — GeoTIFF maps (spec 2026-09-22-geotiff-maps, plan of the same date)
+
+- Import, tiles, detection, labels, scoring and export: 14 build tasks complete on
+  `task/geotiff-maps` (HEAD `d0207c8` before this task's own commit); each task passed its own
+  spec-and-quality review, most after one or more fix rounds recorded in
+  `.superpowers/sdd/2026-09-22-geotiff-maps/progress.md`. Merge to `main` is the controller's step,
+  not this task's.
+- Gate (this task, on `d0207c8` + Task 15's e2e/docs commit): `pnpm -C contract check` pass (Spectral
+  clean, `schema.d.ts` regenerates byte-identical); backend `ruff check`/`ruff format --check` pass;
+  backend `pytest` 783 passed, 9 deselected (288s); frontend `lint` pass (0 errors, 1 pre-existing
+  `react-hooks/exhaustive-deps` warning in `MapView.tsx` from Task 11, not touched here); frontend
+  `test` 598 passed across 138 files; frontend `build` pass (one pre-existing >500kB chunk-size
+  advisory, not an error); frontend `e2e` 62 passed, including the new `maps.spec.ts` (also run
+  3x in isolation to rule out flake); `cargo test --manifest-path frontend/src-tauri/Cargo.toml` 8
+  passed — the frozen sidecar `kestrel-backend-x86_64-pc-windows-msvc.exe` was present in
+  `frontend/src-tauri/binaries/`, so this line ran rather than being skipped.
+- Frozen sidecar: not rebuilt in this task (no raster/packaging code changed since Task 4's fix
+  build). Task 4's figures stand: geo-selftest `geo ok 32633 15.000325 45.000216`; bundle
+  3520.6 -> 3610.6 MiB (+90.0 MiB, +325 files) (ADR 2026-09-22 rasterio).
+- Real map: **not exercised in this task.** No multi-GB orthomosaic or running desktop instance was
+  available in this development session; import, zoom-level tile loading, and screenshots are the
+  operator's walkthrough steps 1-2 in `docs/usability/2026-09-22-maps-walkthrough.md`.
+  `docs/evidence/maps/` was not populated by this task.
+- Detection: not run against a real map or a real model in this task, for the same reason; the e2e
+  suite exercises the UI's happy path against fixed Prism-mock fixtures only (a run that is already
+  `succeeded` with a fixed count), not a live detector. Seam-duplicate checking is the operator's
+  walkthrough step 2.
+- GIS check: **no QGIS and no `ogrinfo` exist on this machine.** The `.gpkg` writer is verified only
+  at the byte level, by Task 9's own sqlite3 test against the OGC GeoPackage spec (envelope byte
+  order, layer geometry, WGS84 GeoJSON ring closure) — no third-party GIS tool has opened the file
+  during development. Say this plainly rather than implying it was validated: the walkthrough's
+  step 8 ("open the .gpkg in QGIS") is the first real check and stays an explicit, non-skippable
+  operator step.
+- Deviations from the spec: see the plan's "Deviations" list (display raster, model GSD, run state,
+  tile media types, export names, on-demand scoring, mock e2e) plus the seam cut-box filter and
+  match geometry in the score response, both added during Task 7's review.
+- Deferred minors carried forward from the SDD ledger (summarised; full text in
+  `.superpowers/sdd/2026-09-22-geotiff-maps/progress.md`), none blocking:
+  - Raster/import (Tasks 4-5): `read_rgb` resamples pixels bilinear but the nodata mask nearest
+    (cosmetic at mask edges); untested paths for `nodata=` masking, the 16-bit valid-only percentile
+    branch, and a projected CRS with a non-metric linear unit; the generic-exception import-failure
+    message is phrased differently on the map row than in the job log for the same failure.
+  - Windowing (Task 6): window `sx`/`sy` differ sub-pixel between interior and last-in-row windows
+    at non-power-of-two scales (theoretical, not observed); `masked_fraction` returns 1.0 ("skip")
+    for an out-of-range lookup; a detection entirely outside its window clamps to a zero-area box
+    rather than being dropped, matching the existing per-image tiling path's behaviour.
+  - Detect job (Task 7): `_parse_bbox` still accepts `"nan"`/`"inf"` after the pattern was tightened
+    (harmless — no rows match); `overlap_px` uses the nominal step for the shifted-back last window
+    in a row, which is the safe direction (more visibility, NMS merges).
+  - Scoring/labels (Task 8): `seed_labels`' own detection query is unbounded by bbox (seeding is an
+    explicit operator action over a zone, not a hot path); the idempotency dedupe is
+    O(candidates × existing labels) with no cap, which could drag on a map near `MAX_LABELS`.
+  - Export (Task 9): the ftUS regression test asserts width/height but not `area_m2`; no GIS tool
+    has opened the `.gpkg` (see GIS check above).
+  - Frontend plumbing (Task 10): `@types/proj4` is deprecated-but-inert (tsc uses proj4's own
+    types regardless); `scaleBar` has no guard for `resolution <= 0` (unreachable from
+    `resolutions()`); `fetchDetections` does not expose the contract's optional `class_id` filter
+    (the UI filters client-side instead).
+  - Runs/labels UI (Tasks 12-13): the stale-viewport-response race and the undo/redo repeat-guard
+    /serialisation and label-vs-detection popover predicate have no automated regression, because
+    `runLayer.ts` and the OL interaction callbacks cannot run under jsdom (`MapView` is mocked
+    there); each relies on a pattern already audited elsewhere in the codebase. The label/zone
+    refetch after each edit is un-batched (one request per edit) but correct. This task's e2e run
+    exercises only the happy path for all of these, by design (decided for Task 15).
+  - Score/export UI (Task 14): `ExportJobs` now lists results exports and map exports together
+    with no grouping between the two kinds; `useResultsExportJobs` covers both kinds and its name
+    is stale; the overlay recolouring and the mistake stepper's view-fit have no automated coverage
+    (jsdom has no canvas).
+- Task 15 (this task): `frontend/e2e/maps.spec.ts` opens a map, sees the first tile requested, reads
+  the pixel/native/lat-lon cursor readout, ticks a run and reads its whole-map count from the
+  Results table, draws an evaluation zone, opens the Score tab and reads Precision, opens the export
+  dialog and starts a GeoJSON+GeoPackage+CSV export of the ticked run. The brief's selectors were
+  checked against the shipped UI before use and needed no changes (the checkbox/radio/row labels,
+  the Score panel's `aria-label="Precision"` row, and the `Zone ▭` Segmented option all matched
+  as drafted). The one real change from the brief: its press-drag-release zone draw
+  (`mouse.down`/`move`/`up`) was flaky in this environment's headless Chromium (failed once in
+  isolated runs); replaced with the documented click-move-click alternative for OpenLayers'
+  `createBox`, which passed 3/3 repeated solo runs and in the full 62-spec suite.
+- Walkthrough for the operator: `docs/usability/2026-09-22-maps-walkthrough.md` (9 numbered steps,
+  each stating what to see, ending with the plain-TIFF-without-coordinates case).
+
 - 2026-09-22: Windows icon report investigated without a rebuild. All 17 source assets, installed
   PE icons, running-window SMALL/SMALL2 and shell-resolved shortcut already showed the approved bird.
   Set the Start shortcut to an explicit content-specific bird ICO and refreshed Windows references;

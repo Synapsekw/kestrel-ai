@@ -60,7 +60,10 @@ function ExportJobRow({ projectId, job }: { projectId: string; job: Job }) {
 
 export function ExportJobs({ projectId, jobs, loading, error }: Props) {
   if (loading) return <SkeletonRows rows={2} columns={3} />;
-  if (error) return <Alert tone="danger">{error}</Alert>;
+  // A partial failure (one export kind's request rejected, the other's resolved — see
+  // `useResultsExportJobs`) must still show whatever DID load; only an error with nothing to show
+  // replaces the list outright.
+  if (error && jobs.length === 0) return <Alert tone="danger">{error}</Alert>;
   if (jobs.length === 0)
     return (
       <EmptyState icon="download" title="No exports yet">
@@ -68,10 +71,13 @@ export function ExportJobs({ projectId, jobs, loading, error }: Props) {
       </EmptyState>
     );
   return (
-    <ul className="flex flex-col gap-2">
-      {jobs.map((job) => (
-        <ExportJobRow key={job.id} projectId={projectId} job={job} />
-      ))}
-    </ul>
+    <div className="flex flex-col gap-2">
+      {error && <Alert tone="danger">{error}</Alert>}
+      <ul className="flex flex-col gap-2">
+        {jobs.map((job) => (
+          <ExportJobRow key={job.id} projectId={projectId} job={job} />
+        ))}
+      </ul>
+    </div>
   );
 }

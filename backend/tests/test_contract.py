@@ -49,8 +49,8 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Operations still served by S0 stubs (501). S1, S3 and S4 have landed, so there are none left:
-# any 501 now fails `test_responses_conform`.
+# Operations still served by 501 stubs: there are none left: any 501 now fails
+# `test_responses_conform`.
 EXPECTED_STUBS: set[str] = set()
 
 

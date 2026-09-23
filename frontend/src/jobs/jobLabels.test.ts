@@ -70,6 +70,17 @@ describe("job labels", () => {
         "p",
       ),
     ).toBeNull();
+    expect(
+      resultTarget({ ...runningJob, type: "map_import", state: "succeeded", result: { map_id: "m1" } }, "p"),
+    ).toEqual({ label: "Open maps", to: "/p/p/maps" });
+    // A map export's files live in the Export screen's job list (widened to include map exports),
+    // not on the Maps screen that started it.
+    expect(
+      resultTarget(
+        { ...runningJob, type: "map_export", state: "succeeded", result: { folder: "exports/x" } },
+        "p",
+      ),
+    ).toEqual({ label: "Open export", to: "/p/p/export" });
   });
 
   it("titles a results export and summarises its result", () => {
@@ -90,6 +101,23 @@ describe("job labels", () => {
     expect(resultsExportFolder(succeeded)).toBe("exports/2026-09-19_101500");
     expect(resultsExportSummary({ ...succeeded, state: "running" })).toBeNull();
     expect(resultsExportSummary({ ...runningJob, type: "train" })).toBeNull();
+  });
+
+  it("opens a finished map export's folder the same way as a results export", () => {
+    const succeeded = {
+      ...runningJob,
+      type: "map_export" as const,
+      state: "succeeded" as const,
+      result: {
+        folder: "exports/2026-09-22_120000",
+        files: ["map-a-labels.csv"],
+        box_count: 1,
+      },
+    };
+    expect(resultsExportFolder(succeeded)).toBe("exports/2026-09-22_120000");
+    expect(resultsExportFiles(succeeded)).toEqual(["map-a-labels.csv"]);
+    // a map export has no images, so the image-count summary stays unavailable for it
+    expect(resultsExportSummary(succeeded)).toBeNull();
   });
 });
 

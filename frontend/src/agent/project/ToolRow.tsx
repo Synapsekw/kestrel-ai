@@ -17,6 +17,9 @@ const JOB_NAME: Record<Job["type"], string> = {
   infer: "Labeling",
   export: "Export",
   results_export: "Results export",
+  map_import: "Map import",
+  map_detect: "Map detection",
+  map_export: "Map export",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

@@ -1,4 +1,6 @@
-"""Process entry point: `python -m app` serves the API, `python -m app worker ...` trains."""
+"""Process entry point: `python -m app` serves the API, `python -m app worker ...` trains,
+`python -m app geo-selftest` checks GDAL/PROJ.
+"""
 
 import multiprocessing
 import sys
@@ -15,10 +17,17 @@ def run(argv: list[str], freeze_support: Callable[[], None] = multiprocessing.fr
     work and exits; for a real launch it is a no-op.
     """
     freeze_support()
+    from app.maps.gdal_env import configure_gdal_env
+
+    configure_gdal_env()  # before anything imports rasterio; a no-op outside the frozen build
     if len(argv) > 1 and argv[1] == "worker":
         from app.training.worker import main as worker_main
 
         return worker_main(argv[2:])
+    if len(argv) > 1 and argv[1] == "geo-selftest":
+        from app.maps.selftest import main as geo_selftest
+
+        return geo_selftest()
     from app.main import main
 
     main()

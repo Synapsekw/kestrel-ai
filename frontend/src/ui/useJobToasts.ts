@@ -10,6 +10,9 @@ const TYPE_NAME: Record<Job["type"], string> = {
   infer: "Detection",
   export: "Export",
   results_export: "Results export",
+  map_import: "Map import",
+  map_detect: "Map detection",
+  map_export: "Map export",
 };
 
 function num(v: unknown): number | null {
@@ -47,6 +50,12 @@ export function jobToastText(job: Job): string {
       return "Export finished";
     case "results_export":
       return "Results export finished";
+    case "map_import":
+      return "Map import finished";
+    case "map_detect":
+      return "Map detection finished";
+    case "map_export":
+      return "Map export finished";
   }
 }
 

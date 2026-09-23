@@ -26,3 +26,17 @@ def publish_image_ids_event(
             "payload": {"image_ids": image_ids},
         }
     )
+
+
+def publish_map_labels_changed_event(request: Request, handle: ProjectHandle, map_id: str) -> None:
+    """A zone or label under `map_id` changed: the UI should refetch it (spec section 8)."""
+    request.app.state.events.publish(
+        {
+            "type": "map_labels.changed",
+            "project_id": handle.id,
+            "job_id": None,
+            "progress": None,
+            "message": "",
+            "payload": {"map_id": map_id},
+        }
+    )
