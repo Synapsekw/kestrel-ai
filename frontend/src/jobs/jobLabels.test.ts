@@ -44,7 +44,7 @@ describe("job labels", () => {
         { ...runningJob, type: "infer", state: "succeeded", result: { query_run_id: "q1", boxes: 3 } },
         "p",
       ),
-    ).toEqual({ label: "Open run", to: "/p/p/query?run=q1" });
+    ).toEqual({ label: "Open runs", to: "/p/p/runs" });
     expect(
       resultTarget(
         {
@@ -72,7 +72,14 @@ describe("job labels", () => {
     ).toBeNull();
     expect(
       resultTarget({ ...runningJob, type: "map_import", state: "succeeded", result: { map_id: "m1" } }, "p"),
-    ).toEqual({ label: "Open maps", to: "/p/p/maps" });
+    ).toEqual({ label: "Open sources", to: "/p/p/sources" });
+    // Runs, photo and map, are listed on Runs: the Detect and Maps screens are no longer steps.
+    expect(
+      resultTarget(
+        { ...runningJob, type: "map_detect", state: "succeeded", result: { map_run_id: "r1" } },
+        "p",
+      ),
+    ).toEqual({ label: "Open runs", to: "/p/p/runs" });
     // A map export's files live in the Export screen's job list (widened to include map exports),
     // not on the Maps screen that started it.
     expect(
@@ -158,5 +165,5 @@ it("titles and links library jobs", () => {
   expect(resultTarget(adopted, "p")).toEqual({ label: "Open library", to: "/library" });
   const moved = { ...runningJob, type: "map_move" as const, state: "succeeded" as const };
   expect(jobTitle(moved)).toBe("Map move");
-  expect(resultTarget(moved, "p")).toEqual({ label: "Open maps", to: "/p/p/maps" });
+  expect(resultTarget(moved, "p")).toEqual({ label: "Open sources", to: "/p/p/sources" });
 });

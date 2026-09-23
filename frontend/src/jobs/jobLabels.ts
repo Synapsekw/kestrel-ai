@@ -83,12 +83,12 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return model(str(job.params, "model_id"));
     case "library_adopt":
       return { label: "Open library", to: "/library" };
+    // Maps are sources and every run, photo or map, is listed on Runs: the old Detect and Maps
+    // screens are no longer steps of a detection project, and neither opens in a training one.
     case "map_move":
-      return { label: "Open maps", to: `${p}/maps` };
-    case "infer": {
-      const id = str(job.result, "query_run_id");
-      return id ? { label: "Open run", to: `${p}/query?run=${id}` } : null;
-    }
+      return { label: "Open sources", to: `${p}/sources` };
+    case "infer":
+      return str(job.result, "query_run_id") ? { label: "Open runs", to: `${p}/runs` } : null;
     case "dataset":
       return { label: "Train on it", to: `${p}/train` };
     case "import":
@@ -97,8 +97,9 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "results_export":
       return null; // it already lives on the Export screen that started it
     case "map_import":
+      return { label: "Open sources", to: `${p}/sources` };
     case "map_detect":
-      return { label: "Open maps", to: `${p}/maps` };
+      return { label: "Open runs", to: `${p}/runs` };
     case "map_export":
       // Its files and "show in folder" live in `ExportJobs` on the Export screen (widened to list
       // map exports alongside results exports), not on the Maps screen that started it.
