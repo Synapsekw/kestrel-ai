@@ -1,5 +1,6 @@
 import { test, expect, type Route } from "@playwright/test";
 import { evidencePath } from "./evidence";
+import { fromMock } from "./kinds";
 
 // Ids from the contract's LibraryModelPage example, which the Prism mock serves.
 const TRAINED = "m0000000-2222-4000-8000-000000000001";
@@ -107,4 +108,96 @@ test("an unopened library blocks the screen with the reason and the folder", asy
   await expect(alert).toContainText("The model library could not be opened");
   await expect(alert).toContainText("library.db is not a database");
   await expect(page.getByTestId("model-table")).toHaveCount(0);
+});
+
+test("an import runs as a job with progress, and the new model is selected when it finishes", async ({
+  page,
+}) => {
+  const IMPORTED = "m0000000-2222-4000-8000-0000000000aa";
+  const job = {
+    id: "j0000000-4444-4000-8000-0000000000aa",
+    project_id: "library",
+    type: "library_import",
+    state: "running",
+    progress: 0.5,
+    message: "Checking the model file",
+    log_path: "runs/j0000000-4444-4000-8000-0000000000aa/job.log",
+    params: { name: "client-x-machinery" },
+    result: null,
+    error: null,
+    created_at: "2026-09-23T10:00:00Z",
+    started_at: "2026-09-23T10:00:01Z",
+    finished_at: null,
+  };
+  // The import is running until the operator has seen its progress; then it succeeds.
+  let finished = false;
+  const current = () =>
+    finished
+      ? {
+          ...job,
+          state: "succeeded",
+          progress: 1,
+          result: { model_id: IMPORTED },
+          finished_at: "2026-09-23T10:00:05Z",
+        }
+      : job;
+  await page.route(
+    (url) => url.pathname === "/api/v1/library/models/import",
+    (route) => route.fulfill(json({ job }, 202)),
+  );
+  await page.route(isJobsList, (route) => route.fulfill(json({ items: [current()], next_cursor: null })));
+  await page.route(
+    (url) => url.pathname === `/api/v1/library/jobs/${job.id}`,
+    (route) => route.fulfill(json(current())),
+  );
+  // Once the import succeeded, the library lists the new model as well as the mock's two.
+  const listed = await fromMock<{ items: Record<string, unknown>[]; next_cursor: null }>(
+    page,
+    "/api/v1/library/models",
+  );
+  const imported = {
+    ...listed.items[0],
+    id: IMPORTED,
+    name: "client-x-machinery",
+    origin: "imported",
+    supplier: "Client X",
+    notes: "",
+    metrics: null,
+    artifacts: {},
+    exports: {},
+    provenance: { source_file: "E:\\Models\\client-x\\best.pt" },
+    sha256: "1".repeat(64),
+    created_at: "2026-09-23T10:00:05Z",
+  };
+  await page.route(
+    (url) => url.pathname === "/api/v1/library/models",
+    (route) => route.fulfill(json(finished ? { ...listed, items: [imported, ...listed.items] } : listed)),
+  );
+
+  await page.goto("/library");
+  await expect(page.getByTestId("model-table")).toContainText("ahmadia-v1-n");
+  await page.getByRole("button", { name: "Import a model file" }).click();
+  const form = page.getByRole("form", { name: "Import a model file" });
+  await form.getByLabel("Model name").fill("client-x-machinery");
+  await form.getByLabel("Model file").fill("E:\\Models\\client-x\\best.pt");
+  await form.getByLabel("Supplier").fill("Client X");
+  await form.getByRole("button", { name: "Add to library" }).click();
+
+  const bar = page.getByRole("progressbar", { name: /Model import: client-x-machinery/ });
+  await expect(bar).toBeVisible();
+  await page.screenshot({
+    path: evidencePath("model-library", "library-import-running.png"),
+    fullPage: true,
+  });
+  finished = true;
+
+  await expect(page).toHaveURL(new RegExp(`model=${IMPORTED}`), { timeout: 10_000 });
+  await expect(
+    page.getByTestId("model-detail").getByRole("heading", { name: "client-x-machinery" }),
+  ).toBeVisible();
+  await expect(bar).toHaveCount(0);
+  await page.screenshot({
+    path: evidencePath("model-library", "library-import-selected.png"),
+    fullPage: true,
+  });
 });
