@@ -46,6 +46,15 @@ api_router.include_router(train_router, dependencies=[Depends(require_kind(("tra
 # Moving a training project's old models into the library: training projects only.
 api_router.include_router(adoption_router, dependencies=[Depends(require_kind(("train",)))])
 
+# Detection runs and class mapping (plan 2 unit R): detection projects only. Its jobs (`infer`,
+# `map_detect`) import rasterio, so it is guarded like the maps router below.
+try:
+    from app.detect.router import router as detect_router
+
+    api_router.include_router(detect_router, dependencies=[Depends(require_kind(("detect",)))])
+except Exception:
+    log.exception("detect router failed to load; run endpoints will be unavailable")
+
 # The maps router's import chain pulls in `rasterio` at module scope (router -> service/tiles ->
 # raster, the job modules). A broken GDAL in the frozen bundle must not stop the whole backend from
 # starting (AGENTS.md: "the app must start even when startup work fails") - so this import is

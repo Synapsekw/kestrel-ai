@@ -43,7 +43,6 @@ import { LabelPanel } from "@/maps/LabelPanel";
 import { MapList } from "@/maps/MapList";
 import { MapOverlay } from "@/maps/MapOverlay";
 import { MapView } from "@/maps/MapView";
-import { NewRunDialog } from "@/maps/NewRunDialog";
 import { ResultsPanel, type CountScope } from "@/maps/ResultsPanel";
 import { RunList } from "@/maps/RunList";
 import { ScorePanel } from "@/maps/ScorePanel";
@@ -61,6 +60,7 @@ import {
   type BoxFacts,
   type BoxGeom,
 } from "@/maps/runModel";
+import { RunDialog } from "@/runs/RunDialog";
 import { Alert, Button, EmptyState, Segmented, toast } from "@/ui";
 
 /**
@@ -857,10 +857,9 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
         />
       )}
       {newRun && active && (
-        <NewRunDialog
+        <RunDialog
           projectId={projectId}
-          geoMap={active}
-          runs={runs}
+          initialSourceIds={[active.id]}
           onClose={() => setNewRun(false)}
           onStarted={() => {
             setNewRun(false);

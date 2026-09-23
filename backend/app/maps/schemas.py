@@ -96,7 +96,9 @@ class SurveyOut(BaseModel):
     run_id: str | None
     model_name: str | None
     conf: float | None
+    pinned: bool
     counts: dict[str, int]
+    verified_counts: dict[str, int]
     deltas: dict[str, int]
     state: Literal["ok", "not_comparable", "not_counted"]
     reason: str | None
@@ -160,12 +162,25 @@ class MapRunOut(BaseModel):
     counts: dict[str, int]
     detection_count: int
     created_at: datetime
+    # Detection workspace (spec 2026-09-23 sections 7.2 and 9.2).
+    source_id: str | None
+    model_snapshot: dict
+    class_map: dict[str, str | None]
+    pinned: bool
+    verified_counts: dict[str, int]
+    area_counts: dict[str, dict[str, dict[str, int]]]
 
     @classmethod
     def from_row(cls, row: MapRun, state: str | None, detection_count: int) -> MapRunOut:
         return cls(
             id=row.id,
             map_id=row.map_id,
+            source_id=row.source_id,
+            model_snapshot=dict(row.model_snapshot or {}),
+            class_map=dict(row.class_map or {}),
+            pinned=bool(row.pinned),
+            verified_counts=dict(row.verified_counts or {}),
+            area_counts=dict(row.area_counts or {}),
             kind=row.kind,
             model_id=row.model_id,
             provider=row.provider,

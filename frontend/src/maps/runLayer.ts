@@ -91,8 +91,7 @@ export function useRunLayer(
     // new generation has already taken over the map; without this guard its late `report()` would
     // overwrite `onViewCounts` with a count for a confidence the operator is no longer looking at,
     // and its late `truncated`/visibility write could flip the layers for a generation it no longer
-    // owns. Same pattern as the whole-map counts effect in `MapsScreen.tsx` and the estimate effect
-    // in `NewRunDialog.tsx`.
+    // owns. Same pattern as the whole-map counts effect in `MapsScreen.tsx`.
     let stale = false;
     const boxes = new VectorSource({
       strategy: bboxStrategy,
