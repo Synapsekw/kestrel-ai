@@ -76,6 +76,9 @@ class JobRunner:
         self._pool: ThreadPoolExecutor | None = None
         self._contexts: dict[str, JobContext] = {}
         self._lock = threading.Lock()
+        # The app-wide model library (a LibraryHandle), wired in the lifespan like `keys`; None when
+        # it could not be opened. Jobs that resolve library models read it from here.
+        self.library = None
 
     def start(self) -> None:
         self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="job")

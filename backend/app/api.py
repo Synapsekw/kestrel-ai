@@ -9,6 +9,7 @@ from app.exports.router import router as exports_router
 from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
+from app.library.router import router as library_router
 from app.project_agent.router import router as project_agent_router
 from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.router import router as projects_router
@@ -24,6 +25,7 @@ for r in (
     agent_router,
     health_router,
     projects_router,
+    library_router,
     datasets_router,
     starter_router,
     providers_router,

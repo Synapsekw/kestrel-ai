@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import socket
 from contextlib import asynccontextmanager
@@ -44,6 +45,21 @@ def project_opened(handle, runner) -> None:
             log.exception("%s failed for project %s", step, handle.id)
 
 
+def open_model_library(app: FastAPI, settings: Settings) -> None:
+    """Open the app-wide library. A failure is logged and the app starts without it: every
+    library-dependent endpoint then answers 503 `library_unavailable` (AGENTS.md: the app must start
+    even when startup work fails)."""
+    from app.library import handle as library_handle
+
+    app.state.library, app.state.library_error = None, None
+    try:
+        app.state.library = library_handle.open_library(settings.data_dir)
+    except Exception as e:
+        logging.getLogger(__name__).exception("the model library could not be opened")
+        app.state.library_error = f"{type(e).__name__}: {e}"
+    app.state.jobs.library = app.state.library
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -66,7 +82,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys
         app.state.jobs.provider_config = app.state.provider_config
+        open_model_library(app, settings)
         app.state.jobs.start()
+        if app.state.library is not None:
+            try:
+                from app.jobs.startup import sweep_orphans
+
+                sweep_orphans(app.state.library, app.state.jobs)
+            except Exception:
+                logging.getLogger(__name__).exception("orphan job sweep failed for the model library")
         # The project agent's turn loops run as tasks on this event loop; the model call is a seam
         # (`agent_llm`) so tests can script the model without reaching a provider.
         from app.project_agent import llm as agent_llm
@@ -78,6 +102,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await app.state.agent.stop()
         app.state.jobs.stop()
         app.state.projects.close_all()
+        if app.state.library is not None:
+            app.state.library.engine.dispose()
 
     app = FastAPI(
         title="kestrel-backend",
