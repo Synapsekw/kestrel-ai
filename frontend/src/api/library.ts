@@ -11,7 +11,7 @@ import type {
   TrainRequest,
   components,
 } from "@contract/client";
-import { ApiFailure, codeOf, unwrap } from "./errors";
+import { codeOf, unwrap } from "./errors";
 import { collectPages } from "./paging";
 
 export type { LibraryModel, LibraryModelImport, LibraryModelPatch, LibraryStatus, ModelUsage };
@@ -26,9 +26,9 @@ export const LIBRARY_JOBS = "library";
 const LIST_LIMIT = 1000;
 const JOB_LIMIT = 100;
 
-/** 503 `library_unavailable`: the app started without its library (spec section 13). */
+/** 503 `library_unavailable`: the app started without its library (spec section 13). Other 503s are not. */
 export function isLibraryUnavailable(err: unknown): boolean {
-  return codeOf(err) === "library_unavailable" || (err instanceof ApiFailure && err.status === 503);
+  return codeOf(err) === "library_unavailable";
 }
 
 export function fetchLibraryStatus(api: ApiClient): Promise<LibraryStatus> {

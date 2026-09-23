@@ -187,4 +187,17 @@ describe("library api", () => {
     expect(isLibraryUnavailable(failure)).toBe(true);
     expect(isLibraryUnavailable(new Error("x"))).toBe(false);
   });
+
+  it("does not read an unrelated 503 as the library being unavailable", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/library\/models$/,
+        status: 503,
+        body: errorBody("provider_unavailable", "busy"),
+      },
+    ]);
+    const failure = await fetchLibraryModels(api).catch((e: unknown) => e);
+    expect(isLibraryUnavailable(failure)).toBe(false);
+  });
 });

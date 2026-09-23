@@ -160,6 +160,23 @@ describe("LibraryScreen", () => {
     expect(requests.map((r) => r.url)).toEqual(["/api/v1/library/status"]);
   });
 
+  it("says the library could not be opened when the status is unknown and the list answers 503", async () => {
+    renderScreen(
+      base([
+        { method: "GET", path: /\/library\/status$/, status: 500, body: {} },
+        {
+          method: "GET",
+          path: /\/library\/models$/,
+          status: 503,
+          body: { error: { code: "library_unavailable", message: "down", details: {} } },
+        },
+      ]),
+    );
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("The model library could not be opened");
+    expect(screen.queryByText("No models in the library yet")).not.toBeInTheDocument();
+  });
+
   it("teaches the first step when the library is empty", async () => {
     renderScreen(
       base([{ method: "GET", path: /\/library\/models$/, body: { items: [], next_cursor: null } }]),

@@ -181,9 +181,16 @@ function LibraryContent() {
         </Alert>
       )}
 
+      {library.unavailable && (
+        <Alert tone="danger" title="The model library could not be opened">
+          Projects still open, but runs and training need the library. Check the library folder, then restart
+          the app.
+        </Alert>
+      )}
+
       {library.loading && models.length === 0 ? (
         <SkeletonRows rows={3} columns={4} />
-      ) : models.length === 0 && !library.error ? (
+      ) : models.length === 0 && !library.error && !library.unavailable ? (
         <EmptyState icon="models" title="No models in the library yet">
           Train a model in a training project, import a model file, or add a starter model above.
         </EmptyState>
