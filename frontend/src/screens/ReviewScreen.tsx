@@ -9,11 +9,15 @@ import { EmptyState } from "@/ui";
 
 const linkClass = "font-medium text-accent hover:underline";
 
-/** Review: a detection project reviews one source's run at a time; otherwise the image queue. */
+/**
+ * Review: a detection project reviews one source's run at a time; otherwise the image queue. A
+ * `?ids=` link (a detection run's "Review results") narrows the image queue in either kind.
+ */
 export function ReviewScreen() {
   const { projectId = "" } = useParams();
+  const [params] = useSearchParams();
   const kind = useProjectKind(projectId);
-  if (kind === "detect") return <DetectReview projectId={projectId} />;
+  if (kind === "detect" && !params.get("ids")) return <DetectReview projectId={projectId} />;
   return <SuggestionReview projectId={projectId} kind={kind} />;
 }
 
