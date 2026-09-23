@@ -85,7 +85,6 @@ function useOpenMap(projectId: string, mapId: string | undefined): GeoMap | null
   const api = useApi();
   const [map, setMap] = useState<GeoMap | null>(null);
   useEffect(() => {
-    setMap(null);
     if (!mapId) return;
     let cancelled = false;
     fetchMap(api, projectId, mapId)
@@ -97,5 +96,6 @@ function useOpenMap(projectId: string, mapId: string | undefined): GeoMap | null
       cancelled = true;
     };
   }, [api, projectId, mapId]);
-  return map;
+  // A map loaded for an earlier id is stale until the new one arrives.
+  return map && map.id === mapId ? map : null;
 }
