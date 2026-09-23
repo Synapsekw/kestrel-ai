@@ -7,8 +7,6 @@ import { Alert, Field, Input, Segmented, Select, cx, focusRing } from "@/ui";
 import type { QueryForm, QueryKind } from "./queryModel";
 
 interface Props {
-  /** Kept for callers; library models are app-wide, so the picker no longer needs it. */
-  projectId?: string;
   form: QueryForm;
   onChange: (patch: Partial<QueryForm>) => void;
   models: LibraryModel[];

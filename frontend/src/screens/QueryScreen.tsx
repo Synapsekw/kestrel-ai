@@ -207,7 +207,6 @@ function DetectWorkspace() {
       ) : (
         <div className="flex max-w-3xl flex-col gap-6 rounded-lg border border-line bg-panel p-5">
           <SourcePicker
-            projectId={projectId}
             form={effectiveForm}
             onChange={patch}
             models={registry.models}

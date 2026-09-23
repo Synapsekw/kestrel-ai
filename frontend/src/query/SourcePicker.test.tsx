@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { exampleModel, exampleProviders, exampleTrainedModel, PROJECT_ID } from "@/test/fixtures";
+import { exampleModel, exampleProviders, exampleTrainedModel } from "@/test/fixtures";
 import { DEFAULT_QUERY_FORM } from "./queryModel";
 import { SourcePicker } from "./SourcePicker";
 
@@ -11,7 +11,6 @@ describe("SourcePicker", () => {
     render(
       <MemoryRouter>
         <SourcePicker
-          projectId={PROJECT_ID}
           form={{ ...DEFAULT_QUERY_FORM, kind: "cloud_provider", provider: "anthropic" }}
           onChange={() => {}}
           models={[]}
