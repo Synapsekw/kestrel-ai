@@ -21,13 +21,15 @@ const METRICS: [string, (r: Row) => string][] = [
  * — the same array `MapsScreen` derives its overlay's `matchOf` from — so the panel can never
  * describe a different run than the map is colouring; `runs` is only consulted to look up a ticked
  * id's display name. The primary is always `selected[0]`, whether or not its score has arrived yet:
- * while it is still loading, its column reads "scoring…" and the stepper stays disabled, rather
- * than silently falling through to a comparison run's numbers.
+ * while it is still loading, its column reads "scoring…"; if the request failed, `scoreErrors`
+ * carries why and the column shows that instead of a "scoring…" that would never resolve. Either
+ * way the stepper stays disabled rather than silently falling through to a comparison run's numbers.
  */
 export function ScorePanel({
   runs,
   selected,
   scores,
+  scoreErrors,
   classes,
   overlay,
   onOverlay,
@@ -37,6 +39,8 @@ export function ScorePanel({
   /** Run ids in tick order (as `RunList`/`toggleCompare` produce them); index 0 is primary. */
   selected: string[];
   scores: Record<string, MapScore | null>;
+  /** A run id whose score request failed, mapped to a short reason (`messageOf`). */
+  scoreErrors: Record<string, string>;
   classes: ClassDef[];
   overlay: boolean;
   onOverlay: (on: boolean) => void;
@@ -47,6 +51,7 @@ export function ScorePanel({
   const secondaryId = selected[1];
   const primaryScore = primaryId !== undefined ? (scores[primaryId] ?? null) : null;
   const secondaryScore = secondaryId !== undefined ? (scores[secondaryId] ?? null) : null;
+  const primaryError = primaryId !== undefined ? scoreErrors[primaryId] : undefined;
   const list = useMemo(() => (primaryScore ? mistakes(primaryScore) : []), [primaryScore]);
   const [at, setAt] = useState(-1);
   const name = (id: string) => classes.find((c) => c.id === id)?.name ?? "unknown class";
@@ -67,9 +72,16 @@ export function ScorePanel({
   };
   const current = at >= 0 ? list[at] : null;
   const columns = [
-    { id: primaryId, score: primaryScore, run: runById(primaryId) },
+    { id: primaryId, score: primaryScore, error: primaryError, run: runById(primaryId) },
     ...(secondaryId !== undefined
-      ? [{ id: secondaryId, score: secondaryScore, run: runById(secondaryId) }]
+      ? [
+          {
+            id: secondaryId,
+            score: secondaryScore,
+            error: scoreErrors[secondaryId],
+            run: runById(secondaryId),
+          },
+        ]
       : []),
   ];
   return (
@@ -77,7 +89,9 @@ export function ScorePanel({
       <table className="w-full text-sm tabular-nums">
         <thead>
           <tr className="text-left text-xs text-muted">
-            <th className="py-1 font-medium">{primaryScore ? `IoU ≥ ${primaryScore.iou}` : "Scoring…"}</th>
+            <th className="py-1 font-medium">
+              {primaryScore ? `IoU ≥ ${primaryScore.iou}` : primaryError ? "Could not score" : "Scoring…"}
+            </th>
             {columns.map((c) => (
               <th
                 key={c.id}
@@ -95,7 +109,15 @@ export function ScorePanel({
               <td className="py-1.5 text-muted">{label}</td>
               {columns.map((c) => (
                 <td key={c.id} className="py-1.5 text-right text-ink">
-                  {c.score ? fmt(c.score.overall) : <span className="text-muted">scoring…</span>}
+                  {c.score ? (
+                    fmt(c.score.overall)
+                  ) : c.error ? (
+                    <span className="text-danger" title={c.error}>
+                      failed
+                    </span>
+                  ) : (
+                    <span className="text-muted">scoring…</span>
+                  )}
                 </td>
               ))}
             </tr>
@@ -139,12 +161,14 @@ export function ScorePanel({
           disabled={!primaryScore || !list.length}
           onClick={() => step(1)}
         />
-        <span className="text-sm text-muted">
-          {!primaryScore
-            ? "Scoring the primary run…"
-            : current
-              ? `${at + 1} of ${list.length} · ${current.match === "fp" ? "false alarm" : "missed"}: ${name(current.class_id)}`
-              : `${list.length} mistakes`}
+        <span className={primaryError ? "text-sm text-danger" : "text-sm text-muted"}>
+          {primaryError
+            ? `Could not score this run: ${primaryError}`
+            : !primaryScore
+              ? "Scoring the primary run…"
+              : current
+                ? `${at + 1} of ${list.length} · ${current.match === "fp" ? "false alarm" : "missed"}: ${name(current.class_id)}`
+                : `${list.length} mistakes`}
         </span>
       </div>
     </section>

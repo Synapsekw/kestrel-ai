@@ -12,6 +12,7 @@ import {
   type MapZone,
 } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
+import { messageOf } from "@/api/errors";
 import {
   createLabel,
   createZone,
@@ -138,6 +139,10 @@ export function MapsScreen() {
   const [zones, setZones] = useState<MapZone[]>([]);
   const [labels, setLabels] = useState<MapLabel[]>([]);
   const [scores, setScores] = useState<Record<string, MapScore | null>>({});
+  // A run whose score request failed: `scores[id]` stays `null` (so the overlay/stepper treat it
+  // the same as "not scored"), but this carries *why*, so the Score tab can tell "still loading"
+  // apart from "failed" instead of showing a permanent "scoring…" for a request that already died.
+  const [scoreErrors, setScoreErrors] = useState<Record<string, string>>({});
   const [overlay, setOverlay] = useState(true);
   const [exporting, setExporting] = useState(false);
   // Bumped every time a label or zone edit round-trips (create/update/delete/seed/undo/redo), so the
@@ -193,6 +198,7 @@ export function MapsScreen() {
     setSelected([]);
     setRuns([]);
     setScores({});
+    setScoreErrors({});
     // `priorStates` itself resets naturally: run ids are UUIDs, so a leftover entry from the
     // previous map never matches one of the new map's run ids.
   }
@@ -303,22 +309,44 @@ export function MapsScreen() {
     if (liveSelected.length === 0) return;
     let cancelled = false;
     for (const runId of liveSelected) {
-      void fetchScore(api, projectId, runId).then((s) => {
-        if (!cancelled) setScores((sc) => ({ ...sc, [runId]: s }));
-      });
+      void fetchScore(api, projectId, runId)
+        .then((s) => {
+          if (cancelled) return;
+          setScores((sc) => ({ ...sc, [runId]: s }));
+          // A retry (label edit, run refresh) that now succeeds clears a stale failure for this run.
+          setScoreErrors((se) => {
+            if (!(runId in se)) return se;
+            const next = { ...se };
+            delete next[runId];
+            return next;
+          });
+        })
+        .catch((err: unknown) => {
+          if (cancelled) return;
+          pushLog(`score run ${runId} failed: ${messageOf(err, String(err))}`);
+          // `scores[runId]` stays `null` (never scored), and the reason lives in `scoreErrors` so
+          // `ScorePanel` can show "failed" instead of a "scoring…" that would never resolve.
+          setScores((sc) => ({ ...sc, [runId]: null }));
+          setScoreErrors((se) => ({ ...se, [runId]: messageOf(err, "could not score this run") }));
+        });
     }
     return () => {
       cancelled = true;
     };
   }, [api, projectId, liveSelected, editVersion]);
-  // The scores actually relevant right now: a run just deselected, or left over from a previous map,
-  // still has an entry in `scores` until this effect above refetches it, so callers key off this
-  // filtered view instead of `scores` directly.
+  // The scores/errors actually relevant right now: a run just deselected, or left over from a
+  // previous map, still has an entry until the effect above refetches it, so callers key off these
+  // filtered views instead of `scores`/`scoreErrors` directly.
   const liveScores = useMemo(() => {
     const out: Record<string, MapScore | null> = {};
     for (const id of liveSelected) if (id in scores) out[id] = scores[id];
     return out;
   }, [scores, liveSelected]);
+  const liveScoreErrors = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const id of liveSelected) if (id in scoreErrors) out[id] = scoreErrors[id];
+    return out;
+  }, [scoreErrors, liveSelected]);
 
   const specFor = useCallback(
     (
@@ -646,6 +674,7 @@ export function MapsScreen() {
                 runs={runs}
                 selected={liveSelected}
                 scores={liveScores}
+                scoreErrors={liveScoreErrors}
                 classes={classes}
                 overlay={overlay}
                 onOverlay={setOverlay}
