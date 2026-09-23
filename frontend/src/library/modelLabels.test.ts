@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classMapping, formatDate, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
+import { classMapping, formatDate, formatLocalDate, formatMetric, originLabel, taskLabel } from "./modelLabels";
 
 describe("model labels", () => {
   it("formats metrics as percentages and dates as UTC minutes", () => {
@@ -8,8 +8,11 @@ describe("model labels", () => {
     expect(formatMetric(null)).toBe("–");
     expect(formatMetric(undefined)).toBe("–");
     expect(formatDate("2026-09-17T10:10:00Z")).toBe("2026-09-17 10:10");
-    expect(kindLabel("imported")).toBe("Imported");
-    expect(kindLabel("trained")).toBe("Trained");
+    expect(originLabel("imported")).toBe("Imported");
+    expect(originLabel("trained")).toBe("Trained");
+    expect(originLabel("starter")).toBe("Starter");
+    expect(taskLabel("detect")).toBe("Boxes");
+    expect(taskLabel("obb")).toBe("Rotated boxes");
   });
 
   it("shows backend timestamps (UTC) in the machine's local time", () => {

@@ -1,31 +1,26 @@
-import { useEffect, useId, useRef, useState } from "react";
-import type { Job, Model, StarterModel } from "@contract/client";
+import { useEffect, useId, useState } from "react";
+import type { Job, StarterModel } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { cancelJob, fetchJob } from "@/api/jobs";
-import { fetchModel } from "@/api/models";
-import { acquireStarterModel, listStarterModels } from "@/api/starterModels";
-import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, Field, Pill, Progress, Select } from "@/ui";
+import { acquireStarter } from "@/api/library";
+import { listStarterModels } from "@/api/starterModels";
+import { Alert, Button, Field, Pill, Select } from "@/ui";
 
 interface Props {
-  projectId: string;
+  /** Library model names, to mark a starter that was added before (`<key>-coco`). */
   existingNames: string[];
-  onImported: (model: Model) => void;
+  /** The download runs as a library job; the caller shows its progress and selects the model. */
+  onStarted: (job: Job) => void;
 }
 
-export function StarterModels({ projectId, existingNames, onImported }: Props) {
+/** Choose a starter family and size and add it to the library; only the chosen weights are downloaded. */
+export function StarterModels({ existingNames, onStarted }: Props) {
   const api = useApi();
   const id = useId();
   const [starters, setStarters] = useState<StarterModel[]>([]);
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState(false);
-  const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const imported = useRef(onImported);
-  useEffect(() => {
-    imported.current = onImported;
-  }, [onImported]);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,90 +39,31 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
     };
   }, [api]);
 
-  useEffect(() => {
-    if (!job) return;
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout>;
-    async function poll(current: Job) {
-      if (cancelled) return;
-      try {
-        const next = await fetchJob(api, projectId, current.id);
-        if (!cancelled) {
-          setError(null);
-          await check(next);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(`${messageOf(e, "Could not check progress.")} Reconnecting to this download...`);
-          timer = setTimeout(() => void poll(current), 1000);
-        }
-      }
-    }
-    async function check(current: Job) {
-      if (cancelled) return;
-      useJobsStore.getState().upsert(current);
-      setJob(current);
-      try {
-        if (current.state === "succeeded") {
-          const modelId = current.result?.model_id;
-          if (typeof modelId !== "string") throw new Error("The import did not return a model.");
-          const model = await fetchModel(api, projectId, modelId);
-          if (!cancelled) {
-            setError(null);
-            imported.current(model);
-            setBusy(false);
-            setJob(null);
-          }
-        } else if (current.state === "failed" || current.state === "cancelled") {
-          setError(current.error ?? "Model download cancelled.");
-          setBusy(false);
-          setJob(null);
-        } else {
-          timer = setTimeout(() => void poll(current), 1000);
-        }
-      } catch (e) {
-        if (!cancelled) {
-          setError(`${messageOf(e, "Could not load the registered model.")} Reconnecting to this model...`);
-          timer = setTimeout(() => void check(current), 1000);
-        }
-      }
-    }
-    void check(job);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-    // Progress updates keep the same polling session until the job identity changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [api, projectId, job?.id]);
+  const familyOf = (s: StarterModel) => s.family ?? s.name.split(" ")[0];
+  const selected = starters.find((s) => s.key === key) ?? starters[0];
+  const family = selected ? familyOf(selected) : "";
+  const families = [...new Set(starters.map(familyOf))];
 
   async function add() {
     if (!selected || busy) return;
     setBusy(true);
     setError(null);
     try {
-      const queued = await acquireStarterModel(api, projectId, selected.key);
-      useJobsStore.getState().upsert(queued);
-      setJob(queued);
+      onStarted(await acquireStarter(api, selected.key));
     } catch (e) {
       setError(messageOf(e, "Could not start the model download."));
+    } finally {
       setBusy(false);
     }
   }
 
-  const familyOf = (s: StarterModel) => s.family ?? s.name.split(" ")[0];
-  const selected = starters.find((s) => s.key === key) ?? starters[0];
-  const family = selected ? familyOf(selected) : "";
-  const families = [...new Set(starters.map(familyOf))];
   if (starters.length === 0 && !error) return null;
 
   return (
-    <section className="flex max-w-3xl flex-col gap-3">
-      <h2 className="text-base font-semibold">Starter models</h2>
+    <section aria-label="Starter models" className="flex max-w-3xl flex-col gap-3">
       <p className="max-w-prose text-sm leading-relaxed text-muted">
-        Choose a YOLO family and size for object detection. Only the model you add is downloaded. Train it on
-        your labeled machinery images before relying on aerial counts. Segmentation, pose and rotated-box
-        models are not supported in this workflow.
+        General-purpose models to start training from. Only the model you add is downloaded. Train it on your
+        own labeled images before relying on its counts.
       </p>
       {error && <Alert tone="danger">{error}</Alert>}
       {selected && (
@@ -173,44 +109,21 @@ export function StarterModels({ projectId, existingNames, onImported }: Props) {
             </span>
             {existingNames.includes(`${selected.key}-coco`) && (
               <Pill tone="neutral" size="sm">
-                In the registry
+                In the library
               </Pill>
             )}
           </div>
-          {job && (
-            <>
-              <Progress value={job.progress} running label="Model download" />
-              <p role="status" className="text-sm text-muted">
-                {job.message || "Preparing model…"}
-              </p>
-            </>
-          )}
           <div className="flex gap-2">
             <Button
               size="sm"
               icon="plus"
               loading={busy}
               disabled={busy}
-              aria-label={
-                busy ? undefined : `${selected.available ? "Add" : "Download and add"} ${selected.name}`
-              }
+              aria-label={`${selected.available ? "Add" : "Download and add"} ${selected.name}`}
               onClick={() => void add()}
             >
-              {busy ? "Adding…" : selected.available ? "Add" : "Download and add"}
+              {selected.available ? "Add" : "Download and add"}
             </Button>
-            {job && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  void cancelJob(api, projectId, job.id).catch((e: unknown) =>
-                    setError(messageOf(e, "Could not cancel download.")),
-                  );
-                }}
-              >
-                Cancel
-              </Button>
-            )}
           </div>
         </>
       )}

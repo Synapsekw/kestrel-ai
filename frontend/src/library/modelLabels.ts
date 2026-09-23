@@ -1,6 +1,12 @@
-import type { Model } from "@contract/client";
+import type { LibraryModel } from "@contract/client";
 
-const KIND_LABEL: Record<Model["kind"], string> = { imported: "Imported", trained: "Trained" };
+const ORIGIN_LABEL: Record<LibraryModel["origin"], string> = {
+  trained: "Trained",
+  imported: "Imported",
+  starter: "Starter",
+};
+
+const TASK_LABEL: Record<LibraryModel["task"], string> = { detect: "Boxes", obb: "Rotated boxes" };
 
 /** An en dash stands in for a metric the model does not have (an imported model has none). */
 export function formatMetric(v: number | null | undefined): string {
@@ -20,8 +26,12 @@ export function formatLocalDate(iso: string): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-export function kindLabel(kind: Model["kind"]): string {
-  return KIND_LABEL[kind];
+export function originLabel(origin: LibraryModel["origin"]): string {
+  return ORIGIN_LABEL[origin];
+}
+
+export function taskLabel(task: LibraryModel["task"]): string {
+  return TASK_LABEL[task];
 }
 
 export interface ClassMapping {

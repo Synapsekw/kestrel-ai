@@ -13,6 +13,11 @@ const TYPE_NAME: Record<Job["type"], string> = {
   map_import: "Map import",
   map_detect: "Map detection",
   map_export: "Map export",
+  library_import: "Model import",
+  library_export: "Model export",
+  library_starter: "Model download",
+  library_adopt: "Moving models to the library",
+  map_move: "Map move",
 };
 
 function num(v: unknown): number | null {
@@ -37,7 +42,7 @@ export function jobToastText(job: Job): string {
       return `Import finished: ${imported} ${imported === 1 ? "image" : "images"}${extra ? ` (${extra})` : ""}`;
     }
     case "train":
-      return "Training finished: the model is registered";
+      return "Training finished: the model is in the library";
     case "infer": {
       const boxes = num(r.boxes);
       return boxes === null
@@ -56,6 +61,16 @@ export function jobToastText(job: Job): string {
       return "Map detection finished";
     case "map_export":
       return "Map export finished";
+    case "library_import":
+      return "Model added to the library";
+    case "library_export":
+      return "Model export finished";
+    case "library_starter":
+      return "Starter model added to the library";
+    case "library_adopt":
+      return "Models moved to the library";
+    case "map_move":
+      return "Map moved";
   }
 }
 

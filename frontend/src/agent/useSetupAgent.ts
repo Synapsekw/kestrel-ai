@@ -14,7 +14,8 @@ import { useApi } from "@/api/client";
 import { chatWithAgent, type AgentMessage, type AgentPlan } from "@/api/agent";
 import { messageOf, unwrap } from "@/api/errors";
 import { fetchProviders } from "@/api/providers";
-import { acquireStarterModel, listStarterModels } from "@/api/starterModels";
+import { acquireStarter, LIBRARY_JOBS } from "@/api/library";
+import { listStarterModels } from "@/api/starterModels";
 import { createSource } from "@/api/sources";
 import { fetchImagePage } from "@/api/images";
 import { cancelJob, fetchJob } from "@/api/jobs";
@@ -118,7 +119,8 @@ export function useSetupAgent(open: boolean) {
         const updates = await Promise.all(
           entries.map(async ([stage, id]) => ({
             stage: stage as Stage,
-            job: await fetchJob(api, project!.id, id),
+            // The starter download is a library job; the others belong to the project.
+            job: await fetchJob(api, stage === "starter" ? LIBRARY_JOBS : project!.id, id),
           })),
         );
         if (disposed) return;
@@ -204,6 +206,7 @@ export function useSetupAgent(open: boolean) {
             body: {
               name: plan.name.trim(),
               folder: folder.trim(),
+              kind: "train",
               classes: plan.classes.map((name, i) => ({
                 name: name.trim(),
                 colour: COLOURS[i % COLOURS.length],
@@ -216,12 +219,12 @@ export function useSetupAgent(open: boolean) {
         setProject(p);
         void navigate(`/p/${p.id}`);
       }
-      remember("starter", await acquireStarterModel(api, p.id, plan.starter_model_key));
+      remember("starter", await acquireStarter(api, plan.starter_model_key));
     });
   const acquire = () =>
     act("starter", async () => {
       if (project && plan)
-        remember("starter", await acquireStarterModel(api, project.id, plan.starter_model_key));
+        remember("starter", await acquireStarter(api, plan.starter_model_key));
     });
   const importImages = () =>
     act("import", async () => {
@@ -251,7 +254,8 @@ export function useSetupAgent(open: boolean) {
   const cancel = (stage: Stage) =>
     act("cancel", async () => {
       const job = jobs[stage];
-      if (project && job) remember(stage, await cancelJob(api, project.id, job.id));
+      if (project && job)
+        remember(stage, await cancelJob(api, stage === "starter" ? LIBRARY_JOBS : project.id, job.id));
     });
   const toggle = (id: string) => {
     setEstimate(null);

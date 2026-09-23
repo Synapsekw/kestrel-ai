@@ -1,25 +1,21 @@
-import { useCallback, useState, type ReactNode } from "react";
-import type { Model, Project } from "@contract/client";
+import { useId, useState, type FormEvent, type ReactNode } from "react";
+import type { Job, LibraryModel, LibraryModelPatch, ModelUsage } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { deleteModel, fetchModel } from "@/api/models";
-import { patchProject } from "@/api/project";
+import { deleteLibraryModel, fetchModelUsage, updateLibraryModel } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
-import { RevealButton } from "@/exports/RevealButton";
-import { Alert, Button, Pill } from "@/ui";
+import { Alert, Button, Field, Input, Pill, Textarea } from "@/ui";
+import { formatAliases, parseAliases } from "./aliases";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
-import { classMapping, formatLocalDate, formatMetric, kindLabel } from "./modelLabels";
-import type { DatasetNames } from "./useDatasetNames";
+import { formatLocalDate, formatMetric, originLabel, taskLabel } from "./modelLabels";
 
 export interface ModelDetailProps {
-  projectId: string;
-  model: Model;
-  project: Project;
-  datasetNames: DatasetNames;
-  onProjectSaved: (p: Project) => void;
-  onChanged: (m: Model) => void;
+  model: LibraryModel;
+  onChanged: (m: LibraryModel) => void;
   onDeleted: (id: string) => void;
+  /** An export job started here; the screen shows its progress. */
+  onJobStarted: (job: Job) => void;
 }
 
 /** One row of the details list: muted term on the left, value on the right. */
@@ -36,48 +32,113 @@ function Row({ term, children, mono }: { term: string; children: ReactNode; mono
 
 const th = "h-8 border-b border-line px-3 font-medium";
 
-export function ModelDetail({
-  projectId,
-  model,
-  project,
-  datasetNames,
-  onProjectSaved,
-  onChanged,
-  onDeleted,
-}: ModelDetailProps) {
+/** "Trained in <project> on <dataset>", "Imported from <file>" or a starter line; a snapshot, never a live link. */
+function Provenance({ model }: { model: LibraryModel }) {
+  const p = model.provenance;
+  let line: ReactNode;
+  if (model.origin === "trained") {
+    line = (
+      <>
+        Trained in <em className="font-medium not-italic text-ink">{p.project_name ?? "a project"}</em>
+        {p.dataset_name && (
+          <>
+            {" "}
+            on <em className="font-medium not-italic text-ink">{p.dataset_name}</em>
+          </>
+        )}
+        {p.base_model_name && <>, starting from {p.base_model_name}</>}.
+      </>
+    );
+  } else if (model.origin === "imported") {
+    line = p.source_file ? (
+      <>
+        Imported from <span className="font-mono text-[13px] text-ink">{p.source_file}</span>.
+      </>
+    ) : (
+      "Imported from a file."
+    );
+  } else {
+    line = "A general-purpose starter model. Train it on your own images before relying on its counts.";
+  }
+  return (
+    <p data-testid="provenance" className="max-w-prose text-sm leading-relaxed text-muted">
+      {line}
+      {model.supplier && <> Supplied by {model.supplier}.</>}
+    </p>
+  );
+}
+
+interface Draft {
+  name: string;
+  notes: string;
+  supplier: string;
+  aliases: string;
+}
+
+function draftOf(model: LibraryModel): Draft {
+  return {
+    name: model.name,
+    notes: model.notes,
+    supplier: model.supplier ?? "",
+    aliases: formatAliases(model.class_aliases),
+  };
+}
+
+/** Only what changed; an untouched form sends nothing. */
+function patchOf(model: LibraryModel, d: Draft): LibraryModelPatch {
+  const patch: LibraryModelPatch = {};
+  if (d.name.trim() !== model.name) patch.name = d.name.trim();
+  if (d.notes !== model.notes) patch.notes = d.notes;
+  const supplier = d.supplier.trim() || null;
+  if (supplier !== model.supplier) patch.supplier = supplier;
+  const aliases = parseAliases(d.aliases);
+  if (JSON.stringify(aliases) !== JSON.stringify(model.class_aliases)) patch.class_aliases = aliases;
+  return patch;
+}
+
+export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: ModelDetailProps) {
   const api = useApi();
+  const id = useId();
   const metrics = model.metrics;
-  const aliases = Object.entries(model.class_aliases);
-  const mapping = classMapping(
-    model.class_names,
-    model.class_aliases,
-    (project?.classes ?? []).map((c) => c.name),
-  );
-  const [confirming, setConfirming] = useState(false);
+  const [draft, setDraft] = useState<Draft>(() => draftOf(model));
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState<{ usage: ModelUsage } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const isPreannotation = project.preannotation_model_id === model.id;
+  const patch = patchOf(model, draft);
+  const dirty = Object.keys(patch).length > 0;
+  const edit = (field: keyof Draft) => (value: string) => {
+    setSaved(false);
+    setDraft((d) => ({ ...d, [field]: value }));
+  };
 
-  /** A finished export changes `model.exports`; refetch the row so the parent list shows the new path. */
-  const refresh = useCallback(
-    () =>
-      void fetchModel(api, projectId, model.id)
-        .then(onChanged)
-        .catch((e: unknown) => pushLog(`refresh model failed: ${messageOf(e, String(e))}`)),
-    [api, projectId, model.id, onChanged],
-  );
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (!dirty) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const next = await updateLibraryModel(api, model.id, patch);
+      onChanged(next);
+      setDraft(draftOf(next));
+      setSaved(true);
+    } catch (err) {
+      pushLog(`update model ${model.id} failed: ${messageOf(err, String(err))}`);
+      setError(messageOf(err, "could not save the model"));
+    } finally {
+      setSaving(false);
+    }
+  }
 
-  async function setAsPreannotation() {
+  async function askDelete() {
     setBusy(true);
     setError(null);
-    setStatus(null);
     try {
-      onProjectSaved(await patchProject(api, projectId, { preannotation_model_id: model.id }));
-      setStatus("Pre-annotation model set");
+      setDeleting({ usage: await fetchModelUsage(api, model.id) });
     } catch (e) {
-      pushLog(`set preannotation model failed: ${messageOf(e, String(e))}`);
-      setError(messageOf(e, "could not set the pre-annotation model"));
+      pushLog(`usage of model ${model.id} failed: ${messageOf(e, String(e))}`);
+      setError(messageOf(e, "could not check which projects use the model"));
     } finally {
       setBusy(false);
     }
@@ -87,7 +148,7 @@ export function ModelDetail({
     setBusy(true);
     setError(null);
     try {
-      await deleteModel(api, projectId, model.id);
+      await deleteLibraryModel(api, model.id);
       onDeleted(model.id);
     } catch (e) {
       pushLog(`delete model ${model.id} failed: ${messageOf(e, String(e))}`);
@@ -95,70 +156,115 @@ export function ModelDetail({
       setBusy(false);
     }
   }
+
+  const users = deleting?.usage.projects ?? [];
   return (
-    <section data-testid="model-detail" className="flex flex-col gap-6 border-t border-line pt-6">
-      <header className="flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-semibold">{model.name}</h2>
-        <Pill tone={model.kind === "trained" ? "ok" : "neutral"} size="sm">
-          {kindLabel(model.kind)}
-        </Pill>
-        <span className="text-xs tabular-nums text-muted">created {formatLocalDate(model.created_at)}</span>
+    <section data-testid="model-detail" aria-label={model.name} className="flex min-w-0 flex-col gap-6">
+      <header className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 className="min-w-0 truncate text-lg font-semibold tracking-tight">{model.name}</h2>
+          <Pill tone={model.origin === "trained" ? "ok" : "neutral"} size="sm">
+            {originLabel(model.origin)}
+          </Pill>
+          <span className="text-xs text-muted">{taskLabel(model.task)}</span>
+          <span className="text-xs tabular-nums text-muted">added {formatLocalDate(model.created_at)}</span>
+        </div>
+        <Provenance model={model} />
+        {model.state === "unavailable" && (
+          <Alert tone="warn">
+            The weights file is missing from the library folder. Runs cannot use this model until the file is
+            back.
+          </Alert>
+        )}
       </header>
 
-      <div className="grid grid-cols-1 gap-8 md:grid-cols-2">
-        <section className="flex flex-col gap-1">
-          <h3 className="text-sm font-semibold">Details</h3>
-          <dl className="flex flex-col">
-            <Row term="Base weights" mono>
-              {model.base_weights ?? "–"}
-            </Row>
-            <Row term="Dataset">
-              {model.dataset_id
-                ? (datasetNames.names[model.dataset_id] ??
-                  (datasetNames.loaded ? "deleted dataset" : model.dataset_id))
-                : "–"}
-            </Row>
-            <Row term="Weights" mono>
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate" title={model.weights_path}>
-                  {model.weights_path}
-                </span>
-                <RevealButton projectId={projectId} path={model.weights_path} />
-              </span>
-            </Row>
-            <Row term="Training job" mono>
-              {model.run_id ? model.run_id.slice(0, 8) : "–"}
-            </Row>
-            {Object.keys(model.hyperparameters).length > 0 && (
-              <Row term="Settings" mono>
-                {JSON.stringify(model.hyperparameters)}
-              </Row>
-            )}
-          </dl>
-        </section>
-
-        <section className="flex flex-col gap-2">
+      <form
+        aria-label="Model details"
+        onSubmit={(e) => void save(e)}
+        className="grid grid-cols-1 gap-4 md:grid-cols-2"
+      >
+        <Field label="Name" htmlFor={`${id}-name`}>
+          <Input
+            id={`${id}-name`}
+            required
+            value={draft.name}
+            onChange={(e) => edit("name")(e.target.value)}
+          />
+        </Field>
+        <Field label="Supplier" htmlFor={`${id}-supplier`} hint="Who supplied the model, if anyone.">
+          <Input
+            id={`${id}-supplier`}
+            value={draft.supplier}
+            onChange={(e) => edit("supplier")(e.target.value)}
+          />
+        </Field>
+        <Field label="Notes" htmlFor={`${id}-notes`} className="md:col-span-2">
+          <Textarea
+            id={`${id}-notes`}
+            rows={2}
+            value={draft.notes}
+            onChange={(e) => edit("notes")(e.target.value)}
+          />
+        </Field>
+        <div className="flex flex-col gap-1 md:col-span-2">
           <h3 className="text-sm font-semibold">Classes</h3>
           <p className="text-sm">{model.class_names.join(", ") || "–"}</p>
-          {aliases.length > 0 && (
-            <p className="text-xs text-muted">
-              Aliases: {aliases.map(([from, to]) => `${from} → ${to}`).join(", ")}
-            </p>
+        </div>
+        <Field
+          label="Class aliases"
+          htmlFor={`${id}-aliases`}
+          hint="One per line, model class=project class. Classes without a match are left out of runs."
+          className="md:col-span-2"
+        >
+          <Textarea
+            id={`${id}-aliases`}
+            rows={3}
+            value={draft.aliases}
+            onChange={(e) => edit("aliases")(e.target.value)}
+            className="font-mono"
+          />
+        </Field>
+        <div className="flex items-center gap-3 md:col-span-2">
+          <Button type="submit" variant="primary" loading={saving} disabled={!dirty}>
+            Save changes
+          </Button>
+          {saved && (
+            <span role="status" className="text-sm text-ok">
+              Saved
+            </span>
           )}
-          {project && (
-            <p data-testid="class-mapping" className="text-xs leading-relaxed text-muted">
-              {mapping.mapped.length} of {model.class_names.length}{" "}
-              {mapping.mapped.length === 1 ? "classes maps" : "classes map"} to this project
-              {mapping.mapped.length > 0 &&
-                `: ${mapping.mapped.map((m) => (m.from === m.to ? m.to : `${m.from} → ${m.to}`)).join(", ")}`}
-              .{mapping.ignored > 0 && ` Detections of the other ${mapping.ignored} are dropped.`}
-            </p>
+        </div>
+      </form>
+
+      <section className="flex flex-col gap-1">
+        <h3 className="text-sm font-semibold">Details</h3>
+        <dl className="flex flex-col">
+          <Row term="File format" mono>
+            {model.format}
+          </Row>
+          {model.provenance.run_id && (
+            <Row term="Training job" mono>
+              {model.provenance.run_id.slice(0, 8)}
+            </Row>
           )}
-        </section>
-      </div>
+          {model.train_gsd_cm !== null && (
+            <Row term="Trained at">
+              <span className="tabular-nums">{model.train_gsd_cm} cm / px</span>
+            </Row>
+          )}
+          {Object.keys(model.hyperparameters).length > 0 && (
+            <Row term="Settings" mono>
+              {JSON.stringify(model.hyperparameters)}
+            </Row>
+          )}
+          <Row term="Fingerprint" mono>
+            <span title={model.sha256}>{model.sha256.slice(0, 12)}</span>
+          </Row>
+        </dl>
+      </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">Metrics</h3>
+        <h3 className="text-sm font-semibold">How well it finds objects</h3>
         {metrics ? (
           <>
             <dl className="flex flex-wrap gap-x-8 gap-y-2">
@@ -203,53 +309,79 @@ export function ModelDetail({
           </>
         ) : (
           <p className="text-sm text-muted">
-            No metrics: imported weights are not evaluated on a project dataset.
+            No scores: only models trained in the app are checked against a dataset.
           </p>
         )}
       </section>
 
       <section className="flex flex-col gap-2">
-        <h3 className="text-sm font-semibold">Training artifacts</h3>
-        <ModelArtifacts projectId={projectId} model={model} />
+        <h3 className="text-sm font-semibold">Training charts</h3>
+        <ModelArtifacts model={model} />
       </section>
 
-      <ExportButtons projectId={projectId} model={model} onFinished={refresh} />
+      <ExportButtons model={model} onStarted={onJobStarted} />
 
       <div className="flex flex-col gap-3 border-t border-line pt-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {isPreannotation ? (
-            <Pill tone="ok" dot>
-              Pre-annotation model
-            </Pill>
-          ) : (
-            <Button onClick={() => void setAsPreannotation()} disabled={busy}>
-              Use as pre-annotation model
-            </Button>
-          )}
-          {!confirming && (
-            <Button variant="danger" icon="trash" onClick={() => setConfirming(true)} disabled={busy}>
-              Delete model
-            </Button>
-          )}
-          {status && (
-            <span role="status" className="text-sm text-ok">
-              {status}
-            </span>
-          )}
-        </div>
-        {confirming && (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span>
-              Delete {model.name}? Its weights and exports are removed; boxes keep their provenance.
-            </span>
-            <Button variant="danger" onClick={() => void remove()} disabled={busy}>
-              Delete permanently
-            </Button>
-            <Button variant="ghost" onClick={() => setConfirming(false)} disabled={busy}>
-              Cancel
-            </Button>
-          </div>
+        {!deleting && (
+          <Button
+            variant="danger"
+            icon="trash"
+            className="w-fit"
+            loading={busy}
+            onClick={() => void askDelete()}
+          >
+            Delete model
+          </Button>
         )}
+        {deleting &&
+          (users.length > 0 ? (
+            <Alert
+              tone="warn"
+              testId="delete-usage"
+              title={`${users.length === 1 ? "1 project uses" : `${users.length} projects use`} this model`}
+            >
+              <ul className="mt-1 flex flex-col gap-0.5">
+                {users.map((u) => (
+                  <li key={u.project_id}>
+                    <span className="font-medium">{u.name}</span>{" "}
+                    <span className="text-muted">
+                      {[
+                        u.preannotation && "pre-annotation",
+                        u.query_runs > 0 && `${u.query_runs} detection ${u.query_runs === 1 ? "run" : "runs"}`,
+                        u.map_runs > 0 && `${u.map_runs} map ${u.map_runs === 1 ? "run" : "runs"}`,
+                      ]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2">
+                Past results stay readable. New runs and pre-annotation in these projects need another model.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="danger" size="sm" loading={busy} onClick={() => void remove()}>
+                  Delete anyway
+                </Button>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => setDeleting(null)}>
+                  Cancel
+                </Button>
+              </div>
+            </Alert>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span>
+                Delete {model.name}? Its file and copies are removed from the library. Past results stay
+                readable.
+              </span>
+              <Button variant="danger" loading={busy} onClick={() => void remove()}>
+                Delete permanently
+              </Button>
+              <Button variant="ghost" onClick={() => setDeleting(null)} disabled={busy}>
+                Cancel
+              </Button>
+            </div>
+          ))}
         {error && <Alert tone="danger">{error}</Alert>}
       </div>
     </section>

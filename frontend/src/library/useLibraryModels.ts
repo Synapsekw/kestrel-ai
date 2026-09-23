@@ -1,59 +1,60 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Model } from "@contract/client";
 import { useApi } from "@/api/client";
-import { isNotImplemented, messageOf } from "@/api/errors";
-import { fetchAllModels } from "@/api/models";
+import { messageOf } from "@/api/errors";
+import { fetchLibraryModels, isLibraryUnavailable, type LibraryModel, type ModelTask } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
 
-export interface ModelsList {
-  models: Model[];
+export interface LibraryModels {
+  models: LibraryModel[];
   loading: boolean;
-  /** 501 from the backend: the registry arrives with S3. */
-  unavailable: boolean;
   error: string | null;
+  /** 503 `library_unavailable`: the app started without its library. */
+  unavailable: boolean;
   reload: () => void;
-  replace: (model: Model) => void;
+  /** Insert or update one model without a refetch (a PATCH answer, a finished import). */
+  replace: (model: LibraryModel) => void;
   remove: (id: string) => void;
 }
 
 interface State {
   key: string;
-  models: Model[];
+  models: LibraryModel[];
   unavailable: boolean;
   error: string | null;
 }
 
-export function useModels(projectId: string): ModelsList {
+/** Every model in the app-wide library, optionally only one task (boxes or rotated boxes). */
+export function useLibraryModels(task?: ModelTask): LibraryModels {
   const api = useApi();
   const [attempt, setAttempt] = useState(0);
-  const key = `${projectId}|${attempt}`;
+  const key = `${task ?? ""}|${attempt}`;
   const [state, setState] = useState<State>({ key: "", models: [], unavailable: false, error: null });
 
   useEffect(() => {
     let cancelled = false;
-    fetchAllModels(api, projectId)
+    fetchLibraryModels(api, task ? { task } : {})
       .then((models) => {
         if (!cancelled) setState({ key, models, unavailable: false, error: null });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        pushLog(`load models failed: ${messageOf(e, String(e))}`);
-        const unavailable = isNotImplemented(e);
+        pushLog(`load library models failed: ${messageOf(e, String(e))}`);
+        const unavailable = isLibraryUnavailable(e);
         setState({
           key,
           models: [],
           unavailable,
-          error: unavailable ? null : messageOf(e, "could not load the model registry"),
+          error: unavailable ? null : messageOf(e, "could not load the model library"),
         });
       });
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, key]);
+  }, [api, task, key]);
 
   const reload = useCallback(() => setAttempt((a) => a + 1), []);
   const replace = useCallback(
-    (model: Model) =>
+    (model: LibraryModel) =>
       setState((s) => ({
         ...s,
         models: s.models.some((m) => m.id === model.id)

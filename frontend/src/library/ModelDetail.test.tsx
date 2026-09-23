@@ -1,205 +1,149 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
 import {
+  errorBody,
+  exampleImportedModel,
   exampleModel,
-  exampleProject,
   exampleTrainedModel,
+  exampleUsage,
   fakeClient,
-  PROJECT_ID,
   runningJob,
   TRAINED_MODEL_ID,
 } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
-import { useJobsStore } from "@/store/jobs";
 import { ModelDetail } from "./ModelDetail";
 
 const noop = () => {};
 
-describe("ModelDetail actions", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+function renderDetail(
+  model = exampleTrainedModel,
+  routes: Parameters<typeof fakeClient>[0] = [],
+  handlers: Partial<{
+    onChanged: (m: typeof model) => void;
+    onDeleted: (id: string) => void;
+    onJobStarted: (j: typeof runningJob) => void;
+  }> = {},
+) {
+  const fake = fakeClient([
+    { method: "GET", path: /\/artifacts\//, raw: true, body: "" },
+    ...routes,
+  ]);
+  renderWithProviders(
+    <ModelDetail
+      model={model}
+      onChanged={handlers.onChanged ?? noop}
+      onDeleted={handlers.onDeleted ?? noop}
+      onJobStarted={handlers.onJobStarted ?? noop}
+    />,
+    { api: fake.api },
+  );
+  return fake;
+}
 
-  it("reveals the weights path and each export path (M3)", async () => {
-    const { api, requests } = fakeClient([{ method: "POST", path: /\/reveal$/, status: 204 }]);
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleTrainedModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={noop}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
-    );
-    const buttons = screen.getAllByRole("button", { name: "Show in folder" });
-    expect(buttons).toHaveLength(2); // one next to the weights path, one next to the onnx export
-    fireEvent.click(buttons[0]);
-    await waitFor(() =>
-      expect(requests.find((r) => r.method === "POST")).toMatchObject({
-        url: `/api/v1/projects/${PROJECT_ID}/reveal`,
-        body: { path: exampleTrainedModel.weights_path },
-      }),
-    );
+describe("ModelDetail", () => {
+  it("shows where a trained model came from", () => {
+    renderDetail();
+    expect(screen.getByTestId("provenance")).toHaveTextContent("Trained in Ahmadia on v1");
+    expect(screen.getByTestId("provenance")).toHaveTextContent("starting from yolo11m-coco");
   });
 
-  it("starts an export job and shows it as a job card", async () => {
-    const { api, requests } = fakeClient([
-      {
-        method: "POST",
-        path: /\/export$/,
-        status: 202,
-        body: {
-          job: { ...runningJob, type: "export", params: { model_id: TRAINED_MODEL_ID, format: "onnx" } },
+  it("shows the file and supplier of an imported model", () => {
+    renderDetail(exampleImportedModel);
+    expect(screen.getByTestId("provenance")).toHaveTextContent("Imported from E:\\Models\\client-x\\best.pt");
+    expect(screen.getByTestId("provenance")).toHaveTextContent("Supplied by Client X");
+  });
+
+  it("saves only the changed fields with PATCH", async () => {
+    const onChanged = vi.fn();
+    const { requests } = renderDetail(
+      exampleTrainedModel,
+      [
+        {
+          method: "PATCH",
+          path: /\/library\/models\/[^/]+$/,
+          body: { ...exampleTrainedModel, notes: "Weak on small trucks.", supplier: "Ops team" },
         },
-      },
-      { method: "GET", path: /\/jobs\/[^/]+$/, body: { ...runningJob, type: "export" } },
-    ]);
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleTrainedModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={noop}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
+      ],
+      { onChanged },
     );
-    expect(screen.getByText("models/ahmadia-v1-n.onnx")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Export ONNX" }));
-    await waitFor(() => expect(screen.getByTestId(`job-${runningJob.id}`)).toBeInTheDocument());
-    // requests[0] is the results.csv fetch of ModelArtifacts, so select the export by method.
-    expect(requests.find((r) => r.method === "POST")).toMatchObject({
-      url: `/api/v1/projects/${PROJECT_ID}/models/${TRAINED_MODEL_ID}/export`,
-      body: { format: "onnx", imgsz: 1280, half: false },
+    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Weak on small trucks." } });
+    fireEvent.change(screen.getByLabelText("Supplier"), { target: { value: "Ops team" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalled());
+    const patch = requests.find((r) => r.method === "PATCH");
+    expect(patch).toMatchObject({
+      url: `/api/v1/library/models/${TRAINED_MODEL_ID}`,
+      body: { notes: "Weak on small trucks.", supplier: "Ops team" },
     });
-    expect(useJobsStore.getState().jobs[runningJob.id].type).toBe("export");
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
   });
 
-  it("sets the pre-annotation model through PATCH and shows the badge when current", async () => {
-    const { api, requests } = fakeClient([
-      {
-        method: "PATCH",
-        path: /\/projects\/[^/]+$/,
-        body: { ...exampleProject, preannotation_model_id: TRAINED_MODEL_ID },
-      },
+  it("edits the class aliases", async () => {
+    const { requests } = renderDetail(exampleModel, [
+      { method: "PATCH", path: /\/library\/models\/[^/]+$/, body: exampleModel },
     ]);
-    const onProjectSaved = vi.fn();
-    const { unmount } = renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleTrainedModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={onProjectSaved}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
-    );
-    fireEvent.click(screen.getByRole("button", { name: "Use as pre-annotation model" }));
-    await waitFor(() => expect(onProjectSaved).toHaveBeenCalled());
-    expect(requests.find((r) => r.method === "PATCH")).toMatchObject({
-      url: `/api/v1/projects/${PROJECT_ID}`,
-      body: { preannotation_model_id: TRAINED_MODEL_ID },
+    expect(screen.getByLabelText("Class aliases")).toHaveValue("truck=dump_truck");
+    fireEvent.change(screen.getByLabelText("Class aliases"), {
+      target: { value: "truck=dump_truck\ncar=wheel_loader" },
     });
-    // `rerender` would replace the provider tree too, so mount the second model afresh:
-    // exampleProject.preannotation_model_id already points at exampleModel.
-    unmount();
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={onProjectSaved}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
-    );
-    expect(screen.getByText("Pre-annotation model")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Use as pre-annotation model" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "PATCH")).toBe(true));
+    expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({
+      class_aliases: { truck: "dump_truck", car: "wheel_loader" },
+    });
   });
 
-  it("deletes only after confirmation", async () => {
-    const { api, requests } = fakeClient([{ method: "DELETE", path: /\/models\/[^/]+$/, status: 204 }]);
+  it("names the projects that use a model and deletes only on the second click", async () => {
     const onDeleted = vi.fn();
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleTrainedModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={noop}
-        onChanged={noop}
-        onDeleted={onDeleted}
-      />,
-      { api },
+    const { requests } = renderDetail(
+      exampleTrainedModel,
+      [
+        { method: "GET", path: /\/usage$/, body: exampleUsage },
+        { method: "DELETE", path: /\/library\/models\/[^/]+$/, status: 204 },
+      ],
+      { onDeleted },
     );
     fireEvent.click(screen.getByRole("button", { name: "Delete model" }));
-    expect(requests.filter((r) => r.method === "DELETE")).toHaveLength(0);
-    expect(screen.getByText(/Delete ahmadia-v1-n\?/)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    const warning = await screen.findByTestId("delete-usage");
+    expect(warning).toHaveTextContent("Ahmadia");
+    expect(warning).toHaveTextContent("Past results stay readable");
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Delete anyway" }));
     await waitFor(() => expect(onDeleted).toHaveBeenCalledWith(TRAINED_MODEL_ID));
-    expect(requests.find((r) => r.method === "DELETE")).toMatchObject({
-      url: `/api/v1/projects/${PROJECT_ID}/models/${TRAINED_MODEL_ID}`,
+    expect(requests.filter((r) => r.method === "DELETE")).toHaveLength(1);
+  });
+
+  it("asks once more when no known project uses the model, and can be cancelled", async () => {
+    const { requests } = renderDetail(exampleTrainedModel, [
+      { method: "GET", path: /\/usage$/, body: { projects: [] } },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete model" }));
+    expect(await screen.findByRole("button", { name: "Delete permanently" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("button", { name: "Delete permanently" })).not.toBeInTheDocument();
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  it("hands an export job to the caller", async () => {
+    const onJobStarted = vi.fn();
+    const job = { ...runningJob, project_id: "library", type: "library_export" as const };
+    renderDetail(exampleTrainedModel, [{ method: "POST", path: /\/export$/, status: 202, body: { job } }], {
+      onJobStarted,
     });
+    fireEvent.click(screen.getByRole("button", { name: "Export ONNX" }));
+    await waitFor(() => expect(onJobStarted).toHaveBeenCalledWith(job));
   });
 
-  it("shows 'deleted dataset' once names have loaded and the model's dataset is missing (I4)", () => {
-    const { api } = fakeClient([]);
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleTrainedModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: true }}
-        onProjectSaved={noop}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
-    );
-    expect(screen.getByText("deleted dataset")).toBeInTheDocument();
+  it("warns when the weights file is missing", () => {
+    renderDetail({ ...exampleTrainedModel, state: "unavailable" });
+    expect(screen.getByText(/weights file is missing/)).toBeInTheDocument();
   });
 
-  it("falls back to the raw id while dataset names are still loading or unavailable (I4)", () => {
-    const { api } = fakeClient([]);
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleTrainedModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={noop}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
-    );
-    expect(screen.queryByText("deleted dataset")).not.toBeInTheDocument();
-    expect(screen.getByText(exampleTrainedModel.dataset_id!)).toBeInTheDocument();
-  });
-
-  it("says how many of the model's classes produce proposals in this project", () => {
-    const { api } = fakeClient([]);
-    renderWithProviders(
-      <ModelDetail
-        projectId={PROJECT_ID}
-        model={exampleModel}
-        project={exampleProject}
-        datasetNames={{ names: {}, loaded: false }}
-        onProjectSaved={noop}
-        onChanged={noop}
-        onDeleted={noop}
-      />,
-      { api },
-    );
-    expect(screen.getByTestId("class-mapping")).toHaveTextContent(
-      "1 of 8 classes maps to this project: truck → dump_truck. Detections of the other 7 are dropped.",
-    );
+  it("shows the reason when the usage cannot be checked", async () => {
+    renderDetail(exampleTrainedModel, [
+      { method: "GET", path: /\/usage$/, status: 503, body: errorBody("library_unavailable", "library is down") },
+    ]);
+    fireEvent.click(screen.getByRole("button", { name: "Delete model" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("library is down");
   });
 });

@@ -20,6 +20,11 @@ const JOB_NAME: Record<Job["type"], string> = {
   map_import: "Map import",
   map_detect: "Map detection",
   map_export: "Map export",
+  library_import: "Model import",
+  library_export: "Model export",
+  library_starter: "Model download",
+  library_adopt: "Moving models to the library",
+  map_move: "Map move",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

@@ -10,6 +10,11 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   map_import: "Map import",
   map_detect: "Map detection",
   map_export: "Map export",
+  library_import: "Model import",
+  library_export: "Model export",
+  library_starter: "Model download",
+  library_adopt: "Moving models to the library",
+  map_move: "Map move",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -26,7 +31,7 @@ function str(record: Record<string, unknown> | null | undefined, key: string): s
 }
 
 export function jobTitle(job: Job): string {
-  if (job.type === "import" && job.params?.purpose === "starter_model") {
+  if (job.type === "library_starter" || (job.type === "import" && job.params?.purpose === "starter_model")) {
     return `Model download: ${str(job.params, "name") ?? str(job.params, "key") ?? "YOLO"}`;
   }
   const name = str(job.params, "name");
@@ -63,26 +68,27 @@ export interface ResultTarget {
 export function resultTarget(job: Job, projectId: string): ResultTarget | null {
   if (job.state !== "succeeded") return null;
   const p = `/p/${projectId}`;
+  const model = (id: string | null) => (id ? { label: "Open model", to: `/library?model=${id}` } : null);
   switch (job.type) {
-    case "train": {
-      const id = str(job.result, "model_id");
-      return id ? { label: "Open model", to: `${p}/models?model=${id}` } : null;
-    }
+    case "train":
+    case "library_import":
+    case "library_starter":
+      return model(str(job.result, "model_id"));
+    case "export":
+    case "library_export":
+      return model(str(job.params, "model_id"));
+    case "library_adopt":
+      return { label: "Open library", to: "/library" };
+    case "map_move":
+      return { label: "Open maps", to: `${p}/maps` };
     case "infer": {
       const id = str(job.result, "query_run_id");
       return id ? { label: "Open run", to: `${p}/query?run=${id}` } : null;
     }
-    case "export": {
-      const id = str(job.params, "model_id");
-      return id ? { label: "Open model", to: `${p}/models?model=${id}` } : null;
-    }
     case "dataset":
       return { label: "Train on it", to: `${p}/train` };
     case "import":
-      if (job.params?.purpose === "starter_model") {
-        const id = str(job.result, "model_id");
-        return id ? { label: "Open model", to: `${p}/models?model=${id}` } : null;
-      }
+      if (job.params?.purpose === "starter_model") return model(str(job.result, "model_id"));
       return { label: "Open images", to: `${p}/data` };
     case "results_export":
       return null; // it already lives on the Export screen that started it

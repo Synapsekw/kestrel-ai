@@ -54,7 +54,7 @@ describe("JobCard", () => {
     renderWithProviders(<JobCard projectId={PROJECT_ID} job={done} />, { api });
     expect(screen.getByRole("link", { name: "Open model" })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/models?model=m9`,
+      "/library?model=m9",
     );
   });
 });

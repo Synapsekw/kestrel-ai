@@ -28,6 +28,11 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   map_import: "map",
   map_detect: "detect",
   map_export: "download",
+  library_import: "import",
+  library_export: "download",
+  library_starter: "models",
+  library_adopt: "models",
+  map_move: "map",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

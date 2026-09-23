@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import type { Model } from "@contract/client";
+import type { LibraryModel } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { artifactUrl, fetchResultsCsv } from "@/api/models";
+import { fetchResultsCsv, libraryArtifactUrl } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
 import { Alert, Skeleton } from "@/ui";
 import { parseResultsCsv, type CurvePoint } from "./resultsCsv";
@@ -36,7 +36,7 @@ function ArtifactImage({ src, alt }: { src: string; alt: string }) {
   );
 }
 
-export function ModelArtifacts({ projectId, model }: { projectId: string; model: Model }) {
+export function ModelArtifacts({ model }: { model: LibraryModel }) {
   const api = useApi();
   const { baseUrl, token } = useBackend();
   const hasCsv = Boolean(model.artifacts.results_csv);
@@ -45,7 +45,7 @@ export function ModelArtifacts({ projectId, model }: { projectId: string; model:
   useEffect(() => {
     if (!hasCsv) return;
     let cancelled = false;
-    fetchResultsCsv(api, projectId, model.id)
+    fetchResultsCsv(api, model.id)
       .then((text) => {
         if (!cancelled) setCsv({ modelId: model.id, points: parseResultsCsv(text), error: null });
       })
@@ -57,17 +57,15 @@ export function ModelArtifacts({ projectId, model }: { projectId: string; model:
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, model.id, hasCsv]);
+  }, [api, model.id, hasCsv]);
 
   const { confusion_matrix, pr_curve } = model.artifacts;
   if (!hasCsv && !confusion_matrix && !pr_curve) {
-    return <p className="text-sm text-muted">No training artifacts (imported weights).</p>;
+    return <p className="text-sm text-muted">No training charts: this model was not trained in the app.</p>;
   }
   const curve = csv && csv.modelId === model.id ? csv : null;
-  const cmSrc = confusion_matrix
-    ? artifactUrl(baseUrl, token, projectId, model.id, "confusion_matrix")
-    : null;
-  const prSrc = pr_curve ? artifactUrl(baseUrl, token, projectId, model.id, "pr_curve") : null;
+  const cmSrc = confusion_matrix ? libraryArtifactUrl(baseUrl, token, model.id, "confusion_matrix") : null;
+  const prSrc = pr_curve ? libraryArtifactUrl(baseUrl, token, model.id, "pr_curve") : null;
   return (
     <div className="flex flex-col gap-3">
       {hasCsv &&
