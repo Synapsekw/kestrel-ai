@@ -10,9 +10,9 @@ import json
 import time
 
 import pytest
+from library_helpers import add_library_model
 from PIL import Image as PILImage
 
-from app.db.models import Model
 from app.project_agent import dispatch, tools
 from app.project_agent.dispatch import ApiCaller, ApiCallError, ImageSelector, resolve_selection
 from app.project_agent.tools import (
@@ -97,12 +97,8 @@ def fake_provider(monkeypatch):
 
 
 @pytest.fixture
-def model_id(handle) -> str:
-    with handle.session() as s:
-        m = Model(name="coco-n", kind="imported", weights_path="models/m.pt", class_names=["excavator"])
-        s.add(m)
-        s.flush()
-        return m.id
+def model_id(app, handle, tmp_path) -> str:
+    return add_library_model(app, tmp_path, name="coco-n", class_names=["excavator"]).id
 
 
 # -------------------------------------------------------------------- dispatch
