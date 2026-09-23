@@ -45,6 +45,11 @@ class Source(Base):
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     imported_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Detection workspace (spec 2026-09-23 section 7.1): "images" | "map" ("video" reserved).
+    kind: Mapped[str] = mapped_column(String, default="images", server_default="images")
+    label: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g. "Flight 14 Sep"
+    # The survey date. A map source mirrors GeoMap.captured_on, which stays the one truth.
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class Image(Base):
@@ -181,6 +186,10 @@ class GeoMap(Base):
     labels_version: Mapped[int] = mapped_column(Integer, default=0)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # The map source that owns this map (spec 2026-09-23 section 7.1); unlinked if it is deleted.
+    source_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("source.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class MapRun(Base):
@@ -197,9 +206,18 @@ class MapRun(Base):
     nms_iou: Mapped[float] = mapped_column(Float, default=0.5)
     conf: Mapped[float] = mapped_column(Float, default=0.25)
     target_gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
-    counts: Mapped[dict] = mapped_column(JSON, default=dict)  # {class_id: n}
+    # {class_id: n}: every detection that is not rejected (app/detect/counts.py keeps it current).
+    counts: Mapped[dict] = mapped_column(JSON, default=dict)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Detection workspace (spec 2026-09-23 sections 7.2 and 9.2, plan 2 deviation 1).
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    model_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    class_map: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {model class: id|None}
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    verified_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {class_id: n}
+    # {area_id: {class_id: {"total": n, "verified": n}}}
+    area_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     __table_args__ = (Index("ix_map_run_map", "map_id"),)
 
 
@@ -214,7 +232,14 @@ class MapDetection(Base):
     w: Mapped[float] = mapped_column(Float)
     h: Mapped[float] = mapped_column(Float)
     angle: Mapped[float | None] = mapped_column(Float, nullable=True)  # reserved for OBB wave 2
-    __table_args__ = (Index("ix_map_detection_run_xy", "run_id", "x", "y"),)
+    # unreviewed | accepted | rejected | edited (spec 2026-09-23 section 8)
+    review_state: Mapped[str] = mapped_column(String, default="unreviewed", server_default="unreviewed")
+    # person | local_model | cloud_provider; a person-drawn detection is a row like any other
+    provenance_kind: Mapped[str] = mapped_column(String, default="local_model", server_default="local_model")
+    __table_args__ = (
+        Index("ix_map_detection_run_xy", "run_id", "x", "y"),
+        Index("ix_map_detection_run_state", "run_id", "review_state"),
+    )
 
 
 class MapZone(Base):
@@ -256,6 +281,32 @@ class QueryRun(Base):
     conf: Mapped[float] = mapped_column(Float, default=0.25)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     promoted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Detection workspace (spec 2026-09-23 sections 7.2 and 9.2); counts are photo *detections*.
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    model_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    class_map: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {class_id: n}
+    verified_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+
+
+class ModelClassMap(Base):
+    """A library model's class names mapped onto this project's classes (spec 2026-09-23 section 7.3)."""
+
+    __tablename__ = "model_class_map"
+    library_model_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    mapping: Mapped[dict] = mapped_column(JSON, default=dict)  # {model_class_name: project_class_id | None}
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class SiteArea(Base):
+    """A project-level area, stored in WGS84 and projected onto each map (spec 2026-09-23 section 9.3)."""
+
+    __tablename__ = "site_area"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    polygon_wgs84: Mapped[list] = mapped_column(JSON)  # [[lon, lat], ...], at least three
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
