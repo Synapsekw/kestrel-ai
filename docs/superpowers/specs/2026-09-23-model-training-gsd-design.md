@@ -122,6 +122,13 @@ The band is deliberately wide. It is a smoke alarm for an order-of-magnitude err
 about what the operator is detecting - a project counting pallets or trees is not wrong, it just
 does not get a silent default.
 
+**What it therefore does not catch.** `ICVD_V3`'s median implied object is 8.5 m, so an altitude
+wrong by a factor of two still lands on 17 m machines, comfortably inside the band. The band cannot
+catch that, and widening its ambition would start rejecting real sites. This is precisely why
+section 4 puts the number in front of the operator with its evidence rather than storing it
+silently: the band catches the gross error, and a human catches the subtle one. The test suite
+pins this limitation explicitly so nobody later mistakes the band for a proof.
+
 ## 4. Where the number comes from, per model
 
 `Model.train_gsd_cm`, one nullable float.
@@ -221,7 +228,8 @@ Critical path: **A -> B -> C -> E**.
 - sensor width from `FocalPlaneXResolution` with both unit 2 and unit 3
 - the 35 mm crop-factor fallback when focal-plane tags are absent
 - no usable EXIF at all yields no estimate rather than a guess
-- the cross-check rejects an altitude inflated 2x, and accepts `ICVD_V3`'s real distribution
+- the cross-check accepts `ICVD_V3`'s real distribution and rejects an order-of-magnitude error in
+  either direction, with an explicit test pinning what it does **not** catch (see below)
 - the EXIF sample is capped at 8 images however large the dataset
 
 **Frontend**
