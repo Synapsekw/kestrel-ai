@@ -77,6 +77,15 @@ try:
 except Exception:
     log.exception("site-area and analytics router failed to load; those endpoints will be unavailable")
 
+# Detection exports, CSV and PDF (plan 2 unit E): detection projects only. Guarded like analytics,
+# which it reads; reportlab itself is imported only inside the job, when a PDF is asked for.
+try:
+    from app.detect.export_router import router as detect_export_router
+
+    api_router.include_router(detect_export_router, dependencies=[Depends(require_kind(("detect",)))])
+except Exception:
+    log.exception("detection export router failed to load; detection exports will be unavailable")
+
 # Reviewing detection runs (plan 2 unit V). It serves map runs and imports the map schemas, so it
 # goes with the maps router: a broken native stack costs the review endpoints, never the app.
 try:
