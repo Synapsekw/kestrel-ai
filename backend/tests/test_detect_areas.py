@@ -18,7 +18,14 @@ W = H = 1000
 
 def _map(gt=GT, map_id="m1") -> GeoMap:
     return GeoMap(
-        id=map_id, name="m", source_path="x", source_size=1, width=W, height=H, geotransform=list(gt), crs_wkt=UTM33
+        id=map_id,
+        name="m",
+        source_path="x",
+        source_size=1,
+        width=W,
+        height=H,
+        geotransform=list(gt),
+        crs_wkt=UTM33,
     )
 
 

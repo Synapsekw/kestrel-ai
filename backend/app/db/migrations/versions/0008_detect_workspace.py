@@ -34,7 +34,9 @@ def upgrade() -> None:
 
     # SQLite accepts a REFERENCES clause on ADD COLUMN when the default is NULL; Alembic's
     # add_column would try a separate ALTER for the constraint, which SQLite has no form of.
-    op.execute("ALTER TABLE geo_map ADD COLUMN source_id VARCHAR(36) REFERENCES source (id) ON DELETE SET NULL")
+    op.execute(
+        "ALTER TABLE geo_map ADD COLUMN source_id VARCHAR(36) REFERENCES source (id) ON DELETE SET NULL"
+    )
 
     _run_columns("map_run")
     op.add_column("map_run", sa.Column("area_counts", sa.JSON(), nullable=False, server_default=EMPTY))
