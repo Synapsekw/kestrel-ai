@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-23
+last-updated: 2026-09-24
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -71,6 +71,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Project agent (in-project AI drawer with tool access) | merged to `main` (`b606360`); rebuilt and installed 2026-09-22 | plain-language operation of the app through ~35 tools over the existing API, approvals for spend/train/delete; 854 backend, 564 frontend, 62 browser and 8 Rust tests; frozen-sidecar route smoke and an installed-build CDP check. No live provider turn yet. See [[2026-09-22-1930-project-agent]] |
 | GeoTIFF maps — import, view, detect, label, score, export | merged to `main` (`759015a`, + `8dbb55e` layout fix); rebuilt and installed 2026-09-23 | an orthomosaic of any size and projection: bounded 256 px tiles, whole-map detection (windowed, resumable, seam-merged) with counts per class, evaluation zones and labels, precision/recall/F1 and count error, and GeoJSON/GeoPackage/CSV export with coordinates. 973 backend, 634 frontend, 63 browser and 8 Rust tests on the merged tree; frozen smoke green including `geo ok`. **Unrun on a real orthomosaic; the GeoPackage has never been opened by GIS software.** See [[2026-09-23-1655-geotiff-maps]] |
 | Survey timeline — counts over time across a site's maps | merged/pushed to `main` (`ddc95f6`) | a map carries the date it was flown (read from `TIFFTAG_DATETIME`, correctable); `GET /survey-timeline` gives each survey's counts and the change since the previous **comparable** one; a Surveys screen draws the chart and table. A survey counted with another model or confidence is marked and excluded from the deltas. 995 backend, 644 frontend, 65 browser tests. **Not in any installed build, and never run on two real orthomosaics.** Superseded the frame-projection design with measurements. See [[2026-09-23-1703-survey-timeline]] |
+| Train/Detect split, model library and detection workspace | merged/pushed to `main` (`c9f88e2`, then `f7d7ab6`); **not installed** | app-wide model Library, `train`/`detect` project kinds with a server-side guard, old models adopted into the library; detection projects get Sources, Runs with class mapping, Review with verified counts, Site areas, Analytics (absorbing Surveys) and CSV/PDF export. 1269 backend, 796 frontend, 76 browser tests at landing. **Frozen sidecar with `reportlab` never built; adoption never run on a real project.** See [[2026-09-24-0622-train-detect-split-and-library]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -82,22 +83,19 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **The survey timeline — counts over time across a site's maps** —
-`d92441d..ddc95f6` (8 tasks in a task worktree, merged and pushed `e6e5f7d..ddc95f6`, worktree
-removed and branch deleted). Maps already counted objects per class; nothing compared one survey
-with the next. Now a map carries the date its imagery was flown, `GET /survey-timeline` returns every
-survey oldest first with the change since the previous **comparable** one, and a Surveys screen draws
-it. The guard is the point: a survey counted with another model or confidence is marked, drawn hollow
-and left out of the arithmetic, so a change of model cannot read as a change on the ground. Gate green
-on the merged result (995 backend, 644 frontend, 65 browser). A bug caught on the way: the new date
-broke the `source.json` sidecar, which had failed **every** map import. See
-[[2026-09-23-1703-survey-timeline]].
+**Shipped last:** **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
+- **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
+- **Project kinds:** projects are `train` or `detect`, enforced per route.
+- **Adoption:** existing projects became training projects, and their models are adopted into the library by a background job (nothing is deleted).
+- **Detection projects:** Sources (photos and maps with a survey date), Runs (a library model plus a one-time class mapping), Review (counts increment in the same transaction), Site areas in WGS84, Analytics showing total (verified) and absorbing Surveys, and CSV/PDF export.
+- **Photo batches** report detections, never objects.
 
-The design that preceded it was killed by measurement rather than opinion: counting distinct objects
-from overlapping frames put the same object 10-17 m from itself between frames (28 m unprojected),
-and the best-fitting angle convention differed between flights.
-`docs/superpowers/specs/2026-09-23-object-counts-per-group-design.md` is marked superseded and carries
-the numbers.
+Gate at landing: 1269 backend, 796 frontend, 76 browser. **Not installed yet,** and the frozen sidecar with the new `reportlab` has never been built. See [[2026-09-24-0622-train-detect-split-and-library]].
+
+Previously shipped: **The survey timeline — counts over time across a site's maps** —
+`d92441d..ddc95f6`. A map carries the date it was flown, `GET /survey-timeline` gives the change since
+the previous comparable survey, and a Surveys screen (now the Surveys section of Analytics in
+detection projects) draws it. See [[2026-09-23-1703-survey-timeline]].
 
 Previously shipped: **GeoTIFF maps — judge a model on the artefact the customer delivers** —
 `cf01fa8..449ecd3` (32 commits in a task worktree, merged `759015a`, worktree removed and branch
@@ -193,31 +191,31 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing from this block — the worktree is removed and its branch deleted. Two other
-sessions hold worktrees as this is written (`pointcloud-spike`, `train-detect-spec`); their state is
-not recorded here. The operator has decided to rebuild and install once that work lands, so the
-survey timeline waits for that build.
+**In flight:** nothing from this block. Other sessions hold `model-gsd`, `pointcloud-specs` and
+`pointcloud-spike`; their state is not recorded here. A rebuild was started at the wrap-up and
+stopped at the operator's request before it changed anything. The operator will rebuild and install
+once the other session lands.
 
-**Next:** rebuild and install once `pointcloud-spike` and `train-detect-spec` land — the installed
-build carries maps and the project agent but **not** the survey timeline — then walk the operator
-through Surveys on two real orthomosaics of one site. Then the **de-machinery pass** the operator
-approved on 2026-09-23: the editor's "No machinery (N)", the preset class list on the Projects
-screen and the agent placeholders all assume construction machinery, and the app is meant for any
-detector (plants, power-line anomalies). Also: run the maps walkthrough on a real orthomosaic
-(`docs/usability/2026-09-22-maps-walkthrough.md`) — step 8, opening the exported GeoPackage in
-QGIS, is the one check no software has ever run — then dispatch CI `sidecar-smoke`, since the
-bundle now carries GDAL and PROJ. A **point cloud viewer** (Potree/COPC) is researched and has a
-kickoff prompt but is unstarted. Previously agreed and now partly overtaken by the survey
-timeline: brainstorm direction **D, counts per flight** — per-flight/per-date machinery counts, a
-trend, an Excel export and a GPS map for site managers — agreed with the operator on 2026-09-22 as
-the next feature. Keep `ci` green (`gh run list --branch main` after each merge; dispatch
-`sidecar-smoke` after packaging changes). Backlog unchanged: plan wave 2 of rotated boxes (spec §5
-of `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan yet; decide first whether to
-bound the pytest step in `finish-task.ps1`, see
-[[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]]); carry out the prepared
-folder rename when the operator is ready (§5).
+**Next:** rebuild and install. The installed build has neither the survey timeline nor the train/detect
+work. Then run `docs/usability/2026-09-23-library-walkthrough.md` and
+`docs/usability/2026-09-23-detection-workspace-walkthrough.md` on the installed app, with a **backup
+copy** of a real training project (to watch adoption) and a real orthomosaic, and dispatch CI
+`sidecar-smoke` (the packaging gained `reportlab`). Then the ONNX model-import spec, the
+**de-machinery pass**, and patching `finish-task.ps1` per
+[[2026-09-24-gotcha-finish-task-rebase-drops-merge-resolutions]]. Still open from before: the maps
+walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point cloud viewer
+(unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Train/Detect split and detection workspace: not installed, adoption unproven (opened 2026-09-24)
+
+Merged and pushed at `f7d7ab6`. Owed:
+- **Rebuild:** freeze the sidecar (first build with `reportlab`), run `smoke_frozen.ps1`, install, and dispatch CI `sidecar-smoke`.
+- **Adoption on a real project:** open a backup copy of a real training project on the new build and check that its models appear in the Library and its past runs open. Tests used fixtures built at revision 0005.
+- **The PDF report** has been checked only in pytest; open one from the installed app.
+- **`GET /survey-timeline`** still answers in training projects, while the UI shows Surveys only in detection projects. It's a small inconsistency, left as is.
+- **Not built:** ONNX import, video sources, and "Send to training project".
 
 ### Survey timeline: not installed, and unproven on real surveys (opened 2026-09-23)
 
