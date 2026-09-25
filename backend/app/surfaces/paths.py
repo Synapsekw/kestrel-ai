@@ -10,3 +10,8 @@ def surface_dir(handle, surface_id: str) -> Path:
 def surface_path(handle, surface_id: str) -> Path:
     """The grid itself: `surface.tif`, written as `surface.tif.partial` and renamed."""
     return surface_dir(handle, surface_id) / "surface.tif"
+
+
+def build_dir(handle, surface_id: str) -> Path:
+    """Spill files and raw.tif while `surface_build` runs; removed in every outcome."""
+    return surface_dir(handle, surface_id) / ".build"
