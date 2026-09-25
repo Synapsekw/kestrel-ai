@@ -115,6 +115,16 @@ def test_nested_inserts_count_layer_zero_on_the_insert_layer(tmp_path):
     assert sorted(arrays(idir, by["TIN"]).points[:, 0].tolist()) == [110.0, 110.0, 111.0]
 
 
+def test_minsert_expands_every_grid_copy(tmp_path):
+    doc = new_doc()
+    block = doc.blocks.new("F")
+    block.add_3dface([(0, 0, 1), (1, 0, 1), (0, 1, 1)], dxfattribs={"layer": "0"})
+    ins = doc.modelspace().add_blockref("F", (E0, N0, 0), dxfattribs={"layer": "TIN"})
+    ins.grid(size=(2, 2), spacing=(10, 10))
+    _, _, by = read(save(doc, tmp_path / "mi.dxf"), tmp_path)
+    assert by["TIN"].face_count == 4 and by["TIN"].entity_counts["3dface"] == 4
+
+
 def test_all_zero_layers_are_flagged_and_not_selected(tmp_path):
     doc = new_doc()
     msp = doc.modelspace()

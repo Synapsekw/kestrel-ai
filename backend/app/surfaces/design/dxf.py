@@ -98,6 +98,15 @@ class _Walker:
         self._check = check_cancelled
         self._n = 0
 
+    def _skip(self, layer: str):
+        """virtual_entities()' skipped_entity_callback: an entity inside a block it cannot convert
+        to a DXFGraphic is counted as unsupported on the INSERT's own layer, not silently dropped."""
+
+        def cb(entity, reason) -> None:
+            self.layers[layer].counts["unsupported"] += 1
+
+        return cb
+
     def walk(self, entities, inherited: str | None = None) -> None:
         import ezdxf
 
@@ -111,7 +120,11 @@ class _Walker:
             kind = e.dxftype()
             try:
                 if kind == "INSERT":
-                    self.walk(e.virtual_entities(), layer)
+                    # A MINSERT (e.mcount > 1) is a row x column grid of copies; virtual_entities()
+                    # on the INSERT itself yields only the first one, so multi_insert() expands the
+                    # rest (each with its own offset) before virtual_entities() renders each copy.
+                    for ins in e.multi_insert() if e.mcount > 1 else (e,):
+                        self.walk(ins.virtual_entities(skipped_entity_callback=self._skip(layer)), layer)
                 else:
                     self._one(e, kind, self.layers[layer])
             except (ezdxf.DXFError, ValueError, IndexError, ZeroDivisionError):
@@ -278,21 +291,27 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
     import ezdxf
     from ezdxf import recover
 
-    admission.admit(
-        DXF_RAM_FACTOR * path.stat().st_size,
-        f"Reading {path.name}",
-        "Save only the surface layers to a new DXF (WBLOCK) and import that.",
-    )
-    progress(0.05, MESSAGE)
     try:
+        # Inside the try: a file that vanished between detect.classify()'s check and here raises
+        # FileNotFoundError (an OSError), caught below as the same clean "can't be opened" failure.
+        size = path.stat().st_size
+        admission.admit(
+            DXF_RAM_FACTOR * size,
+            f"Reading {path.name}",
+            "Save only the surface layers to a new DXF (WBLOCK) and import that.",
+        )
+        progress(0.05, MESSAGE)
         with path.open("rb") as f:
             is_binary = f.read(len(BINARY_SIGNATURE)) == BINARY_SIGNATURE
         # R5: ezdxf 1.4.4's recover.readfile rejects binary DXF (DXFStructureError: invalid group
-        # code "AutoCAD Binary DXF"); ezdxf.readfile handles the binary tag stream directly.
+        # code "AutoCAD Binary DXF"); ezdxf.readfile handles the binary tag stream directly, but
+        # unlike recover.readfile it runs no audit, so run one explicitly for parity (it also runs
+        # the block-reference-cycle check; see the RecursionError guard below).
         if is_binary:
             doc = ezdxf.readfile(str(path))
+            auditor = doc.audit()
         else:
-            doc, _auditor = recover.readfile(str(path))
+            doc, auditor = recover.readfile(str(path))
     except ezdxf.DXFStructureError as e:
         raise JobFailure(f"{path.name} can't be read as DXF: {e}") from None
     except OSError as e:
@@ -302,8 +321,14 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
     insunits = int(doc.header.get("$INSUNITS", 0) or 0)
     detected = _detected(insunits, doc.header.get("$MEASUREMENT"), _geodata_hint(msp))
     walker = _Walker(check_cancelled)
-    walker.walk(_progressing(msp, max(len(msp), 1), progress))
-    del doc, msp  # release the document before the candidates are written
+    try:
+        walker.walk(_progressing(msp, max(len(msp), 1), progress))
+    except RecursionError:
+        # The auditor's block-reference-cycle check only reports a cycle, it does not break it, so
+        # one that gets through still recurses forever via virtual_entities(); a clean failure, not
+        # a crash.
+        raise JobFailure(f"{path.name} has a circular block reference and can't be read") from None
+    del doc, msp, auditor  # release the document (and the auditor's own reference to it)
     candidates = _candidates(walker.layers, idir, check_cancelled)
     progress(1.0, MESSAGE)
     return InspectResult(detected, candidates, internal={"insunits": insunits})
