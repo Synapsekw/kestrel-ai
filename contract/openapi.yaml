@@ -42,6 +42,12 @@ x-websocket:
     - `maps.changed`: `payload` is `{map_ids: [...]}` after a GeoTIFF map is imported or updated.
     - `map_runs.changed`: `payload` is `{map_id, run_ids: [...]}` after a map detection run finishes.
     - `map_labels.changed`: `payload` is `{map_id}` after a zone or ground-truth label changes.
+    - `pointclouds.changed`: `payload` is `{cloud_ids: [...]}` after a point cloud is created, changes
+      status, is patched or deleted, or one of its measurements changes.
+    - `surfaces.changed`: `payload` is `{surface_ids: [...]}` after a surface (cloud DSM or design)
+      is created, built, renamed or deleted.
+    - `volumes.changed`: `payload` is `{measurement_ids: [...]}` after a volume measurement is
+      created, calculated, changed, becomes stale or is deleted.
   message: "#/components/schemas/Event"
 
 tags:
@@ -60,6 +66,9 @@ tags:
   - name: agent
   - name: maps
   - name: detect
+  - name: pointclouds
+  - name: surfaces
+  - name: volumes
 
 paths:
   /api/v1/agent/chat:
@@ -2313,6 +2322,761 @@ paths:
         "409": { $ref: "#/components/responses/WrongProjectKind" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------------ point clouds (S1)
+  /api/v1/projects/{projectId}/pointclouds:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [pointclouds]
+      operationId: listPointClouds
+      summary: Every point cloud in the project, newest first.
+      responses:
+        "200":
+          description: point clouds
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PointCloudList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [pointclouds]
+      operationId: createPointCloud
+      summary: |
+        Import a LAS or LAZ file (a `pointcloud_import` job). The source file is only read and is
+        never kept in the project. Validation and the RAM and disk admission run again here; a
+        refusal creates no row.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PointCloudCreate" }
+      responses:
+        "202":
+          description: cloud created in `importing`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PointCloudWithJob" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "the file is not a readable LAS/LAZ (`unsupported_point_cloud`), or the import needs more memory (`insufficient_memory`) or disk (`insufficient_disk`) than is free; `message` is the text the UI shows"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/inspect:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [pointclouds]
+      operationId: inspectPointCloudFile
+      summary: Read a LAS/LAZ file's header and VLRs (at most 1 MiB) and judge admission, without importing it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PointCloudInspectRequest" }
+      responses:
+        "200":
+          description: the header facts and the admission verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PointCloudFileInfo" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "the file is not a readable LAS/LAZ (`unsupported_point_cloud`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    get:
+      tags: [pointclouds]
+      operationId: getPointCloud
+      responses:
+        "200":
+          description: the point cloud
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PointCloudOut" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [pointclouds]
+      operationId: patchPointCloud
+      summary: Rename, correct the survey date, link or unlink a map, or assign an EPSG to a cloud that has no CRS.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PointCloudPatch" }
+      responses:
+        "200":
+          description: the updated point cloud
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PointCloudOut" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "a map link needs both entities to have a CRS (`link_needs_coordinates`) and overlapping WGS84 bounds (`no_overlap`); `assign_epsg` is refused when the file has a CRS (`crs_already_set`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [pointclouds]
+      operationId: deletePointCloud
+      summary: Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched.
+      responses:
+        "204": { description: deleted }
+        "409":
+          description: "its import or export job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/octree/{octreeFile}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/octreeFile"
+    get:
+      tags: [pointclouds]
+      operationId: getPointCloudOctreeFile
+      summary: |
+        One file of the cloud's Potree 2.0 display copy, for the 3D viewer. Exactly one byte range
+        (`bytes=a-b`, `bytes=a-` or `bytes=-n`) of at most 64 MiB is answered 206; no `Range`
+        answers the whole file with 200 only when it is at most 64 MiB. Multiple ranges, malformed
+        syntax, a start at or past the end, a range over 64 MiB, or no `Range` on a bigger file
+        answer 416 with `Content-Range: bytes */<size>`. The body streams in 1 MiB chunks.
+        `Cache-Control: private, max-age=31536000, immutable`. The token goes in the `token`
+        query parameter. The loader's CORS preflight (`Range` and `Content-Type` request headers)
+        is answered by the CORS middleware before routing, so there is no OPTIONS operation.
+      parameters:
+        - name: Range
+          in: header
+          required: false
+          description: one byte range, e.g. `bytes=0-21`
+          schema: { type: string }
+      responses:
+        "200":
+          description: the whole file (at most 64 MiB)
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            application/json:
+              schema: { type: object, additionalProperties: true, description: "`metadata.json`" }
+        "206":
+          description: the requested byte range
+          headers:
+            Content-Range: { schema: { type: string }, description: "bytes a-b/size" }
+            Accept-Ranges: { schema: { type: string, enum: [bytes] } }
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+            application/json:
+              schema: { type: string, format: binary, description: "a range of `metadata.json`" }
+        "409":
+          description: "the cloud is not `ready` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "416":
+          description: "the range cannot be served (`code` is `range_not_satisfiable`); `Content-Range: bytes */<size>`"
+          headers:
+            Content-Range: { schema: { type: string }, description: "bytes */size" }
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    get:
+      tags: [pointclouds]
+      operationId: listCloudMeasurements
+      summary: The cloud's saved measurements, oldest first (at most 1 000).
+      responses:
+        "200":
+          description: measurements
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudMeasurementList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [pointclouds]
+      operationId: createCloudMeasurement
+      summary: Save a measurement. The server recomputes `results` from the points; a client never sends them.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudMeasurementCreate" }
+      responses:
+        "201":
+          description: the saved measurement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "the wrong number of points for the kind, a `vertical` check whose points are less than 0.5 m apart vertically, or the cloud already has 1 000 measurements (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    patch:
+      tags: [pointclouds]
+      operationId: updateCloudMeasurement
+      summary: Rename a measurement or change its note.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudMeasurementUpdate" }
+      responses:
+        "200":
+          description: the updated measurement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [pointclouds]
+      operationId: deleteCloudMeasurement
+      responses:
+        "204": { description: deleted }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/exports:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    post:
+      tags: [pointclouds]
+      operationId: createPointCloudExport
+      summary: |
+        Write a LAZ copy of the source file (a `pointcloud_export` job) into
+        `exports/<stamp>-cloud-<name>/`, with `cloud.json` and, when asked and any exist,
+        `measurements.csv`. The source must still be reachable, with its size and mtime unchanged.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PointCloudExportRequest" }
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ surfaces (S2 paths 1-8)
+  /api/v1/projects/{projectId}/surfaces:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [surfaces]
+      operationId: listSurfaces
+      summary: Every surface in the project, cloud DSMs and designs.
+      responses:
+        "200":
+          description: surfaces
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfaceList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [surfaces]
+      operationId: createSurface
+      summary: Build a surface from a ready point cloud (a `surface_build` job).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SurfaceBuildRequest" }
+      responses:
+        "202":
+          description: surface created in `building`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfaceWithJob" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "not enough free disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a cloud CRS the build cannot use, or an invalid request (`validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/surfaces/{surfaceId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/surfaceId"
+    get:
+      tags: [surfaces]
+      operationId: getSurface
+      responses:
+        "200":
+          description: the surface
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Surface" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [surfaces]
+      operationId: patchSurface
+      summary: Rename a surface.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SurfacePatch" }
+      responses:
+        "200":
+          description: the updated surface
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Surface" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [surfaces]
+      operationId: deleteSurface
+      summary: Delete the surface and its folder under `surfaces/`.
+      responses:
+        "204": { description: deleted }
+        "409":
+          description: "a volume measurement uses the surface or its job is queued or running (`code` is `conflict`; the message names them), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/surfaces/{surfaceId}/tiles/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/surfaceId"
+      - { name: z, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 30 } }
+      - { name: x, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: y, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      tags: [surfaces]
+      operationId: getSurfaceTile
+      summary: One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent.
+      parameters:
+        - name: tint
+          in: query
+          required: false
+          description: "multiply by a hypsometric ramp; false when absent"
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: tile image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the tile is outside the grid or all nodata }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/surfaces/{surfaceId}/ortho-tiles/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/surfaceId"
+      - { name: z, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 30 } }
+      - { name: x, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: y, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      tags: [surfaces]
+      operationId: getSurfaceOrthoTile
+      summary: One 256 px tile of a map's display raster warped into this surface's grid, for the ortho underlay.
+      parameters:
+        - name: map_id
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: tile image; PNG when it holds nodata
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the map does not overlap this tile }
+        "422":
+          description: "the map or the surface has no CRS (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/surfaces/{surfaceId}/sample:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/surfaceId"
+    get:
+      tags: [surfaces]
+      operationId: getSurfaceSample
+      summary: The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata.
+      parameters:
+        - { name: x, in: query, required: true, schema: { type: number } }
+        - { name: y, in: query, required: true, schema: { type: number } }
+      responses:
+        "200":
+          description: the sample
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfaceSample" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ design surfaces (S3)
+  /api/v1/projects/{projectId}/design-inspections:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [surfaces]
+      operationId: createDesignInspection
+      summary: Read a design file (a `design_import` job, phase `inspect`) - hash it, detect units and CRS, and list its candidate surfaces.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DesignInspectionCreate" }
+      responses:
+        "202":
+          description: inspection created in `inspecting`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignInspectionWithJob" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "the file is missing, has an unknown extension, or is a DWG (`code` is `validation_error`; a DWG has `details.reason: \"dwg\"`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/design-inspections/{inspectionId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+    get:
+      tags: [surfaces]
+      operationId: getDesignInspection
+      responses:
+        "200":
+          description: the inspection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignInspection" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [surfaces]
+      operationId: deleteDesignInspection
+      summary: Cancel a running inspect or preview and delete the inspection folder.
+      responses:
+        "204": { description: deleted }
+        "409":
+          description: "a build uses the inspection (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/design-inspections/{inspectionId}/candidates/{candidateId}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+      - $ref: "#/components/parameters/candidateId"
+    get:
+      tags: [surfaces]
+      operationId: getDesignCandidateThumbnail
+      summary: A 160 px plan view of one candidate.
+      responses:
+        "200":
+          description: thumbnail
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the candidate has no thumbnail }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+    post:
+      tags: [surfaces]
+      operationId: createDesignPreview
+      summary: Place, triangulate and rasterise the chosen candidates onto a coarse preview grid and validate them (a `design_import` job, phase `preview`). It cancels the inspection's running preview first.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DesignImportOptions" }
+      responses:
+        "202":
+          description: preview created in `running`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignPreviewWithJob" }
+        "409":
+          description: "the inspection is not ready (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "an unknown candidate, an unparseable CRS, or a LandXML or DEM selection of other than one candidate (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews/{previewId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+      - $ref: "#/components/parameters/previewId"
+    get:
+      tags: [surfaces]
+      operationId: getDesignPreview
+      responses:
+        "200":
+          description: the preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DesignPreview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews/{previewId}/image:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+      - $ref: "#/components/parameters/previewId"
+    get:
+      tags: [surfaces]
+      operationId: getDesignPreviewImage
+      summary: The preview's plan image.
+      responses:
+        "200":
+          description: preview image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the preview is not ready or failed }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/design-surfaces:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [surfaces]
+      operationId: createDesignSurface
+      summary: Build the design surface from a ready preview (a `design_import` job, phase `build`); the new `Surface` has `kind` `design`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DesignSurfaceCreate" }
+      responses:
+        "202":
+          description: surface created in `building`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfaceWithJob" }
+        "409":
+          description: "the preview is not ready, is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ volumes (S2 paths 9-17)
+  /api/v1/projects/{projectId}/volumes:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [volumes]
+      operationId: listVolumeMeasurements
+      summary: Every volume measurement. Recomputes each fingerprint; a changed ready one becomes `stale`.
+      responses:
+        "200":
+          description: measurements
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VolumeMeasurementList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [volumes]
+      operationId: createVolumeMeasurement
+      summary: Create a measurement and queue its `volume_calc` job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VolumeMeasurementCreate" }
+      responses:
+        "202":
+          description: measurement created in `calculating`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VolumeMeasurementWithJob" }
+        "409": { $ref: "#/components/responses/WrongProjectKind" }
+        "422":
+          description: "a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface), a base that does not fit (`invalid_base`), or an invalid request (`validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/volumes/{measurementId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/measurementId"
+    get:
+      tags: [volumes]
+      operationId: getVolumeMeasurement
+      responses:
+        "200":
+          description: the measurement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VolumeMeasurement" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [volumes]
+      operationId: patchVolumeMeasurement
+      summary: Change a measurement's inputs; any change other than `name` makes it `stale`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VolumeMeasurementPatch" }
+      responses:
+        "200":
+          description: the updated measurement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VolumeMeasurement" }
+        "409":
+          description: "the measurement is calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "changed inputs the rules refuse (`invalid_geometry`, `invalid_base`), or an invalid request (`validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [volumes]
+      operationId: deleteVolumeMeasurement
+      responses:
+        "204": { description: deleted }
+        "409":
+          description: "the measurement is calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/volumes/{measurementId}/calculate:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/measurementId"
+    post:
+      tags: [volumes]
+      operationId: calculateVolumeMeasurement
+      summary: Recalculate a measurement (a `volume_calc` job).
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VolumeMeasurementWithJob" }
+        "409":
+          description: "the measurement is already calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/volumes/{measurementId}/diff-tiles/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/measurementId"
+      - { name: z, in: path, required: true, schema: { type: integer, minimum: 0, maximum: 30 } }
+      - { name: x, in: path, required: true, schema: { type: integer, minimum: 0 } }
+      - { name: y, in: path, required: true, schema: { type: integer, minimum: 0 } }
+    get:
+      tags: [volumes]
+      operationId: getVolumeDiffTile
+      summary: One 256 px cut/fill tile in the top surface's grid (red below the base, blue above).
+      parameters:
+        - name: v
+          in: query
+          required: false
+          description: "the results' `computed_at`, for cache busting"
+          schema: { type: string }
+      responses:
+        "200":
+          description: tile image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the tile is outside the measured cells }
+        "409":
+          description: "the measurement has no results (`code` is `conflict`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/volumes/{measurementId}/footprints:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/measurementId"
+    get:
+      tags: [volumes]
+      operationId: getVolumeFootprints
+      summary: The buffered detection footprints the measurement masks, in the surface CRS; at most 5 000.
+      responses:
+        "200":
+          description: footprints
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VolumeFootprints" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/volume-exports:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [volumes]
+      operationId: createVolumeExport
+      summary: Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>-volumes-<title>/` (a `volume_export` job).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VolumeExportRequest" }
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "a measurement is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
   # ------------------------------------------------------------------ exports
   /api/v1/projects/{projectId}/exports:
     parameters:
@@ -2598,6 +3362,48 @@ components:
       in: path
       required: true
       schema: { type: string }
+    cloudId:
+      name: cloudId
+      in: path
+      required: true
+      schema: { type: string }
+    cloudMeasurementId:
+      name: cloudMeasurementId
+      in: path
+      required: true
+      description: a point-cloud measurement; `measurementId` is a volume measurement
+      schema: { type: string }
+    octreeFile:
+      name: octreeFile
+      in: path
+      required: true
+      schema: { type: string, enum: [metadata.json, hierarchy.bin, octree.bin] }
+    surfaceId:
+      name: surfaceId
+      in: path
+      required: true
+      schema: { type: string }
+    measurementId:
+      name: measurementId
+      in: path
+      required: true
+      description: a volume measurement
+      schema: { type: string }
+    inspectionId:
+      name: inspectionId
+      in: path
+      required: true
+      schema: { type: string }
+    previewId:
+      name: previewId
+      in: path
+      required: true
+      schema: { type: string }
+    candidateId:
+      name: candidateId
+      in: path
+      required: true
+      schema: { type: string, pattern: "^c[0-9]{1,6}$" }
 
   responses:
     Error:
@@ -2662,7 +3468,12 @@ components:
                 details `{kind, allowed}`), library_unavailable (503: the model library could not
                 be opened), model_unavailable (409: the library model's weights file is missing),
                 unmapped_classes (422: the run's model has classes with no project class and no
-                remembered mapping; details `{model_id, unmapped}`)
+                remembered mapping; details `{model_id, unmapped}`), unsupported_point_cloud,
+                insufficient_memory and insufficient_disk (422: a point cloud cannot be read or
+                admitted), link_needs_coordinates, no_overlap and crs_already_set (422: a point
+                cloud patch), grid_too_large (422: a surface grid over the cell ceiling),
+                job_running (409: the resource's job is queued or running), not_ready (409:
+                the resource has not finished importing), range_not_satisfiable (416)
             message: { type: string }
             details:
               type: object
@@ -4980,9 +5791,792 @@ components:
       properties:
         path: { type: string, minLength: 1, description: relative to the project folder }
       example: { path: "exports/2026-09-19_101500" }
+    # ------------------------------------------------------------ point clouds (S1)
+    PointCloudZStats:
+      type: object
+      description: min, max and mean are exact; the percentiles come from a stride sample of at most 2 M points
+      required: [min, max, mean, p01, p1, p5, p50, p95, p99, p999, sample_count]
+      properties:
+        min: { type: number }
+        max: { type: number }
+        mean: { type: number }
+        p01: { type: number }
+        p1: { type: number }
+        p5: { type: number }
+        p50: { type: number }
+        p95: { type: number }
+        p99: { type: number }
+        p999: { type: number }
+        sample_count: { type: integer }
+    PointCloudOut:
+      type: object
+      required: [id, name, status, error, source_path, source_size, source_sha256, las_version, point_format, point_count, has_rgb, scale, crs_wkt, epsg, proj4, vertical_crs, crs_source, bounds_native, bounds_repaired, bounds_wgs84, octree_spacing_m, z_stats, class_counts, octree_bytes, captured_on, map_id, job_id, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { type: string, enum: [importing, ready, failed] }
+        error: { type: [string, "null"], description: readable text when `failed` }
+        source_path: { type: string, description: the original file; only ever read, never kept in the project }
+        source_size: { type: integer, format: int64 }
+        source_sha256: { type: [string, "null"], description: streamed while the work copy is made }
+        las_version: { type: [string, "null"], description: "e.g. `1.2`" }
+        point_format: { type: [integer, "null"] }
+        point_count: { type: [integer, "null"], format: int64, description: the scanned count }
+        has_rgb: { type: [boolean, "null"] }
+        scale:
+          type: [array, "null"]
+          description: the header scales sx, sy, sz; the coordinate precision shown with every pick
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+        crs_wkt: { type: [string, "null"], description: the horizontal CRS; null means no coordinates }
+        epsg: { type: [integer, "null"] }
+        proj4: { type: [string, "null"], description: for client-side conversions }
+        vertical_crs: { type: [string, "null"], description: the vertical CRS name; null means heights as stored, no vertical datum }
+        crs_source:
+          type: [string, "null"]
+          enum: [file, assigned, null]
+        bounds_native:
+          type: [array, "null"]
+          description: minx, miny, minz, maxx, maxy, maxz; the true bounds from the scan
+          items: { type: number }
+          minItems: 6
+          maxItems: 6
+        bounds_repaired: { type: [boolean, "null"], description: true when the header bounds did not contain every point }
+        bounds_wgs84:
+          type: [array, "null"]
+          description: minlon, minlat, maxlon, maxlat
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+        octree_spacing_m: { type: [number, "null"], description: the octree root node's spacing, not the point spacing }
+        z_stats: { oneOf: [{ $ref: "#/components/schemas/PointCloudZStats" }, { type: "null" }] }
+        class_counts:
+          type: [object, "null"]
+          description: the ASPRS classification histogram, keyed by class code
+          additionalProperties: { type: integer }
+        octree_bytes: { type: [integer, "null"], format: int64 }
+        captured_on: { type: [string, "null"], format: date, description: when the survey was flown }
+        map_id: { type: [string, "null"], description: the linked orthomosaic }
+        job_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "c0000000-8888-4000-8000-000000000001"
+        name: "Chimney stack 3D"
+        status: ready
+        error: null
+        source_path: "\\\\DanNas\\surveys\\chimney.las"
+        source_size: 773872531
+        source_sha256: "9f2c0d8e7a1b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5"
+        las_version: "1.2"
+        point_format: 3
+        point_count: 21697184
+        has_rgb: true
+        scale: [0.001, 0.001, 0.001]
+        crs_wkt: "PROJCS[\"WGS 84 / UTM zone 39N\"]"
+        epsg: 32639
+        proj4: "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs"
+        vertical_crs: null
+        crs_source: file
+        bounds_native: [553012.4, 2847210.9, -52.3, 553198.7, 2847402.1, 31.8]
+        bounds_repaired: true
+        bounds_wgs84: [51.5301, 25.7331, 51.5320, 25.7349]
+        octree_spacing_m: 1.52
+        z_stats: { min: -52.3, max: 31.8, mean: -41.2, p01: -46.1, p1: -45.9, p5: -45.6, p50: -44.8, p95: -30.2, p99: -5.1, p999: 20.4, sample_count: 1972472 }
+        class_counts: { "0": 21697184 }
+        octree_bytes: 137390210
+        captured_on: "2026-09-10"
+        map_id: null
+        job_id: "j0000000-4444-4000-8000-000000000001"
+        created_at: "2026-09-23T10:00:00Z"
+    PointCloudList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PointCloudOut" }
+    PointCloudCreate:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: absolute path of a .las or .laz file }
+        name: { type: string, minLength: 1, maxLength: 200, description: the file stem when absent }
+        map_id: { type: string, description: link this map on import; subject to the same checks as a PATCH }
+    PointCloudWithJob:
+      type: object
+      required: [cloud, job]
+      properties:
+        cloud: { $ref: "#/components/schemas/PointCloudOut" }
+        job: { $ref: "#/components/schemas/Job" }
+    PointCloudPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        captured_on: { type: [string, "null"], format: date, description: when the survey was flown; null clears it }
+        map_id: { type: [string, "null"], description: link a map; null unlinks }
+        assign_epsg: { type: integer, description: only when the cloud has no CRS (`crs_wkt` is null); the cloud is never reprojected }
+    PointCloudInspectRequest:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: absolute path of a .las or .laz file }
+    PointCloudAdmission:
+      type: object
+      required: [ok, ram_needed_bytes, ram_available_bytes, disk_needed_bytes, disk_available_bytes, reason]
+      properties:
+        ok: { type: boolean }
+        ram_needed_bytes: { type: integer, format: int64 }
+        ram_available_bytes: { type: integer, format: int64 }
+        disk_needed_bytes: { type: integer, format: int64 }
+        disk_available_bytes: { type: integer, format: int64 }
+        reason: { type: [string, "null"], description: when `ok` is false, the message the UI shows verbatim }
+    PointCloudFileInfo:
+      type: object
+      required: [path, size, compressed, las_version, point_format, point_count, has_rgb, header_bounds, crs_wkt, epsg, captured_on, admission]
+      properties:
+        path: { type: string }
+        size: { type: integer, format: int64 }
+        compressed: { type: boolean, description: true for LAZ }
+        las_version: { type: string }
+        point_format: { type: integer }
+        point_count: { type: integer, format: int64, description: the header's count }
+        has_rgb: { type: boolean }
+        header_bounds:
+          type: array
+          description: minx, miny, minz, maxx, maxy, maxz as the header states them
+          items: { type: number }
+          minItems: 6
+          maxItems: 6
+        crs_wkt: { type: [string, "null"] }
+        epsg: { type: [integer, "null"] }
+        captured_on: { type: [string, "null"], format: date }
+        admission: { $ref: "#/components/schemas/PointCloudAdmission" }
+    CloudMeasurementKind:
+      type: string
+      enum: [point, distance, height, vertical]
+    CloudMeasurementPoint:
+      type: object
+      required: [x, y, z, uncertainty_m]
+      properties:
+        x: { type: number, description: native CRS }
+        y: { type: number }
+        z: { type: number }
+        uncertainty_m: { type: number, minimum: 0, description: the display spacing of the deepest loaded node that contains the pick }
+    CloudMeasurementCreate:
+      type: object
+      required: [kind, points]
+      properties:
+        kind: { $ref: "#/components/schemas/CloudMeasurementKind" }
+        points:
+          type: array
+          description: one point for `point`, two for the other kinds
+          items: { $ref: "#/components/schemas/CloudMeasurementPoint" }
+          minItems: 1
+          maxItems: 2
+        name: { type: string, minLength: 1, maxLength: 200, description: "\"Distance 3\"-style numbering when absent" }
+        note: { type: string, maxLength: 2000 }
+    CloudMeasurementUpdate:
+      type: object
+      additionalProperties: false
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        note: { type: [string, "null"], maxLength: 2000, description: null clears it }
+    CloudMeasurementResults:
+      type: object
+      description: computed by the server from the stored points; a quantity that does not apply to the kind is null
+      required: [lon, lat, dx, dy, dz, distance_3d, distance_horizontal, distance_vertical, height_difference, lean_offset_m, lean_angle_deg, lean_azimuth_deg, lean_mm_per_m, uncertainty_m, angle_uncertainty_deg]
+      properties:
+        lon: { type: [number, "null"] }
+        lat: { type: [number, "null"] }
+        dx: { type: [number, "null"] }
+        dy: { type: [number, "null"] }
+        dz: { type: [number, "null"] }
+        distance_3d: { type: [number, "null"] }
+        distance_horizontal: { type: [number, "null"] }
+        distance_vertical: { type: [number, "null"] }
+        height_difference: { type: [number, "null"], description: second pick minus first, signed }
+        lean_offset_m: { type: [number, "null"] }
+        lean_angle_deg: { type: [number, "null"], description: degrees from vertical }
+        lean_azimuth_deg: { type: [number, "null"], description: the top relative to the base, clockwise from grid north }
+        lean_mm_per_m: { type: [number, "null"] }
+        uncertainty_m: { type: [number, "null"] }
+        angle_uncertainty_deg: { type: [number, "null"] }
+    CloudMeasurementOut:
+      type: object
+      required: [id, point_cloud_id, kind, name, note, points, results, created_at, updated_at]
+      properties:
+        id: { type: string }
+        point_cloud_id: { type: string }
+        kind: { $ref: "#/components/schemas/CloudMeasurementKind" }
+        name: { type: string }
+        note: { type: [string, "null"] }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/CloudMeasurementPoint" }
+          minItems: 1
+          maxItems: 2
+        results: { $ref: "#/components/schemas/CloudMeasurementResults" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CloudMeasurementList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CloudMeasurementOut" }
+    PointCloudExportRequest:
+      type: object
+      required: [format]
+      properties:
+        format: { type: string, enum: [laz] }
+        include_measurements: { type: boolean, description: "true when absent: write measurements.csv when the cloud has measurements" }
+    # ------------------------------------------------------------ surfaces and volumes (S2)
+    SurfaceKind:
+      type: string
+      enum: [cloud_dsm, design]
+    SurfaceStatus:
+      type: string
+      enum: [building, ready, failed]
+    SurfaceMethod:
+      type: string
+      description: "median, mean, max and min are cloud statistics (S2); tin, delaunay, dem_resample and dem_copy are design methods (S3)"
+      enum: [median, mean, max, min, tin, delaunay, dem_resample, dem_copy]
+    SurfaceBuildMethod:
+      type: string
+      enum: [median, mean, max, min]
+    SurfaceBuildParams:
+      type: object
+      description: the build request with the defaults resolved
+      required: [point_cloud_id, name, method, cell_size_m, auto_cell, hole_fill_max_gap_m, despike_m, z_clip, drop_noise_classes, assume_metres]
+      properties:
+        point_cloud_id: { type: string }
+        name: { type: string }
+        method: { $ref: "#/components/schemas/SurfaceBuildMethod" }
+        cell_size_m: { type: number, description: the cell size actually used }
+        auto_cell: { type: boolean }
+        hole_fill_max_gap_m: { type: number }
+        despike_m: { type: [number, "null"] }
+        z_clip:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+        drop_noise_classes: { type: boolean }
+        assume_metres: { type: boolean }
+    SurfaceBuildStats:
+      type: object
+      required: [points_read, points_used, points_dropped, density_per_m2, spacing_m, auto_cell, cells_valid, cells_despiked, cells_filled, z_p02, z_p98, reprojected_from_epsg, build_s]
+      properties:
+        points_read: { type: integer }
+        points_used: { type: integer }
+        points_dropped:
+          type: object
+          required: [noise_class, withheld, z_clip]
+          properties:
+            noise_class: { type: integer }
+            withheld: { type: integer }
+            z_clip: { type: integer }
+        density_per_m2: { type: [number, "null"] }
+        spacing_m: { type: [number, "null"] }
+        auto_cell: { type: boolean }
+        cells_valid: { type: integer }
+        cells_despiked: { type: integer }
+        cells_filled: { type: integer }
+        z_p02: { type: [number, "null"] }
+        z_p98: { type: [number, "null"] }
+        reprojected_from_epsg: { type: [integer, "null"] }
+        build_s: { type: number }
+    Surface:
+      type: object
+      required: [id, name, kind, status, error, point_cloud_id, design_source, crs_wkt, epsg, proj4, cell_size_m, width, height, geotransform, bounds_native, z_min, z_max, coverage_fraction, method, build_params, stats, captured_on, map_id, tile_grid, measurement_count, job_id, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/SurfaceKind" }
+        status: { $ref: "#/components/schemas/SurfaceStatus" }
+        error: { type: [string, "null"] }
+        point_cloud_id: { type: [string, "null"] }
+        design_source: { oneOf: [{ $ref: "#/components/schemas/DesignSource" }, { type: "null" }], description: null for cloud_dsm }
+        crs_wkt: { type: [string, "null"], description: null means local metres }
+        epsg: { type: [integer, "null"] }
+        proj4: { type: [string, "null"], description: derived from crs_wkt at response time }
+        cell_size_m: { type: [number, "null"], description: null while building }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
+        geotransform:
+          type: [array, "null"]
+          description: GDAL order, north-up
+          items: { type: number }
+          minItems: 6
+          maxItems: 6
+        bounds_native:
+          type: [array, "null"]
+          description: minx, miny, maxx, maxy of the grid
+          items: { type: number }
+          minItems: 4
+          maxItems: 4
+        z_min: { type: [number, "null"] }
+        z_max: { type: [number, "null"] }
+        coverage_fraction: { type: [number, "null"] }
+        method: { oneOf: [{ $ref: "#/components/schemas/SurfaceMethod" }, { type: "null" }], description: null while building }
+        build_params: { oneOf: [{ $ref: "#/components/schemas/SurfaceBuildParams" }, { type: "null" }], description: null for design }
+        stats: { oneOf: [{ $ref: "#/components/schemas/SurfaceBuildStats" }, { type: "null" }], description: null for design }
+        captured_on: { type: [string, "null"], format: date, description: read through from the cloud }
+        map_id: { type: [string, "null"], description: read through from the cloud; the ortho of the same flight }
+        tile_grid: { oneOf: [{ $ref: "#/components/schemas/TileGrid" }, { type: "null" }] }
+        measurement_count: { type: integer }
+        job_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    SurfaceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Surface" }
+    SurfaceBuildRequest:
+      type: object
+      required: [point_cloud_id]
+      properties:
+        point_cloud_id: { type: string }
+        name: { type: string }
+        method: { $ref: "#/components/schemas/SurfaceBuildMethod" }
+        cell_size_m: { type: [number, "null"], minimum: 0.01, maximum: 5, description: auto when absent or null }
+        hole_fill_max_gap_m: { type: number, minimum: 0, maximum: 10, description: "1.0 when absent; 0 = off" }
+        despike_m: { type: [number, "null"], minimum: 0.1, maximum: 100, description: "1.0 when absent; null = off" }
+        z_clip:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 2
+          maxItems: 2
+        drop_noise_classes: { type: boolean, description: true when absent }
+        assume_metres: { type: boolean, description: false when absent }
+    SurfacePatch:
+      type: object
+      properties:
+        name: { type: string, minLength: 1 }
+    SurfaceWithJob:
+      type: object
+      required: [surface, job]
+      properties:
+        surface: { $ref: "#/components/schemas/Surface" }
+        job: { $ref: "#/components/schemas/Job" }
+    SurfaceSample:
+      type: object
+      required: [x, y, z]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        z: { type: [number, "null"], description: null over nodata }
+    VolumeStatus:
+      type: string
+      enum: [calculating, ready, failed, stale]
+    VolumeBaseKind:
+      type: string
+      enum: [toe_plane, toe_surface, flat, surface]
+    VolumeBase:
+      type: object
+      required: [kind]
+      description: z is required for flat and surface_id for surface; the server answers 422 otherwise
+      properties:
+        kind: { $ref: "#/components/schemas/VolumeBaseKind" }
+        z: { type: [number, "null"] }
+        surface_id: { type: [string, "null"] }
+    VolumeRing:
+      type: array
+      description: "[x, y] vertices in the top surface's CRS"
+      minItems: 3
+      maxItems: 5000
+      items:
+        type: array
+        items: { type: number }
+        minItems: 2
+        maxItems: 2
+    ExclusionMode:
+      type: string
+      enum: [patch, exclude]
+    ExclusionPolygon:
+      type: object
+      required: [id, ring, mode]
+      properties:
+        id: { type: string, description: client-generated (a UUID) so edits can target it }
+        ring: { $ref: "#/components/schemas/VolumeRing" }
+        mode: { $ref: "#/components/schemas/ExclusionMode" }
+    VolumeMasks:
+      type: object
+      required: [detection_run_ids, class_ids, buffer_m, exclusion_polygons]
+      properties:
+        detection_run_ids: { type: array, items: { type: string } }
+        class_ids: { type: [array, "null"], items: { type: string }, description: null means every class }
+        buffer_m: { type: number, minimum: 0, maximum: 5 }
+        exclusion_polygons: { type: array, items: { $ref: "#/components/schemas/ExclusionPolygon" } }
+    VolumeMasksInput:
+      type: object
+      description: fields that are sent replace the stored ones
+      properties:
+        detection_run_ids: { type: array, items: { type: string }, description: "[] when absent" }
+        class_ids: { type: [array, "null"], items: { type: string }, description: null when absent }
+        buffer_m: { type: number, minimum: 0, maximum: 5, description: "1.0 when absent" }
+        exclusion_polygons: { type: array, items: { $ref: "#/components/schemas/ExclusionPolygon" }, description: "[] when absent" }
+    AlignmentMeasured:
+      type: object
+      required: [n_cells, median_dz, mad, sigma, tilt_mm_per_m, span_m]
+      properties:
+        n_cells: { type: integer }
+        median_dz: { type: number }
+        mad: { type: number }
+        sigma: { type: number }
+        tilt_mm_per_m: { type: number }
+        span_m: { type: number }
+    VolumeAlignment:
+      type: object
+      required: [stable_polygon, apply_shift, measured]
+      properties:
+        stable_polygon: { oneOf: [{ $ref: "#/components/schemas/VolumeRing" }, { type: "null" }] }
+        apply_shift: { type: boolean }
+        measured: { oneOf: [{ $ref: "#/components/schemas/AlignmentMeasured" }, { type: "null" }] }
+    VolumeAlignmentInput:
+      type: object
+      properties:
+        stable_polygon: { oneOf: [{ $ref: "#/components/schemas/VolumeRing" }, { type: "null" }], description: null when absent }
+        apply_shift: { type: boolean, description: false when absent }
+    VolumeWarningCode:
+      type: string
+      enum: [nodata_high, patch_too_large, patch_failed, edge_coverage_low, base_fit_poor, stable_area_small, no_stable_area, alignment_offset, alignment_datum, alignment_noisy, alignment_tilt, mask_other_flight]
+    VolumeWarning:
+      type: object
+      required: [code, severity, message]
+      properties:
+        code: { $ref: "#/components/schemas/VolumeWarningCode" }
+        severity: { type: string, enum: [warn, danger] }
+        message: { type: string }
+    VolumeTotals:
+      type: object
+      required: [fill_m3, cut_m3, net_m3]
+      properties:
+        fill_m3: { type: number }
+        cut_m3: { type: number }
+        net_m3: { type: number }
+    BaseFit:
+      type: object
+      required: [kind, samples, rejected, usable_edge_fraction, rms_m, plane]
+      properties:
+        kind: { $ref: "#/components/schemas/VolumeBaseKind" }
+        samples: { type: integer }
+        rejected: { type: integer }
+        usable_edge_fraction: { type: number }
+        rms_m: { type: number }
+        plane:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+    VolumeUncertainty:
+      type: object
+      required: [total_m3, base_m3, alignment_m3, cell_size_m3, nodata_m3, patch_m3, complete]
+      properties:
+        total_m3: { type: [number, "null"] }
+        base_m3: { type: [number, "null"] }
+        alignment_m3: { type: [number, "null"] }
+        cell_size_m3: { type: [number, "null"] }
+        nodata_m3: { type: [number, "null"] }
+        patch_m3: { type: [number, "null"] }
+        complete: { type: boolean }
+    SurfaceRef:
+      type: object
+      description: a provenance snapshot of a surface at calculation time
+      required: [id, name, kind, method, cell_size_m, captured_on, cloud_file, cloud_sha256]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/SurfaceKind" }
+        method: { oneOf: [{ $ref: "#/components/schemas/SurfaceMethod" }, { type: "null" }] }
+        cell_size_m: { type: number }
+        captured_on: { type: [string, "null"], format: date }
+        cloud_file: { type: [string, "null"] }
+        cloud_sha256: { type: [string, "null"] }
+    VolumeResults:
+      type: object
+      additionalProperties: false
+      required: [fill_m3, cut_m3, net_m3, area_m2, polygon_area_m2, measured_area_m2, masked_area_m2, excluded_area_m2, nodata_area_m2, cell_size_m, areal_scale_factor, shift_applied_m, diff_scale_m, duration_s, footprints_used, patch_regions, unshifted, alignment, base_fit, uncertainty, warnings, top_surface, base_surface, inputs, inputs_fingerprint, engine_version, computed_at]
+      properties:
+        fill_m3: { type: number }
+        cut_m3: { type: number }
+        net_m3: { type: number }
+        area_m2: { type: number }
+        polygon_area_m2: { type: number }
+        measured_area_m2: { type: number }
+        masked_area_m2: { type: number }
+        excluded_area_m2: { type: number }
+        nodata_area_m2: { type: number }
+        cell_size_m: { type: number }
+        areal_scale_factor: { type: number }
+        shift_applied_m: { type: number }
+        diff_scale_m: { type: number }
+        duration_s: { type: number }
+        footprints_used: { type: integer }
+        patch_regions: { type: integer }
+        unshifted: { oneOf: [{ $ref: "#/components/schemas/VolumeTotals" }, { type: "null" }] }
+        alignment: { oneOf: [{ $ref: "#/components/schemas/AlignmentMeasured" }, { type: "null" }] }
+        base_fit: { oneOf: [{ $ref: "#/components/schemas/BaseFit" }, { type: "null" }] }
+        uncertainty: { $ref: "#/components/schemas/VolumeUncertainty" }
+        warnings: { type: array, items: { $ref: "#/components/schemas/VolumeWarning" } }
+        top_surface: { $ref: "#/components/schemas/SurfaceRef" }
+        base_surface: { oneOf: [{ $ref: "#/components/schemas/SurfaceRef" }, { type: "null" }] }
+        inputs: { type: object, additionalProperties: true, description: a canonical snapshot of the inputs }
+        inputs_fingerprint: { type: string, description: sha256 of the canonical JSON of `inputs` }
+        engine_version: { type: integer }
+        computed_at: { type: string, format: date-time }
+    VolumeMeasurement:
+      type: object
+      required: [id, name, status, error, polygon_native, top_surface_id, base, masks, alignment, results, stale_reasons, job_id, created_at, updated_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/VolumeStatus" }
+        error: { type: [string, "null"] }
+        polygon_native: { $ref: "#/components/schemas/VolumeRing" }
+        top_surface_id: { type: string }
+        base: { $ref: "#/components/schemas/VolumeBase" }
+        masks: { $ref: "#/components/schemas/VolumeMasks" }
+        alignment: { $ref: "#/components/schemas/VolumeAlignment" }
+        results: { oneOf: [{ $ref: "#/components/schemas/VolumeResults" }, { type: "null" }] }
+        stale_reasons: { type: array, items: { type: string }, description: "response only: the inputs that changed, e.g. \"masks: detection run deleted\"" }
+        job_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    VolumeMeasurementList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/VolumeMeasurement" }
+    VolumeMeasurementCreate:
+      type: object
+      required: [name, polygon_native, top_surface_id, base]
+      properties:
+        name: { type: string, minLength: 1 }
+        polygon_native: { $ref: "#/components/schemas/VolumeRing" }
+        top_surface_id: { type: string }
+        base: { $ref: "#/components/schemas/VolumeBase" }
+        masks: { $ref: "#/components/schemas/VolumeMasksInput" }
+        alignment: { $ref: "#/components/schemas/VolumeAlignmentInput" }
+    VolumeMeasurementPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1 }
+        polygon_native: { $ref: "#/components/schemas/VolumeRing" }
+        top_surface_id: { type: string }
+        base: { $ref: "#/components/schemas/VolumeBase" }
+        masks: { $ref: "#/components/schemas/VolumeMasksInput" }
+        alignment: { $ref: "#/components/schemas/VolumeAlignmentInput" }
+    VolumeMeasurementWithJob:
+      type: object
+      required: [measurement, job]
+      properties:
+        measurement: { $ref: "#/components/schemas/VolumeMeasurement" }
+        job: { $ref: "#/components/schemas/Job" }
+    VolumeFootprint:
+      type: object
+      required: [run_id, detection_id, class_id, ring]
+      properties:
+        run_id: { type: string }
+        detection_id: { type: string }
+        class_id: { type: string }
+        ring: { $ref: "#/components/schemas/VolumeRing" }
+    VolumeFootprints:
+      type: object
+      required: [items, truncated]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/VolumeFootprint" } }
+        truncated: { type: boolean, description: true past 5 000 footprints }
+    VolumeExportFormat:
+      type: string
+      enum: [pdf, gpkg, csv, xlsx]
+    VolumeExportRequest:
+      type: object
+      required: [measurement_ids, formats]
+      properties:
+        measurement_ids: { type: array, items: { type: string }, minItems: 1, uniqueItems: true }
+        formats: { type: array, items: { $ref: "#/components/schemas/VolumeExportFormat" }, minItems: 1, uniqueItems: true }
+        title: { type: string, maxLength: 200, description: the project name when absent }
+    # ------------------------------------------------------------ design surfaces (S3)
+    DesignFormat: { type: string, enum: [geotiff, landxml, dxf] }
+    LinearUnit: { type: string, enum: [millimetre, centimetre, metre, international_foot, us_survey_foot] }
+    DesignGeometry: { type: string, enum: [faces, points, raster, none] }
+    DesignCandidateKind: { type: string, enum: [dem, tin_surface, dxf_layer] }
+    DesignWarningLevel: { type: string, enum: [info, warn, block] }
+    DesignInspectionCreate:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: absolute path of a .tif/.tiff, .xml/.landxml or .dxf file }
+    DesignRasterInfo:
+      type: object
+      required: [width, height, cell_x, cell_y, dtype, nodata, band_count]
+      properties:
+        width: { type: integer }
+        height: { type: integer }
+        cell_x: { type: number }
+        cell_y: { type: number }
+        dtype: { type: string }
+        nodata: { type: [number, "null"] }
+        band_count: { type: integer }
+    DesignCandidate:
+      type: object
+      required: [id, kind, name, geometry, bounds_file, z_min, z_max, point_count, face_count, entity_counts, default_selected, notes, raster]
+      properties:
+        id: { type: string, pattern: "^c[0-9]{1,6}$" }
+        kind: { $ref: "#/components/schemas/DesignCandidateKind" }
+        name: { type: string }
+        geometry: { $ref: "#/components/schemas/DesignGeometry" }
+        bounds_file: { type: array, items: { type: number }, minItems: 4, maxItems: 4, description: "[minx, miny, maxx, maxy] in file units, x = easting (LandXML N/E already applied)" }
+        z_min: { type: [number, "null"] }
+        z_max: { type: [number, "null"] }
+        point_count: { type: integer }
+        face_count: { type: integer }
+        entity_counts: { type: object, additionalProperties: { type: integer }, description: "DXF: 3dface, mesh, polyface, polymesh, polyline_3d, polyline_2d, lwpolyline, line, point, unsupported; LandXML: invisible_faces" }
+        default_selected: { type: boolean }
+        notes: { type: array, items: { $ref: "#/components/schemas/DesignWarning" } }
+        raster: { oneOf: [{ $ref: "#/components/schemas/DesignRasterInfo" }, { type: "null" }] }
+    DesignDetected:
+      type: object
+      required: [horizontal_unit, vertical_unit, unit_source, crs_wkt, epsg, crs_source, crs_hint]
+      properties:
+        horizontal_unit: { oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }] }
+        vertical_unit: { oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }] }
+        unit_source: { type: string, description: "e.g. 'LandXML <Imperial linearUnit=USSurveyFoot>', 'DXF $INSUNITS=6', 'CRS axis unit', 'none'" }
+        crs_wkt: { type: [string, "null"] }
+        epsg: { type: [integer, "null"] }
+        crs_source: { type: [string, "null"] }
+        crs_hint: { type: [string, "null"], description: an unverified CRS name (DXF GEODATA, LandXML name) }
+    DesignInspection:
+      type: object
+      required: [id, state, error, job_id, path, format, file_size, sha256, detected, candidates, default_target_surface_id, created_at]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [inspecting, ready, failed] }
+        error: { type: [string, "null"] }
+        job_id: { type: string }
+        path: { type: string }
+        format: { $ref: "#/components/schemas/DesignFormat" }
+        file_size: { type: integer }
+        sha256: { type: [string, "null"] }
+        detected: { oneOf: [{ $ref: "#/components/schemas/DesignDetected" }, { type: "null" }] }
+        candidates: { type: array, items: { $ref: "#/components/schemas/DesignCandidate" } }
+        default_target_surface_id: { type: [string, "null"] }
+        created_at: { type: string, format: date-time }
+    DesignInspectionWithJob:
+      type: object
+      required: [inspection, job]
+      properties:
+        inspection: { $ref: "#/components/schemas/DesignInspection" }
+        job: { $ref: "#/components/schemas/Job" }
+    DesignImportOptions:
+      type: object
+      required: [candidate_ids, source_crs, horizontal_unit, vertical_unit]
+      properties:
+        candidate_ids: { type: array, minItems: 1, items: { type: string, pattern: "^c[0-9]{1,6}$" } }
+        source_crs: { type: string, minLength: 1, description: "'EPSG:<code>' or WKT; parsed with pyproj.CRS.from_user_input" }
+        horizontal_unit: { $ref: "#/components/schemas/LinearUnit" }
+        vertical_unit: { $ref: "#/components/schemas/LinearUnit" }
+        swap_xy: { type: boolean, description: "false when absent" }
+        target_surface_id: { type: [string, "null"], description: "null when absent. A ready cloud_dsm surface; the output adopts its CRS and cell size on the aligned lattice (same_lattice with it)" }
+        cell_size_m: { type: [number, "null"], exclusiveMinimum: 0, description: "null when absent; required when target_surface_id is null; ignored otherwise; default in the UI 0.25" }
+        max_edge_m: { type: [number, "null"], minimum: 0, description: "null when absent. Points geometry only; null = automatic, 0 = off" }
+    DesignWarning:
+      type: object
+      required: [code, level, message]
+      properties:
+        code: { type: string, description: "no_overlap, low_overlap, no_target, looks_geographic, looks_local, foot_ambiguity, units_mismatch_crs, units_assumed, z_offset, z_units, crs_assumed, crs_from_file, overlapping_triangles, long_edges_removed, duplicate_points, degenerate_triangles, sentinel_nodata, nodata_unknown, no_heights, unsupported_entities, chorded_arcs, mixed_geometry, nothing_to_triangulate, empty_result, geographic_output, non_metric_output, unsupported_crs_unit, grid_too_large, large_grid, not_tin" }
+        level: { $ref: "#/components/schemas/DesignWarningLevel" }
+        message: { type: string }
+    DesignSuggestion:
+      type: object
+      required: [code, message, overlap_fraction, options_patch]
+      properties:
+        code: { type: string, enum: [swap_xy, horizontal_unit] }
+        message: { type: string }
+        overlap_fraction: { type: number }
+        options_patch: { type: object, additionalProperties: true, description: keys of DesignImportOptions to overwrite }
+    DesignPreviewOutput:
+      type: object
+      required: [crs_wkt, epsg, cell_size_m, width, height, bounds_native, preview_cell_size_m]
+      properties:
+        crs_wkt: { type: string }
+        epsg: { type: [integer, "null"] }
+        cell_size_m: { type: number }
+        width: { type: integer }
+        height: { type: integer }
+        bounds_native: { type: array, items: { type: number }, minItems: 4, maxItems: 4 }
+        preview_cell_size_m: { type: number }
+    DesignZCheck:
+      type: object
+      required: [median_dz_m, p05_dz_m, p95_dz_m, n_samples, design_z_min_m, design_z_max_m]
+      properties:
+        median_dz_m: { type: number }
+        p05_dz_m: { type: number }
+        p95_dz_m: { type: number }
+        n_samples: { type: integer }
+        design_z_min_m: { type: number }
+        design_z_max_m: { type: number }
+    DesignPreview:
+      type: object
+      required: [id, inspection_id, state, error, job_id, options, output, triangle_count, overlap_fraction, target_covered_fraction, design_area_m2, z_check, warnings, suggestions, created_at]
+      properties:
+        id: { type: string }
+        inspection_id: { type: string }
+        state: { type: string, enum: [running, ready, failed] }
+        error: { type: [string, "null"] }
+        job_id: { type: string }
+        options: { $ref: "#/components/schemas/DesignImportOptions" }
+        output: { oneOf: [{ $ref: "#/components/schemas/DesignPreviewOutput" }, { type: "null" }] }
+        triangle_count: { type: [integer, "null"] }
+        overlap_fraction: { type: [number, "null"] }
+        target_covered_fraction: { type: [number, "null"] }
+        design_area_m2: { type: [number, "null"] }
+        z_check: { oneOf: [{ $ref: "#/components/schemas/DesignZCheck" }, { type: "null" }] }
+        warnings: { type: array, items: { $ref: "#/components/schemas/DesignWarning" } }
+        suggestions: { type: array, items: { $ref: "#/components/schemas/DesignSuggestion" } }
+        created_at: { type: string, format: date-time }
+    DesignPreviewWithJob:
+      type: object
+      required: [preview, job]
+      properties:
+        preview: { $ref: "#/components/schemas/DesignPreview" }
+        job: { $ref: "#/components/schemas/Job" }
+    DesignSurfaceCreate:
+      type: object
+      required: [inspection_id, preview_id]
+      properties:
+        inspection_id: { type: string }
+        preview_id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        accept_warnings: { type: boolean, description: "false when absent" }
+    DesignSource:
+      type: object
+      required: [path, format, units, vertical_units, sha256, candidates, source_crs_wkt, source_epsg, swap_xy, max_edge_m, aligned_to_surface_id, accepted_warnings]
+      properties:
+        path: { type: string }
+        format: { $ref: "#/components/schemas/DesignFormat" }
+        units: { oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }] }
+        vertical_units: { $ref: "#/components/schemas/LinearUnit" }
+        sha256: { type: string }
+        candidates: { type: array, items: { type: string } }
+        source_crs_wkt: { type: string }
+        source_epsg: { type: [integer, "null"] }
+        swap_xy: { type: boolean }
+        max_edge_m: { type: [number, "null"] }
+        aligned_to_surface_id: { type: [string, "null"] }
+        accepted_warnings: { type: array, items: { type: string } }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -5059,6 +6653,9 @@ components:
               maps.changed,
               map_runs.changed,
               map_labels.changed,
+              pointclouds.changed,
+              surfaces.changed,
+              volumes.changed,
             ]
         project_id: { type: string, description: "the project id, or `library` for library jobs" }
         job_id: { type: [string, "null"] }

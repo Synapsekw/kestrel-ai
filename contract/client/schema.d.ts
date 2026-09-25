@@ -1659,6 +1659,540 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/pointclouds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every point cloud in the project, newest first. */
+        get: operations["listPointClouds"];
+        put?: never;
+        /**
+         * Import a LAS or LAZ file (a `pointcloud_import` job). The source file is only read and is
+         *     never kept in the project. Validation and the RAM and disk admission run again here; a
+         *     refusal creates no row.
+         */
+        post: operations["createPointCloud"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read a LAS/LAZ file's header and VLRs (at most 1 MiB) and judge admission, without importing it. */
+        post: operations["inspectPointCloudFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getPointCloud"];
+        put?: never;
+        post?: never;
+        /** Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched. */
+        delete: operations["deletePointCloud"];
+        options?: never;
+        head?: never;
+        /** Rename, correct the survey date, link or unlink a map, or assign an EPSG to a cloud that has no CRS. */
+        patch: operations["patchPointCloud"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/octree/{octreeFile}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                octreeFile: components["parameters"]["octreeFile"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One file of the cloud's Potree 2.0 display copy, for the 3D viewer. Exactly one byte range
+         *     (`bytes=a-b`, `bytes=a-` or `bytes=-n`) of at most 64 MiB is answered 206; no `Range`
+         *     answers the whole file with 200 only when it is at most 64 MiB. Multiple ranges, malformed
+         *     syntax, a start at or past the end, a range over 64 MiB, or no `Range` on a bigger file
+         *     answer 416 with `Content-Range: bytes *\/<size>`. The body streams in 1 MiB chunks.
+         *     `Cache-Control: private, max-age=31536000, immutable`. The token goes in the `token`
+         *     query parameter. The loader's CORS preflight (`Range` and `Content-Type` request headers)
+         *     is answered by the CORS middleware before routing, so there is no OPTIONS operation.
+         */
+        get: operations["getPointCloudOctreeFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        /** The cloud's saved measurements, oldest first (at most 1 000). */
+        get: operations["listCloudMeasurements"];
+        put?: never;
+        /** Save a measurement. The server recomputes `results` from the points; a client never sends them. */
+        post: operations["createCloudMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteCloudMeasurement"];
+        options?: never;
+        head?: never;
+        /** Rename a measurement or change its note. */
+        patch: operations["updateCloudMeasurement"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write a LAZ copy of the source file (a `pointcloud_export` job) into
+         *     `exports/<stamp>-cloud-<name>/`, with `cloud.json` and, when asked and any exist,
+         *     `measurements.csv`. The source must still be reachable, with its size and mtime unchanged.
+         */
+        post: operations["createPointCloudExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every surface in the project, cloud DSMs and designs. */
+        get: operations["listSurfaces"];
+        put?: never;
+        /** Build a surface from a ready point cloud (a `surface_build` job). */
+        post: operations["createSurface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSurface"];
+        put?: never;
+        post?: never;
+        /** Delete the surface and its folder under `surfaces/`. */
+        delete: operations["deleteSurface"];
+        options?: never;
+        head?: never;
+        /** Rename a surface. */
+        patch: operations["patchSurface"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}/tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /** One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent. */
+        get: operations["getSurfaceTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}/ortho-tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /** One 256 px tile of a map's display raster warped into this surface's grid, for the ortho underlay. */
+        get: operations["getSurfaceOrthoTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        /** The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata. */
+        get: operations["getSurfaceSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read a design file (a `design_import` job, phase `inspect`) - hash it, detect units and CRS, and list its candidate surfaces. */
+        post: operations["createDesignInspection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDesignInspection"];
+        put?: never;
+        post?: never;
+        /** Cancel a running inspect or preview and delete the inspection folder. */
+        delete: operations["deleteDesignInspection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/candidates/{candidateId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                candidateId: components["parameters"]["candidateId"];
+            };
+            cookie?: never;
+        };
+        /** A 160 px plan view of one candidate. */
+        get: operations["getDesignCandidateThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Place, triangulate and rasterise the chosen candidates onto a coarse preview grid and validate them (a `design_import` job, phase `preview`). It cancels the inspection's running preview first. */
+        post: operations["createDesignPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews/{previewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDesignPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews/{previewId}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        /** The preview's plan image. */
+        get: operations["getDesignPreviewImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-surfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build the design surface from a ready preview (a `design_import` job, phase `build`); the new `Surface` has `kind` `design`. */
+        post: operations["createDesignSurface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every volume measurement. Recomputes each fingerprint; a changed ready one becomes `stale`. */
+        get: operations["listVolumeMeasurements"];
+        put?: never;
+        /** Create a measurement and queue its `volume_calc` job. */
+        post: operations["createVolumeMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getVolumeMeasurement"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteVolumeMeasurement"];
+        options?: never;
+        head?: never;
+        /** Change a measurement's inputs; any change other than `name` makes it `stale`. */
+        patch: operations["patchVolumeMeasurement"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}/calculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recalculate a measurement (a `volume_calc` job). */
+        post: operations["calculateVolumeMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}/diff-tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /** One 256 px cut/fill tile in the top surface's grid (red below the base, blue above). */
+        get: operations["getVolumeDiffTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}/footprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        /** The buffered detection footprints the measurement masks, in the surface CRS; at most 5 000. */
+        get: operations["getVolumeFootprints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volume-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>-volumes-<title>/` (a `volume_export` job). */
+        post: operations["createVolumeExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/exports": {
         parameters: {
             query?: never;
@@ -1878,7 +2412,12 @@ export interface components {
                  *     details `{kind, allowed}`), library_unavailable (503: the model library could not
                  *     be opened), model_unavailable (409: the library model's weights file is missing),
                  *     unmapped_classes (422: the run's model has classes with no project class and no
-                 *     remembered mapping; details `{model_id, unmapped}`)
+                 *     remembered mapping; details `{model_id, unmapped}`), unsupported_point_cloud,
+                 *     insufficient_memory and insufficient_disk (422: a point cloud cannot be read or
+                 *     admitted), link_needs_coordinates, no_overlap and crs_already_set (422: a point
+                 *     cloud patch), grid_too_large (422: a surface grid over the cell ceiling),
+                 *     job_running (409: the resource's job is queued or running), not_ready (409:
+                 *     the resource has not finished importing), range_not_satisfiable (416)
                  */
                 code: string;
                 message: string;
@@ -4853,8 +5392,754 @@ export interface components {
             /** @description relative to the project folder */
             path: string;
         };
+        /** @description min, max and mean are exact; the percentiles come from a stride sample of at most 2 M points */
+        PointCloudZStats: {
+            min: number;
+            max: number;
+            mean: number;
+            p01: number;
+            p1: number;
+            p5: number;
+            p50: number;
+            p95: number;
+            p99: number;
+            p999: number;
+            sample_count: number;
+        };
+        /**
+         * @example {
+         *       "id": "c0000000-8888-4000-8000-000000000001",
+         *       "name": "Chimney stack 3D",
+         *       "status": "ready",
+         *       "error": null,
+         *       "source_path": "\\\\DanNas\\surveys\\chimney.las",
+         *       "source_size": 773872531,
+         *       "source_sha256": "9f2c0d8e7a1b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5",
+         *       "las_version": "1.2",
+         *       "point_format": 3,
+         *       "point_count": 21697184,
+         *       "has_rgb": true,
+         *       "scale": [
+         *         0.001,
+         *         0.001,
+         *         0.001
+         *       ],
+         *       "crs_wkt": "PROJCS[\"WGS 84 / UTM zone 39N\"]",
+         *       "epsg": 32639,
+         *       "proj4": "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs",
+         *       "vertical_crs": null,
+         *       "crs_source": "file",
+         *       "bounds_native": [
+         *         553012.4,
+         *         2847210.9,
+         *         -52.3,
+         *         553198.7,
+         *         2847402.1,
+         *         31.8
+         *       ],
+         *       "bounds_repaired": true,
+         *       "bounds_wgs84": [
+         *         51.5301,
+         *         25.7331,
+         *         51.532,
+         *         25.7349
+         *       ],
+         *       "octree_spacing_m": 1.52,
+         *       "z_stats": {
+         *         "min": -52.3,
+         *         "max": 31.8,
+         *         "mean": -41.2,
+         *         "p01": -46.1,
+         *         "p1": -45.9,
+         *         "p5": -45.6,
+         *         "p50": -44.8,
+         *         "p95": -30.2,
+         *         "p99": -5.1,
+         *         "p999": 20.4,
+         *         "sample_count": 1972472
+         *       },
+         *       "class_counts": {
+         *         "0": 21697184
+         *       },
+         *       "octree_bytes": 137390210,
+         *       "captured_on": "2026-09-10",
+         *       "map_id": null,
+         *       "job_id": "j0000000-4444-4000-8000-000000000001",
+         *       "created_at": "2026-09-23T10:00:00Z"
+         *     }
+         */
+        PointCloudOut: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            /** @description readable text when `failed` */
+            error: string | null;
+            /** @description the original file; only ever read */
+            source_path: string;
+            /** Format: int64 */
+            source_size: number;
+            /** @description streamed while the work copy is made */
+            source_sha256: string | null;
+            /** @description e.g. `1.2` */
+            las_version: string | null;
+            point_format: number | null;
+            /**
+             * Format: int64
+             * @description the scanned count
+             */
+            point_count: number | null;
+            has_rgb: boolean | null;
+            /** @description the header scales sx, sy, sz; the coordinate precision shown with every pick */
+            scale: number[] | null;
+            /** @description the horizontal CRS; null means no coordinates */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description for client-side conversions */
+            proj4: string | null;
+            /** @description the vertical CRS name; null means heights as stored */
+            vertical_crs: string | null;
+            /** @enum {string|null} */
+            crs_source: "file" | "assigned" | null;
+            /** @description minx, miny, minz, maxx, maxy, maxz; the true bounds from the scan */
+            bounds_native: number[] | null;
+            /** @description true when the header bounds did not contain every point */
+            bounds_repaired: boolean | null;
+            /** @description minlon, minlat, maxlon, maxlat */
+            bounds_wgs84: number[] | null;
+            /** @description the octree root node's spacing */
+            octree_spacing_m: number | null;
+            z_stats: components["schemas"]["PointCloudZStats"] | null;
+            /** @description the ASPRS classification histogram, keyed by class code */
+            class_counts: {
+                [key: string]: number;
+            } | null;
+            /** Format: int64 */
+            octree_bytes: number | null;
+            /**
+             * Format: date
+             * @description when the survey was flown
+             */
+            captured_on: string | null;
+            /** @description the linked orthomosaic */
+            map_id: string | null;
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PointCloudList: {
+            items: components["schemas"]["PointCloudOut"][];
+        };
+        PointCloudCreate: {
+            /** @description absolute path of a .las or .laz file */
+            path: string;
+            /** @description the file stem when absent */
+            name?: string;
+            /** @description link this map on import; subject to the same checks as a PATCH */
+            map_id?: string;
+        };
+        PointCloudWithJob: {
+            cloud: components["schemas"]["PointCloudOut"];
+            job: components["schemas"]["Job"];
+        };
+        PointCloudPatch: {
+            name?: string;
+            /**
+             * Format: date
+             * @description when the survey was flown; null clears it
+             */
+            captured_on?: string | null;
+            /** @description link a map; null unlinks */
+            map_id?: string | null;
+            /** @description only when the cloud has no CRS (`crs_wkt` is null); the cloud is never reprojected */
+            assign_epsg?: number;
+        };
+        PointCloudInspectRequest: {
+            /** @description absolute path of a .las or .laz file */
+            path: string;
+        };
+        PointCloudAdmission: {
+            ok: boolean;
+            /** Format: int64 */
+            ram_needed_bytes: number;
+            /** Format: int64 */
+            ram_available_bytes: number;
+            /** Format: int64 */
+            disk_needed_bytes: number;
+            /** Format: int64 */
+            disk_available_bytes: number;
+            /** @description when `ok` is false */
+            reason: string | null;
+        };
+        PointCloudFileInfo: {
+            path: string;
+            /** Format: int64 */
+            size: number;
+            /** @description true for LAZ */
+            compressed: boolean;
+            las_version: string;
+            point_format: number;
+            /**
+             * Format: int64
+             * @description the header's count
+             */
+            point_count: number;
+            has_rgb: boolean;
+            /** @description minx, miny, minz, maxx, maxy, maxz as the header states them */
+            header_bounds: number[];
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** Format: date */
+            captured_on: string | null;
+            admission: components["schemas"]["PointCloudAdmission"];
+        };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export";
+        CloudMeasurementKind: "point" | "distance" | "height" | "vertical";
+        CloudMeasurementPoint: {
+            /** @description native CRS */
+            x: number;
+            y: number;
+            z: number;
+            /** @description the display spacing of the deepest loaded node that contains the pick */
+            uncertainty_m: number;
+        };
+        CloudMeasurementCreate: {
+            kind: components["schemas"]["CloudMeasurementKind"];
+            /** @description one point for `point`, two for the other kinds */
+            points: components["schemas"]["CloudMeasurementPoint"][];
+            /** @description "Distance 3"-style numbering when absent */
+            name?: string;
+            note?: string;
+        };
+        CloudMeasurementUpdate: {
+            name?: string;
+            /** @description null clears it */
+            note?: string | null;
+        };
+        /** @description computed by the server from the stored points; a quantity that does not apply to the kind is null */
+        CloudMeasurementResults: {
+            lon: number | null;
+            lat: number | null;
+            dx: number | null;
+            dy: number | null;
+            dz: number | null;
+            distance_3d: number | null;
+            distance_horizontal: number | null;
+            distance_vertical: number | null;
+            /** @description second pick minus first */
+            height_difference: number | null;
+            lean_offset_m: number | null;
+            /** @description degrees from vertical */
+            lean_angle_deg: number | null;
+            /** @description the top relative to the base */
+            lean_azimuth_deg: number | null;
+            lean_mm_per_m: number | null;
+            uncertainty_m: number | null;
+            angle_uncertainty_deg: number | null;
+        };
+        CloudMeasurementOut: {
+            id: string;
+            point_cloud_id: string;
+            kind: components["schemas"]["CloudMeasurementKind"];
+            name: string;
+            note: string | null;
+            points: components["schemas"]["CloudMeasurementPoint"][];
+            results: components["schemas"]["CloudMeasurementResults"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CloudMeasurementList: {
+            items: components["schemas"]["CloudMeasurementOut"][];
+        };
+        PointCloudExportRequest: {
+            /** @enum {string} */
+            format: "laz";
+            /** @description true when absent: write measurements.csv when the cloud has measurements */
+            include_measurements?: boolean;
+        };
+        /** @enum {string} */
+        SurfaceKind: "cloud_dsm" | "design";
+        /** @enum {string} */
+        SurfaceStatus: "building" | "ready" | "failed";
+        /**
+         * @description median, mean, max and min are cloud statistics (S2); tin, delaunay, dem_resample and dem_copy are design methods (S3)
+         * @enum {string}
+         */
+        SurfaceMethod: "median" | "mean" | "max" | "min" | "tin" | "delaunay" | "dem_resample" | "dem_copy";
+        /** @enum {string} */
+        SurfaceBuildMethod: "median" | "mean" | "max" | "min";
+        /** @description the build request with the defaults resolved */
+        SurfaceBuildParams: {
+            point_cloud_id: string;
+            name: string;
+            method: components["schemas"]["SurfaceBuildMethod"];
+            /** @description the cell size actually used */
+            cell_size_m: number;
+            auto_cell: boolean;
+            hole_fill_max_gap_m: number;
+            despike_m: number | null;
+            z_clip: number[] | null;
+            drop_noise_classes: boolean;
+            assume_metres: boolean;
+        };
+        SurfaceBuildStats: {
+            points_read: number;
+            points_used: number;
+            points_dropped: {
+                noise_class: number;
+                withheld: number;
+                z_clip: number;
+            };
+            density_per_m2: number | null;
+            spacing_m: number | null;
+            auto_cell: boolean;
+            cells_valid: number;
+            cells_despiked: number;
+            cells_filled: number;
+            z_p02: number | null;
+            z_p98: number | null;
+            reprojected_from_epsg: number | null;
+            build_s: number;
+        };
+        Surface: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["SurfaceKind"];
+            status: components["schemas"]["SurfaceStatus"];
+            error: string | null;
+            point_cloud_id: string | null;
+            /** @description null for cloud_dsm */
+            design_source: components["schemas"]["DesignSource"] | null;
+            /** @description null means local metres */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description derived from crs_wkt at response time */
+            proj4: string | null;
+            /** @description null while building */
+            cell_size_m: number | null;
+            width: number | null;
+            height: number | null;
+            /** @description GDAL order, north-up */
+            geotransform: number[] | null;
+            /** @description minx, miny, maxx, maxy of the grid */
+            bounds_native: number[] | null;
+            z_min: number | null;
+            z_max: number | null;
+            coverage_fraction: number | null;
+            /** @description null while building */
+            method: components["schemas"]["SurfaceMethod"] | null;
+            /** @description null for design */
+            build_params: components["schemas"]["SurfaceBuildParams"] | null;
+            /** @description null for design */
+            stats: components["schemas"]["SurfaceBuildStats"] | null;
+            /**
+             * Format: date
+             * @description read through from the cloud
+             */
+            captured_on: string | null;
+            /** @description read through from the cloud; the ortho of the same flight */
+            map_id: string | null;
+            tile_grid: components["schemas"]["TileGrid"] | null;
+            measurement_count: number;
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SurfaceList: {
+            items: components["schemas"]["Surface"][];
+        };
+        SurfaceBuildRequest: {
+            point_cloud_id: string;
+            name?: string;
+            method?: components["schemas"]["SurfaceBuildMethod"];
+            /** @description auto when absent or null */
+            cell_size_m?: number | null;
+            /** @description 1.0 when absent; 0 = off */
+            hole_fill_max_gap_m?: number;
+            /** @description 1.0 when absent; null = off */
+            despike_m?: number | null;
+            z_clip?: number[] | null;
+            /** @description true when absent */
+            drop_noise_classes?: boolean;
+            /** @description false when absent */
+            assume_metres?: boolean;
+        };
+        SurfacePatch: {
+            name?: string;
+        };
+        SurfaceWithJob: {
+            surface: components["schemas"]["Surface"];
+            job: components["schemas"]["Job"];
+        };
+        SurfaceSample: {
+            x: number;
+            y: number;
+            /** @description null over nodata */
+            z: number | null;
+        };
+        /** @enum {string} */
+        VolumeStatus: "calculating" | "ready" | "failed" | "stale";
+        /** @enum {string} */
+        VolumeBaseKind: "toe_plane" | "toe_surface" | "flat" | "surface";
+        /** @description z is required for flat and surface_id for surface; the server answers 422 otherwise */
+        VolumeBase: {
+            kind: components["schemas"]["VolumeBaseKind"];
+            z?: number | null;
+            surface_id?: string | null;
+        };
+        /** @description [x, y] vertices in the top surface's CRS */
+        VolumeRing: number[][];
+        /** @enum {string} */
+        ExclusionMode: "patch" | "exclude";
+        ExclusionPolygon: {
+            /** @description client-generated (a UUID) so edits can target it */
+            id: string;
+            ring: components["schemas"]["VolumeRing"];
+            mode: components["schemas"]["ExclusionMode"];
+        };
+        VolumeMasks: {
+            detection_run_ids: string[];
+            /** @description null means every class */
+            class_ids: string[] | null;
+            buffer_m: number;
+            exclusion_polygons: components["schemas"]["ExclusionPolygon"][];
+        };
+        /** @description fields that are sent replace the stored ones */
+        VolumeMasksInput: {
+            /** @description [] when absent */
+            detection_run_ids?: string[];
+            /** @description null when absent */
+            class_ids?: string[] | null;
+            /** @description 1.0 when absent */
+            buffer_m?: number;
+            /** @description [] when absent */
+            exclusion_polygons?: components["schemas"]["ExclusionPolygon"][];
+        };
+        AlignmentMeasured: {
+            n_cells: number;
+            median_dz: number;
+            mad: number;
+            sigma: number;
+            tilt_mm_per_m: number;
+            span_m: number;
+        };
+        VolumeAlignment: {
+            stable_polygon: components["schemas"]["VolumeRing"] | null;
+            apply_shift: boolean;
+            measured: components["schemas"]["AlignmentMeasured"] | null;
+        };
+        VolumeAlignmentInput: {
+            /** @description null when absent */
+            stable_polygon?: components["schemas"]["VolumeRing"] | null;
+            /** @description false when absent */
+            apply_shift?: boolean;
+        };
+        /** @enum {string} */
+        VolumeWarningCode: "nodata_high" | "patch_too_large" | "patch_failed" | "edge_coverage_low" | "base_fit_poor" | "stable_area_small" | "no_stable_area" | "alignment_offset" | "alignment_datum" | "alignment_noisy" | "alignment_tilt" | "mask_other_flight";
+        VolumeWarning: {
+            code: components["schemas"]["VolumeWarningCode"];
+            /** @enum {string} */
+            severity: "warn" | "danger";
+            message: string;
+        };
+        VolumeTotals: {
+            fill_m3: number;
+            cut_m3: number;
+            net_m3: number;
+        };
+        BaseFit: {
+            kind: components["schemas"]["VolumeBaseKind"];
+            samples: number;
+            rejected: number;
+            usable_edge_fraction: number;
+            rms_m: number;
+            plane: number[] | null;
+        };
+        VolumeUncertainty: {
+            total_m3: number | null;
+            base_m3: number | null;
+            alignment_m3: number | null;
+            cell_size_m3: number | null;
+            nodata_m3: number | null;
+            patch_m3: number | null;
+            complete: boolean;
+        };
+        /** @description a provenance snapshot of a surface at calculation time */
+        SurfaceRef: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["SurfaceKind"];
+            method: components["schemas"]["SurfaceMethod"] | null;
+            cell_size_m: number;
+            /** Format: date */
+            captured_on: string | null;
+            cloud_file: string | null;
+            cloud_sha256: string | null;
+        };
+        VolumeResults: {
+            fill_m3: number;
+            cut_m3: number;
+            net_m3: number;
+            area_m2: number;
+            polygon_area_m2: number;
+            measured_area_m2: number;
+            masked_area_m2: number;
+            excluded_area_m2: number;
+            nodata_area_m2: number;
+            cell_size_m: number;
+            areal_scale_factor: number;
+            shift_applied_m: number;
+            diff_scale_m: number;
+            duration_s: number;
+            footprints_used: number;
+            patch_regions: number;
+            unshifted: components["schemas"]["VolumeTotals"] | null;
+            alignment: components["schemas"]["AlignmentMeasured"] | null;
+            base_fit: components["schemas"]["BaseFit"] | null;
+            uncertainty: components["schemas"]["VolumeUncertainty"];
+            warnings: components["schemas"]["VolumeWarning"][];
+            top_surface: components["schemas"]["SurfaceRef"];
+            base_surface: components["schemas"]["SurfaceRef"] | null;
+            /** @description a canonical snapshot of the inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** @description sha256 of the canonical JSON of `inputs` */
+            inputs_fingerprint: string;
+            engine_version: number;
+            /** Format: date-time */
+            computed_at: string;
+        };
+        VolumeMeasurement: {
+            id: string;
+            name: string;
+            status: components["schemas"]["VolumeStatus"];
+            error: string | null;
+            polygon_native: components["schemas"]["VolumeRing"];
+            top_surface_id: string;
+            base: components["schemas"]["VolumeBase"];
+            masks: components["schemas"]["VolumeMasks"];
+            alignment: components["schemas"]["VolumeAlignment"];
+            results: components["schemas"]["VolumeResults"] | null;
+            /** @description response only: the inputs that changed, e.g. "masks: detection run deleted" */
+            stale_reasons: string[];
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        VolumeMeasurementList: {
+            items: components["schemas"]["VolumeMeasurement"][];
+        };
+        VolumeMeasurementCreate: {
+            name: string;
+            polygon_native: components["schemas"]["VolumeRing"];
+            top_surface_id: string;
+            base: components["schemas"]["VolumeBase"];
+            masks?: components["schemas"]["VolumeMasksInput"];
+            alignment?: components["schemas"]["VolumeAlignmentInput"];
+        };
+        VolumeMeasurementPatch: {
+            name?: string;
+            polygon_native?: components["schemas"]["VolumeRing"];
+            top_surface_id?: string;
+            base?: components["schemas"]["VolumeBase"];
+            masks?: components["schemas"]["VolumeMasksInput"];
+            alignment?: components["schemas"]["VolumeAlignmentInput"];
+        };
+        VolumeMeasurementWithJob: {
+            measurement: components["schemas"]["VolumeMeasurement"];
+            job: components["schemas"]["Job"];
+        };
+        VolumeFootprint: {
+            run_id: string;
+            detection_id: string;
+            class_id: string;
+            ring: components["schemas"]["VolumeRing"];
+        };
+        VolumeFootprints: {
+            items: components["schemas"]["VolumeFootprint"][];
+            /** @description true past 5 000 footprints */
+            truncated: boolean;
+        };
+        /** @enum {string} */
+        VolumeExportFormat: "pdf" | "gpkg" | "csv" | "xlsx";
+        VolumeExportRequest: {
+            measurement_ids: string[];
+            formats: components["schemas"]["VolumeExportFormat"][];
+            /** @description the project name when absent */
+            title?: string;
+        };
+        /** @enum {string} */
+        DesignFormat: "geotiff" | "landxml" | "dxf";
+        /** @enum {string} */
+        LinearUnit: "millimetre" | "centimetre" | "metre" | "international_foot" | "us_survey_foot";
+        /** @enum {string} */
+        DesignGeometry: "faces" | "points" | "raster" | "none";
+        /** @enum {string} */
+        DesignCandidateKind: "dem" | "tin_surface" | "dxf_layer";
+        /** @enum {string} */
+        DesignWarningLevel: "info" | "warn" | "block";
+        DesignInspectionCreate: {
+            /** @description absolute path of a .tif/.tiff */
+            path: string;
+        };
+        DesignRasterInfo: {
+            width: number;
+            height: number;
+            cell_x: number;
+            cell_y: number;
+            dtype: string;
+            nodata: number | null;
+            band_count: number;
+        };
+        DesignCandidate: {
+            id: string;
+            kind: components["schemas"]["DesignCandidateKind"];
+            name: string;
+            geometry: components["schemas"]["DesignGeometry"];
+            /** @description [minx, miny, maxx, maxy] in file units, x = easting (LandXML N/E already applied) */
+            bounds_file: number[];
+            z_min: number | null;
+            z_max: number | null;
+            point_count: number;
+            face_count: number;
+            /** @description DXF: 3dface, mesh, polyface, polymesh, polyline_3d, polyline_2d, lwpolyline, line, point, unsupported; LandXML: invisible_faces */
+            entity_counts: {
+                [key: string]: number;
+            };
+            default_selected: boolean;
+            notes: components["schemas"]["DesignWarning"][];
+            raster: components["schemas"]["DesignRasterInfo"] | null;
+        };
+        DesignDetected: {
+            horizontal_unit: components["schemas"]["LinearUnit"] | null;
+            vertical_unit: components["schemas"]["LinearUnit"] | null;
+            /** @description e.g. 'LandXML <Imperial linearUnit=USSurveyFoot>', 'DXF $INSUNITS=6', 'CRS axis unit', 'none' */
+            unit_source: string;
+            crs_wkt: string | null;
+            epsg: number | null;
+            crs_source: string | null;
+            /** @description an unverified CRS name (DXF GEODATA */
+            crs_hint: string | null;
+        };
+        DesignInspection: {
+            id: string;
+            /** @enum {string} */
+            state: "inspecting" | "ready" | "failed";
+            error: string | null;
+            job_id: string;
+            path: string;
+            format: components["schemas"]["DesignFormat"];
+            file_size: number;
+            sha256: string | null;
+            detected: components["schemas"]["DesignDetected"] | null;
+            candidates: components["schemas"]["DesignCandidate"][];
+            default_target_surface_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        DesignInspectionWithJob: {
+            inspection: components["schemas"]["DesignInspection"];
+            job: components["schemas"]["Job"];
+        };
+        DesignImportOptions: {
+            candidate_ids: string[];
+            /** @description 'EPSG:<code>' or WKT; parsed with pyproj.CRS.from_user_input */
+            source_crs: string;
+            horizontal_unit: components["schemas"]["LinearUnit"];
+            vertical_unit: components["schemas"]["LinearUnit"];
+            /** @description false when absent */
+            swap_xy?: boolean;
+            /** @description null when absent. A ready cloud_dsm surface; the output adopts its CRS and cell size on the aligned lattice (same_lattice with it) */
+            target_surface_id?: string | null;
+            /** @description null when absent; required when target_surface_id is null; ignored otherwise; default in the UI 0.25 */
+            cell_size_m?: number | null;
+            /** @description null when absent. Points geometry only; null = automatic, 0 = off */
+            max_edge_m?: number | null;
+        };
+        DesignWarning: {
+            /** @description no_overlap, low_overlap, no_target, looks_geographic, looks_local, foot_ambiguity, units_mismatch_crs, units_assumed, z_offset, z_units, crs_assumed, crs_from_file, overlapping_triangles, long_edges_removed, duplicate_points, degenerate_triangles, sentinel_nodata, nodata_unknown, no_heights, unsupported_entities, chorded_arcs, mixed_geometry, nothing_to_triangulate, empty_result, geographic_output, non_metric_output, unsupported_crs_unit, grid_too_large, large_grid, not_tin */
+            code: string;
+            level: components["schemas"]["DesignWarningLevel"];
+            message: string;
+        };
+        DesignSuggestion: {
+            /** @enum {string} */
+            code: "swap_xy" | "horizontal_unit";
+            message: string;
+            overlap_fraction: number;
+            /** @description keys of DesignImportOptions to overwrite */
+            options_patch: {
+                [key: string]: unknown;
+            };
+        };
+        DesignPreviewOutput: {
+            crs_wkt: string;
+            epsg: number | null;
+            cell_size_m: number;
+            width: number;
+            height: number;
+            bounds_native: number[];
+            preview_cell_size_m: number;
+        };
+        DesignZCheck: {
+            median_dz_m: number;
+            p05_dz_m: number;
+            p95_dz_m: number;
+            n_samples: number;
+            design_z_min_m: number;
+            design_z_max_m: number;
+        };
+        DesignPreview: {
+            id: string;
+            inspection_id: string;
+            /** @enum {string} */
+            state: "running" | "ready" | "failed";
+            error: string | null;
+            job_id: string;
+            options: components["schemas"]["DesignImportOptions"];
+            output: components["schemas"]["DesignPreviewOutput"] | null;
+            triangle_count: number | null;
+            overlap_fraction: number | null;
+            target_covered_fraction: number | null;
+            design_area_m2: number | null;
+            z_check: components["schemas"]["DesignZCheck"] | null;
+            warnings: components["schemas"]["DesignWarning"][];
+            suggestions: components["schemas"]["DesignSuggestion"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        DesignPreviewWithJob: {
+            preview: components["schemas"]["DesignPreview"];
+            job: components["schemas"]["Job"];
+        };
+        DesignSurfaceCreate: {
+            inspection_id: string;
+            preview_id: string;
+            name?: string;
+            /** @description false when absent */
+            accept_warnings?: boolean;
+        };
+        DesignSource: {
+            path: string;
+            format: components["schemas"]["DesignFormat"];
+            units: components["schemas"]["LinearUnit"] | null;
+            vertical_units: components["schemas"]["LinearUnit"];
+            sha256: string;
+            candidates: string[];
+            source_crs_wkt: string;
+            source_epsg: number | null;
+            swap_xy: boolean;
+            max_edge_m: number | null;
+            aligned_to_surface_id: string | null;
+            accepted_warnings: string[];
+        };
+        /** @enum {string} */
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -4931,7 +6216,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed";
             /** @description the project id, or `library` for library jobs */
             project_id: string;
             job_id: string | null;
@@ -5054,6 +6339,16 @@ export interface components {
         zoneId: string;
         labelId: string;
         areaId: string;
+        cloudId: string;
+        /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+        cloudMeasurementId: string;
+        octreeFile: "metadata.json" | "hierarchy.bin" | "octree.bin";
+        surfaceId: string;
+        /** @description a volume measurement */
+        measurementId: string;
+        inspectionId: string;
+        previewId: string;
+        candidateId: string;
     };
     requestBodies: never;
     headers: never;
@@ -8639,6 +9934,1242 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listPointClouds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description point clouds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createPointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudCreate"];
+            };
+        };
+        responses: {
+            /** @description cloud created in `importing`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudWithJob"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description the file is not a readable LAS/LAZ (`unsupported_point_cloud`), or the import needs more memory (`insufficient_memory`) or disk (`insufficient_disk`) than is free; `message` is the text the UI shows */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    inspectPointCloudFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description the header facts and the admission verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudFileInfo"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description the file is not a readable LAS/LAZ (`unsupported_point_cloud`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the point cloud */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudOut"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description its import or export job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchPointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated point cloud */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudOut"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description a map link needs both entities to have a CRS (`link_needs_coordinates`) and overlapping WGS84 bounds (`no_overlap`); `assign_epsg` is refused when the file has a CRS (`crs_already_set`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPointCloudOctreeFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description one byte range, e.g. `bytes=0-21` */
+                Range?: string;
+            };
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                octreeFile: components["parameters"]["octreeFile"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the whole file (at most 64 MiB) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description the requested byte range */
+            206: {
+                headers: {
+                    /** @description bytes a-b/size */
+                    "Content-Range"?: string;
+                    "Accept-Ranges"?: "bytes";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "application/json": string;
+                };
+            };
+            /** @description the cloud is not `ready` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the range cannot be served (`code` is `range_not_satisfiable`); `Content-Range: bytes *\/<size>` */
+            416: {
+                headers: {
+                    /** @description bytes *\/size */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCloudMeasurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createCloudMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description the saved measurement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementOut"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description the wrong number of points for the kind, a `vertical` check whose points are less than 0.5 m apart vertically, or the cloud already has 1 000 measurements (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteCloudMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateCloudMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudMeasurementUpdate"];
+            };
+        };
+        responses: {
+            /** @description the updated measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementOut"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createPointCloudExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSurfaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description surfaces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfaceBuildRequest"];
+            };
+        };
+        responses: {
+            /** @description surface created in `building`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceWithJob"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description not enough free disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a cloud CRS the build cannot use, or an invalid request (`validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the surface */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Surface"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description a volume measurement uses the surface or its job is queued or running (`code` is `conflict`; the message names them), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfacePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated surface */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Surface"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurfaceTile: {
+        parameters: {
+            query?: {
+                /** @description multiply by a hypsometric ramp; false when absent */
+                tint?: boolean;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the tile is outside the grid or all nodata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurfaceOrthoTile: {
+        parameters: {
+            query: {
+                map_id: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image; PNG when it holds nodata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description the map does not overlap this tile */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the map or the surface has no CRS (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurfaceSample: {
+        parameters: {
+            query: {
+                x: number;
+                y: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the sample */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceSample"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesignInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignInspectionCreate"];
+            };
+        };
+        responses: {
+            /** @description inspection created in `inspecting`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignInspectionWithJob"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description the file is missing, has an unknown extension, or is a DWG (`code` is `validation_error`; a DWG has `details.reason: "dwg"`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the inspection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignInspection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDesignInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description a build uses the inspection (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignCandidateThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                candidateId: components["parameters"]["candidateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the candidate has no thumbnail */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesignPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignImportOptions"];
+            };
+        };
+        responses: {
+            /** @description preview created in `running`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignPreviewWithJob"];
+                };
+            };
+            /** @description the inspection is not ready (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description an unknown candidate, an unparseable CRS, or a LandXML or DEM selection of other than one candidate (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignPreview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignPreviewImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description preview image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the preview is not ready or failed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesignSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignSurfaceCreate"];
+            };
+        };
+        responses: {
+            /** @description surface created in `building`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceWithJob"];
+                };
+            };
+            /** @description the preview is not ready, is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listVolumeMeasurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurementList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description measurement created in `calculating`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurementWithJob"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface), a base that does not fit (`invalid_base`), or an invalid request (`validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurement"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the measurement is calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeMeasurementPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurement"];
+                };
+            };
+            /** @description the measurement is calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description changed inputs the rules refuse (`invalid_geometry`, `invalid_base`), or an invalid request (`validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    calculateVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurementWithJob"];
+                };
+            };
+            /** @description the measurement is already calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVolumeDiffTile: {
+        parameters: {
+            query?: {
+                /** @description the results' `computed_at`, for cache busting */
+                v?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the tile is outside the measured cells */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the measurement has no results (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVolumeFootprints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description footprints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeFootprints"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createVolumeExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description a measurement is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

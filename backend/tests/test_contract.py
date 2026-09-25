@@ -10,6 +10,7 @@ from schemathesis.specs.openapi.checks import (
     allow_header_conformance,
     content_type_conformance,
     negative_data_rejection,
+    positive_data_acceptance,
     response_schema_conformance,
     status_code_conformance,
     unsupported_method,
@@ -35,6 +36,22 @@ def test_stub_list_matches_routers(app):
     assert EXPECTED_STUBS <= ids, sorted(EXPECTED_STUBS - ids)
 
 
+def test_refusal_allowances_name_real_operations_and_declared_statuses():
+    """Every REFUSES_VALID_DATA entry is a real operationId and each status is declared for it."""
+    # REFUSES_VALID_DATA is empty at F0, so this loop checks nothing; it becomes live as S1-S3 add
+    # entries.
+    ops = {
+        op["operationId"]: op
+        for ops in yaml.safe_load(SPEC.read_text("utf-8"))["paths"].values()
+        for m, op in ops.items()
+        if m in METHODS
+    }
+    for op_id, statuses in REFUSES_VALID_DATA.items():
+        assert op_id in ops, op_id
+        declared = {int(code) for code in ops[op_id]["responses"] if str(code).isdigit()}
+        assert statuses <= declared, (op_id, sorted(statuses - declared))
+
+
 def test_every_spec_path_is_routed(app):
     wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
     have = _operations(app.openapi()["paths"])
@@ -49,9 +66,62 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Operations still served by 501 stubs: there are none left: any 501 now fails
-# `test_responses_conform`.
-EXPECTED_STUBS: set[str] = set()
+# Operations still served by 501 stubs: every operation of the point-cloud (S1), volumes (S2) and
+# design-surface (S3) specs, routed by foundation F0. Each unit that builds one removes it here and
+# from its router's STUBS; any other 501 fails `test_responses_conform`.
+EXPECTED_STUBS: set[str] = {
+    # S1 point clouds (app/pointclouds/router.py)
+    "listPointClouds",
+    "createPointCloud",
+    "inspectPointCloudFile",
+    "getPointCloud",
+    "patchPointCloud",
+    "deletePointCloud",
+    "getPointCloudOctreeFile",
+    "listCloudMeasurements",
+    "createCloudMeasurement",
+    "updateCloudMeasurement",
+    "deleteCloudMeasurement",
+    "createPointCloudExport",
+    # S2 surfaces (app/surfaces/router.py)
+    "listSurfaces",
+    "createSurface",
+    "getSurface",
+    "patchSurface",
+    "deleteSurface",
+    "getSurfaceTile",
+    "getSurfaceOrthoTile",
+    "getSurfaceSample",
+    # S2 volumes (app/volumes/router.py)
+    "listVolumeMeasurements",
+    "createVolumeMeasurement",
+    "getVolumeMeasurement",
+    "patchVolumeMeasurement",
+    "deleteVolumeMeasurement",
+    "calculateVolumeMeasurement",
+    "getVolumeDiffTile",
+    "getVolumeFootprints",
+    "createVolumeExport",
+    # S3 design surfaces (app/surfaces/design/router.py)
+    "createDesignInspection",
+    "getDesignInspection",
+    "deleteDesignInspection",
+    "getDesignCandidateThumbnail",
+    "createDesignPreview",
+    "getDesignPreview",
+    "getDesignPreviewImage",
+    "createDesignSurface",
+}
+
+# Operations that may refuse a schema-valid request by design, because the schema cannot express
+# the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an
+# admission refusal, a self-crossing polygon): operationId -> the statuses such a request may get.
+# For exactly those responses only schemathesis's positive-data-acceptance check is skipped; every
+# conformance check still runs, and the answer must carry its own error code, never
+# `validation_error` (FastAPI's malformed-request answer). This is the only allowance mechanism:
+# S1, S2 and S3 add entries here and never loosen the test another way. Empty until a unit builds a
+# refusing operation; each status must be declared for its operation in openapi.yaml (guarded below).
+REFUSES_VALID_DATA: dict[str, set[int]] = {}
 
 
 @pytest.fixture
@@ -91,4 +161,10 @@ def test_responses_conform(case, app, project_id, tmp_path):
     # unsupported_method / allow_header_conformance: literal segments such as /projects/open share
     # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.
     excluded = [negative_data_rejection, unsupported_method, allow_header_conformance]
+    op_id = case.operation.definition.raw.get("operationId")
+    if response.status_code in REFUSES_VALID_DATA.get(op_id, set()):
+        # A deliberate refusal of a schema-valid request: skip only positive-data acceptance.
+        code = response.json()["error"]["code"]
+        assert code and code != "validation_error", response.text
+        excluded.append(positive_data_acceptance)
     case.validate_response(response, excluded_checks=excluded)

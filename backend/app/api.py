@@ -1,3 +1,4 @@
+import importlib
 import logging
 
 from fastapi import APIRouter, Depends
@@ -96,3 +97,21 @@ try:
     api_router.include_router(review_router, dependencies=[Depends(require_kind(("detect",), ANY_KIND))])
 except Exception:
     log.exception("review router failed to load; review endpoints will be unavailable")
+
+# Point clouds, surfaces, volumes and design surfaces (foundation F0 of the 2026-09-23 point-cloud,
+# volumes and design-surface specs). Guarded like the maps router: laspy, scipy and rasterio are
+# native stacks, and a broken one must cost only its own endpoints, never the app. Detection
+# projects create and change these; any project may read them (a training project has none).
+for _module in (
+    "app.pointclouds.router",
+    "app.surfaces.router",
+    "app.surfaces.design.router",
+    "app.volumes.router",
+):
+    try:
+        api_router.include_router(
+            importlib.import_module(_module).router,
+            dependencies=[Depends(require_kind(("detect",), ANY_KIND))],
+        )
+    except Exception:
+        log.exception("%s failed to load; its endpoints will be unavailable", _module)

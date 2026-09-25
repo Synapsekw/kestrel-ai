@@ -1,8 +1,9 @@
 """Helper to mount 501 placeholders so the contract is fully routed before a sub-project lands.
 
-No router uses it right now: every contract operation is built. It is kept on purpose as the way a
-future unit routes its operations as 501 stubs before it lands (as the C x BM fix did for BM);
-`tests/test_contract.py` then lists those operations as expected 501s.
+Foundation F0 routes the point-cloud, volumes and design-surface operations through it
+(`app/pointclouds/router.py`, `app/surfaces/router.py`, `app/surfaces/design/router.py`,
+`app/volumes/router.py`); `tests/test_contract.py` lists them as expected 501s, and each unit that
+builds an operation removes it from its router's STUBS and from EXPECTED_STUBS.
 """
 
 from fastapi import APIRouter, Body, Depends
