@@ -81,6 +81,25 @@ describe("Segmented", () => {
     await userEvent.click(screen.getByRole("radio", { name: "List" }));
     expect(screen.getByRole("radio", { name: "List" })).toHaveAttribute("aria-checked", "true");
   });
+
+  it("Segmented: a disabled option cannot be chosen", async () => {
+    const onChange = vi.fn();
+    render(
+      <Segmented
+        label="Colour"
+        value="elevation"
+        onChange={onChange}
+        options={[
+          { value: "rgb", label: "RGB", disabled: true },
+          { value: "elevation", label: "Elevation" },
+        ]}
+      />,
+    );
+    const rgb = screen.getByRole("radio", { name: "RGB" });
+    expect(rgb).toBeDisabled();
+    await userEvent.click(rgb);
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
 
 describe("Tooltip", () => {

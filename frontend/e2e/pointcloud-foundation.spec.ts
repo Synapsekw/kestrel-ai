@@ -14,7 +14,7 @@ test("a detection project opens the empty Point clouds and Volumes screens from 
   await nav.getByRole("link", { name: "Point clouds", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds$`));
   await expect(page.getByRole("heading", { name: "Point clouds" })).toBeVisible();
-  await expect(page.getByText("Import a LAS or LAZ point cloud")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import", exact: true })).toBeVisible();
 
   await nav.getByRole("link", { name: "Volumes", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/volumes$`));

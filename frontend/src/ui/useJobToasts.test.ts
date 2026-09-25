@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@contract/client";
+import { runningJob } from "@/test/fixtures";
 import { jobToastText, reportedInline } from "./useJobToasts";
 
 const base: Job = {
@@ -51,5 +52,13 @@ describe("reportedInline", () => {
     expect(reportedInline({ ...base, type: "infer" }, "/p/p1/query")).toBe(true);
     expect(reportedInline({ ...base, type: "export" }, "/library")).toBe(false);
     expect(reportedInline(base, "/p/other/data")).toBe(false);
+  });
+
+  it("the Clouds screen reports its own LAZ export", () => {
+    const job = { ...runningJob, type: "pointcloud_export", project_id: "p1", state: "succeeded" } as Job;
+    expect(reportedInline(job, "/p/p1/clouds")).toBe(true);
+    expect(reportedInline(job, "/p/p1/clouds/c-123")).toBe(true);
+    expect(reportedInline(job, "/p/p1/maps/m-1")).toBe(false);
+    expect(reportedInline({ ...job, type: "import" } as Job, "/p/p1/data/x")).toBe(false);
   });
 });

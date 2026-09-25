@@ -120,12 +120,16 @@ const REPORTED_ON: Partial<Record<Job["type"], string>> = {
   dataset: "data",
   train: "train",
   infer: "query",
+  pointcloud_export: "clouds",
 };
 
 /** True when the screen at `pathname` shows this job's outcome itself, so a toast would repeat it. */
 export function reportedInline(job: Job, pathname: string): boolean {
   const segment = REPORTED_ON[job.type];
-  return !!segment && pathname.replace(/\/$/, "").endsWith(`/p/${job.project_id}/${segment}`);
+  if (!segment) return false;
+  const path = pathname.replace(/\/$/, "");
+  const base = `/p/${job.project_id}/${segment}`;
+  return path.endsWith(base) || (job.type === "pointcloud_export" && path.startsWith(`${base}/`));
 }
 
 /**
