@@ -353,3 +353,109 @@ class AgentItem(Base):
         Index("ix_agent_item_seq", "seq", unique=True),
         Index("ix_agent_item_turn", "turn_id"),
     )
+
+
+class PointCloud(Base):
+    """A LAS/LAZ point cloud and its Potree display copy (spec 2026-09-23-point-clouds section 3)."""
+
+    __tablename__ = "point_cloud"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="importing")  # importing | ready | failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_path: Mapped[str] = mapped_column(String)  # absolute; only ever read, never kept
+    source_size: Mapped[int] = mapped_column(Integer)
+    source_sha256: Mapped[str | None] = mapped_column(String, nullable=True)  # streamed in the work copy
+    source_mtime: Mapped[float | None] = mapped_column(Float, nullable=True)  # export refuses a change
+    las_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    point_format: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    point_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # scanned, not the header's
+    has_rgb: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    scale: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [sx, sy, sz]
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)  # horizontal; null = no coordinates
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    proj4: Mapped[str | None] = mapped_column(String, nullable=True)
+    vertical_crs: Mapped[str | None] = mapped_column(String, nullable=True)  # null = heights as stored
+    crs_source: Mapped[str | None] = mapped_column(String, nullable=True)  # file | assigned
+    bounds_native: Mapped[list | None] = mapped_column(JSON, nullable=True)  # true bounds, 6 numbers
+    bounds_repaired: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    bounds_wgs84: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [minlon, minlat, maxlon, maxlat]
+    # The octree's ROOT node spacing from metadata.json, not the point spacing (the brief's spacing_m).
+    octree_spacing_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    z_stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    class_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {"<code>": n}
+    octree_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    map_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("geo_map.id", ondelete="SET NULL"), nullable=True
+    )
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class CloudMeasurement(Base):
+    """A saved pick-based measurement on a point cloud (spec 2026-09-23-point-clouds section 3)."""
+
+    __tablename__ = "cloud_measurement"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    point_cloud_id: Mapped[str] = mapped_column(String(36), ForeignKey("point_cloud.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # point | distance | height | vertical
+    name: Mapped[str] = mapped_column(String)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
+    points: Mapped[list] = mapped_column(JSON)  # [{x, y, z, uncertainty_m}] in the cloud's native CRS
+    results: Mapped[dict] = mapped_column(JSON, default=dict)  # computed by the server, never the client
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_cloud_measurement_cloud", "point_cloud_id"),)
+
+
+class Surface(Base):
+    """A gridded surface: a cloud DSM (S2) or an imported design (S3) (spec 2026-09-23-volumes section 3)."""
+
+    __tablename__ = "surface"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    kind: Mapped[str] = mapped_column(String)  # cloud_dsm | design
+    status: Mapped[str] = mapped_column(String, default="building")  # building | ready | failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    # A surface's tif is self-contained, so it survives its cloud.
+    point_cloud_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("point_cloud.id", ondelete="SET NULL"), nullable=True
+    )
+    design_source: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # DesignSource; null: cloud_dsm
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)  # null = local metres
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cell_size_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    geotransform: Mapped[list | None] = mapped_column(JSON, nullable=True)  # GDAL order, north-up
+    bounds_native: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [minx, miny, maxx, maxy]
+    z_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    z_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coverage_fraction: Mapped[float | None] = mapped_column(Float, nullable=True)
+    method: Mapped[str | None] = mapped_column(String, nullable=True)  # one SurfaceMethod value
+    build_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # SurfaceBuildStats; null for design
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_surface_status", "status"),)
+
+
+class VolumeMeasurement(Base):
+    """Cut and fill over a polygon on a top surface (spec 2026-09-23-volumes section 3)."""
+
+    __tablename__ = "volume_measurement"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    polygon_native: Mapped[list] = mapped_column(JSON)  # [[x, y], ...] in the top surface's CRS
+    top_surface_id: Mapped[str] = mapped_column(String(36), ForeignKey("surface.id", ondelete="RESTRICT"))
+    base: Mapped[dict] = mapped_column(JSON)  # {kind, z?, surface_id?}
+    masks: Mapped[dict] = mapped_column(JSON, default=dict)
+    alignment: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String, default="calculating")  # calculating|ready|failed|stale
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    results: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # VolumeResults
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_volume_measurement_top_surface", "top_surface_id"),)
