@@ -55,6 +55,100 @@ Follow-ups:
 - a ready surface has no Delete on the Volumes screen (S2 offers it on failed rows only);
 - no timing follow-up: both §16.11 timings are well inside 60 s.
 
+## Point clouds (S1) — 2026-09-24/2026-09-26 (merged)
+
+The spec is `docs/superpowers/specs/2026-09-23-point-clouds-design.md` and the plan is
+`docs/superpowers/plans/2026-09-24-point-clouds.md`. The SDD ledger is
+`.superpowers/sdd/2026-09-24-point-clouds/`. S1 merged to `main` at **`0af7084`**. Task 19 (this
+entry) came afterwards: acceptance on the real chimney file and the 195 M cloud, with evidence in
+`docs/evidence/2026-09-24-point-clouds/` (see its `README.md`) and the walkthrough in
+`docs/usability/2026-09-24-point-clouds-walkthrough.md`.
+
+What changed:
+
+- **Import pipeline.** Admission (a RAM estimate from the header count; a 422 `insufficient_memory`
+  refusal) is followed by a background `pointcloud_import` job: copy, chunked scan with header-bounds
+  repair, then the PotreeConverter display copy under a Job Object. Cancel kills the converter, and a
+  startup sweep marks an interrupted import `failed`.
+- **Display copy.** A BROTLI octree is served by an octree endpoint that allows only the enumerated
+  file names.
+- **Viewer.** potree-core: true RGB, elevation, a point budget, orbit/pan/zoom, **F** fit, **T**
+  top, and a diagnostics hook (`window.__kestrelCloudViewer`).
+- **Measurements.** Point, distance and vertical-check, each with a per-pick uncertainty *u* and the
+  warn tone above 0.10 m. Lean angle and azimuth are measured from grid north. Copy as CSV.
+- **Jumps.** Map → 3D (`?at=`, `&fp=`, Z refine, pin) and 3D → map (a marker), and a map linked on
+  Details.
+- **LAZ export** with measurements (a `pointcloud_export` job).
+- **Packaged check.** `check:webview` runs on the release exe, and `build:installer` stops if it
+  fails. See ADR `2026-09-23-gotcha-packaged-webview-needs-worker-src-blob`.
+- **About Kestrel AI** lists nine components with their licence texts.
+
+Evidence (spec §17). Measured 2026-09-26 on the operator's machine, which other sessions were loading
+at the time: about 21.6 GB of 63.8 GB RAM free at the start. The data was on local NVMe; generated
+files were on `D:\kestrel-acceptance`.
+
+| § | Criterion | Measured | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| 1 | Chimney import | succeeded; 21 697 184 pts; EPSG 32639; `bounds_repaired` true; `bounds_native` = the independent scan exactly (0.001); octree `metadata.json` 21 697 184 pts; octree 0.186 × source; **9.5 s** (≤ 60) | PASS | `import-chimney-local.json`, `independent-scan.txt`, `octree-metadata.txt` |
+| 1 | NAS time | the same file straight from `\\DanNas`: **20.3 s** | recorded | `import-chimney-nas.json` |
+| 2 | 195 M import | admitted; succeeded in **58.9 s** (≤ 300); converter peak RSS **8.98 GB** (≤ 10); backend RSS growth **0.20 GB** (≤ 1) | PASS | `import-195m.json` |
+| 3 | Refusal at 4 GB free | 422 `insufficient_memory`, "about 9.9 GB … 4.0 GB is free", no row (the spec says "about 9.8") | PASS | `refusal.txt` |
+| 4 | Cancel | converter gone in **1.08 s**; `failed` "import cancelled"; folder gone | PASS | `cancel.json` |
+| 5 | Crash | converter gone **0.13 s** after the sidecar was killed; after the restart `failed` "import interrupted by application restart; import the file again"; `.work` gone | PASS | `crash.txt` |
+| 6 | Chimney at 3 M | first points **87 ms**; settled **688 ms**; orbit p50 **17.8 ms** (p95 18.1); webview peak **0.68 GB** | PASS | `viewer-chimney-3M.json` |
+| 6 | Chimney at 8 M | webview peak **0.67 GB** (≤ 3). Only 0.46 M points were visible in the whole-site view, so the budget never bound | PASS | `viewer-chimney-8M.json` |
+| 6 | 195 M at 3 M | settled **656 ms** (≤ 8000); orbit p50 **17.8 ms** | PASS | `viewer-195m-3M.json` |
+| 7 | Colours | white **0.004 %** of sampled pixels (< 5 %); the fixture's red 0.108 / green 0.109. See note 3 | PASS | `viewer-*.json`, `check-webview.log` |
+| 8 | Packaged check | `check:webview` ok on the release build; `build:installer` ran it before Inno Setup. The negative proof (no `worker-src blob:` → CSP FAIL, no installer) is in the ADR (2026-09-25) and was not re-run | PASS | `check-webview.log`, `installer.log` |
+| 9 | Picks are real points | 10 picks: nearest source point at **1.000 mm** ×7, **1.414 mm** ×2, **1.732 mm** ×1 | **FAIL** (see note 1) | `picks.txt`, `viewer-picks.json` |
+| 10 | Uncertainty on the rim | close range **29.4 m** (≤ 30); ratio **8** (≥ 4); close *u* **0.086 m** (≤ 0.05 fails). Both picks landed at the bottom of the flue (z ≈ −41), not on the rim | **FAIL** (see note 2) | `uncertainty-attempt2-rim.json` |
+| 10 | Uncertainty on open ground (supplementary) | 29.4 m; close *u* **0.043 m**; ratio **16** | would pass | `uncertainty-open-ground.json` |
+| 10 | Warn tone above 0.10 m | unit test (`readout.test.ts`); screenshot is an operator step | PASS (unit) | `vitest-criteria.txt` |
+| 11 | Formulas | shared vectors, the 1.000° pole and the vertical refusal pass in pytest and vitest | PASS | `pytest-criteria.txt`, `vitest-criteria.txt` |
+| 12 | Map ↔ 3D | not run: it needs the installed app (operator walkthrough step 7). The different-CRS unit test passes | operator | `vitest-criteria.txt` |
+| 13 | Chimney LAZ export | **0.209** × source (≤ 0.25); **1.77 s** (≤ 30); count 21 697 184; EPSG 32639; header bounds contain every point. QGIS is an operator step | PASS | `export-chimney.json`, `laz-check-chimney.txt` |
+| 13 | 195 M LAZ export | **8.51 s** (≤ 180) | PASS | `export-195m.json` |
+| 14 | Octree endpoint | `test_pointcloud_octree.py` passes | PASS | `pytest-criteria.txt` |
+| 15 | Frozen bundle | `pointcloud ok 50000 32639 BROTLI laz 50000`, `cloud ok 50000 206`, `smoke ok`; the payload check fails on a missing manifest file | PASS | `smoke-frozen.log`, `pytest-payload-scripts.txt` |
+| 16 | About | `AboutScreen.test.tsx` and `test_about_versions.py` pass | PASS | the test logs |
+| 17 | Gate | see *Gate* below | PASS | — |
+
+Notes:
+
+1. **Picks sit one quantum off (§9).** Every pick is exactly 1 mm low in X, and sometimes in Y or Z
+   too. The octree's `offset` is the repaired minimum, `243194.29700000002`: floating-point noise
+   puts it just above the source's 1 mm grid. PotreeConverter truncates `(x − offset) / scale`, so
+   the display copy decodes each point one scale unit low wherever that noise lands. The picks are
+   still real source points; their coordinates are biased by −1 mm per axis. A fix belongs in how
+   the importer hands the repaired bounds to the converter (for example, a minimum aligned to the
+   grid, or a half-quantum pad), or in snapping picks to the source grid. It needs its own test, so
+   it was not done here.
+2. **Rim uncertainty (§10).** The rim XY comes from the data, because no one was there to pick it in
+   the app. It is a dense point on the rim ring at z 188.8 m (`rim2.txt`). The jump arrival's
+   straight-down Z refine returned the flue bottom (z −41.6) at that XY, not the rim, so the
+   close-up measured a point about 230 m below the rim, at level 6 (*u* 0.086 m). The same run on
+   open ground gives *u* 0.043 m and a ratio of 16. It needs a look (systematic debugging): why does
+   `pickDown` choose a lower point under a thin rim? Operator walkthrough step 5 asks for the rim
+   from inside the app.
+3. **Colour sample.** `sampleColours()` counted `background: 0` although the grey background is
+   visible in the screenshots. The white share was therefore divided by every pixel sampled, not
+   only the point pixels. With 23 white pixels out of 527 440 it stays far below 5 % either way. The
+   background-colour match in `classifyPixels` is probably off (colour encoding); it is minor.
+
+Timing caveat: an orbit p50 of 17.8 ms is the 60 Hz vsync interval, so it is a floor, not the
+viewer's cost.
+
+Bundle: the frozen sidecar is 3 618.8 MB in 14 496 files. The converter ADR
+(`2026-09-23-potreeconverter-in-the-frozen-sidecar`) records a growth of +7.5 MiB and +63 files over
+the pre-S1 bundle. The Inno setup is 1 877.8 MB, without a WebView2 bootstrapper.
+
+Gate on the merge worktree before `0af7084` (controller run): pytest 1761 passed, 5 skipped,
+9 deselected; vitest 196 files, 949 tests; e2e 89 passed; frontend lint 0 errors; build ok; contract
+check ok; ruff ok. `cargo test` was skipped there (no frozen sidecar). In this acceptance worktree, with the
+sidecar freshly frozen from `main`: `cargo test --manifest-path frontend/src-tauri/Cargo.toml` gave
+8 passed, and `pytest -m potreeconverter` gave 2 passed. New in this entry:
+`frontend/scripts/measure-cloud-viewer.mjs` (eslint and prettier clean).
+
 ## Volumes S2 — 2026-09-25 (`task/volumes`, gated at `94c4e8b`, not yet on `main`)
 
 Spec `docs/superpowers/specs/2026-09-23-volumes-design.md` (with F0 §5), plan

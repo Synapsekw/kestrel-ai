@@ -1,0 +1,32 @@
+potreeconverter payload ok: 10 files, version 2.1.5
+1376 WARNING: Failed to collect submodules for 'torch.utils.tensorboard' because importing 'torch.utils.tensorboard' raised: ModuleNotFoundError: No module named 'tensorboard'
+W0926 00:31:55.796000 54692 Lib\site-packages\torch\utils\flop_counter.py:113] triton not found; flop counting will not work for triton kernels
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._sharding_spec` will be deprecated, use `torch.distributed._shard.sharding_spec` instead
+  __import__(name)
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._sharded_tensor` will be deprecated, use `torch.distributed._shard.sharded_tensor` instead
+  __import__(name)
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\utils\hooks\__init__.py:665: DeprecationWarning: `torch.distributed._shard.checkpoint` will be deprecated, use `torch.distributed.checkpoint` instead
+  __import__(name)
+1183 WARNING: Failed to collect submodules for 'setuptools._vendor.packaging.licenses' because importing 'setuptools._vendor.packaging.licenses' raised: ModuleNotFoundError: No module named 'packaging.licenses'
+100049 WARNING: Datas for pyproj not found at:
+E:\Dev\Yolo\app\backend\.venv\Library\share\proj
+121259 WARNING: Hidden import "torchvision.image" not found!
+121259 WARNING: Hidden import "torchvision._C" not found!
+121336 WARNING: Hidden import "tzdata" not found!
+123214 WARNING: Hidden import "scipy.special._cdflib" not found!
+123897 WARNING: Hidden import "pysqlite2" not found!
+123899 WARNING: Hidden import "MySQLdb" not found!
+130247 WARNING: Ignoring /usr/lib64/libgomp.so.1 imported from E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\torch\_inductor\codecache.py - only basenames are supported with ctypes imports!
+Could not find an up-to-date installation of `packaging`. License expressions might not be validated. To enforce validation, please install `packaging>=24.2`.
+W0926 00:33:55.995000 33680 Lib\site-packages\torch\utils\flop_counter.py:113] triton not found; flop counting will not work for triton kernels
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._sharding_spec` will be deprecated, use `torch.distributed._shard.sharding_spec` instead
+  __import__(package)
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._sharded_tensor` will be deprecated, use `torch.distributed._shard.sharded_tensor` instead
+  __import__(package)
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\building\build_main.py:227: DeprecationWarning: `torch.distributed._shard.checkpoint` will be deprecated, use `torch.distributed.checkpoint` instead
+  __import__(package)
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\building\build_main.py:227: PendingDeprecationWarning: Please use `import python_multipart` instead.
+  __import__(package)
+potreeconverter payload ok: 10 files, version 2.1.5
+sidecar copied to E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\backend\..\frontend\src-tauri\binaries
+dist/kestrel-backend: 3,618.8 MB in 14,496 files; build took 217 s

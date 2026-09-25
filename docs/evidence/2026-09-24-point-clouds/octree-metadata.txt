@@ -1,0 +1,1 @@
+metadata.json D:\kestrel-acceptance\project\pointclouds\f670dea0-cb98-49b7-8cae-097bc78ef3ef\octree\metadata.json points=21697184

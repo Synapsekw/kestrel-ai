@@ -1,0 +1,28 @@
+   Compiling kestrel-ai v0.1.0 (E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend\src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 40.52s
+     Running unittests src\lib.rs (frontend\src-tauri\target\debug\deps\kestrel_ai_lib-d0be4d772bf7c86f.exe)
+
+running 8 tests
+test appdata::tests::does_nothing_when_there_is_no_legacy_folder ... ok
+test appdata::tests::leaves_both_alone_when_both_exist ... ok
+test appdata::tests::moves_the_legacy_folder_when_only_it_exists ... ok
+test appdata::tests::is_idempotent ... ok
+test logfile::tests::appends_lines_and_creates_the_folder ... ok
+test logfile::tests::rolls_over_once_the_limit_is_reached ... ok
+test logfile::tests::writes_one_line_per_event_whatever_line_ending_it_arrived_with ... ok
+test logfile::tests::keeps_only_one_previous_file ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src\main.rs (frontend\src-tauri\target\debug\deps\kestrel_ai-fcbdb3bbf738dbb6.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests kestrel_ai_lib
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

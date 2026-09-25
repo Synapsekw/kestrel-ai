@@ -1,0 +1,2 @@
+# chunked laspy scan (2 M points per chunk) of chimney.las (a byte copy of the NAS file), x y z min then max
+[243194.298, 3177915.06, -141.185, 243880.844, 3178616.528, 189.554]
