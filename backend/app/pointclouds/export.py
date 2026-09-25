@@ -18,14 +18,9 @@ from pyproj import CRS
 
 from app.jobs.cancellation import JobFailure
 from app.pointclouds.lasbounds import widen, write_header_bounds
-from app.pointclouds.schemas import CloudMeasurementResults
+from app.pointclouds.measure import FIELDS
 
 CHUNK = 2_000_000
-# The per-measurement results columns: every field of CloudMeasurementResults, in schema order.
-# The spec (9.3) names the canonical field list `app/pointclouds/measure.py`'s FIELDS; that module
-# is owned by another S1 unit not yet on this branch, so this reads the same list off the
-# already-landed Pydantic schema instead of hand-duplicating it (see task-12-report.md).
-FIELDS = list(CloudMeasurementResults.model_fields)
 CSV_COLUMNS = ["id", "name", "kind", "note", "x1", "y1", "z1", "u1", "x2", "y2", "z2", "u2", *FIELDS]
 
 
