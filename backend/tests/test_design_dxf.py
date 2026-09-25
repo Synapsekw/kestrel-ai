@@ -1,5 +1,6 @@
 """The ezdxf reader (spec §8.1, §15.3 DXF)."""
 
+import sys
 import tracemalloc
 
 import numpy as np
@@ -8,6 +9,7 @@ from design_dxf import add_contours, add_faces, inject_unknown, new_doc, save
 from designs import E0, N0, cone_contour_runs, two_triangle_plane
 from ezdxf.math import Vec3
 
+from app.jobs.cancellation import JobFailure
 from app.surfaces.design import dxf, store
 from app.surfaces.design.rasterise import SimpleLattice, rasterise_to_array
 
@@ -123,6 +125,21 @@ def test_minsert_expands_every_grid_copy(tmp_path):
     ins.grid(size=(2, 2), spacing=(10, 10))
     _, _, by = read(save(doc, tmp_path / "mi.dxf"), tmp_path)
     assert by["TIN"].face_count == 4 and by["TIN"].entity_counts["3dface"] == 4
+
+
+def test_circular_block_reference_raises_job_failure(tmp_path):
+    doc = new_doc()
+    blk = doc.blocks.new("SELF")
+    blk.add_blockref("SELF", (0, 0, 0))
+    doc.modelspace().add_blockref("SELF", (0, 0, 0), dxfattribs={"layer": "TIN"})
+    path = save(doc, tmp_path / "cycle.dxf")
+    old_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(200)  # keep the test fast: the cycle recurses until this limit trips
+    try:
+        with pytest.raises(JobFailure, match="circular block reference"):
+            read(path, tmp_path)
+    finally:
+        sys.setrecursionlimit(old_limit)
 
 
 def test_all_zero_layers_are_flagged_and_not_selected(tmp_path):
