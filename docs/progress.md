@@ -9,6 +9,41 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Point-cloud foundation F0 — 2026-09-24 (`task/pointcloud-foundation`, merged to `main`)
+
+Spec `docs/superpowers/specs/2026-09-23-point-clouds-design.md` §5 (with S2 §11 and S3 §12), plan
+`docs/superpowers/plans/2026-09-24-pointcloud-foundation.md`. The shared ground S1 (point clouds),
+S2 (volumes) and S3 (design surfaces) build on in parallel worktrees.
+
+What changed:
+
+- **Contract:** every S1–S3 path and schema (37 operations; tags `pointclouds`, `surfaces`,
+  `volumes`), the job types `pointcloud_import`, `pointcloud_export`, `surface_build`,
+  `volume_calc`, `volume_export`, `design_import`, and the events `pointclouds.changed`,
+  `surfaces.changed`, `volumes.changed`. Every operation answers 501 until its unit lands
+  (`EXPECTED_STUBS`); writes are detection-project only.
+- **Migration `0009_pointclouds_surfaces_volumes`** (add-only): `point_cloud`, `cloud_measurement`,
+  `surface`, `volume_measurement`. The only migration of S1–S3.
+- **Backend scaffolding:** four packages with stub routers and stub jobs, four no-op startup sweeps
+  in `project_opened`, the PotreeConverter seam with an offline fake in the `app` fixture,
+  `pointcloud-selftest` / `design-selftest` / `volumes-selftest` placeholders, CORS `Range` for the octree loader.
+- **Dependencies:** laspy 2.7.0, lazrs 0.8.2, openpyxl 3.1.5, ezdxf 1.4.4 new; scipy, shapely,
+  psutil now direct; potree-core 2.0.15, three 0.180.0, @types/three 0.180.0 exact.
+- **UI:** Point clouds and Volumes below Site areas in a detection project (empty, lazy-loaded
+  screens), "About Kestrel AI" on App settings.
+- **Venv** (`vault/decisions/2026-09-24-worktree-overlay-venv-for-new-dependencies.md`): built
+  with an overlay venv; laspy, lazrs, ezdxf, openpyxl and et-xmlfile were then installed into the
+  shared `backend/.venv` additively (`--no-deps`, nothing else changed), so the landing gate ran
+  normally.
+
+Verified on the branch (2026-09-25) with the AGENTS.md gate on the shared interpreter:
+`pnpm -C contract check` clean; ruff clean; pytest 1362 passed; frontend lint clean, vitest 824
+passed, build ok; e2e 79 passed; cargo test skipped (no frozen sidecar in the worktree). Alembic
+heads on the merge result: `['0009']`.
+
+Operator walkthrough: not user-observable beyond two empty screens and two nav entries — open a
+detection project and click Point clouds, then Volumes; App settings → About Kestrel AI.
+
 ## Detection workspace — 2026-09-23/24 (gated on `task/dw-integration`, not yet on `main`)
 
 Plan 2 of the train/detect split (spec
