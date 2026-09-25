@@ -9,6 +9,52 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Design surfaces (S3) — 2026-09-24
+
+Import a design as a `Surface` (`kind = design`) on the cloud DSM's own grid: a DEM GeoTIFF (copied
+when it already conforms, else re-gridded window by window with an exact warp), a LandXML TIN (a
+streamed parse that honours the northing-first rule), or a DXF with 3D faces, meshes or contours
+(ezdxf; contours through densified Delaunay with boundary peeling). One `design_import` job runs in
+three phases — inspect, preview, build — and nothing is imported until the operator imports a clean
+preview or accepts its warnings; the preview catches swapped axes, the wrong foot, feet heights, a
+wrong CRS and far-apart placements, and offers one-click fixes. Design
+`docs/superpowers/specs/2026-09-23-design-surfaces-design.md`, plan
+`docs/superpowers/plans/2026-09-24-design-surfaces.md`, evidence `docs/evidence/design-surfaces/README.md`,
+walkthrough `docs/usability/2026-09-24-design-surfaces-walkthrough.md`.
+
+Acceptance on the chimney site (headless, real backend, scratch app data): all five §15.4 steps pass —
+LandXML N E Z 98.4 % overlap, median dz +0.005 m; E N Z 0 % → Apply swap → 98.4 %; 3D-face DXF 98.4 %,
++0.005 m; contour DXF (Delaunay, 3 559 long triangles trimmed at 6.1 m) 88.2 %, +0.067 m; EPSG:32638
+DEM re-gridded, 100 %, −0.012 m; an S2 volume against each of the five designs runs. §16.11 timing:
+a 1 M-point / 2 M-face LandXML inspects in 7.90 s and builds onto 4996 × 4996 at 0.2 m in 8.38 s
+(targets < 60 s each).
+
+Verified (on `task/design-surfaces` @ `d581a10` + this docs commit, the worktree's overlay interpreter):
+- `pnpm -C contract check`: spectral no errors, `schema.d.ts` regenerated with no diff.
+- `ruff check .`: all checks passed; `ruff format --check .`: 403 files already formatted.
+- `pytest`: 1969 passed, 9 skipped, 9 deselected (763.74 s).
+- `pnpm -C frontend lint`: ok (eslint 0 errors, 1 existing warning in `MapView.tsx`; prettier; tokens ok).
+- `pnpm -C frontend test`: 982 passed (200 files).
+- `pnpm -C frontend build`: ok.
+- `pnpm -C frontend e2e`: 91 passed (free ports 14731/14732).
+- `cargo test`: not run — no frozen sidecar in `frontend/src-tauri/binaries/` (git-ignored).
+
+Follow-ups:
+- a queued design build cancelled from the Jobs panel publishes no `surfaces.changed` (S2's settle
+  corrects the row on the next list);
+- S2's restart sweep tells a design row "build it again" (a design needs a re-import) — S2 copy;
+- after a 409 on import the dialog can keep a vanished target id selected until re-picked;
+- `get_design_preview` can answer 500 if a delete races a poll;
+- a failed design build keeps its inspection but the dialog can't reopen it (the 24 h sweep removes it);
+- the Volumes screen mounts the dialog in two places (list and empty state) as separate instances;
+- the next packaging run must pass `smoke_frozen.ps1`'s new `design` step;
+- `QHULL_BYTES_PER_POINT` = 700 measured at ~684 B/pt (2.3 % headroom); rasterise `BATCH` 16 384 /
+  `RANGE_CHUNK` 65 536;
+- the preview's suggestions score hypotheses on the file's vertices, orphans included, not on the
+  footprint (spec §10): on the chimney TIN they say 67 % where applying gives 98.4 % (evidence, Findings);
+- a ready surface has no Delete on the Volumes screen (S2 offers it on failed rows only);
+- no timing follow-up: both §16.11 timings are well inside 60 s.
+
 ## Volumes S2 — 2026-09-25 (`task/volumes`, gated at `94c4e8b`, not yet on `main`)
 
 Spec `docs/superpowers/specs/2026-09-23-volumes-design.md` (with F0 §5), plan
