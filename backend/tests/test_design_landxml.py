@@ -1,5 +1,6 @@
 """The streamed LandXML reader (spec §7, §15.3 LandXML, §16.2, §16.3, §16.5)."""
 
+import shutil
 import tracemalloc
 
 import numpy as np
@@ -98,6 +99,30 @@ def test_non_numeric_points_fail(tmp_path):
         read(src, tmp_path)
 
 
+def test_a_failed_read_leaves_no_open_handles(tmp_path):
+    """Hardening (ruling c): a JobFailure raised mid-surface must not leave points.f64/faces.i32/
+    ids.i64/faces_ids.i64 open — on Windows an open handle blocks deleting the inspection folder,
+    exactly the shape of the race phase_inspect.run's cancel path has to survive."""
+    s = {"name": "EG", "raw_points": ["2800000 500000 nan"], "faces": []}
+    src = write_landxml(tmp_path / "s.xml", [s])
+    idir = tmp_path / "insp"
+    idir.mkdir()
+    with pytest.raises(JobFailure, match="not three numbers"):
+        landxml.inspect_file(src, idir, progress=lambda f, m: None, check_cancelled=lambda: None)
+    shutil.rmtree(idir)  # would raise PermissionError on Windows if any handle were still open
+
+
+def test_huge_point_id_fails_cleanly(tmp_path):
+    """Hardening: a point id outside int64 range would otherwise raise OverflowError from the
+    ids.i64 array append deep inside add_point; _id() range-checks first and fails with the same
+    'is not a number' shape as any other unparsable id."""
+    pts, faces = grid_tin(3, 3)
+    ids = [10**20 + k for k in range(len(pts))]
+    src = write_landxml(tmp_path / "s.xml", [{"name": "EG", "points": pts, "faces": faces, "ids": ids}])
+    with pytest.raises(JobFailure, match="is not a number"):
+        read(src, tmp_path)
+
+
 def test_grid_and_points_only_surfaces_are_blocked(tmp_path):
     pts, faces = grid_tin(3, 3)
     src = write_landxml(
@@ -151,6 +176,16 @@ def test_units(tmp_path, units, h, v, z100):
     assert (d.horizontal_unit, d.vertical_unit) == (h, v)
     assert d.unit_source == f"LandXML <{units[0]} linearUnit={units[1]}>"
     assert 100 * unit_to_m(d.vertical_unit) == pytest.approx(z100, rel=1e-12)
+
+
+def test_unmapped_linear_unit_is_reported_as_not_supported(tmp_path):
+    """Hardening: an unmapped LandXML linearUnit (kilometer, inch, mile, ...) must not read as a
+    silently-resolved unit — unit_source says so instead."""
+    pts, faces = grid_tin(2, 2)
+    s = [{"name": "EG", "points": pts, "faces": faces}]
+    res, _ = read(write_landxml(tmp_path / "s.xml", s, units=("Metric", "kilometer", None)), tmp_path)
+    assert res.detected.horizontal_unit is None
+    assert res.detected.unit_source == "LandXML linearUnit=kilometer (not supported)"
 
 
 def test_coordinate_system_epsg_wkt_and_absent(tmp_path):

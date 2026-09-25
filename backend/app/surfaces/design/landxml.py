@@ -34,17 +34,26 @@ def _local(tag) -> str:
     return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
 
 
+_I64_MIN, _I64_MAX = -(2**63), 2**63 - 1
+
+
 def _id(value: str, surface: str) -> int:
     try:
-        return int(value)
+        n = int(value)
     except ValueError:
         try:
             f = float(value)
         except ValueError:
             f = float("nan")
         if f == f and f.is_integer():
-            return int(f)
-        raise JobFailure(f"surface '{surface}': point id '{value}' is not a number") from None
+            n = int(f)
+        else:
+            raise JobFailure(f"surface '{surface}': point id '{value}' is not a number") from None
+    if not (_I64_MIN <= n <= _I64_MAX):
+        # A Python int has no bound, but the ids.i64/faces_ids.i64 scratch arrays are int64;
+        # out-of-range ids get the same "not a number" message rather than an OverflowError.
+        raise JobFailure(f"surface '{surface}': point id '{value}' is not a number")
+    return n
 
 
 class _Surface:
@@ -54,14 +63,20 @@ class _Surface:
         self.cid, self.name = cid, name
         self.cdir = store.candidate_dir(idir, cid)
         self.writer = store.CandidateWriter(self.cdir, "faces")
-        self._ids_f = (self.cdir / "ids.i64").open("wb")
-        self._fids_f = (self.cdir / "faces_ids.i64").open("wb")
+        self._ids_f = self._fids_f = None
         self._pts, self._ids, self._fids = array("d"), array("q"), array("q")
         self.seq = 0
         self.invisible = 0
         self.surf_type = "TIN"
         self.containers: list = []
         self.finished = False  # guards close_files() against double-closing after finish()
+
+    def open_scratch(self) -> None:
+        """Opens ids.i64/faces_ids.i64. Split from __init__ so the caller can append this surface
+        to its tracking list right after `self.writer` opens and before this call: if opening the
+        scratch files fails, close_files() can still close the writer's already-open handles."""
+        self._ids_f = (self.cdir / "ids.i64").open("wb")
+        self._fids_f = (self.cdir / "faces_ids.i64").open("wb")
 
     def add_point(self, text: str, pid: str | None) -> None:
         vals = text.split()
@@ -108,14 +123,20 @@ class _Surface:
     def close_files(self) -> None:
         """Close every buffer file this surface opened, however far parsing got (ruling c): a
         JobFailure or cancel raised mid-parse must not leave points.f64/faces.i32/ids.i64/
-        faces_ids.i64 open, which would block deleting the inspection folder on Windows."""
+        faces_ids.i64 open, which would block deleting the inspection folder on Windows. Uses
+        `writer.abort()`, not `writer.close()`: a candidate that failed mid-parse must not get a
+        meta.json that looks complete, and a meta.json write is one more way to fail while
+        cleaning up after the real failure. The scratch files this surface owns are unlinked too,
+        the same as a normal `finish()` does."""
         if self.finished:
             return
         self.finished = True
         for f in (self._ids_f, self._fids_f):
-            if not f.closed:
+            if f is not None and not f.closed:
                 f.close()
-        self.writer.close()
+        self.writer.abort()
+        for name in ("ids.i64", "faces_ids.i64"):
+            (self.cdir / name).unlink(missing_ok=True)
 
     def finish(self, check_cancelled) -> dict:
         self._flush()
@@ -160,7 +181,14 @@ def _detected(units: dict, cs: dict) -> Detected:
     lin, elev = units.get("linearUnit"), units.get("elevationUnit")
     h = LANDXML_UNITS.get(lin) if lin else None
     v = LANDXML_UNITS.get(elev) if elev else h
-    source = f"LandXML <{units['system']} linearUnit={lin}>" if lin else "none"
+    if not lin:
+        source = "none"
+    elif h is None:
+        # An unmapped linearUnit (kilometer, inch, mile, ...) is not silently ignored: the
+        # source says so instead of reading like a normal, resolved unit.
+        source = f"LandXML linearUnit={lin} (not supported)"
+    else:
+        source = f"LandXML <{units['system']} linearUnit={lin}>"
     crs_wkt = epsg = crs_source = None
     if cs.get("epsgCode"):
         try:
@@ -212,7 +240,11 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
                         cur = _Surface(
                             idir, f"c{len(surfaces)}", elem.get("name") or f"Surface {len(surfaces) + 1}"
                         )
+                        # Track it before opening its scratch files (ruling 4/hardening): if
+                        # open_scratch() itself fails, close_files() in the outer finally can still
+                        # close the writer's already-open points.f64/faces.i32 handles.
                         surfaces.append(cur)
+                        cur.open_scratch()
                     elif cur is not None and name == "Definition":
                         cur.surf_type = elem.get("surfType", "TIN")
                     elif cur is not None and name in ("Pnts", "Faces"):

@@ -210,6 +210,14 @@ class CandidateWriter:
             self._runs.write((base + np.cumsum(lengths)).astype(np.int64).tobytes())
             self.run_count += len(lengths)
 
+    def abort(self) -> None:
+        """Close every open file without writing meta.json (a reader that failed mid-surface must
+        not leave a meta.json that looks like a complete candidate, and must not risk a second,
+        masking failure from that write)."""
+        for f in (self._points, self._faces, self._runs):
+            if f is not None and not f.closed:
+                f.close()
+
     def close(self, **extra) -> dict:
         for f in (self._points, self._faces, self._runs):
             if f is not None:
