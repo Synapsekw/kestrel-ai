@@ -11,7 +11,7 @@ import { CloudList } from "@/clouds/CloudList";
 import { CloudViewer, type CloudPick, type CloudViewerHandle } from "@/clouds/CloudViewer";
 import { ExportWatch } from "@/clouds/ExportWatch";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
-import { cloudToMapNative } from "@/clouds/jump";
+import { cloudToMapNative, jumpQuery } from "@/clouds/jump";
 import { MeasurePanel } from "@/clouds/MeasurePanel";
 import { overlayShapes } from "@/clouds/measure";
 import { useJumpArrival } from "@/clouds/useJumpArrival";
@@ -248,7 +248,7 @@ export function CloudsScreen() {
                 icon="map"
                 onClick={() => {
                   const q = cloudToMapNative(cloud, linkedMap, lastPick);
-                  navigate(`/p/${projectId}/maps/${linkedMap.id}?at=${q.x.toFixed(3)},${q.y.toFixed(3)}`);
+                  navigate(`/p/${projectId}/maps/${linkedMap.id}${jumpQuery(q)}`);
                 }}
               >
                 Show on map

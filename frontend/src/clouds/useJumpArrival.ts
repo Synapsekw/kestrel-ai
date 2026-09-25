@@ -1,18 +1,48 @@
 import { useEffect, type RefObject } from "react";
 import type { PointCloud } from "@/api/clouds";
 import { toast } from "@/ui";
-import type { CloudViewerHandle } from "./CloudViewer";
-import { footprintDiagonal, insideXY, parseAt, parseFootprint } from "./jump";
+import type { CloudPick, CloudViewerHandle } from "./CloudViewer";
+import { footprintDiagonal, insideXY, parseAt, parseFootprint, type XY } from "./jump";
 import { jumpDistance } from "./viewer/camera";
 
 const TICK_MS = 100;
 const MAX_WAIT_TICKS = 300; // 30 s
 const Z_REFINE_M = 2;
+/** Screen positions sampled along the pin, top to bottom (plus the p50 one): a fixed, small pick count. */
+const PIN_SAMPLES = 12;
+/** Idle ticks in a row before the view counts as settled: the first idle tick after lookAt can be stale. */
+const SETTLED_TICKS = 2;
+/** Rounds of picks that found nothing before the refine gives up. */
+const PICK_ROUNDS = 3;
+
+/**
+ * The hit nearest (x, y) horizontally among picks along the pin's screen segment. A 45° view of the
+ * p50 point alone lands ≈ |z_surface − p50| off horizontally, so a stockpile, pit or chimney top is
+ * only found by searching the whole vertical.
+ */
+function pickAlongPin(v: CloudViewerHandle, at: XY, zLo: number, zHi: number, z0: number): CloudPick | null {
+  const zs = Array.from({ length: PIN_SAMPLES }, (_, i) => zHi - ((zHi - zLo) * i) / (PIN_SAMPLES - 1));
+  zs.push(z0);
+  let best: CloudPick | null = null;
+  let bestD = Infinity;
+  for (const z of zs) {
+    const screen = v.project({ x: at.x, y: at.y, z });
+    const hit = screen ? v.pickAtClient(screen.x, screen.y) : null;
+    if (!hit) continue;
+    const d = Math.hypot(hit.x - at.x, hit.y - at.y);
+    if (d < bestD) {
+      best = hit;
+      bestD = d;
+    }
+  }
+  return best;
+}
 
 /**
  * Spec §10 "Arriving in 3D", once per navigation: outside the cloud → a toast; else look at
  * (x, y, p50) from 45° south at max(40 m, 3 × footprint diagonal), draw a vertical pin, and once
- * the view has settled pick at the pin: a hit within 2 m retargets Z and draws the footprint there.
+ * the view has settled pick along the pin: the nearest hit within 2 m retargets Z and draws the
+ * footprint there.
  */
 export function useJumpArrival(
   viewer: RefObject<CloudViewerHandle | null>,
@@ -35,13 +65,16 @@ export function useJumpArrival(
     const distance = jumpDistance(fp ? footprintDiagonal(fp) : 0);
     let placed = false;
     let ticks = 0;
+    let idle = 0;
+    let rounds = 0;
     const timer = window.setInterval(() => {
       const v = viewer.current;
       ticks += 1;
-      if (!v || ticks > MAX_WAIT_TICKS) {
-        if (ticks > MAX_WAIT_TICKS) window.clearInterval(timer);
+      if (ticks > MAX_WAIT_TICKS) {
+        window.clearInterval(timer);
         return;
       }
+      if (!v) return;
       const s = v.stats();
       if (!placed) {
         if (s.numVisiblePoints === 0) return; // the cloud is not loaded yet
@@ -59,11 +92,16 @@ export function useJumpArrival(
         placed = true;
         return;
       }
-      if (s.nodesLoading > 0) return;
+      idle = s.nodesLoading > 0 ? 0 : idle + 1;
+      if (idle < SETTLED_TICKS) return;
+      const hit = pickAlongPin(v, at, b[2], b[5], z0);
+      if (!hit) {
+        rounds += 1;
+        if (rounds >= PICK_ROUNDS) window.clearInterval(timer);
+        return; // nothing under the pin yet: try again next tick
+      }
       window.clearInterval(timer);
-      const screen = v.project({ x: at.x, y: at.y, z: z0 });
-      const hit = screen ? v.pickAtClient(screen.x, screen.y) : null;
-      if (hit && Math.hypot(hit.x - at.x, hit.y - at.y) <= Z_REFINE_M) {
+      if (Math.hypot(hit.x - at.x, hit.y - at.y) <= Z_REFINE_M) {
         v.lookAt({ x: at.x, y: at.y, z: hit.z }, distance);
         if (fp)
           v.setOverlay("footprint", [

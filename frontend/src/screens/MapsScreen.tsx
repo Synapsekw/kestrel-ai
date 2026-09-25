@@ -242,6 +242,13 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
     },
     [active, navigate, projectId],
   );
+  // A menu opened on one map never lingers over the next.
+  const activeId = active?.id ?? null;
+  const [menuMap, setMenuMap] = useState(activeId);
+  if (menuMap !== activeId) {
+    setMenuMap(activeId);
+    setMenu(null);
+  }
   const at = useMemo(() => parseAt(searchParams), [searchParams]);
   const { outside: atOutside } = useAtMarker(olMap, active, at);
   useEffect(() => {
@@ -887,6 +894,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
               <MapContextMenu
                 menu={menu}
                 clouds={linkedClouds}
+                georeferenced={!!active.geotransform && !!active.proj4}
                 onOpen={(c) => {
                   setMenu(null);
                   openIn3d(c, menu.px, menu.py);

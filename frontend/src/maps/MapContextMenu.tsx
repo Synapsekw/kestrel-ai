@@ -13,11 +13,14 @@ export interface MapMenu {
 export function MapContextMenu({
   menu,
   clouds,
+  georeferenced,
   onOpen,
   onClose,
 }: {
   menu: MapMenu;
   clouds: PointCloud[];
+  /** The map has a CRS and a geotransform; without them no cloud can ever be linked to a spot on it. */
+  georeferenced: boolean;
   onOpen(cloud: PointCloud): void;
   onClose(): void;
 }) {
@@ -34,7 +37,11 @@ export function MapContextMenu({
       style={{ left: menu.x, top: menu.y }}
     >
       {clouds.length === 0 ? (
-        <p className="px-2 py-1.5 text-xs text-muted">Link a point cloud to this map to open spots in 3D.</p>
+        <p className="max-w-64 px-2 py-1.5 text-xs text-muted">
+          {georeferenced
+            ? "Link a point cloud to this map to open spots in 3D."
+            : "This map has no coordinates, so its spots cannot be opened in 3D."}
+        </p>
       ) : (
         clouds.map((c) => (
           <Button key={c.id} role="menuitem" size="sm" variant="ghost" icon="cloud" onClick={() => onOpen(c)}>

@@ -406,6 +406,11 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
     })
     .toBeLessThan(3);
 
+  // the refine: a hit along the pin within 2 m retargets Z and draws the detection's footprint
+  await expect
+    .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
+    .toContain("footprint");
+
   const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
   await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
   await page.getByRole("button", { name: "Show on map" }).click();
