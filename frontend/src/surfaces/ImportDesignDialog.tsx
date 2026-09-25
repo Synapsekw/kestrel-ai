@@ -79,17 +79,19 @@ export function ImportDesignDialog({
   useEffect(() => {
     inspectionRef.current = inspection;
   }, [inspection]);
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    // StrictMode's dev-only mount→cleanup→mount rehearsal must not leave the dialog permanently
+    // "closed": re-arm on every (re)mount, not just once.
+    closedRef.current = false;
+    return () => {
       closedRef.current = true;
       if (!startedRef.current && inspectionRef.current) {
         const id = inspectionRef.current.id;
         inspectionRef.current = null;
         void deleteDesignInspection(api, projectId, id).catch(() => undefined);
       }
-    },
-    [api, projectId],
-  );
+    };
+  }, [api, projectId]);
 
   useEffect(() => {
     let cancelled = false;
