@@ -14,8 +14,8 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${webPort}`,
     headless: true,
     trace: process.env.CI ? "retain-on-failure" : "off",
-    // WebGL in headless Chromium needs SwiftShader asked for explicitly (plan decision 13).
-    launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] },
+    // No SwiftShader here: forcing software GL on every worker's browser starves the CPU at
+    // start-up and the first test of each worker times out. clouds.spec.ts asks for it itself.
   },
   webServer: [
     {

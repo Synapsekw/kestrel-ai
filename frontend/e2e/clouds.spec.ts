@@ -5,6 +5,10 @@ import { buildOctree, redGreenGrid, routeOctree } from "./fixtures/potreeOctree"
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 
+// WebGL in headless Chromium needs SwiftShader asked for explicitly (plan decision 13). Only this
+// file renders WebGL, so only its workers pay for software GL (playwright.config.ts).
+test.use({ launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] } });
+
 async function viewerStats(page: Page) {
   return page.evaluate(() => window.__kestrelCloudViewer?.stats() ?? null);
 }
