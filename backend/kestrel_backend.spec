@@ -2,9 +2,20 @@
 # One-folder freeze of the backend (spec section 10). The exe doubles as the training/export
 # worker (`kestrel-backend.exe worker train <params.json>`), so torch, torchvision, ultralytics
 # and the ONNX stack all have to be inside the bundle: nothing is installed on the user's machine.
+import sys
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+
+# collect_submodules("app") below needs "app" importable *in this process*, before Analysis(pathex=["."])
+# ever runs. Depending on how pyinstaller.exe is invoked, sys.path[0] can be the entry-point script's own
+# directory (e.g. .venv/Scripts) rather than the current working directory, so plain `import app` can fail
+# here even though `Set-Location $backend` (build.ps1) put the right folder on the *process* cwd. Without
+# this, collect_submodules("app") silently returns [] (see the gotcha ADR): every module reachable only
+# through a dynamic `importlib.import_module("app...")` string (F0's router/startup dispatch in
+# app/api.py and app/main.py) would then be missing from the frozen bundle with no build-time warning.
+if SPECPATH not in sys.path:
+    sys.path.insert(0, SPECPATH)
 
 hiddenimports = (
     collect_submodules("app")
