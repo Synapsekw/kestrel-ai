@@ -22,7 +22,11 @@ def project_opened(handle, runner) -> None:
     """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
     their folders back, sweep partial exports a crash left behind, fail agent turns the last process
     left running, and start moving a training project's old models into the library. Each step on
-    its own, so one failing never skips the others."""
+    its own, so one failing never skips the others.
+
+    The point-cloud, surface, volume and design-inspection sweeps (foundation F0) are imported
+    inside their own step: a module that fails to import costs only that step."""
+    import importlib
     import logging
 
     from app.datasets import materialise
@@ -33,12 +37,20 @@ def project_opened(handle, runner) -> None:
     from app.project_agent import store as agent_store
 
     log = logging.getLogger(__name__)
+
+    def sweep(module: str):
+        return lambda: importlib.import_module(module).sweep_interrupted(handle, runner)
+
     for step, run in (
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
         ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),
         ("interrupted map import sweep", lambda: maps_startup.sweep_interrupted_imports(handle, runner)),
+        ("interrupted point cloud import sweep", sweep("app.pointclouds.startup")),
+        ("interrupted surface build sweep", sweep("app.surfaces.startup")),
+        ("interrupted volume calculation sweep", sweep("app.volumes.startup")),
+        ("stale design inspection sweep", sweep("app.surfaces.design.startup")),
         # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
         ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),
     ):
@@ -127,7 +139,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
-        allow_headers=["Authorization", "Content-Type"],
+        # Range: the point-cloud octree loader reads byte ranges, and its `Range` header triggers a
+        # preflight that must pass here, before routing (spec 2026-09-23-point-clouds section 2).
+        allow_headers=["Authorization", "Content-Type", "Range"],
+        expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
         allow_credentials=False,
         max_age=600,
     )

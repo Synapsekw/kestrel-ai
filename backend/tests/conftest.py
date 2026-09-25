@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from local_paths import FRAMES_DIR
 from PIL import Image
+from pointclouds import fake_run_converter
 
 from app.config import Settings
 from app.health import GpuProbe
@@ -52,7 +53,7 @@ def app(settings, monkeypatch):
     `subprocess.Popen` itself): the contract conformance test calls every route (including reveal)
     with generated bodies, and no test may start the real Explorer; `tests/test_reveal.py` restores
     the real `launch` and monkeypatches `subprocess.Popen` itself where it needs to assert on the
-    exact command.
+    exact command. PotreeConverter is replaced by `tests/pointclouds.py::fake_run_converter`.
     """
 
     def no_model_download(*args, **kwargs):
@@ -65,6 +66,10 @@ def app(settings, monkeypatch):
     created.state.keys = MemoryKeyStore()
     created.state.gpu_probe = GpuProbe(probe=lambda: {"available": False, "name": "test-gpu"})
     monkeypatch.setattr("app.exports.reveal.launch", lambda command: None)
+    # PotreeConverter is an external exe: tests use a real, tiny Potree octree written in Python
+    # (ADR 2026-09-21-gotcha-contract-jobs-need-offline-seams). The fake imports laspy only when
+    # a job actually converts.
+    monkeypatch.setattr("app.pointclouds.converter.run_converter", fake_run_converter)
     return created
 
 

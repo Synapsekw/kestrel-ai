@@ -3,6 +3,7 @@
 `make_las` writes a tiny LAS or LAZ with laspy, optionally with header bounds deliberately too small
 (the Pix4D trap: its "Chimney stack 3D" header misses the true max by 0.3 mm). `write_fake_octree`
 writes a minimal valid Potree 2.0 octree: one leaf root node, `DEFAULT` encoding, position + rgb.
+`fake_run_converter` is the offline stand-in for PotreeConverter that `conftest.app` installs.
 
 laspy is imported inside the functions that need it, so importing this module (conftest does) costs
 nothing and never fails on an interpreter without laspy.
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import json
 import struct
+import time
 from pathlib import Path
 
 import numpy as np
@@ -173,3 +175,35 @@ def read_fake_octree(out_dir: Path) -> tuple[dict, np.ndarray, np.ndarray]:
     records = np.frombuffer(raw, dtype=[("pos", "<i4", 3), ("rgb", "<u2", 3)], count=count)
     xyz = records["pos"] * np.asarray(meta["scale"]) + np.asarray(meta["offset"])
     return meta, xyz, records["rgb"].copy()
+
+
+def fake_run_converter(input_path, out_dir, *, progress, check_cancelled):
+    """The offline PotreeConverter: reads the LAS/LAZ with laspy, writes `write_fake_octree` output.
+
+    Same signature and result type as `app.pointclouds.converter.run_converter`.
+    """
+    import laspy
+
+    from app.pointclouds.converter import ConverterResult
+
+    started = time.monotonic()
+    check_cancelled()
+    progress(0.0, "building the 3D view copy: INDEXING 0 %")
+    las = laspy.read(input_path)
+    xyz = np.column_stack([np.asarray(las.x), np.asarray(las.y), np.asarray(las.z)])
+    names = set(las.point_format.dimension_names)
+    rgb = (
+        np.column_stack([np.asarray(las.red), np.asarray(las.green), np.asarray(las.blue)])
+        if {"red", "green", "blue"} <= names
+        else np.full((len(xyz), 3), 65535, dtype=np.uint16)
+    )
+    write_fake_octree(xyz, Path(out_dir), rgb=rgb)
+    check_cancelled()
+    progress(1.0, "building the 3D view copy: DONE 100 %")
+    return ConverterResult(
+        octree_dir=Path(out_dir),
+        log_tail=["fake converter: " + str(len(xyz)) + " points"],
+        command=["fake-potreeconverter", str(input_path), "-o", str(out_dir)],
+        seconds=time.monotonic() - started,
+        encoding="DEFAULT",  # write_fake_octree's encoding; the real converter reports BROTLI
+    )

@@ -42,6 +42,9 @@ class ProjectHandle:
     thumbs_dir = property(lambda s: s.folder / "cache" / "thumbs")
     exports_dir = property(lambda s: s.folder / "exports")
     maps_dir = property(lambda s: s.folder / "maps")
+    pointclouds_dir = property(lambda s: s.folder / "pointclouds")
+    surfaces_dir = property(lambda s: s.folder / "surfaces")
+    volumes_dir = property(lambda s: s.folder / "volumes")
 
     @contextmanager
     def session(self) -> Iterator[Session]:
