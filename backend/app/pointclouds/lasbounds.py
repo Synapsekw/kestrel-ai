@@ -50,5 +50,24 @@ def widen(bounds: Sequence[float], scale: Sequence[float]) -> list[float]:
     ]
 
 
+# A thousandth of a scale step: far above the double rounding noise at UTM magnitudes (~1e-7 steps),
+# far below anything a reader could see.
+GRID_NUDGE = 1e-3
+
+
+def widen_for_converter(bounds: Sequence[float], scale: Sequence[float]) -> list[float]:
+    """`widen`, with each minimum a further thousandth of a step down: the work copy's header.
+
+    PotreeConverter 2.1.5 takes the header minimum as its offset and truncates `(x - offset) / scale`.
+    A minimum on the source grid is a double just above or just below it (243194.298 - 0.001 is
+    243194.29700000002), so grid values land at `k - eps` and truncate one step low: every display
+    point, and so every pick, was 1 mm off (§17.9, first acceptance). Just below the grid, every
+    source value lands at `k + 0.001` steps and truncates to exactly `k`. The bounds still contain
+    every point; the export keeps plain `widen`.
+    """
+    wide = widen(bounds, scale)
+    return [*(wide[i] - scale[i] * GRID_NUDGE for i in range(3)), *wide[3:]]
+
+
 def contains(outer: Sequence[float], inner: Sequence[float]) -> bool:
     return all(outer[i] <= inner[i] for i in range(3)) and all(outer[i] >= inner[i] for i in range(3, 6))

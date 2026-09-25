@@ -325,3 +325,36 @@ def test_an_unreadable_source_header_is_a_job_failure(tmp_path, monkeypatch):
     assert str(e.value) == (
         f"could not read the source file: {src} (The process cannot access the file because it is being used)"
     )
+
+
+@pytest.mark.potreeconverter
+@pytest.mark.skipif(converter_path.converter_exe() is None, reason="PotreeConverter payload not fetched")
+def test_points_on_the_source_grid_round_trip_through_the_real_converter(tmp_path, monkeypatch):
+    """§17.9: every display-copy point decodes to its source point within half a scale step per axis.
+
+    The first acceptance found every pick exactly 1 mm low: the converter truncates (x - offset) /
+    scale with the repaired header minimum as its offset. The chimney's grid is used on purpose (its
+    minimum X widened one step is the double 243194.29700000002, just above the grid). The converter
+    runs UNCOMPRESSED here only so the test can decode octree.bin without brotli; it quantises the
+    positions once, before encoding, so BROTLI carries the same integers.
+    """
+    import numpy as np
+
+    monkeypatch.setattr(converter, "ENCODING", "UNCOMPRESSED")
+    rng = np.random.default_rng(1)
+    n = 20_000
+    origin_mm = np.array([243_194_298, 3_177_915_060, -141_185])
+    grid = origin_mm + rng.integers(0, 50_000, size=(n, 3))
+    grid[0] = origin_mm  # the minimum itself is a point, as in the chimney
+    src = make_las(tmp_path / "grid.las", n, points=grid / 1000.0)
+    _run(src, tmp_path / "pc" / "grid")
+    octree = tmp_path / "pc" / "grid" / "octree"
+    meta = json.loads((octree / "metadata.json").read_text("utf-8-sig"))
+    record = sum(a["size"] for a in meta["attributes"])
+    raw = np.fromfile(octree / "octree.bin", dtype=np.uint8).reshape(-1, record)
+    ints = raw[:, :12].copy().view("<i4").reshape(-1, 3)
+    decoded_mm = (ints * np.asarray(meta["scale"]) + np.asarray(meta["offset"])) * 1000.0
+    nearest = np.round(decoded_mm).astype(np.int64)
+    assert len(decoded_mm) == n
+    assert np.abs(decoded_mm - nearest).max() <= 0.5
+    assert {tuple(p) for p in nearest.tolist()} == {tuple(p) for p in grid.tolist()}

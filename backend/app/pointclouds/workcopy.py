@@ -15,7 +15,12 @@ import laspy
 import numpy as np
 
 from app.jobs.cancellation import JobFailure
-from app.pointclouds.lasbounds import contains, read_header_bounds, widen, write_header_bounds
+from app.pointclouds.lasbounds import (
+    contains,
+    read_header_bounds,
+    widen_for_converter,
+    write_header_bounds,
+)
 
 COPY_CHUNK = 64 * 1024 * 1024
 DISK_FULL = "the project drive is full; free some space and import again"
@@ -82,10 +87,11 @@ def copy_and_hash(
 
 
 def repair_header(path: Path, bounds: Sequence[float], scale: Sequence[float]) -> bool:
-    """Writes the scanned bounds, widened one scale step, into the copy's header; True if they were
-    not already inside the header (the Pix4D defect). A laspy reopen then proves the result."""
+    """Writes the scanned bounds, widened one scale step (the minimum nudged just below the source
+    grid, see `widen_for_converter`), into the copy's header; True if they were not already inside
+    the header (the Pix4D defect). A laspy reopen then proves the result."""
     repaired = not contains(read_header_bounds(path), bounds)
-    write_header_bounds(path, widen(bounds, scale))
+    write_header_bounds(path, widen_for_converter(bounds, scale))
     with laspy.open(path) as r:
         mins, maxs = np.asarray(r.header.mins), np.asarray(r.header.maxs)
     if not (np.all(mins <= np.asarray(bounds[:3])) and np.all(maxs >= np.asarray(bounds[3:]))):

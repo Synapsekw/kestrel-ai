@@ -138,4 +138,35 @@ def test_a_correct_header_still_gets_the_widened_bounds(tmp_path):
     path = make_las(tmp_path / "ok.las", 5_000)
     bounds = _true_bounds(path)
     assert workcopy.repair_header(path, bounds, [0.001, 0.001, 0.001]) is False
-    assert lasbounds.read_header_bounds(path) == pytest.approx(lasbounds.widen(bounds, [0.001] * 3), abs=1e-9)
+    assert lasbounds.read_header_bounds(path) == pytest.approx(
+        lasbounds.widen_for_converter(bounds, [0.001] * 3), abs=1e-9
+    )
+
+
+# §17.9 first acceptance: the chimney's source minimum X 243194.298 widened one step became the
+# double 243194.29700000002, a hair above the 1 mm grid. PotreeConverter 2.1.5 takes that as its
+# offset and truncates (x - offset) / scale, so every grid value landed at k - eps -> k - 1: each
+# pick decoded one millimetre low.
+CHIMNEY_GRID_BOUNDS = [243194.298, 3177915.060, -141.185, 245353.937, 3180119.464, 189.554]
+
+
+def test_the_repaired_minimum_sits_just_below_the_source_grid(tmp_path):
+    path = make_las(tmp_path / "grid.las", 500)
+    scale = [0.001, 0.001, 0.001]
+    workcopy.repair_header(path, CHIMNEY_GRID_BOUNDS, scale)
+    header = lasbounds.read_header_bounds(path)
+    assert lasbounds.contains(header, CHIMNEY_GRID_BOUNDS)
+    for axis in range(3):
+        lo, s = CHIMNEY_GRID_BOUNDS[axis], scale[axis]
+        for k in (0, 1, 7, 123_456, 2_159_639):
+            x = lo + k * s  # a value on the source grid, as the converter reads it (a double)
+            steps = (x - header[axis]) / s
+            # truncation must land on k + 1 (the widening step) with a margin far above rounding noise
+            assert int(steps) == k + 1, (axis, k, steps)
+            assert steps - (k + 1) > 1e-4, (axis, k, steps)
+
+
+def test_widen_for_converter_nudges_only_the_minimum():
+    b = lasbounds.widen_for_converter([0, 0, 0, 1, 1, 1], [0.001, 0.01, 0.1])
+    assert b[3:] == pytest.approx([1.001, 1.01, 1.1], abs=1e-12)
+    assert b[:3] == pytest.approx([-0.001001, -0.01001, -0.1001], abs=1e-12)
