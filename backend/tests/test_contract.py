@@ -78,7 +78,6 @@ EXPECTED_STUBS: set[str] = {
     "getPointCloud",
     "patchPointCloud",
     "deletePointCloud",
-    "getPointCloudOctreeFile",
     "listCloudMeasurements",
     "createCloudMeasurement",
     "updateCloudMeasurement",
@@ -112,6 +111,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
+    "getPointCloudOctreeFile": {416},  # a Range the file cannot satisfy
 }
 
 
