@@ -191,4 +191,92 @@ describe("ImportDesignDialog", () => {
     expect(onClose).toHaveBeenCalled();
     await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
   });
+
+  // Task 6 review (a): unmounting (the button closes the dialog) while the create request is
+  // still in flight must not leak the inspection it eventually creates.
+  it("deletes the inspection if the create request resolves after the dialog was closed", async () => {
+    const { api, requests } = fakeClient(routes());
+    const { unmount } = renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Design file"), {
+      target: { value: "D:\\designs\\site-tin.xml" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Read file" }));
+    // Unmount synchronously, before the fake POST's promise has a chance to resolve.
+    unmount();
+    await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
+  });
+
+  // Task 6 review (b): once an import has started, the inspection belongs to the surface build;
+  // Cancel (or an unmount that races it) must not delete it.
+  it("does not delete the inspection once an import has started", async () => {
+    const onStarted = vi.fn();
+    const { api, requests } = fakeClient(routes());
+    const { unmount } = renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={onStarted} />,
+      { api },
+    );
+    await readFile();
+    await preview();
+    fireEvent.click(screen.getByRole("button", { name: "Import surface" }));
+    await waitFor(() => expect(onStarted).toHaveBeenCalledWith(designSurface));
+    unmount();
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  // Task 6 review (c): a tracked job's poller giving up must not leave the progress bar spinning
+  // forever; it must offer a way to retry.
+  it("shows a retry alert when the inspect job's poller gives up", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/surfaces$/, body: { items: [exampleTarget] } },
+      {
+        method: "POST",
+        path: /\/design-inspections$/,
+        status: 202,
+        body: {
+          inspection: { ...landxmlInspection, state: "inspecting", candidates: [], detected: null },
+          job: job(INSPECT_JOB, "queued"),
+        },
+      },
+      {
+        method: "GET",
+        path: new RegExp(`/jobs/${INSPECT_JOB}$`),
+        status: 404,
+        body: { error: { code: "not_found", message: "inspect job not found" } },
+      },
+    ]);
+    renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    fireEvent.change(screen.getByLabelText("Design file"), {
+      target: { value: "D:\\designs\\site-tin.xml" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Read file" }));
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByText("inspect job not found")).toBeInTheDocument();
+  });
+
+  it("shows a retry alert when the preview job's poller gives up", async () => {
+    const { api } = fakeClient(
+      routes(readyPreview, [
+        {
+          method: "GET",
+          path: new RegExp(`/jobs/${PREVIEW_JOB}$`),
+          status: 404,
+          body: { error: { code: "not_found", message: "preview job not found" } },
+        },
+      ]),
+    );
+    renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await readFile();
+    fireEvent.click(screen.getByRole("button", { name: "Preview" }));
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.getByText("preview job not found")).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useApi, useBackend } from "@/api/client";
 import {
   createDesignInspection,
@@ -68,6 +68,29 @@ export function ImportDesignDialog({
   const inspectDone = inspectJob.job !== null && !isActiveJob(inspectJob.job);
   const previewDone = previewJob.job !== null && !isActiveJob(previewJob.job);
 
+  // Closing (or unmounting) while an inspection is being created or is unfinished must not leak it
+  // on the backend, but once an import has actually started the inspection is no longer ours to
+  // discard (Task 6 review (a), (b)). `inspectionRef` tracks the latest known inspection id even
+  // before `setInspection` has committed (the create POST may still be in flight); `closedRef` and
+  // `startedRef` record why a later continuation should, or should not, delete it.
+  const inspectionRef = useRef<DesignInspection | null>(null);
+  const closedRef = useRef(false);
+  const startedRef = useRef(false);
+  useEffect(() => {
+    inspectionRef.current = inspection;
+  }, [inspection]);
+  useEffect(
+    () => () => {
+      closedRef.current = true;
+      if (!startedRef.current && inspectionRef.current) {
+        const id = inspectionRef.current.id;
+        inspectionRef.current = null;
+        void deleteDesignInspection(api, projectId, id).catch(() => undefined);
+      }
+    },
+    [api, projectId],
+  );
+
   useEffect(() => {
     let cancelled = false;
     listTargetSurfaces(api, projectId)
@@ -114,12 +137,16 @@ export function ImportDesignDialog({
   const gate = importGate(preview, stale, accepted);
 
   function discard() {
-    if (inspection) void deleteDesignInspection(api, projectId, inspection.id).catch(() => undefined);
+    const insp = inspectionRef.current;
+    if (!insp) return;
+    inspectionRef.current = null;
+    void deleteDesignInspection(api, projectId, insp.id).catch(() => undefined);
   }
 
   function close() {
     if (busy === "import") return;
-    discard();
+    closedRef.current = true;
+    if (!startedRef.current) discard();
     onClose();
   }
 
@@ -144,11 +171,18 @@ export function ImportDesignDialog({
     try {
       const r = await createDesignInspection(api, projectId, path.trim());
       useJobsStore.getState().upsert(r.job);
+      if (closedRef.current) {
+        // The dialog closed (or unmounted) while the create request was in flight: nothing is
+        // listening any more, so delete the inspection it just created instead of leaking it.
+        void deleteDesignInspection(api, projectId, r.inspection.id).catch(() => undefined);
+        return;
+      }
+      inspectionRef.current = r.inspection;
       setInspection(r.inspection);
     } catch (e) {
-      setFileError(messageOf(e, "could not read the file"));
+      if (!closedRef.current) setFileError(messageOf(e, "could not read the file"));
     } finally {
-      setBusy(null);
+      if (!closedRef.current) setBusy(null);
     }
   }
 
@@ -191,6 +225,7 @@ export function ImportDesignDialog({
         ...(name.trim() ? { name: name.trim() } : {}),
       });
       useJobsStore.getState().upsert(res.job);
+      startedRef.current = true;
       onStarted(res.surface);
     } catch (err) {
       setError(messageOf(err, "could not start the import"));
@@ -247,13 +282,25 @@ export function ImportDesignDialog({
               </Button>
             </div>
           </Field>
-          {inspection?.state === "inspecting" && (
-            <Progress
-              value={inspectJob.job?.progress}
-              running
-              label={inspectJob.job?.message || "Reading design file"}
-            />
-          )}
+          {inspection?.state === "inspecting" &&
+            (inspectJob.error ? (
+              <Alert
+                tone="danger"
+                actions={
+                  <Button size="sm" icon="refresh" onClick={inspectJob.retry}>
+                    Retry
+                  </Button>
+                }
+              >
+                {inspectJob.error}
+              </Alert>
+            ) : (
+              <Progress
+                value={inspectJob.job?.progress}
+                running
+                label={inspectJob.job?.message || "Reading design file"}
+              />
+            ))}
           {inspection?.state === "failed" && <Alert tone="danger">{inspection.error}</Alert>}
         </Section>
 
@@ -288,13 +335,25 @@ export function ImportDesignDialog({
 
         {preview && inspection && (
           <Section title="Check">
-            {preview.state === "running" && (
-              <Progress
-                value={previewJob.job?.progress}
-                running
-                label={previewJob.job?.message || "Previewing design"}
-              />
-            )}
+            {preview.state === "running" &&
+              (previewJob.error ? (
+                <Alert
+                  tone="danger"
+                  actions={
+                    <Button size="sm" icon="refresh" onClick={previewJob.retry}>
+                      Retry
+                    </Button>
+                  }
+                >
+                  {previewJob.error}
+                </Alert>
+              ) : (
+                <Progress
+                  value={previewJob.job?.progress}
+                  running
+                  label={previewJob.job?.message || "Previewing design"}
+                />
+              ))}
             {preview.state === "failed" && <Alert tone="danger">{preview.error}</Alert>}
             {preview.state === "ready" && (
               <>

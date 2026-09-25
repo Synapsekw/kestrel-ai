@@ -27,6 +27,7 @@ import {
 } from "@/api/volumes";
 import { pushLog } from "@/app/diagnostics";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
+import { ImportDesignButton } from "@/surfaces/ImportDesignButton";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
 import { Alert, Button, EmptyState, Pill, Segmented, Switch, toast } from "@/ui";
@@ -256,15 +257,18 @@ export function VolumesScreen() {
         icon="volume"
         title={readyClouds.length ? "Build a surface from a point cloud" : "Import a point cloud first"}
         action={
-          readyClouds.length ? (
-            <Button variant="primary" icon="plus" onClick={() => setBuilding({})}>
-              Build surface
-            </Button>
-          ) : (
-            <Button variant="primary" onClick={() => navigate(`/p/${projectId}/clouds`)}>
-              Go to Point clouds
-            </Button>
-          )
+          <>
+            {readyClouds.length ? (
+              <Button variant="primary" icon="plus" onClick={() => setBuilding({})}>
+                Build surface
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={() => navigate(`/p/${projectId}/clouds`)}>
+                Go to Point clouds
+              </Button>
+            )}
+            <ImportDesignButton projectId={projectId} onChanged={reload} />
+          </>
         }
       >
         A surface is a height grid built from a point cloud. Draw a polygon on it to measure a stockpile or a
@@ -306,6 +310,7 @@ export function VolumesScreen() {
                 .then(reload)
                 .catch((err: unknown) => report("delete the surface", err))
             }
+            actions={<ImportDesignButton projectId={projectId} onChanged={reload} />}
           />
         )}
         <div className="flex flex-col gap-2 border-t border-line pt-3">
