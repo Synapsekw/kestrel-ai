@@ -124,15 +124,6 @@ def test_selftest_placeholders_say_so_and_exit_2(capsys, command):
 # --- the converter seam --------------------------------------------------------------------------
 
 
-def test_the_real_converter_is_not_built_yet(tmp_path):
-    # No `app` fixture here, so the module still holds the real runner.
-    assert converter.run_converter is not fake_run_converter
-    with pytest.raises(NotImplementedError, match="unit I1"):
-        converter.run_converter(
-            tmp_path / "in.las", tmp_path / "out", progress=lambda f, m: None, check_cancelled=lambda: None
-        )
-
-
 def test_the_app_fixture_installs_the_offline_converter(app, tmp_path):
     assert converter.run_converter is fake_run_converter
     source = make_las(tmp_path / "in.laz", 400, compressed=True)
