@@ -12,6 +12,7 @@ import {
   type MapZone,
 } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
+import { listPointClouds, type PointCloud } from "@/api/clouds";
 import { messageOf } from "@/api/errors";
 import {
   createLabel,
@@ -36,11 +37,13 @@ import { SiteAreaDrawBar } from "@/analytics/SiteAreaDrawBar";
 import { useSiteAreaOverlay } from "@/analytics/useSiteAreaOverlay";
 import { addMapDetection, type MapDetection } from "@/api/review";
 import { pushLog } from "@/app/diagnostics";
+import { cloudsForMap, jumpQuery, mapPixelToCloud, parseAt, type XY } from "@/clouds/jump";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { ExportMapDialog } from "@/maps/ExportMapDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
 import { LabelPanel } from "@/maps/LabelPanel";
+import { MapContextMenu, type MapMenu } from "@/maps/MapContextMenu";
 import { MapReviewPanel } from "@/maps/MapReviewPanel";
 import { MapList } from "@/maps/MapList";
 import { MapOverlay } from "@/maps/MapOverlay";
@@ -54,6 +57,7 @@ import { useLabelLayers, type Tool } from "@/maps/labelLayers";
 import { LabelHistory, outsideZones, pickClassCommand, type LabelApi } from "@/maps/labelModel";
 import { type Match, type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
 import { matchLookup } from "@/maps/scoreView";
+import { useAtMarker } from "@/maps/useAtMarker";
 import {
   MAX_COMPARE,
   boxFacts,
@@ -166,7 +170,20 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   const [wholeMap, setWholeMap] = useState<Record<string, Record<string, number>>>({});
   const [inView, setInView] = useState<Record<string, Record<string, number>>>({});
   const [inViewTruncated, setInViewTruncated] = useState<Record<string, boolean>>({});
-  const [popover, setPopover] = useState<{ x: number; y: number; facts: BoxFacts } | null>(null);
+  const [popover, setPopover] = useState<{
+    x: number;
+    y: number;
+    facts: BoxFacts;
+    box: BoxGeom;
+  } | null>(null);
+  const [clouds, setClouds] = useState<PointCloud[]>([]);
+  const [menu, setMenu] = useState<MapMenu | null>(null);
+  useEffect(() => {
+    if (readOnly) return;
+    void listPointClouds(api, projectId)
+      .then(setClouds)
+      .catch(() => setClouds([])); // no clouds is a normal state; the jump simply is not offered
+  }, [api, projectId, readOnly]);
 
   const [rightTab, setRightTab] = useState<RightTab>("results");
   const [zones, setZones] = useState<MapZone[]>([]);
@@ -205,6 +222,44 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   useOnJobsFinished("map_import", reload);
 
   const active = maps?.find((m) => m.id === mapId) ?? null;
+  const linkedClouds = useMemo(
+    () => (active?.geotransform && active.proj4 ? cloudsForMap(clouds, active.id) : []),
+    [clouds, active],
+  );
+  const openIn3d = useCallback(
+    (cloud: PointCloud, px: number, py: number, box?: BoxGeom) => {
+      if (!active) return;
+      const at = mapPixelToCloud(active, cloud, px, py);
+      const fp: XY[] | undefined = box
+        ? [
+            [box.x, box.y],
+            [box.x + box.w, box.y],
+            [box.x + box.w, box.y + box.h],
+            [box.x, box.y + box.h],
+          ].map(([x, y]) => mapPixelToCloud(active, cloud, x, y))
+        : undefined;
+      navigate(`/p/${projectId}/clouds/${cloud.id}${jumpQuery(at, fp)}`);
+    },
+    [active, navigate, projectId],
+  );
+  const at = useMemo(() => parseAt(searchParams), [searchParams]);
+  const { outside: atOutside } = useAtMarker(olMap, active, at);
+  useEffect(() => {
+    if (atOutside) toast("info", "This spot is outside the map");
+  }, [atOutside]);
+  useEffect(() => {
+    // A past (read-only) map has no clouds to jump to, so it keeps the browser's own menu.
+    if (!olMap || readOnly) return;
+    const viewport = olMap.getViewport();
+    const onContext = (e: MouseEvent) => {
+      e.preventDefault();
+      const [px, py] = fromOl(olMap.getEventCoordinate(e));
+      const r = viewport.getBoundingClientRect();
+      setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, px, py });
+    };
+    viewport.addEventListener("contextmenu", onContext);
+    return () => viewport.removeEventListener("contextmenu", onContext);
+  }, [olMap, readOnly]);
   // Site areas (plan 2 unit A): outlines on the map, and the outline tool for `?draw=site-area`.
   const siteAreas = useSiteAreaOverlay(olMap, active, projectId, !readOnly);
   const read = useMemo(() => (active ? makeReadout(active) : null), [active]);
@@ -643,6 +698,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   useEffect(() => {
     if (!olMap || !active) return;
     const onClick = (e: { pixel: number[] }) => {
+      setMenu(null); // any click on the map puts the right-click menu away
       // `kind === "detection"` excludes ground-truth label features, which share the `classId`
       // property but have no confidence to show (see `labelLayers.ts`).
       const feature = olMap.forEachFeatureAtPixel(e.pixel, (f) =>
@@ -680,7 +736,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
             (feature.get("provenanceKind") as MapDetection["provenance_kind"]) ?? "local_model",
         });
       }
-      setPopover({ x: e.pixel[0], y: e.pixel[1], facts: boxFacts(active, box, classes, confidence) });
+      setPopover({ x: e.pixel[0], y: e.pixel[1], facts: boxFacts(active, box, classes, confidence), box });
     };
     olMap.on("singleclick", onClick);
     return () => olMap.un("singleclick", onClick);
@@ -803,7 +859,40 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
                 {popover.facts.readout.native && <p className="text-muted">{popover.facts.readout.native}</p>}
                 {popover.facts.readout.wgs84 && <p className="text-ink">{popover.facts.readout.wgs84}</p>}
                 {popover.facts.size && <p className="text-muted">{popover.facts.size}</p>}
+                {linkedClouds.length > 0 && (
+                  <div className="mt-1 flex flex-col gap-0.5 border-t border-line pt-1.5">
+                    {linkedClouds.map((c) => (
+                      <Button
+                        key={c.id}
+                        size="sm"
+                        variant="ghost"
+                        icon="cloud"
+                        onClick={() =>
+                          openIn3d(
+                            c,
+                            popover.box.x + popover.box.w / 2,
+                            popover.box.y + popover.box.h / 2,
+                            popover.box,
+                          )
+                        }
+                      >
+                        {linkedClouds.length === 1 ? "Open in 3D" : `Open in 3D: ${c.name}`}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
+            {menu && (
+              <MapContextMenu
+                menu={menu}
+                clouds={linkedClouds}
+                onOpen={(c) => {
+                  setMenu(null);
+                  openIn3d(c, menu.px, menu.py);
+                }}
+                onClose={() => setMenu(null)}
+              />
             )}
           </>
         ) : (

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { cloudOctreeUrl, type GeoMap } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { createPointCloud, deletePointCloud, listPointClouds, type PointCloud } from "@/api/clouds";
@@ -8,11 +8,13 @@ import { listMaps } from "@/api/maps";
 import { pushLog } from "@/app/diagnostics";
 import { CloudDetails } from "@/clouds/CloudDetails";
 import { CloudList } from "@/clouds/CloudList";
-import { CloudViewer, type CloudViewerHandle } from "@/clouds/CloudViewer";
+import { CloudViewer, type CloudPick, type CloudViewerHandle } from "@/clouds/CloudViewer";
 import { ExportWatch } from "@/clouds/ExportWatch";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
+import { cloudToMapNative } from "@/clouds/jump";
 import { MeasurePanel } from "@/clouds/MeasurePanel";
 import { overlayShapes } from "@/clouds/measure";
+import { useJumpArrival } from "@/clouds/useJumpArrival";
 import { useMeasureTool } from "@/clouds/useMeasureTool";
 import { ViewPanel, type ViewSettings } from "@/clouds/ViewPanel";
 import { readBudget, writeBudget } from "@/clouds/viewer/budget";
@@ -40,6 +42,7 @@ export function CloudsScreen() {
   const { projectId = "", cloudId } = useParams();
   const api = useApi();
   const navigate = useNavigate();
+  const location = useLocation();
   const { baseUrl, token } = useBackend();
   const viewer = useRef<CloudViewerHandle>(null);
   const [clouds, setClouds] = useState<PointCloud[] | null>(null);
@@ -89,6 +92,8 @@ export function CloudsScreen() {
   useOnJobsFinished("pointcloud_import", reload);
 
   const cloud = clouds?.find((c) => c.id === cloudId) ?? null;
+  useJumpArrival(viewer, cloud, location.search);
+  const [lastPick, setLastPick] = useState<CloudPick | null>(null);
   const defaultRange = useMemo<[number, number]>(
     () => (cloud ? defaultElevationRange(cloud) : [0, 1]),
     [cloud],
@@ -101,7 +106,10 @@ export function CloudsScreen() {
   if (cloud && seedKey !== settingsFor) {
     setSettingsFor(seedKey);
     // Picks belong to one cloud's coordinates; a switch puts the tool down.
-    if (settingsFor?.split("|")[0] !== cloud.id) measure.cancel();
+    if (settingsFor?.split("|")[0] !== cloud.id) {
+      measure.cancel();
+      setLastPick(null); // "Show on map" never carries one cloud's pick onto another's map
+    }
     setSettings({
       budget: readBudget(),
       colour: defaultColour(cloud.has_rgb),
@@ -215,7 +223,10 @@ export function CloudsScreen() {
             elevationRange={settings.elevationRange}
             pointSize={settings.pointSize}
             armed={tab === "measure" && !!measure.tool}
-            onPick={(p) => tab === "measure" && measure.add(p)}
+            onPick={(p) => {
+              setLastPick(p);
+              if (tab === "measure") measure.add(p);
+            }}
             onHover={measure.setHover}
           />
         ) : (
@@ -227,6 +238,24 @@ export function CloudsScreen() {
             {cloud?.error ?? "Pick a cloud on the left, or import one."}
           </EmptyState>
         )}
+        {(() => {
+          const linkedMap = maps.find((m) => m.id === cloud?.map_id && m.proj4 && m.geotransform);
+          if (!cloud || !lastPick || !linkedMap) return null;
+          return (
+            <div className="absolute bottom-10 right-3">
+              <Button
+                size="sm"
+                icon="map"
+                onClick={() => {
+                  const q = cloudToMapNative(cloud, linkedMap, lastPick);
+                  navigate(`/p/${projectId}/maps/${linkedMap.id}?at=${q.x.toFixed(3)},${q.y.toFixed(3)}`);
+                }}
+              >
+                Show on map
+              </Button>
+            </div>
+          );
+        })()}
       </section>
       <aside
         data-testid="cloud-panel"

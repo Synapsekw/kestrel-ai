@@ -33,6 +33,7 @@ export interface CloudViewerHandle {
   topView(): void;
   lookAt(target: Vec3, distance: number): void;
   pickAtClient(clientX: number, clientY: number): CloudPick | null;
+  /** Client (viewport) coordinates of a native-CRS point, or null behind the camera. */
   project(p: Vec3): { x: number; y: number } | null;
   setOverlay(key: string, shapes: OverlayShape[]): void;
   stats(): ViewerStats;
@@ -454,7 +455,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         const v = new THREE.Vector3(p.x, p.y, p.z).project(e.camera);
         if (v.z > 1 || v.z < -1) return null;
         const r = canvas.getBoundingClientRect();
-        return { x: ((v.x + 1) / 2) * r.width, y: ((1 - v.y) / 2) * r.height };
+        return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
       },
       setOverlay(key, shapes) {
         const e = engine.current;

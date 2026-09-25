@@ -295,3 +295,131 @@ test("measure a distance with two picks, save it, copy the CSV", async ({ page, 
     "id,name,kind,note,x1,y1,z1,u1,x2,y2,z2,u2,lon,lat,dx,dy,dz,distance_3d,distance_horizontal,distance_vertical,height_difference,lean_offset_m,lean_angle_deg,lean_azimuth_deg,lean_mm_per_m,uncertainty_m,angle_uncertainty_deg",
   );
 });
+
+const MAP = "a0000000-6666-4000-8000-000000000009";
+const RUN = "r0000000-7777-4000-8000-000000000009";
+const EXC = "c1a2b3c4-0000-4000-8000-000000000001";
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkaGhgAAAChACB8f3CzwAAAABJRU5ErkJggg==",
+  "base64",
+);
+const siteMap = {
+  id: MAP,
+  name: "Chimney ortho",
+  status: "ready",
+  error: null,
+  source_path: "D:/orthos/chimney.tif",
+  source_size: 1,
+  width: 2000,
+  height: 2000,
+  band_count: 3,
+  dtype: "uint8",
+  crs_wkt: 'PROJCRS["WGS 84 / UTM zone 39N"]',
+  epsg: 32639,
+  proj4: "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs",
+  geotransform: [243500, 0.05, 0, 3178100, 0, -0.05],
+  bounds_native: [243500, 3178000, 243600, 3178100],
+  bounds_wgs84: [48.3744, 28.7038, 48.3755, 28.7048],
+  gsd_cm: 5,
+  tile_grid: { tile_size: 256, max_zoom: 3 },
+  labels_version: 0,
+  job_id: null,
+  created_at: "2026-09-24T09:00:00Z",
+  captured_on: "2026-05-04",
+};
+const siteRun = {
+  id: RUN,
+  map_id: MAP,
+  kind: "local_model",
+  model_id: "m0000000-2222-4000-8000-000000000001",
+  provider: null,
+  model_name: "machinery-v3",
+  query: "",
+  tile_size: 1280,
+  overlap: 0.2,
+  nms_iou: 0.5,
+  conf: 0.25,
+  target_gsd_cm: null,
+  job_id: null,
+  state: "succeeded",
+  counts: { [EXC]: 1 },
+  detection_count: 1,
+  created_at: "2026-09-24T10:00:00Z",
+};
+
+async function mapRoutes(page: Page) {
+  const cors = { "Access-Control-Allow-Origin": "*" };
+  const j = (pattern: (u: URL) => boolean, body: unknown) =>
+    page.route(pattern, (r) =>
+      r.fulfill({ contentType: "application/json", headers: cors, body: JSON.stringify(body) }),
+    );
+  await page.route(
+    (u) => u.pathname.includes(`/maps/${MAP}/tiles/`),
+    (r) => r.fulfill({ contentType: "image/png", headers: cors, body: PNG }),
+  );
+  await j((u) => u.pathname === `/api/v1/projects/${P}/maps`, { items: [siteMap] });
+  await j((u) => u.pathname.endsWith(`/maps/${MAP}/runs`), { items: [siteRun] });
+  await j((u) => u.pathname.endsWith(`/maps/${MAP}/labels`), { items: [] });
+  await j((u) => u.pathname.endsWith(`/maps/${MAP}/zones`), { items: [] });
+  await j((u) => u.pathname.endsWith("/density"), {
+    cell_size: 2000,
+    cells: [{ gx: 0, gy: 0, class_id: EXC, count: 1 }],
+  });
+  // one big detection over the middle of the map: a click at the canvas centre lands on it
+  await j((u) => u.pathname.endsWith("/detections"), {
+    items: [{ id: "d1", class_id: EXC, confidence: 0.9, x: 900, y: 900, w: 200, h: 200, angle: null }],
+    truncated: false,
+  });
+  await j((u) => u.pathname === `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson({ map_id: MAP })] });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson({ map_id: MAP }));
+  await routeOctree(
+    page,
+    CLOUD,
+    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 })),
+  );
+}
+
+test("a detection on the map opens the same spot in 3D, and a pick goes back to the map", async ({
+  page,
+}) => {
+  await mapRoutes(page);
+  await page.goto(`/p/${P}/maps/${MAP}`);
+  await page.getByRole("checkbox", { name: /Show machinery-v3/ }).check();
+  const mapBox = (await page.getByTestId("map-view").boundingBox())!;
+  await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2);
+  await page.getByRole("button", { name: "Open in 3D" }).click();
+  // box centre (1000, 1000) px -> 243500 + 1000 * 0.05, 3178100 - 1000 * 0.05
+  await expect(page).toHaveURL(
+    new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=243550\\.000,3178050\\.000&fp=243545\\.000,3178055\\.000;`),
+  );
+  await expect
+    .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
+    .toContain("pin");
+  // Polled: the pin can appear a frame before the view that `lookAt` set has been drawn.
+  // 3 m, not 2: this fixture's single level-0 node (0.78 m spacing) draws splats large enough at the
+  // 42 m arrival distance that a nearer point covers the centre pixel (measured 2.24 m off). A wrong
+  // CRS or axis would miss by hundreds of metres, so 3 m still proves the jump landed on the spot.
+  await expect
+    .poll(async () => {
+      const pick = await page.evaluate(() => window.__kestrelCloudViewer!.pickCenter());
+      return pick ? Math.hypot(pick.x - 243550, pick.y - 3178050) : Infinity;
+    })
+    .toBeLessThan(3);
+
+  const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
+  await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  await page.getByRole("button", { name: "Show on map" }).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/maps/${MAP}\\?at=243`));
+  await expect(page.getByTestId("map-at-marker")).toBeVisible();
+});
+
+test("right-click on the map opens that spot in 3D; a spot outside the cloud says so", async ({ page }) => {
+  await mapRoutes(page);
+  await page.goto(`/p/${P}/maps/${MAP}`);
+  const mapBox = (await page.getByTestId("map-view").boundingBox())!;
+  await page.mouse.click(mapBox.x + mapBox.width / 2, mapBox.y + mapBox.height / 2, { button: "right" });
+  await page.getByRole("menuitem", { name: "Open this spot in 3D" }).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=`));
+  await page.goto(`/p/${P}/clouds/${CLOUD}?at=100.000,200.000`);
+  await expect(page.getByText("This spot is outside the cloud")).toBeVisible({ timeout: 20_000 });
+});
