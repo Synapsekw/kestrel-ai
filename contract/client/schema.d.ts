@@ -1743,6 +1743,8 @@ export interface paths {
          *     `Cache-Control: private, max-age=31536000, immutable`. The token goes in the `token`
          *     query parameter. The loader's CORS preflight (`Range` and `Content-Type` request headers)
          *     is answered by the CORS middleware before routing, so there is no OPTIONS operation.
+         *     An unknown cloud answers 404 `not_found`; a `ready` cloud whose display-copy file is
+         *     missing on disk answers 404 `octree_missing` (both through the `default` response).
          */
         get: operations["getPointCloudOctreeFile"];
         put?: never;
@@ -1874,7 +1876,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent. */
+        /**
+         * One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent.
+         *     A surface that is not `ready` answers 409 `conflict` (through the `default` response).
+         */
         get: operations["getSurfaceTile"];
         put?: never;
         post?: never;
@@ -1897,7 +1902,11 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** One 256 px tile of a map's display raster warped into this surface's grid, for the ortho underlay. */
+        /**
+         * One 256 px tile of a map's display raster warped into this surface's grid, for the ortho
+         *     underlay. A surface that is not `ready` answers 409 `conflict`, a map that is not `ready`
+         *     409 `not_ready` (both through the `default` response).
+         */
         get: operations["getSurfaceOrthoTile"];
         put?: never;
         post?: never;
@@ -1917,7 +1926,10 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata. */
+        /**
+         * The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata.
+         *     A surface that is not `ready` answers 409 `conflict` (through the `default` response).
+         */
         get: operations["getSurfaceSample"];
         put?: never;
         post?: never;
@@ -2415,9 +2427,16 @@ export interface components {
                  *     remembered mapping; details `{model_id, unmapped}`), unsupported_point_cloud,
                  *     insufficient_memory and insufficient_disk (422: a point cloud cannot be read or
                  *     admitted), link_needs_coordinates, no_overlap and crs_already_set (422: a point
-                 *     cloud patch), grid_too_large (422: a surface grid over the cell ceiling),
-                 *     job_running (409: the resource's job is queued or running), not_ready (409:
-                 *     the resource has not finished importing), range_not_satisfiable (416)
+                 *     cloud patch), invalid_epsg (422: an EPSG code pyproj does not know),
+                 *     wrong_point_count, needs_projected_crs, vertical_span_too_small and
+                 *     measurement_limit (422: a point-cloud measurement), octree_missing (404: a ready
+                 *     cloud's display-copy file is missing on disk), grid_too_large (422: a surface
+                 *     grid over the cell ceiling), unsupported_crs, source_missing and
+                 *     invalid_build_request (422: a surface build), no_coordinates (422: an ortho
+                 *     underlay without a CRS), invalid_geometry and invalid_base (422: a volume
+                 *     measurement's polygon or base), job_running (409: the resource's job is queued
+                 *     or running), not_ready (409: the resource has not finished importing),
+                 *     range_not_satisfiable (416)
                  */
                 code: string;
                 message: string;
@@ -10115,7 +10134,7 @@ export interface operations {
                 };
             };
             409: components["responses"]["WrongProjectKind"];
-            /** @description a map link needs both entities to have a CRS (`link_needs_coordinates`) and overlapping WGS84 bounds (`no_overlap`); `assign_epsg` is refused when the file has a CRS (`crs_already_set`) */
+            /** @description a map link needs both entities to have a CRS (`link_needs_coordinates`) and overlapping WGS84 bounds (`no_overlap`); `assign_epsg` is refused when the file has a CRS (`crs_already_set`) or names an EPSG code pyproj does not know (`invalid_epsg`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10240,8 +10259,16 @@ export interface operations {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
-            /** @description the wrong number of points for the kind, a `vertical` check whose points are less than 0.5 m apart vertically, or the cloud already has 1 000 measurements (`code` is `validation_error`) */
+            /** @description the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the wrong number of points for the kind (`wrong_point_count`), a distance, height difference or vertical check on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10393,8 +10420,16 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
-            /** @description not enough free disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a cloud CRS the build cannot use, or an invalid request (`validation_error`) */
+            /** @description the point cloud is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a cloud CRS the build cannot use, i.e. none without `assume_metres` or one in feet (`unsupported_crs`); the source file gone or changed in size (`source_missing`), build parameters that contradict each other such as a Z clip upside down (`invalid_build_request`), a grid over the cell ceiling (`grid_too_large`), or not enough free disk (`insufficient_disk`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10561,7 +10596,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description the map or the surface has no CRS (`code` is `validation_error`) */
+            /** @description the map or the surface has no CRS (`code` is `no_coordinates`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10914,8 +10949,16 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurementWithJob"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
-            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface), a base that does not fit (`invalid_base`), or an invalid request (`validation_error`) */
+            /** @description the top or base surface is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11010,7 +11053,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurement"];
                 };
             };
-            /** @description the measurement is calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is calculating, or a surface its changed inputs name is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11019,7 +11062,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description changed inputs the rules refuse (`invalid_geometry`, `invalid_base`), or an invalid request (`validation_error`) */
+            /** @description changed inputs the rules refuse (`invalid_geometry`, `invalid_base`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
