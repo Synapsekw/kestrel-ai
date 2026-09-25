@@ -50,8 +50,11 @@ export function DesignCheck({
         <dt className="text-muted">Triangles</dt>
         <dd>{preview.triangle_count !== null ? preview.triangle_count.toLocaleString() : "—"}</dd>
       </dl>
-      {preview.warnings.map((w) => (
-        <Alert key={w.code} tone={w.level === "block" ? "danger" : w.level === "warn" ? "warn" : "info"}>
+      {preview.warnings.map((w, i) => (
+        <Alert
+          key={`${w.code}-${i}`}
+          tone={w.level === "block" ? "danger" : w.level === "warn" ? "warn" : "info"}
+        >
           {w.message}
         </Alert>
       ))}

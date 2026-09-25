@@ -318,4 +318,100 @@ describe("ImportDesignDialog", () => {
     expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.getByText("preview job not found")).toBeInTheDocument();
   });
+
+  // Final review 1: a 409 not_ready from createDesignSurface must not leave the dialog at a dead end
+  // (Preview disabled, Import repeating the 409, the vanished target still listed).
+  it("offers Preview again and reloads the targets after a 409 not_ready on import", async () => {
+    let surfaceLists = 0;
+    const { api, requests } = fakeClient(
+      routes(readyPreview, [
+        {
+          method: "GET",
+          path: /\/surfaces$/,
+          body: () => {
+            surfaceLists += 1;
+            return { items: [exampleTarget] };
+          },
+        },
+        {
+          method: "POST",
+          path: /\/design-surfaces$/,
+          status: 409,
+          body: {
+            error: {
+              code: "not_ready",
+              message: "the target surface Chimney DSM is no longer ready; preview again",
+              details: {},
+            },
+          },
+        },
+      ]),
+    );
+    renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await readFile();
+    await preview();
+    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+    expect(surfaceLists).toBe(1);
+    fireEvent.click(screen.getByRole("button", { name: "Import surface" }));
+    expect(await screen.findByText(/no longer ready; preview again/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
+    expect(screen.getByRole("button", { name: "Import surface" })).toBeDisabled();
+    await waitFor(() => expect(surfaceLists).toBe(2));
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  // Final review 2: the default name follows the selection until the user types their own.
+  it("recomputes the default name when the selection changes, unless the user edited it", async () => {
+    const twoSurfaces = {
+      ...landxmlInspection,
+      candidates: [
+        landxmlInspection.candidates[0],
+        { ...landxmlInspection.candidates[1], name: "Finished grade", notes: [], face_count: 200 },
+      ],
+    };
+    const { api } = fakeClient(
+      routes(readyPreview, [
+        { method: "GET", path: new RegExp(`/design-inspections/${INSPECTION_ID}$`), body: twoSurfaces },
+      ]),
+    );
+    renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await readFile();
+    await preview();
+    expect(screen.getByLabelText("Name")).toHaveValue("site-tin — Existing ground");
+    fireEvent.change(screen.getByRole("combobox", { name: "Surface" }), { target: { value: "c1" } });
+    expect(screen.getByLabelText("Name")).toHaveValue("site-tin — Finished grade");
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Final grade v2" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Surface" }), { target: { value: "c0" } });
+    expect(screen.getByLabelText("Name")).toHaveValue("Final grade v2");
+  });
+
+  // Final review 5: warnings dedupe by code AND message, so two may share a code.
+  it("renders two warnings that share a code without a duplicate-key warning", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const twoWarnings = {
+      ...warnPreview,
+      warnings: [
+        { code: "outside_target", level: "warn" as const, message: "first message" },
+        { code: "outside_target", level: "warn" as const, message: "second message" },
+      ],
+    };
+    const { api } = fakeClient(routes(twoWarnings));
+    renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await readFile();
+    await preview();
+    expect(screen.getByText("first message")).toBeInTheDocument();
+    expect(screen.getByText("second message")).toBeInTheDocument();
+    const dupes = errorSpy.mock.calls.filter((c) => String(c[0]).includes("same key"));
+    errorSpy.mockRestore();
+    expect(dupes).toHaveLength(0);
+  });
 });

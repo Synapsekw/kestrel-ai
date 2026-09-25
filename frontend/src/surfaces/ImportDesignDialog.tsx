@@ -14,7 +14,7 @@ import {
   type DesignPreview,
   type Surface,
 } from "@/api/designSurfaces";
-import { messageOf } from "@/api/errors";
+import { codeOf, messageOf } from "@/api/errors";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Dialog, Field, Input, Pill, Progress } from "@/ui";
@@ -59,7 +59,10 @@ export function ImportDesignDialog({
   const [preview, setPreview] = useState<DesignPreview | null>(null);
   const [previewedKey, setPreviewedKey] = useState<string | null>(null);
   const [accepted, setAccepted] = useState(false);
-  const [name, setName] = useState("");
+  // The name follows the selection (`defaultName`) until the user types one: a stale default would
+  // save the surface under the wrong name.
+  const [editedName, setEditedName] = useState<string | null>(null);
+  const [targetsVersion, setTargetsVersion] = useState(0);
   const [busy, setBusy] = useState<"read" | "preview" | "import" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -105,7 +108,7 @@ export function ImportDesignDialog({
     return () => {
       cancelled = true;
     };
-  }, [api, projectId]);
+  }, [api, projectId, targetsVersion]);
 
   useEffect(() => {
     if (!inspection || inspection.state !== "inspecting" || !inspectDone) return;
@@ -114,11 +117,7 @@ export function ImportDesignDialog({
       .then((next) => {
         if (cancelled || next.state === "inspecting") return;
         setInspection(next);
-        if (next.state === "ready") {
-          const f = initialForm(next, targets);
-          setForm(f);
-          setName(defaultName(next, f));
-        }
+        if (next.state === "ready") setForm(initialForm(next, targets));
       })
       .catch((e: unknown) => !cancelled && setFileError(messageOf(e, "could not load the file's contents")));
     return () => {
@@ -139,6 +138,7 @@ export function ImportDesignDialog({
     };
   }, [api, projectId, inspection, preview, previewDone]);
 
+  const name = editedName ?? (inspection && form ? defaultName(inspection, form) : "");
   const stale = form !== null && isStale(form, preview, previewedKey);
   const gate = importGate(preview, stale, accepted);
 
@@ -174,6 +174,7 @@ export function ImportDesignDialog({
     setInspection(null);
     setForm(null);
     setPreview(null);
+    setEditedName(null);
     try {
       const r = await createDesignInspection(api, projectId, path.trim());
       useJobsStore.getState().upsert(r.job);
@@ -241,6 +242,15 @@ export function ImportDesignDialog({
       // The import never started: a later close should still discard the inspection.
       startedRef.current = "idle";
       setError(messageOf(err, "could not start the import"));
+      const code = codeOf(err);
+      if (code === "not_ready" || code === "conflict") {
+        // The target (or the preview) changed under us: drop the preview so Preview is offered
+        // again, and reload the targets so a vanished one is no longer listed.
+        setPreview(null);
+        setPreviewedKey(null);
+        setAccepted(false);
+        setTargetsVersion((v) => v + 1);
+      }
     } finally {
       setBusy(null);
     }
@@ -378,7 +388,7 @@ export function ImportDesignDialog({
                   busy={busy !== null}
                 />
                 <Field label="Name" htmlFor="design-name">
-                  <Input id="design-name" value={name} onChange={(e) => setName(e.target.value)} />
+                  <Input id="design-name" value={name} onChange={(e) => setEditedName(e.target.value)} />
                 </Field>
               </>
             )}
