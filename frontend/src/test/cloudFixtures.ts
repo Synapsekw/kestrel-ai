@@ -1,0 +1,47 @@
+import type { PointCloud } from "@/api/clouds";
+
+export const CLOUD_ID = "c0000000-8888-4000-8000-000000000001";
+
+/** The chimney's shape (spec §1): 21.7 M points, EPSG:32639, header bounds repaired. */
+export const exampleCloud: PointCloud = {
+  id: CLOUD_ID,
+  name: "Chimney stack 3D",
+  status: "ready",
+  error: null,
+  source_path: "\\\\DanNas\\Work Data\\Chimney stack 3D_group1_densified_point_cloud.las",
+  source_size: 737_902_645,
+  source_sha256: "ab".repeat(32),
+  las_version: "1.2",
+  point_format: 3,
+  point_count: 21_697_184,
+  has_rgb: true,
+  scale: [0.001, 0.001, 0.001],
+  crs_wkt: 'PROJCRS["WGS 84 / UTM zone 39N"]',
+  epsg: 32639,
+  proj4: "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs",
+  vertical_crs: null,
+  crs_source: "file",
+  bounds_native: [243194.298, 3177915.06, -45, 243895.765, 3178616.528, 175],
+  bounds_repaired: true,
+  bounds_wgs84: [48.3712, 28.7004, 48.3784, 28.7068],
+  octree_spacing_m: 4.13,
+  z_stats: {
+    min: -141.2,
+    max: 175,
+    mean: 8.2,
+    p01: -46,
+    p1: -44,
+    p5: -43.5,
+    p50: -40.1,
+    p95: 60,
+    p99: 170,
+    p999: 174.5,
+    sample_count: 1_972_472,
+  },
+  class_counts: { "1": 21_697_184 },
+  octree_bytes: 137_000_000,
+  captured_on: "2026-05-04",
+  map_id: null,
+  job_id: null,
+  created_at: "2026-09-24T09:00:00Z",
+};

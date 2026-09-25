@@ -1,14 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { fakeClient } from "@/test/fixtures";
+import { renderWithProviders } from "@/test/render";
 import { AboutScreen } from "./AboutScreen";
 import { CloudsScreen } from "./CloudsScreen";
 
 describe("the empty screens foundation F0 lands", () => {
-  it("Point clouds says what it is for and that import is not here yet", () => {
-    render(<CloudsScreen />);
-    expect(screen.getByRole("heading", { name: "Point clouds" })).toBeInTheDocument();
-    expect(screen.getByText("Import a LAS or LAZ point cloud")).toBeInTheDocument();
-    expect(screen.getByText(/not available in this build yet/)).toBeInTheDocument();
+  it("Point clouds says what it is for", async () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/pointclouds$/, body: { items: [] } }]);
+    renderWithProviders(<CloudsScreen />, { api, route: "/p/p1/clouds", path: "/p/:projectId/clouds" });
+    expect(await screen.findByRole("heading", { name: "Point clouds" })).toBeInTheDocument();
+    expect(await screen.findByText("Import a LAS or LAZ point cloud")).toBeInTheDocument();
   });
 
   it("About names the app", () => {
