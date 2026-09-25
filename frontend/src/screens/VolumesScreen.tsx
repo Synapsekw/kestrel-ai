@@ -1,18 +1,397 @@
-import { EmptyState } from "@/ui";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import type OlMap from "ol/Map";
+import { surfaceOrthoTileUrl, surfaceTileUrl, type Surface, type VolumeMeasurement } from "@contract/client";
+import { useApi, useBackend } from "@/api/client";
+import { messageOf } from "@/api/errors";
+import {
+  deleteSurface,
+  listCloudsForBuild,
+  listSurfaces,
+  sampleSurface,
+  type PointCloudOut,
+} from "@/api/surfaces";
+import { createVolume, listVolumes, patchVolume, type VolumeMeasurementPatch } from "@/api/volumes";
+import { pushLog } from "@/app/diagnostics";
+import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
+import { useChangesStore } from "@/store/changes";
+import { useJobsStore } from "@/store/jobs";
+import { Alert, Button, EmptyState, Pill, Switch, toast } from "@/ui";
+import { BuildSurfaceDialog } from "@/volumes/BuildSurfaceDialog";
+import { SurfaceList } from "@/volumes/SurfaceList";
+import { SurfaceOverlay, type SurfaceReadout } from "@/volumes/SurfaceOverlay";
+import { SurfaceView } from "@/volumes/SurfaceView";
+import { VolumeToolbar } from "@/volumes/VolumeToolbar";
+import { headline, nextName, pixelToNative } from "@/volumes/model";
+import { useVolumeLayers, type VolumeTool } from "@/volumes/volumeLayers";
+
+const SAMPLE_MS = 150;
+// Stable references for "nothing": the layer hook re-draws whenever these change identity.
+const NO_GT = [0, 1, 0, 0, 0, -1];
+const NO_EXCLUSIONS: VolumeMeasurement["masks"]["exclusion_polygons"] = [];
+const NO_FOOTPRINTS: number[][][] = [];
+const STATUS_TONE = { ready: "ok", stale: "warn", calculating: "neutral", failed: "danger" } as const;
+const STATUS_TEXT = { ready: "Ready", stale: "Stale", calculating: "Calculating", failed: "Failed" } as const;
+
+function report(action: string, err: unknown): void {
+  const message = messageOf(err, `could not ${action}`);
+  pushLog(`${action} failed: ${message}`);
+  toast("danger", message);
+}
 
 /**
- * Volumes: surfaces from point clouds and designs, cut and fill over a polygon (spec
- * 2026-09-23-volumes section 9). Lazy-loaded from routes.tsx. Foundation F0 lands it empty; S2
- * units V7 and V8 build it, and S3 unit U8 mounts "Import design surface" in its surface list.
+ * Volumes (spec 2026-09-23-volumes section 9): surfaces and measurements on the left, the top
+ * surface's hillshade (over the ortho of the same flight) with the drawing tools in the middle, and
+ * a Measure | Results aside. Every drawn or edited ring is saved at once; numbers only ever come
+ * from a `volume_calc` job.
  */
 export function VolumesScreen() {
-  return (
-    <div className="mx-auto w-full max-w-3xl px-6 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Volumes</h1>
-      <EmptyState icon="volume" title="Measure stockpiles and earthworks">
-        Build a surface from a point cloud, then measure cut and fill against a toe, a flat level, another
-        survey or a design. Volumes are not available in this build yet.
+  const { projectId = "", measurementId } = useParams();
+  const api = useApi();
+  const navigate = useNavigate();
+  const { baseUrl, token } = useBackend();
+  const surfacesRevision = useChangesStore((s) => s.surfacesRevision);
+  const volumesRevision = useChangesStore((s) => s.volumesRevision);
+  const [surfaces, setSurfaces] = useState<Surface[] | null>(null);
+  const [clouds, setClouds] = useState<PointCloudOut[]>([]);
+  const [measurements, setMeasurements] = useState<VolumeMeasurement[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [pickedSurface, setPickedSurface] = useState<string | null>(null);
+  const [building, setBuilding] = useState<{ cloudId?: string } | null>(null);
+  const [olMap, setOlMap] = useState<OlMap | null>(null);
+  const [resolution, setResolution] = useState(1);
+  const [readout, setReadout] = useState<SurfaceReadout | null>(null);
+  const [tool, setTool] = useState<VolumeTool>("pan");
+  const [orthoOn, setOrthoOn] = useState(true);
+  const [selectedExclusion, setSelectedExclusion] = useState<string | null>(null);
+  const footprints: number[][][] = NO_FOOTPRINTS; // Task 16 loads the masked machines
+  const [picking, setPicking] = useState(false);
+
+  const reload = useCallback(() => {
+    Promise.all([
+      listSurfaces(api, projectId),
+      listVolumes(api, projectId),
+      listCloudsForBuild(api, projectId),
+    ])
+      .then(([s, v, c]) => {
+        setSurfaces(s);
+        setMeasurements(v);
+        setClouds(c);
+        setLoadError(null);
+      })
+      .catch((err: unknown) => setLoadError(messageOf(err, "could not load surfaces and volumes")));
+  }, [api, projectId]);
+  useEffect(reload, [reload, surfacesRevision, volumesRevision]);
+  useOnJobsFinished("surface_build", reload);
+  useOnJobsFinished("volume_calc", reload);
+
+  const active = measurements?.find((m) => m.id === measurementId) ?? null;
+  const ready = useMemo(() => (surfaces ?? []).filter((s) => s.status === "ready"), [surfaces]);
+  const top =
+    (active && surfaces?.find((s) => s.id === active.top_surface_id)) ||
+    ready.find((s) => s.id === pickedSurface) ||
+    ready[0] ||
+    null;
+  const baseSurface =
+    active?.base.kind === "surface" ? (surfaces?.find((s) => s.id === active.base.surface_id) ?? null) : null;
+  const gt = top?.geotransform ?? null;
+  const onSurface = measurements?.filter((m) => m.top_surface_id === top?.id) ?? [];
+
+  const save = useCallback(
+    (patch: VolumeMeasurementPatch) => {
+      if (!active) return;
+      patchVolume(api, projectId, active.id, patch)
+        .then((m) => setMeasurements((all) => all?.map((x) => (x.id === m.id ? m : x)) ?? all))
+        .catch((err: unknown) => report("save the change", err));
+    },
+    [api, projectId, active],
+  );
+
+  const onRing = useCallback(
+    (role: "measure" | "stable" | "exclusion", ring: number[][], id?: string) => {
+      if (!top) return;
+      if (role === "measure" && !active) {
+        createVolume(api, projectId, {
+          name: nextName(measurements ?? []),
+          polygon_native: ring,
+          top_surface_id: top.id,
+          base: { kind: "toe_plane" },
+        })
+          .then((created) => {
+            useJobsStore.getState().upsert(created.job);
+            setMeasurements((all) => [created.measurement, ...(all ?? [])]);
+            navigate(`/p/${projectId}/volumes/${created.measurement.id}`);
+          })
+          .catch((err: unknown) => report("create the measurement", err));
+        return;
+      }
+      if (!active) return;
+      if (role === "measure") save({ polygon_native: ring });
+      else if (role === "stable") save({ alignment: { stable_polygon: ring } });
+      else {
+        const others = active.masks.exclusion_polygons.filter((e) => e.id !== id);
+        const mode = active.masks.exclusion_polygons.find((e) => e.id === id)?.mode ?? "patch";
+        save({ masks: { exclusion_polygons: [...others, { id: id ?? crypto.randomUUID(), ring, mode }] } });
+      }
+      setTool((t) => (t === "edit" ? t : "pan"));
+    },
+    [api, projectId, top, active, measurements, navigate, save],
+  );
+
+  useVolumeLayers(olMap, {
+    geotransform: gt ?? NO_GT,
+    polygon: active?.polygon_native ?? null,
+    stable: active?.alignment.stable_polygon ?? null,
+    exclusions: active?.masks.exclusion_polygons ?? NO_EXCLUSIONS,
+    footprints,
+    tool,
+    selectedExclusion,
+    onDrawn: (role, ring) => onRing(role, ring),
+    onEdited: (role, ring, id) => onRing(role, ring, id),
+    onSelectExclusion: setSelectedExclusion,
+  });
+
+  const lastSample = useRef(0);
+  const onPointer = useCallback(
+    (px: number, py: number) => {
+      if (!top || !gt) return;
+      const now = Date.now();
+      if (now - lastSample.current < SAMPLE_MS) return;
+      lastSample.current = now;
+      const [x, y] = pixelToNative(gt, px, py);
+      const base = baseSurface
+        ? sampleSurface(api, projectId, baseSurface.id, x, y).then((s) => s.z)
+        : Promise.resolve(null);
+      Promise.all([sampleSurface(api, projectId, top.id, x, y), base])
+        .then(([t, b]) => setReadout({ x, y, top: t.z, base: baseSurface ? b : null }))
+        .catch(() => setReadout({ x, y, top: null, base: null }));
+    },
+    [api, projectId, top, gt, baseSurface],
+  );
+
+  // "Pick on map" for a flat base: the next click sets z from the top surface.
+  useEffect(() => {
+    if (!olMap || !picking || !gt || !top) return;
+    const onClick = (e: { coordinate: number[] }) => {
+      const [x, y] = pixelToNative(gt, e.coordinate[0], -e.coordinate[1]);
+      sampleSurface(api, projectId, top.id, x, y)
+        .then((s) => {
+          if (s.z == null) toast("info", "No surface there; pick a point on the surface.");
+          else save({ base: { kind: "flat", z: Number(s.z.toFixed(3)) } });
+        })
+        .catch((err: unknown) => report("read the height", err))
+        .finally(() => setPicking(false));
+    };
+    olMap.on("singleclick", onClick);
+    return () => olMap.un("singleclick", onClick);
+  }, [olMap, picking, gt, top, api, projectId, save]);
+
+  const deleteSelected = useCallback(() => {
+    if (!active || !selectedExclusion) return;
+    save({
+      masks: {
+        exclusion_polygons: active.masks.exclusion_polygons.filter((e) => e.id !== selectedExclusion),
+      },
+    });
+    setSelectedExclusion(null);
+  }, [active, selectedExclusion, save]);
+
+  if (surfaces && measurements && surfaces.length === 0 && !building) {
+    return (
+      <EmptyState
+        className="h-full p-6"
+        icon="volume"
+        title={clouds.length ? "Build a surface from a point cloud" : "Import a point cloud first"}
+        action={
+          clouds.length ? (
+            <Button variant="primary" icon="plus" onClick={() => setBuilding({})}>
+              Build surface
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={() => navigate(`/p/${projectId}/clouds`)}>
+              Go to Point clouds
+            </Button>
+          )
+        }
+      >
+        A surface is a height grid built from a point cloud. Draw a polygon on it to measure a stockpile or a
+        work area.
       </EmptyState>
+    );
+  }
+
+  const orthoUrl =
+    top?.map_id && orthoOn ? surfaceOrthoTileUrl(baseUrl, token, projectId, top.id, top.map_id) : null;
+  return (
+    <div className="flex h-full min-h-0 w-full">
+      <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
+        <h1 className="text-xl font-semibold tracking-tight">Volumes</h1>
+        {loadError && (
+          <Alert
+            tone="danger"
+            actions={
+              <Button size="sm" icon="refresh" onClick={reload}>
+                Retry
+              </Button>
+            }
+          >
+            {loadError}
+          </Alert>
+        )}
+        {surfaces && (
+          <SurfaceList
+            surfaces={surfaces}
+            activeId={top?.id ?? null}
+            onSelect={(id) => {
+              setPickedSurface(id);
+              navigate(`/p/${projectId}/volumes`);
+            }}
+            onBuild={() => setBuilding({})}
+            onRebuild={(s) => setBuilding({ cloudId: s.point_cloud_id ?? undefined })}
+            onDelete={(s) =>
+              void deleteSurface(api, projectId, s.id)
+                .then(reload)
+                .catch((err: unknown) => report("delete the surface", err))
+            }
+          />
+        )}
+        <div className="flex flex-col gap-2 border-t border-line pt-3">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-ink">Measurements</h2>
+            <Button
+              size="sm"
+              icon="plus"
+              disabled={!top}
+              onClick={() => {
+                navigate(`/p/${projectId}/volumes`);
+                setTool("measure");
+              }}
+            >
+              New measurement
+            </Button>
+          </div>
+          {onSurface.length === 0 ? (
+            <p className="text-sm text-muted">Draw a polygon around a stockpile or a work area.</p>
+          ) : (
+            <ul className="flex flex-col gap-1" aria-label="Measurements">
+              {onSurface.map((m) => (
+                <li key={m.id}>
+                  <Button
+                    variant={m.id === active?.id ? "secondary" : "ghost"}
+                    className="w-full justify-between"
+                    onClick={() => navigate(`/p/${projectId}/volumes/${m.id}`)}
+                  >
+                    <span className="truncate">{m.name}</span>
+                    <span className="flex items-center gap-1.5 text-xs tabular-nums text-muted">
+                      {headline(m)}
+                      <Pill size="sm" tone={STATUS_TONE[m.status]}>
+                        {STATUS_TEXT[m.status]}
+                      </Pill>
+                    </span>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
+      <section className="relative min-w-0 flex-1">
+        {top && gt ? (
+          <>
+            <SurfaceView
+              surface={top}
+              hillshadeUrl={surfaceTileUrl(baseUrl, token, projectId, top.id)}
+              orthoUrl={orthoUrl}
+              hillshadeOpacity={orthoUrl ? 0.35 : 1}
+              onReady={setOlMap}
+              onPointer={onPointer}
+              onViewChange={(v) => setResolution(v.resolution)}
+            />
+            <VolumeToolbar
+              tool={tool}
+              onTool={setTool}
+              hasMeasurement={!!active}
+              onDeleteSelected={deleteSelected}
+            />
+            <div className="absolute left-3 top-14 flex flex-col gap-1 rounded-md border border-line bg-panel p-2 shadow-float">
+              {top.map_id && <Switch label="Ortho" checked={orthoOn} onChange={setOrthoOn} />}
+            </div>
+            <SurfaceOverlay map={olMap} surface={top} readout={readout} resolution={resolution} />
+          </>
+        ) : (
+          <EmptyState icon="volume" title="No surface is ready yet">
+            A surface appears here when its build has finished.
+          </EmptyState>
+        )}
+      </section>
+      <aside
+        data-testid="volume-panel"
+        className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-l border-line p-4 xl:w-80"
+      >
+        {active && top ? (
+          <VolumeAside
+            key={active.id}
+            projectId={projectId}
+            measurement={active}
+            top={top}
+            surfaces={ready}
+            picking={picking}
+            onPick={() => setPicking(true)}
+            onSave={save}
+            onExport={() => undefined}
+            onChanged={reload}
+          />
+        ) : (
+          <p className="text-sm text-muted">
+            Choose a measurement, or draw a polygon with Draw measurement (P).
+          </p>
+        )}
+      </aside>
+      {building && (
+        <BuildSurfaceDialog
+          projectId={projectId}
+          clouds={clouds}
+          initialCloudId={building.cloudId}
+          onClose={() => setBuilding(null)}
+          onStarted={(created) => {
+            setBuilding(null);
+            setPickedSurface(created.surface.id);
+            reload();
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+function VolumeAside({
+  projectId,
+  measurement: m,
+  onChanged,
+}: {
+  projectId: string;
+  measurement: VolumeMeasurement;
+  top: Surface;
+  surfaces: Surface[];
+  picking: boolean;
+  onPick: () => void;
+  onSave: (patch: VolumeMeasurementPatch) => void;
+  onExport: () => void;
+  onChanged: () => void;
+}) {
+  // Task 16 replaces this with the Measure | Results panels.
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="min-w-0 truncate text-base font-semibold">{m.name}</h2>
+        <Pill tone={STATUS_TONE[m.status]}>{STATUS_TEXT[m.status]}</Pill>
+      </div>
+      <p className="text-sm text-muted" data-project={projectId}>
+        {m.results ? headline(m) : "Calculating…"}
+      </p>
+      <Button size="sm" icon="refresh" onClick={onChanged}>
+        Refresh
+      </Button>
+    </>
   );
 }
