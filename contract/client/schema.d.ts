@@ -10907,7 +10907,7 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            /** @description the preview is not ready, is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the preview is not ready, or the target cloud surface is no longer ready (`code` is `not_ready`); the preview is not the newest, has `block` warnings, has `warn` warnings without `accept_warnings`, or the design is already being imported (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -1,8 +1,4 @@
-"""Design surfaces (spec 2026-09-23-design-surfaces): inspections, previews and the import.
-
-Operations not built yet are 501 stubs; the task that lands one removes it from STUBS here and
-from EXPECTED_STUBS in tests/test_contract.py.
-"""
+"""Design surfaces (spec 2026-09-23-design-surfaces): inspections, previews and the import."""
 
 from __future__ import annotations
 
@@ -17,9 +13,9 @@ from pyproj import CRS
 from pyproj.exceptions import CRSError
 
 from app.errors import AppError, not_found
+from app.events_util import publish_surfaces_changed
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 from app.surfaces.design import detect, store
 from app.surfaces.design import jobs as _jobs  # noqa: F401 - registers `design_import`
 from app.surfaces.design.schemas import (
@@ -29,8 +25,10 @@ from app.surfaces.design.schemas import (
     DesignInspectionWithJob,
     DesignPreviewOut,
     DesignPreviewWithJob,
+    DesignSurfaceCreate,
 )
 from app.surfaces.design.targets import target_state
+from app.surfaces.schemas import SurfaceWithJob
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["surfaces"])
 CANDIDATE = r"^c[0-9]{1,6}$"
@@ -254,5 +252,18 @@ def get_design_preview_image(
     )
 
 
-STUBS = [("POST", "/design-surfaces", "createDesignSurface")]
-add_stubs(router, STUBS)
+@router.post("/design-surfaces", response_model=SurfaceWithJob, status_code=202)
+def create_design_surface(
+    body: DesignSurfaceCreate, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> SurfaceWithJob:
+    # Imported here: the build module pulls in rasterio and scipy, which the router must not need to load.
+    from app.surfaces import service
+    from app.surfaces.design import phase_build
+
+    def changed(ids: list[str]) -> None:
+        publish_surfaces_changed(request, handle, ids)
+
+    surface_id, job = phase_build.create(handle, request.app.state.jobs, body, surfaces_changed=changed)
+    out = service.set_job(handle, surface_id, job.id)
+    changed([surface_id])  # the list shows the building row at once
+    return SurfaceWithJob(surface=out, job=JobOut.from_row(job, handle.id))

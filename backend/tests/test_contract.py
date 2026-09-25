@@ -70,10 +70,7 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 # Operations still served by 501 stubs: every operation of the point-cloud (S1), volumes (S2) and
 # design-surface (S3) specs, routed by foundation F0. Each unit that builds one removes it here and
 # from its router's STUBS; any other 501 fails `test_responses_conform`.
-EXPECTED_STUBS: set[str] = {
-    # S3 design surfaces (app/surfaces/design/router.py)
-    "createDesignSurface",
-}
+EXPECTED_STUBS: set[str] = set()
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
 # the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an
