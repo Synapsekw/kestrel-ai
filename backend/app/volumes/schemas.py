@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.jobs.schemas import JobOut
 from app.surfaces.schemas import SurfaceKind, SurfaceMethod
@@ -187,6 +187,17 @@ class VolumeMeasurementCreate(BaseModel):
 
 
 class VolumeMeasurementPatch(BaseModel):
+    """The contract's patch: at least one field (minProperties 1), none of them nullable."""
+
+    @model_validator(mode="after")
+    def _sent_fields_are_values(self) -> VolumeMeasurementPatch:
+        if not self.model_fields_set:
+            raise ValueError("send at least one field to change")
+        nulls = sorted(k for k in self.model_fields_set if getattr(self, k) is None)
+        if nulls:
+            raise ValueError(f"{', '.join(nulls)} cannot be null; leave the field out instead")
+        return self
+
     name: str | None = Field(default=None, min_length=1)
     polygon_native: VolumeRing | None = None
     top_surface_id: str | None = None

@@ -278,7 +278,7 @@ def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPat
         row = _get(s, measurement_id)
         if sent.get("name"):
             row.name = sent["name"]
-        changes = {k: v for k, v in sent.items() if k in INPUT_FIELDS and v is not None}
+        changes = {k: v for k, v in sent.items() if k in INPUT_FIELDS}  # the schema refuses nulls
         if changes:
             if row.status == "calculating":
                 raise _conflict(f"{row.name} is being calculated; wait for it or cancel the job")
@@ -306,12 +306,23 @@ def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPat
 
 
 def start_calculation(handle: ProjectHandle, measurement_id: str, submit: Callable[[], Job]) -> tuple:
+    """Mark the row `calculating` and submit its job. The previous (ended) job_id is cleared first:
+    left in place, a read before the new id is written would `_settle` the row back while the new
+    job runs. A submit that raises puts the row back as it was."""
     with handle.session() as s:
         row = _get(s, measurement_id)
         if row.status == "calculating":
             raise _conflict(f"{row.name} is already being calculated")
-        row.status, row.error = "calculating", None
-    job = submit()
+        before = row.status, row.error, row.job_id
+        row.status, row.error, row.job_id = "calculating", None, None
+    try:
+        job = submit()
+    except BaseException:
+        with handle.session() as s:
+            row = s.get(VolumeMeasurement, measurement_id)
+            if row is not None:
+                row.status, row.error, row.job_id = before
+        raise
     with handle.session() as s:
         row = s.get(VolumeMeasurement, measurement_id)
         if row is None:
@@ -328,6 +339,24 @@ def set_job(handle: ProjectHandle, measurement_id: str, job_id: str) -> VolumeMe
             raise not_found("volume measurement", measurement_id)
         row.job_id = job_id
         s.flush()
+        return to_out(row, [])
+
+
+def submit_failed(handle: ProjectHandle, measurement_id: str, error: BaseException) -> None:
+    """A just-created row whose job could not be queued: `failed` with a readable error, never
+    `calculating` with no job (nothing would ever settle it)."""
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, measurement_id)
+        if row is not None and row.status == "calculating" and row.job_id is None:
+            row.status, row.error = "failed", f"the calculation could not be queued: {error}"
+
+
+def peek(handle: ProjectHandle, measurement_id: str) -> VolumeMeasurementOut:
+    """The row as stored, without the fingerprint refresh: for the tile and footprint hot paths."""
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, measurement_id)
+        if row is None:
+            raise not_found("volume measurement", measurement_id)
         return to_out(row, [])
 
 

@@ -53,7 +53,12 @@ def create_volume_measurement(
     body: VolumeMeasurementCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> VolumeMeasurementWithJob:
     row = service.create(handle, body)
-    job = _submit(request, handle, row.id)
+    try:
+        job = _submit(request, handle, row.id)
+    except Exception as e:
+        service.submit_failed(handle, row.id, e)
+        publish_volumes_changed(request, handle, [row.id])
+        raise
     out = service.set_job(handle, row.id, job.id)
     publish_volumes_changed(request, handle, [row.id])
     return VolumeMeasurementWithJob(measurement=out, job=JobOut.from_row(job, handle.id))
@@ -116,7 +121,7 @@ def get_volume_diff_tile(
     v: str | None = None,
     handle: ProjectHandle = Depends(get_project),
 ) -> Response:
-    out, _ = service.get_measurement(handle, measurementId)
+    out = service.peek(handle, measurementId)
     path = diff_path(handle, measurementId)
     if out.results is None or not path.is_file():
         raise AppError("not_ready", f"{out.name} has no results yet; calculate it first", 409)
@@ -141,7 +146,7 @@ def get_volume_footprints(
 ) -> VolumeFootprints:
     """The same footprints the job masks, for display; runs that cannot be used are skipped here
     (the calculation names them)."""
-    out, _ = service.get_measurement(handle, measurementId)
+    out = service.peek(handle, measurementId)
     top = surfaces.require_ready(handle, out.top_surface_id)
     runs = []
     for run_id in out.masks.detection_run_ids:

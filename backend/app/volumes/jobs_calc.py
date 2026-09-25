@@ -33,6 +33,23 @@ def _flight_map_ids(s, *surfaces: Surface | None) -> set[str]:
     return ids
 
 
+REPLACE_ATTEMPTS = 10
+REPLACE_WAIT_S = 0.1
+
+
+def _replace(src, dst) -> None:
+    """os.replace with a short bounded retry: on Windows a tile request reading the old diff.tif
+    holds it open for a moment, and the rename fails with PermissionError meanwhile."""
+    for attempt in range(REPLACE_ATTEMPTS):
+        try:
+            os.replace(src, dst)
+            return
+        except PermissionError:
+            if attempt == REPLACE_ATTEMPTS - 1:
+                raise
+            time.sleep(REPLACE_WAIT_S)
+
+
 def _restore(ctx: JobContext, measurement_id: str, message: str | None) -> None:
     with ctx.project.session() as s:
         row = s.get(VolumeMeasurement, measurement_id)
@@ -140,14 +157,21 @@ def run_volume_calc(ctx: JobContext) -> dict:
         "computed_at": datetime.now(UTC).isoformat(),
         "duration_s": round(time.perf_counter() - started, 2),
     }
+    # the diff lands before the numbers: if it cannot, the old results and the old diff still agree
+    try:
+        _replace(staging, diff_path(ctx.project, measurement_id))
+    except BaseException as e:
+        staging.unlink(missing_ok=True)
+        _restore(ctx, measurement_id, f"the cut/fill grid could not be saved: {e}")
+        ctx.publish("volumes.changed", {"measurement_ids": [measurement_id]})
+        raise JobFailure(f"the cut/fill grid could not be saved: {e}") from e
     with ctx.project.session() as s:
         row = s.get(VolumeMeasurement, measurement_id)
         if row is None:  # deleted while calculating is refused, but never leave a stray diff behind
-            staging.unlink(missing_ok=True)
+            diff_path(ctx.project, measurement_id).unlink(missing_ok=True)
             raise JobFailure("the measurement was deleted")
         row.results, row.status, row.error = results, "ready", None
         row.alignment = {**(row.alignment or {}), "measured": numbers["alignment"]}
-    os.replace(staging, diff_path(ctx.project, measurement_id))
     DIFF_TILES.drop_map(measurement_id)
     ctx.publish("volumes.changed", {"measurement_ids": [measurement_id]})
     return {"measurement_id": measurement_id, "net_m3": numbers["net_m3"]}

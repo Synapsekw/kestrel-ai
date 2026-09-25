@@ -2,6 +2,7 @@
 
 import io
 import math
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -11,12 +12,14 @@ from pyproj import CRS, Transformer
 from rasterio.windows import Window
 from shapely import affinity
 from shapely.geometry import box
+from sqlalchemy import select
 from surfaces import CX, CY, EPSG, WKT, X0, Y1, circle, cone, cone_cloud, fixture_spec, plane, write_cloud
 from volume_rows import add_cloud, add_map_run, add_surface
 
-from app.db.models import MapRun, Surface, VolumeMeasurement
+from app.db.models import Job, MapRun, Surface, VolumeMeasurement
 from app.surfaces.grid import open_surface
 from app.surfaces.tiles import diff_colours
+from app.volumes import jobs_calc, service
 from app.volumes.paths import diff_path, measurement_dir
 from app.volumes.schemas import VolumeResults
 from app.volumes.startup import sweep_interrupted
@@ -188,10 +191,126 @@ def test_calculating_rows_refuse_changes_and_the_sweep_resets_them(client, proje
         assert s.get(VolumeMeasurement, ids[1]).status == "stale"
 
 
+def _ended_job(handle, state="cancelled") -> str:
+    with handle.session() as s:
+        job = Job(type="volume_calc", params={}, state=state)
+        s.add(job)
+        s.flush()
+        return job.id
+
+
+def test_a_queued_job_cancelled_before_it_starts_reads_back_failed_or_stale(
+    client, project_id, handle, top, measure
+):
+    """The runner never calls `run_volume_calc` for a cancelled queued job; the read settles it."""
+    m, _ = measure(top)
+    ended = _ended_job(handle), _ended_job(handle)
+    with handle.session() as s:
+        fresh = VolumeMeasurement(
+            name="New",
+            polygon_native=circle(CX, CY, 12.0),
+            top_surface_id=top,
+            base={"kind": "toe_plane"},
+            masks={},
+            alignment={},
+            status="calculating",
+            job_id=ended[0],
+        )
+        s.add(fresh)
+        s.flush()
+        fresh_id = fresh.id
+        old = s.get(VolumeMeasurement, m["id"])
+        old.status, old.job_id = "calculating", ended[1]
+    got = client.get(f"{BASE}/{project_id}/volumes/{fresh_id}").json()
+    assert got["status"] == "failed" and got["error"] == service.ENDED_BEFORE_START
+    assert client.get(f"{BASE}/{project_id}/volumes/{m['id']}").json()["status"] == "stale"
+
+
+def test_a_recalculation_whose_previous_job_ended_stays_calculating(handle, top, measure):
+    """Between marking the row and recording the new job, a read must not settle it back."""
+    m, job = measure(top)
+    assert job["state"] == "succeeded"
+    seen = []
+
+    def submit():
+        seen.append(service.get_measurement(handle, m["id"])[0].status)
+        with handle.session() as s:
+            new = Job(type="volume_calc", params={}, state="queued")
+            s.add(new)
+            s.flush()
+            s.expunge(new)
+        return new
+
+    out, _ = service.start_calculation(handle, m["id"], submit)
+    assert seen == ["calculating"] and out.status == "calculating"
+
+
+def test_a_submit_that_raises_puts_the_row_back(client, project_id, handle, top, measure, monkeypatch):
+    m, _ = measure(top)
+
+    def boom():
+        raise RuntimeError("queue is closed")
+
+    with pytest.raises(RuntimeError):
+        service.start_calculation(handle, m["id"], boom)
+    got = client.get(f"{BASE}/{project_id}/volumes/{m['id']}").json()
+    assert got["status"] == "ready" and got["job_id"] == m["job_id"]
+
+    monkeypatch.setattr(client.app.state.jobs, "submit", lambda *a, **k: boom())
+    body = {
+        "name": "Queued never",
+        "polygon_native": circle(CX, CY, 12.0),
+        "top_surface_id": top,
+        "base": {"kind": "toe_plane"},
+    }
+    with pytest.raises(RuntimeError):
+        client.post(f"{BASE}/{project_id}/volumes", json=body)
+    with handle.session() as s:
+        row = s.execute(
+            select(VolumeMeasurement).where(VolumeMeasurement.name == "Queued never")
+        ).scalar_one()
+        assert row.status == "failed" and "could not be queued" in row.error
+
+
+def test_patch_refuses_nulls_and_an_empty_body(client, project_id, top, measure):
+    m, _ = measure(top)
+    url = f"{BASE}/{project_id}/volumes/{m['id']}"
+    for body in ({}, {"base": None}, {"name": None}, {"top_surface_id": None, "name": "x"}):
+        r = client.patch(url, json=body)
+        assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error", body
+    assert client.get(url).json()["name"] == "Pile 1"
+
+
+def test_a_diff_that_cannot_be_replaced_keeps_the_old_results(
+    client, wait_job, project_id, handle, top, measure, monkeypatch
+):
+    m, _ = measure(top)
+    before = diff_path(handle, m["id"]).read_bytes()
+
+    real_replace = jobs_calc.os.replace
+
+    def locked(src, dst):  # only the final rename is blocked; the grid writer's own rename is not
+        if Path(dst).name != "diff.tif":
+            return real_replace(src, dst)
+        raise PermissionError(13, "in use by a tile reader", str(dst))
+
+    monkeypatch.setattr(jobs_calc.os, "replace", locked)
+    monkeypatch.setattr(jobs_calc, "REPLACE_WAIT_S", 0.0)
+    client.patch(f"{BASE}/{project_id}/volumes/{m['id']}", json={"base": {"kind": "flat", "z": 50.0}})
+    r = client.post(f"{BASE}/{project_id}/volumes/{m['id']}/calculate")
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "failed" and "could not be saved" in job["error"]
+    got = client.get(f"{BASE}/{project_id}/volumes/{m['id']}").json()
+    assert got["status"] == "stale" and got["results"] == m["results"]
+    assert diff_path(handle, m["id"]).read_bytes() == before
+    assert not list(measurement_dir(handle, m["id"]).glob("diff-*.tif"))
+
+
 def test_delete_removes_the_files_and_frees_the_surface(client, project_id, handle, top, measure):
     m, _ = measure(top)
     assert measurement_dir(handle, m["id"]).is_dir()
-    assert client.delete(f"{BASE}/{project_id}/surfaces/{top}").status_code == 409
+    r = client.delete(f"{BASE}/{project_id}/surfaces/{top}")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
     assert client.delete(f"{BASE}/{project_id}/volumes/{m['id']}").status_code == 204
     assert not measurement_dir(handle, m["id"]).exists()
     assert client.get(f"{BASE}/{project_id}/volumes/{m['id']}").status_code == 404
@@ -336,12 +455,11 @@ def test_surface_base_with_stable_area_and_shift(client, project_id, handle, mea
     assert m["alignment"]["measured"]["median_dz"] == pytest.approx(0.07, abs=0.001)
     assert r["base_surface"]["name"] == "March" and r["uncertainty"]["complete"]
     # the base surface is in use through the JSON base.surface_id, not only top_surface_id
-    assert client.delete(f"{BASE}/{project_id}/surfaces/{earlier}").status_code == 409
+    r = client.delete(f"{BASE}/{project_id}/surfaces/{earlier}")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
 
 
 def test_results_validate_against_the_contract_schema(top, measure):
-    from pathlib import Path
-
     import jsonschema_rs  # schemathesis's validator; the pure-Python jsonschema is not installed
     import yaml
 
