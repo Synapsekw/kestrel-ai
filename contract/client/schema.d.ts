@@ -2197,7 +2197,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>-volumes-<title>/` (a `volume_export` job). */
+        /** Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>/` (a `volume_export` job; its `result` is `{folder, files}`). */
         post: operations["createVolumeExport"];
         delete?: never;
         options?: never;
@@ -11204,7 +11204,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description a measurement is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -392,4 +392,6 @@ def validate_export(handle: ProjectHandle, measurement_ids: list[str]) -> None:
             row = _get(s, measurement_id)
             _refresh(s, row)
             if row.status != "ready":
-                raise _conflict(f"{row.name} is {row.status}; recalculate it before exporting")
+                raise AppError(
+                    "not_ready", f"{row.name} is {row.status}; recalculate it before exporting", 409
+                )

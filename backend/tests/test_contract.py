@@ -84,8 +84,6 @@ EXPECTED_STUBS: set[str] = {
     "updateCloudMeasurement",
     "deleteCloudMeasurement",
     "createPointCloudExport",
-    # S2 volumes (app/volumes/router.py)
-    "createVolumeExport",
     # S3 design surfaces (app/surfaces/design/router.py)
     "createDesignInspection",
     "getDesignInspection",

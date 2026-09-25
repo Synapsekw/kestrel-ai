@@ -1,7 +1,4 @@
-"""Volume measurements (spec 2026-09-23-volumes §8, §11.1 paths 9-17).
-
-Paths 9-16 are built here (Task 11); `createVolumeExport` stays a 501 stub until Task 13.
-"""
+"""Volume measurements (spec 2026-09-23-volumes §8, §11.1 paths 9-17)."""
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi import Path as PathParam
@@ -10,10 +7,10 @@ from app.errors import AppError
 from app.events_util import publish_volumes_changed
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 from app.surfaces import service as surfaces
 from app.surfaces.grid import open_surface
 from app.surfaces.tiles import DIFF_TILES, render_diff_tile
+from app.training.schemas import JobRef
 from app.volumes import service
 from app.volumes.engine import ring_polygon
 from app.volumes.footprints import DISPLAY_LIMIT, FootprintError, footprints_for, usable_runs
@@ -21,6 +18,7 @@ from app.volumes.jobs_calc import run_volume_calc  # noqa: F401 - registers `vol
 from app.volumes.jobs_export import run_volume_export  # noqa: F401 - registers `volume_export`
 from app.volumes.paths import diff_path
 from app.volumes.schemas import (
+    VolumeExportRequest,
     VolumeFootprint,
     VolumeFootprints,
     VolumeMeasurementCreate,
@@ -177,6 +175,17 @@ def get_volume_footprints(
     return VolumeFootprints(items=items, truncated=truncated)
 
 
-STUBS: list[tuple[str, str, str]] = [("POST", "/volume-exports", "createVolumeExport")]  # Task 13
-
-add_stubs(router, STUBS)
+@router.post("/volume-exports", response_model=JobRef, status_code=202)
+def create_volume_export(
+    body: VolumeExportRequest, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> JobRef:
+    service.validate_export(handle, body.measurement_ids)
+    with handle.session() as s:
+        title = body.title or handle.row(s).name
+    params = {
+        "measurement_ids": list(dict.fromkeys(body.measurement_ids)),
+        "formats": body.formats,
+        "title": title,
+    }
+    job = request.app.state.jobs.submit(handle, "volume_export", params)
+    return JobRef(job=JobOut.from_row(job, handle.id))

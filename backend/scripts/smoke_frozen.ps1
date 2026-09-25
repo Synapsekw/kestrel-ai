@@ -61,6 +61,12 @@ if ($LASTEXITCODE -ne 0 -or $geo -notmatch "geo ok 32633") { throw "geo selftest
 Write-Host ($geo.Trim().Split("`n")[-1])
 Complete-Step "geo"
 
+# Volume exports (plan 2026-09-24-volumes Task 13): reportlab, openpyxl and scipy's qhull.
+$vol = & $exe volumes-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selftest failed: $vol" }
+Write-Host ($vol.Trim().Split("`n")[-1])
+Complete-Step "volumes"
+
 function Invoke-Api([string] $Method, [string] $Path, $Body, [int] $TimeoutSec = 900) {
   $request = @{
     Method          = $Method

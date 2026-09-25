@@ -114,7 +114,6 @@ def test_change_events_carry_their_ids_and_skip_an_empty_list(publish, event_typ
     [
         "pointcloud-selftest",
         "design-selftest",
-        "volumes-selftest",
     ],
 )
 def test_selftest_placeholders_say_so_and_exit_2(capsys, command):

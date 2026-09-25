@@ -3079,7 +3079,7 @@ paths:
     post:
       tags: [volumes]
       operationId: createVolumeExport
-      summary: Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>-volumes-<title>/` (a `volume_export` job).
+      summary: Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>/` (a `volume_export` job; its `result` is `{folder, files}`).
       requestBody:
         required: true
         content:
@@ -3092,7 +3092,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/JobRef" }
         "409":
-          description: "a measurement is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          description: "a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
