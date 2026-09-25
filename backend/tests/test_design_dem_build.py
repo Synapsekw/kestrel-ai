@@ -13,7 +13,7 @@ from rasterio.enums import Resampling
 from rasterio.vrt import WarpedVRT
 from rasterio.windows import Window
 
-from app.jobs.cancellation import JobFailure
+from app.jobs.cancellation import JobCancelled, JobFailure
 from app.surfaces import grid
 from app.surfaces.design import dem_build
 from app.surfaces.design import placement as pl
@@ -365,3 +365,71 @@ def test_a_four_times_ratio_target_cell_holds_a_millimetre_at_the_edge_ring(tmp_
     finite = np.isfinite(out)
     assert finite.any() and not finite.all()  # the tightly-covering source leaves a genuine edge ring
     assert np.abs(out[finite] - steep_plane(X, Y)[finite]).max() < 1e-3
+
+
+class _CancelAfter:
+    """A check_cancelled that raises JobCancelled on its `n`-th call."""
+
+    def __init__(self, n):
+        self.n, self.calls = n, 0
+
+    def __call__(self):
+        self.calls += 1
+        if self.calls >= self.n:
+            raise JobCancelled()
+
+
+def _spy_tmp_dirs(monkeypatch):
+    made = []
+    real = dem_build.tempfile.mkdtemp
+
+    def spy(*a, **kw):
+        made.append(real(*a, **kw))
+        return made[-1]
+
+    monkeypatch.setattr(dem_build.tempfile, "mkdtemp", spy)
+    return made
+
+
+def _coarse_spec():
+    """A 2 m grid over the 40 x 40 m test DEM."""
+    return grid.GridSpec(
+        crs_wkt=CRS.from_epsg(32639).to_wkt(),
+        epsg=32639,
+        cell_size=2.0,
+        x0=E0,
+        y0=N0 + 40,
+        width=20,
+        height=20,
+    )
+
+
+def test_a_cancel_stops_the_preview_validity_pass_and_removes_its_temp_dir(tmp_path, monkeypatch):
+    # Final review 4: the validity pass reads the whole source DEM; it must honour a cancel per chunk.
+    src = write_dem(tmp_path / "d.tif", np.ones((40, 40), np.float32), x0=E0, y0=N0 + 40, cell=1.0)
+    monkeypatch.setattr(grid, "MAX_READ", 8)  # 25 chunks of 8 x 8
+    made = _spy_tmp_dirs(monkeypatch)
+    p = pl.resolve(opts(), "geotiff", _coarse_spec())
+    pspec = _coarse_spec()
+    cancel = _CancelAfter(3)
+    with pytest.raises(JobCancelled):
+        dem_build.read_preview(src, pspec, p, INTERNAL, check_cancelled=cancel)
+    assert cancel.calls == 3  # stopped in the third of the 25 chunks
+    assert made and not any(os.path.exists(d) for d in made)
+
+
+def test_a_cancel_stops_the_regrid_validity_pass_and_reports_its_progress(tmp_path, monkeypatch):
+    src = write_dem(tmp_path / "d.tif", np.ones((40, 40), np.float32), x0=E0, y0=N0 + 40, cell=1.0)
+    monkeypatch.setattr(grid, "MAX_READ", 8)
+    made = _spy_tmp_dirs(monkeypatch)
+    spec = _coarse_spec()
+    p = pl.resolve(opts(), "geotiff", spec)
+    fractions = []
+    cancel = _CancelAfter(6)
+    out = tmp_path / "out.tif"
+    with pytest.raises(JobCancelled), grid.SurfaceWriter(out, spec) as w:
+        dem_build.regrid(
+            src, spec, w, p, INTERNAL, progress=lambda f, m: fractions.append(f), check_cancelled=cancel
+        )
+    assert fractions and max(fractions) <= dem_build.VALIDITY_SHARE * 5 / 25 + 1e-9
+    assert made and not any(os.path.exists(d) for d in made)

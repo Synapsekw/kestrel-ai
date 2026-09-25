@@ -1,6 +1,7 @@
 """createDesignPreview, getDesignPreview, getDesignPreviewImage and the preview phase (spec §4, §10, §12)."""
 
 import os
+import shutil
 import time
 
 import pytest
@@ -287,5 +288,36 @@ def test_deleting_the_inspection_cancels_a_running_preview(
     assert calls
     assert client.delete(url(project_id, iid)).status_code == 204
     assert wait_job(project_id, first["job"]["id"])["state"] == "cancelled"
-    time.sleep(0.2)
     assert not store.inspection_dir(handle, iid).exists()
+
+
+def test_a_training_project_may_not_preview(client, tmp_path):
+    """Final review 3: the router's kind guard covers createDesignPreview too."""
+    body = {"name": "t", "folder": str(tmp_path / "t"), "classes": [], "kind": "train"}
+    pid = client.post(BASE, json=body).json()["id"]
+    r = client.post(url(pid, store.new_id(), "/previews"), json=options())
+    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
+
+
+def test_a_preview_image_whose_inspection_vanishes_mid_read_is_404(
+    client, project_id, wait_job, tmp_path, target, monkeypatch
+):
+    """Final review 6: the folder removed between the lookup and the read is a 404, not a 500."""
+    pts, faces = site_tin()
+    iid = inspect(
+        client,
+        project_id,
+        wait_job,
+        write_landxml(tmp_path / "s.xml", [{"name": "EG", "points": pts, "faces": faces}]),
+    )
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    real = store.require_preview
+
+    def vanishing(idir, preview_id):
+        d = real(idir, preview_id)
+        shutil.rmtree(idir)
+        return d
+
+    monkeypatch.setattr(store, "require_preview", vanishing)
+    r = client.get(url(project_id, iid, f"/previews/{p['id']}/image"))
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"

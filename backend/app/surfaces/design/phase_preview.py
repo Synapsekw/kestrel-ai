@@ -74,7 +74,7 @@ def compute(handle, idir: Path, pdir: Path, options: dict, *, progress, check_ca
         progress(0.3, MESSAGE)
         tin_counts: dict = {}
         if fmt == "geotiff":
-            design = dem_build.read_preview(src, pspec, p, iinternal)
+            design = dem_build.read_preview(src, pspec, p, iinternal, check_cancelled=check_cancelled)
         else:
             if sel.geometry == "points":
                 tin = pipeline.triangulate_points(

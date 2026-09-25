@@ -1,5 +1,6 @@
 """createDesignSurface and the build phase (spec §2 Commit gate, §3, §4, §6, §15.3 API and jobs, §16)."""
 
+import shutil
 import threading
 import time
 
@@ -551,3 +552,23 @@ def test_the_row_turns_ready_only_after_its_files(
     assert job["state"] == "succeeded"
     assert seen == {"source.json": "building", "inspection": "building"}
     assert row(handle, body["surface"]["id"]).status == "ready"
+
+
+def test_an_inspection_removed_during_the_commit_is_404_not_500(
+    client, project_id, wait_job, tmp_path, handle, target, monkeypatch
+):
+    """Final review 6: the folder vanishing between the lookup and the gate's reads is a 404."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    real = store.require_inspection
+
+    def vanishing(h, inspection_id):
+        d = real(h, inspection_id)
+        shutil.rmtree(d)
+        return d
+
+    monkeypatch.setattr(store, "require_inspection", vanishing)
+    r = commit(client, project_id, iid, p["id"])
+    assert r.status_code == 404 and code(r) == "not_found"
+    with handle.session() as s:
+        assert s.query(Surface).filter(Surface.kind == "design").count() == 0

@@ -232,3 +232,12 @@ def test_a_training_project_may_not_delete_a_design_inspection(client, tmp_path)
     pid = client.post(BASE, json=body).json()["id"]
     r = client.delete(url(pid, store.new_id()))
     assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
+
+
+def test_a_relative_path_is_refused_as_missing(client, project_id, tmp_path, monkeypatch, fake_reader):
+    """Final review 7: a relative path would resolve against the sidecar's working folder; it is a
+    404 even when a file of that name exists there (Deviation 1: never a 422)."""
+    (tmp_path / "site.xml").write_text("<LandXML/>")
+    monkeypatch.chdir(tmp_path)
+    r = post(client, project_id, "site.xml")
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"

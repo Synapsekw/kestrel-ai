@@ -46,6 +46,7 @@ from app.surfaces.design.placement import Placement, raster_envelope
 COPY_CHUNK = 64 * 2**20
 MESSAGE = "Importing design surface"
 WARP_TOLERANCE = 1e-9  # effectively exact; GDAL raises ObjectNullError on 0.0 (rasterio 1.4.4 / GDAL 3.10.3)
+VALIDITY_SHARE = 0.2  # of the re-grid's progress spent on the validity pass over the whole source
 COVERAGE_EPS = 1e-6  # a warped validity of 1 - COVERAGE_EPS or better counts as fully covered
 
 
@@ -167,7 +168,11 @@ def _validity_halo(src, spec: grid.GridSpec) -> int:
     return max(2, math.ceil(ratio) + 1)
 
 
-def _build_validity_source(src, spec: grid.GridSpec, internal: dict):
+def _no_op(*_args) -> None:
+    return None
+
+
+def _build_validity_source(src, spec: grid.GridSpec, internal: dict, *, check_cancelled, progress=_no_op):
     """A uint8 1/0 raster covering `src`'s own extent plus a `_validity_halo` border of explicit 0:
     1 wherever `src` is valid (finite, not equal to `internal["nodata"]` -- which also covers a
     sentinel value never declared as the file's own nodata -- and not masked by the source's own
@@ -179,6 +184,9 @@ def _build_validity_source(src, spec: grid.GridSpec, internal: dict):
     time, so the whole source is never held in memory at once either way. Returns the temp
     directory's path (the caller removes it, including on cancellation or failure) and the
     validity file's own path.
+
+    The pass reads the whole source DEM, so it calls `check_cancelled` once per chunk (a cancel
+    raises out of it and the temp directory is removed) and reports `progress(fraction)`.
     """
     import rasterio
 
@@ -205,9 +213,13 @@ def _build_validity_source(src, spec: grid.GridSpec, internal: dict):
         ) as vds:
             nodata = internal.get("nodata")
             want_mask = bool(internal.get("mask"))
-            for r0 in range(0, src.height, grid.MAX_READ):
+            rows = range(0, src.height, grid.MAX_READ)
+            cols = range(0, src.width, grid.MAX_READ)
+            total, done = len(rows) * len(cols), 0
+            for r0 in rows:
                 rh = min(grid.MAX_READ, src.height - r0)
-                for c0 in range(0, src.width, grid.MAX_READ):
+                for c0 in cols:
+                    check_cancelled()
                     cw = min(grid.MAX_READ, src.width - c0)
                     win = Window(c0, r0, cw, rh)
                     raw = src.read(1, window=win)
@@ -217,6 +229,8 @@ def _build_validity_source(src, spec: grid.GridSpec, internal: dict):
                     if want_mask:
                         valid &= src.read_masks(1, window=win) > 0
                     vds.write(valid.astype(np.uint8), 1, window=Window(c0 + halo, r0 + halo, cw, rh))
+                    done += 1
+                    progress(done / total)
     except BaseException:
         shutil.rmtree(tmp_dir, ignore_errors=True)
         raise
@@ -257,7 +271,14 @@ def regrid(
     windows = list(grid.read_windows(spec, within=within))
     with rasterio.open(path) as src:
         resampling, kernel_kwargs = _warp_params(src, spec)
-        tmp_dir, vpath = _build_validity_source(src, spec, internal)
+        # The validity pass is the first VALIDITY_SHARE of the re-grid's progress, the windows the rest.
+        tmp_dir, vpath = _build_validity_source(
+            src,
+            spec,
+            internal,
+            check_cancelled=check_cancelled,
+            progress=lambda f: progress(VALIDITY_SHARE * f, MESSAGE),
+        )
         try:
             with (
                 rasterio.open(vpath) as vsrc,
@@ -271,17 +292,19 @@ def regrid(
                     data = np.where(coverage >= 1.0 - COVERAGE_EPS, data, np.float32(np.nan))
                     if np.isfinite(data).any():
                         writer.write_block(win, data)
-                    progress((i + 1) / len(windows), MESSAGE)
+                    progress(VALIDITY_SHARE + (1 - VALIDITY_SHARE) * (i + 1) / len(windows), MESSAGE)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def read_preview(path: Path, pspec: grid.GridSpec, p: Placement, internal: dict) -> np.ndarray:
+def read_preview(
+    path: Path, pspec: grid.GridSpec, p: Placement, internal: dict, *, check_cancelled=_no_op
+) -> np.ndarray:
     import rasterio
 
     with rasterio.open(path) as src:
         resampling, kernel_kwargs = _warp_params(src, pspec)
-        tmp_dir, vpath = _build_validity_source(src, pspec, internal)
+        tmp_dir, vpath = _build_validity_source(src, pspec, internal, check_cancelled=check_cancelled)
         try:
             with (
                 rasterio.open(vpath) as vsrc,

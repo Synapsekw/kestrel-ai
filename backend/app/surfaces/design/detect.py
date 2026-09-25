@@ -19,11 +19,12 @@ def _dwg() -> AppError:
 
 def classify(path: Path) -> str:
     """The format of `path`. Order matters: a .dwg always gets the fix message (even when missing);
-    a missing file is 404, not 422 (the contract's positive-data check forbids 422 on a valid body)."""
+    a missing file is 404, not 422 (the contract's positive-data check forbids 422 on a valid body).
+    A relative path would resolve against the sidecar's working folder, so it is treated as missing."""
     ext = path.suffix.lower()
     if ext == ".dwg":
         raise _dwg()
-    if not path.is_file():
+    if not path.is_absolute() or not path.is_file():
         raise not_found("design file", str(path))
     if ext not in EXTENSIONS:
         raise AppError(

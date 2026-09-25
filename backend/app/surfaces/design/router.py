@@ -249,11 +249,14 @@ def get_design_preview_image(
 ) -> Response:
     pdir = store.require_preview(store.require_inspection(handle, inspectionId), previewId)
     png = pdir / "preview.png"
-    if store.read_json(pdir / "preview.json")["state"] != "ready" or not png.is_file():
-        return Response(status_code=204)
-    return Response(
-        png.read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=3600"}
-    )
+    try:
+        if store.read_json(pdir / "preview.json")["state"] != "ready" or not png.is_file():
+            return Response(status_code=204)
+        data = png.read_bytes()
+    except FileNotFoundError:
+        # The inspection (or the preview) was deleted between the lookup and the read.
+        raise not_found("design preview", previewId) from None
+    return Response(data, media_type="image/png", headers={"Cache-Control": "private, max-age=3600"})
 
 
 @router.post("/design-surfaces", response_model=SurfaceWithJob, status_code=202)

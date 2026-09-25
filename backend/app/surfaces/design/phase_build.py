@@ -12,7 +12,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from app.db.models import Surface
-from app.errors import AppError
+from app.errors import AppError, not_found
 from app.jobs.cancellation import JobCancelled, JobFailure
 from app.surfaces import grid, service
 from app.surfaces.design import dem_build, pipeline, rasterise, store
@@ -94,11 +94,17 @@ def create(
 
     Everything from the gate to recording `build_job_id` runs under `store.commit_lock`, so two
     concurrent commits (a double-click) cannot both pass the gate: the second sees the first's
-    live build and gets 409 `conflict`."""
-    idir = store.require_inspection(handle, body.inspection_id)
+    live build and gets 409 `conflict`.
+
+    The inspection lookup is under the lock too (a delete takes it), and a folder that still vanishes
+    between the lookup and a read (removed by something not holding the lock) is a 404, not a 500."""
     with store.commit_lock:
-        inspection, preview = check_commit(handle, idir, body.preview_id, body.accept_warnings, runner)
-        pinternal = store.read_json(store.preview_dir(idir, body.preview_id) / "internal.json")
+        idir = store.require_inspection(handle, body.inspection_id)
+        try:
+            inspection, preview = check_commit(handle, idir, body.preview_id, body.accept_warnings, runner)
+            pinternal = store.read_json(store.preview_dir(idir, body.preview_id) / "internal.json")
+        except FileNotFoundError:
+            raise not_found("design inspection", body.inspection_id) from None
         source = design_source(inspection, preview, pinternal, body.accept_warnings)
         with handle.session() as s:
             created = Surface(
