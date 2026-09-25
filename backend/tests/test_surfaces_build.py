@@ -193,6 +193,22 @@ def test_feet_and_missing_crs_are_refused(tmp_path):
     assert result.spec.crs_wkt is None
 
 
+def test_malformed_crs_is_a_readable_rejection_not_a_raw_pyproj_error(tmp_path):
+    xyz = _lattice(25, size=10.0)
+    with pytest.raises(BuildRejected, match="could not be read") as e:
+        _build(tmp_path, xyz, BuildParams(cell_size_m=0.5), crs_wkt="not a valid crs at all")
+    assert e.value.code == "unsupported_crs"
+    assert "feet" not in e.value.message
+
+
+def test_geocentric_crs_gets_its_own_message_not_the_feet_message(tmp_path):
+    xyz = _lattice(25, size=10.0)
+    with pytest.raises(BuildRejected, match="not a projected system") as e:
+        _build(tmp_path, xyz, BuildParams(cell_size_m=0.5), crs_wkt=CRS.from_epsg(4978).to_wkt())
+    assert e.value.code == "unsupported_crs"
+    assert "feet" not in e.value.message
+
+
 def test_too_many_cells_names_the_smallest_cell_that_fits(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "MAX_CELLS", 10_000)
     xyz = _lattice(25, size=60.0)
@@ -241,6 +257,33 @@ def test_row_band_reduce_equals_the_direct_reduce(tmp_path, monkeypatch):
     monkeypatch.setattr(build, "BIN_BUFFER_BYTES", 2**20)
     banded, out2, _ = _build(tmp_path, xyz, BuildParams(cell_size_m=0.1), name="banded")
     with open_surface(out1) as a, open_surface(out2) as b:
+        w = Window(0, 0, a.spec.width, a.spec.height)
+        assert np.array_equal(a.read(w), b.read(w), equal_nan=True)
+
+
+def test_stale_bin_file_from_a_crashed_build_does_not_change_the_result(tmp_path):
+    """A previous build in the same `.build` folder that crashed after appending to a spill file
+    must not have its leftover records merge into a fresh build's grid."""
+    xyz = _lattice(25, size=20.0)
+    path = write_cloud(tmp_path / "s.las", xyz)
+    src = _source(path, xyz)
+    work = tmp_path / "s" / ".build"
+    (work / "bins").mkdir(parents=True)
+    (work / "bins" / "0_0.bin").write_bytes(b"\xff" * 800)  # a crashed earlier build's leftovers
+    result = build_surface(
+        src,
+        BuildParams(cell_size_m=0.5),
+        tmp_path / "s" / "surface.tif",
+        work,
+        progress=lambda f, m: None,
+        check_cancelled=lambda: None,
+    )
+    clean, _, _ = _build(tmp_path, xyz, BuildParams(cell_size_m=0.5), name="clean")
+    assert result.build_stats["points_used"] == clean.build_stats["points_used"]
+    with (
+        open_surface(tmp_path / "s" / "surface.tif") as a,
+        open_surface(tmp_path / "clean" / "surface.tif") as b,
+    ):
         w = Window(0, 0, a.spec.width, a.spec.height)
         assert np.array_equal(a.read(w), b.read(w), equal_nan=True)
 

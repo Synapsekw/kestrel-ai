@@ -26,6 +26,7 @@ import laspy
 import numpy as np
 import rasterio
 from pyproj import CRS, Transformer
+from pyproj.exceptions import CRSError
 from rasterio.windows import Window
 from scipy import ndimage
 
@@ -126,7 +127,11 @@ def plan_crs(src: CloudSource, assume_metres: bool) -> CrsPlan:
         if not assume_metres:
             raise BuildRejected("unsupported_crs", NO_CRS)
         return CrsPlan(None, None, None, None)
-    crs = CRS.from_user_input(src.crs_wkt)
+    problem = crs_problem(src.crs_wkt)
+    try:
+        crs = CRS.from_user_input(src.crs_wkt)
+    except CRSError as e:
+        raise BuildRejected("unsupported_crs", problem) from e
     if crs.is_geographic:
         minx, miny, _, maxx, maxy, _ = src.bounds_native
         epsg = utm_epsg((minx + maxx) / 2, (miny + maxy) / 2)
@@ -134,8 +139,9 @@ def plan_crs(src: CloudSource, assume_metres: bool) -> CrsPlan:
         return CrsPlan(
             target.to_wkt(), epsg, Transformer.from_crs(crs, target, always_xy=True), crs.to_epsg()
         )
-    if crs_problem(src.crs_wkt):
-        raise BuildRejected("unsupported_crs", FEET)
+    if problem:
+        message = FEET if "is not in metres" in problem else problem
+        raise BuildRejected("unsupported_crs", message)
     return CrsPlan(src.crs_wkt, crs.to_epsg(), None, None)
 
 
@@ -545,6 +551,9 @@ def build_surface(
         raise BuildRejected("grid_too_large", grid_too_large_message(bounds, cell, plan)) from e
     bins = work_dir / "bins"
     bins.mkdir(parents=True, exist_ok=True)
+    for stale in bins.iterdir():  # a crashed earlier build's spill files must not merge in
+        if stale.is_file():
+            stale.unlink()
     counters = Counters()
     binner = _Binner(bins, spec, BIN_BUFFER_BYTES)
     total = max(src.point_count, 1)
