@@ -62,6 +62,12 @@ if ($LASTEXITCODE -ne 0 -or $geo -notmatch "geo ok 32633") { throw "geo selftest
 Write-Host ($geo.Trim().Split("`n")[-1])
 Complete-Step "geo"
 
+# ezdxf + scipy.spatial (+ the grid writer) inside the bundle (spec 2026-09-23-design-surfaces §14.2 U3/U7).
+$design = & $exe design-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $design -notmatch "design ok 10") { throw "design selftest failed: $design" }
+Write-Host ($design.Trim().Split("`n")[-1])
+Complete-Step "design"
+
 # Volume exports (plan 2026-09-24-volumes Task 13): reportlab, openpyxl and scipy's qhull.
 $vol = & $exe volumes-selftest 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selftest failed: $vol" }

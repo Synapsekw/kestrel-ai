@@ -111,9 +111,7 @@ def test_change_events_carry_their_ids_and_skip_an_empty_list(publish, event_typ
 # all three are gone the parametrize is empty and pytest skips the test.
 @pytest.mark.parametrize(
     "command",
-    [
-        "design-selftest",
-    ],
+    [],
 )
 def test_selftest_placeholders_say_so_and_exit_2(capsys, command):
     assert run(["app.exe", command, "--write-fixture", "x.laz"], freeze_support=lambda: None) == 2
