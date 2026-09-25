@@ -83,7 +83,7 @@ export function results(kind: MeasureKind, pts: MPoint[]): Results {
 }
 
 export function isGeographic(cloud: Pick<PointCloud, "proj4">): boolean {
-  return !!cloud.proj4 && /\+proj=longlat\b/.test(cloud.proj4);
+  return !!cloud.proj4 && /\+proj=(longlat|latlong)\b/.test(cloud.proj4);
 }
 
 /** What the server would refuse, said before Save (spec §9.3; Review Focus 4). */

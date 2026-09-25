@@ -41,4 +41,38 @@ describe("measurements CSV", () => {
       row.startsWith('m1,"Gate, ""north""",distance,,1,2,3,0.01,4,6,3,0.02,,,3,4,0,5,5,0,0,,,,,0.0224,'),
     ).toBe(true);
   });
+  it("pads a single-point measurement's second point with empty cells", () => {
+    const csv = measurementsCsv([
+      {
+        id: "m2",
+        point_cloud_id: "c",
+        kind: "point",
+        name: "Point 1",
+        note: "gate post",
+        points: [{ x: 1, y: 2, z: 3, uncertainty_m: 0.01 }],
+        results: {
+          lon: 48.1,
+          lat: 28.2,
+          dx: null,
+          dy: null,
+          dz: null,
+          distance_3d: null,
+          distance_horizontal: null,
+          distance_vertical: null,
+          height_difference: null,
+          lean_offset_m: null,
+          lean_angle_deg: null,
+          lean_azimuth_deg: null,
+          lean_mm_per_m: null,
+          uncertainty_m: 0.01,
+          angle_uncertainty_deg: null,
+        },
+        created_at: "2026-09-24T10:00:00Z",
+        updated_at: "2026-09-24T10:00:00Z",
+      },
+    ]);
+    const row = csv.trim().split("\r\n")[1];
+    expect(row).toBe("m2,Point 1,point,gate post,1,2,3,0.01,,,,,48.1,28.2,,,,,,,,,,,,0.01,");
+    expect(row.split(",")).toHaveLength(CSV_COLUMNS.length);
+  });
 });

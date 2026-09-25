@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useApi } from "@/api/client";
 import type { PointCloud } from "@/api/clouds";
 import {
@@ -85,12 +85,16 @@ export function MeasurePanel({
   const [error, setError] = useState<string | null>(null);
   const geographic = isGeographic(cloud);
   const readout = useMemo(() => makePickReadout(cloud), [cloud]);
-  const reload = useCallback(() => {
+  useEffect(() => {
+    // A late answer for an earlier cloud or project never overwrites the current list.
+    let current = true;
     void listCloudMeasurements(api, projectId, cloud.id)
-      .then(setItems)
-      .catch((e: unknown) => setError(messageOf(e, "could not load the measurements")));
+      .then((xs) => current && setItems(xs))
+      .catch((e: unknown) => current && setError(messageOf(e, "could not load the measurements")));
+    return () => {
+      current = false;
+    };
   }, [api, projectId, cloud.id]);
-  useEffect(reload, [reload]);
 
   const points: MPoint[] = tool.picks.map((p) => ({
     x: p.x,
@@ -102,6 +106,32 @@ export function MeasurePanel({
   const blocked = tool.tool ? refusal(tool.tool, points, geographic) : null;
   const last = tool.picks[tool.picks.length - 1] ?? tool.hover;
   const r = last ? readout(last) : null;
+
+  const replace = (u: CloudMeasurement) => {
+    setItems((xs) => xs.map((x) => (x.id === u.id ? u : x)));
+    setError(null);
+  };
+  /** Saves a rename or note on blur; on failure the field goes back to what the server holds. */
+  const patch = (
+    input: HTMLInputElement,
+    m: CloudMeasurement,
+    body: { name: string } | { note: string | null },
+    serverValue: string,
+    what: string,
+  ) =>
+    void updateCloudMeasurement(api, projectId, cloud.id, m.id, body)
+      .then(replace)
+      .catch((e: unknown) => {
+        input.value = serverValue;
+        setError(messageOf(e, `could not ${what}`));
+      });
+  const remove = (m: CloudMeasurement) =>
+    void deleteCloudMeasurement(api, projectId, cloud.id, m.id)
+      .then(() => {
+        setItems((xs) => xs.filter((x) => x.id !== m.id));
+        setError(null);
+      })
+      .catch((e: unknown) => setError(messageOf(e, "could not delete the measurement")));
 
   const save = () => {
     if (!tool.tool || !tool.complete || blocked) return;
@@ -148,7 +178,7 @@ export function MeasurePanel({
           <span className={cx(r.warn ? "text-warn" : "text-muted")}>{r.precision}</span>
         </div>
       )}
-      {live && tool.tool && <ResultRows kind={tool.tool} r={live} />}
+      {live && !blocked && tool.tool && <ResultRows kind={tool.tool} r={live} />}
       {blocked && tool.complete && <Alert tone="warn">{blocked}</Alert>}
       {error && <Alert tone="danger">{error}</Alert>}
       <Button variant="primary" disabled={!tool.complete || !!blocked} onClick={save}>
@@ -188,13 +218,12 @@ export function MeasurePanel({
                   dense
                   aria-label={`Name of ${m.name}`}
                   defaultValue={m.name}
-                  onBlur={(e) =>
-                    e.target.value.trim() &&
-                    e.target.value !== m.name &&
-                    void updateCloudMeasurement(api, projectId, cloud.id, m.id, {
-                      name: e.target.value.trim(),
-                    }).then((u) => setItems((xs) => xs.map((x) => (x.id === u.id ? u : x))))
-                  }
+                  onBlur={(e) => {
+                    const input = e.currentTarget;
+                    const name = input.value.trim();
+                    if (!name) input.value = m.name;
+                    else if (name !== m.name) patch(input, m, { name }, m.name, "rename the measurement");
+                  }}
                 />
                 <IconButton
                   icon="eye"
@@ -202,16 +231,7 @@ export function MeasurePanel({
                   label={`Fly to ${m.name}`}
                   onClick={() => onFlyTo(m.points[m.points.length - 1] as MPoint)}
                 />
-                <IconButton
-                  icon="trash"
-                  size="sm"
-                  label={`Delete ${m.name}`}
-                  onClick={() =>
-                    void deleteCloudMeasurement(api, projectId, cloud.id, m.id).then(() =>
-                      setItems((xs) => xs.filter((x) => x.id !== m.id)),
-                    )
-                  }
-                />
+                <IconButton icon="trash" size="sm" label={`Delete ${m.name}`} onClick={() => remove(m)} />
               </div>
               <span className="text-xs tabular-nums text-muted">
                 {KIND_LABEL[m.kind]} · {main} · ± {formatLength(res.uncertainty_m ?? 0)}
@@ -221,12 +241,11 @@ export function MeasurePanel({
                 aria-label={`Note for ${m.name}`}
                 placeholder="Note"
                 defaultValue={m.note ?? ""}
-                onBlur={(e) =>
-                  e.target.value !== (m.note ?? "") &&
-                  void updateCloudMeasurement(api, projectId, cloud.id, m.id, {
-                    note: e.target.value || null,
-                  }).then((u) => setItems((xs) => xs.map((x) => (x.id === u.id ? u : x))))
-                }
+                onBlur={(e) => {
+                  const input = e.currentTarget;
+                  if (input.value !== (m.note ?? ""))
+                    patch(input, m, { note: input.value || null }, m.note ?? "", "save the note");
+                }}
               />
             </li>
           );

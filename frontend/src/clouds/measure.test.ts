@@ -50,6 +50,7 @@ describe("measurement formulas (the same vectors the backend reads)", () => {
     expect(isGeographic(exampleCloud)).toBe(false);
     expect(isGeographic({ ...exampleCloud, proj4: "+proj=longlat +datum=WGS84 +no_defs" })).toBe(true);
     expect(isGeographic({ ...exampleCloud, proj4: null })).toBe(false);
+    expect(isGeographic({ ...exampleCloud, proj4: "+proj=latlong +datum=WGS84" })).toBe(true);
   });
 
   it("draws the picks, the segment and the plumb line", () => {

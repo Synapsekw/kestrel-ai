@@ -3,7 +3,7 @@ import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { PointCloud } from "@/api/clouds";
-import { fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { errorBody, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { renderWithProviders } from "@/test/render";
 import { MeasurePanel } from "./MeasurePanel";
@@ -66,5 +66,35 @@ describe("Measure panel", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Distance" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Point" })).toBeEnabled();
+  });
+  it("says a failed rename and puts the saved name back", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/measurements$/, body: { items: [saved] } },
+      {
+        method: "PATCH",
+        path: /\/measurements\/m1$/,
+        status: 500,
+        body: errorBody("internal", "the database is locked"),
+      },
+    ]);
+    renderWithProviders(<Harness cloud={exampleCloud} onTool={() => undefined} />, { api });
+    const name = await screen.findByRole("textbox", { name: "Name of Distance 1" });
+    await userEvent.clear(name);
+    await userEvent.type(name, "Gate");
+    await userEvent.tab();
+    expect(await screen.findByRole("alert")).toHaveTextContent("the database is locked");
+    expect(name).toHaveValue("Distance 1");
+  });
+
+  it("shows the vertical-check refusal instead of results", () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/measurements$/, body: { items: [] } }]);
+    let tool: MeasureTool | null = null;
+    renderWithProviders(<Harness cloud={exampleCloud} onTool={(t) => (tool = t)} />, { api });
+    act(() => tool!.arm("vertical"));
+    act(() => tool!.add({ x: 0, y: 0, z: 0, level: 5, uncertainty_m: 0.03 }));
+    act(() => tool!.add({ x: 1, y: 0, z: 0.3, level: 5, uncertainty_m: 0.03 }));
+    expect(screen.getByText("pick points further apart vertically (at least 0.5 m)")).toBeInTheDocument();
+    expect(screen.queryByText("Lean ratio")).toBeNull();
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
   });
 });
