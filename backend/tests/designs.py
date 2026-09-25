@@ -76,3 +76,47 @@ def lattice_over(bounds: tuple[float, float, float, float], cell: float) -> Simp
     x0 = math.floor(round(minx / cell, 9)) * cell
     y0 = math.ceil(round(maxy / cell, 9)) * cell
     return SimpleLattice(x0, y0, cell, int((maxx - x0) // cell) + 1, int((y0 - miny) // cell) + 1)
+
+
+def l_shape_points(hole: bool = True):
+    """A 1 m grid over 100 x 100 m minus a 30 x 30 m notch (x, y > 70), and minus an enclosed
+    25 x 25 m patch (20 < x, y < 45) that stays surrounded by points. Every point is a run of 1."""
+    g = np.arange(0, 101, 1.0)
+    xx, yy = np.meshgrid(g, g)
+    x, y = xx.ravel(), yy.ravel()
+    keep = ~((x > 70) & (y > 70))
+    if hole:
+        keep &= ~((x > 20) & (x < 45) & (y > 20) & (y < 45))
+    pts = np.column_stack([x[keep] + E0, y[keep] + N0, np.full(int(keep.sum()), 5.0)])
+    return pts, np.arange(len(pts) + 1, dtype=np.int64)
+
+
+def crossing_runs():
+    """Two 2-vertex runs crossing at (E0 + 5, N0) at heights 5 and 7, plus four corner points."""
+    pts = np.array(
+        [
+            [E0, N0, 5.0],
+            [E0 + 10, N0, 5.0],
+            [E0 + 5, N0 - 5, 7.0],
+            [E0 + 5, N0 + 5, 7.0],
+            [E0 - 2, N0 - 7, 6.0],
+            [E0 + 12, N0 - 7, 6.0],
+            [E0 + 12, N0 + 7, 6.0],
+            [E0 - 2, N0 + 7, 6.0],
+        ]
+    )
+    return pts, np.array([0, 2, 4, 5, 6, 7, 8], np.int64)
+
+
+def cone_contour_runs(points_per_ring: int = 256):
+    """Contours of cone_z: closed circles at z = 0..19 with radius 2 (20 - z)."""
+    ang = np.linspace(0, 2 * math.pi, points_per_ring + 1)  # the last vertex closes the ring
+    pts, runs = [], [0]
+    for z in range(20):
+        r = 2.0 * (20 - z)
+        ring = np.column_stack(
+            [CONE_CENTRE[0] + r * np.cos(ang), CONE_CENTRE[1] + r * np.sin(ang), np.full(len(ang), float(z))]
+        )
+        pts.append(ring)
+        runs.append(runs[-1] + len(ring))
+    return np.vstack(pts), np.array(runs, np.int64)
