@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-24
+last-updated: 2026-09-25
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -191,10 +191,23 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing from this block. Other sessions hold `model-gsd`, `pointcloud-specs` and
-`pointcloud-spike`; their state is not recorded here. A rebuild was started at the wrap-up and
-stopped at the operator's request before it changed anything. The operator will rebuild and install
-once the other session lands.
+**In flight:** **Volumes (S2)** — surfaces (the grid convention, the build pipeline with
+median/mean/max/min, despike, hole-fill, auto cell, hillshade + zoom tiles), the volume engine
+(fill/cut/net against a toe-plane, fitted toe surface, flat level or another survey/design surface,
+clutter masks from detection runs and hand-drawn exclusions, a two-surface alignment/shift check, a
+full uncertainty budget), the `volume_calc`/`volume_export` jobs and the Volumes screen — on
+`task/volumes`, gated at `94c4e8b` (contract check, ruff, ruff format, pytest 1543 passed/3
+skipped/9 deselected, frontend lint, 848/848 unit, build and 80/80 e2e all green). **Not merged
+yet:** a final-review fix wave (five Important findings plus cheap minors from the whole-branch
+review) is running in a separate worktree `volumes-tfx`, and `finish-task.ps1` re-runs the full gate
+before the merge to `main`. This block (Task 17) wrote the module-level acceptance evidence
+(`docs/evidence/volumes-acceptance.md`), the CloudCompare cross-check template
+(`docs/evidence/volumes-crosscheck.md`, rows still open — CloudCompare isn't installed here) and the
+walkthrough (`docs/usability/2026-09-24-volumes-walkthrough.md`), plus the top ledger entry in
+`docs/progress.md`; see [[2026-09-25-2244-volumes-task17-docs]]. Point-cloud foundation F0 (the
+shared scaffolding S1/S2/S3 build on) is already merged to `main` (`754c741`, 2026-09-24). Other
+sessions may still hold `model-gsd`, `pointcloud-specs` and `pointcloud-spike`; their state is not
+recorded here.
 
 **Next:** rebuild and install. The installed build has neither the survey timeline nor the train/detect
 work. Then run `docs/usability/2026-09-23-library-walkthrough.md` and
@@ -207,6 +220,24 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Volumes (S2): branch not merged, acceptance run at module level (opened 2026-09-25)
+
+On `task/volumes`, gated at `94c4e8b`; not yet on `main`. Owed:
+- **Land the final-review fix wave** (`volumes-tfx`: five Important findings — a stale-reload edge
+  case on F0's `GET /pointclouds` 501 stub, the cut/fill layer's grid mismatch with
+  `results.top_surface`, a detection review not bumping a measurement's inputs fingerprint, the
+  reversed Task 16 base-CRS filter, and these Task 17 docs, now closed — plus cheap minors) and
+  re-run the full gate via `finish-task.ps1` before merging.
+- **Run the deferred in-app steps** once S1's point-cloud import UI lands on `main`: repeat the
+  task-17 brief's Steps 1–7 through the real UI (import the chimney/+0.100 mm/195 M clouds, re-run
+  `docs/usability/2026-09-24-volumes-walkthrough.md` live), then install CloudCompare 2.13 and fill
+  in `docs/evidence/volumes-crosscheck.md`'s open rows, plus the QGIS/PDF/XLSX export review.
+- **Profile `app/surfaces/build.py`'s memory growth with site size** before accepting larger sites:
+  peak working set grew 2.9× (625 MiB → 1 818 MiB) across a 9× site though a single block should set
+  the ceiling; passes the ≤ 2 GB acceptance bound but misses the 1.5 GB target.
+- **Run the frozen PyInstaller packaging smoke test** for `volumes-selftest` and close the ADR's
+  open hidden-import question (Task 13's overlay venv had no starter weights/PyInstaller).
 
 ### Train/Detect split and detection workspace: not installed, adoption unproven (opened 2026-09-24)
 
