@@ -63,3 +63,42 @@ def test_short_hierarchy_fails(tmp_path):
     with pytest.raises(JobFailure) as e:
         validate_octree(d, points=1000, bounds=BOUNDS, encoding="BROTLI")
     assert "hierarchy.bin is 10 bytes, shorter than its first chunk (22)" in str(e.value)
+
+
+def test_top_level_list_fails_readably(tmp_path):
+    """A parseable but non-object metadata.json must not raise AttributeError."""
+    d = tmp_path / "octree"
+    d.mkdir()
+    (d / "metadata.json").write_text(json.dumps([1, 2, 3]), "utf-8")
+    (d / "hierarchy.bin").write_bytes(b"\0" * 22)
+    (d / "octree.bin").write_bytes(b"\0" * 100)
+    with pytest.raises(JobFailure) as e:
+        validate_octree(d, points=1000, bounds=BOUNDS, encoding="BROTLI")
+    assert str(e.value).startswith("the 3D view copy failed its checks: ")
+
+
+@pytest.mark.parametrize(
+    ("override", "fragment"),
+    [
+        # boundingBox.min with fewer than 3 entries: must not raise IndexError.
+        ({"boundingBox": {"min": [0, 0], "max": [10, 10, 5]}}, "bounding box does not contain the cloud"),
+        # non-numeric coordinates: must not raise TypeError comparing str to float.
+        (
+            {"boundingBox": {"min": ["a", 0, 0], "max": [10, 10, 5]}},
+            "bounding box does not contain the cloud",
+        ),
+        # non-numeric firstChunkSize: must not raise ValueError/TypeError from int(...).
+        (
+            {"hierarchy": {"firstChunkSize": "not-a-number"}},
+            "firstChunkSize is missing or not a positive number ('not-a-number')",
+        ),
+        # firstChunkSize <= 0 gets its own message, not "shorter than its first chunk (0)".
+        ({"hierarchy": {"firstChunkSize": 0}}, "firstChunkSize is missing or not a positive number (0)"),
+        # firstChunkSize missing entirely.
+        ({"hierarchy": {}}, "firstChunkSize is missing or not a positive number (None)"),
+    ],
+)
+def test_malformed_but_parseable_metadata_fails_readably(tmp_path, override, fragment):
+    with pytest.raises(JobFailure) as e:
+        validate_octree(_octree(tmp_path, **override), points=1000, bounds=BOUNDS, encoding="BROTLI")
+    assert str(e.value).startswith("the 3D view copy failed its checks: ") and fragment in str(e.value)

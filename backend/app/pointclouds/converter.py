@@ -72,18 +72,33 @@ def _exe_prefix() -> list[str]:
 
 
 def terminate_tree(proc: subprocess.Popen) -> None:
-    """Take the converter and anything it started down; only ever our own process tree."""
+    """Take the converter and anything it started down; only ever our own process tree.
+
+    Best-effort cleanup only: whatever goes wrong here must never raise and mask a caller's
+    in-flight exception (e.g. the `JobCancelled` this is usually called just before re-raising).
+    """
     if proc.poll() is not None:
         return
     if os.name == "nt":
-        subprocess.run(["taskkill", "/T", "/F", "/PID", str(proc.pid)], capture_output=True, check=False)  # noqa: S603, S607
+        try:
+            subprocess.run(  # noqa: S603, S607
+                ["taskkill", "/T", "/F", "/PID", str(proc.pid)],
+                capture_output=True,
+                check=False,
+                timeout=TERMINATE_GRACE_S,
+            )
+        except subprocess.TimeoutExpired:
+            pass
     else:
         proc.kill()
     try:
         proc.wait(TERMINATE_GRACE_S)
     except subprocess.TimeoutExpired:
         proc.kill()
-        proc.wait(5)
+        try:
+            proc.wait(5)
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def _last_error(lines: list[str], code: int) -> str:
@@ -139,6 +154,7 @@ def _run(work: Path, input_name: str, out_name: str, progress, check_cancelled) 
         creationflags=CREATE_NO_WINDOW if os.name == "nt" else 0,
     )
     job = None
+    reader: threading.Thread | None = None
     try:
         if os.name == "nt":
             from app.pointclouds import winjob
@@ -172,6 +188,10 @@ def _run(work: Path, input_name: str, out_name: str, progress, check_cancelled) 
     finally:
         if proc.poll() is None:
             terminate_tree(proc)
+        if reader is not None:
+            reader.join(5)
+        if proc.stdout is not None:
+            proc.stdout.close()
         if job is not None:
             from app.pointclouds import winjob
 
