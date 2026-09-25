@@ -29,3 +29,11 @@ STUBS: list[tuple[str, str, str]] = [
 ]
 
 add_stubs(router, STUBS)
+
+# S1 units land their operations as sub-routers (plan 2026-09-24-point-clouds): each one removes
+# its tuples from STUBS above and adds its router here. They inherit this router's prefix, tag and
+# project-kind guard.
+SUB_ROUTERS: tuple[APIRouter, ...] = ()
+
+for _sub in SUB_ROUTERS:
+    router.include_router(_sub)

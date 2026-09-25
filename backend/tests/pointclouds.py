@@ -207,3 +207,59 @@ def fake_run_converter(input_path, out_dir, *, progress, check_cancelled):
         seconds=time.monotonic() - started,
         encoding="DEFAULT",  # write_fake_octree's encoding; the real converter reports BROTLI
     )
+
+
+def insert_cloud(handle, **fields) -> str:
+    """A point_cloud row (ready by default) with the chimney's shape; `fields` override any column."""
+    from pyproj import CRS
+
+    from app.db.models import PointCloud
+
+    crs = CRS.from_epsg(32639)
+    values = dict(
+        name="Cloud",
+        status="ready",
+        error=None,
+        source_path=str(handle.folder / "source.las"),
+        source_size=0,
+        source_sha256="",
+        source_mtime=0.0,
+        las_version="1.2",
+        point_format=3,
+        point_count=1000,
+        has_rgb=True,
+        scale=[0.001, 0.001, 0.001],
+        crs_wkt=crs.to_wkt(),
+        epsg=32639,
+        proj4=crs.to_proj4(),
+        vertical_crs=None,
+        crs_source="file",
+        bounds_native=[243500.0, 3178000.0, -45.0, 243600.0, 3178100.0, 175.0],
+        bounds_repaired=False,
+        bounds_wgs84=[48.3744, 28.7038, 48.3755, 28.7048],
+        octree_spacing_m=4.0,
+        z_stats={
+            "min": -45.0,
+            "max": 175.0,
+            "mean": 10.0,
+            "p01": -44.9,
+            "p1": -44.0,
+            "p5": -43.0,
+            "p50": 12.0,
+            "p95": 120.0,
+            "p99": 170.0,
+            "p999": 174.0,
+            "sample_count": 1000,
+        },
+        class_counts={"2": 1000},
+        octree_bytes=0,
+        captured_on=None,
+        map_id=None,
+        job_id=None,
+    )
+    values.update(fields)
+    with handle.session() as s:
+        row = PointCloud(**values)
+        s.add(row)
+        s.flush()
+        return row.id
