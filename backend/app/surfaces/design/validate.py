@@ -7,6 +7,7 @@ sampled file vertices under each alternative (swap, other units) and look them u
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -29,6 +30,7 @@ from app.surfaces.design.units import (
 OVERVIEW_SIDE = 512
 NO_OVERLAP, LOW_OVERLAP = 0.05, 0.5
 SUGGEST_MIN, SUGGEST_GAIN = 0.5, 0.30
+SAMPLE_CAP = 20_000
 Z_OFFSET_M = 15.0
 Z_RANGE_MIN_M = 2.0
 FOOT_RATIOS = (3.2808, 0.3048)
@@ -136,21 +138,24 @@ def validate(v: ValidationInput) -> ValidationResult:
         overlap = n_both / n_design if n_design else 0.0
         area = v.overview.valid_area_m2 if v.overview is not None else 0.0
         covered = min(1.0, n_both * cell_area / area) if area > 0 else 0.0
-        if overlap < NO_OVERLAP:
-            notes.append(
-                codes.warn(
-                    "no_overlap",
-                    f"the design and the cloud surface don't overlap "
-                    f"({_pct(overlap)} of the design lies on it)",
+        # An empty design is already `block`ed above; a 0/0 "overlap" of nothing on nothing is not
+        # a real no_overlap/low_overlap finding, and there is nothing to suggest re-placing.
+        if n_design:
+            if overlap < NO_OVERLAP:
+                notes.append(
+                    codes.warn(
+                        "no_overlap",
+                        f"the design and the cloud surface don't overlap "
+                        f"({_pct(overlap)} of the design lies on it)",
+                    )
                 )
-            )
-        elif overlap < LOW_OVERLAP:
-            notes.append(
-                codes.warn("low_overlap", f"only {_pct(overlap)} of the design lies on the cloud surface")
-            )
+            elif overlap < LOW_OVERLAP:
+                notes.append(
+                    codes.warn("low_overlap", f"only {_pct(overlap)} of the design lies on the cloud surface")
+                )
+            suggestions = _suggestions(v)
         if n_both:
             z_check = _z_check(v.design, t, dvalid, both, notes)
-        suggestions = _suggestions(v)
     notes += _coordinate_notes(v)
     notes += _tin_notes(v.tin)
     return ValidationResult(overlap, covered, n_design * cell_area, z_check, notes, suggestions)
@@ -165,7 +170,7 @@ def _z_check(design, t, dvalid, both, notes) -> dict:
                 "z_offset",
                 f"the design sits {med:+.1f} m from the cloud surface (median) — "
                 "ellipsoidal vs orthometric heights, or a units problem; "
-                "S2's alignment check can measure and apply a vertical shift",
+                "the alignment check in Volumes can measure and apply a vertical shift",
             )
         )
     d_lo, d_hi = np.percentile(design[both], [5, 95])
@@ -301,10 +306,10 @@ def _tin_notes(tin: dict) -> list[DesignNote]:
     return out
 
 
-def _sample_overlap(v: ValidationInput, options: dict) -> float:
+def _sample_overlap(v: ValidationInput, options: dict, samples: np.ndarray) -> float:
     try:
         p = placing.resolve(options, v.fmt, v.target_spec)
-        xy = placing.place_vertices(v.samples, p)
+        xy = placing.place_vertices(samples, p)
     except placing.PlacementBlocked:
         return 0.0
     return float(np.isfinite(v.overview.sample(xy[:, 0], xy[:, 1])).mean())
@@ -313,7 +318,12 @@ def _sample_overlap(v: ValidationInput, options: dict) -> float:
 def _suggestions(v: ValidationInput) -> list[dict]:
     if v.fmt == "geotiff" or v.samples is None or len(v.samples) == 0 or v.overview is None:
         return []
-    current = _sample_overlap(v, v.options)
+    samples = v.samples
+    if len(samples) > SAMPLE_CAP:
+        # Defensive: the caller is asked for at most SAMPLE_CAP vertices (module docstring), but a
+        # stride keeps this bounded regardless of what it actually passes.
+        samples = samples[:: math.ceil(len(samples) / SAMPLE_CAP)]
+    current = _sample_overlap(v, v.options, samples)
     variants = [("swap_xy", {"swap_xy": not bool(v.options.get("swap_xy"))})]
     variants += [
         ("horizontal_unit", {"horizontal_unit": u.value})
@@ -322,15 +332,15 @@ def _suggestions(v: ValidationInput) -> list[dict]:
     ]
     best: dict[str, dict] = {}
     for code, patch in variants:
-        frac = _sample_overlap(v, {**v.options, **patch})
+        frac = _sample_overlap(v, {**v.options, **patch}, samples)
         if frac < SUGGEST_MIN or frac - current < SUGGEST_GAIN:
             continue
         if frac > best.get(code, {}).get("overlap_fraction", -1.0):
             message = (
-                f"With easting/northing swapped the design covers {_pct(frac)} of the cloud surface."
+                f"With easting/northing swapped, {_pct(frac)} of the design lies on the cloud surface."
                 if code == "swap_xy"
-                else f"Read in {UNIT_LABEL[LinearUnit(patch['horizontal_unit'])]} the design covers "
-                f"{_pct(frac)} of the cloud surface."
+                else f"Read in {UNIT_LABEL[LinearUnit(patch['horizontal_unit'])]}, {_pct(frac)} of the "
+                "design lies on the cloud surface."
             )
             best[code] = {"code": code, "message": message, "overlap_fraction": frac, "options_patch": patch}
     return sorted(best.values(), key=lambda s: -s["overlap_fraction"])

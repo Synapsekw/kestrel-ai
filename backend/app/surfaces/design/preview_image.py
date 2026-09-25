@@ -39,11 +39,11 @@ class Layer:
 
 
 def _outline(mask: np.ndarray) -> np.ndarray:
-    inner = mask.copy()
-    inner[1:, :] &= mask[:-1, :]
-    inner[:-1, :] &= mask[1:, :]
-    inner[:, 1:] &= mask[:, :-1]
-    inner[:, :-1] &= mask[:, 1:]
+    """The cells of `mask` that border a False cell — a False neighbour just off the array (the
+    panel edge) counts too, so a footprint that reaches the edge of the panel is still outlined
+    there, not just where it borders another False cell inside the array."""
+    p = np.pad(mask, 1, constant_values=False)
+    inner = p[1:-1, 1:-1] & p[:-2, 1:-1] & p[2:, 1:-1] & p[1:-1, :-2] & p[1:-1, 2:]
     return mask & ~inner
 
 

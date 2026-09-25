@@ -100,7 +100,8 @@ def test_a_swapped_file_gets_no_overlap_and_a_swap_suggestion(target):
     assert codes_of(r)["no_overlap"].level == "warn"
     (s,) = [s for s in r.suggestions if s["code"] == "swap_xy"]
     assert s["overlap_fraction"] >= 0.9 and s["options_patch"] == {"swap_xy": True}
-    assert s["message"].startswith("With easting/northing swapped the design covers")
+    assert s["message"].startswith("With easting/northing swapped, ")
+    assert "lies on the cloud surface" in s["message"]
 
 
 def test_metres_read_as_feet_get_a_unit_suggestion(target):
@@ -191,9 +192,13 @@ def test_tin_quality_notes(target):
 
 
 def test_an_empty_design_is_blocked(target):
-    v = make(target)
+    v = make(target, samples=samples_over(DESIGN_BOUNDS))
     v.design[:] = np.nan
-    assert codes_of(validate.validate(v))["empty_result"].level == "block"
+    r = validate.validate(v)
+    assert codes_of(r)["empty_result"].level == "block"
+    # Nothing to overlap and nothing to suggest re-placing when the design itself is empty.
+    assert not {"no_overlap", "low_overlap"} & set(codes_of(r))
+    assert r.suggestions == []
 
 
 def test_the_preview_image_is_one_panel_or_two(target, tmp_path):
@@ -209,3 +214,14 @@ def test_the_preview_image_is_one_panel_or_two(target, tmp_path):
     im = Image.open(tmp_path / "two.png")
     assert im.size[0] == 512 and im.size[0] > im.size[1]
     assert preview_image.render(d_layer, None, tmp_path / "solo.png") == 1
+
+
+def test_outline_marks_the_panel_edge_when_the_footprint_touches_it():
+    mask = np.ones((4, 4), dtype=bool)
+    edge = preview_image._outline(mask)
+    # A footprint filling the whole panel touches the edge on all four sides: the border ring is
+    # outline, only the fully-surrounded 2 x 2 centre is not.
+    assert edge[0, 0] and edge[0, -1] and edge[-1, 0] and edge[-1, -1]
+    assert edge[0, :].all() and edge[-1, :].all() and edge[:, 0].all() and edge[:, -1].all()
+    assert not edge[1, 1] and not edge[1, 2] and not edge[2, 1] and not edge[2, 2]
+    assert edge.sum() == 12
