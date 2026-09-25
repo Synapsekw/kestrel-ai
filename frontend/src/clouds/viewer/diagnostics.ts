@@ -43,6 +43,24 @@ export function diagnosticsEnabled(storage: Pick<Storage, "getItem"> | null = sa
   }
 }
 
+/** Installs `hook` (frozen: the page may read it, not change it) and returns the release for this
+ * viewer's cleanup, which removes the hook only while it is still this viewer's own. */
+export function installHook(hook: CloudViewerDiagnostics): () => void {
+  const frozen = Object.freeze({ ...hook });
+  window.__kestrelCloudViewer = frozen;
+  return () => {
+    if (window.__kestrelCloudViewer === frozen) delete window.__kestrelCloudViewer;
+  };
+}
+
+export const MAX_ERRORS = 20;
+
+/** The render loop reports a failed node on every frame it stays in view: keep each message once,
+ * and the list bounded. */
+export function pushErrorOnce(errors: string[], message: string): void {
+  if (errors.length < MAX_ERRORS && !errors.includes(message)) errors.push(message);
+}
+
 function safeStorage(): Storage | null {
   try {
     return window.localStorage;

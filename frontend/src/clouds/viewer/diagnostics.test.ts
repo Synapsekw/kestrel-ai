@@ -1,5 +1,53 @@
-import { describe, expect, it } from "vitest";
-import { classifyPixels, diagnosticsEnabled, DIAGNOSTICS_KEY } from "./diagnostics";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  classifyPixels,
+  diagnosticsEnabled,
+  DIAGNOSTICS_KEY,
+  installHook,
+  MAX_ERRORS,
+  pushErrorOnce,
+  type CloudViewerDiagnostics,
+} from "./diagnostics";
+
+function hook(): CloudViewerDiagnostics {
+  return {
+    stats: () => {
+      throw new Error("unused");
+    },
+    sampleColours: () => ({ total: 0, background: 0, red: 0, green: 0, white: 0 }),
+    pickCenter: () => null,
+    overlays: () => [],
+  };
+}
+
+describe("diagnostics hook ownership", () => {
+  afterEach(() => {
+    delete window.__kestrelCloudViewer;
+  });
+
+  it("installs a frozen hook and removes only its own", () => {
+    const releaseOld = installHook(hook());
+    const installed = window.__kestrelCloudViewer;
+    expect(Object.isFrozen(installed)).toBe(true);
+    const releaseNew = installHook(hook());
+    const current = window.__kestrelCloudViewer;
+    expect(current).not.toBe(installed);
+    releaseOld(); // an older viewer's cleanup running after the new one mounted
+    expect(window.__kestrelCloudViewer).toBe(current);
+    releaseNew();
+    expect(window.__kestrelCloudViewer).toBeUndefined();
+  });
+});
+
+describe("viewer error list", () => {
+  it("records a failure once, and never more than the cap", () => {
+    const errors: string[] = [];
+    for (let i = 0; i < 100; i++) pushErrorOnce(errors, "a node failed to load");
+    expect(errors).toEqual(["a node failed to load"]);
+    for (let i = 0; i < 100; i++) pushErrorOnce(errors, `e${i}`);
+    expect(errors).toHaveLength(MAX_ERRORS);
+  });
+});
 
 describe("diagnostics", () => {
   it("is off unless the flag is exactly 1", () => {

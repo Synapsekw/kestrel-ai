@@ -14,6 +14,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "src"),
     },
   },
+  // The Clouds screen is lazy, so a dev server whose cache predates three/potree-core would find
+  // them mid-session and reload the page once; pre-bundling them up front avoids that.
+  optimizeDeps: { include: ["three", "potree-core"] },
   envPrefix: ["VITE_", "APP_"],
   // VITE_DEV_PORT moves the dev server (e2e beside another checkout that holds 1420).
   server: { port: Number(process.env.VITE_DEV_PORT ?? 1420), strictPort: true, host: "127.0.0.1" },

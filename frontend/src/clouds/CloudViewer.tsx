@@ -8,9 +8,12 @@ import { nearFar, siteDiagonal, topView, wholeSiteView, type Bounds6, type Vec3 
 import {
   classifyPixels,
   diagnosticsEnabled,
+  installHook,
+  pushErrorOnce,
   type ColourSample,
   type ViewerStats,
 } from "./viewer/diagnostics";
+import { disposeChildren, disposePointsGeometries } from "./viewer/dispose";
 import { shouldKeepRendering } from "./viewer/idle";
 import { makeMaterialOptions, type ColourMode } from "./viewer/materialOptions";
 import { localPositions, tokenRgb, type OverlayShape } from "./viewer/overlay";
@@ -217,6 +220,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       let pending = 0;
       if (e.pco) {
         const r = potree.updatePointClouds([e.pco], camera, renderer);
+        // a failed node is reported through nodeLoadFailed below, not as an unhandled rejection;
+        // allSettled, because potree-core 2.0.15 also puts undefined entries in this list
+        void Promise.allSettled(r.nodeLoadPromises);
         const loading = (e.pco.pcoGeometry as unknown as { numNodesLoading?: number }).numNodesLoading ?? 0;
         pending = r.nodeLoadPromises.length + (r.exceededMaxLoadsToGPU ? 1 : 0);
         stats.numVisiblePoints = r.numVisiblePoints;
@@ -227,7 +233,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         if (stats.firstPointsMs !== null && stats.settledMs === null && loading === 0 && pending === 0) {
           stats.settledMs = now - started;
         }
-        if (r.nodeLoadFailed) stats.errors.push("a node failed to load");
+        if (r.nodeLoadFailed) pushErrorOnce(stats.errors, "a node failed to load");
         pending += loading;
       }
       renderer.render(scene, camera);
@@ -298,7 +304,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     const onLost = (ev: Event) => {
       ev.preventDefault();
       stats.contextLost = true;
-      stats.errors.push("webglcontextlost");
+      pushErrorOnce(stats.errors, "webglcontextlost");
       setLostKey(key);
     };
     const onVisible = () => {
@@ -315,6 +321,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       .loadPointCloud(metadataUrl(octreeUrl), makeRequestManager(token))
       .then((pco) => {
         if (disposed) {
+          disposePointsGeometries(pco);
           pco.dispose();
           return;
         }
@@ -332,7 +339,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       })
       .catch((err: unknown) => {
         const message = err instanceof Error ? err.message : String(err);
-        stats.errors.push(`load: ${message}`);
+        pushErrorOnce(stats.errors, `load: ${message}`);
         if (!disposed) setLoadError({ key, message });
       });
 
@@ -351,8 +358,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     }
     applyRef.current = applyMaterial;
 
+    let releaseHook = () => {};
     if (diagnosticsEnabled()) {
-      window.__kestrelCloudViewer = {
+      releaseHook = installHook({
         stats: () => ({ ...stats, errors: [...stats.errors] }),
         sampleColours: (): ColourSample => {
           renderer.render(scene, camera);
@@ -368,7 +376,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           return pickAtClient(r.left + r.width / 2, r.top + r.height / 2);
         },
         overlays: () => [...new Set(overlay.children.map((c) => String(c.userData.key)))],
-      };
+      });
     }
 
     return () => {
@@ -382,9 +390,15 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       canvas.removeEventListener("webglcontextlost", onLost);
       document.removeEventListener("visibilitychange", onVisible);
       controls.dispose();
-      e.pco?.dispose();
+      // the canvas is keyed by `generation` only: a new cloud reuses this WebGL context, so every
+      // buffer this scene made is released here, not left to the context's end
+      disposeChildren(overlay);
+      if (e.pco) {
+        disposePointsGeometries(e.pco);
+        e.pco.dispose();
+      }
       renderer.dispose();
-      if (window.__kestrelCloudViewer) delete window.__kestrelCloudViewer;
+      releaseHook();
       engine.current = null;
       applyRef.current = () => {};
     };
@@ -447,10 +461,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         if (!e || !bounds) return;
         const origin = { x: bounds[0], y: bounds[1], z: bounds[2] };
         e.overlay.position.set(origin.x, origin.y, origin.z);
-        for (const old of e.overlay.children.filter((c) => c.userData.key === key)) {
-          e.overlay.remove(old);
-          (old as THREE.Line).geometry.dispose();
-        }
+        disposeChildren(e.overlay, (c) => c.userData.key === key);
         for (const s of shapes) {
           const [r, g, b] = tokenRgb(s.tone === "accent" ? "accent" : s.tone === "ok" ? "ok" : "warn");
           const color = new THREE.Color(r / 255, g / 255, b / 255);
