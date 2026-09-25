@@ -46,11 +46,17 @@ pointcloud-selftest` re-checks every sha256 and runs the real import on a fixtur
   double never wrote a BOM.
 
 **Consequences.** The bundle grows by the converter payload (about 4 MB) plus laspy and lazrs;
-measured: `<pending Phase 2: this worktree's build.ps1 "bundle: … MB" line>` against
-`<pending Phase 2: the same line from a build of main before Task 2, or docs/progress.md's last
-packaging entry>`. This ADR is committed with the two spans still open per the controller's
-phasing (Task 15 ships selftest.py, the smoke script and this ADR in Phase 1; `build.ps1` /
-`smoke_frozen.ps1` run in Phase 2 once Task 14's `/projects/{id}/pointclouds` endpoint is on this
-branch) — replace both spans with the two measured `bundle: … MB` lines before the branch merges.
+measured (this worktree's `build.ps1`, 2026-09-25, task/point-clouds-t15 rebased onto Task 14):
+3,793,870,049 bytes (3,618.1 MiB, matching the build script's own "bundle: … MB" report), 14,508
+files. Baseline, the rasterio/pyproj ADR's own "after" figure (main branch, before this S1 plan's
+Task 2 added the PotreeConverter payload and laspy/lazrs): 3,785,991,153 bytes (3,610.6 MiB),
+14,445 files. Growth: +7,878,896 bytes (+7.5 MiB), +63 files — smaller than the "about 4 MB"
+estimate above suggested on its own because laspy/lazrs and this task's own pure-Python additions
+(`router.py`, `startup.py`, the routes/schemas/service modules across `app.pointclouds`,
+`app.surfaces`, `app.surfaces.design` and `app.volumes` — see the gotcha ADR
+`2026-09-25-gotcha-dynamically-loaded-routers-need-hiddenimports`) are tiny next to the ~4 MB
+converter payload itself. `smoke_frozen.ps1` passed end to end on this build: `pointcloud ok 50000
+32639 BROTLI laz 50000`, `cloud ok 50000 206`, `smoke ok`.
+
 A new MSVC toolset in a future PotreeConverter release shows up as a failed `--help` run in the
 fetch script: pass `-CrtDir` with a newer redist.
