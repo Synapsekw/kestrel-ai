@@ -2786,7 +2786,7 @@ paths:
               schema: { $ref: "#/components/schemas/DesignInspectionWithJob" }
         "409": { $ref: "#/components/responses/WrongProjectKind" }
         "422":
-          description: "the file is missing, has an unknown extension, or is a DWG (`code` is `validation_error`; a DWG has `details.reason: \"dwg\"`)"
+          description: "the file is a DWG (`code` is `validation_error`, `details.reason` is `\"dwg\"`) or an existing file has an unknown extension (`details.reason` is `\"extension\"`); a missing file is `404 not_found`, never a 422"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

@@ -10677,7 +10677,7 @@ export interface operations {
                 };
             };
             409: components["responses"]["WrongProjectKind"];
-            /** @description the file is missing, has an unknown extension, or is a DWG (`code` is `validation_error`; a DWG has `details.reason: "dwg"`) */
+            /** @description the file is a DWG (`code` is `validation_error`, `details.reason` is `"dwg"`) or an existing file has an unknown extension (`details.reason` is `"extension"`); a missing file is `404 not_found`, never a 422 */
             422: {
                 headers: {
                     [name: string]: unknown;
