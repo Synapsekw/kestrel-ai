@@ -45,6 +45,12 @@ def centres(spec):
     return spec.cell_centres(Window(0, 0, spec.width, spec.height))
 
 
+def steep_plane(x, y):
+    """A steeper plane than designs.plane_z (slope 0.3, matching the reviewer's fix-round-1
+    probes) so a contaminated cell's error clears the 1 mm oracle instead of hiding under it."""
+    return 10.0 + 0.3 * (np.asarray(x) - E0) - 0.15 * (np.asarray(y) - N0)
+
+
 def test_a_conforming_dem_on_the_target_lattice_is_copied_byte_for_byte(tmp_path):
     target = target_spec()
     src = write_target(tmp_path / "design.tif", target, lambda x, y: plane_z(x, y) - 1.0)
@@ -246,3 +252,78 @@ def test_gdal_default_warp_tolerance_misses_the_millimetre_oracle_but_1e9_holds(
 
     out = build(tmp_path, src, target, p)
     assert np.abs(out - exact).max() < 1e-3
+
+
+def test_an_interior_nodata_hole_erodes_its_contaminated_rim_not_just_itself(tmp_path):
+    """R7 fix round 1: GDAL's bilinear renormalises weights across a source nodata hole, so a cell
+    just outside the hole is never actually purely a blend of valid neighbours -- the data band
+    alone does not show this (it comes back a plausible-looking, silently wrong value). The
+    coverage mask (a validity band warped through the identical pipeline) catches the whole
+    contaminated rim, not just the hole's own footprint."""
+    target = target_spec()
+    off = 0.2  # source cells, offset from the target lattice, like the edge-ring case
+    shifted = grid.GridSpec(
+        target.crs_wkt,
+        target.epsg,
+        target.cell_size,
+        target.x0 + off * target.cell_size,
+        target.y0 - off * target.cell_size,
+        target.width,
+        target.height,
+    )
+    xs, ys = shifted.cell_centres(Window(0, 0, target.width, target.height))
+    z = steep_plane(xs, ys).astype(np.float32)
+    z[80:100, 80:100] = -9999.0  # an interior hole, well inside the target -- not at any outer edge
+    src = write_dem(tmp_path / "hole.tif", z, x0=shifted.x0, y0=shifted.y0, cell=shifted.cell_size)
+    internal = {**INTERNAL, "nodata": -9999.0, "sentinel": True}
+    p = pl.resolve(opts(), "geotiff", target)
+    out = build(tmp_path, src, target, p, internal)
+    X, Y = centres(target)
+    finite = np.isfinite(out)
+    assert finite.any() and not finite.all()  # the hole and its contaminated rim are both eroded
+    assert np.abs(out[finite] - steep_plane(X, Y)[finite]).max() < 1e-3
+
+
+def test_a_one_point_two_ratio_target_cell_holds_a_millimetre(tmp_path):
+    """R7 fix round 1: without XSCALE=1/YSCALE=1, GDAL widens the bilinear kernel whenever the
+    target cell is coarser than the source -- here a 0.6 m target on a 0.5 m source (ratio 1.2) --
+    biasing interior cells well past 1 mm even generously clear of any edge."""
+    target = target_spec(cell=0.6)
+    off = 0.2
+    src_cell = 0.5
+    pad = 6  # source cells of slack around the target footprint: isolate the ratio bias, not R7's erosion
+    x0 = target.x0 - pad * src_cell + off * src_cell
+    y0 = target.y0 + pad * src_cell - off * src_cell
+    w = int(round((target.width * target.cell_size + 2 * pad * src_cell) / src_cell))
+    h = int(round((target.height * target.cell_size + 2 * pad * src_cell) / src_cell))
+    cols, rows = np.meshgrid(np.arange(w) + 0.5, np.arange(h) + 0.5)
+    z = steep_plane(x0 + cols * src_cell, y0 - rows * src_cell).astype(np.float32)
+    src = write_dem(tmp_path / "ratio12.tif", z, x0=x0, y0=y0, cell=src_cell)
+    p = pl.resolve(opts(), "geotiff", target)
+    out = build(tmp_path, src, target, p)
+    X, Y = centres(target)
+    assert np.isfinite(out).all()
+    assert np.abs(out - steep_plane(X, Y)).max() < 1e-3
+
+
+def test_a_four_times_ratio_target_cell_holds_a_millimetre_at_the_edge_ring(tmp_path):
+    """R7 fix round 1: the Resampling.average path (target cell more than double the source cell --
+    here a 2 m target on a 0.5 m source, ratio 4) needs the same coverage-based erosion as bilinear;
+    a fixed pixel-distance reach sized for bilinear left its edge ring badly off."""
+    target = target_spec(cell=2.0)
+    off = 0.3
+    src_cell = 0.5  # target cell / src cell = 4 -> Resampling.average
+    xs, ys = target.cell_centres(Window(0, 0, target.width, target.height))
+    x0 = target.x0 + off * src_cell  # the source covers exactly the target's own extent, shifted
+    y0 = target.y0 - off * src_cell
+    w = int(round(target.width * target.cell_size / src_cell))
+    h = int(round(target.height * target.cell_size / src_cell))
+    cols, rows = np.meshgrid(np.arange(w) + 0.5, np.arange(h) + 0.5)
+    z = steep_plane(x0 + cols * src_cell, y0 - rows * src_cell).astype(np.float32)
+    src = write_dem(tmp_path / "ratio4.tif", z, x0=x0, y0=y0, cell=src_cell)
+    p = pl.resolve(opts(), "geotiff", target)
+    out = build(tmp_path, src, target, p)
+    X, Y = centres(target)
+    finite = np.isfinite(out)
+    assert finite.any() and not finite.all()  # the tightly-covering source leaves a genuine edge ring
+    assert np.abs(out[finite] - steep_plane(X, Y)[finite]).max() < 1e-3
