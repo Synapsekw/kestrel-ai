@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-25
+last-updated: 2026-09-26
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -72,6 +72,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | GeoTIFF maps — import, view, detect, label, score, export | merged to `main` (`759015a`, + `8dbb55e` layout fix); rebuilt and installed 2026-09-23 | an orthomosaic of any size and projection: bounded 256 px tiles, whole-map detection (windowed, resumable, seam-merged) with counts per class, evaluation zones and labels, precision/recall/F1 and count error, and GeoJSON/GeoPackage/CSV export with coordinates. 973 backend, 634 frontend, 63 browser and 8 Rust tests on the merged tree; frozen smoke green including `geo ok`. **Unrun on a real orthomosaic; the GeoPackage has never been opened by GIS software.** See [[2026-09-23-1655-geotiff-maps]] |
 | Survey timeline — counts over time across a site's maps | merged/pushed to `main` (`ddc95f6`) | a map carries the date it was flown (read from `TIFFTAG_DATETIME`, correctable); `GET /survey-timeline` gives each survey's counts and the change since the previous **comparable** one; a Surveys screen draws the chart and table. A survey counted with another model or confidence is marked and excluded from the deltas. 995 backend, 644 frontend, 65 browser tests. **Not in any installed build, and never run on two real orthomosaics.** Superseded the frame-projection design with measurements. See [[2026-09-23-1703-survey-timeline]] |
 | Train/Detect split, model library and detection workspace | merged/pushed to `main` (`c9f88e2`, then `f7d7ab6`); **not installed** | app-wide model Library, `train`/`detect` project kinds with a server-side guard, old models adopted into the library; detection projects get Sources, Runs with class mapping, Review with verified counts, Site areas, Analytics (absorbing Surveys) and CSV/PDF export. 1269 backend, 796 frontend, 76 browser tests at landing. **Frozen sidecar with `reportlab` never built; adoption never run on a real project.** See [[2026-09-24-0622-train-detect-split-and-library]] |
+| Design surfaces (S3) — import a DEM/LandXML/DXF design as a surface | gated on `task/design-surfaces` (`2633708`); **not merged** — the controller runs `finish-task.ps1` | acceptance on the chimney site passes all five §15.4 steps headless (LandXML 98.4 % overlap, median dz +0.005 m; swap fix; 3D faces; contours; EPSG:32638 DEM; S2 volume against each); 1 M-point LandXML inspects in 7.9 s and builds 4996² in 8.4 s. 1969 backend, 982 frontend, 91 browser tests. **Not driven through the UI or installed.** See [[2026-09-26-0144-design-surfaces]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -191,7 +192,9 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** **Volumes (S2)** — surfaces (the grid convention, the build pipeline with
+**In flight:** **Design surfaces (S3)** — Task 17 (acceptance, walkthrough, evidence, ledger) done on `task/design-surfaces` at `2633708`, gate green; awaiting the controller's `finish-task.ps1` merge. See [[2026-09-26-0144-design-surfaces]].
+
+Earlier in flight: **Volumes (S2)** — surfaces (the grid convention, the build pipeline with
 median/mean/max/min, despike, hole-fill, auto cell, hillshade + zoom tiles), the volume engine
 (fill/cut/net against a toe-plane, fitted toe surface, flat level or another survey/design surface,
 clutter masks from detection runs and hand-drawn exclusions, a two-surface alignment/shift check, a
@@ -220,6 +223,15 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Design surfaces (S3): merge and live walkthrough (opened 2026-09-26)
+
+- **Merge** `task/design-surfaces` via `finish-task.ps1` (controller, under the cross-plan merge lock).
+- **Walk `docs/usability/2026-09-24-design-surfaces-walkthrough.md` in the app** — the acceptance ran
+  headless through the API only.
+- **Suggestion overlap is scored on file vertices, not the footprint** (spec §10): on the chimney TIN
+  it says 67 % where applying gives 98.4 % (repro in `docs/evidence/design-surfaces/README.md`).
+- **The next packaging run must pass `smoke_frozen.ps1`'s new `design` step.**
 
 ### Volumes (S2): branch not merged, acceptance run at module level (opened 2026-09-25)
 
