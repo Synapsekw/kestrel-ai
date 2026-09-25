@@ -40,6 +40,26 @@ def test_densify_keeps_runs_apart_and_interpolates_z():
     assert not ((out[:, 0] > 10) & (out[:, 0] < 100)).any()  # never bridges two runs
 
 
+def test_dedupe_does_not_overflow_or_merge_a_distant_outlier():
+    """A far outlier (e.g. an E/N-swapped vertex) must stay its own vertex: the old scalar key
+    (kx * (ky.max() + 1) + ky) could overflow int64 and wrap two distant cells onto the same key,
+    silently merging them — exactly the bad input S3 exists to catch."""
+    near = np.array(
+        [
+            [E0, N0, 5.0],
+            [E0 + 0.0001, N0, 5.0],  # within 1 mm of the point above: must merge with it
+            [E0 + 10.0, N0, 6.0],  # 10 m away: must stay distinct
+        ]
+    )
+    outlier = np.array([[5_000_000.0, 500_000.0, 9.0]])  # kilometres away, E/N magnitudes swapped
+    xyz = np.vstack([near, outlier])
+    out, duplicates = tr.dedupe(xyz)
+    assert len(out) == 3
+    assert duplicates == 0  # the merged pair's Z values agreed (both 5.0)
+    assert np.any(np.all(np.isclose(out[:, :2], outlier[0, :2]), axis=1))
+    assert np.any(np.all(np.isclose(out[:, :2], near[2, :2]), axis=1))
+
+
 def test_crossing_contours_are_averaged_and_counted():
     pts, runs = crossing_runs()
     t = tr.triangulate(pts, runs, spacing=1.0, max_edge_m=0, auto_floor=5.0, admit=no_admit)

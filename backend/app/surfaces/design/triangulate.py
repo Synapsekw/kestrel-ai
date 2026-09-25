@@ -62,11 +62,12 @@ def dedupe(xyz: np.ndarray) -> tuple[np.ndarray, int]:
     """One vertex per 1 mm XY key, Z averaged; returns (vertices, keys whose Z spread > 1 mm)."""
     kx = np.round(xyz[:, 0] / DEDUPE_M).astype(np.int64)
     ky = np.round(xyz[:, 1] / DEDUPE_M).astype(np.int64)
-    kx -= kx.min()
-    ky -= ky.min()
-    key = kx * (int(ky.max()) + 1) + ky
-    uniq, inv, counts = np.unique(key, return_inverse=True, return_counts=True)
-    if len(uniq) == len(key):
+    # Grouping on the (kx, ky) pair directly (rather than packing into one scalar key) avoids an
+    # int64 overflow when one point is far from the rest (e.g. an E/N-swapped or mis-scaled vertex
+    # at UTM magnitudes): a wrapped scalar key could silently merge two distant points into one
+    # phantom vertex, which is exactly the kind of bad input S3 exists to catch, not hide.
+    _, inv, counts = np.unique(np.column_stack([kx, ky]), axis=0, return_inverse=True, return_counts=True)
+    if len(counts) == len(xyz):
         return xyz, 0
     out = np.column_stack([np.bincount(inv, weights=xyz[:, i]) / counts for i in range(3)])
     order = np.argsort(inv, kind="stable")
