@@ -6,6 +6,7 @@ import pytest
 import schemathesis
 import yaml
 from hypothesis import HealthCheck, settings
+from schemathesis.generation.meta import GenerationMode
 from schemathesis.specs.openapi.checks import (
     allow_header_conformance,
     content_type_conformance,
@@ -83,10 +84,6 @@ EXPECTED_STUBS: set[str] = {
     "updateCloudMeasurement",
     "deleteCloudMeasurement",
     "createPointCloudExport",
-    # S2 surfaces (app/surfaces/router.py)
-    "getSurfaceTile",
-    "getSurfaceOrthoTile",
-    "getSurfaceSample",
     # S2 volumes (app/volumes/router.py)
     "listVolumeMeasurements",
     "createVolumeMeasurement",
@@ -122,6 +119,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # CRS-less cloud (`unsupported_crs`), a missing source (`source_missing`), a Z clip upside down
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
     "createSurface": {422},
+    "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
 }
 
 
@@ -163,7 +161,11 @@ def test_responses_conform(case, app, project_id, tmp_path):
     # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.
     excluded = [negative_data_rejection, unsupported_method, allow_header_conformance]
     op_id = case.operation.definition.raw.get("operationId")
-    if response.status_code in REFUSES_VALID_DATA.get(op_id, set()):
+    # schemathesis also fuzzes negative (schema-invalid, e.g. a required param dropped) cases by
+    # default; those legitimately hit FastAPI's own `validation_error`, so REFUSES_VALID_DATA (a
+    # business-rule refusal of a *schema-valid* request) only judges positively-generated cases.
+    is_positive = case.meta is None or case.meta.generation.mode == GenerationMode.POSITIVE
+    if is_positive and response.status_code in REFUSES_VALID_DATA.get(op_id, set()):
         # A deliberate refusal of a schema-valid request: skip only positive-data acceptance.
         code = response.json()["error"]["code"]
         assert code and code != "validation_error", response.text

@@ -1904,8 +1904,8 @@ export interface paths {
         };
         /**
          * One 256 px tile of a map's display raster warped into this surface's grid, for the ortho
-         *     underlay. A surface that is not `ready` answers 409 `conflict`, a map that is not `ready`
-         *     409 `not_ready` (both through the `default` response).
+         *     underlay. A surface that is not `ready`, or a map that is not `ready`, answers 409
+         *     `not_ready` (through the `default` response).
          */
         get: operations["getSurfaceOrthoTile"];
         put?: never;
