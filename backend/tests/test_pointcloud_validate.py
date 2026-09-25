@@ -10,7 +10,7 @@ from app.pointclouds.validate import validate_octree
 BOUNDS = [0.0, 0.0, 0.0, 10.0, 10.0, 5.0]
 
 
-def _octree(tmp_path, **meta_overrides):
+def _octree(tmp_path, *, bom=False, **meta_overrides):
     d = tmp_path / "octree"
     d.mkdir()
     meta = {
@@ -22,7 +22,10 @@ def _octree(tmp_path, **meta_overrides):
         "hierarchy": {"firstChunkSize": 22, "stepSize": 4, "depth": 1},
     }
     meta.update(meta_overrides)
-    (d / "metadata.json").write_text(json.dumps(meta), "utf-8")
+    payload = json.dumps(meta).encode("utf-8")
+    if bom:
+        payload = b"\xef\xbb\xbf" + payload
+    (d / "metadata.json").write_bytes(payload)
     (d / "hierarchy.bin").write_bytes(b"\0" * 22)
     (d / "octree.bin").write_bytes(b"\0" * 100)
     return d
@@ -30,6 +33,14 @@ def _octree(tmp_path, **meta_overrides):
 
 def test_a_good_octree_passes(tmp_path):
     assert validate_octree(_octree(tmp_path), points=1000, bounds=BOUNDS, encoding="BROTLI")["spacing"] == 0.5
+
+
+def test_a_utf8_bom_in_metadata_json_still_parses(tmp_path):
+    """PotreeConverter 2.1.5 writes metadata.json with a UTF-8 BOM (\\xef\\xbb\\xbf); plain
+    utf-8 decoding raises JSONDecodeError on it, so validate_octree must read utf-8-sig."""
+    d = _octree(tmp_path, bom=True)
+    assert (d / "metadata.json").read_bytes().startswith(b"\xef\xbb\xbf")
+    assert validate_octree(d, points=1000, bounds=BOUNDS, encoding="BROTLI")["spacing"] == 0.5
 
 
 @pytest.mark.parametrize(

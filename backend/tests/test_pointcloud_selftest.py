@@ -54,6 +54,20 @@ def test_manifest_verification(tmp_path):
         selftest.verify_manifest(tmp_path / "gone")
 
 
+def test_manifest_with_a_utf8_bom_parses(tmp_path):
+    """fetch_potreeconverter.ps1 (PowerShell) writes MANIFEST.json with a UTF-8 BOM
+    (\\xef\\xbb\\xbf); plain utf-8 decoding raises JSONDecodeError on it, so verify_manifest
+    must read utf-8-sig."""
+    folder = tmp_path / "bom"
+    folder.mkdir()
+    data = b"MZ"
+    (folder / "PotreeConverter.exe").write_bytes(data)
+    entries = [{"name": "PotreeConverter.exe", "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}]
+    payload = b"\xef\xbb\xbf" + json.dumps({"converter_version": "2.1.5", "files": entries}).encode("utf-8")
+    (folder / "MANIFEST.json").write_bytes(payload)
+    assert selftest.verify_manifest(folder) == 1
+
+
 def test_a_failure_prints_fail_and_exits_1(monkeypatch, capsys):
     def no_converter(tmp):
         raise selftest.SelftestError("no converter")
