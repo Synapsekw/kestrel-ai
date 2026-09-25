@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
+from app.jobs.cancellation import JobFailure
 from app.surfaces.design import admission, codes, store, triangulate
 from app.surfaces.design import placement as placing
 from app.surfaces.design.codes import DesignNote
@@ -68,18 +69,29 @@ def load_geometry(idir: Path, sel: Selection, p: placing.Placement, *, check_can
         f"The design's {n_pts:,} points and {n_faces:,} triangles",
         "Select fewer layers, or split the design into smaller files.",
     )
-    verts, faces, runs, base = [], [], [np.zeros(1, np.int64)], 0
+    if n_pts > np.iinfo(np.int32).max:
+        raise JobFailure(
+            f"The design has {n_pts:,} points, more than a triangle index can address. "
+            "Select fewer layers, or split the design into smaller files."
+        )
+    # Faces are built in int32 straight into one preallocated array (12 B per face, as admitted),
+    # never through an int64 copy per candidate plus a concatenate plus a cast.
+    faces = np.empty((n_faces, 3), np.int32) if sel.geometry == "faces" else None
+    verts, runs, base, f0 = [], [np.zeros(1, np.int64)], 0, 0
     for a in arrays:
         verts.append(placing.place_vertices(a.points, p, check_cancelled=check_cancelled))
-        if sel.geometry == "faces":
-            faces.append(np.asarray(a.faces, dtype=np.int64) + base)
+        if faces is not None:
+            f1 = f0 + len(a.faces)
+            faces[f0:f1] = a.faces
+            faces[f0:f1] += np.int32(base)
+            f0 = f1
         else:
             runs.append(np.asarray(a.runs[1:], dtype=np.int64) + base)
         base += len(a.points)
     del arrays  # release the memory maps
     v = np.concatenate(verts) if verts else np.zeros((0, 3))
-    if sel.geometry == "faces":
-        return v, np.concatenate(faces).astype(np.int32), None
+    if faces is not None:
+        return v, faces, None
     return v, None, np.concatenate(runs)
 
 

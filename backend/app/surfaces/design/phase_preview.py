@@ -48,7 +48,8 @@ def compute(handle, idir: Path, pdir: Path, options: dict, *, progress, check_ca
         "z_check": None,
         "suggestions": [],
     }
-    internal: dict = {}
+    # Every ready preview's internal.json carries the documented keys (Task 14 builds from them).
+    internal: dict = {"max_edge_m": None, "tin": None}
     warnings: list[DesignNote] = []
     reader = open_target(handle, options.get("target_surface_id"))
     try:
@@ -148,7 +149,11 @@ def compute(handle, idir: Path, pdir: Path, options: dict, *, progress, check_ca
             z_check=result.z_check,
             suggestions=result.suggestions,
         )
-        internal.update(output_spec=out.to_json(), bounds=[float(b) for b in bounds], tin=tin_counts)
+        internal.update(
+            output_spec=out.to_json(),
+            bounds=[float(b) for b in bounds],
+            tin=tin_counts if fmt != "geotiff" else None,
+        )
     except pipeline.Blocked as b:
         warnings += b.notes
     except placing.PlacementBlocked as b:
@@ -183,7 +188,11 @@ def run(ctx) -> dict:
         message = str(e) if isinstance(e, JobFailure) else f"preview failed: {type(e).__name__}: {e}"
         store.patch_json(pdir / "preview.json", state="failed", error=message)
         raise
-    store.write_json(pdir / "internal.json", internal)
-    store.patch_json(pdir / "preview.json", state="ready", error=None, **body)
+    written = store.write_json(pdir / "internal.json", internal)
+    if not written or store.patch_json(pdir / "preview.json", state="ready", error=None, **body) is None:
+        # The folder went away under us (the inspection was deleted): never end `succeeded`.
+        if ctx.cancelled.is_set():
+            raise JobCancelled()
+        raise JobFailure("the design inspection was deleted while the preview was running")
     ctx.progress(1.0, "Preview ready")
     return {"preview_id": pid, "overlap_fraction": body["overlap_fraction"]}

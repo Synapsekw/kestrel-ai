@@ -1,5 +1,6 @@
 """createDesignPreview, getDesignPreview, getDesignPreviewImage and the preview phase (spec §4, §10, §12)."""
 
+import os
 import time
 
 import pytest
@@ -145,12 +146,17 @@ def test_a_mixed_selection_is_blocked(client, project_id, wait_job, tmp_path, ta
     assert client.get(url(project_id, iid, f"/previews/{p['id']}/image")).status_code == 204
 
 
-def test_a_dem_preview(client, project_id, wait_job, tmp_path, target):
+def test_a_dem_preview(client, project_id, wait_job, tmp_path, target, handle):
     src = write_target(tmp_path / "dem.tif", target_spec(), lambda x, y: plane_z(x, y) + 0.5)
     iid = inspect(client, project_id, wait_job, src)
     p = preview(client, project_id, wait_job, iid, target_surface_id=target)
     assert p["overlap_fraction"] >= 0.99 and p["triangle_count"] is None
     assert p["z_check"]["median_dz_m"] == pytest.approx(0.5, abs=0.01)
+    internal = store.read_json(
+        store.preview_dir(store.inspection_dir(handle, iid), p["id"]) / "internal.json"
+    )
+    assert set(internal) == {"output_spec", "bounds", "tin", "max_edge_m"}
+    assert internal["tin"] is None and internal["max_edge_m"] is None
 
 
 def test_no_target_uses_the_cell_size(client, project_id, wait_job, tmp_path):
@@ -240,3 +246,46 @@ def test_a_new_preview_cancels_the_running_one(client, project_id, wait_job, tmp
     old = client.get(url(project_id, iid, f"/previews/{first['preview']['id']}")).json()
     assert old["state"] == "failed" and old["error"] == "preview cancelled"
     assert wait_job(project_id, second["job"]["id"])["state"] == "succeeded"
+
+
+def test_a_dem_changed_after_reading_fails_the_preview(client, project_id, wait_job, tmp_path, target):
+    src = write_target(tmp_path / "dem.tif", target_spec(), lambda x, y: plane_z(x, y) + 0.5)
+    iid = inspect(client, project_id, wait_job, src)
+    st = os.stat(src)
+    os.utime(src, ns=(st.st_atime_ns, st.st_mtime_ns + 5_000_000_000))
+    r = client.post(url(project_id, iid, "/previews"), json=options(target_surface_id=target))
+    assert r.status_code == 202, r.text
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "failed" and "changed since it was read" in job["error"]
+    p = client.get(url(project_id, iid, f"/previews/{r.json()['preview']['id']}")).json()
+    assert p["state"] == "failed" and "changed since it was read" in p["error"]
+
+
+def test_deleting_the_inspection_cancels_a_running_preview(
+    client, project_id, wait_job, tmp_path, target, handle, monkeypatch
+):
+    pts, faces = site_tin()
+    iid = inspect(
+        client,
+        project_id,
+        wait_job,
+        write_landxml(tmp_path / "s.xml", [{"name": "EG", "points": pts, "faces": faces}]),
+    )
+    calls = []
+
+    def slow(handle, idir, pdir, opts, *, progress, check_cancelled):
+        calls.append(pdir.name)
+        while True:
+            check_cancelled()
+            time.sleep(0.01)
+
+    monkeypatch.setattr(phase_preview, "compute", slow)
+    first = client.post(url(project_id, iid, "/previews"), json=options(target_surface_id=target)).json()
+    deadline = time.time() + 10
+    while not calls and time.time() < deadline:
+        time.sleep(0.01)
+    assert calls
+    assert client.delete(url(project_id, iid)).status_code == 204
+    assert wait_job(project_id, first["job"]["id"])["state"] == "cancelled"
+    time.sleep(0.2)
+    assert not store.inspection_dir(handle, iid).exists()

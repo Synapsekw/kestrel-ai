@@ -182,13 +182,14 @@ def create_design_preview(
     req = store.read_json(idir / "request.json")
     if store.build_live(req, runner):
         raise AppError("conflict", "a design surface is being imported from this inspection", 409)
-    if req.get("latest_preview_job_id") and runner.is_live(req["latest_preview_job_id"]):
-        runner.cancel(handle, req["latest_preview_job_id"])  # only the newest preview is shown (spec §4.2)
     pid = store.new_id()
     pdir = store.preview_dir(idir, pid)
     # parents=False below the inspection dir (as CandidateWriter): never recreate a deleted inspection.
-    pdir.parent.mkdir(parents=False, exist_ok=True)
-    pdir.mkdir(parents=False)
+    try:
+        pdir.parent.mkdir(parents=False, exist_ok=True)
+        pdir.mkdir(parents=False)
+    except FileNotFoundError:
+        raise not_found("design inspection", inspectionId) from None
     store.write_json(
         pdir / "preview.json",
         {
@@ -216,8 +217,15 @@ def create_design_preview(
     )
     # A fresh read under the store lock, not the `req` read above: two previews posted together must
     # both land in preview_job_ids (so deleting the inspection cancels both).
-    store.update_json(idir / "request.json", _record_preview_job(pid, job.id))
+    recorded = store.update_json(idir / "request.json", _record_preview_job(pid, job.id))
+    # Only the newest preview is shown (spec §4.2): cancel every other live preview job, not just the
+    # previous latest, so concurrent POSTs never leave an older one running.
+    for other in (recorded or {}).get("preview_job_ids", []):
+        if other != job.id and runner.is_live(other):
+            runner.cancel(handle, other)
     preview = store.patch_json(pdir / "preview.json", job_id=job.id)
+    if preview is None:  # the inspection was deleted meanwhile; its delete cancels the job
+        raise not_found("design inspection", inspectionId)
     return DesignPreviewWithJob(preview=DesignPreviewOut(**preview), job=JobOut.from_row(job, handle.id))
 
 
