@@ -69,13 +69,17 @@ export function ImportDesignDialog({
   const previewDone = previewJob.job !== null && !isActiveJob(previewJob.job);
 
   // Closing (or unmounting) while an inspection is being created or is unfinished must not leak it
-  // on the backend, but once an import has actually started the inspection is no longer ours to
-  // discard (Task 6 review (a), (b)). `inspectionRef` tracks the latest known inspection id even
-  // before `setInspection` has committed (the create POST may still be in flight); `closedRef` and
-  // `startedRef` record why a later continuation should, or should not, delete it.
+  // on the backend, but once an import has actually started (or is in flight — the createDesignSurface
+  // POST hasn't resolved yet, so a race could otherwise still delete out from under it) the inspection
+  // is no longer ours to discard (Task 6 review (a), (b); controller follow-up review). `inspectionRef`
+  // tracks the latest known inspection id even before `setInspection` has committed (the create POST
+  // may still be in flight); `closedRef` and `startedRef` record why a later continuation should, or
+  // should not, delete it. `startedRef` is "pending" for the duration of the createDesignSurface POST
+  // (skip the delete either way), "started" once it succeeds, and reset to "idle" if it fails (a later
+  // close should still discard the inspection).
   const inspectionRef = useRef<DesignInspection | null>(null);
   const closedRef = useRef(false);
-  const startedRef = useRef(false);
+  const startedRef = useRef<"idle" | "pending" | "started">("idle");
   useEffect(() => {
     inspectionRef.current = inspection;
   }, [inspection]);
@@ -85,7 +89,7 @@ export function ImportDesignDialog({
     closedRef.current = false;
     return () => {
       closedRef.current = true;
-      if (!startedRef.current && inspectionRef.current) {
+      if (startedRef.current === "idle" && inspectionRef.current) {
         const id = inspectionRef.current.id;
         inspectionRef.current = null;
         void deleteDesignInspection(api, projectId, id).catch(() => undefined);
@@ -148,7 +152,7 @@ export function ImportDesignDialog({
   function close() {
     if (busy === "import") return;
     closedRef.current = true;
-    if (!startedRef.current) discard();
+    if (startedRef.current === "idle") discard();
     onClose();
   }
 
@@ -219,6 +223,10 @@ export function ImportDesignDialog({
     if (!inspection || !preview || !gate.allowed) return;
     setBusy("import");
     setError(null);
+    // Mark the import as in flight before awaiting the POST: an unmount that races it (e.g.
+    // navigating away) must not delete the inspection out from under a request that may still
+    // succeed.
+    startedRef.current = "pending";
     try {
       const res = await createDesignSurface(api, projectId, {
         inspection_id: inspection.id,
@@ -227,9 +235,11 @@ export function ImportDesignDialog({
         ...(name.trim() ? { name: name.trim() } : {}),
       });
       useJobsStore.getState().upsert(res.job);
-      startedRef.current = true;
+      startedRef.current = "started";
       onStarted(res.surface);
     } catch (err) {
+      // The import never started: a later close should still discard the inspection.
+      startedRef.current = "idle";
       setError(messageOf(err, "could not start the import"));
     } finally {
       setBusy(null);

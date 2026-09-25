@@ -1,7 +1,9 @@
+import { StrictMode } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { renderWithProviders, TestApiProvider } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import type { FakeRoute } from "@/test/fixtures";
 import { ImportDesignDialog } from "./ImportDesignDialog";
@@ -223,6 +225,43 @@ describe("ImportDesignDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Import surface" }));
     await waitFor(() => expect(onStarted).toHaveBeenCalledWith(designSurface));
     unmount();
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  // Controller follow-up review: unmounting while the createDesignSurface POST is still in flight
+  // (not yet resolved, so `onStarted` hasn't fired and `startedRef` isn't "started" yet) must not
+  // let the unmount cleanup delete the inspection out from under a request that may still succeed.
+  it("does not delete the inspection if unmounted while the import POST is in flight", async () => {
+    const { api, requests } = fakeClient(routes());
+    const { unmount } = renderWithProviders(
+      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+      { api },
+    );
+    await readFile();
+    await preview();
+    fireEvent.click(screen.getByRole("button", { name: "Import surface" }));
+    // Unmount synchronously, before the fake POST's promise has a chance to resolve.
+    unmount();
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/design-surfaces"))).toBe(true));
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+  });
+
+  // Regression test for the StrictMode bug fixed alongside this task: the dev-only
+  // mount→cleanup→mount rehearsal must not leave the dialog unusable, nor delete an inspection
+  // that was never actually created.
+  it("still reads a file under StrictMode's mount-cleanup-remount rehearsal", async () => {
+    const { api, requests } = fakeClient(routes());
+    render(
+      <StrictMode>
+        <TestApiProvider api={api}>
+          <MemoryRouter>
+            <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />
+          </MemoryRouter>
+        </TestApiProvider>
+      </StrictMode>,
+    );
+    await readFile();
+    expect(screen.getByRole("combobox", { name: "Surface" })).toHaveValue("c0");
     expect(requests.some((r) => r.method === "DELETE")).toBe(false);
   });
 

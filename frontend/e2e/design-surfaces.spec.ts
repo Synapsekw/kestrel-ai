@@ -162,10 +162,13 @@ async function stubDesignApi(page: Page, posts: Record<string, unknown[]>) {
   );
   await page.route(
     (u) => u.pathname === `${base}/design-inspections/${INSP}`,
-    (r) =>
-      r.request().method() === "DELETE"
-        ? r.fulfill({ status: 204, headers: CORS })
-        : r.fulfill(jsonReply(inspection)),
+    (r) => {
+      if (r.request().method() === "DELETE") {
+        posts.deletes.push(INSP);
+        return r.fulfill({ status: 204, headers: CORS });
+      }
+      return r.fulfill(jsonReply(inspection));
+    },
   );
   await page.route(
     (u) => u.pathname === `${base}/design-inspections/${INSP}/previews`,
@@ -205,7 +208,7 @@ async function stubDesignApi(page: Page, posts: Record<string, unknown[]>) {
 test.beforeEach(({ page }) => asDetectionProject(page, P));
 
 test("imports a LandXML design with no target and lists it", async ({ page }) => {
-  const posts: Record<string, unknown[]> = { inspections: [], previews: [], surfaces: [] };
+  const posts: Record<string, unknown[]> = { inspections: [], previews: [], surfaces: [], deletes: [] };
   await stubDesignApi(page, posts);
   await page.goto(`/p/${P}/volumes`);
   await page.getByRole("button", { name: "Import design surface" }).click();
@@ -231,6 +234,8 @@ test("imports a LandXML design with no target and lists it", async ({ page }) =>
   });
   expect(posts.surfaces[0]).toMatchObject({ inspection_id: INSP, preview_id: PREV, accept_warnings: false });
   await expect(page.getByText("site-tin — Existing ground")).toBeVisible();
+  // A completed import must never delete the inspection it was built from.
+  expect(posts.deletes).toHaveLength(0);
 });
 
 test("a DWG shows the fix inline", async ({ page }) => {
