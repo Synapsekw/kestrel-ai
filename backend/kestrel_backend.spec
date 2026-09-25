@@ -9,6 +9,9 @@ from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, co
 hiddenimports = (
     collect_submodules("app")
     + collect_submodules("ultralytics")
+    # point clouds (spec 2026-09-23-point-clouds section 5 item 6): laspy picks its LAZ backend
+    # at runtime, so lazrs is named; PotreeConverter's own payload is added by unit K1.
+    + collect_submodules("laspy")
     + [
         "torch",
         "torchvision",
@@ -50,6 +53,7 @@ hiddenimports = (
         # frozen build raises `ModuleNotFoundError: No module named 'rasterio.serde'` at startup
         # (found during the freeze spike, ADR 2026-09-22).
         "rasterio.serde",
+        "lazrs",
     ]
 )
 

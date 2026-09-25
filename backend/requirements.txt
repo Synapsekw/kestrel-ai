@@ -32,3 +32,12 @@ rasterio==1.4.4
 pyproj==3.7.2
 # detection export (plan 2 unit E): the PDF report per source; BSD, pure Python plus pillow
 reportlab==5.0.1
+# point clouds, volumes, design surfaces (specs 2026-09-23, foundation F0). scipy, shapely and
+# psutil were already transitive; they are direct now, at the same versions.
+laspy==2.7.0
+lazrs==0.8.2
+scipy==1.17.1
+shapely==2.1.2
+psutil==7.2.2
+openpyxl==3.1.5
+ezdxf==1.4.4

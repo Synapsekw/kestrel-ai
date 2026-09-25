@@ -81,6 +81,10 @@ Three things that trip people up:
   commands run against the main checkout's interpreter, e.g.
   `E:\Dev\Yolo\app\backend\.venv\Scripts\python.exe`. Do not `uv venv` a fresh one inside a
   worktree.
+  The one exception: a unit that adds Python packages builds an overlay venv in its worktree while
+  it develops, and at landing installs only the new pins into the shared one, additively
+  (`--no-deps`, a `uv pip list` diff before and after), then gates normally
+  (`vault/decisions/2026-09-24-worktree-overlay-venv-for-new-dependencies.md`).
 - **`cargo` is not on PATH** in every shell. If `cargo test` fails to resolve, call the real binary
   directly: `%USERPROFILE%\.cargo\bin\cargo.exe test --manifest-path frontend/src-tauri/Cargo.toml`.
 - **There are two databases, each with its own migrations.** Each project has `project.db`, with its
