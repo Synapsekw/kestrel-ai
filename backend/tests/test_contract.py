@@ -72,10 +72,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 # from its router's STUBS; any other 501 fails `test_responses_conform`.
 EXPECTED_STUBS: set[str] = {
     # S3 design surfaces (app/surfaces/design/router.py)
-    "createDesignInspection",
-    "getDesignInspection",
-    "deleteDesignInspection",
-    "getDesignCandidateThumbnail",
     "createDesignPreview",
     "getDesignPreview",
     "getDesignPreviewImage",

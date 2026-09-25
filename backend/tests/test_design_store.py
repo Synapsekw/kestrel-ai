@@ -1,5 +1,7 @@
 """The inspection folder and the geometry cache (spec §3 Storage)."""
 
+import shutil
+
 import numpy as np
 import pytest
 from PIL import Image
@@ -113,3 +115,24 @@ def test_shade_thumbnail_keeps_zero_transparent(tmp_path):
     thumbs.shade_thumbnail(shade, out)
     im = np.asarray(Image.open(out))
     assert im.shape[1] == 160 and im[0, 0, 3] == 0 and im[0, -1, 3] == 255
+
+
+def test_candidate_writer_does_not_recreate_a_deleted_inspection_dir(tmp_path):
+    """Review Focus 3 hardening: mkdir(parents=False) below a deleted inspection dir raises,
+    rather than silently recreating cand/<cid>/ after the delete."""
+    idir = tmp_path / "cache" / "design-inspections" / store.new_id()
+    idir.mkdir(parents=True)
+    shutil.rmtree(idir)
+    with pytest.raises(FileNotFoundError):
+        store.CandidateWriter(store.candidate_dir(idir, "c0"), "faces")
+    assert not idir.exists()
+
+
+def test_thumbnail_does_not_recreate_a_deleted_inspection_dir(tmp_path):
+    idir = tmp_path / "cache" / "design-inspections" / store.new_id()
+    idir.mkdir(parents=True)
+    shutil.rmtree(idir)
+    pts = np.array([[500000.0, 2800000.0, 1.0], [500010.0, 2800000.0, 2.0], [500000.0, 2800010.0, 3.0]])
+    with pytest.raises(FileNotFoundError):
+        thumbs.plan_thumbnail(pts, store.thumb_path(idir, "c0"))
+    assert not idir.exists()

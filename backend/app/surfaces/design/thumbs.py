@@ -27,7 +27,9 @@ def plan_thumbnail(points: np.ndarray, out: Path, *, size: int = 160) -> None:
     img = np.zeros((height, width, 4), np.uint8)
     img[rows, cols, 0] = img[rows, cols, 1] = img[rows, cols, 2] = shade
     img[rows, cols, 3] = 255
-    out.parent.mkdir(parents=True, exist_ok=True)
+    # A single level below the inspection dir: parents=False so a deleted inspection raises
+    # FileNotFoundError instead of the write recreating the folder (spec §3 store.py note).
+    out.parent.mkdir(parents=False, exist_ok=True)
     Image.fromarray(img, "RGBA").save(out)
 
 
@@ -38,5 +40,5 @@ def shade_thumbnail(shade: np.ndarray, out: Path, *, size: int = 160) -> None:
     rgba[..., 3] = np.where(shade > 0, 255, 0)
     im = Image.fromarray(rgba, "RGBA")
     im.thumbnail((size, size), Image.Resampling.BILINEAR)
-    out.parent.mkdir(parents=True, exist_ok=True)
+    out.parent.mkdir(parents=False, exist_ok=True)
     im.save(out)

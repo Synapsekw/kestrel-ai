@@ -88,7 +88,7 @@ def write_json(path: Path, data: dict) -> bool:
         if not path.parent.is_dir():
             return False
         tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text(json.dumps(data, indent=2, default=str), "utf-8")
+        tmp.write_text(json.dumps(data, indent=2), "utf-8")
         os.replace(tmp, path)
         return True
 
@@ -163,7 +163,11 @@ class CandidateWriter:
     """Appends one candidate's geometry to cand/<cid>/ in file units, x = easting (spec §3)."""
 
     def __init__(self, cdir: Path, geometry: str):
-        cdir.mkdir(parents=True, exist_ok=True)
+        # Each level below the inspection dir is created with parents=False: if a reader is still
+        # running after the inspection was deleted, the missing grandparent raises FileNotFoundError
+        # instead of silently recreating the folder the delete just removed.
+        cdir.parent.mkdir(parents=False, exist_ok=True)
+        cdir.mkdir(parents=False, exist_ok=True)
         self.cdir, self.geometry = cdir, geometry
         self._points = (cdir / "points.f64").open("wb")
         self._faces = (cdir / "faces.i32").open("wb") if geometry == "faces" else None
