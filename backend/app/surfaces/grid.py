@@ -21,6 +21,7 @@ import numpy as np
 import rasterio
 from affine import Affine
 from pyproj import CRS, Transformer
+from pyproj.exceptions import CRSError
 from rasterio.enums import Compression, MaskFlags, Resampling
 from rasterio.windows import Window
 
@@ -59,7 +60,10 @@ def crs_problem(crs_wkt: str | None) -> str | None:
     """None when the CRS is absent (local metres) or projected in metres; otherwise why not."""
     if crs_wkt is None:
         return None
-    crs = CRS.from_user_input(crs_wkt)
+    try:
+        crs = CRS.from_user_input(crs_wkt)
+    except CRSError as e:
+        return f"the coordinate system could not be read: {e}"
     if crs.is_geographic:
         return "the coordinate system is geographic (degrees); a surface needs a projected system in metres"
     if not crs.is_projected:
@@ -374,7 +378,11 @@ class SurfaceWriter:
                 self._ds.build_overviews(factors, Resampling.average)
         self._ds.close()
         self._ds = None
-        os.replace(self.partial, self.path)
+        try:
+            os.replace(self.partial, self.path)
+        except OSError:
+            self.partial.unlink(missing_ok=True)
+            raise
         return self._stats.result()
 
 

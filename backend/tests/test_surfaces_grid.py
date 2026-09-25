@@ -7,9 +7,9 @@ import warnings
 import numpy as np
 import pytest
 import rasterio
+from affine import Affine
 from pyproj import CRS, Transformer
 from rasterio.enums import Resampling
-from rasterio.transform import from_origin
 from rasterio.windows import Window
 from surfaces import EPSG, WKT, X0, Y1, fixture_spec, plane, write_surface
 
@@ -24,6 +24,7 @@ from app.surfaces.grid import (
     block_windows,
     compute_stats,
     convention_problems,
+    crs_problem,
     hillshade,
     open_surface,
     read_windows,
@@ -59,6 +60,12 @@ def test_aligned_grid_refuses(crs, cell, message):
 def test_aligned_grid_refuses_too_many_cells():
     with pytest.raises(GridError, match="more than"):
         aligned_grid((0, 0, 1000, 1000), 0.1, None, None, max_cells=1000)
+
+
+def test_crs_problem_and_aligned_grid_refuse_malformed_wkt():
+    assert isinstance(crs_problem("not a crs"), str)
+    with pytest.raises(GridError):
+        aligned_grid((0, 0, 10, 10), 0.1, "not a crs", None)
 
 
 def test_same_lattice_true_and_near_miss():
@@ -269,8 +276,11 @@ def test_convention_problems_accepts_writer_output(tmp_path):
         ({"mask": True}, "internal mask"),
         ({"tiled": False, "blockxsize": None, "blockysize": None}, "not tiled"),
         ({"compress": "lzw"}, "not DEFLATE"),
-        ({"transform": from_origin(500000.03, 3300000.0, 0.1, 0.1)}, "not a multiple"),
-        ({"crs": CRS.from_epsg(4326).to_wkt(), "transform": from_origin(50.0, 30.0, 0.1, 0.1)}, "geographic"),
+        ({"transform": Affine(0.1, 0.0, 500000.03, 0.0, -0.1, 3300000.0)}, "not a multiple"),
+        (
+            {"crs": CRS.from_epsg(4326).to_wkt(), "transform": Affine(0.1, 0.0, 50.0, 0.0, -0.1, 30.0)},
+            "geographic",
+        ),
     ],
 )
 def test_convention_problems_names_each_breach(tmp_path, over, needle):
@@ -292,7 +302,7 @@ def test_convention_problems_names_each_breach(tmp_path, over, needle):
         compress="deflate",
         predictor=3,
         crs=WKT,
-        transform=from_origin(500000.0, 3300000.0, 0.1, 0.1),
+        transform=Affine(0.1, 0.0, 500000.0, 0.0, -0.1, 3300000.0),
     )
     if not over.get("tiled", True):
         base.pop("blockxsize")
@@ -325,7 +335,7 @@ def test_convention_problems_missing_overviews(tmp_path):
         compress="deflate",
         predictor=3,
         crs=WKT,
-        transform=from_origin(500000.0, 3300000.0, 0.1, 0.1),
+        transform=Affine(0.1, 0.0, 500000.0, 0.0, -0.1, 3300000.0),
     ) as ds:
         ds.write(np.ones((300, 600), "float32"), 1)
     assert convention_problems(path) == ["internal overviews are missing"]
