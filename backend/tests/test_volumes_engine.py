@@ -356,3 +356,33 @@ def test_patch_with_ground_on_one_side_only_warns_and_becomes_nodata(tmp_path):
     res = _run(tmp_path, 0.1, top, circle(CX, CY, 12.0), base_kind="toe_plane", footprints=[footprint])
     assert "patch_failed" in _codes(res)
     assert any(w["code"] == "patch_failed" and w["severity"] == "warn" for w in res["warnings"])
+    spec = fixture_spec(0.1)
+    whole = Window(0, 0, spec.width, spec.height)
+    footprint_area = cells_in(footprint, spec, whole, all_touched=True).sum() * 0.01
+    assert res["nodata_area_m2"] >= footprint_area
+
+
+def test_patch_failure_on_the_base_also_warns(tmp_path):
+    """Ruling (Task 8): the same check applies to the BASE side of a surface-base patch — a
+    footprint NaN'd on three sides in the base survey (valid ground only to its east), over a
+    clean top, still fails to patch and must be reported, not silently folded into nodata."""
+    footprint = box(CX - 1, CY - 1, CX + 1, CY + 1)
+
+    def base_fn(x, y):
+        z = plane(x, y)
+        near = (x > CX - 2) & (x < CX + 2) & (y > CY - 2) & (y < CY + 2)
+        east_only = x >= CX + 1
+        return np.where(near & ~east_only, np.nan, z)
+
+    res = _run(
+        tmp_path,
+        0.1,
+        lambda x, y: plane(x, y) + cone(x, y),
+        circle(CX, CY, 12.0),
+        base_fn=base_fn,
+        base_kind="surface",
+        footprints=[footprint],
+    )
+    assert "patch_failed" in _codes(res)
+    assert any(w["code"] == "patch_failed" and w["severity"] == "warn" for w in res["warnings"])
+    assert any(w["code"] == "patch_failed" and w["severity"] == "warn" for w in res["warnings"])

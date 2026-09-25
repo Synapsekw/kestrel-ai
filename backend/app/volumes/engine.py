@@ -226,20 +226,23 @@ def measure(inp: EngineInputs) -> dict:
             patched = np.zeros(top.shape, dtype=bool)
             unused = np.zeros(top.shape, dtype=bool)
             win_box = box(
-                *spec.window_transform(win) * (0, int(win.height)),
-                *spec.window_transform(win) * (int(win.width), 0),
+                *(spec.window_transform(win) @ (0, int(win.height))),
+                *(spec.window_transform(win) @ (int(win.width), 0)),
             )
             for j, part in enumerate(regions.patch_parts):
                 if not part.intersects(win_box):
                     continue
                 outcome = patch_part(part, spec, read_top, others[j])
                 paste(outcome, top, win, patched, failed)
+                ok = outcome.ok
                 if outcome.ok:
                     part_rms[j] = (float(part.intersection(poly).area), outcome.rms_m)
-                else:
-                    failed_parts.add(j)
                 if surface_base:
-                    paste(patch_part(part, spec, read_base, others[j]), base, win, unused, failed)
+                    base_outcome = patch_part(part, spec, read_base, others[j])
+                    paste(base_outcome, base, win, unused, failed)
+                    ok = ok and base_outcome.ok
+                if not ok:
+                    failed_parts.add(j)
             usable = inside & ~excluded
             measured = usable & np.isfinite(top) & np.isfinite(base) & ~failed
             dz0 = top - base
