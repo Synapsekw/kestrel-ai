@@ -158,6 +158,49 @@ describe("Clouds screen", () => {
     );
   }, 10_000);
 
+  it("keeps following a LAZ export after the screen was left and opened again", async () => {
+    // Final review F1: Export, go to Maps (the screen unmounts), come back, the job then ends.
+    const exportJob: Job = {
+      ...runningJob,
+      id: "j-export-2",
+      type: "pointcloud_export",
+      state: "queued",
+      params: { cloud_id: CLOUD_ID },
+    };
+    let done = false;
+    const { api, requests } = fakeClient([
+      ...routes([exampleCloud]),
+      { method: "POST", path: /\/exports$/, status: 202, body: { job: exportJob } },
+      {
+        method: "GET",
+        path: /\/jobs\/j-export-2$/,
+        body: () =>
+          done
+            ? { ...exportJob, state: "succeeded", progress: 1, result: { folder: "exports/y" } }
+            : { ...exportJob, state: "running" },
+      },
+    ]);
+    useToastStore.getState().clear();
+    const opts = { api, route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, path: "/p/:projectId/clouds/:cloudId" };
+    const first = renderWithProviders(<CloudsScreen />, opts);
+    await userEvent.click(await screen.findByRole("button", { name: "Export LAZ" }));
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/jobs/j-export-2"))).toBe(true));
+    first.unmount();
+    renderWithProviders(<CloudsScreen />, opts);
+    // Details knows the export is still running: no second export can start.
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Export LAZ" })).toHaveAttribute("aria-busy", "true"),
+    );
+    done = true;
+    await waitFor(
+      () => {
+        const t = useToastStore.getState().toasts.find((x) => x.text === "LAZ export finished");
+        expect(t?.action?.label).toBe("Show folder");
+      },
+      { timeout: 5000 },
+    );
+  }, 10_000);
+
   it("offers Export LAZ only for a ready cloud and keeps a link that no longer qualifies", async () => {
     const linked = { ...exampleCloud, status: "failed", error: "boom", map_id: "m-gone" };
     const { api } = fakeClient(routes([linked]));

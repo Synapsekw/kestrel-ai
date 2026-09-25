@@ -120,16 +120,35 @@ const REPORTED_ON: Partial<Record<Job["type"], string>> = {
   dataset: "data",
   train: "train",
   infer: "query",
-  pointcloud_export: "clouds",
 };
 
-/** True when the screen at `pathname` shows this job's outcome itself, so a toast would repeat it. */
+/** Job ids whose outcome a mounted component reports itself (e.g. the Clouds screen's ExportWatch). */
+const claimed = new Map<string, number>();
+
+/**
+ * Claims one job's outcome for the caller, which then shows it; the global toast stays quiet for
+ * exactly that job while the claim is held. Returns the release. A claim, not a route: a job whose
+ * watcher is not mounted still gets the global toast, whatever screen is open.
+ */
+export function claimJobOutcome(jobId: string): () => void {
+  claimed.set(jobId, (claimed.get(jobId) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const n = (claimed.get(jobId) ?? 1) - 1;
+    if (n > 0) claimed.set(jobId, n);
+    else claimed.delete(jobId);
+  };
+}
+
+/** True when the screen at `pathname` (or a mounted claim) shows this job's outcome, so a toast would repeat it. */
 export function reportedInline(job: Job, pathname: string): boolean {
+  if (claimed.has(job.id)) return true;
   const segment = REPORTED_ON[job.type];
   if (!segment) return false;
   const path = pathname.replace(/\/$/, "");
-  const base = `/p/${job.project_id}/${segment}`;
-  return path.endsWith(base) || (job.type === "pointcloud_export" && path.startsWith(`${base}/`));
+  return path.endsWith(`/p/${job.project_id}/${segment}`);
 }
 
 /**

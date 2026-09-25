@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { cloudOctreeUrl, type GeoMap } from "@contract/client";
+import { cloudOctreeUrl, type GeoMap, type Job } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { createPointCloud, deletePointCloud, listPointClouds, type PointCloud } from "@/api/clouds";
 import { messageOf } from "@/api/errors";
@@ -21,7 +21,7 @@ import { readBudget, writeBudget } from "@/clouds/viewer/budget";
 import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOptions";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
-import { useJobsStore } from "@/store/jobs";
+import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, EmptyState, Segmented, toast } from "@/ui";
 
 type Tab = "details" | "view" | "measure";
@@ -30,6 +30,22 @@ const TABS: { value: Tab; label: string }[] = [
   { value: "view", label: "View" },
   { value: "measure", label: "Measure" },
 ];
+
+/** This project's running LAZ exports in the jobs store, job id -> cloud id. */
+function runningExports(jobs: Record<string, Job>, projectId: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const j of Object.values(jobs)) {
+    const cloudId = (j.params as Record<string, unknown> | null)?.cloud_id;
+    if (
+      j.type === "pointcloud_export" &&
+      j.project_id === projectId &&
+      isActiveJob(j) &&
+      typeof cloudId === "string"
+    )
+      out[j.id] = cloudId;
+  }
+  return out;
+}
 
 function report(action: string, err: unknown): string {
   const message = messageOf(err, `could not ${action}`);
@@ -49,14 +65,29 @@ export function CloudsScreen() {
   const [maps, setMaps] = useState<GeoMap[]>([]);
   const [listError, setListError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  // Running LAZ exports by cloud id. Held here (always mounted on /clouds) so a tab or cloud switch
-  // mid-export still ends in its toast.
-  const [exports, setExports] = useState<Record<string, string>>({});
+  // Followed LAZ exports, job id -> cloud id. Held here (always mounted on /clouds) so a tab or cloud
+  // switch mid-export still ends in its toast, and picked up from the jobs store (which outlives the
+  // screen) so leaving the screen and coming back mid-export does too.
+  const [exports, setExports] = useState<Record<string, string>>(() =>
+    runningExports(useJobsStore.getState().jobs, projectId),
+  );
+  useEffect(
+    () =>
+      useJobsStore.subscribe((s) => {
+        const running = runningExports(s.jobs, projectId);
+        setExports((e) => {
+          const missing = Object.entries(running).filter(([id]) => !(id in e));
+          return missing.length ? { ...e, ...Object.fromEntries(missing) } : e;
+        });
+      }),
+    [projectId],
+  );
   const exportDone = useCallback(
     (jobId: string) =>
-      setExports((e) => Object.fromEntries(Object.entries(e).filter(([, id]) => id !== jobId))),
+      setExports((e) => Object.fromEntries(Object.entries(e).filter(([id]) => id !== jobId))),
     [],
   );
+  const exportFor = (id: string) => Object.entries(exports).find(([, c]) => c === id)?.[0] ?? null;
   const [tab, setTab] = useState<Tab>("details");
   const [settings, setSettings] = useState<ViewSettings | null>(null);
   const measure = useMeasureTool();
@@ -153,7 +184,7 @@ export function CloudsScreen() {
       .catch((e: unknown) => report("delete the point cloud", e));
 
   // Rendered in both layouts: deleting the last cloud mid-export still ends in its toast.
-  const watchers = Object.values(exports).map((jobId) => (
+  const watchers = Object.keys(exports).map((jobId) => (
     <ExportWatch key={jobId} projectId={projectId} jobId={jobId} onDone={exportDone} />
   ));
 
@@ -281,8 +312,8 @@ export function CloudsScreen() {
                 projectId={projectId}
                 cloud={cloud}
                 maps={maps}
-                exportJobId={exports[cloud.id] ?? null}
-                onExportStarted={(jobId) => setExports((e) => ({ ...e, [cloud.id]: jobId }))}
+                exportJobId={exportFor(cloud.id)}
+                onExportStarted={(jobId) => setExports((e) => ({ ...e, [jobId]: cloud.id }))}
                 onChanged={(c) => setClouds((cs) => cs?.map((x) => (x.id === c.id ? c : x)) ?? cs)}
                 onDeleted={() => {
                   reload();

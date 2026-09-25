@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Job } from "@contract/client";
 import { runningJob } from "@/test/fixtures";
-import { jobToastText, reportedInline } from "./useJobToasts";
+import { claimJobOutcome, jobToastText, reportedInline } from "./useJobToasts";
 
 const base: Job = {
   id: "j1",
@@ -54,11 +54,20 @@ describe("reportedInline", () => {
     expect(reportedInline(base, "/p/other/data")).toBe(false);
   });
 
-  it("the Clouds screen reports its own LAZ export", () => {
+  it("a LAZ export is quiet only while a mounted watcher claims it, on any screen", () => {
     const job = { ...runningJob, type: "pointcloud_export", project_id: "p1", state: "succeeded" } as Job;
-    expect(reportedInline(job, "/p/p1/clouds")).toBe(true);
+    // Unclaimed (the Clouds screen was left and opened again before F1): the global toast shows.
+    expect(reportedInline(job, "/p/p1/clouds")).toBe(false);
+    expect(reportedInline(job, "/p/p1/clouds/c-123")).toBe(false);
+    const release = claimJobOutcome(job.id);
     expect(reportedInline(job, "/p/p1/clouds/c-123")).toBe(true);
-    expect(reportedInline(job, "/p/p1/maps/m-1")).toBe(false);
+    expect(reportedInline(job, "/p/p1/maps/m-1")).toBe(true);
+    const again = claimJobOutcome(job.id);
+    release();
+    release(); // idempotent
+    expect(reportedInline(job, "/p/p1/clouds")).toBe(true);
+    again();
+    expect(reportedInline(job, "/p/p1/clouds")).toBe(false);
     expect(reportedInline({ ...job, type: "import" } as Job, "/p/p1/data/x")).toBe(false);
   });
 });
