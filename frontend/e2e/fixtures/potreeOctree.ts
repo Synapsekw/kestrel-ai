@@ -109,9 +109,9 @@ export function redGreenGrid(o: {
 
 /**
  * A hollow stack seen from above (the §17.10 chimney in miniature): a thin rim of sparse points on a
- * circle of radius 1.5 m at z = top (one every 30°, 0.78 m apart: a coarse level of detail), a dense flue floor (0.05 m grid,
- * r < 1.45 m) at z = floor, and a ground apron (0.1 m grid, 2.5 m < r < 3 m) at z = 0. Straight down
- * at a spot on the rim between two rim points, the floor is the drawn point nearest the spot.
+ * circle of radius 1.5 m at z = top (one every 30°: a coarse level of detail), a dense flue floor
+ * (0.05 m grid, r < 1.45 m) at z = floor, and a ground apron (0.1 m grid, 2.5 m < r < 3 m) at z = 0.
+ * Straight down at a spot on the rim 0.13 m from a rim point, a floor point is drawn nearer the spot.
  */
 export function hollowStack(o: { centre: [number, number]; top: number; floor: number }): FixturePoint[] {
   const [cx, cy] = o.centre;

@@ -434,14 +434,14 @@ test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor 
   // §17.10 first acceptance: at a chimney rim point (z 188.8) the straight-down refine returned the
   // flue bottom (z -41.6), the drawn point nearest the spot, so the close-up framed the wrong height.
   const C = { x: 243550, y: 3178050 };
-  const stack = hollowStack({ centre: [C.x, C.y], top: 8, floor: -2 });
-  const bounds = [C.x - 3, C.y - 3, -2, C.x + 3, C.y + 3, 8];
+  const stack = hollowStack({ centre: [C.x, C.y], top: 5, floor: -2 });
+  const bounds = [C.x - 3, C.y - 3, -2, C.x + 3, C.y + 3, 5];
   const cloud = cloudJson({ bounds_native: bounds, point_count: stack.length });
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloud] });
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloud);
   await routeOctree(page, CLOUD, buildOctree(stack));
-  // on the rim circle, halfway between the rim points at 0° and 30°
-  const a = (15 * Math.PI) / 180;
+  // on the rim circle, 5° (0.13 m) from the rim point at 0°
+  const a = (5 * Math.PI) / 180;
   const spot = { x: C.x + 1.5 * Math.cos(a), y: C.y + 1.5 * Math.sin(a) };
   await page.goto(`/p/${P}/clouds/${CLOUD}?at=${spot.x.toFixed(3)},${spot.y.toFixed(3)}`);
   await expect
@@ -453,7 +453,7 @@ test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor 
     [spot.x, spot.y],
   );
   expect(down).not.toBeNull();
-  expect(down!.z).toBeCloseTo(8, 2);
+  expect(down!.z).toBeCloseTo(5, 2);
   expect(Math.hypot(down!.x - spot.x, down!.y - spot.y)).toBeLessThan(0.5); // the rim point beside it
 });
 

@@ -19,7 +19,7 @@ import { makeMaterialOptions, type ColourMode } from "./viewer/materialOptions";
 import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./viewer/overlay";
 import { pickAllPoints } from "./viewer/pickAll";
 import { makeRequestManager, metadataUrl } from "./viewer/requestManager";
-import { topmostWithin } from "./viewer/topmost";
+import { nearestToCentre, topmostWithin } from "./viewer/topmost";
 import { deepestLevelAt, pickUncertainty, type NodeBox } from "./viewer/uncertainty";
 
 export interface CloudPick {
@@ -152,14 +152,18 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     });
   }, []);
 
+  const rootSpacing = useCallback(
+    (e: Engine): number =>
+      cloud.octree_spacing_m ?? (e.pco?.pcoGeometry as unknown as { spacing?: number })?.spacing ?? 1,
+    [cloud.octree_spacing_m],
+  );
+
   const toCloudPick = useCallback(
     (e: Engine, p: THREE.Vector3): CloudPick => {
       const level = deepestLevelAt(nodeBoxes(), p) ?? 0;
-      const spacing =
-        cloud.octree_spacing_m ?? (e.pco?.pcoGeometry as unknown as { spacing?: number })?.spacing ?? 1;
-      return { x: p.x, y: p.y, z: p.z, level, uncertainty_m: pickUncertainty(spacing, level) };
+      return { x: p.x, y: p.y, z: p.z, level, uncertainty_m: pickUncertainty(rootSpacing(e), level) };
     },
-    [cloud.octree_spacing_m, nodeBoxes],
+    [nodeBoxes, rootSpacing],
   );
 
   const pickAtClient = useCallback(
@@ -174,8 +178,13 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       );
       const ray = new THREE.Raycaster();
       ray.setFromCamera(ndc, e.camera);
-      const hit = e.pco.pick(e.renderer, e.camera, ray.ray, { pickWindowSize: PICK_WINDOW });
-      return hit?.position ? toCloudPick(e, hit.position) : null;
+      // potree's rule (the drawn point nearest the window centre), over the valid hits only: its own
+      // pick answered null on the chimney with 18 points drawn in the window (see pickAllPoints)
+      const all = pickAllPoints(e.pco, e.renderer, e.camera, ray.ray, PICK_WINDOW);
+      const p = all
+        ? nearestToCentre(all)
+        : (e.pco.pick(e.renderer, e.camera, ray.ray, { pickWindowSize: PICK_WINDOW })?.position ?? null);
+      return p ? toCloudPick(e, new THREE.Vector3(p.x, p.y, p.z)) : null;
     },
     [toCloudPick],
   );
@@ -192,7 +201,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       // so the pick window (that side, centred on the ray) covers the ±radius square. The depth test
       // keeps the topmost point in each pixel; potree's picker would then return the lit pixel nearest
       // the centre, which over a thin rim is the ground seen past it (§17.10, first acceptance), so
-      // every drawn point is read back and `topmostWithin` takes the top surface's nearest point.
+      // every drawn point is read back and `topmostWithin` takes the top surface at the spot.
       const sx = radius * Math.max(w / h, 1);
       const sy = radius * Math.max(h / w, 1);
       const top = bounds[5] + DOWN_MARGIN_M;
@@ -204,13 +213,19 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       down.updateMatrixWorld(true);
       const ray = new THREE.Ray(down.position.clone(), new THREE.Vector3(0, 0, -1));
       const all = pickAllPoints(e.pco, e.renderer, down, ray, Math.min(w, h));
+      const spacing = rootSpacing(e);
       const p = all
-        ? topmostWithin(all, x, y, radius)
+        ? topmostWithin(
+            all.map((h) => ({ ...h, reach: pickUncertainty(spacing, h.level) })),
+            x,
+            y,
+            radius,
+          )
         : (e.pco.pick(e.renderer, down, ray, { pickWindowSize: Math.min(w, h) })?.position ?? null);
       if (!p || Math.hypot(p.x - x, p.y - y) > radius) return null;
-      return toCloudPick(e, p);
+      return toCloudPick(e, new THREE.Vector3(p.x, p.y, p.z));
     },
-    [bounds, toCloudPick],
+    [bounds, rootSpacing, toCloudPick],
   );
 
   useEffect(() => {

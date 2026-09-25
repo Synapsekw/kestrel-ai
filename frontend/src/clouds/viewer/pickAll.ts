@@ -13,12 +13,23 @@ interface PickerStatics {
   getPickPoint(hit: unknown, nodes: RenderedNode[]): unknown;
 }
 
+/** A drawn point in native coordinates, with its squared pixel distance from the window centre and
+ * its node's octree level. */
+export interface DrawnPoint {
+  x: number;
+  y: number;
+  z: number;
+  d2: number;
+  level: number;
+}
+
 /**
  * Every point potree's picker draws in a `windowSize` pick window, in native coordinates: one render
  * and one read-back, the same cost as a plain `pco.pick`. potree-core only returns the lit pixel
  * nearest the window centre, so its two statics are wrapped for the length of the call to see the
- * pixels and the rendered nodes. Null when this potree-core no longer has them (the caller then
- * falls back to the plain pick; the e2e hollow-ring test would fail).
+ * pixels and the rendered nodes. Pixels whose node index names no rendered node are dropped
+ * (potree's own pick can land on one and answer null). Null when this potree-core no longer has
+ * those statics: the caller then falls back to the plain pick, and the e2e hollow-stack test fails.
  */
 export function pickAllPoints(
   pco: PointCloudOctree,
@@ -26,7 +37,7 @@ export function pickAllPoints(
   camera: THREE.Camera,
   ray: THREE.Ray,
   windowSize: number,
-): THREE.Vector3[] | null {
+): DrawnPoint[] | null {
   const statics = PointCloudOctreePicker as unknown as PickerStatics;
   const findHit = statics.findHit;
   const getPickPoint = statics.getPickPoint;
@@ -34,7 +45,7 @@ export function pickAllPoints(
   let hits: WindowHit[] = [];
   let nodes: RenderedNode[] = [];
   statics.findHit = (pixels, size) => {
-    hits = windowHits(pixels);
+    hits = windowHits(pixels, size);
     return findHit.call(statics, pixels, size);
   };
   statics.getPickPoint = (hit, rendered) => {
@@ -47,12 +58,15 @@ export function pickAllPoints(
     statics.findHit = findHit;
     statics.getPickPoint = getPickPoint;
   }
-  const out: THREE.Vector3[] = [];
+  const out: DrawnPoint[] = [];
+  const p = new THREE.Vector3();
   for (const h of hits) {
-    const scene = nodes[h.pcIndex]?.node.sceneNode;
+    const node = nodes[h.pcIndex]?.node;
+    const scene = node?.sceneNode;
     const position = scene?.geometry?.attributes.position;
-    if (!scene || !position || h.pIndex >= position.count) continue;
-    out.push(new THREE.Vector3().fromBufferAttribute(position, h.pIndex).applyMatrix4(scene.matrixWorld));
+    if (!node || !scene || !position || h.pIndex >= position.count) continue;
+    p.fromBufferAttribute(position, h.pIndex).applyMatrix4(scene.matrixWorld);
+    out.push({ x: p.x, y: p.y, z: p.z, d2: h.d2, level: node.level });
   }
   return out;
 }
