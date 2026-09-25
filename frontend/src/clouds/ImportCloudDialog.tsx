@@ -17,21 +17,17 @@ const INSPECT_DELAY_MS = 300;
 
 export function ImportCloudDialog({
   projectId,
-  initialPath = "",
-  initialName = "",
   onClose,
   onStarted,
 }: {
   projectId: string;
-  initialPath?: string;
-  initialName?: string;
   onClose(): void;
   onStarted(c: PointCloud): void;
 }) {
   const api = useApi();
   const { mode } = useBackend();
-  const [path, setPath] = useState(initialPath);
-  const [name, setName] = useState(initialName);
+  const [path, setPath] = useState("");
+  const [name, setName] = useState("");
   const [mapId, setMapId] = useState("");
   const [maps, setMaps] = useState<GeoMap[]>([]);
   // The last inspect answer and the path it was for: a stale answer for another path shows nothing.

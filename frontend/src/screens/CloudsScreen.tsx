@@ -9,6 +9,7 @@ import { pushLog } from "@/app/diagnostics";
 import { CloudDetails } from "@/clouds/CloudDetails";
 import { CloudList } from "@/clouds/CloudList";
 import { CloudViewer, type CloudViewerHandle } from "@/clouds/CloudViewer";
+import { ExportWatch } from "@/clouds/ExportWatch";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
 import { ViewPanel, type ViewSettings } from "@/clouds/ViewPanel";
 import { readBudget, writeBudget } from "@/clouds/viewer/budget";
@@ -40,7 +41,15 @@ export function CloudsScreen() {
   const [clouds, setClouds] = useState<PointCloud[] | null>(null);
   const [maps, setMaps] = useState<GeoMap[]>([]);
   const [listError, setListError] = useState<string | null>(null);
-  const [importing, setImporting] = useState<{ path: string; name: string } | null>(null);
+  const [importing, setImporting] = useState(false);
+  // Running LAZ exports by cloud id. Held here (always mounted on /clouds) so a tab or cloud switch
+  // mid-export still ends in its toast.
+  const [exports, setExports] = useState<Record<string, string>>({});
+  const exportDone = useCallback(
+    (jobId: string) =>
+      setExports((e) => Object.fromEntries(Object.entries(e).filter(([, id]) => id !== jobId))),
+    [],
+  );
   const [tab, setTab] = useState<Tab>("details");
   const [settings, setSettings] = useState<ViewSettings | null>(null);
 
@@ -64,10 +73,12 @@ export function CloudsScreen() {
     [cloud],
   );
 
-  // A new cloud starts from its own defaults; the budget is remembered across clouds.
+  // A new cloud starts from its own defaults; the budget is remembered across clouds. Keyed on the
+  // status too: an importing row has no z stats or colour yet, so the ready row seeds again.
   const [settingsFor, setSettingsFor] = useState<string | null>(null);
-  if (cloud && cloud.id !== settingsFor) {
-    setSettingsFor(cloud.id);
+  const seedKey = cloud ? `${cloud.id}|${cloud.status}` : null;
+  if (cloud && seedKey !== settingsFor) {
+    setSettingsFor(seedKey);
     setSettings({
       budget: readBudget(),
       colour: defaultColour(cloud.has_rgb),
@@ -88,14 +99,19 @@ export function CloudsScreen() {
 
   const importAgain = (c: PointCloud) =>
     void createPointCloud(api, projectId, { path: c.source_path, name: c.name })
-      .then((r) => {
-        useJobsStore.getState().upsert(r.job);
-        return deletePointCloud(api, projectId, c.id).then(() => {
-          reload();
+      .then(
+        (r) => {
+          useJobsStore.getState().upsert(r.job);
           navigate(`/p/${projectId}/clouds/${r.cloud.id}`);
-        });
-      })
-      .catch((e: unknown) => report("import again", e));
+          // The new import runs either way; a failed delete only leaves the old row in the list.
+          return deletePointCloud(api, projectId, c.id).then(
+            () => undefined,
+            (e: unknown) => void report("remove the failed point cloud", e),
+          );
+        },
+        (e: unknown) => void report("import again", e),
+      )
+      .finally(reload);
 
   const remove = (c: PointCloud) =>
     void deletePointCloud(api, projectId, c.id)
@@ -105,16 +121,22 @@ export function CloudsScreen() {
       })
       .catch((e: unknown) => report("delete the point cloud", e));
 
+  // Rendered in both layouts: deleting the last cloud mid-export still ends in its toast.
+  const watchers = Object.values(exports).map((jobId) => (
+    <ExportWatch key={jobId} projectId={projectId} jobId={jobId} onDone={exportDone} />
+  ));
+
   if (clouds && clouds.length === 0 && !importing) {
     return (
       <div className="flex h-full flex-col p-6">
+        {watchers}
         <h1 className="text-xl font-semibold tracking-tight">Point clouds</h1>
         <EmptyState
           className="m-auto"
           icon="cloud"
           title="Import a LAS or LAZ point cloud"
           action={
-            <Button variant="primary" icon="import" onClick={() => setImporting({ path: "", name: "" })}>
+            <Button variant="primary" icon="import" onClick={() => setImporting(true)}>
               Import
             </Button>
           }
@@ -130,7 +152,7 @@ export function CloudsScreen() {
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold tracking-tight">Point clouds</h1>
-          <Button size="sm" icon="import" onClick={() => setImporting({ path: "", name: "" })}>
+          <Button size="sm" icon="import" onClick={() => setImporting(true)}>
             Import
           </Button>
         </div>
@@ -195,6 +217,8 @@ export function CloudsScreen() {
                 projectId={projectId}
                 cloud={cloud}
                 maps={maps}
+                exportJobId={exports[cloud.id] ?? null}
+                onExportStarted={(jobId) => setExports((e) => ({ ...e, [cloud.id]: jobId }))}
                 onChanged={(c) => setClouds((cs) => cs?.map((x) => (x.id === c.id ? c : x)) ?? cs)}
                 onDeleted={() => {
                   reload();
@@ -218,14 +242,13 @@ export function CloudsScreen() {
           </>
         )}
       </aside>
+      {watchers}
       {importing && (
         <ImportCloudDialog
           projectId={projectId}
-          initialPath={importing.path}
-          initialName={importing.name}
-          onClose={() => setImporting(null)}
+          onClose={() => setImporting(false)}
           onStarted={(c) => {
-            setImporting(null);
+            setImporting(false);
             reload();
             navigate(`/p/${projectId}/clouds/${c.id}`);
           }}

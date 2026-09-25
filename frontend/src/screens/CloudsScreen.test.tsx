@@ -1,7 +1,10 @@
-import { screen } from "@testing-library/react";
+import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { fakeClient, PROJECT_ID } from "@/test/fixtures";
+import type { Job } from "@contract/client";
+import { useJobsStore } from "@/store/jobs";
+import { fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
+import { useToastStore } from "@/ui";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { renderWithProviders } from "@/test/render";
 import { CloudsScreen } from "./CloudsScreen";
@@ -84,5 +87,86 @@ describe("Clouds screen", () => {
       path: "/p/:projectId/clouds/:cloudId",
     });
     expect(await screen.findByLabelText("EPSG code")).toBeInTheDocument();
+  });
+
+  it("re-seeds the view settings when an importing cloud becomes ready", async () => {
+    const importJob: Job = { ...runningJob, id: "j-import-1", type: "pointcloud_import", state: "running" };
+    // The screen saw the import running; the poll then answers it finished.
+    useJobsStore.getState().upsert(importJob);
+    const importing = {
+      ...exampleCloud,
+      status: "importing",
+      has_rgb: null,
+      z_stats: null,
+      bounds_native: null,
+      point_count: null,
+      job_id: importJob.id,
+    };
+    let lists = 0;
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/pointclouds$/,
+        body: () => ({ items: [lists++ === 0 ? importing : exampleCloud] }),
+      },
+      { method: "GET", path: /\/jobs\/j-import-1$/, body: { ...importJob, state: "succeeded", progress: 1 } },
+      { method: "GET", path: /\/maps$/, body: { items: [] } },
+    ]);
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
+      path: "/p/:projectId/clouds/:cloudId",
+    });
+    await screen.findByTestId("cloud-viewer");
+    await userEvent.click(screen.getByRole("radio", { name: "View" }));
+    expect(screen.getByRole("radio", { name: "RGB" })).toHaveAttribute("aria-checked", "true");
+    await userEvent.click(screen.getByRole("radio", { name: "Elevation" }));
+    expect(screen.getByLabelText("Lowest")).toHaveValue(-44);
+  });
+
+  it("toasts a finished LAZ export even after the Details tab was left", async () => {
+    const exportJob: Job = { ...runningJob, id: "j-export-1", type: "pointcloud_export", state: "queued" };
+    let done = false;
+    const { api, requests } = fakeClient([
+      ...routes([exampleCloud]),
+      { method: "POST", path: /\/exports$/, status: 202, body: { job: exportJob } },
+      {
+        method: "GET",
+        path: /\/jobs\/j-export-1$/,
+        body: () =>
+          done
+            ? { ...exportJob, state: "succeeded", progress: 1, result: { folder: "exports/x" } }
+            : { ...exportJob, state: "running" },
+      },
+    ]);
+    useToastStore.getState().clear();
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
+      path: "/p/:projectId/clouds/:cloudId",
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Export LAZ" }));
+    await waitFor(() => expect(requests.some((r) => r.url.endsWith("/jobs/j-export-1"))).toBe(true));
+    await userEvent.click(screen.getByRole("radio", { name: "View" }));
+    done = true;
+    await waitFor(
+      () => {
+        const t = useToastStore.getState().toasts.find((x) => x.text === "LAZ export finished");
+        expect(t?.action?.label).toBe("Show folder");
+      },
+      { timeout: 5000 },
+    );
+  }, 10_000);
+
+  it("offers Export LAZ only for a ready cloud and keeps a link that no longer qualifies", async () => {
+    const linked = { ...exampleCloud, status: "failed", error: "boom", map_id: "m-gone" };
+    const { api } = fakeClient(routes([linked]));
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
+      path: "/p/:projectId/clouds/:cloudId",
+    });
+    expect(await screen.findByRole("button", { name: "Export LAZ" })).toBeDisabled();
+    expect(screen.getByLabelText("Linked map")).toHaveValue("m-gone");
   });
 });

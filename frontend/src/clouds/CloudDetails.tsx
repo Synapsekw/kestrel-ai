@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { GeoMap } from "@contract/client";
 import { useApi } from "@/api/client";
 import { createPointCloudExport, deletePointCloud, patchPointCloud, type PointCloud } from "@/api/clouds";
 import { messageOf } from "@/api/errors";
-import { revealInExplorer } from "@/api/exports";
-import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
-import { Alert, Button, Dialog, Field, Input, Pill, Select, toast } from "@/ui";
+import { Alert, Button, Dialog, Field, Input, Pill, Select } from "@/ui";
 import { crsLabel, crsName, formatBytes, formatPoints, heightsLabel } from "./format";
 import { rankMaps } from "./link";
 
@@ -16,12 +14,17 @@ export function CloudDetails({
   projectId,
   cloud,
   maps,
+  exportJobId,
+  onExportStarted,
   onChanged,
   onDeleted,
 }: {
   projectId: string;
   cloud: PointCloud;
   maps: GeoMap[];
+  /** This cloud's running export; the screen follows it to the end (ExportWatch), not this tab. */
+  exportJobId: string | null;
+  onExportStarted(jobId: string): void;
   onChanged(c: PointCloud): void;
   onDeleted(): void;
 }) {
@@ -29,27 +32,16 @@ export function CloudDetails({
   const [error, setError] = useState<string | null>(null);
   const [epsg, setEpsg] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const [exportJobId, setExportJobId] = useState<string | null>(null);
-  const { job: exportJob } = useTrackedJob(projectId, exportJobId);
-  const ranked = useMemo(() => rankMaps(cloud, maps), [cloud, maps]);
-  const b = cloud.bounds_native;
-
-  // One toast per finished export; a ref (not state) remembers which job it was already shown for.
-  const toasted = useRef<string | null>(null);
+  const exportJob = useJobsStore((st) => (exportJobId ? st.jobs[exportJobId] : undefined));
   const exporting = !!exportJob && isActiveJob(exportJob);
-  useEffect(() => {
-    if (!exportJob || isActiveJob(exportJob) || toasted.current === exportJob.id) return;
-    toasted.current = exportJob.id;
-    if (exportJob.state === "succeeded") {
-      const folder = String((exportJob.result as Record<string, unknown> | null)?.folder ?? "exports");
-      toast("ok", "LAZ export finished", {
-        label: "Show folder",
-        onClick: () => void revealInExplorer(api, projectId, folder).catch(() => undefined),
-      });
-    } else {
-      toast("danger", `LAZ export ${exportJob.state}: ${exportJob.error ?? "see the log"}`);
-    }
-  }, [api, projectId, exportJob]);
+  const ranked = useMemo(() => rankMaps(cloud, maps), [cloud, maps]);
+  // The current link stays listed even when its map no longer qualifies, so the select never
+  // pretends the cloud is unlinked.
+  const staleLink =
+    cloud.map_id && !ranked.some((r) => r.map.id === cloud.map_id)
+      ? (maps.find((m) => m.id === cloud.map_id)?.name ?? "Linked map")
+      : null;
+  const b = cloud.bounds_native;
 
   const patch = (body: Parameters<typeof patchPointCloud>[3]) =>
     void patchPointCloud(api, projectId, cloud.id, body)
@@ -127,6 +119,7 @@ export function CloudDetails({
           onChange={(e) => patch({ map_id: e.target.value || null })}
         >
           <option value="">Not linked</option>
+          {staleLink && cloud.map_id && <option value={cloud.map_id}>{staleLink} (current link)</option>}
           {ranked.map((r) => (
             <option key={r.map.id} value={r.map.id}>
               {r.map.name} · {Math.round(r.overlap * 100)} % overlap
@@ -142,11 +135,12 @@ export function CloudDetails({
         <Button
           icon="download"
           loading={exporting}
+          disabled={cloud.status !== "ready"}
           onClick={() =>
             void createPointCloudExport(api, projectId, cloud.id, true)
               .then((job) => {
                 useJobsStore.getState().upsert(job);
-                setExportJobId(job.id);
+                onExportStarted(job.id);
               })
               .catch((e: unknown) => setError(messageOf(e, "could not start the export")))
           }
