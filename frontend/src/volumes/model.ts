@@ -48,6 +48,12 @@ export function formatM2(v: number | null | undefined): string {
   return v == null ? "—" : `${nf.format(v).replace(/,/g, " ")} m²`;
 }
 
+/** "1.00031 (+0.031 %)": the areal scale factor with the percentage it implies (spec §6.2). */
+export function scaleFactorText(k: number): string {
+  const pct = (k - 1) * 100;
+  return `${k.toFixed(5)} (${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(3)} %)`;
+}
+
 export function uncertaintyText(u: Uncertainty): string {
   if (u.total_m3 == null) return "± unknown (indicative, incomplete)";
   return `± ${formatM3(u.total_m3)} (indicative${u.complete ? "" : ", incomplete"})`;

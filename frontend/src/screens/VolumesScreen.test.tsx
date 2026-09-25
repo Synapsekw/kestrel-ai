@@ -9,6 +9,7 @@ import {
   exampleSurface,
 } from "@/test/volumeFixtures";
 import { renderWithProviders } from "@/test/render";
+import { useDiffLayer } from "@/volumes/diffLayer";
 import { useVolumeLayers, type VolumeLayerOptions } from "@/volumes/volumeLayers";
 import { VolumesScreen } from "./VolumesScreen";
 
@@ -58,6 +59,55 @@ describe("VolumesScreen", () => {
       path: "/p/:projectId/volumes",
     });
     expect(await screen.findByText("Build a surface from a point cloud")).toBeInTheDocument();
+  });
+
+  it("still lists surfaces and measurements while point clouds answer 501", async () => {
+    const notBuilt = {
+      method: "GET",
+      path: /\/pointclouds$/,
+      status: 501,
+      body: { error: { code: "not_implemented", message: "not implemented yet" } },
+    };
+    const empty = fakeClient([notBuilt, ...base([], [], [])]);
+    renderWithProviders(<VolumesScreen />, {
+      api: empty.api,
+      route: `/p/${PROJECT_ID}/volumes`,
+      path: "/p/:projectId/volumes",
+    });
+    expect(await screen.findByText("Import a point cloud first")).toBeInTheDocument();
+    const listed = fakeClient([notBuilt, ...base([exampleSurface], [exampleMeasurement], [])]);
+    renderWithProviders(<VolumesScreen />, {
+      api: listed.api,
+      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/volumes/:measurementId",
+    });
+    expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
+    expect(screen.getByRole("list", { name: "Measurements" })).toHaveTextContent("Pile 1");
+    expect(screen.queryByText(/could not load/)).not.toBeInTheDocument();
+  });
+
+  it("shows the cut/fill layer only on the top the results were computed on", async () => {
+    const other = { ...exampleSurface, id: "s-other", name: "May survey" };
+    const moved = { ...exampleMeasurement, status: "stale", top_surface_id: other.id };
+    const { api } = fakeClient(base([exampleSurface, other], [moved]));
+    const first = renderWithProviders(<VolumesScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/volumes/:measurementId",
+    });
+    expect(await screen.findByTestId("surface-view")).toHaveTextContent("May survey");
+    expect(vi.mocked(useDiffLayer).mock.calls.at(-1)?.[2]).toBeNull();
+    expect(screen.queryByRole("switch", { name: "Cut / fill" })).not.toBeInTheDocument();
+
+    first.unmount();
+    const same = fakeClient(base([exampleSurface], [exampleMeasurement]));
+    vi.mocked(useDiffLayer).mockClear();
+    renderWithProviders(<VolumesScreen />, {
+      api: same.api,
+      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/volumes/:measurementId",
+    });
+    await waitFor(() => expect(vi.mocked(useDiffLayer).mock.calls.at(-1)?.[2]).toContain("/diff-tiles/"));
   });
 
   it("lists surfaces and measurements and shows a stale measurement's reasons", async () => {

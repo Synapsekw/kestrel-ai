@@ -83,10 +83,12 @@ export function MeasurePanel({
     };
   }, [api, projectId]);
 
+  // The top must stay in the polygon's CRS; the server refuses a top in another one.
   const sameCrs = surfaces.filter((s) => s.epsg === top.epsg && s.crs_wkt === top.crs_wkt);
-  // A base must share the top's grid CRS, as the top list does; the server refuses anything else.
-  const bases = [...sameCrs]
-    .filter((s) => s.id !== top.id)
+  // A base may be in any CRS (spec §6.2, reprojected), but a local grid never pairs with a
+  // georeferenced one: the server refuses that mix (422 invalid_base).
+  const bases = surfaces
+    .filter((s) => s.id !== top.id && (s.crs_wkt == null) === (top.crs_wkt == null))
     .sort((a, b) => (b.captured_on ?? "").localeCompare(a.captured_on ?? ""));
   const baseSurface = surfaces.find((s) => s.id === m.base.surface_id) ?? null;
   const groups = groupRuns(runs, top.map_id, baseSurface?.map_id ?? null);

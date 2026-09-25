@@ -12,6 +12,7 @@ import {
   nativeToPixel,
   nextName,
   pixelToNative,
+  scaleFactorText,
   staleText,
   uncertaintyText,
   viewIn3dHref,
@@ -19,6 +20,11 @@ import {
 } from "./model";
 
 describe("volumes model", () => {
+  it("prints the areal scale factor with the percentage it implies", () => {
+    expect(scaleFactorText(1.00031)).toBe("1.00031 (+0.031 %)");
+    expect(scaleFactorText(0.99962)).toBe("0.99962 (−0.038 %)");
+  });
+
   it("converts pixels and native coordinates through the north-up affine", () => {
     const gt = exampleSurface.geotransform!;
     expect(pixelToNative(gt, 100, 200)).toEqual([500010, 3299980]);

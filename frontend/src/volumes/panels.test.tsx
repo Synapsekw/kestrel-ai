@@ -88,15 +88,17 @@ describe("MeasurePanel", () => {
     expect(screen.getByText(/ground is near -46 m/)).toBeInTheDocument();
   });
 
-  it("offers as base only surfaces in the top surface's CRS", () => {
+  it("offers as base a surface in any georeferenced CRS, but never a local one", () => {
     const { api } = fakeClient(routes);
     const otherZone = {
       ...exampleBaseSurface,
       id: "other-zone",
       name: "Zone 40 survey",
+      captured_on: "2026-02-01",
       epsg: 32640,
       crs_wkt: 'PROJCS["WGS 84 / UTM zone 40N"]',
     };
+    const local = { ...exampleBaseSurface, id: "local", name: "Local grid", epsg: null, crs_wkt: null };
     renderWithProviders(
       <MeasurePanel
         projectId={PROJECT_ID}
@@ -105,7 +107,7 @@ describe("MeasurePanel", () => {
           base: { kind: "surface", z: null, surface_id: exampleBaseSurface.id },
         }}
         top={exampleSurface}
-        surfaces={[exampleSurface, exampleBaseSurface, otherZone]}
+        surfaces={[exampleSurface, exampleBaseSurface, otherZone, local]}
         picking={false}
         onPick={() => {}}
         onSave={() => {}}
@@ -114,7 +116,34 @@ describe("MeasurePanel", () => {
       { api },
     );
     const options = Array.from(screen.getByLabelText("Base surface").querySelectorAll("option"));
-    expect(options.map((o) => o.value)).toEqual([exampleBaseSurface.id]);
+    expect(options.map((o) => o.value)).toEqual([exampleBaseSurface.id, otherZone.id]);
+    // the top stays in the polygon's CRS
+    const tops = Array.from(screen.getByLabelText("Top surface").querySelectorAll("option"));
+    expect(tops.map((o) => o.value)).toEqual([exampleSurface.id, exampleBaseSurface.id]);
+  });
+
+  it("under a local top, offers only local bases", () => {
+    const { api } = fakeClient(routes);
+    const localTop = { ...exampleSurface, epsg: null, crs_wkt: null, proj4: null };
+    const localBase = { ...exampleBaseSurface, epsg: null, crs_wkt: null, proj4: null };
+    renderWithProviders(
+      <MeasurePanel
+        projectId={PROJECT_ID}
+        measurement={{
+          ...exampleMeasurement,
+          base: { kind: "surface", z: null, surface_id: localBase.id },
+        }}
+        top={localTop}
+        surfaces={[localTop, localBase, { ...exampleBaseSurface, id: "georef" }]}
+        picking={false}
+        onPick={() => {}}
+        onSave={() => {}}
+        onChanged={() => {}}
+      />,
+      { api },
+    );
+    const options = Array.from(screen.getByLabelText("Base surface").querySelectorAll("option"));
+    expect(options.map((o) => o.value)).toEqual([localBase.id]);
   });
 
   it("the buffer field follows the stored value after a revert", () => {
@@ -189,6 +218,8 @@ describe("VolumeResultsPanel", () => {
     expect(screen.getByText("Stockpile volume (above base)")).toBeInTheDocument();
     expect(screen.getByText("1 234.5 m³")).toBeInTheDocument();
     expect(screen.getByText("± 14.2 m³ (indicative)")).toBeInTheDocument();
+    // spec §6.2: the areal scale factor with the percentage it implies
+    expect(screen.getByText("0.99962 (−0.038 %)")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View in 3D" })).toHaveAttribute(
       "href",
       expect.stringContaining(`/clouds/${exampleSurface.point_cloud_id}?at=`),

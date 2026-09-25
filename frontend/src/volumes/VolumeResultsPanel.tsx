@@ -1,7 +1,15 @@
 import { Link } from "react-router-dom";
 import type { Surface, VolumeMeasurement } from "@contract/client";
 import { Alert, Button, Disclosure, buttonClass } from "@/ui";
-import { formatM2, formatM3, labels, uncertaintyText, viewIn3dHref, worstTone } from "./model";
+import {
+  formatM2,
+  formatM3,
+  labels,
+  scaleFactorText,
+  uncertaintyText,
+  viewIn3dHref,
+  worstTone,
+} from "./model";
 
 const ALIGNMENT_CODES = new Set([
   "stable_area_small",
@@ -72,6 +80,7 @@ export function VolumeResultsPanel({
         <Row k="Patched (machines)" v={formatM2(r.masked_area_m2)} />
         <Row k="Excluded" v={formatM2(r.excluded_area_m2)} />
         <Row k="No data" v={`${formatM2(r.nodata_area_m2)} (${(share * 100).toFixed(1)} %)`} />
+        <Row k="Areal scale factor" v={scaleFactorText(r.areal_scale_factor)} />
       </dl>
       {m.base.kind === "surface" && (
         <Alert tone={tone === "ok" ? "ok" : tone} title="Alignment">
@@ -104,7 +113,7 @@ export function VolumeResultsPanel({
         </dl>
         <p className="pt-2 text-xs text-muted">
           Not included: the survey&apos;s own georeferencing accuracy. Heights are as stored in the cloud;
-          grid areas differ from ground areas by a factor of {r.areal_scale_factor.toFixed(5)}.
+          grid areas are not converted to ground areas (the areal scale factor above is not applied).
         </p>
       </Disclosure>
       {other.map((w) => (

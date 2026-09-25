@@ -9,7 +9,7 @@ import {
   type VolumeMeasurement,
 } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
-import { messageOf } from "@/api/errors";
+import { isNotImplemented, messageOf } from "@/api/errors";
 import {
   deleteSurface,
   listCloudsForBuild,
@@ -90,18 +90,22 @@ export function VolumesScreen() {
   const [picking, setPicking] = useState(false);
 
   const reload = useCallback(() => {
-    Promise.all([
-      listSurfaces(api, projectId),
-      listVolumes(api, projectId),
-      listCloudsForBuild(api, projectId),
-    ])
-      .then(([s, v, c]) => {
+    Promise.all([listSurfaces(api, projectId), listVolumes(api, projectId)])
+      .then(([s, v]) => {
         setSurfaces(s);
         setMeasurements(v);
-        setClouds(c);
         setLoadError(null);
       })
       .catch((err: unknown) => setLoadError(messageOf(err, "could not load surfaces and volumes")));
+    // The clouds only offer "Build surface": without them (point clouds not built yet answer 501)
+    // the screen still lists its surfaces and measurements, and asks for a point cloud first.
+    listCloudsForBuild(api, projectId)
+      .then(setClouds)
+      .catch((err: unknown) => {
+        if (!isNotImplemented(err))
+          pushLog(`load the point clouds failed: ${messageOf(err, "unknown error")}`);
+        setClouds([]);
+      });
   }, [api, projectId]);
   useEffect(reload, [reload, surfacesRevision, volumesRevision]);
   useOnJobsFinished("surface_build", reload);
@@ -192,8 +196,10 @@ export function VolumesScreen() {
     onSelectExclusion: setSelectedExclusion,
   });
 
+  // The diff is laid on the lattice of the top it was computed on: after the top changed (stale,
+  // old results kept) its tiles would land in the wrong place, so there is no cut/fill layer then.
   const diffUrl =
-    active?.results && top
+    active?.results && top && active.results.top_surface.id === top.id
       ? volumeDiffTileUrl(baseUrl, token, projectId, active.id, active.results.computed_at)
       : null;
   useDiffLayer(olMap, top, diffOn ? diffUrl : null);
