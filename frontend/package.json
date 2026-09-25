@@ -24,11 +24,13 @@
     "konva": "^9.3.22",
     "ol": "^10.10.0",
     "openapi-fetch": "~0.13.8",
+    "potree-core": "2.0.15",
     "proj4": "^2.22.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-konva": "^18.2.16",
     "react-router-dom": "^6.30.6",
+    "three": "0.180.0",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
@@ -42,6 +44,7 @@
     "@types/proj4": "^2.19.0",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/three": "0.180.0",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.6.1",
     "eslint": "^9.39.5",
