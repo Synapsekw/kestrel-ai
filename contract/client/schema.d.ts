@@ -1812,8 +1812,9 @@ export interface paths {
         put?: never;
         /**
          * Write a LAZ copy of the source file (a `pointcloud_export` job) into
-         *     `exports/<stamp>-cloud-<name>/`, with `cloud.json` and, when asked and any exist,
-         *     `measurements.csv`. The source must still be reachable, with its size and mtime unchanged.
+         *     `exports/<stamp>[_n]/`, as `cloud-<slug>.laz` with `cloud-<slug>.json` and, when asked and
+         *     any exist, `cloud-<slug>-measurements.csv`. The source must still be reachable, with its
+         *     size and mtime unchanged.
          */
         post: operations["createPointCloudExport"];
         delete?: never;
