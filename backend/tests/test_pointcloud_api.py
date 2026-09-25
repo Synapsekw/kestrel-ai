@@ -272,3 +272,69 @@ def test_create_links_a_ready_overlapping_map(client, wait_job, project_id, hand
     map_id = _map(handle, [-180, -90, 180, 90])
     created, job = _import(client, wait_job, project_id, src, map_id=map_id)
     assert created["cloud"]["map_id"] == map_id and job["state"] == "succeeded", job
+
+
+def test_create_error_order_404_then_409_then_422(client, project_id, handle, tmp_path, monkeypatch):
+    """Final review B3: 404 (file, map) before 409 (map not ready) before any 422 about the file."""
+    junk = tmp_path / "junk.las"
+    junk.write_bytes(b"not a point cloud")
+    url = f"{BASE}/{project_id}/pointclouds"
+    r = client.post(url, json={"path": str(junk), "map_id": "nope"})
+    assert r.status_code == 404, r.text
+    pending = _map(handle, BOX, status="importing")
+    r = client.post(url, json={"path": str(junk), "map_id": pending})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+    monkeypatch.setattr(admission, "available_ram", lambda: 1 * GB)
+    r = client.post(url, json={"path": str(make_las(tmp_path / "a.las", 100)), "map_id": pending})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+    assert client.get(url).json()["items"] == []
+
+
+def test_an_unreadable_file_is_422_not_500(client, project_id, tmp_path, monkeypatch):
+    """Final review B4: a sharing violation or a dropped NAS while reading the header."""
+    src = make_las(tmp_path / "a.las", 100)
+
+    def locked(path):
+        raise PermissionError(13, "The process cannot access the file because it is being used", str(path))
+
+    monkeypatch.setattr(service, "inspect_file", locked)
+    expected = (
+        f"could not read the source file: {src} (The process cannot access the file because it is being used)"
+    )
+    for route in ("/pointclouds/inspect", "/pointclouds"):
+        r = client.post(f"{BASE}/{project_id}{route}", json={"path": str(src)})
+        assert r.status_code == 422, r.text
+        assert r.json()["error"] == {
+            **r.json()["error"],
+            "code": "unsupported_point_cloud",
+            "message": expected,
+        }
+
+
+def test_create_stores_the_header_crs_so_an_assign_during_import_is_refused(project_id, handle, tmp_path):
+    """Final review B5: the job would overwrite an assigned CRS with the file's."""
+    from app.pointclouds.schemas import PointCloudCreate
+
+    row = service.create_cloud(handle, PointCloudCreate(path=str(make_las(tmp_path / "a.las", 100))))
+    assert (row.epsg, row.crs_source) == (32639, "file") and row.crs_wkt and row.proj4
+    with pytest.raises(Exception) as e:
+        service.patch_cloud(handle, row.id, service.PointCloudPatch(assign_epsg=32638))
+    assert getattr(e.value, "code", None) == "crs_already_set"
+    bare = service.create_cloud(
+        handle, PointCloudCreate(path=str(make_las(tmp_path / "b.las", 100, epsg=None)))
+    )
+    assert (bare.crs_wkt, bare.epsg, bare.crs_source) == (None, None, None)
+
+
+def test_a_submit_that_fails_leaves_no_importing_row(client, app, project_id, handle, tmp_path, monkeypatch):
+    """Final review B7: the row must not sit in `importing` with no job until the next restart."""
+
+    def refuse(*_a, **_k):
+        raise RuntimeError("the job queue is shut down")
+
+    monkeypatch.setattr(app.state.jobs, "submit", refuse)
+    with pytest.raises(RuntimeError):
+        client.post(f"{BASE}/{project_id}/pointclouds", json={"path": str(make_las(tmp_path / "a.las", 100))})
+    [c] = client.get(f"{BASE}/{project_id}/pointclouds").json()["items"]
+    assert c["status"] == "failed" and c["error"] == "could not start the import: the job queue is shut down"
+    assert not (handle.folder / "pointclouds" / c["id"]).exists()

@@ -19,6 +19,7 @@ from app.pointclouds.schemas import (
     PointCloudFileInfo,
     PointCloudPatch,
 )
+from app.pointclouds.workcopy import os_reason
 from app.projects.service import ProjectHandle
 
 LIVE = ("queued", "running")
@@ -42,6 +43,10 @@ def _header(path: Path) -> HeaderInfo:
         return inspect_file(path)
     except UnsupportedCloud as e:
         raise AppError("unsupported_point_cloud", str(e), 422) from None
+    except OSError as e:  # a permission error, a sharing violation, a NAS that dropped: never a 500
+        raise AppError(
+            "unsupported_point_cloud", f"could not read the source file: {path} ({os_reason(e)})", 422
+        ) from None
 
 
 def _assess(handle: ProjectHandle, info: HeaderInfo) -> admission.Admission:
@@ -103,16 +108,23 @@ def _check_link(gmap: GeoMap, cloud_crs_wkt: str | None, cloud_wgs84: list[float
 
 def create_cloud(handle: ProjectHandle, body: PointCloudCreate) -> PointCloud:
     path = _file(body.path)
-    info = _header(path)
-    adm = _assess(handle, info)
-    if not adm.ok:
-        raise AppError(adm.code, adm.reason, 422)
     with handle.session() as s:
-        if body.map_id:
-            gmap = _map_for_link(s, body.map_id)
-            header_wgs84 = bounds_wgs84(info.header_bounds, info.crs.crs_wkt) if info.crs.crs_wkt else None
-            _check_link(gmap, info.crs.crs_wkt, header_wgs84)
-        st = path.stat()
+        # Error order: 404 (file, map) -> 409 (map not ready) -> 422 (the file, admission, the link).
+        gmap = _map_for_link(s, body.map_id) if body.map_id else None
+        info = _header(path)
+        adm = _assess(handle, info)
+        if not adm.ok:
+            raise AppError(adm.code, adm.reason, 422)
+        crs = info.crs
+        if gmap is not None:
+            header_wgs84 = bounds_wgs84(info.header_bounds, crs.crs_wkt) if crs.crs_wkt else None
+            _check_link(gmap, crs.crs_wkt, header_wgs84)
+        try:
+            st = path.stat()
+        except OSError as e:
+            raise AppError(
+                "unsupported_point_cloud", f"could not read the source file: {path} ({os_reason(e)})", 422
+            ) from None
         row = PointCloud(
             name=body.name or path.stem,
             status="importing",
@@ -125,12 +137,28 @@ def create_cloud(handle: ProjectHandle, body: PointCloudCreate) -> PointCloud:
             point_count=info.point_count,
             has_rgb=info.has_rgb,
             scale=info.scale,
+            # The header's CRS now, not only when the job ends: an assign_epsg during the import must
+            # meet crs_already_set rather than be overwritten by the job (final review B5).
+            crs_wkt=crs.crs_wkt,
+            epsg=crs.epsg if crs.crs_wkt else None,
+            proj4=crs.proj4 if crs.crs_wkt else None,
+            vertical_crs=crs.vertical_crs if crs.crs_wkt else None,
+            crs_source="file" if crs.crs_wkt else None,
             map_id=body.map_id,
         )
         s.add(row)
         s.flush()
         s.expunge(row)
     return row
+
+
+def fail_cloud(handle: ProjectHandle, cloud_id: str, message: str) -> None:
+    """Mark a cloud failed and remove its folder; for an import that never got its job."""
+    with handle.session() as s:
+        row = s.get(PointCloud, cloud_id)
+        if row is not None:
+            row.status, row.error = "failed", message
+    shutil.rmtree(rows.cloud_dir(handle, cloud_id), ignore_errors=True)
 
 
 def set_job(handle: ProjectHandle, cloud_id: str, job_id: str) -> PointCloud:

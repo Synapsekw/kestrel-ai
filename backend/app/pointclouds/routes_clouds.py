@@ -32,7 +32,15 @@ def create_point_cloud(
     body: PointCloudCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> PointCloudWithJob:
     row = service.create_cloud(handle, body)
-    job = request.app.state.jobs.submit(handle, "pointcloud_import", {"cloud_id": row.id, "name": row.name})
+    try:
+        job = request.app.state.jobs.submit(
+            handle, "pointcloud_import", {"cloud_id": row.id, "name": row.name}
+        )
+    except Exception as e:
+        # Never leave an `importing` row with no job until the next restart's sweep (final review B7).
+        service.fail_cloud(handle, row.id, f"could not start the import: {e}")
+        publish_pointclouds_changed(request, handle, [row.id])
+        raise
     row = service.set_job(handle, row.id, job.id)
     publish_pointclouds_changed(request, handle, [row.id])
     return PointCloudWithJob(cloud=PointCloudOut.from_row(row), job=JobOut.from_row(job, handle.id))
