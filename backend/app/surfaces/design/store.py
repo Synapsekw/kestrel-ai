@@ -32,6 +32,10 @@ from app.errors import not_found
 ID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
 HASH_CHUNK = 64 * 2**20
 _LOCK = threading.RLock()
+# Held by the router from a `build_live` check to its act (commit, preview, delete), so a build
+# cannot start between another request's check and what it does next. Separate from `_LOCK`: the
+# job threads need `_LOCK` for their own reads and never take this one.
+commit_lock = threading.RLock()
 
 
 def inspections_root(handle) -> Path:

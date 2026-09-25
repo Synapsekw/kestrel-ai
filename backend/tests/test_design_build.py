@@ -14,7 +14,7 @@ from rasterio.windows import Window
 
 from app.db.models import Surface
 from app.surfaces import grid
-from app.surfaces.design import rasterise, store
+from app.surfaces.design import phase_build, rasterise, store
 from app.surfaces.paths import surface_dir, surface_path
 
 BASE = "/api/v1/projects"
@@ -274,8 +274,11 @@ def test_accepted_warnings_are_recorded(client, project_id, wait_job, tmp_path, 
 
 @pytest.mark.parametrize("how", ["failed", "missing_tif", "deleted"])
 def test_commit_refuses_when_the_target_is_gone(client, project_id, wait_job, tmp_path, handle, target, how):
-    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    # dz=45 raises a `z_offset` warn: a vanished target must still answer not_ready (fix 3), never
+    # "accept the warnings".
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path, dz=45.0))
     p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    assert "z_offset" in {w["code"] for w in p["warnings"]}
     if how == "failed":
         with handle.session() as s:
             s.get(Surface, target).status = "failed"
@@ -379,3 +382,172 @@ def test_read_windows_tile_on_the_rasteriser_blocks():
     wins = list(grid.read_windows(spec))
     assert all(w.col_off % grid.MAX_READ == 0 and w.row_off % grid.MAX_READ == 0 for w in wins)
     assert all(w.width <= grid.MAX_READ and w.height <= grid.MAX_READ for w in wins)
+
+
+def _stuck_build(monkeypatch, handle):
+    """Make the build's block producer wait for its cancel; returns the event set when it starts."""
+    started = threading.Event()
+
+    def stuck(self, window):
+        started.set()
+        while True:
+            self._check()
+            time.sleep(0.01)
+
+    monkeypatch.setattr(rasterise.TinRasteriser, "rasterise_window", stuck)
+    return started
+
+
+def test_two_concurrent_commits_start_one_build(
+    client, project_id, wait_job, tmp_path, handle, target, monkeypatch
+):
+    """Fix round 1, finding 1: a double-click. Without store.commit_lock both requests pass the gate
+    inside the widened window below and two builds start from one inspection."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    started = _stuck_build(monkeypatch, handle)
+    real_check = phase_build.check_commit
+
+    def slow_check(*a, **k):
+        out = real_check(*a, **k)
+        time.sleep(0.5)  # both requests would be past the gate here without the lock
+        return out
+
+    monkeypatch.setattr(phase_build, "check_commit", slow_check)
+    barrier, answers = threading.Barrier(2), []
+
+    def post():
+        barrier.wait()
+        answers.append(commit(client, project_id, iid, p["id"]))
+
+    threads = [threading.Thread(target=post) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(60)
+    assert sorted(r.status_code for r in answers) == [202, 409]
+    (refused,) = [r for r in answers if r.status_code == 409]
+    assert code(refused) == "conflict" and "already" in refused.json()["error"]["message"]
+    with handle.session() as s:
+        assert s.query(Surface).filter(Surface.kind == "design").count() == 1
+    (ok,) = [r for r in answers if r.status_code == 202]
+    assert started.wait(30)
+    client.post(url(project_id, f"/jobs/{ok.json()['job']['id']}/cancel"))
+    assert wait_job(project_id, ok.json()["job"]["id"])["state"] == "cancelled"
+
+
+def test_the_build_lock_guards_delete_and_preview(client, project_id, wait_job, tmp_path, handle, target):
+    """Finding 1: create_design_preview and delete_design_inspection check build_live under the same
+    lock as the commit, so neither can act between a commit's gate and its recorded build."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    preview(client, project_id, wait_job, iid, target_surface_id=target)
+
+    def blocked_while_locked(call):
+        held, release, answers = threading.Event(), threading.Event(), []
+
+        def hold():
+            with store.commit_lock:
+                held.set()
+                release.wait(10)
+
+        t = threading.Thread(target=hold)
+        t.start()
+        assert held.wait(5)
+        worker = threading.Thread(target=lambda: answers.append(call()))
+        worker.start()
+        worker.join(0.5)
+        waited = worker.is_alive() and answers == []
+        release.set()
+        worker.join(30)
+        t.join(5)
+        return waited, answers[0]
+
+    opts = {
+        "candidate_ids": ["c0"],
+        "source_crs": "EPSG:32639",
+        "horizontal_unit": "metre",
+        "vertical_unit": "metre",
+        "target_surface_id": target,
+    }
+    waited, r = blocked_while_locked(
+        lambda: client.post(url(project_id, f"/design-inspections/{iid}/previews"), json=opts)
+    )
+    assert waited and r.status_code == 202
+    wait_job(project_id, r.json()["job"]["id"])
+    waited, r = blocked_while_locked(lambda: client.delete(url(project_id, f"/design-inspections/{iid}")))
+    assert waited and r.status_code == 204
+
+
+def test_a_build_that_finished_before_its_job_was_recorded_is_still_202(
+    client, project_id, wait_job, tmp_path, handle, target, monkeypatch
+):
+    """Finding 2: recording build_job_id can meet the job's success-path rmtree of the inspection."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    real = store.patch_json
+
+    def gone(path, **fields):
+        if path.name == "request.json" and "build_job_id" in fields:
+            raise FileNotFoundError(2, "gone", str(path))
+        return real(path, **fields)
+
+    monkeypatch.setattr(store, "patch_json", gone)
+    body, job = build(client, project_id, wait_job, iid, p["id"])
+    assert job["state"] == "succeeded" and row(handle, body["surface"]["id"]).status == "ready"
+
+
+def test_a_row_deleted_before_its_job_id_is_recorded(
+    client, project_id, wait_job, tmp_path, handle, target, monkeypatch
+):
+    """Finding 4: a delete between submit and set_job: the caller still gets a 202 with the created
+    row, and the job fails readably."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    runner = client.app.state.jobs
+    real_submit = runner.submit
+
+    def submit_after_delete(project, type, params):
+        with handle.session() as s:
+            s.delete(s.get(Surface, params["surface_id"]))
+        return real_submit(project, type, params)
+
+    monkeypatch.setattr(runner, "submit", submit_after_delete)
+    r = commit(client, project_id, iid, p["id"])
+    assert r.status_code == 202, r.text
+    assert r.json()["surface"]["job_id"] == r.json()["job"]["id"]
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "failed" and "deleted before its import started" in job["error"]
+    assert not surface_dir(handle, r.json()["surface"]["id"]).exists()
+
+
+def test_the_row_turns_ready_only_after_its_files(
+    client, project_id, wait_job, tmp_path, handle, target, monkeypatch
+):
+    """Finding 5: source.json is written and the inspection removed while the row is still building."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    seen = {}
+    real_write, real_rmtree = store.write_json, phase_build.shutil.rmtree
+
+    def status(sid):
+        with handle.session() as s:
+            return s.get(Surface, sid).status
+
+    def write(path, data):
+        if path.name == "source.json":
+            seen["source.json"] = status(path.parent.name)
+        return real_write(path, data)
+
+    def rmtree(path, *a, **k):
+        if path == store.inspection_dir(handle, iid):
+            with handle.session() as s:
+                (r,) = s.query(Surface).filter(Surface.kind == "design").all()
+                seen["inspection"] = r.status
+        return real_rmtree(path, *a, **k)
+
+    monkeypatch.setattr(store, "write_json", write)
+    monkeypatch.setattr(phase_build.shutil, "rmtree", rmtree)
+    body, job = build(client, project_id, wait_job, iid, p["id"])
+    assert job["state"] == "succeeded"
+    assert seen == {"source.json": "building", "inspection": "building"}
+    assert row(handle, body["surface"]["id"]).status == "ready"

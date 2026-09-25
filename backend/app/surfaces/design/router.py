@@ -85,14 +85,15 @@ def delete_design_inspection(
 ) -> Response:
     idir = store.require_inspection(handle, inspectionId)
     runner = request.app.state.jobs
-    req = store.read_json(idir / "request.json")
-    if store.build_live(req, runner):
-        raise AppError("conflict", "a design surface is being imported from this inspection", 409)
-    for job_id in store.job_ids(req):
-        if runner.is_live(job_id):
-            runner.cancel(handle, job_id)
-            _wait_until_not_live(runner, job_id)
-    shutil.rmtree(idir, ignore_errors=True)  # still live past the wait: best-effort; the sweep ends it
+    with store.commit_lock:  # no import may start between the build_live check and the delete
+        req = store.read_json(idir / "request.json")
+        if store.build_live(req, runner):
+            raise AppError("conflict", "a design surface is being imported from this inspection", 409)
+        for job_id in store.job_ids(req):
+            if runner.is_live(job_id):
+                runner.cancel(handle, job_id)
+                _wait_until_not_live(runner, job_id)
+        shutil.rmtree(idir, ignore_errors=True)  # still live past the wait: best-effort; the sweep ends it
     return Response(status_code=204)
 
 
@@ -177,45 +178,48 @@ def create_design_preview(
         )
     options = _check_options(handle, inspection, body)
     runner = request.app.state.jobs
-    req = store.read_json(idir / "request.json")
-    if store.build_live(req, runner):
-        raise AppError("conflict", "a design surface is being imported from this inspection", 409)
-    pid = store.new_id()
-    pdir = store.preview_dir(idir, pid)
-    # parents=False below the inspection dir (as CandidateWriter): never recreate a deleted inspection.
-    try:
-        pdir.parent.mkdir(parents=False, exist_ok=True)
-        pdir.mkdir(parents=False)
-    except FileNotFoundError:
-        raise not_found("design inspection", inspectionId) from None
-    store.write_json(
-        pdir / "preview.json",
-        {
-            "id": pid,
-            "inspection_id": inspectionId,
-            "state": "running",
-            "error": None,
-            "job_id": "",
-            "options": options,
-            "output": None,
-            "triangle_count": None,
-            "overlap_fraction": None,
-            "target_covered_fraction": None,
-            "design_area_m2": None,
-            "z_check": None,
-            "warnings": [],
-            "suggestions": [],
-            "created_at": datetime.now(UTC).isoformat(),
-        },
-    )
-    job = runner.submit(
-        handle,
-        "design_import",
-        {"phase": "preview", "inspection_id": inspectionId, "preview_id": pid, "options": options},
-    )
-    # A fresh read under the store lock, not the `req` read above: two previews posted together must
-    # both land in preview_job_ids (so deleting the inspection cancels both).
-    recorded = store.update_json(idir / "request.json", _record_preview_job(pid, job.id))
+    # From the build_live check until this preview is recorded as the latest: a commit in between
+    # would build from a preview that is about to be superseded.
+    with store.commit_lock:
+        req = store.read_json(idir / "request.json")
+        if store.build_live(req, runner):
+            raise AppError("conflict", "a design surface is being imported from this inspection", 409)
+        pid = store.new_id()
+        pdir = store.preview_dir(idir, pid)
+        # parents=False below the inspection dir (as CandidateWriter): never recreate a deleted inspection.
+        try:
+            pdir.parent.mkdir(parents=False, exist_ok=True)
+            pdir.mkdir(parents=False)
+        except FileNotFoundError:
+            raise not_found("design inspection", inspectionId) from None
+        store.write_json(
+            pdir / "preview.json",
+            {
+                "id": pid,
+                "inspection_id": inspectionId,
+                "state": "running",
+                "error": None,
+                "job_id": "",
+                "options": options,
+                "output": None,
+                "triangle_count": None,
+                "overlap_fraction": None,
+                "target_covered_fraction": None,
+                "design_area_m2": None,
+                "z_check": None,
+                "warnings": [],
+                "suggestions": [],
+                "created_at": datetime.now(UTC).isoformat(),
+            },
+        )
+        job = runner.submit(
+            handle,
+            "design_import",
+            {"phase": "preview", "inspection_id": inspectionId, "preview_id": pid, "options": options},
+        )
+        # A fresh read under the store lock, not the `req` read above: two previews posted together must
+        # both land in preview_job_ids (so deleting the inspection cancels both).
+        recorded = store.update_json(idir / "request.json", _record_preview_job(pid, job.id))
     # Only the newest preview is shown (spec §4.2): cancel every other live preview job, not just the
     # previous latest, so concurrent POSTs never leave an older one running.
     for other in (recorded or {}).get("preview_job_ids", []):
@@ -257,13 +261,11 @@ def create_design_surface(
     body: DesignSurfaceCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> SurfaceWithJob:
     # Imported here: the build module pulls in rasterio and scipy, which the router must not need to load.
-    from app.surfaces import service
     from app.surfaces.design import phase_build
 
     def changed(ids: list[str]) -> None:
         publish_surfaces_changed(request, handle, ids)
 
-    surface_id, job = phase_build.create(handle, request.app.state.jobs, body, surfaces_changed=changed)
-    out = service.set_job(handle, surface_id, job.id)
-    changed([surface_id])  # the list shows the building row at once
+    out, job = phase_build.create(handle, request.app.state.jobs, body, surfaces_changed=changed)
+    changed([out.id])  # the list shows the building row at once
     return SurfaceWithJob(surface=out, job=JobOut.from_row(job, handle.id))

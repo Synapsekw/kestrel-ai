@@ -19,6 +19,7 @@ from app.surfaces.design import dem_build, pipeline, rasterise, store
 from app.surfaces.design import placement as placing
 from app.surfaces.design.targets import target_ready
 from app.surfaces.paths import surface_dir, surface_path
+from app.surfaces.schemas import SurfaceOut
 
 MESSAGE = "Importing design surface"
 CANCELLED = "import cancelled"
@@ -43,6 +44,10 @@ def check_commit(handle, idir: Path, preview_id: str, accept: bool, runner) -> t
         raise _conflict("this design is already being imported")
     if preview["state"] != "ready":
         raise _not_ready("the preview is not ready: wait for it, or preview again")
+    # Before the newest/block/warn checks: a vanished target must not be answered "accept the warnings".
+    target = preview["options"].get("target_surface_id")
+    if target and not target_ready(handle, target):
+        raise _not_ready(f"the target surface {target} is no longer ready; preview again")
     if req.get("latest_preview_id") != preview_id:
         raise _conflict("a newer preview exists: import from the newest one")
     blocks = [w for w in preview["warnings"] if w["level"] == "block"]
@@ -50,9 +55,6 @@ def check_commit(handle, idir: Path, preview_id: str, accept: bool, runner) -> t
         raise _conflict(f"this design can't be imported: {blocks[0]['message']}")
     if any(w["level"] == "warn" for w in preview["warnings"]) and not accept:
         raise _conflict("this preview has warnings: accept them to import")
-    target = preview["options"].get("target_surface_id")
-    if target and not target_ready(handle, target):
-        raise _not_ready(f"the target surface {target} is no longer ready; preview again")
     return inspection, preview
 
 
@@ -85,42 +87,56 @@ def _default_name(inspection: dict, source: dict) -> str:
 
 def create(
     handle, runner, body, *, surfaces_changed: Callable[[list[str]], None] | None = None
-) -> tuple[str, object]:
-    """Insert the `building` row and queue the build. If the job cannot be queued the row is marked
-    failed (S2's `submit_failed`) and `surfaces_changed` is told before the error propagates."""
+) -> tuple[SurfaceOut, object]:
+    """Insert the `building` row, queue the build and record it; returns the row as the contract's
+    `Surface` and the job. If the job cannot be queued the row is marked failed (S2's
+    `submit_failed`) and `surfaces_changed` is told before the error propagates.
+
+    Everything from the gate to recording `build_job_id` runs under `store.commit_lock`, so two
+    concurrent commits (a double-click) cannot both pass the gate: the second sees the first's
+    live build and gets 409 `conflict`."""
     idir = store.require_inspection(handle, body.inspection_id)
-    inspection, preview = check_commit(handle, idir, body.preview_id, body.accept_warnings, runner)
-    pinternal = store.read_json(store.preview_dir(idir, body.preview_id) / "internal.json")
-    source = design_source(inspection, preview, pinternal, body.accept_warnings)
-    with handle.session() as s:
-        row = Surface(
-            name=body.name or _default_name(inspection, source),
-            kind="design",
-            status="building",
-            point_cloud_id=None,
-            design_source=source,
-        )
-        s.add(row)
-        s.flush()
-        sid = row.id
-    try:
-        job = runner.submit(
-            handle,
-            "design_import",
-            {
-                "phase": "build",
-                "surface_id": sid,
-                "inspection_id": body.inspection_id,
-                "preview_id": body.preview_id,
-            },
-        )
-    except Exception as e:
-        service.submit_failed(handle, sid, e)
-        if surfaces_changed is not None:
-            surfaces_changed([sid])
-        raise
-    store.patch_json(idir / "request.json", build_job_id=job.id, surface_id=sid)
-    return sid, job
+    with store.commit_lock:
+        inspection, preview = check_commit(handle, idir, body.preview_id, body.accept_warnings, runner)
+        pinternal = store.read_json(store.preview_dir(idir, body.preview_id) / "internal.json")
+        source = design_source(inspection, preview, pinternal, body.accept_warnings)
+        with handle.session() as s:
+            created = Surface(
+                name=body.name or _default_name(inspection, source),
+                kind="design",
+                status="building",
+                point_cloud_id=None,
+                design_source=source,
+            )
+            s.add(created)
+            s.flush()
+            s.expunge(created)  # S2's `set_job(created=)` reports it if a delete removes the row
+        sid = created.id
+        try:
+            job = runner.submit(
+                handle,
+                "design_import",
+                {
+                    "phase": "build",
+                    "surface_id": sid,
+                    "inspection_id": body.inspection_id,
+                    "preview_id": body.preview_id,
+                },
+            )
+        except Exception as e:
+            service.submit_failed(handle, sid, e)
+            if surfaces_changed is not None:
+                surfaces_changed([sid])
+            raise
+        try:
+            # None, or an OSError, when the job already succeeded and removed the inspection folder:
+            # the job ran, so that is not an error for the caller.
+            store.patch_json(idir / "request.json", build_job_id=job.id, surface_id=sid)
+        except OSError:
+            pass
+    # A delete may have removed the row before its job id was recorded: S2 then reports `created`,
+    # and the job fails readably ("deleted before its import started").
+    return service.set_job(handle, sid, job.id, created=created), job
 
 
 def _rasterise(tin: pipeline.Tin, spec: grid.GridSpec, path: Path, progress, check) -> grid.SurfaceStats:
@@ -135,8 +151,17 @@ def _rasterise(tin: pipeline.Tin, spec: grid.GridSpec, path: Path, progress, che
         return w.finish()
 
 
+def _source(handle, sid: str, when: str) -> dict:
+    with handle.session() as s:
+        row = s.get(Surface, sid)
+        if row is None:
+            raise JobFailure(f"the design surface was deleted {when}")
+        return dict(row.design_source)
+
+
 def _build(ctx, sid: str, idir: Path, pid: str) -> dict:
     handle = ctx.project
+    _source(handle, sid, "before its import started")
     inspection = store.read_json(idir / "inspection.json")
     iinternal = store.read_json(idir / "internal.json")
     pdir = store.preview_dir(idir, pid)
@@ -198,6 +223,22 @@ def _build(ctx, sid: str, idir: Path, pid: str) -> dict:
     if stats.valid_cells == 0:
         raise JobFailure("the design covers no cell of the output grid")
     ctx.check_cancelled()
+    # Every file first, the row last: a crash never leaves a `ready` row without its source.json.
+    source = _source(handle, sid, "while it was being imported")
+    keys = (
+        "overlap_fraction",
+        "target_covered_fraction",
+        "design_area_m2",
+        "z_check",
+        "triangle_count",
+        "warnings",
+    )
+    if not store.write_json(
+        surface_dir(handle, sid) / "source.json", {**source, "preview": {k: preview[k] for k in keys}}
+    ):
+        raise JobFailure("the design surface's folder was removed while it was being imported")
+    gc.collect()  # memory maps of the cache must be gone before Windows lets the folder go
+    shutil.rmtree(idir, ignore_errors=True)
     with handle.session() as s:
         row = s.get(Surface, sid)
         if row is None:
@@ -207,18 +248,6 @@ def _build(ctx, sid: str, idir: Path, pid: str) -> dict:
         row.width, row.height = spec.width, spec.height
         row.geotransform, row.bounds_native = list(spec.geotransform), list(spec.bounds)
         row.z_min, row.z_max, row.coverage_fraction = stats.z_min, stats.z_max, stats.coverage_fraction
-        source = dict(row.design_source)
-    keys = (
-        "overlap_fraction",
-        "target_covered_fraction",
-        "design_area_m2",
-        "z_check",
-        "triangle_count",
-        "warnings",
-    )
-    store.write_json(
-        surface_dir(handle, sid) / "source.json", {**source, "preview": {k: preview[k] for k in keys}}
-    )
     return {
         "surface_id": sid,
         "width": spec.width,
@@ -254,8 +283,6 @@ def run(ctx) -> dict:
             raise JobCancelled() from e
         _fail(ctx, sid, f"import failed: {type(e).__name__}: {e}")
         raise
-    gc.collect()  # memory maps of the cache must be gone before Windows lets the folder go
-    shutil.rmtree(idir, ignore_errors=True)
     ctx.publish("surfaces.changed", {"surface_ids": [sid]})
     ctx.progress(1.0, "Design surface ready")
     return result
