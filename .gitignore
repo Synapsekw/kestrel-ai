@@ -7,6 +7,7 @@ __pycache__/
 .hypothesis/
 backend/build/
 backend/dist/
+backend/third_party/
 # node
 node_modules/
 frontend/dist/

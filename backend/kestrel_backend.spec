@@ -73,6 +73,16 @@ datas = (
     + collect_data_files("reportlab")
 )
 
+# PotreeConverter 2.1.5 + laszip.dll + the MSVC runtime + licence texts (spec §14), fetched by
+# scripts/fetch_potreeconverter.ps1. As datas, not binaries: PyInstaller must keep the folder layout
+# and must not relocate the DLLs away from the exe that loads them.
+POTREE = Path(SPECPATH) / "third_party" / "potreeconverter"
+datas += [
+    (str(p), (Path("potreeconverter") / p.relative_to(POTREE).parent).as_posix())
+    for p in sorted(POTREE.rglob("*"))
+    if p.is_file()
+]
+
 binaries = (
     collect_dynamic_libs("torch")  # torch/lib: the CUDA runtime, cuDNN and cuBLAS DLLs
     + collect_dynamic_libs("torchvision")
