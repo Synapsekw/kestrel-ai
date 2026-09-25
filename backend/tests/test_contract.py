@@ -78,7 +78,6 @@ EXPECTED_STUBS: set[str] = {
     "getPointCloud",
     "patchPointCloud",
     "deletePointCloud",
-    "createPointCloudExport",
     # S3 design surfaces (app/surfaces/design/router.py)
     "createDesignInspection",
     "getDesignInspection",
