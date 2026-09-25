@@ -107,6 +107,34 @@ export function redGreenGrid(o: {
   return out;
 }
 
+/**
+ * A hollow stack seen from above (the §17.10 chimney in miniature): a thin rim of sparse points on a
+ * circle of radius 1.5 m at z = top (one every 30°, 0.78 m apart: a coarse level of detail), a dense flue floor (0.05 m grid,
+ * r < 1.45 m) at z = floor, and a ground apron (0.1 m grid, 2.5 m < r < 3 m) at z = 0. Straight down
+ * at a spot on the rim between two rim points, the floor is the drawn point nearest the spot.
+ */
+export function hollowStack(o: { centre: [number, number]; top: number; floor: number }): FixturePoint[] {
+  const [cx, cy] = o.centre;
+  const out: FixturePoint[] = [];
+  for (let deg = 0; deg < 360; deg += 30) {
+    const a = (deg * Math.PI) / 180;
+    out.push({ x: cx + 1.5 * Math.cos(a), y: cy + 1.5 * Math.sin(a), z: o.top, r: 220, g: 20, b: 20 });
+  }
+  for (let i = -60; i <= 60; i += 1) {
+    for (let j = -60; j <= 60; j += 1) {
+      const r = Math.hypot(i * 0.05, j * 0.05);
+      if (r < 1.45) out.push({ x: cx + i * 0.05, y: cy + j * 0.05, z: o.floor, r: 20, g: 20, b: 200 });
+    }
+  }
+  for (let i = -30; i <= 30; i += 1) {
+    for (let j = -30; j <= 30; j += 1) {
+      const r = Math.hypot(i * 0.1, j * 0.1);
+      if (r > 2.5 && r < 3) out.push({ x: cx + i * 0.1, y: cy + j * 0.1, z: 0, r: 20, g: 200, b: 20 });
+    }
+  }
+  return out;
+}
+
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-expose-headers": "Content-Range, Accept-Ranges, Content-Length",

@@ -46,8 +46,8 @@ function pickAlongPin(v: CloudViewerHandle, at: XY, zLo: number, zHi: number, z0
  * (x, y, p50) from 45° south at max(40 m, 3 × footprint diagonal), draw a vertical pin, and once
  * the view has settled pick straight down at the spot (the topmost surface within 2 m, however far
  * above or below p50: a 45° view only shows about p50 − 77 m … p50 + 21 m of the pin), falling back
- * to picks along the pin's on-canvas stretch. The nearest hit within 2 m retargets Z and draws the
- * footprint there.
+ * to picks along the pin's on-canvas stretch. The hit (the straight-down pick's highest, or the
+ * fallback's nearest) within 2 m retargets Z and draws the footprint there.
  */
 export function useJumpArrival(
   viewer: RefObject<CloudViewerHandle | null>,

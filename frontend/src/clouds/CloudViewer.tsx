@@ -16,8 +16,10 @@ import {
 import { disposeChildren, disposePointsGeometries } from "./viewer/dispose";
 import { shouldKeepRendering } from "./viewer/idle";
 import { makeMaterialOptions, type ColourMode } from "./viewer/materialOptions";
-import { localPositions, tokenRgb, type OverlayShape } from "./viewer/overlay";
+import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./viewer/overlay";
+import { pickAllPoints } from "./viewer/pickAll";
 import { makeRequestManager, metadataUrl } from "./viewer/requestManager";
+import { topmostWithin } from "./viewer/topmost";
 import { deepestLevelAt, pickUncertainty, type NodeBox } from "./viewer/uncertainty";
 
 export interface CloudPick {
@@ -34,9 +36,10 @@ export interface CloudViewerHandle {
   lookAt(target: Vec3, distance: number): void;
   pickAtClient(clientX: number, clientY: number): CloudPick | null;
   /**
-   * The topmost loaded point within `radius` m (horizontally) of (x, y), the one nearest the spot:
-   * potree's picker run with an orthographic camera above the cloud looking straight down, so the
-   * answer does not depend on the current view (no viewport clamping, no horizontal error).
+   * The top surface within `radius` m (horizontally) of (x, y), at its loaded point nearest the spot
+   * (`topmostWithin`): potree's picker run with an orthographic camera above the cloud looking
+   * straight down, so the answer does not depend on the current view (no viewport clamping, no
+   * horizontal error), then every point it drew read back and compared.
    */
   pickDown(x: number, y: number, radius: number): CloudPick | null;
   /** Client (viewport) coordinates of a native-CRS point, or null behind the camera; may be off the canvas. */
@@ -186,8 +189,10 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       const h = canvas.clientHeight;
       if (!w || !h) return null;
       // A pixel is the same ground distance both ways and the canvas's shorter side spans 2 x radius,
-      // so the pick window (that side, centred on the ray) covers the ±radius square. The picker keeps
-      // the lit pixel nearest the centre; the depth test keeps the topmost point in each pixel.
+      // so the pick window (that side, centred on the ray) covers the ±radius square. The depth test
+      // keeps the topmost point in each pixel; potree's picker would then return the lit pixel nearest
+      // the centre, which over a thin rim is the ground seen past it (§17.10, first acceptance), so
+      // every drawn point is read back and `topmostWithin` takes the top surface's nearest point.
       const sx = radius * Math.max(w / h, 1);
       const sy = radius * Math.max(h / w, 1);
       const top = bounds[5] + DOWN_MARGIN_M;
@@ -198,8 +203,10 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       down.updateProjectionMatrix();
       down.updateMatrixWorld(true);
       const ray = new THREE.Ray(down.position.clone(), new THREE.Vector3(0, 0, -1));
-      const hit = e.pco.pick(e.renderer, down, ray, { pickWindowSize: Math.min(w, h) });
-      const p = hit?.position;
+      const all = pickAllPoints(e.pco, e.renderer, down, ray, Math.min(w, h));
+      const p = all
+        ? topmostWithin(all, x, y, radius)
+        : (e.pco.pick(e.renderer, down, ray, { pickWindowSize: Math.min(w, h) })?.position ?? null);
       if (!p || Math.hypot(p.x - x, p.y - y) > radius) return null;
       return toCloudPick(e, p);
     },
@@ -218,7 +225,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const clear = tokenRgb("canvas");
-    renderer.setClearColor(new THREE.Color(clear[0] / 255, clear[1] / 255, clear[2] / 255));
+    renderer.setClearColor(tokenColor(clear));
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1e6);
     camera.up.set(0, 0, 1);
@@ -514,8 +521,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         e.overlay.position.set(origin.x, origin.y, origin.z);
         disposeChildren(e.overlay, (c) => c.userData.key === key);
         for (const s of shapes) {
-          const [r, g, b] = tokenRgb(s.tone === "accent" ? "accent" : s.tone === "ok" ? "ok" : "warn");
-          const color = new THREE.Color(r / 255, g / 255, b / 255);
+          const color = tokenColor(
+            tokenRgb(s.tone === "accent" ? "accent" : s.tone === "ok" ? "ok" : "warn"),
+          );
           const geom = new THREE.BufferGeometry();
           const closed = s.kind === "line" && !!s.closed;
           geom.setAttribute(

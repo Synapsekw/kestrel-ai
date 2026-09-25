@@ -33,3 +33,14 @@ describe("overlay geometry", () => {
     ).toEqual([1, 2, 3, 4, 5, 6, 1, 2, 3]);
   });
 });
+
+describe("token colours in WebGL", () => {
+  it("a 0-255 token renders as itself, not brightened by a second sRGB encoding", async () => {
+    const THREE = await import("three");
+    const { tokenColor } = await import("./overlay");
+    // the canvas token: `new THREE.Color(21 / 255, …)` takes the numbers as linear and the sRGB
+    // output then shows (81, 92, 88), the grey the acceptance saw and sampleColours never matched
+    expect(tokenColor([21, 27, 25]).getHexString(THREE.SRGBColorSpace)).toBe("151b19");
+    expect(tokenColor([229, 175, 100]).getHexString(THREE.SRGBColorSpace)).toBe("e5af64");
+  });
+});

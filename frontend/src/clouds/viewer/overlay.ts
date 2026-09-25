@@ -1,3 +1,4 @@
+import { Color, SRGBColorSpace } from "three";
 import type { Vec3 } from "./camera";
 
 export type OverlayTone = "accent" | "ok" | "warn";
@@ -24,4 +25,13 @@ export function tokenRgb(name: string, el: Element = document.documentElement): 
   return parts.length === 3 && parts.every(Number.isFinite)
     ? [parts[0], parts[1], parts[2]]
     : [229, 175, 100];
+}
+
+/**
+ * A 0-255 sRGB token as a three.js colour. `new Color(r / 255, g / 255, b / 255)` takes the numbers
+ * as linear, and the renderer's sRGB output then brightens them: the canvas token (21, 27, 25) drew
+ * as (81, 92, 88), so `sampleColours()` never matched the background.
+ */
+export function tokenColor(rgb: [number, number, number]): Color {
+  return new Color().setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, SRGBColorSpace);
 }

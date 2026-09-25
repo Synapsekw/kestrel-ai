@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { asDetectionProject } from "./kinds";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
-import { buildOctree, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
+import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 
@@ -426,6 +426,35 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
   await page.getByRole("button", { name: "Show on map" }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/maps/${MAP}\\?at=243`));
   await expect(page.getByTestId("map-at-marker")).toBeVisible();
+});
+
+test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor seen past it", async ({
+  page,
+}) => {
+  // §17.10 first acceptance: at a chimney rim point (z 188.8) the straight-down refine returned the
+  // flue bottom (z -41.6), the drawn point nearest the spot, so the close-up framed the wrong height.
+  const C = { x: 243550, y: 3178050 };
+  const stack = hollowStack({ centre: [C.x, C.y], top: 8, floor: -2 });
+  const bounds = [C.x - 3, C.y - 3, -2, C.x + 3, C.y + 3, 8];
+  const cloud = cloudJson({ bounds_native: bounds, point_count: stack.length });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloud] });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloud);
+  await routeOctree(page, CLOUD, buildOctree(stack));
+  // on the rim circle, halfway between the rim points at 0° and 30°
+  const a = (15 * Math.PI) / 180;
+  const spot = { x: C.x + 1.5 * Math.cos(a), y: C.y + 1.5 * Math.sin(a) };
+  await page.goto(`/p/${P}/clouds/${CLOUD}?at=${spot.x.toFixed(3)},${spot.y.toFixed(3)}`);
+  await expect
+    .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
+    .toContain("pin");
+  await expect.poll(async () => (await viewerStats(page))?.nodesLoading, { timeout: 20_000 }).toBe(0);
+  const down = await page.evaluate(
+    ([x, y]) => window.__kestrelCloudViewer!.pickDown(x, y, 2),
+    [spot.x, spot.y],
+  );
+  expect(down).not.toBeNull();
+  expect(down!.z).toBeCloseTo(8, 2);
+  expect(Math.hypot(down!.x - spot.x, down!.y - spot.y)).toBeLessThan(0.5); // the rim point beside it
 });
 
 test("right-click on the map opens that spot in 3D; a spot outside the cloud says so", async ({ page }) => {
