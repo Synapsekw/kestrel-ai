@@ -150,3 +150,32 @@ def test_thumbnail_does_not_recreate_a_deleted_inspection_dir(tmp_path):
     with pytest.raises(FileNotFoundError):
         thumbs.plan_thumbnail(pts, store.thumb_path(idir, "c0"))
     assert not idir.exists()
+
+
+def test_update_json_appends_without_losing_a_concurrent_write(tmp_path):
+    import threading
+
+    p = tmp_path / "request.json"
+    store.write_json(p, {"preview_job_ids": []})
+
+    def add(i):
+        store.update_json(p, lambda d: {**d, "preview_job_ids": [*d["preview_job_ids"], i]})
+
+    threads = [threading.Thread(target=add, args=(i,)) for i in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(store.read_json(p)["preview_job_ids"]) == list(range(20))
+    assert store.update_json(tmp_path / "gone.json", lambda d: d) is None
+
+
+def test_build_live(tmp_path):
+    class Runner:
+        def is_live(self, job_id):
+            return job_id == "live"
+
+    assert store.build_live({"build_job_id": "live"}, Runner())
+    assert not store.build_live({"build_job_id": "done"}, Runner())
+    assert not store.build_live({"build_job_id": None}, Runner())
+    assert not store.build_live({}, Runner())

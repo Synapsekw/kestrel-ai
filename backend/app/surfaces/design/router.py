@@ -8,10 +8,13 @@ from __future__ import annotations
 
 import shutil
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi import Path as PathParam
+from pyproj import CRS
+from pyproj.exceptions import CRSError
 
 from app.errors import AppError, not_found
 from app.jobs.schemas import JobOut
@@ -19,7 +22,15 @@ from app.projects.service import ProjectHandle, get_project
 from app.stubs import add_stubs
 from app.surfaces.design import detect, store
 from app.surfaces.design import jobs as _jobs  # noqa: F401 - registers `design_import`
-from app.surfaces.design.schemas import DesignInspectionCreate, DesignInspectionOut, DesignInspectionWithJob
+from app.surfaces.design.schemas import (
+    DesignImportOptions,
+    DesignInspectionCreate,
+    DesignInspectionOut,
+    DesignInspectionWithJob,
+    DesignPreviewOut,
+    DesignPreviewWithJob,
+)
+from app.surfaces.design.targets import target_state
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["surfaces"])
 CANDIDATE = r"^c[0-9]{1,6}$"
@@ -77,7 +88,7 @@ def delete_design_inspection(
     idir = store.require_inspection(handle, inspectionId)
     runner = request.app.state.jobs
     req = store.read_json(idir / "request.json")
-    if req.get("build_job_id") and runner.is_live(req["build_job_id"]):
+    if store.build_live(req, runner):
         raise AppError("conflict", "a design surface is being imported from this inspection", 409)
     for job_id in store.job_ids(req):
         if runner.is_live(job_id):
@@ -107,10 +118,133 @@ def get_design_candidate_thumbnail(
     )
 
 
-STUBS = [
-    ("POST", "/design-inspections/{inspectionId}/previews", "createDesignPreview"),
-    ("GET", "/design-inspections/{inspectionId}/previews/{previewId}", "getDesignPreview"),
-    ("GET", "/design-inspections/{inspectionId}/previews/{previewId}/image", "getDesignPreviewImage"),
-    ("POST", "/design-surfaces", "createDesignSurface"),
-]
+def _check_options(handle: ProjectHandle, inspection: dict, body: DesignImportOptions) -> dict:
+    """The 422s and the target's 409 not_ready of createDesignPreview (spec §12); pyproj only, so
+    importing the router stays light."""
+    ids = {c["id"] for c in inspection["candidates"]}
+    unknown = [c for c in body.candidate_ids if c not in ids]
+    if unknown:
+        raise AppError("validation_error", f"there is no part {unknown[0]} in this file", 422)
+    if len(set(body.candidate_ids)) != len(body.candidate_ids):
+        raise AppError("validation_error", "each part can be chosen once", 422)
+    if inspection["format"] in ("landxml", "geotiff") and len(body.candidate_ids) != 1:
+        raise AppError("validation_error", "choose exactly one surface of this file", 422)
+    try:
+        CRS.from_user_input(body.source_crs.strip())
+    except CRSError as e:
+        raise AppError("validation_error", f"the source CRS can't be read: {e}", 422) from None
+    if body.target_surface_id:
+        state = target_state(handle, body.target_surface_id)
+        if state == "not_a_cloud":
+            raise AppError(
+                "validation_error", f"surface {body.target_surface_id} is not a ready cloud surface", 422
+            )
+        if state == "not_ready":
+            raise AppError(
+                "not_ready",
+                f"surface {body.target_surface_id} is not ready yet; wait for it or pick another",
+                409,
+            )
+    elif body.cell_size_m is None:
+        raise AppError("validation_error", "choose a target cloud surface or a cell size", 422)
+    return body.model_dump(mode="json")
+
+
+def _record_preview_job(pid: str, job_id: str):
+    def apply(req: dict) -> dict:
+        return {
+            **req,
+            "latest_preview_id": pid,
+            "latest_preview_job_id": job_id,
+            "preview_job_ids": [*req.get("preview_job_ids", []), job_id],
+        }
+
+    return apply
+
+
+@router.post(
+    "/design-inspections/{inspectionId}/previews", response_model=DesignPreviewWithJob, status_code=202
+)
+def create_design_preview(
+    inspectionId: str,  # noqa: N803
+    body: DesignImportOptions,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> DesignPreviewWithJob:
+    idir = store.require_inspection(handle, inspectionId)
+    inspection = store.read_json(idir / "inspection.json")
+    if inspection["state"] != "ready":
+        raise AppError(
+            "not_ready", "the file has not been read yet, or reading it failed: read it again", 409
+        )
+    options = _check_options(handle, inspection, body)
+    runner = request.app.state.jobs
+    req = store.read_json(idir / "request.json")
+    if store.build_live(req, runner):
+        raise AppError("conflict", "a design surface is being imported from this inspection", 409)
+    if req.get("latest_preview_job_id") and runner.is_live(req["latest_preview_job_id"]):
+        runner.cancel(handle, req["latest_preview_job_id"])  # only the newest preview is shown (spec §4.2)
+    pid = store.new_id()
+    pdir = store.preview_dir(idir, pid)
+    # parents=False below the inspection dir (as CandidateWriter): never recreate a deleted inspection.
+    pdir.parent.mkdir(parents=False, exist_ok=True)
+    pdir.mkdir(parents=False)
+    store.write_json(
+        pdir / "preview.json",
+        {
+            "id": pid,
+            "inspection_id": inspectionId,
+            "state": "running",
+            "error": None,
+            "job_id": "",
+            "options": options,
+            "output": None,
+            "triangle_count": None,
+            "overlap_fraction": None,
+            "target_covered_fraction": None,
+            "design_area_m2": None,
+            "z_check": None,
+            "warnings": [],
+            "suggestions": [],
+            "created_at": datetime.now(UTC).isoformat(),
+        },
+    )
+    job = runner.submit(
+        handle,
+        "design_import",
+        {"phase": "preview", "inspection_id": inspectionId, "preview_id": pid, "options": options},
+    )
+    # A fresh read under the store lock, not the `req` read above: two previews posted together must
+    # both land in preview_job_ids (so deleting the inspection cancels both).
+    store.update_json(idir / "request.json", _record_preview_job(pid, job.id))
+    preview = store.patch_json(pdir / "preview.json", job_id=job.id)
+    return DesignPreviewWithJob(preview=DesignPreviewOut(**preview), job=JobOut.from_row(job, handle.id))
+
+
+@router.get("/design-inspections/{inspectionId}/previews/{previewId}", response_model=DesignPreviewOut)
+def get_design_preview(
+    inspectionId: str,  # noqa: N803
+    previewId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> DesignPreviewOut:
+    pdir = store.require_preview(store.require_inspection(handle, inspectionId), previewId)
+    return DesignPreviewOut(**store.read_json(pdir / "preview.json"))
+
+
+@router.get("/design-inspections/{inspectionId}/previews/{previewId}/image", response_class=Response)
+def get_design_preview_image(
+    inspectionId: str,  # noqa: N803
+    previewId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> Response:
+    pdir = store.require_preview(store.require_inspection(handle, inspectionId), previewId)
+    png = pdir / "preview.png"
+    if store.read_json(pdir / "preview.json")["state"] != "ready" or not png.is_file():
+        return Response(status_code=204)
+    return Response(
+        png.read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=3600"}
+    )
+
+
+STUBS = [("POST", "/design-surfaces", "createDesignSurface")]
 add_stubs(router, STUBS)

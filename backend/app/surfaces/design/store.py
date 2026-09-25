@@ -112,6 +112,18 @@ def patch_json(path: Path, **fields) -> dict | None:
         return data
 
 
+def update_json(path: Path, fn: Callable[[dict], dict]) -> dict | None:
+    """Read, apply `fn(data) -> data` and write, all under the lock, so a read-modify-write (such as
+    appending to a list) cannot lose a concurrent update; None when the file is gone."""
+    path = Path(path)
+    with _LOCK:
+        if not path.is_file():
+            return None
+        data = fn(read_json(path))
+        write_json(path, data)
+        return data
+
+
 def create_inspection(handle, inspection_id: str, source: Path, fmt: str) -> Path:
     d = inspection_dir(handle, inspection_id)
     d.mkdir(parents=True)
@@ -152,6 +164,12 @@ def create_inspection(handle, inspection_id: str, source: Path, fmt: str) -> Pat
 def job_ids(request: dict) -> list[str]:
     ids = [request.get("inspect_job_id"), *request.get("preview_job_ids", []), request.get("build_job_id")]
     return [i for i in ids if i]
+
+
+def build_live(request: dict, runner) -> bool:
+    """True while a design surface is being imported from this inspection (its build job is live)."""
+    job_id = request.get("build_job_id")
+    return bool(job_id) and runner.is_live(job_id)
 
 
 def sha256_file(path: Path, *, progress: Callable[[float], None], check_cancelled: Callable[[], None]) -> str:

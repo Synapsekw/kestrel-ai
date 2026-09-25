@@ -10803,7 +10803,7 @@ export interface operations {
                     "application/json": components["schemas"]["DesignPreviewWithJob"];
                 };
             };
-            /** @description the inspection is not ready (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the inspection has not been read yet or reading it failed, or the target cloud surface is building, failed or missing its grid (`code` is `not_ready`); a design surface is being imported from this inspection (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10812,7 +10812,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description an unknown candidate, an unparseable CRS, or a LandXML or DEM selection of other than one candidate (`code` is `validation_error`) */
+            /** @description an unknown or repeated candidate, an unparseable CRS, a LandXML or DEM selection of other than one candidate, a `target_surface_id` that is not a cloud surface (unknown, or not a `cloud_dsm`), or neither a target nor `cell_size_m` (`code` is `validation_error`) */
             422: {
                 headers: {
                     [name: string]: unknown;
