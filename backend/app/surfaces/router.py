@@ -29,7 +29,7 @@ def create_surface(
 ) -> SurfaceWithJob:
     row = service.create_surface(handle, body)
     job = request.app.state.jobs.submit(handle, "surface_build", {"surface_id": row.id})
-    out = service.set_job(handle, row.id, job.id)
+    out = service.set_job(handle, row.id, job.id, created=row)
     publish_surfaces_changed(request, handle, [row.id])
     return SurfaceWithJob(surface=out, job=JobOut.from_row(job, handle.id))
 

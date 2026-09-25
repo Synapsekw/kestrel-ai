@@ -1,7 +1,6 @@
 """Surfaces through the API: create -> surface_build -> ready, admission, sweep (spec §5, §3)."""
 
 import re
-import time
 
 import numpy as np
 import pytest
@@ -9,7 +8,7 @@ from pyproj import CRS
 from surfaces import WKT, cone_cloud, fixture_spec, plane, write_cloud
 from volume_rows import add_cloud, add_surface
 
-from app.db.models import PointCloud, Surface, VolumeMeasurement
+from app.db.models import Job, PointCloud, Surface, VolumeMeasurement
 from app.jobs.cancellation import JobCancelled
 from app.surfaces import build, service
 from app.surfaces.grid import convention_problems
@@ -139,14 +138,52 @@ def test_build_of_filtered_out_cloud_fails_cleanly(client, wait_job, project_id,
 
 def test_cancel_deletes_the_row_and_the_folder(client, wait_job, project_id, handle, cloud, monkeypatch):
     def stop(*a, **k):
-        time.sleep(0.3)  # the operator cancels after the create request has answered
-        raise JobCancelled()
+        raise JobCancelled()  # may win the race with the create request's set_job: still a 202
 
     monkeypatch.setattr(build, "build_surface", stop)
     created, job = _build(client, wait_job, project_id, point_cloud_id=cloud)
     assert job["state"] == "cancelled"
     assert client.get(f"{BASE}/{project_id}/surfaces/{created['id']}").status_code == 404
     assert not (handle.surfaces_dir / created["id"]).exists()
+
+
+@pytest.mark.parametrize(
+    ("job_state", "error"),
+    [("cancelled", service.CANCELLED_BEFORE_START), ("failed", service.STOPPED_BEFORE_FINISH)],
+)
+def test_building_row_whose_job_ended_reads_failed(client, project_id, handle, cloud, job_state, error):
+    """A queued job cancelled before it started never runs `run_surface_build`; the read path
+    settles the row instead of leaving it `building` until the next startup sweep."""
+    with handle.session() as s:
+        job = Job(type="surface_build", params={}, state=job_state)
+        s.add(job)
+        s.flush()
+        row = Surface(name="q", kind="cloud_dsm", status="building", point_cloud_id=cloud, job_id=job.id)
+        s.add(row)
+        s.flush()
+        sid = row.id
+    items = client.get(f"{BASE}/{project_id}/surfaces").json()["items"]
+    assert [(i["status"], i["error"]) for i in items] == [("failed", error)]
+    got = client.get(f"{BASE}/{project_id}/surfaces/{sid}").json()
+    assert got["status"] == "failed" and got["error"] == error
+    with handle.session() as s:
+        assert s.get(Surface, sid).status == "failed"  # persisted, not only reported
+    assert client.delete(f"{BASE}/{project_id}/surfaces/{sid}").status_code == 204
+
+
+def test_set_job_reports_the_created_row_when_a_cancel_already_deleted_it(handle, cloud):
+    with handle.session() as s:
+        row = Surface(name="gone", kind="cloud_dsm", status="building", point_cloud_id=cloud)
+        s.add(row)
+        s.flush()
+        s.expunge(row)
+    with handle.session() as s:
+        s.delete(s.get(Surface, row.id))
+    out = service.set_job(handle, row.id, "job-1", created=row)
+    assert out.id == row.id and out.job_id == "job-1"
+    with pytest.raises(service.AppError) as e:
+        service.set_job(handle, row.id, "job-1")
+    assert e.value.status == 404
 
 
 def test_rename_and_delete_rules(client, project_id, handle):
