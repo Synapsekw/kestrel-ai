@@ -50,6 +50,27 @@ Every source file was only read.
 | `laz-check.py`, `laz-check-chimney.txt` | the exported chimney LAZ: count, EPSG, and header bounds containing every point (§13) |
 | `ortho.txt` | `make_test_ortho.py`: `ortho ok 13732x14031 0.05 EPSG:32639` (§12 input) |
 
+## Fix round (2026-09-26, same branch)
+
+The first run failed §9 (picks 1 mm low) and §10 (the Z refine landed on the flue floor). After the
+fixes (`cbbb884` header minimum just below the source grid; `9e9eb7b` and `3d2b588`: the
+straight-down refine takes the top surface at the spot, `pickAtClient` skips invalid pick pixels,
+token colours rendered as sRGB) the sidecar and the release exe were rebuilt and these were re-run.
+The §9 files above (`viewer-picks.json`, `picks/`, `export-chimney-with-picks.json`,
+`picks-measurements.csv`, `picks.txt`) were overwritten by the new run; git history has the first.
+
+| File | What it proves |
+| --- | --- |
+| `picks.txt` | §9 after the fix: 10 picks, each 0.001–0.002 mm from a source point, `picks ok 10` |
+| `picks-octree-offset.txt` | the new octree offset `243194.296999, 3177915.058999, -141.186001` (just below the grid) |
+| `uncertainty-rim-fixed.json` (+ folder) | §10 on the same rim point: both picks on the rim (z 189.1 / 189.4), close 29.4 m, *u* 0.171 m, ratio 4 |
+| `rim-octree-depth.txt`, `octree-path.py`, `rim-density.py` | why *u* stays 0.171 m at the rim: the octree ends at level 5 there; source spacing 0.074 m (median) |
+| `pickdown-diag.json` | the viewer's `pickDown`/`pickCenter` in the packaged app at the rim and two other spots |
+| `uncertainty-open-ground-fixed.json` (+ folder), `open-ground-column.txt`, `column-scan.py` | the supplementary spot now refines to airborne sky-coloured points above it (2 117 at z 130–160 m within 2 m) |
+| `viewer-chimney-3M-fixed.json` (+ `chimney-3M-fixed/`) | §6/§7 after the colour fix: background now counted (438 462 px), white 0.02 % of point pixels |
+| `import-chimney-local-fixed.json`, `octree-metadata-fixed.txt` | §1 re-import: 9.16 s, same `bounds_native`, 21 697 184 pts |
+| `build-fixed.log`, `tauri-build-fixed.log`, `smoke-frozen-fixed.log`, `check-webview-fixed.log` | the rebuilds and packaged checks after the fixes |
+
 Not in this folder: `jump-3d.png`, `jump-map.png`, `qgis.png` and `uncertainty-warn.png`. They come
 from the installed app, which the operator runs by following
 `docs/usability/2026-09-24-point-clouds-walkthrough.md`.

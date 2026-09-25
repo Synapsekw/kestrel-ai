@@ -62,7 +62,9 @@ The spec is `docs/superpowers/specs/2026-09-23-point-clouds-design.md` and the p
 `.superpowers/sdd/2026-09-24-point-clouds/`. S1 merged to `main` at **`0af7084`**. Task 19 (this
 entry) came afterwards: acceptance on the real chimney file and the 195 M cloud, with evidence in
 `docs/evidence/2026-09-24-point-clouds/` (see its `README.md`) and the walkthrough in
-`docs/usability/2026-09-24-point-clouds-walkthrough.md`.
+`docs/usability/2026-09-24-point-clouds-walkthrough.md`. A fix round on the same branch then fixed
+the two first-run failures (§9 picks 1 mm low, §10 Z refine on the flue floor) and re-measured;
+the rows below give the new figures and say what failed first.
 
 What changed:
 
@@ -98,11 +100,11 @@ files were on `D:\kestrel-acceptance`.
 | 6 | Chimney at 3 M | first points **87 ms**; settled **688 ms**; orbit p50 **17.8 ms** (p95 18.1); webview peak **0.68 GB** | PASS | `viewer-chimney-3M.json` |
 | 6 | Chimney at 8 M | webview peak **0.67 GB** (≤ 3). Only 0.46 M points were visible in the whole-site view, so the budget never bound | PASS | `viewer-chimney-8M.json` |
 | 6 | 195 M at 3 M | settled **656 ms** (≤ 8000); orbit p50 **17.8 ms** | PASS | `viewer-195m-3M.json` |
-| 7 | Colours | white **0.004 %** of sampled pixels (< 5 %); the fixture's red 0.108 / green 0.109. See note 3 | PASS | `viewer-*.json`, `check-webview.log` |
+| 7 | Colours | white **0.004 %** of sampled pixels (< 5 %); the fixture's red 0.108 / green 0.109. After the colour fix (note 3): background 438 462 of 527 440 pixels, white **0.02 %** of the point pixels; `check:webview` ok | PASS | `viewer-*.json`, `viewer-chimney-3M-fixed.json`, `check-webview-fixed.log` |
 | 8 | Packaged check | `check:webview` ok on the release build; `build:installer` ran it before Inno Setup. The negative proof (no `worker-src blob:` → CSP FAIL, no installer) is in the ADR (2026-09-25) and was not re-run | PASS | `check-webview.log`, `installer.log` |
-| 9 | Picks are real points | 10 picks: nearest source point at **1.000 mm** ×7, **1.414 mm** ×2, **1.732 mm** ×1 | **FAIL** (see note 1) | `picks.txt`, `viewer-picks.json` |
-| 10 | Uncertainty on the rim | close range **29.4 m** (≤ 30); ratio **8** (≥ 4); close *u* **0.086 m** (≤ 0.05 fails). Both picks landed at the bottom of the flue (z ≈ −41), not on the rim | **FAIL** (see note 2) | `uncertainty-attempt2-rim.json` |
-| 10 | Uncertainty on open ground (supplementary) | 29.4 m; close *u* **0.043 m**; ratio **16** | would pass | `uncertainty-open-ground.json` |
+| 9 | Picks are real points | after the fix: 10 picks, nearest source point **0.001–0.002 mm** each (`picks ok 10`). First run: 1.000 mm ×7, 1.414 ×2, 1.732 ×1, every pick one 1 mm step low (note 1) | PASS (fixed) | `picks.txt`, `viewer-picks.json`, `picks-octree-offset.txt` |
+| 10 | Uncertainty on the rim | after the fix both picks are on the rim (z 189.1 site-wide, 189.4 close): close range **29.4 m** (≤ 30); ratio **4** (≥ 4); close *u* **0.171 m** (≤ 0.05 fails). The octree ends at level 5 at the rim (5.48 m / 2⁵), and the source itself is 0.074 m apart there (median nearest neighbour), so ≤ 0.05 m is out of reach on this rim. First run: *u* 0.086 m, both picks on the flue floor (z ≈ −41) because the Z refine chose it (note 2) | **FAIL** (data-limited; the refine bug is fixed) | `uncertainty-rim-fixed.json`, `rim-octree-depth.txt`, `pickdown-diag.json`; first run `uncertainty-attempt2-rim.json` |
+| 10 | Uncertainty on the "open ground" spot (supplementary) | after the fix the refine lands on airborne sky-coloured points above that spot (2 117 source points at z 130–160 m within 2 m; seen from above they hide the ground within 0.6 m): close *u* 0.086 m, ratio 8. First run (ground): *u* 0.043 m, ratio 16 | recorded | `uncertainty-open-ground-fixed.json`, `open-ground-column.txt`; first run `uncertainty-open-ground.json` |
 | 10 | Warn tone above 0.10 m | unit test (`readout.test.ts`); screenshot is an operator step | PASS (unit) | `vitest-criteria.txt` |
 | 11 | Formulas | shared vectors, the 1.000° pole and the vertical refusal pass in pytest and vitest | PASS | `pytest-criteria.txt`, `vitest-criteria.txt` |
 | 12 | Map ↔ 3D | not run: it needs the installed app (operator walkthrough step 7). The different-CRS unit test passes | operator | `vitest-criteria.txt` |
@@ -115,25 +117,32 @@ files were on `D:\kestrel-acceptance`.
 
 Notes:
 
-1. **Picks sit one quantum off (§9).** Every pick is exactly 1 mm low in X, and sometimes in Y or Z
-   too. The octree's `offset` is the repaired minimum, `243194.29700000002`: floating-point noise
-   puts it just above the source's 1 mm grid. PotreeConverter truncates `(x − offset) / scale`, so
-   the display copy decodes each point one scale unit low wherever that noise lands. The picks are
-   still real source points; their coordinates are biased by −1 mm per axis. A fix belongs in how
-   the importer hands the repaired bounds to the converter (for example, a minimum aligned to the
-   grid, or a half-quantum pad), or in snapping picks to the source grid. It needs its own test, so
-   it was not done here.
-2. **Rim uncertainty (§10).** The rim XY comes from the data, because no one was there to pick it in
-   the app. It is a dense point on the rim ring at z 188.8 m (`rim2.txt`). The jump arrival's
-   straight-down Z refine returned the flue bottom (z −41.6) at that XY, not the rim, so the
-   close-up measured a point about 230 m below the rim, at level 6 (*u* 0.086 m). The same run on
-   open ground gives *u* 0.043 m and a ratio of 16. It needs a look (systematic debugging): why does
-   `pickDown` choose a lower point under a thin rim? Operator walkthrough step 5 asks for the rim
-   from inside the app.
-3. **Colour sample.** `sampleColours()` counted `background: 0` although the grey background is
-   visible in the screenshots. The white share was therefore divided by every pixel sampled, not
-   only the point pixels. With 23 white pixels out of 527 440 it stays far below 5 % either way. The
-   background-colour match in `classifyPixels` is probably off (colour encoding); it is minor.
+1. **Picks sat one quantum off (§9) — fixed.** First run: every pick exactly 1 mm low in X, and
+   sometimes in Y or Z. PotreeConverter 2.1.5 takes the work copy's header minimum as its offset and
+   truncates `(x − offset) / scale`; the repaired minimum (source min widened one step) was
+   `243194.29700000002`, a hair above the 1 mm grid, so grid values landed at k − ε and truncated to
+   k − 1. Fix (`cbbb884`): the header minimum is now written a thousandth of a step further down
+   (`widen_for_converter`), so the octree offset is `243194.296999` and every grid value truncates
+   to exactly k. The converter has no offset/scale option, so the header is the lever. The bounds
+   still contain every point; `bounds_native` and the export (which reads the source) are
+   unchanged. A real-converter test round-trips 20 000 grid points within 0.5 mm per axis.
+2. **Rim uncertainty (§10) — refine fixed, criterion data-limited.** First run: at a dense rim
+   point (z 188.8, `rim2.txt`) the jump arrival's straight-down Z refine returned the flue bottom
+   (z −41.6): potree-core's picker returns the drawn point nearest the window centre, and the ground
+   seen past the rim's coarse points was nearer. Fix (`9e9eb7b`, `3d2b588`):
+   `pickDown` reads back every point the pick window drew and takes the top surface at the spot
+   (`topmostWithin`: the smallest ring of 0.25/0.5/1/2 m holding a hit, a coarse point counting
+   within its own uncertainty, then the highest ± 0.5 m, nearest first). Both picks now land on the
+   rim, but the close-up *u* is 0.171 m: the octree ends at level 5 at the rim, and the source
+   points are 0.074 m apart there, so the spec's ≤ 0.05 m cannot be met on this rim with
+   *u* = spacing / 2^level. That needs a decision (another rim definition, or a *u* for leaf
+   nodes); it was not changed here. The same fix round found potree's pick answering null with 18
+   valid points in the window (a pixel whose node index names no rendered node); `pickAtClient`
+   now takes the nearest valid drawn point, which gave the §9 run all 10 picks.
+3. **Colour sample — fixed.** `new THREE.Color(r/255, …)` took the canvas token as linear, and the
+   sRGB output drew (21, 27, 25) as (81, 92, 88), the grey in the screenshots, so `sampleColours()`
+   never matched the background. `tokenColor` sets the token as sRGB for the clear colour and the
+   overlay tones: the canvas now shows the DESIGN.md token, and the background count is right.
 
 Timing caveat: an orbit p50 of 17.8 ms is the 60 Hz vsync interval, so it is a floor, not the
 viewer's cost.
@@ -148,6 +157,14 @@ check ok; ruff ok. `cargo test` was skipped there (no frozen sidecar). In this a
 sidecar freshly frozen from `main`: `cargo test --manifest-path frontend/src-tauri/Cargo.toml` gave
 8 passed, and `pytest -m potreeconverter` gave 2 passed. New in this entry:
 `frontend/scripts/measure-cloud-viewer.mjs` (eslint and prettier clean).
+
+Fix round (same branch): sidecar re-frozen (3 618.8 MB, 204 s), `smoke_frozen.ps1` → `pointcloud ok
+50000 32639 BROTLI laz 50000`, `cloud ok 50000 206`, `smoke ok`; `pnpm tauri build --no-bundle` ok;
+`check:webview` → `webview ok points=49724 red=0.108 green=0.109`; chimney re-import 9.16 s,
+21 697 184 pts, same `bounds_native`, octree 0.186 × source (`import-chimney-local-fixed.json`).
+Tests: pytest `tests/test_pointcloud*.py tests/test_contract.py` 399 passed, 5 skipped;
+`-m potreeconverter` 3 passed; ruff clean; vitest 197 files, 961 tests; frontend lint 0 errors, build ok;
+`e2e/clouds.spec.ts` 9 passed.
 
 ## Volumes S2 — 2026-09-25 (`task/volumes`, gated at `94c4e8b`, not yet on `main`)
 
