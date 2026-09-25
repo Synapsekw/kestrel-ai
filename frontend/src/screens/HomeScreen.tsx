@@ -61,6 +61,12 @@ const TYPE_VERB: Record<Job["type"], string> = {
   recount: "Recounting a run",
   area_recount: "Recounting site areas",
   detect_export: "Exporting counts",
+  pointcloud_import: "Importing a point cloud",
+  pointcloud_export: "Exporting a point cloud",
+  surface_build: "Building a surface",
+  volume_calc: "Calculating a volume",
+  volume_export: "Exporting volumes",
+  design_import: "Importing a design surface",
 };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;

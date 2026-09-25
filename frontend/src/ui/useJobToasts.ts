@@ -22,6 +22,12 @@ const TYPE_NAME: Record<Job["type"], string> = {
   recount: "Recount",
   area_recount: "Site-area recount",
   detect_export: "Detection export",
+  pointcloud_import: "Point cloud import",
+  pointcloud_export: "Point cloud export",
+  surface_build: "Build surface",
+  volume_calc: "Calculate volume",
+  volume_export: "Export volumes",
+  design_import: "Design surface import",
 };
 
 function num(v: unknown): number | null {
@@ -87,6 +93,21 @@ export function jobToastText(job: Job): string {
       return "Site-area counts updated";
     case "detect_export":
       return "Export finished";
+    case "pointcloud_import":
+      return "Point cloud imported";
+    case "pointcloud_export":
+      return "Point cloud export finished";
+    case "surface_build":
+      return "Surface built";
+    case "volume_calc":
+      return "Volume calculated";
+    case "volume_export":
+      return "Volume export finished";
+    case "design_import":
+      // One job type, three phases (spec 2026-09-23-design-surfaces section 4.1).
+      if (job.params?.phase === "build") return "Design surface imported";
+      if (job.params?.phase === "preview") return "Design preview ready";
+      return "Design file read";
   }
 }
 

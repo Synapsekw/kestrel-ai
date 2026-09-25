@@ -19,6 +19,12 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   recount: "Recount",
   area_recount: "Site-area recount",
   detect_export: "Detection export",
+  pointcloud_import: "Point cloud import",
+  pointcloud_export: "Point cloud export",
+  surface_build: "Build surface",
+  volume_calc: "Calculate volume",
+  volume_export: "Export volumes",
+  design_import: "Design surface import",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -111,6 +117,14 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return { label: "Open analytics", to: `${p}/analytics` };
     case "detect_export":
       return { label: "Open export", to: `${p}/export` };
+    case "pointcloud_import":
+    case "pointcloud_export":
+      return { label: "Open point clouds", to: `${p}/clouds` };
+    case "surface_build":
+    case "volume_calc":
+    case "volume_export":
+    case "design_import":
+      return { label: "Open volumes", to: `${p}/volumes` };
   }
 }
 

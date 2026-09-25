@@ -29,6 +29,12 @@ const JOB_NAME: Record<Job["type"], string> = {
   recount: "Recount",
   area_recount: "Site-area recount",
   detect_export: "Detection export",
+  pointcloud_import: "Point cloud import",
+  pointcloud_export: "Point cloud export",
+  surface_build: "Build surface",
+  volume_calc: "Calculate volume",
+  volume_export: "Export volumes",
+  design_import: "Design surface import",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

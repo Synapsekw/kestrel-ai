@@ -37,6 +37,12 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   recount: "detect",
   area_recount: "map",
   detect_export: "download",
+  pointcloud_import: "cloud",
+  pointcloud_export: "cloud",
+  surface_build: "volume",
+  volume_calc: "volume",
+  volume_export: "volume",
+  design_import: "volume",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {
