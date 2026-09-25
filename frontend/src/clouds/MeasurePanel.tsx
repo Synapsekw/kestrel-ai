@@ -133,14 +133,23 @@ export function MeasurePanel({
       })
       .catch((e: unknown) => setError(messageOf(e, "could not delete the measurement")));
 
+  // One save per measurement: Save waits for the answer, and after a save it waits for new picks
+  // (the picks array is replaced on every pick, so its identity marks "already saved").
+  const [saving, setSaving] = useState(false);
+  const [savedPicks, setSavedPicks] = useState<MeasureTool["picks"] | null>(null);
+  const canSave = tool.complete && !blocked && !saving && savedPicks !== tool.picks;
   const save = () => {
-    if (!tool.tool || !tool.complete || blocked) return;
+    if (!tool.tool || !canSave) return;
+    const picks = tool.picks;
+    setSaving(true);
     void createCloudMeasurement(api, projectId, cloud.id, { kind: tool.tool, points })
       .then((m) => {
         setItems((xs) => [...xs, m]);
+        setSavedPicks(picks);
         setError(null);
       })
-      .catch((e: unknown) => setError(messageOf(e, "could not save the measurement")));
+      .catch((e: unknown) => setError(messageOf(e, "could not save the measurement")))
+      .finally(() => setSaving(false));
   };
 
   return (
@@ -181,7 +190,7 @@ export function MeasurePanel({
       {live && !blocked && tool.tool && <ResultRows kind={tool.tool} r={live} />}
       {blocked && tool.complete && <Alert tone="warn">{blocked}</Alert>}
       {error && <Alert tone="danger">{error}</Alert>}
-      <Button variant="primary" disabled={!tool.complete || !!blocked} onClick={save}>
+      <Button variant="primary" disabled={!canSave} loading={saving} onClick={save}>
         Save
       </Button>
       <div className="flex items-center justify-between border-t border-line pt-3">

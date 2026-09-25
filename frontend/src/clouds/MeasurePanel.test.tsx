@@ -57,6 +57,28 @@ describe("Measure panel", () => {
     expect(await screen.findByRole("textbox", { name: "Name of Distance 1" })).toHaveValue("Distance 1");
   });
 
+  it("saves a measurement once: Save waits for the answer, then for a new pick", async () => {
+    // Final review F4: a double click saved the same measurement twice.
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/measurements$/, body: { items: [] } },
+      { method: "POST", path: /\/measurements$/, status: 201, body: saved },
+    ]);
+    let tool: MeasureTool | null = null;
+    renderWithProviders(<Harness cloud={exampleCloud} onTool={(t) => (tool = t)} />, { api });
+    act(() => tool!.arm("distance"));
+    act(() => tool!.add({ x: 0, y: 0, z: 0, level: 5, uncertainty_m: 0.03 }));
+    act(() => tool!.add({ x: 3, y: 4, z: 12, level: 5, uncertainty_m: 0.04 }));
+    const save = screen.getByRole("button", { name: "Save" });
+    await userEvent.dblClick(save);
+    await screen.findByRole("textbox", { name: "Name of Distance 1" });
+    expect(requests.filter((r) => r.method === "POST")).toHaveLength(1);
+    expect(save).toBeDisabled();
+    act(() => tool!.add({ x: 1, y: 1, z: 1, level: 5, uncertainty_m: 0.03 }));
+    expect(save).toBeDisabled(); // one pick of a new distance
+    act(() => tool!.add({ x: 2, y: 2, z: 2, level: 5, uncertainty_m: 0.03 }));
+    expect(save).toBeEnabled();
+  });
+
   it("says why distances are off on a cloud in degrees", () => {
     const { api } = fakeClient([{ method: "GET", path: /\/measurements$/, body: { items: [] } }]);
     const geographic = { ...exampleCloud, proj4: "+proj=longlat +datum=WGS84 +no_defs" };

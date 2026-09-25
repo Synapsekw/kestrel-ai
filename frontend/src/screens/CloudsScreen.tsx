@@ -2,7 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { cloudOctreeUrl, type GeoMap, type Job } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
-import { createPointCloud, deletePointCloud, listPointClouds, type PointCloud } from "@/api/clouds";
+import {
+  createPointCloud,
+  deletePointCloud,
+  listPointClouds,
+  patchPointCloud,
+  type PointCloud,
+} from "@/api/clouds";
 import { messageOf } from "@/api/errors";
 import { listMaps } from "@/api/maps";
 import { pushLog } from "@/app/diagnostics";
@@ -45,6 +51,20 @@ function runningExports(jobs: Record<string, Job>, projectId: string): Record<st
       out[j.id] = cloudId;
   }
   return out;
+}
+
+function centreTitle(cloud: PointCloud | null): string {
+  if (!cloud) return "Choose a point cloud";
+  if (cloud.status === "importing") return "Building the 3D view copy…";
+  if (cloud.status === "failed") return `${cloud.name} could not be imported`;
+  return cloud.name;
+}
+
+function centreText(cloud: PointCloud | null): string {
+  if (!cloud) return "Pick a cloud on the left, or import one.";
+  if (cloud.status === "importing") return `${cloud.name} opens here when its import finishes.`;
+  if (cloud.status === "failed") return cloud.error ?? "The job log says why.";
+  return "";
 }
 
 function report(action: string, err: unknown): string {
@@ -123,6 +143,9 @@ export function CloudsScreen() {
   useOnJobsFinished("pointcloud_import", reload);
 
   const cloud = clouds?.find((c) => c.id === cloudId) ?? null;
+  // View and Measure need the 3D view copy: an importing or failed cloud has Details only.
+  const ready = cloud?.status === "ready";
+  const shownTab: Tab = ready ? tab : "details";
   useJumpArrival(viewer, cloud, location.search);
   const [lastPick, setLastPick] = useState<CloudPick | null>(null);
   const defaultRange = useMemo<[number, number]>(
@@ -159,15 +182,25 @@ export function CloudsScreen() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // The retry keeps what the operator set on the failed cloud: its map link (create links it, from
+  // the header) and its capture date (create has no field for it; a date set during the import is
+  // never overwritten by the job).
   const importAgain = (c: PointCloud) =>
-    void createPointCloud(api, projectId, { path: c.source_path, name: c.name })
+    void createPointCloud(api, projectId, {
+      path: c.source_path,
+      name: c.name,
+      ...(c.map_id ? { map_id: c.map_id } : {}),
+    })
       .then(
-        (r) => {
+        async (r) => {
           useJobsStore.getState().upsert(r.job);
           navigate(`/p/${projectId}/clouds/${r.cloud.id}`);
-          // The new import runs either way; a failed delete only leaves the old row in the list.
-          return deletePointCloud(api, projectId, c.id).then(
-            () => undefined,
+          // The new import runs either way; a failed date or delete is said, never undoes it.
+          if (c.captured_on)
+            await patchPointCloud(api, projectId, r.cloud.id, { captured_on: c.captured_on }).catch(
+              (e: unknown) => void report("keep the capture date", e),
+            );
+          await deletePointCloud(api, projectId, c.id).catch(
             (e: unknown) => void report("remove the failed point cloud", e),
           );
         },
@@ -261,12 +294,8 @@ export function CloudsScreen() {
             onHover={measure.setHover}
           />
         ) : (
-          <EmptyState
-            className="m-auto"
-            icon="cloud"
-            title={cloud ? `${cloud.name} is ${cloud.status}` : "Choose a point cloud"}
-          >
-            {cloud?.error ?? "Pick a cloud on the left, or import one."}
+          <EmptyState className="m-auto" icon="cloud" title={centreTitle(cloud)}>
+            {centreText(cloud)}
           </EmptyState>
         )}
         {(() => {
@@ -298,14 +327,14 @@ export function CloudsScreen() {
             <Segmented
               label="Cloud panel"
               size="sm"
-              value={tab}
+              value={shownTab}
               onChange={(t) => {
                 setTab(t);
                 if (t !== "measure") measure.cancel();
               }}
-              options={TABS}
+              options={TABS.map((o) => (o.value === "details" ? o : { ...o, disabled: !ready }))}
             />
-            {tab === "details" && (
+            {shownTab === "details" && (
               <CloudDetails
                 // Keyed: an error, EPSG draft or export of one cloud never carries over to the next.
                 key={cloud.id}
@@ -321,7 +350,7 @@ export function CloudsScreen() {
                 }}
               />
             )}
-            {tab === "view" && settings && (
+            {shownTab === "view" && settings && (
               <ViewPanel
                 settings={settings}
                 hasRgb={!!cloud.has_rgb}
@@ -334,7 +363,7 @@ export function CloudsScreen() {
                 onTop={() => viewer.current?.topView()}
               />
             )}
-            {tab === "measure" && (
+            {shownTab === "measure" && (
               <MeasurePanel
                 key={cloud.id}
                 projectId={projectId}

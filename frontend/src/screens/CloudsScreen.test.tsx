@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import type { Job } from "@contract/client";
@@ -200,6 +200,99 @@ describe("Clouds screen", () => {
       { timeout: 5000 },
     );
   }, 10_000);
+
+  it("keeps View and Measure for a ready cloud, and says what an importing or failed one is doing", async () => {
+    // Final review F3.
+    const importing = { ...exampleCloud, status: "importing", z_stats: null, has_rgb: null };
+    const { api } = fakeClient(routes([importing]));
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
+      path: "/p/:projectId/clouds/:cloudId",
+    });
+    const centre = await screen.findByTestId("cloud-centre");
+    expect(centre).toHaveTextContent("Building the 3D view copy…");
+    expect(centre).not.toHaveTextContent("Pick a cloud on the left");
+    expect(screen.getByRole("radio", { name: "View" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Measure" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Details" })).toBeEnabled();
+  });
+
+  it("shows a failed cloud's reason in the centre, with View and Measure off", async () => {
+    const failed = { ...exampleCloud, status: "failed", error: "the file has no points" };
+    const { api } = fakeClient(routes([failed]));
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
+      path: "/p/:projectId/clouds/:cloudId",
+    });
+    const centre = await screen.findByTestId("cloud-centre");
+    expect(centre).toHaveTextContent(`${exampleCloud.name} could not be imported`);
+    expect(centre).toHaveTextContent("the file has no points");
+    expect(screen.getByRole("radio", { name: "View" })).toBeDisabled();
+    expect(screen.getByRole("radio", { name: "Measure" })).toBeDisabled();
+  });
+
+  it("Import again keeps the failed cloud's map link and capture date", async () => {
+    // Final review F5.
+    const failed = {
+      ...exampleCloud,
+      status: "failed",
+      error: "import interrupted by application restart; import the file again",
+      map_id: "m-1",
+      captured_on: "2026-05-04",
+    };
+    const fresh = { ...exampleCloud, id: "c-new", status: "importing", map_id: "m-1", captured_on: null };
+    const importJob: Job = { ...runningJob, id: "j-import-9", type: "pointcloud_import", state: "queued" };
+    const { api, requests } = fakeClient([
+      ...routes([failed]),
+      { method: "POST", path: /\/pointclouds$/, status: 202, body: { cloud: fresh, job: importJob } },
+      { method: "PATCH", path: /\/pointclouds\/c-new$/, body: { ...fresh, captured_on: "2026-05-04" } },
+      { method: "DELETE", path: new RegExp(`/pointclouds/${CLOUD_ID}$`), status: 204, body: null },
+      { method: "GET", path: /\/pointclouds\/c-new$/, body: fresh },
+      { method: "GET", path: /\/jobs\/j-import-9$/, body: importJob },
+    ]);
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds`,
+      path: "/p/:projectId/clouds/:cloudId?",
+    });
+    await userEvent.click(await screen.findByRole("button", { name: "Import again" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
+    const post = requests.find((r) => r.method === "POST");
+    expect(post?.body).toEqual({ path: failed.source_path, name: failed.name, map_id: "m-1" });
+    const patch = requests.find((r) => r.method === "PATCH");
+    expect(patch?.url).toMatch(/\/pointclouds\/c-new$/);
+    expect(patch?.body).toEqual({ captured_on: "2026-05-04" });
+  });
+
+  it("saves the capture date when the field is left, not on every keystroke", async () => {
+    // Final review F6.
+    const { api, requests } = fakeClient([
+      ...routes([exampleCloud]),
+      {
+        method: "PATCH",
+        path: new RegExp(`/pointclouds/${CLOUD_ID}$`),
+        body: { ...exampleCloud, captured_on: "2026-05-12" },
+      },
+    ]);
+    renderWithProviders(<CloudsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
+      path: "/p/:projectId/clouds/:cloudId",
+    });
+    const input = await screen.findByLabelText("Captured on");
+    // A date typed year by year passes through intermediate years.
+    for (const v of ["0002-05-12", "0020-05-12", "0202-05-12", "2026-05-12"])
+      fireEvent.change(input, { target: { value: v } });
+    expect(requests.filter((r) => r.method === "PATCH")).toHaveLength(0);
+    fireEvent.blur(input);
+    await waitFor(() => expect(requests.filter((r) => r.method === "PATCH")).toHaveLength(1));
+    expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({ captured_on: "2026-05-12" });
+    fireEvent.blur(await screen.findByLabelText("Captured on")); // nothing changed since: no second save
+    await new Promise((r) => setTimeout(r, 50));
+    expect(requests.filter((r) => r.method === "PATCH")).toHaveLength(1);
+  });
 
   it("offers Export LAZ only for a ready cloud and keeps a link that no longer qualifies", async () => {
     const linked = { ...exampleCloud, status: "failed", error: "boom", map_id: "m-gone" };

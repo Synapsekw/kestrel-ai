@@ -82,10 +82,33 @@ export function CloudDetails({
       {error && <Alert tone="danger">{error}</Alert>}
       <Field label="Captured on" htmlFor="cloud-captured">
         <Input
+          // Uncontrolled and saved when left (or on Enter): typing a year passes through 0002, 0020,
+          // 0202... which must never be sent. Keyed on the stored date, so a saved or failed value
+          // (and a change from elsewhere) resets the field to what the server holds.
+          key={cloud.captured_on ?? ""}
           id="cloud-captured"
           type="date"
-          value={cloud.captured_on ?? ""}
-          onChange={(e) => patch({ captured_on: e.target.value || null })}
+          defaultValue={cloud.captured_on ?? ""}
+          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+          onBlur={(e) => {
+            const input = e.currentTarget;
+            const stored = cloud.captured_on ?? "";
+            if (input.validity.badInput) {
+              input.value = stored; // half a date: neither a date nor "cleared"
+              return;
+            }
+            if (input.value === stored) return;
+            const value = input.value || null;
+            void patchPointCloud(api, projectId, cloud.id, { captured_on: value })
+              .then((c) => {
+                setError(null);
+                onChanged(c);
+              })
+              .catch((err: unknown) => {
+                input.value = cloud.captured_on ?? "";
+                setError(messageOf(err, "could not save"));
+              });
+          }}
         />
       </Field>
       {!cloud.crs_wkt && (
