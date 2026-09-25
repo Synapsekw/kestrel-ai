@@ -306,6 +306,44 @@ def test_a_one_point_two_ratio_target_cell_holds_a_millimetre(tmp_path):
     assert np.abs(out - steep_plane(X, Y)).max() < 1e-3
 
 
+@pytest.mark.parametrize(("case", "target_cell"), [("ratio 1", 0.5), ("ratio 1.2", 0.6)])
+def test_a_reprojected_steep_plane_holds_a_millimetre(tmp_path, case, target_cell):
+    """Fix round 2: a CRS-reprojected source needs the real `XSCALE`/`YSCALE` kwargs even at ratio
+    1 -- round 1's exact-bilinear workaround (reproject at the source's own resolution, then
+    hand-interpolate) still missed the 1 mm oracle by ~15 mm here, because that reprojection step
+    itself goes through the same GDAL bilinear kernel, which is biased without the real kwargs
+    (passing them inside `warp_extras={...}` does not reach GDAL at all -- see the ADR)."""
+    to38 = Transformer.from_crs(32639, 32638, always_xy=True)
+    target = target_spec((250_000.0, 3_000_000.0, 250_400.0, 3_000_300.0), cell=target_cell)
+    xs, ys = to38.transform(
+        [250_000, 250_400, 250_400, 250_000], [3_000_000, 3_000_000, 3_000_300, 3_000_300]
+    )
+    x0, y1 = min(xs) - 20, max(ys) + 20
+    src_cell = 0.5
+    w = int((max(xs) - x0 + 20) / src_cell)
+    h = int((y1 - (min(ys) - 20)) / src_cell)
+    X0, Y0 = x0, y1
+
+    def plane38(x, y):
+        return 10.0 + 0.3 * (x - X0) - 0.15 * (Y0 - y)
+
+    cols, rows = np.meshgrid(np.arange(w) + 0.5, np.arange(h) + 0.5)
+    src = write_dem(
+        tmp_path / "p38steep.tif",
+        plane38(x0 + cols * src_cell, y1 - rows * src_cell),
+        x0=x0,
+        y0=y1,
+        cell=src_cell,
+        crs="EPSG:32638",
+    )
+    p = pl.resolve(opts(source_crs="EPSG:32638"), "geotiff", target)
+    out = build(tmp_path, src, target, p)
+    X, Y = centres(target)
+    ex, ey = to38.transform(X, Y)
+    assert np.isfinite(out).all()
+    assert np.abs(out - plane38(ex, ey)).max() < 1e-3
+
+
 def test_a_four_times_ratio_target_cell_holds_a_millimetre_at_the_edge_ring(tmp_path):
     """R7 fix round 1: the Resampling.average path (target cell more than double the source cell --
     here a 2 m target on a 0.5 m source, ratio 4) needs the same coverage-based erosion as bilinear;

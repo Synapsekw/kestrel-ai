@@ -61,54 +61,94 @@ the original test suite:
    the destination pixel as valid, extrapolating from partial data. A destination cell one ring
    outside the hole can be tens of millimetres off while looking like ordinary data.
 
-2. **GDAL's bilinear kernel is measurably biased for a non-integer resolution ratio, and `XSCALE=1,
-   YSCALE=1` does not fix it on this rasterio/GDAL build.** A controller ruling asked for `XSCALE=1,
-   YSCALE=1` on the bilinear `WarpedVRT`, citing an independent reviewer's measurement of 0.01 mm at
-   a 1.2x and a 1.5x target/source cell ratio. On this repo's rasterio 1.4.4 / GDAL 3.10.3, that
-   override is a verified no-op: `WarpedVRT.warp_extras` correctly records the values passed
-   (`vrt.warp_extras == {"XSCALE": 1, "YSCALE": 1, ...}`), but the read output is bit-identical
-   whether `XSCALE`/`YSCALE` is omitted, set to 1, or set to anything from 0.001 to 50 -- confirmed
-   both via `WarpedVRT.read()` and via `rasterio.warp.reproject()`. The underlying bias itself is
-   real and reproducible without any of this module's code: a plain `DatasetReader.read(out_shape=
-   ..., resampling=Resampling.bilinear)` resize at a 1.2x ratio, with no CRS and no `WarpedVRT`
-   involved at all, shows the same magnitude of error (10-25 mm on a 0.3 slope), and it is exactly
-   periodic in the destination column with a period matching the ratio's reduced fraction (5 for
-   6:5) -- a phase-locked kernel-positioning artifact, not a coordinate-transform or float-precision
-   issue (unchanged by `tolerance`, by using no CRS at all, and by using float64 throughout).
-   `Resampling.average` and `Resampling.cubic_spline` show the same or worse bias at this ratio;
-   `Resampling.cubic` is better (~1.3 mm) but still misses 1 mm. The bias vanishes (< 0.002 mm) the
+2. **GDAL's bilinear kernel is measurably biased for a non-integer resolution ratio.** A controller
+   ruling asked for `XSCALE=1, YSCALE=1` on the bilinear `WarpedVRT`, citing an independent
+   reviewer's measurement of 0.01 mm at a 1.2x and a 1.5x target/source cell ratio. The bias itself
+   is real: at a 1.2x ratio and a 0.3 slope it's ~12-15 mm; it's exactly periodic in the destination
+   column with a period matching the ratio's reduced fraction (5 for 6:5), and it vanishes the
    moment the ratio is exactly 1.
-
-   Given `XSCALE`/`YSCALE` do not work here, the fix is to avoid GDAL's ratio-dependent kernel
-   entirely for the regime it's biased in: `dem_build._needs_exact_bilinear` detects a genuine
-   downsampling ratio in `(1, 2]` (upsampling and same-resolution are already exact; ratio > 2 is
-   `Resampling.average`, separately verified accurate via
-   `test_a_four_times_ratio_target_cell_holds_a_millimetre_at_the_edge_ring`) and switches to a
-   two-stage path: `_open_reprojected_native` reprojects the source (and, identically, the coverage
-   validity band) into the output CRS *at the source's own cell size* -- ratio exactly 1, where
-   GDAL's kernel is exact -- and `_bilinear_from_native` then interpolates onto the actual target
-   lattice by hand with the plain 4-neighbour bilinear formula, in `EXACT_MAX_SIDE`-capped, bounded
-   reads. Verified at both ratios the reviewer cited: 1.2x (0.6 m target on a 0.5 m source,
-   `test_a_one_point_two_ratio_target_cell_holds_a_millimetre`) is within ~0.015 mm, and a spot check
-   at 1.5x is within ~0.006 mm.
-
-   The fixed half-pixel erosion was replaced at the same time with a proper coverage mask (a 1.0/0.0
-   validity band warped through the identical pipeline as the heights -- the same GDAL warp, or the
-   same exact-bilinear path -- thresholded at `>= 1 - 1e-6`), which catches the interior-hole rim,
-   the outer edge, and `Resampling.average`'s wider reach uniformly instead of three different fixed
-   distances. See `test_an_interior_nodata_hole_erodes_its_contaminated_rim_not_just_itself`.
 
 ### Consequences (fix round 1)
 
-- Positive: all of the above tests hold, including the pre-existing edge-ring and 4x-ratio tests,
-  unaffected because they fall outside the `(1, 2]` exact-bilinear regime (ratio 1 and ratio 4
-  respectively).
-- Negative: the exact-bilinear path does one extra reprojection (source, at its own resolution) and
-  a second, manual interpolation pass, only for the `(1, 2]` downsampling regime; every other ratio
-  is unaffected and unchanged in cost.
-- This is a *ruled deviation* from the literal controller instruction: `XSCALE=1, YSCALE=1` is still
-  set (harmless, and it is possible a different GDAL build honours it for `WarpedVRT` reads), but it
-  is not what makes the new tests pass. If a future GDAL/rasterio upgrade changes this, `warp_extras`
-  becoming genuinely effective would just make `_needs_exact_bilinear`'s fallback path an
-  (still-correct) no-op improvement opportunity, not a regression -- worth re-measuring the 1.2x/1.5x
-  cases before removing it, though, rather than assuming the newer GDAL fixed it.
+- Positive: `test_an_interior_nodata_hole_erodes_its_contaminated_rim_not_just_itself` pins the
+  coverage-mask fix for interior holes, and it holds.
+- The half-pixel erosion was replaced with a proper coverage mask (a 1.0/0.0 validity band warped
+  through the identical pipeline as the heights, thresholded at `>= 1 - 1e-6`), which catches the
+  interior-hole rim, the outer edge, and `Resampling.average`'s wider reach uniformly instead of
+  three different fixed distances. This part of fix round 1 stood; item 2's mitigation did not, see
+  fix round 2 below -- **fix round 1's own claim that `XSCALE=1, YSCALE=1` is inert on this build was
+  wrong, and is corrected there, not repeated here.**
+
+## Fix round 2 (2026-09-25): the `XSCALE`/`YSCALE` override never reached GDAL
+
+Fix round 1 measured `XSCALE=1, YSCALE=1` as a no-op and built a substantial workaround instead (a
+second WarpedVRT reprojecting the source at its own resolution, then a hand-rolled 4-neighbour
+bilinear interpolation onto the real target lattice) -- entirely because of a call-site bug, not a
+GDAL or rasterio limitation:
+
+```python
+# what fix round 1 did -- looks reasonable, does nothing:
+WarpedVRT(src, ..., warp_extras={"XSCALE": 1, "YSCALE": 1})
+```
+
+`rasterio.vrt.WarpedVRT`'s `warp_extras` is a real parameter, but passing a dict as its value makes
+rasterio store that whole dict *verbatim under its own `"warp_extras"` key* rather than merging
+`XSCALE`/`YSCALE` into the option set GDAL actually reads -- `vrt.warp_extras` after construction is
+`{"warp_extras": {"XSCALE": 1, "YSCALE": 1}, "init_dest": "0"}`, not `{"XSCALE": 1, "YSCALE": 1,
+...}`. Fix round 1's own check of `vrt.warp_extras` (it printed a dict *containing* `{"XSCALE": 1,
+"YSCALE": 1}`) was misread as confirmation the values reached GDAL; they were one level too deep.
+`rasterio.warp.reproject(..., warp_extras={...})` has the identical bug.
+
+The values only take effect passed as **real keyword arguments**:
+
+```python
+WarpedVRT(src, ..., XSCALE=1, YSCALE=1)          # correct
+reproject(..., XSCALE=1, YSCALE=1)               # correct
+```
+
+Re-measured with the corrected call:
+
+| case | dict (`warp_extras={...}`) | real kwargs |
+| --- | --- | --- |
+| 0.5 -> 0.6 m, slope 0.3, offset lattice | 11.92 mm | 0.0055 mm |
+| ratio 1.5, same conditions | 8.15 mm | 0.0023 mm |
+| UTM 38 -> 39 reprojection, ratio 1, slope 0.3 | 15.91 mm | 0.0067 mm |
+| UTM 38 -> 39 reprojection, ratio 1.2, slope 0.3 | 15.48 mm | 0.0078 mm |
+| windowed reads (64x64 chunks) vs one full read, real kwargs | -- | identical (0.00e+00 max diff) |
+
+The UTM 38 -> 39 rows matter beyond confirming the bug: fix round 1's exact-bilinear workaround
+(reproject at the source's own resolution, "ratio 1 is exact", then hand-interpolate) does **not**
+fix a reprojected source even at ratio 1 -- the reprojection step itself still goes through the same
+GDAL bilinear kernel, still biased without the real kwargs. Only the correct kwargs fix that case;
+the workaround's premise ("ratio 1 is always exact") held for a same-CRS resize but not for a
+reprojection, and was never actually necessary once the real bug was found.
+
+### Decision (fix round 2)
+
+- Pass `XSCALE=1, YSCALE=1` as real keyword arguments everywhere a bilinear `WarpedVRT` is opened
+  (`_open_warped`, `_open_validity_warp`), via `_warp_params`'s `kernel_kwargs` dict unpacked with
+  `**kernel_kwargs` at each call site -- never as `warp_extras={...}`.
+- Delete fix round 1's exact-bilinear workaround (`_needs_exact_bilinear`,
+  `_open_reprojected_native`, `_bilinear_from_native`, `_regrid_exact_bilinear`, and the branching in
+  `regrid()`/`read_preview()`) -- it is no longer needed and, per the UTM 38 -> 39 measurements
+  above, was not even fully correct.
+- `_build_validity_source` now writes to a temporary GeoTIFF on disk (tiled, DEFLATE, uint8) instead
+  of an in-memory `MemoryFile` (`/vsimem`, RAM-backed) -- a `MemoryFile` copy of a large source DEM
+  (tens of thousands of pixels per side) would put a full uncompressed array in RAM, breaking the
+  bounded-memory invariant regardless of the `grid.MAX_READ`-chunked writes into it. The temp
+  directory is removed in a `finally` (including on cancellation or a failure partway through its
+  own construction).
+
+### Consequences (fix round 2)
+
+- Positive: all fix-round-1 tests still hold (the edge-ring, interior-hole, 1.2x-ratio and 4x-ratio
+  cases), plus a new `test_a_reprojected_steep_plane_holds_a_millimetre` (ratio 1 and 1.2, UTM 38 ->
+  39, slope 0.3) that the exact-bilinear workaround would not have passed.
+- Negative: none measured -- the real-kwargs fix is strictly simpler than what it replaces (one
+  `WarpedVRT` per warp, not two, and no hand-rolled interpolation).
+- The earlier "ruled deviation" (accepting `XSCALE`/`YSCALE` as an instructed-but-inert override) no
+  longer applies: the controller's original ruling was correct, the round-1 implementation of it was
+  not. Lesson for future rasterio/GDAL option passing in this codebase: verify an override actually
+  changed *output*, not just that the option name appears somewhere in the constructed object's
+  introspection -- `vrt.warp_extras` containing the right *substring* was not the same as it
+  containing the right *keys*.
