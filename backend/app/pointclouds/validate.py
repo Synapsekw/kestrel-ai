@@ -43,7 +43,8 @@ def _first_chunk_size(hierarchy_meta: object) -> int | None:
 
 def validate_octree(octree: Path, *, points: int, bounds: list[float], encoding: str) -> dict:
     try:
-        meta = json.loads((octree / "metadata.json").read_text("utf-8"))
+        # utf-8-sig: PotreeConverter 2.1.5 writes metadata.json with a UTF-8 BOM.
+        meta = json.loads((octree / "metadata.json").read_text("utf-8-sig"))
     except (OSError, ValueError) as e:
         raise JobFailure(
             f"the 3D view copy failed its checks: metadata.json could not be read ({e})"

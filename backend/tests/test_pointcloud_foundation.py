@@ -112,7 +112,6 @@ def test_change_events_carry_their_ids_and_skip_an_empty_list(publish, event_typ
 @pytest.mark.parametrize(
     "command",
     [
-        "pointcloud-selftest",
         "design-selftest",
     ],
 )

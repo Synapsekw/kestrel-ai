@@ -9,9 +9,10 @@
   runs, the `worker` subcommand trains with DataLoader workers (freeze_support), ONNX export
   works, and keyring reaches Windows Credential Manager without setuptools entry points.
 
-  Prints `geo ok 32633 <lon> <lat>`, `health ok`, `cuda True <gpu name>`, `starter ok 3`, `library ok`,
-  `predict ok <n> boxes` and `worker ok`, and exits non-zero on any failure. Sample frames are
-  copied out of the read-only source folder first.
+  Prints `geo ok 32633 <lon> <lat>`, `pointcloud ok 50000 32639 BROTLI laz 50000`, `health ok`,
+  `cuda True <gpu name>`, `starter ok 3`, `library ok`, `import ok <n> images`,
+  `cloud ok 50000 206`, `predict ok <n> boxes` and `worker ok`, and exits non-zero on any failure.
+  Sample frames are copied out of the read-only source folder first.
 
 .PARAMETER Keep
   Leave the generated work dir behind; it is deleted on the way out by default.
@@ -66,6 +67,12 @@ $vol = & $exe volumes-selftest 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selftest failed: $vol" }
 Write-Host ($vol.Trim().Split("`n")[-1])
 Complete-Step "volumes"
+
+# PotreeConverter + laspy/lazrs inside the bundle (ADR 2026-09-23): the real import path on a fixture.
+$pc = & $exe pointcloud-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $pc -notmatch "pointcloud ok 50000 32639 BROTLI laz 50000") { throw "pointcloud selftest failed: $pc" }
+Write-Host ($pc.Trim().Split("`n")[-1])
+Complete-Step "pointcloud"
 
 function Invoke-Api([string] $Method, [string] $Path, $Body, [int] $TimeoutSec = 900) {
   $request = @{
@@ -187,6 +194,31 @@ try {
   if ($stats.image_count -ne $Frames) { throw "imported $($stats.image_count) images, expected $Frames" }
   Complete-Step "import"
   Write-Host "import ok $($stats.image_count) images"
+
+  # 5b. a point cloud through the API: import in a detection project, then a Range read of its octree
+  $cloudsFolder = Join-Path $WorkDir "clouds-project"
+  New-Item -ItemType Directory -Force $cloudsFolder | Out-Null
+  $fixture = Join-Path $WorkDir "fixture.laz"
+  $written = & $exe pointcloud-selftest --write-fixture $fixture 2>&1 | Out-String
+  if ($LASTEXITCODE -ne 0) { throw "could not write the point-cloud fixture: $written" }
+  $pcProject = Invoke-Api POST "/projects" @{ name = "Frozen smoke clouds"; folder = $cloudsFolder; classes = $classes; kind = "detect" }
+  $created = Invoke-Api POST "/projects/$($pcProject.id)/pointclouds" @{ path = $fixture }
+  $job = Wait-ApiJob "/projects/$($pcProject.id)/jobs" $created.job.id
+  if ($job.state -ne "succeeded") { throw "point-cloud import failed: $($job.error)" }
+  $cloud = Invoke-Api GET "/projects/$($pcProject.id)/pointclouds/$($created.cloud.id)"
+  if ($cloud.status -ne "ready" -or $cloud.point_count -ne 50000) { throw "cloud not ready: $($cloud | ConvertTo-Json -Compress)" }
+  # PowerShell 5.1 refuses a Range header in -Headers; HttpWebRequest.AddRange sets it properly.
+  $rangeUrl = "$script:Base/api/v1/projects/$($pcProject.id)/pointclouds/$($cloud.id)/octree/hierarchy.bin"
+  $req = [System.Net.HttpWebRequest]::Create($rangeUrl)
+  $req.Headers.Add("Authorization", "Bearer $script:Token")
+  $req.AddRange(0, 21)
+  $resp = $req.GetResponse()
+  $stream = $resp.GetResponseStream(); $buffer = New-Object byte[] 64; $read = 0
+  while (($n = $stream.Read($buffer, $read, $buffer.Length - $read)) -gt 0) { $read += $n }
+  $status = [int]$resp.StatusCode; $resp.Close()
+  if ($status -ne 206 -or $read -ne 22) { throw "octree Range read gave $status with $read bytes" }
+  Complete-Step "pointcloud_api"
+  Write-Host "cloud ok $($cloud.point_count) $status"
 
   $acquire = Invoke-Api POST "/library/starters/yolo11n/acquire" @{}
   $job = Wait-ApiJob "/library/jobs" $acquire.job.id
