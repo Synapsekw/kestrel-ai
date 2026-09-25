@@ -1,0 +1,56 @@
+{
+  "tolerance": 1e-9,
+  "fields": ["lon", "lat", "dx", "dy", "dz", "distance_3d", "distance_horizontal", "distance_vertical", "height_difference", "lean_offset_m", "lean_angle_deg", "lean_azimuth_deg", "lean_mm_per_m", "uncertainty_m", "angle_uncertainty_deg"],
+  "cases": [
+    {
+      "name": "a single pick", "kind": "point",
+      "points": [{"x": 243522.123, "y": 3178252.456, "z": -44.321, "uncertainty_m": 0.032}],
+      "results": {"uncertainty_m": 0.032}
+    },
+    {
+      "name": "3-4-12 box diagonal", "kind": "distance",
+      "points": [{"x": 0, "y": 0, "z": 0, "uncertainty_m": 0.03}, {"x": 3, "y": 4, "z": 12, "uncertainty_m": 0.04}],
+      "results": {"dx": 3, "dy": 4, "dz": 12, "distance_3d": 13.0, "distance_horizontal": 5.0, "distance_vertical": 12, "height_difference": 12, "uncertainty_m": 0.05}
+    },
+    {
+      "name": "UTM coordinates, going down", "kind": "distance",
+      "points": [{"x": 500000.5, "y": 4983000.25, "z": 100.0, "uncertainty_m": 0.01}, {"x": 500010.5, "y": 4982990.25, "z": 95.0, "uncertainty_m": 0.02}],
+      "results": {"dx": 10.0, "dy": -10.0, "dz": -5.0, "distance_3d": 15.0, "distance_horizontal": 14.142135623730951, "distance_vertical": 5.0, "height_difference": -5.0, "uncertainty_m": 0.022360679774997897}
+    },
+    {
+      "name": "second pick lower: negative", "kind": "height",
+      "points": [{"x": 10, "y": 10, "z": 50, "uncertainty_m": 0.005}, {"x": 10, "y": 12, "z": 47.5, "uncertainty_m": 0.005}],
+      "results": {"dx": 0, "dy": 2, "dz": -2.5, "distance_3d": 3.2015621187164243, "distance_horizontal": 2.0, "distance_vertical": 2.5, "height_difference": -2.5, "uncertainty_m": 0.007071067811865475}
+    },
+    {
+      "name": "second pick higher: positive", "kind": "height",
+      "points": [{"x": 243500, "y": 3178200, "z": -45.2, "uncertainty_m": 0.02}, {"x": 243501, "y": 3178200.5, "z": 130.8, "uncertainty_m": 0.08}],
+      "results": {"dx": 1, "dy": 0.5, "dz": 176.0, "distance_3d": 176.00355110053889, "distance_horizontal": 1.118033988749895, "distance_vertical": 176.0, "height_difference": 176.0, "uncertainty_m": 0.08246211251235322}
+    },
+    {
+      "name": "pole leaning exactly 1 degree to grid east", "kind": "vertical",
+      "points": [{"x": 243522, "y": 3178252, "z": -44, "uncertainty_m": 0.01}, {"x": 243523.74550649282, "y": 3178252, "z": 56, "uncertainty_m": 0.01}],
+      "results": {"dx": 1.7455064928217325, "dy": 0, "dz": 100, "distance_3d": 100.01523280439076, "distance_horizontal": 1.7455064928217325, "distance_vertical": 100, "height_difference": 100, "lean_offset_m": 1.7455064928217325, "lean_angle_deg": 0.9999999999999851, "lean_azimuth_deg": 90.0, "lean_mm_per_m": 17.455064928217325, "uncertainty_m": 0.01414213562373095, "angle_uncertainty_deg": 0.008102846791394976}
+    },
+    {
+      "name": "top picked first: sorted by Z", "kind": "vertical",
+      "points": [{"x": 243523.74550649282, "y": 3178252, "z": 56, "uncertainty_m": 0.01}, {"x": 243522, "y": 3178252, "z": -44, "uncertainty_m": 0.01}],
+      "results": {"dx": 1.7455064928217325, "dy": 0, "dz": 100, "distance_3d": 100.01523280439076, "distance_horizontal": 1.7455064928217325, "distance_vertical": 100, "height_difference": 100, "lean_offset_m": 1.7455064928217325, "lean_angle_deg": 0.9999999999999851, "lean_azimuth_deg": 90.0, "lean_mm_per_m": 17.455064928217325, "uncertainty_m": 0.01414213562373095, "angle_uncertainty_deg": 0.008102846791394976}
+    },
+    {
+      "name": "lean to the north-west", "kind": "vertical",
+      "points": [{"x": 1000, "y": 2000, "z": 0, "uncertainty_m": 0.05}, {"x": 999, "y": 2001, "z": 50, "uncertainty_m": 0.05}],
+      "results": {"dx": -1, "dy": 1, "dz": 50, "distance_3d": 50.0199960015992, "distance_horizontal": 1.4142135623730951, "distance_vertical": 50, "height_difference": 50, "lean_offset_m": 1.4142135623730951, "lean_angle_deg": 1.6201374245654556, "lean_azimuth_deg": 315.0, "lean_mm_per_m": 28.284271247461902, "uncertainty_m": 0.07071067811865477, "angle_uncertainty_deg": 0.0810284144352254}
+    },
+    {
+      "name": "perfectly plumb", "kind": "vertical",
+      "points": [{"x": 5, "y": 5, "z": 0, "uncertainty_m": 0.02}, {"x": 5, "y": 5, "z": 30, "uncertainty_m": 0.02}],
+      "results": {"dx": 0, "dy": 0, "dz": 30, "distance_3d": 30.0, "distance_horizontal": 0.0, "distance_vertical": 30, "height_difference": 30, "lean_offset_m": 0.0, "lean_angle_deg": 0.0, "lean_azimuth_deg": 0.0, "lean_mm_per_m": 0.0, "uncertainty_m": 0.0282842712474619, "angle_uncertainty_deg": 0.054018962963811507}
+    },
+    {
+      "name": "lean to the south, chimney scale", "kind": "vertical",
+      "points": [{"x": 243522.4, "y": 3178252.1, "z": -44.0, "uncertainty_m": 0.012}, {"x": 243522.35, "y": 3178251.93, "z": 175.6, "uncertainty_m": 0.031}],
+      "results": {"dx": -0.04999999998835847, "dy": -0.1699999999254942, "dz": 219.6, "distance_3d": 219.60007149361306, "distance_horizontal": 0.17720045139193036, "distance_vertical": 219.6, "height_difference": 219.6, "lean_offset_m": 0.17720045139193036, "lean_angle_deg": 0.04623331415746636, "lean_azimuth_deg": 196.38954033722115, "lean_mm_per_m": 0.8069237312929434, "uncertainty_m": 0.03324154027718932, "angle_uncertainty_deg": 0.008673041656875507}
+    }
+  ]
+}

@@ -78,10 +78,6 @@ EXPECTED_STUBS: set[str] = {
     "getPointCloud",
     "patchPointCloud",
     "deletePointCloud",
-    "listCloudMeasurements",
-    "createCloudMeasurement",
-    "updateCloudMeasurement",
-    "deleteCloudMeasurement",
     "createPointCloudExport",
     # S3 design surfaces (app/surfaces/design/router.py)
     "createDesignInspection",
@@ -112,6 +108,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "getPointCloudOctreeFile": {416},  # a Range the file cannot satisfy
+    "createCloudMeasurement": {422},
 }
 
 
