@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { exampleGeoMap, exampleMapRun, exampleProject, fakeClient, runningJob } from "@/test/fixtures";
 import {
   PROJECT_ID,
@@ -8,7 +8,8 @@ import {
   exampleSurface,
   otherFlightRun,
 } from "@/test/volumeFixtures";
-import { renderWithProviders } from "@/test/render";
+import { MemoryRouter } from "react-router-dom";
+import { TestApiProvider, renderWithProviders } from "@/test/render";
 import { ExportVolumesDialog } from "./ExportVolumesDialog";
 import { MeasurePanel } from "./MeasurePanel";
 import { VolumeResultsPanel } from "./VolumeResultsPanel";
@@ -85,6 +86,59 @@ describe("MeasurePanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Pick on map" }));
     expect(onPick).toHaveBeenCalled();
     expect(screen.getByText(/ground is near -46 m/)).toBeInTheDocument();
+  });
+
+  it("offers as base only surfaces in the top surface's CRS", () => {
+    const { api } = fakeClient(routes);
+    const otherZone = {
+      ...exampleBaseSurface,
+      id: "other-zone",
+      name: "Zone 40 survey",
+      epsg: 32640,
+      crs_wkt: 'PROJCS["WGS 84 / UTM zone 40N"]',
+    };
+    renderWithProviders(
+      <MeasurePanel
+        projectId={PROJECT_ID}
+        measurement={{
+          ...exampleMeasurement,
+          base: { kind: "surface", z: null, surface_id: exampleBaseSurface.id },
+        }}
+        top={exampleSurface}
+        surfaces={[exampleSurface, exampleBaseSurface, otherZone]}
+        picking={false}
+        onPick={() => {}}
+        onSave={() => {}}
+        onChanged={() => {}}
+      />,
+      { api },
+    );
+    const options = Array.from(screen.getByLabelText("Base surface").querySelectorAll("option"));
+    expect(options.map((o) => o.value)).toEqual([exampleBaseSurface.id]);
+  });
+
+  it("the buffer field follows the stored value after a revert", () => {
+    const { api } = fakeClient(routes);
+    const panel = (buffer_m: number) => (
+      <TestApiProvider api={api}>
+        <MemoryRouter>
+          <MeasurePanel
+            projectId={PROJECT_ID}
+            measurement={{ ...exampleMeasurement, masks: { ...exampleMeasurement.masks, buffer_m } }}
+            top={exampleSurface}
+            surfaces={[exampleSurface]}
+            picking={false}
+            onPick={() => {}}
+            onSave={() => {}}
+            onChanged={() => {}}
+          />
+        </MemoryRouter>
+      </TestApiProvider>
+    );
+    const { rerender } = render(panel(1));
+    expect(screen.getByLabelText("Buffer around machines (m)")).toHaveValue(1);
+    rerender(panel(2.5));
+    expect(screen.getByLabelText("Buffer around machines (m)")).toHaveValue(2.5);
   });
 
   it("Calculate starts the job", async () => {

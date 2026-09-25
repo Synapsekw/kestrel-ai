@@ -3,12 +3,14 @@ import { isTypingTarget } from "@/editor/hotkeys";
 import { Button, Kbd } from "@/ui";
 import type { VolumeTool } from "./volumeLayers";
 
-const TOOLS: { tool: VolumeTool; label: string; key: string; needsMeasurement: boolean }[] = [
-  { tool: "pan", label: "Pan", key: "V", needsMeasurement: false },
-  { tool: "measure", label: "Draw measurement", key: "P", needsMeasurement: false },
-  { tool: "stable", label: "Stable area", key: "S", needsMeasurement: true },
-  { tool: "exclusion", label: "Exclusion", key: "X", needsMeasurement: true },
-  { tool: "edit", label: "Edit vertices", key: "E", needsMeasurement: true },
+// `short` is what the bar shows (it has to fit a 1280 px window next to both side panels); `label`
+// is the full name, used as the accessible name and the tooltip.
+const TOOLS: { tool: VolumeTool; short: string; label: string; key: string; needsMeasurement: boolean }[] = [
+  { tool: "pan", short: "Pan", label: "Pan", key: "V", needsMeasurement: false },
+  { tool: "measure", short: "Measure", label: "Draw measurement", key: "P", needsMeasurement: false },
+  { tool: "stable", short: "Stable", label: "Stable area", key: "S", needsMeasurement: true },
+  { tool: "exclusion", short: "Exclude", label: "Exclusion", key: "X", needsMeasurement: true },
+  { tool: "edit", short: "Edit", label: "Edit vertices", key: "E", needsMeasurement: true },
 ];
 
 /**
@@ -42,7 +44,7 @@ export function VolumeToolbar({
     <div
       role="toolbar"
       aria-label="Drawing tools"
-      className="absolute left-3 top-3 flex gap-1 rounded-md border border-line bg-panel p-1 shadow-float"
+      className="flex flex-wrap gap-1 rounded-md border border-line bg-panel p-1 shadow-float"
     >
       {TOOLS.map((t) => (
         <Button
@@ -52,8 +54,10 @@ export function VolumeToolbar({
           aria-pressed={tool === t.tool}
           disabled={t.needsMeasurement && !hasMeasurement}
           onClick={() => onTool(t.tool)}
+          aria-label={`${t.label} (${t.key})`}
+          title={`${t.label} (${t.key})`}
         >
-          {t.label} <Kbd>{t.key}</Kbd>
+          {t.short} <Kbd>{t.key}</Kbd>
         </Button>
       ))}
     </div>

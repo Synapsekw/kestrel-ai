@@ -51,15 +51,19 @@ export function MeasurePanel({
   const { job } = useTrackedJob(projectId, m.status === "calculating" ? m.job_id : null);
   const [name, setName] = useState(m.name);
   const [flatZ, setFlatZ] = useState(m.base.z != null ? String(m.base.z) : "");
+  const [buffer, setBuffer] = useState(String(m.masks.buffer_m));
   const [maps, setMaps] = useState<GeoMap[]>([]);
   const [runs, setRuns] = useState<MapRun[]>([]);
   // A saved change comes back as a new measurement: re-seed the drafts during render (not in an
   // effect) so the fields follow the stored values.
-  const [seen, setSeen] = useState({ name: m.name, z: m.base.z });
-  if (seen.name !== m.name || seen.z !== m.base.z) {
-    setSeen({ name: m.name, z: m.base.z });
-    setName(m.name);
-    setFlatZ(m.base.z != null ? String(m.base.z) : "");
+  // (Revert to last calculated inputs is such a change too.)
+  const stored = { name: m.name, z: m.base.z, buffer: m.masks.buffer_m };
+  const [seen, setSeen] = useState(stored);
+  if (seen.name !== stored.name || seen.z !== stored.z || seen.buffer !== stored.buffer) {
+    setSeen(stored);
+    setName(stored.name);
+    setFlatZ(stored.z != null ? String(stored.z) : "");
+    setBuffer(String(stored.buffer));
   }
 
   useEffect(() => {
@@ -80,7 +84,8 @@ export function MeasurePanel({
   }, [api, projectId]);
 
   const sameCrs = surfaces.filter((s) => s.epsg === top.epsg && s.crs_wkt === top.crs_wkt);
-  const bases = [...surfaces]
+  // A base must share the top's grid CRS, as the top list does; the server refuses anything else.
+  const bases = [...sameCrs]
     .filter((s) => s.id !== top.id)
     .sort((a, b) => (b.captured_on ?? "").localeCompare(a.captured_on ?? ""));
   const baseSurface = surfaces.find((s) => s.id === m.base.surface_id) ?? null;
@@ -226,10 +231,12 @@ export function MeasurePanel({
               min={0}
               max={5}
               step={0.1}
-              defaultValue={m.masks.buffer_m}
-              onBlur={(e) =>
-                Number(e.target.value) !== m.masks.buffer_m &&
-                onSave({ masks: { buffer_m: Number(e.target.value) } })
+              value={buffer}
+              onChange={(e) => setBuffer(e.target.value)}
+              onBlur={() =>
+                buffer !== "" &&
+                Number(buffer) !== m.masks.buffer_m &&
+                onSave({ masks: { buffer_m: Number(buffer) } })
               }
             />
           </Field>

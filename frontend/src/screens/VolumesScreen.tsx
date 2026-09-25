@@ -309,12 +309,14 @@ export function VolumesScreen() {
               size="sm"
               icon="plus"
               disabled={!top}
+              aria-label="New measurement"
+              title="New measurement (P)"
               onClick={() => {
                 navigate(`/p/${projectId}/volumes`);
                 setTool("measure");
               }}
             >
-              New measurement
+              New
             </Button>
           </div>
           {onSurface.length === 0 ? (
@@ -342,7 +344,7 @@ export function VolumesScreen() {
           )}
         </div>
       </section>
-      <section className="relative min-w-0 flex-1">
+      <section className="relative min-w-0 flex-1 overflow-hidden">
         {top && gt ? (
           <>
             <SurfaceView
@@ -354,15 +356,22 @@ export function VolumesScreen() {
               onPointer={onPointer}
               onViewChange={(v) => setResolution(v.resolution)}
             />
-            <VolumeToolbar
-              tool={tool}
-              onTool={setTool}
-              hasMeasurement={!!active}
-              onDeleteSelected={deleteSelected}
-            />
-            <div className="absolute left-3 top-14 flex flex-col gap-1 rounded-md border border-line bg-panel p-2 shadow-float">
-              {top.map_id && <Switch label="Ortho" checked={orthoOn} onChange={setOrthoOn} />}
-              {diffUrl && <Switch label="Cut / fill" checked={diffOn} onChange={setDiffOn} />}
+            {/* One column for the tools and the layer switches, stopping short of the zoom stack on
+                the right: a toolbar that wraps pushes the switches down instead of under them. The
+                column itself lets clicks through to the map; only its panels take them. */}
+            <div className="pointer-events-none absolute left-3 right-16 top-3 flex flex-col items-start gap-2 [&>*]:pointer-events-auto">
+              <VolumeToolbar
+                tool={tool}
+                onTool={setTool}
+                hasMeasurement={!!active}
+                onDeleteSelected={deleteSelected}
+              />
+              {(top.map_id || diffUrl) && (
+                <div className="flex flex-col gap-1 rounded-md border border-line bg-panel p-2 shadow-float">
+                  {top.map_id && <Switch label="Ortho" checked={orthoOn} onChange={setOrthoOn} />}
+                  {diffUrl && <Switch label="Cut / fill" checked={diffOn} onChange={setDiffOn} />}
+                </div>
+              )}
             </div>
             <SurfaceOverlay map={olMap} surface={top} readout={readout} resolution={resolution} />
           </>
@@ -390,9 +399,7 @@ export function VolumesScreen() {
             onChanged={reload}
           />
         ) : (
-          <p className="text-sm text-muted">
-            Choose a measurement, or draw a polygon with Draw measurement (P).
-          </p>
+          <p className="text-sm text-muted">Choose a measurement, or draw a polygon with Measure (P).</p>
         )}
       </aside>
       {building && (
