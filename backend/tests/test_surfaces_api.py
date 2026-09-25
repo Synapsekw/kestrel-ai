@@ -1,10 +1,12 @@
 """Surfaces through the API: create -> surface_build -> ready, admission, sweep (spec §5, §3)."""
 
 import re
+import threading
 
 import numpy as np
 import pytest
 from pyproj import CRS
+from sqlalchemy import delete, event, update
 from surfaces import WKT, cone_cloud, fixture_spec, plane, write_cloud
 from volume_rows import add_cloud, add_surface
 
@@ -184,6 +186,96 @@ def test_set_job_reports_the_created_row_when_a_cancel_already_deleted_it(handle
     with pytest.raises(service.AppError) as e:
         service.set_job(handle, row.id, "job-1")
     assert e.value.status == 404
+
+
+def _on_first_load(write):
+    """Run `write` on its own thread, as the job would, right after the next Surface load: between
+    a service call's read of the row and its write back. The call waits (bounded) for the write
+    unless the write is blocked on the call's own transaction; the returned `done` joins it."""
+    fired, threads = [], []
+
+    def listener(target, context):
+        if not fired:
+            fired.append(True)
+            t = threading.Thread(target=write)
+            t.start()
+            threads.append(t)
+            t.join(timeout=0.5)  # returns at once unless the call's transaction holds the lock
+
+    def done():
+        event.remove(Surface, "load", listener)
+        for t in threads:
+            t.join(timeout=10)
+            assert not t.is_alive()
+
+    event.listen(Surface, "load", listener)
+    return done
+
+
+def _building_row(handle, cloud, *, with_job_id=True):
+    with handle.session() as s:
+        job = Job(type="surface_build", params={}, state="running")
+        s.add(job)
+        s.flush()
+        job_id = job.id if with_job_id else None
+        row = Surface(name="r", kind="cloud_dsm", status="building", point_cloud_id=cloud, job_id=job_id)
+        s.add(row)
+        s.flush()
+        s.expunge(row)
+        return row, job.id
+
+
+def test_set_job_survives_a_cancel_deleting_the_row_after_it_was_read(handle, cloud):
+    """The cancelled job deletes the row between set_job's read and its write (was a StaleDataError)."""
+    row, job_id = _building_row(handle, cloud, with_job_id=False)  # as create_surface leaves it
+
+    def job_deletes_the_row():
+        with handle.session() as s:
+            s.execute(delete(Surface).where(Surface.id == row.id))
+
+    remove = _on_first_load(job_deletes_the_row)
+    try:
+        out = service.set_job(handle, row.id, job_id, created=row)
+    finally:
+        remove()
+    assert out.id == row.id and out.job_id == job_id
+    with handle.session() as s:
+        assert s.get(Surface, row.id) is None  # the job's delete is not lost either
+
+
+def test_settle_keeps_the_error_the_job_wrote_after_the_row_was_read(handle, cloud):
+    """The job fails the row with its own message and ends between the read and the settle: the
+    settle must not overwrite that message with its generic one (was a lost update)."""
+    row, job_id = _building_row(handle, cloud)
+
+    def job_fails_the_row_and_ends():
+        with handle.session() as s:
+            s.execute(update(Surface).where(Surface.id == row.id).values(status="failed", error="no points"))
+            s.execute(update(Job).where(Job.id == job_id).values(state="failed"))
+
+    remove = _on_first_load(job_fails_the_row_and_ends)
+    try:
+        got = service.get_surface(handle, row.id)
+    finally:
+        remove()
+    assert (got.status, got.error) == ("failed", "no points")
+    with handle.session() as s:
+        assert s.get(Surface, row.id).error == "no points"
+
+
+def test_a_row_the_cancelled_job_deleted_after_the_read_is_gone(handle, cloud):
+    row, job_id = _building_row(handle, cloud)
+
+    def job_deletes_the_row_and_ends():
+        with handle.session() as s:
+            s.execute(delete(Surface).where(Surface.id == row.id))
+            s.execute(update(Job).where(Job.id == job_id).values(state="cancelled"))
+
+    remove = _on_first_load(job_deletes_the_row_and_ends)
+    try:
+        assert service.list_surfaces(handle) == []
+    finally:
+        remove()
 
 
 def test_rename_and_delete_rules(client, project_id, handle):

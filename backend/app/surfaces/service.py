@@ -13,7 +13,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from pyproj import CRS
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, PointCloud, Surface, VolumeMeasurement
@@ -97,30 +97,41 @@ def to_out(s: Session, row: Surface) -> SurfaceOut:
     )
 
 
-def _settle(s: Session, row: Surface) -> Surface:
+def _settle(s: Session, row: Surface) -> Surface | None:
     """A `building` row whose job has ended without the build finishing the row becomes `failed`,
     persisted in the caller's session. It happens when a queued job is cancelled: the runner never
-    calls `run_surface_build`, so nothing else would move the row until the next startup sweep."""
+    calls `run_surface_build`, so nothing else would move the row until the next startup sweep.
+
+    The job thread may write or delete the row after `row` was read, so the change is a
+    compare-and-set on `status == "building"` and the row is re-read after it: the job's own
+    `failed` message wins over the generic one. None when a cancelled build deleted the row."""
     if row.status == "building" and row.job_id:
         job = s.get(Job, row.job_id)
         if job is not None and job.state in TERMINAL_JOB_STATES:
-            row.status = "failed"
-            row.error = CANCELLED_BEFORE_START if job.state == "cancelled" else STOPPED_BEFORE_FINISH
-            s.flush()
+            error = CANCELLED_BEFORE_START if job.state == "cancelled" else STOPPED_BEFORE_FINISH
+            s.execute(
+                update(Surface)
+                .where(Surface.id == row.id, Surface.status == "building")
+                .values(status="failed", error=error)
+                .execution_options(synchronize_session=False)
+            )
+            return s.get(Surface, row.id, populate_existing=True)
     return row
 
 
 def _get(s: Session, surface_id: str) -> Surface:
     row = s.get(Surface, surface_id)
+    row = _settle(s, row) if row is not None else None
     if row is None:
         raise not_found("surface", surface_id)
-    return _settle(s, row)
+    return row
 
 
 def list_surfaces(handle: ProjectHandle) -> list[SurfaceOut]:
     with handle.session() as s:
         rows = s.execute(select(Surface).order_by(Surface.created_at.desc())).scalars().all()
-        return [to_out(s, _settle(s, r)) for r in rows]
+        settled = [_settle(s, r) for r in rows]
+        return [to_out(s, r) for r in settled if r is not None]
 
 
 def get_surface(handle: ProjectHandle, surface_id: str) -> SurfaceOut:
@@ -248,15 +259,21 @@ def set_job(
     `created` (the row as `create_surface` returned it) is reported instead of a 404: the job was
     queued, and its own state says what became of it."""
     with handle.session() as s:
+        # A statement, not a read-then-flush: the job may delete the row in between (StaleDataError).
+        s.execute(
+            update(Surface)
+            .where(Surface.id == surface_id)
+            .values(job_id=job_id)
+            .execution_options(synchronize_session=False)
+        )
         row = s.get(Surface, surface_id)
+        row = _settle(s, row) if row is not None else None
         if row is None:
             if created is None:
                 raise not_found("surface", surface_id)
             created.job_id = job_id
             return to_out(s, created)
-        row.job_id = job_id
-        s.flush()
-        return to_out(s, _settle(s, row))
+        return to_out(s, row)
 
 
 def rename(handle: ProjectHandle, surface_id: str, name: str | None) -> SurfaceOut:
