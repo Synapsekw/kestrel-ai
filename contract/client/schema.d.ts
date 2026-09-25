@@ -10004,7 +10004,15 @@ export interface operations {
                     "application/json": components["schemas"]["PointCloudWithJob"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
+            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description the file is not a readable LAS/LAZ (`unsupported_point_cloud`), or the import needs more memory (`insufficient_memory`) or disk (`insufficient_disk`) than is free; `message` is the text the UI shows */
             422: {
                 headers: {
@@ -10134,7 +10142,15 @@ export interface operations {
                     "application/json": components["schemas"]["PointCloudOut"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
+            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description a map link needs both entities to have a CRS (`link_needs_coordinates`) and overlapping WGS84 bounds (`no_overlap`); `assign_epsg` is refused when the file has a CRS (`crs_already_set`) or names an EPSG code pyproj does not know (`invalid_epsg`) */
             422: {
                 headers: {

@@ -71,13 +71,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 # design-surface (S3) specs, routed by foundation F0. Each unit that builds one removes it here and
 # from its router's STUBS; any other 501 fails `test_responses_conform`.
 EXPECTED_STUBS: set[str] = {
-    # S1 point clouds (app/pointclouds/router.py)
-    "listPointClouds",
-    "createPointCloud",
-    "inspectPointCloudFile",
-    "getPointCloud",
-    "patchPointCloud",
-    "deletePointCloud",
     # S3 design surfaces (app/surfaces/design/router.py)
     "createDesignInspection",
     "getDesignInspection",
@@ -108,6 +101,9 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "getPointCloudOctreeFile": {416},  # a Range the file cannot satisfy
     "createCloudMeasurement": {422},
+    "createPointCloud": {422},  # a readable path that is not LAS/LAZ, or refused by admission
+    "inspectPointCloudFile": {422},  # a readable path that is not LAS/LAZ
+    "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
 }
 
 
