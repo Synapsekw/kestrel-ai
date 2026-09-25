@@ -20,11 +20,12 @@ import laspy
 
 from app.jobs.cancellation import JobFailure
 from app.pointclouds import admission
+from app.pointclouds import converter as converter_module
 from app.pointclouds.crs import CrsInfo, bounds_wgs84, crs_from_header
 from app.pointclouds.lasfile import inspect_file
 from app.pointclouds.scan import scan
 from app.pointclouds.validate import validate_octree
-from app.pointclouds.workcopy import copy_and_hash, repair_header
+from app.pointclouds.workcopy import copy_and_hash, os_reason, repair_header
 
 COPY_END, SCAN_END, CONVERT_END, VALIDATE_END = 0.30, 0.45, 0.97, 0.99
 
@@ -72,8 +73,6 @@ def import_cloud(
     converter: Callable | None = None,
 ) -> ImportResult:
     if converter is None:
-        from app.pointclouds import converter as converter_module
-
         converter = converter_module.run_converter  # looked up now: the test seam patches the module
     started = time.monotonic()
     timings: dict[str, float] = {}
@@ -88,8 +87,11 @@ def import_cloud(
         try:
             st = source.stat()
         except OSError as e:
-            raise JobFailure(f"could not read the source file: {source} ({e.strerror or e})") from None
-        info = inspect_file(source)
+            raise JobFailure(f"could not read the source file: {source} ({os_reason(e)})") from None
+        try:
+            info = inspect_file(source)
+        except OSError as e:  # a sharing violation, a permission error, a NAS that dropped
+            raise JobFailure(f"could not read the source file: {source} ({os_reason(e)})") from None
         admission.require(admission.assess(info.point_count, st.st_size, info.record_len, cloud_dir.parent))
         shutil.rmtree(work, ignore_errors=True)
         work.mkdir(parents=True)
@@ -117,14 +119,18 @@ def import_cloud(
         repaired = repair_header(copy, scanned.bounds, info.scale)
         t = lap("crs_repair_s", t)
         check_cancelled()
-        admission.require(admission.assess(scanned.count, st.st_size, info.record_len, cloud_dir.parent))
         out = work / "octree"
-        result = converter(
-            copy,
-            out,
-            progress=lambda f, m: progress(SCAN_END + (CONVERT_END - SCAN_END) * f, m),
-            check_cancelled=check_cancelled,
-        )
+        # Spec §6.7: take the converter slot first (waiting, cancellably, behind another import), then
+        # re-check against what is free now. The work copy is already on the project drive, so the
+        # disk re-check counts no source bytes (final review B1).
+        with converter_module.slot(lambda _f, m: progress(SCAN_END, m), check_cancelled):
+            admission.require(admission.assess(scanned.count, 0, info.record_len, cloud_dir.parent))
+            result = converter(
+                copy,
+                out,
+                progress=lambda f, m: progress(SCAN_END + (CONVERT_END - SCAN_END) * f, m),
+                check_cancelled=check_cancelled,
+            )
         t = lap("convert_s", t)
         progress(CONVERT_END, "checking the 3D view copy")
         meta = validate_octree(out, points=scanned.count, bounds=scanned.bounds, encoding=result.encoding)

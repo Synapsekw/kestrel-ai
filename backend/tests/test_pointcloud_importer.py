@@ -3,13 +3,16 @@
 import errno
 import io
 import json
+import threading
+import time
 
 import pytest
 from pointclouds import fake_run_converter, make_las
 
 from app.jobs.cancellation import JobCancelled, JobFailure
-from app.pointclouds import admission, converter_path, workcopy
+from app.pointclouds import admission, converter, converter_path, workcopy
 from app.pointclouds.importer import import_cloud
+from app.pointclouds.lasfile import inspect_file
 
 GB = 1_000_000_000
 
@@ -198,4 +201,127 @@ def test_the_real_converter_on_a_pix4d_style_laz(tmp_path):
         32639,
         50_000,
         "BROTLI",
+    )
+
+
+def _bytes_under(folder):
+    return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file()) if folder.exists() else 0
+
+
+def test_the_disk_re_check_does_not_count_the_work_copy_twice(tmp_path, monkeypatch):
+    """Final review B1: the work copy is already on the project drive when the job re-checks."""
+    src = make_las(tmp_path / "src" / "c.las", 20_000)
+    cloud_dir = tmp_path / "pc" / "c11"
+    info = inspect_file(src)
+    budget = admission.disk_needed(info.point_count, src.stat().st_size, info.record_len) + 1_000
+    # A drive with just enough room at submit, shrinking by whatever the job writes into .work.
+    monkeypatch.setattr(admission, "free_disk", lambda folder: budget - _bytes_under(cloud_dir / ".work"))
+    calls = []
+    r, _ = _run(src, cloud_dir, converter=fake_converter(calls))
+    assert r.point_count == 20_000 and len(calls) == 1
+
+
+def test_the_re_check_waits_for_the_converter_slot(tmp_path, monkeypatch):
+    """Final review B2 (spec §6.7): a second import waits for the slot, then re-checks and runs."""
+    ram_calls: list[float] = []
+
+    def ram():
+        ram_calls.append(time.monotonic())
+        return 64 * GB
+
+    monkeypatch.setattr(admission, "available_ram", ram)
+    held, release = threading.Event(), threading.Event()
+
+    def holder():
+        with converter.slot(lambda *_: None, lambda: None):
+            held.set()
+            release.wait(10)
+
+    h = threading.Thread(target=holder)
+    h.start()
+    assert held.wait(5)
+    seen: list[tuple[float, str]] = []
+    calls, errors = [], []
+    src = make_las(tmp_path / "c.las", 1_000)
+
+    def b():
+        try:
+            import_cloud(
+                src,
+                tmp_path / "pc" / "c12",
+                progress=lambda f, m: seen.append((f, m)),
+                check_cancelled=lambda: None,
+                converter=fake_converter(calls),
+            )
+        except BaseException as e:  # noqa: BLE001 - the test inspects it
+            errors.append(e)
+
+    t = threading.Thread(target=b)
+    t.start()
+    deadline = time.monotonic() + 10
+    while converter.WAITING not in [m for _, m in seen] and time.monotonic() < deadline:
+        time.sleep(0.02)
+    assert converter.WAITING in [m for _, m in seen]
+    time.sleep(0.3)
+    assert calls == [] and len(ram_calls) == 1  # only the up-front check so far
+    released_at = time.monotonic()
+    release.set()
+    h.join(5)
+    t.join(15)
+    assert errors == [] and len(calls) == 1
+    assert len(ram_calls) == 2 and ram_calls[1] >= released_at  # re-checked after the slot came free
+    fractions = [f for f, _ in seen]
+    assert fractions == sorted(fractions)
+
+
+def test_a_cancel_while_waiting_for_the_slot_never_converts(tmp_path):
+    held, release = threading.Event(), threading.Event()
+
+    def holder():
+        with converter.slot(lambda *_: None, lambda: None):
+            held.set()
+            release.wait(10)
+
+    h = threading.Thread(target=holder)
+    h.start()
+    assert held.wait(5)
+    state = {"waiting": False}
+
+    def progress(_f, m):
+        state["waiting"] = state["waiting"] or m == converter.WAITING
+
+    def check():
+        if state["waiting"]:
+            raise JobCancelled()
+
+    calls = []
+    cloud_dir = tmp_path / "pc" / "c13"
+    try:
+        with pytest.raises(JobCancelled):
+            import_cloud(
+                make_las(tmp_path / "c.las", 1_000),
+                cloud_dir,
+                progress=progress,
+                check_cancelled=check,
+                converter=fake_converter(calls),
+            )
+    finally:
+        release.set()
+        h.join(5)
+    assert calls == [] and not (cloud_dir / ".work").exists()
+
+
+def test_an_unreadable_source_header_is_a_job_failure(tmp_path, monkeypatch):
+    """Final review B4: a sharing violation / NAS drop while reading the header."""
+    from app.pointclouds import importer
+
+    def locked(path):
+        raise PermissionError(13, "The process cannot access the file because it is being used", str(path))
+
+    monkeypatch.setattr(importer, "inspect_file", locked)
+    src = make_las(tmp_path / "c.las", 100)
+    with pytest.raises(JobFailure) as e:
+        _run(src, tmp_path / "pc" / "c14", converter=fake_converter())
+    assert str(e.value) == (
+        f"could not read the source file: {src} (The process cannot access the file because it is being used)"
     )

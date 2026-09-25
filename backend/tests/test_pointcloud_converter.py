@@ -167,14 +167,24 @@ def test_a_waiting_import_can_be_cancelled(fake, tmp_path):
         if time.monotonic() - started > 0.5:
             raise JobCancelled()
 
-    converter._LOCK.acquire()
+    held, release = threading.Event(), threading.Event()
+
+    def holder():  # another thread: the lock is re-entrant, so holding it here would not block
+        with converter.slot(lambda *_: None, _never):
+            held.set()
+            release.wait(10)
+
+    h = threading.Thread(target=holder)
+    h.start()
+    assert held.wait(5)
     try:
         with pytest.raises(JobCancelled):
             converter.run_converter(
                 src, out, progress=lambda f, m: messages.append(m), check_cancelled=cancel_after_half_a_second
             )
     finally:
-        converter._LOCK.release()
+        release.set()
+        h.join(5)
     assert messages == ["waiting for another point-cloud import"]
     assert not record.exists()
 
@@ -206,3 +216,39 @@ def test_killing_the_parent_kills_the_converter(tmp_path, backend_dir, monkeypat
     while _alive(converter_pid) and time.time() < deadline:
         time.sleep(0.1)
     assert not _alive(converter_pid)
+
+
+def _free_from_another_thread() -> bool:
+    """The slot is free: probed from another thread, so a leaked re-entrant hold would show."""
+    free: list[bool] = []
+
+    def probe():
+        free.append(converter._LOCK.acquire(blocking=False))
+        if free[0]:
+            converter._LOCK.release()
+
+    t = threading.Thread(target=probe)
+    t.start()
+    t.join(5)
+    return free == [True]
+
+
+def test_the_slot_is_re_entrant_and_run_converter_enters_it_for_free(fake, tmp_path):
+    """Final review B2: the importer holds the slot around its re-check and the converter call."""
+    record = tmp_path / "argv.json"
+    fake("argv", FAKE_PC_ARGV=record)
+    src, out = _work(tmp_path)
+    messages: list[str] = []
+    with converter.slot(lambda f, m: messages.append(m), _never):
+        converter.run_converter(src, out, progress=lambda f, m: messages.append(m), check_cancelled=_never)
+    assert converter.WAITING not in messages and record.exists()
+    assert _free_from_another_thread()  # released again, fully
+
+
+def test_a_cancel_is_checked_as_soon_as_the_slot_is_taken():
+    def cancelled():
+        raise JobCancelled()
+
+    with pytest.raises(JobCancelled), converter.slot(lambda *_: None, cancelled):
+        pytest.fail("the body must not run")
+    assert _free_from_another_thread()

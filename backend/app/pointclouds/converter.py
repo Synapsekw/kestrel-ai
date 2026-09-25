@@ -1,6 +1,9 @@
 """Run PotreeConverter out of process (spec §6.7).
 
 One converter at a time per process (a module lock; a second import waits, cancellably). The
+importer takes the lock with `slot()` before its last RAM/disk re-check (spec §6.7), so an import
+waiting behind another is re-checked only once the other's converter has let go of its memory;
+`run_converter` re-enters the same re-entrant lock for free. The
 converter runs in the work folder with relative ASCII arguments only, inside a Job Object that kills
 it if this process dies; cancel kills its tree with taskkill /T /F. `run_converter` is the seam the
 test fixture replaces (gotcha: contract jobs need offline seams).
@@ -17,12 +20,13 @@ import: either would keep the real runner after the fixture patched the module a
 from __future__ import annotations
 
 import collections
+import contextlib
 import os
 import re
 import subprocess
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,7 +38,7 @@ WAITING = "waiting for another point-cloud import"
 PROGRESS_RE = re.compile(r"^\[(\d+)%, (\d+)s\], \[([A-Z]+): (\d+)%")
 CREATE_NO_WINDOW = 0x08000000
 TERMINATE_GRACE_S = 10
-_LOCK = threading.Lock()
+_LOCK = threading.RLock()  # re-entrant: the importer holds it around run_converter
 
 
 class ConverterStopped(JobFailure):
@@ -112,11 +116,25 @@ def _last_error(lines: list[str], code: int) -> str:
 
 
 def _acquire(progress: Callable[[float, str], None], check_cancelled: Callable[[], None]) -> None:
-    if _LOCK.acquire(blocking=False):
-        return
-    progress(0.0, WAITING)
-    while not _LOCK.acquire(timeout=0.25):
-        check_cancelled()
+    if not _LOCK.acquire(blocking=False):
+        progress(0.0, WAITING)
+        while not _LOCK.acquire(timeout=0.25):
+            check_cancelled()
+    try:
+        check_cancelled()  # a cancel that landed while waiting (or just before) wins over the slot
+    except BaseException:
+        _LOCK.release()
+        raise
+
+
+@contextlib.contextmanager
+def slot(progress: Callable[[float, str], None], check_cancelled: Callable[[], None]) -> Iterator[None]:
+    """Hold the one converter slot; waits (reporting WAITING, cancellably) while another import has it."""
+    _acquire(progress, check_cancelled)
+    try:
+        yield
+    finally:
+        _LOCK.release()
 
 
 def run_converter(
@@ -130,11 +148,8 @@ def run_converter(
     work = input_path.parent
     if out_dir.parent != work:
         raise ValueError("the converter's input and output must share the work folder")
-    _acquire(progress, check_cancelled)
-    try:
+    with slot(progress, check_cancelled):
         return _run(work, input_path.name, out_dir.name, progress, check_cancelled)
-    finally:
-        _LOCK.release()
 
 
 def _run(work: Path, input_name: str, out_name: str, progress, check_cancelled) -> ConverterResult:

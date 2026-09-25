@@ -30,7 +30,7 @@ def _open_dest(path: Path):
     return open(path, "wb")
 
 
-def _reason(e: OSError) -> str:
+def os_reason(e: OSError) -> str:
     return e.strerror or str(e) or type(e).__name__
 
 
@@ -52,7 +52,7 @@ def copy_and_hash(
         total = source.stat().st_size
         src = _open_source(source)
     except OSError as e:
-        raise JobFailure(f"could not read the source file: {source} ({_reason(e)})") from None
+        raise JobFailure(f"could not read the source file: {source} ({os_reason(e)})") from None
     digest, done = hashlib.sha256(), 0
     try:
         with src, _open_dest(dest) as out:
@@ -61,7 +61,7 @@ def copy_and_hash(
                 try:
                     block = src.read(chunk)
                 except OSError as e:
-                    raise JobFailure(f"could not read the source file: {source} ({_reason(e)})") from None
+                    raise JobFailure(f"could not read the source file: {source} ({os_reason(e)})") from None
                 if not block:
                     break
                 digest.update(block)
@@ -70,7 +70,7 @@ def copy_and_hash(
                 except OSError as e:
                     if _is_disk_full(e):
                         raise JobFailure(DISK_FULL) from None
-                    raise JobFailure(f"could not write the work copy: {_reason(e)}") from None
+                    raise JobFailure(f"could not write the work copy: {os_reason(e)}") from None
                 done += len(block)
                 progress(done, total)
         if done != total:
