@@ -1,7 +1,8 @@
 """Startup sweep for measurements (spec 2026-09-23-volumes §3), wired into `project_opened` by F0.
 
 A `calculating` measurement whose job this process does not hold becomes `stale` when it has
-earlier results and `failed` otherwise; orphan partial and staged diff files are removed.
+earlier results and `failed` otherwise; orphan partial and staged diff files are removed, and so is
+any folder no measurement row names (a delete that met a held file on Windows).
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 
 from app.db.models import VolumeMeasurement
+from app.surfaces.startup import remove_orphan_folders
 
 if TYPE_CHECKING:
     from app.projects.service import ProjectHandle
@@ -44,6 +46,12 @@ def sweep_interrupted(handle: ProjectHandle, runner) -> list[str]:
                 leftover.unlink()
             except OSError:
                 log.warning("could not remove %s", leftover)
+    remove_orphan_folders(handle.volumes_dir, lambda: _measurement_ids(handle), live)
     if swept:
         log.info("reset %d interrupted volume calculation(s) in project %s", len(swept), handle.id)
     return swept
+
+
+def _measurement_ids(handle: ProjectHandle) -> set[str]:
+    with handle.session() as s:
+        return set(s.execute(select(VolumeMeasurement.id)).scalars())

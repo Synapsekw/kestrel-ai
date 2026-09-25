@@ -12,7 +12,7 @@ from volume_rows import add_cloud, add_surface
 
 from app.db.models import Job, PointCloud, Surface, VolumeMeasurement
 from app.jobs.cancellation import JobCancelled
-from app.surfaces import build, service
+from app.surfaces import build, service, startup
 from app.surfaces.grid import convention_problems
 from app.surfaces.paths import build_dir, surface_path
 from app.surfaces.startup import sweep_interrupted
@@ -348,3 +348,41 @@ def test_sweep_fails_interrupted_builds_of_every_kind(handle, cloud):
     assert not build_dir(handle, ids[0]).exists() and build_dir(handle, ids[2]).exists()
     assert not (surface_path(handle, ids[0]).parent / "surface.tif.partial").exists()
     assert (surface_path(handle, ids[2]).parent / "surface.tif.partial").exists()
+
+
+def test_sweep_removes_folders_no_row_names(handle, cloud, monkeypatch, caplog):
+    """A delete whose rmtree met a file a tile reader held (Windows) leaves the folder behind; the
+    next open removes it. Folders of rows (and of live jobs) stay; a failure is logged, not raised."""
+
+    class Runner:
+        def is_live(self, job_id):
+            return False
+
+    kept = add_surface(handle, fixture_spec(0.5), plane)
+    orphan = handle.surfaces_dir / "deleted-surface-id"
+    (orphan / "surface.tif").parent.mkdir(parents=True)
+    (orphan / "surface.tif").write_bytes(b"x")
+    sweep_interrupted(handle, Runner())
+    assert not orphan.exists() and surface_path(handle, kept).is_file()
+
+    stuck = handle.surfaces_dir / "held-by-a-reader"
+    stuck.mkdir()
+
+    def held(path, *a, **k):
+        raise PermissionError(13, "in use", str(path))
+
+    monkeypatch.setattr(startup.shutil, "rmtree", held)
+    sweep_interrupted(handle, Runner())
+    assert stuck.is_dir() and "could not remove orphan folder" in caplog.text
+
+
+def test_a_build_that_cannot_be_queued_leaves_a_failed_row(client, project_id, handle, cloud, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("queue is closed")
+
+    monkeypatch.setattr(client.app.state.jobs, "submit", boom)
+    with pytest.raises(RuntimeError):
+        client.post(f"{BASE}/{project_id}/surfaces", json={"point_cloud_id": cloud})
+    with handle.session() as s:
+        (row,) = s.query(Surface).all()
+        assert row.status == "failed" and "could not be queued: queue is closed" in row.error

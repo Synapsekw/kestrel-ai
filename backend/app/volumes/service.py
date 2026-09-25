@@ -13,7 +13,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import PureWindowsPath
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, MapDetection, MapRun, PointCloud, Surface, VolumeMeasurement
@@ -56,26 +56,38 @@ def _conflict(message: str) -> AppError:
     return AppError("conflict", message, 409)
 
 
-def _settle(s: Session, row: VolumeMeasurement) -> VolumeMeasurement:
+def _settle(s: Session, row: VolumeMeasurement) -> VolumeMeasurement | None:
     """A `calculating` row whose job has ended without the job settling the row (a queued job
     cancelled before it ran) goes back to `stale` or `failed`, as the job itself would have done;
-    otherwise it would refuse every change until the next startup sweep."""
+    otherwise it would refuse every change until the next startup sweep.
+
+    The job thread (or a new calculation) may write the row after `row` was read, so the change is
+    a compare-and-set on `status == "calculating"` and the same `job_id`, and the row is re-read
+    after it: whatever the job itself wrote wins over the generic settle."""
     if row.status == "calculating" and row.job_id:
         job = s.get(Job, row.job_id)
         if job is not None and job.state in TERMINAL_JOB_STATES:
-            if row.results:
-                row.status = "stale"
-            else:
-                row.status, row.error = "failed", ENDED_BEFORE_START
-            s.flush()
+            values = {"status": "stale"} if row.results else {"status": "failed", "error": ENDED_BEFORE_START}
+            s.execute(
+                update(VolumeMeasurement)
+                .where(
+                    VolumeMeasurement.id == row.id,
+                    VolumeMeasurement.status == "calculating",
+                    VolumeMeasurement.job_id == row.job_id,
+                )
+                .values(**values)
+                .execution_options(synchronize_session=False)
+            )
+            return s.get(VolumeMeasurement, row.id, populate_existing=True)
     return row
 
 
 def _get(s: Session, measurement_id: str) -> VolumeMeasurement:
     row = s.get(VolumeMeasurement, measurement_id)
+    row = _settle(s, row) if row is not None else None
     if row is None:
         raise not_found("volume measurement", measurement_id)
-    return _settle(s, row)
+    return row
 
 
 def _ready_surface(s: Session, surface_id: str, role: str) -> Surface:
@@ -103,8 +115,17 @@ def _check_inputs(
 ) -> Surface:
     """Lookups (404) and states (409) first, then the business rules (422). Returns the top."""
     top = _ready_surface(s, top_id, "top")
+    base_surface = None
     if base["kind"] == "surface" and base.get("surface_id"):
-        _ready_surface(s, base["surface_id"], "base")
+        base_surface = _ready_surface(s, base["surface_id"], "base")
+    if base_surface is not None and (base_surface.crs_wkt is None) != (top.crs_wkt is None):
+        # any two CRSs reproject (spec §6.2, §6.4); a local grid has no place on a georeferenced one
+        local, georef = (base_surface, top) if base_surface.crs_wkt is None else (top, base_surface)
+        raise _invalid(
+            f"{local.name} has local coordinates and {georef.name} is georeferenced; "
+            "choose a base and a top that are both local or both georeferenced",
+            "invalid_base",
+        )
     if base["kind"] == "surface" and not base.get("surface_id"):
         raise _invalid("a surface base needs surface_id", "invalid_base")
     if base["kind"] == "flat" and base.get("z") is None:
@@ -171,6 +192,18 @@ def _job_time(s: Session, job_id: str | None) -> str | None:
     return job.finished_at.isoformat() if job and job.finished_at else None
 
 
+def _kept_by_class(s: Session, run_id: str) -> dict[str, int]:
+    """The run's detections the masking can use (not rejected), counted per class: one indexed
+    aggregate (`ix_map_detection_run_state`). Rejecting or reclassifying a box in the review
+    changes it, so the measurement turns stale (spec §6.10)."""
+    rows = s.execute(
+        select(MapDetection.class_id, func.count())
+        .where(MapDetection.run_id == run_id, MapDetection.review_state != "rejected")
+        .group_by(MapDetection.class_id)
+    ).all()
+    return {class_id: count for class_id, count in rows}
+
+
 def inputs_snapshot(s: Session, row: VolumeMeasurement) -> dict:
     """Everything the numbers depend on, as a canonical dict (spec §6.10). The first five keys are
     the PATCH fields themselves, so "Revert to last calculated inputs" can send them back."""
@@ -182,8 +215,9 @@ def inputs_snapshot(s: Session, row: VolumeMeasurement) -> dict:
         if run is None:
             runs.append({"id": run_id, "missing": True})
             continue
-        count = s.execute(select(func.count()).where(MapDetection.run_id == run_id)).scalar_one()
-        runs.append({"id": run_id, "finished_at": _job_time(s, run.job_id), "detection_count": count})
+        runs.append(
+            {"id": run_id, "finished_at": _job_time(s, run.job_id), "kept": _kept_by_class(s, run_id)}
+        )
     alignment = row.alignment or {}
     return {
         "polygon_native": row.polygon_native,
@@ -254,10 +288,12 @@ def list_measurements(handle: ProjectHandle) -> tuple[list[VolumeMeasurementOut]
     """The measurements, newest first, and the ids that just turned stale (to publish)."""
     with handle.session() as s:
         out, changed = [], []
-        for row in s.execute(
-            select(VolumeMeasurement).order_by(VolumeMeasurement.created_at.desc())
-        ).scalars():
-            reasons, turned = _refresh(s, _settle(s, row))
+        rows = s.execute(select(VolumeMeasurement).order_by(VolumeMeasurement.created_at.desc())).scalars()
+        for listed in rows.all():
+            row = _settle(s, listed)
+            if row is None:  # deleted since it was listed
+                continue
+            reasons, turned = _refresh(s, row)
             if turned:
                 changed.append(row.id)
             out.append(to_out(row, reasons))

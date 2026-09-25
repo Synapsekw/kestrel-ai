@@ -10958,7 +10958,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`); a malformed body is `validation_error` */
+            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11062,7 +11062,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description changed inputs the rules refuse (`invalid_geometry`, `invalid_base`); a malformed body is `validation_error` */
+            /** @description changed inputs the rules refuse (`invalid_geometry`, `invalid_base`: as on create, and a new top in another CRS than the polygon); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;

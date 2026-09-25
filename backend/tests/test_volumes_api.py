@@ -16,7 +16,8 @@ from sqlalchemy import select
 from surfaces import CX, CY, EPSG, WKT, X0, Y1, circle, cone, cone_cloud, fixture_spec, plane, write_cloud
 from volume_rows import add_cloud, add_map_run, add_surface
 
-from app.db.models import Job, MapRun, Surface, VolumeMeasurement
+from app.db.models import Job, MapDetection, MapRun, Surface, VolumeMeasurement
+from app.detect.review import review_map_detections
 from app.surfaces.grid import open_surface
 from app.surfaces.tiles import diff_colours
 from app.volumes import jobs_calc, service
@@ -468,3 +469,79 @@ def test_results_validate_against_the_contract_schema(top, measure):
     components = yaml.safe_load(spec.read_text("utf-8"))["components"]
     schema = {"$ref": "#/components/schemas/VolumeMeasurement", "components": components}
     jsonschema_rs.Draft202012Validator(schema, validate_formats=True).validate(m)
+
+
+def test_rejecting_or_reclassing_a_masked_detection_makes_it_stale(client, project_id, handle, top, measure):
+    """Spec §6.10: what is masked changes when a person reviews the run's detections."""
+    _, run_id, (det_id,) = _ll_map_with_machine(handle)
+    m, _ = measure(top, masks={"detection_run_ids": [run_id]})
+    url = f"{BASE}/{project_id}/volumes/{m['id']}"
+    assert m["status"] == "ready" and m["results"]["footprints_used"] == 1
+    review_map_detections(handle, run_id, [det_id], "accept")  # still masked: nothing changes
+    assert client.get(url).json()["status"] == "ready"
+    review_map_detections(handle, run_id, [det_id], "reject")
+    got = client.get(url).json()
+    assert got["status"] == "stale" and got["stale_reasons"] == ["masks: detection run changed"]
+    review_map_detections(handle, run_id, [det_id], "unreview")
+    assert client.get(url).json()["stale_reasons"] == []  # back on the inputs it was computed from
+    with handle.session() as s:
+        s.get(MapDetection, det_id).class_id = "c-dozer"
+    assert client.get(url).json()["stale_reasons"] == ["masks: detection run changed"]
+
+
+def test_a_local_base_under_a_georeferenced_top_is_422_invalid_base(client, project_id, handle, top, measure):
+    local = add_surface(handle, fixture_spec(0.1, crs_wkt=None, epsg=None), plane, name="Local")
+    body = {
+        "name": "mix",
+        "polygon_native": circle(CX, CY, 12.0),
+        "top_surface_id": top,
+        "base": {"kind": "surface", "surface_id": local},
+    }
+    r = client.post(f"{BASE}/{project_id}/volumes", json=body)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_base"
+    assert "local coordinates" in r.json()["error"]["message"]
+    m, _ = measure(top)
+    url = f"{BASE}/{project_id}/volumes/{m['id']}"
+    r = client.patch(url, json={"base": {"kind": "surface", "surface_id": local}})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_base"
+    # spec §6.2: a georeferenced base in any other CRS is accepted (the job reprojects it)
+    utm38 = add_surface(handle, fixture_spec(0.1, crs_wkt=CRS.from_epsg(32638).to_wkt(), epsg=32638), plane)
+    r = client.patch(url, json={"base": {"kind": "surface", "surface_id": utm38}})
+    assert r.status_code == 200 and r.json()["status"] == "stale"
+
+
+def test_settle_keeps_what_the_job_wrote_after_the_row_was_read(handle, top, measure):
+    """A compare-and-set on `calculating` and the same job: a row the job already settled, or one a
+    new calculation took over, is not overwritten by the generic settle."""
+    m, _ = measure(top)
+    ended = _ended_job(handle)
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, m["id"])
+        row.status, row.job_id = "calculating", ended
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, m["id"])  # read as `calculating` with an ended job
+        with handle.session() as job_side:  # ... then the job settles it itself
+            job_side.get(VolumeMeasurement, m["id"]).status = "ready"
+        assert service._settle(s, row).status == "ready"
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, m["id"])
+        row.status, row.job_id = "calculating", ended
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, m["id"])
+        with handle.session() as other:  # a new calculation took the row over
+            other.get(VolumeMeasurement, m["id"]).job_id = "new-job"
+        settled = service._settle(s, row)
+        assert (settled.status, settled.job_id) == ("calculating", "new-job")
+
+
+def test_sweep_removes_measurement_folders_no_row_names(handle, top, measure):
+    class Runner:
+        def is_live(self, job_id):
+            return False
+
+    m, _ = measure(top)
+    orphan = handle.volumes_dir / "deleted-measurement-id"
+    orphan.mkdir(parents=True)
+    (orphan / "diff.tif").write_bytes(b"x")
+    sweep_interrupted(handle, Runner())
+    assert not orphan.exists() and diff_path(handle, m["id"]).is_file()

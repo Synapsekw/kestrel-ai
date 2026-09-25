@@ -41,7 +41,12 @@ def create_surface(
     body: SurfaceBuildRequest, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> SurfaceWithJob:
     row = service.create_surface(handle, body)
-    job = request.app.state.jobs.submit(handle, "surface_build", {"surface_id": row.id})
+    try:
+        job = request.app.state.jobs.submit(handle, "surface_build", {"surface_id": row.id})
+    except Exception as e:
+        service.submit_failed(handle, row.id, e)
+        publish_surfaces_changed(request, handle, [row.id])
+        raise
     out = service.set_job(handle, row.id, job.id, created=row)
     publish_surfaces_changed(request, handle, [row.id])
     return SurfaceWithJob(surface=out, job=JobOut.from_row(job, handle.id))

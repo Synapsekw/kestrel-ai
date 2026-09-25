@@ -51,6 +51,11 @@ def metres(v: float | None) -> str:
     return "—" if v is None else f"{v:.3f} m"
 
 
+def scale_factor(k: float) -> str:
+    """The grid-to-ground areal scale factor with the percentage it implies (spec §6.2)."""
+    return f"{k:.5f} ({(k - 1) * 100:+.3f} %)"
+
+
 class _NumberedCanvas(rl_canvas.Canvas):
     """Draws "Kestrel AI · <date> · page n/N" once the page count is known."""
 
@@ -164,6 +169,7 @@ def _measurement(item: ExportItem) -> list:
                     f"No data: {m2(r['nodata_area_m2'])} ({share:.1%}) — volume there is unknown, "
                     f"estimated ± {m3(r['uncertainty']['nodata_m3'])}",
                 ),
+                ("Areal scale factor (not applied)", scale_factor(r["areal_scale_factor"])),
             ]
         )
     )

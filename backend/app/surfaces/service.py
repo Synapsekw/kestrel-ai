@@ -276,6 +276,15 @@ def set_job(
         return to_out(s, row)
 
 
+def submit_failed(handle: ProjectHandle, surface_id: str, error: BaseException) -> None:
+    """A just-created row whose build could not be queued: `failed` with a readable error, never
+    `building` with no job (nothing would ever settle it)."""
+    with handle.session() as s:
+        row = s.get(Surface, surface_id)
+        if row is not None and row.status == "building" and row.job_id is None:
+            row.status, row.error = "failed", f"the build could not be queued: {error}"
+
+
 def rename(handle: ProjectHandle, surface_id: str, name: str | None) -> SurfaceOut:
     with handle.session() as s:
         row = _get(s, surface_id)

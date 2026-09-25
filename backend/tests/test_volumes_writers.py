@@ -161,3 +161,10 @@ def test_pdf_names_every_measurement_and_its_numbers(tmp_path):
     for text in (b"Pile & 1", b"Pile 2", b"523.6 m\\263", b"1,234.5"):
         assert text in data or text.replace(b"\\263", b"") in data, text
     assert b"page 1/" in data
+    # spec §6.2: the areal scale factor is printed with the percentage it implies
+    assert b"Areal scale factor" in data and b"0.99962 \\(-0.038 %\\)" in data  # PDF escapes ( )
+
+
+def test_scale_factor_prints_the_percentage():
+    assert report_pdf.scale_factor(1.00031) == "1.00031 (+0.031 %)"
+    assert report_pdf.scale_factor(0.99962) == "0.99962 (-0.038 %)"
