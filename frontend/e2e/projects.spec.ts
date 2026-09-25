@@ -6,7 +6,16 @@ import { evidencePath } from "./evidence";
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 
 const TRAIN_STEPS = ["Images", "Label", "Datasets", "Train", "Review", "Export"];
-const DETECT_STEPS = ["Sources", "Runs", "Review", "Analytics", "Export", "Site areas"];
+const DETECT_STEPS = [
+  "Sources",
+  "Runs",
+  "Review",
+  "Analytics",
+  "Export",
+  "Site areas",
+  "Point clouds",
+  "Volumes",
+];
 
 /** The pipeline entries of the sidebar, by their leading label. */
 async function expectSteps(page: Page, shown: string[], hidden: string[]) {
@@ -59,7 +68,16 @@ test("a training project shows the training steps, and a detection screen sends 
   page,
 }) => {
   await page.goto(`/p/${P}`);
-  await expectSteps(page, TRAIN_STEPS, ["Sources", "Runs", "Analytics", "Site areas", "Detect", "Maps"]);
+  await expectSteps(page, TRAIN_STEPS, [
+    "Sources",
+    "Runs",
+    "Analytics",
+    "Site areas",
+    "Detect",
+    "Maps",
+    "Point clouds",
+    "Volumes",
+  ]);
   await page.screenshot({
     path: evidencePath("model-library", "training-project-sidebar.png"),
     fullPage: true,

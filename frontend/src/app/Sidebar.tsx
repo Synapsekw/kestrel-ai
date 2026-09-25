@@ -147,8 +147,9 @@ interface Props {
 }
 
 /**
- * The left rail: Projects and Library, then the open project's steps for its kind, then Site areas
- * (detection projects), Past detections (training projects that have some) and the settings.
+ * The left rail: Projects and Library, then the open project's steps for its kind, then Site areas,
+ * Point clouds and Volumes (detection projects), Past detections (training projects that have
+ * some) and the settings.
  */
 export function Sidebar({ projectId, projectName }: Props) {
   const [expanded, setExpanded] = useState(false);
@@ -204,6 +205,19 @@ export function Sidebar({ projectId, projectName }: Props) {
           {kind === "detect" && (
             <PlainEntry to={`/p/${projectId}/site-areas`} icon="map" compact={compact} shortLabel="Areas">
               Site areas
+            </PlainEntry>
+          )}
+          {/* Point clouds, then Volumes: the one statement of this order is spec
+              2026-09-23-point-clouds section 5 item 7. Design surfaces have no entry: they are
+              imported from the Volumes screen's surface list. */}
+          {kind === "detect" && (
+            <PlainEntry to={`/p/${projectId}/clouds`} icon="cloud" compact={compact} shortLabel="Clouds">
+              Point clouds
+            </PlainEntry>
+          )}
+          {kind === "detect" && (
+            <PlainEntry to={`/p/${projectId}/volumes`} icon="volume" compact={compact}>
+              Volumes
             </PlainEntry>
           )}
           {hasPast && (

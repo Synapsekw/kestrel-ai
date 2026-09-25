@@ -21,6 +21,8 @@ const SCREEN: Record<string, string> = {
   runs: "Runs",
   analytics: "Analytics",
   "site-areas": "Site areas",
+  clouds: "Point clouds",
+  volumes: "Volumes",
   settings: "Project settings",
   export: "Export",
 };
@@ -31,6 +33,7 @@ export function screenName(pathname: string): string {
   if (parts.length === 0) return "Projects";
   if (parts[0] === "settings") return "App settings";
   if (parts[0] === "library") return "Library";
+  if (parts[0] === "about") return "About";
   if (parts[0] === "p") return parts.length >= 3 ? (SCREEN[parts[2]] ?? "") : "Home";
   return "";
 }

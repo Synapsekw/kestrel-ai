@@ -23,3 +23,13 @@ describe("screenName", () => {
     expect(screenName("/p/abc/site-areas")).toBe("Site areas");
   });
 });
+
+describe("screenName: foundation F0 screens", () => {
+  it("names Point clouds, Volumes and About", () => {
+    expect(screenName("/p/abc/clouds")).toBe("Point clouds");
+    expect(screenName("/p/abc/clouds/c1")).toBe("Point clouds");
+    expect(screenName("/p/abc/volumes")).toBe("Volumes");
+    expect(screenName("/p/abc/volumes/v1")).toBe("Volumes");
+    expect(screenName("/about")).toBe("About");
+  });
+});

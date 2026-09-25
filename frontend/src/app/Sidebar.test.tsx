@@ -218,3 +218,44 @@ describe("Sidebar", () => {
     expect(within(nav).getByRole("link", { name: /^Images/ }).className).not.toContain("bg-accent-soft");
   });
 });
+
+describe("Sidebar: point clouds and volumes (foundation F0)", () => {
+  beforeEach(() => {
+    useProgressStore.setState({ byProject: {} });
+  });
+
+  it("a detection project lists Point clouds, then Volumes, after Site areas", () => {
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "detect" } });
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12, models: 1 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="North site" />, { api });
+    fireEvent.click(screen.getByRole("button", { name: "Expand navigation" }));
+    const nav = screen.getByRole("navigation");
+    const order = ["Site areas", "Point clouds", "Volumes", "Project settings"].map((label) =>
+      within(nav).getByText(label),
+    );
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+    expect(within(nav).getByRole("link", { name: "Point clouds" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/clouds`,
+    );
+    expect(within(nav).getByRole("link", { name: "Volumes" })).toHaveAttribute(
+      "href",
+      `/p/${PROJECT_ID}/volumes`,
+    );
+    // Design surfaces are imported from the Volumes screen; they have no entry of their own.
+    expect(within(nav).queryByRole("link", { name: /Design/ })).toBeNull();
+  });
+
+  it("a training project has neither", () => {
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 40 });
+    const { api } = fakeClient([]);
+    renderWithProviders(<Sidebar projectId={PROJECT_ID} projectName="Walkthrough" />, { api });
+    const nav = screen.getByRole("navigation");
+    expect(within(nav).queryByRole("link", { name: "Point clouds" })).toBeNull();
+    expect(within(nav).queryByRole("link", { name: "Volumes" })).toBeNull();
+  });
+});
