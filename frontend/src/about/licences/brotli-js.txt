@@ -1,0 +1,27 @@
+brotli.js (npm package "brotli", bundled in potree-core's decoder worker)
+Repository: https://github.com/devongovett/brotli.js
+Licence (per the package's package.json "license" field): MIT
+
+No LICENSE file is published in the npm package (brotli@1.3.3) or in the upstream git
+repository; only the SPDX identifier "MIT" is declared in package.json and the readme's
+"## License" section. The standard MIT License text is reproduced below, verbatim from
+https://opensource.org/license/mit/, with the copyright holder taken from the package's
+"author" field and the year of its earliest published release (v1.0.1, 2015-02-03).
+
+Copyright (c) 2015 Devon Govett
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this
+software and associated documentation files (the "Software"), to deal in the Software
+without restriction, including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons
+to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
