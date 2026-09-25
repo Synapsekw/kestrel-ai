@@ -33,8 +33,16 @@ export interface CloudViewerHandle {
   topView(): void;
   lookAt(target: Vec3, distance: number): void;
   pickAtClient(clientX: number, clientY: number): CloudPick | null;
-  /** Client (viewport) coordinates of a native-CRS point, or null behind the camera. */
+  /**
+   * The topmost loaded point within `radius` m (horizontally) of (x, y), the one nearest the spot:
+   * potree's picker run with an orthographic camera above the cloud looking straight down, so the
+   * answer does not depend on the current view (no viewport clamping, no horizontal error).
+   */
+  pickDown(x: number, y: number, radius: number): CloudPick | null;
+  /** Client (viewport) coordinates of a native-CRS point, or null behind the camera; may be off the canvas. */
   project(p: Vec3): { x: number; y: number } | null;
+  /** The canvas in client coordinates, or null before it exists. */
+  canvasRect(): { left: number; top: number; right: number; bottom: number } | null;
   setOverlay(key: string, shapes: OverlayShape[]): void;
   stats(): ViewerStats;
 }
@@ -57,6 +65,8 @@ export interface CloudViewerProps {
 const HOVER_MS = 100;
 const CLICK_SLOP_PX = 4;
 const PICK_WINDOW = 15;
+/** How far above the cloud's top (and below its bottom) the straight-down pick camera reaches. */
+const DOWN_MARGIN_M = 10;
 const fmt = (v: number) => v.toFixed(3);
 const points = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
 
@@ -139,6 +149,16 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     });
   }, []);
 
+  const toCloudPick = useCallback(
+    (e: Engine, p: THREE.Vector3): CloudPick => {
+      const level = deepestLevelAt(nodeBoxes(), p) ?? 0;
+      const spacing =
+        cloud.octree_spacing_m ?? (e.pco?.pcoGeometry as unknown as { spacing?: number })?.spacing ?? 1;
+      return { x: p.x, y: p.y, z: p.z, level, uncertainty_m: pickUncertainty(spacing, level) };
+    },
+    [cloud.octree_spacing_m, nodeBoxes],
+  );
+
   const pickAtClient = useCallback(
     (clientX: number, clientY: number): CloudPick | null => {
       const e = engine.current;
@@ -152,14 +172,38 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       const ray = new THREE.Raycaster();
       ray.setFromCamera(ndc, e.camera);
       const hit = e.pco.pick(e.renderer, e.camera, ray.ray, { pickWindowSize: PICK_WINDOW });
-      const p = hit?.position;
-      if (!p) return null;
-      const level = deepestLevelAt(nodeBoxes(), p) ?? 0;
-      const spacing =
-        cloud.octree_spacing_m ?? (e.pco.pcoGeometry as unknown as { spacing?: number }).spacing ?? 1;
-      return { x: p.x, y: p.y, z: p.z, level, uncertainty_m: pickUncertainty(spacing, level) };
+      return hit?.position ? toCloudPick(e, hit.position) : null;
     },
-    [cloud.octree_spacing_m, nodeBoxes],
+    [toCloudPick],
+  );
+
+  const pickDown = useCallback(
+    (x: number, y: number, radius: number): CloudPick | null => {
+      const e = engine.current;
+      const canvas = canvasRef.current;
+      if (!e?.pco || !canvas || !bounds) return null;
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (!w || !h) return null;
+      // A pixel is the same ground distance both ways and the canvas's shorter side spans 2 x radius,
+      // so the pick window (that side, centred on the ray) covers the ±radius square. The picker keeps
+      // the lit pixel nearest the centre; the depth test keeps the topmost point in each pixel.
+      const sx = radius * Math.max(w / h, 1);
+      const sy = radius * Math.max(h / w, 1);
+      const top = bounds[5] + DOWN_MARGIN_M;
+      const down = new THREE.OrthographicCamera(-sx, sx, sy, -sy, 0.1, top - bounds[2] + DOWN_MARGIN_M);
+      down.up.set(0, 1, 0);
+      down.position.set(x, y, top);
+      down.lookAt(x, y, bounds[2]);
+      down.updateProjectionMatrix();
+      down.updateMatrixWorld(true);
+      const ray = new THREE.Ray(down.position.clone(), new THREE.Vector3(0, 0, -1));
+      const hit = e.pco.pick(e.renderer, down, ray, { pickWindowSize: Math.min(w, h) });
+      const p = hit?.position;
+      if (!p || Math.hypot(p.x - x, p.y - y) > radius) return null;
+      return toCloudPick(e, p);
+    },
+    [bounds, toCloudPick],
   );
 
   useEffect(() => {
@@ -376,6 +420,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           const r = canvas.getBoundingClientRect();
           return pickAtClient(r.left + r.width / 2, r.top + r.height / 2);
         },
+        pickDown: (x: number, y: number, radius: number) => pickDown(x, y, radius),
         overlays: () => [...new Set(overlay.children.map((c) => String(c.userData.key)))],
       });
     }
@@ -448,6 +493,11 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         e.requestRender();
       },
       pickAtClient,
+      pickDown,
+      canvasRect() {
+        const r = canvasRef.current?.getBoundingClientRect();
+        return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom } : null;
+      },
       project(p) {
         const e = engine.current;
         const canvas = canvasRef.current;
@@ -490,7 +540,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       },
       stats: () => ({ ...(engine.current?.stats ?? emptyStats()) }),
     }),
-    [bounds, pickAtClient],
+    [bounds, pickAtClient, pickDown],
   );
 
   return (

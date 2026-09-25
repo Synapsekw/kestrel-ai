@@ -16,6 +16,7 @@ function hook(): CloudViewerDiagnostics {
     },
     sampleColours: () => ({ total: 0, background: 0, red: 0, green: 0, white: 0 }),
     pickCenter: () => null,
+    pickDown: () => null,
     overlays: () => [],
   };
 }

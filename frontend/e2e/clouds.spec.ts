@@ -410,6 +410,12 @@ test("a detection on the map opens the same spot in 3D, and a pick goes back to 
   await expect
     .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
     .toContain("footprint");
+  // The refine's straight-down pick (final review F2) lands on the spot itself, not a splat 2 m off,
+  // and on the surface there: the grid point (243550, 3178050) at z = 0.02 x 50 = 1.0.
+  const down = await page.evaluate(() => window.__kestrelCloudViewer!.pickDown(243550, 3178050, 2));
+  expect(down).not.toBeNull();
+  expect(Math.hypot(down!.x - 243550, down!.y - 3178050)).toBeLessThan(0.5);
+  expect(down!.z).toBeCloseTo(1.0, 1);
 
   const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
   await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);

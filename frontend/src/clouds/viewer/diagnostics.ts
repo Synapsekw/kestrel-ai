@@ -25,6 +25,12 @@ export interface CloudViewerDiagnostics {
   stats(): ViewerStats;
   sampleColours(): ColourSample;
   pickCenter(): { x: number; y: number; z: number; level: number; uncertainty_m: number } | null;
+  /** The viewer's straight-down pick at (x, y) within `radius` m: the jump arrival's Z refine. */
+  pickDown(
+    x: number,
+    y: number,
+    radius: number,
+  ): { x: number; y: number; z: number; level: number; uncertainty_m: number } | null;
   /** The keys of the overlays currently drawn ("measure", "pin", "footprint"), for the e2e tests. */
   overlays(): string[];
 }

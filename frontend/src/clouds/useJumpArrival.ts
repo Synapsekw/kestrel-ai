@@ -8,7 +8,7 @@ import { jumpDistance } from "./viewer/camera";
 const TICK_MS = 100;
 const MAX_WAIT_TICKS = 300; // 30 s
 const Z_REFINE_M = 2;
-/** Screen positions sampled along the pin, top to bottom (plus the p50 one): a fixed, small pick count. */
+/** Fallback: screen positions sampled along the pin, top to bottom (plus the p50 one): a small, fixed pick count. */
 const PIN_SAMPLES = 12;
 /** Idle ticks in a row before the view counts as settled: the first idle tick after lookAt can be stale. */
 const SETTLED_TICKS = 2;
@@ -16,18 +16,21 @@ const SETTLED_TICKS = 2;
 const PICK_ROUNDS = 3;
 
 /**
- * The hit nearest (x, y) horizontally among picks along the pin's screen segment. A 45° view of the
- * p50 point alone lands ≈ |z_surface − p50| off horizontally, so a stockpile, pit or chimney top is
- * only found by searching the whole vertical.
+ * The fallback when the straight-down pick finds nothing: the hit nearest (x, y) horizontally among
+ * picks along the pin's screen segment. Only samples that land on the canvas are picked: potree's
+ * picker clamps an off-canvas position to the viewport edge, which answers for some other spot.
  */
 function pickAlongPin(v: CloudViewerHandle, at: XY, zLo: number, zHi: number, z0: number): CloudPick | null {
   const zs = Array.from({ length: PIN_SAMPLES }, (_, i) => zHi - ((zHi - zLo) * i) / (PIN_SAMPLES - 1));
   zs.push(z0);
+  const rect = v.canvasRect();
+  if (!rect) return null;
   let best: CloudPick | null = null;
   let bestD = Infinity;
   for (const z of zs) {
-    const screen = v.project({ x: at.x, y: at.y, z });
-    const hit = screen ? v.pickAtClient(screen.x, screen.y) : null;
+    const s = v.project({ x: at.x, y: at.y, z });
+    if (!s || s.x < rect.left || s.x > rect.right || s.y < rect.top || s.y > rect.bottom) continue;
+    const hit = v.pickAtClient(s.x, s.y);
     if (!hit) continue;
     const d = Math.hypot(hit.x - at.x, hit.y - at.y);
     if (d < bestD) {
@@ -41,7 +44,9 @@ function pickAlongPin(v: CloudViewerHandle, at: XY, zLo: number, zHi: number, z0
 /**
  * Spec §10 "Arriving in 3D", once per navigation: outside the cloud → a toast; else look at
  * (x, y, p50) from 45° south at max(40 m, 3 × footprint diagonal), draw a vertical pin, and once
- * the view has settled pick along the pin: the nearest hit within 2 m retargets Z and draws the
+ * the view has settled pick straight down at the spot (the topmost surface within 2 m, however far
+ * above or below p50: a 45° view only shows about p50 − 77 m … p50 + 21 m of the pin), falling back
+ * to picks along the pin's on-canvas stretch. The nearest hit within 2 m retargets Z and draws the
  * footprint there.
  */
 export function useJumpArrival(
@@ -94,7 +99,7 @@ export function useJumpArrival(
       }
       idle = s.nodesLoading > 0 ? 0 : idle + 1;
       if (idle < SETTLED_TICKS) return;
-      const hit = pickAlongPin(v, at, b[2], b[5], z0);
+      const hit = v.pickDown(at.x, at.y, Z_REFINE_M) ?? pickAlongPin(v, at, b[2], b[5], z0);
       if (!hit) {
         rounds += 1;
         if (rounds >= PICK_ROUNDS) window.clearInterval(timer);

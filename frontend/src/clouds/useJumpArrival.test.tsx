@@ -20,14 +20,20 @@ const cloud = {
 const FP = "&fp=243545,3178055;243555,3178055;243555,3178045;243545,3178045";
 const D = jumpDistance(Math.hypot(10, 10));
 
-/** A fake viewer: `project` puts z on the screen's y axis (y = 1000 - 10 z); `hitFor(z)` answers a pick there. */
+/**
+ * A fake viewer: `project` puts z on the screen's y axis (y = 1000 - 10 z) of a canvas covering
+ * y 0..1000; `hitFor(z)` answers a pick there. `pickDown` (the vertical pick) finds nothing unless a
+ * test says so, so the pin-sampling fallback is what these tests exercise by default.
+ */
 function fakeViewer(hitFor: (z: number) => CloudPick | null) {
   const v = {
     stats: vi.fn(() => ({ numVisiblePoints: 100, nodesLoading: 0 })),
     lookAt: vi.fn(),
     setOverlay: vi.fn(),
     project: vi.fn((p: { x: number; y: number; z: number }) => ({ x: 400, y: 1000 - 10 * p.z })),
+    canvasRect: vi.fn(() => ({ left: 0, top: 0, right: 800, bottom: 1000 })),
     pickAtClient: vi.fn((_x: number, y: number) => hitFor((1000 - y) / 10)),
+    pickDown: vi.fn<(x: number, y: number, radius: number) => CloudPick | null>(() => null),
   };
   const ref = { current: v as unknown as CloudViewerHandle } as RefObject<CloudViewerHandle | null>;
   return { v, ref };
@@ -131,6 +137,32 @@ describe("useJumpArrival", () => {
     act(() => void vi.advanceTimersByTime(100));
     expect(v.pickAtClient).toHaveBeenCalled();
     expect(footprintCalls(v)).toHaveLength(1);
+  });
+
+  it("picks straight down first: the topmost surface far above p50, without sampling the pin", () => {
+    // Final review F2: a chimney top 45 m above p50, where the 45° arrival view does not reach.
+    const { v, ref } = fakeViewer(() => hit(20, 0));
+    v.pickDown.mockImplementation(() => hit(0.1, 95));
+    arrive(ref, `?at=${AT.x},${AT.y}${FP}`);
+    expect(v.pickDown).toHaveBeenCalledWith(AT.x, AT.y, 2);
+    expect(v.pickAtClient).not.toHaveBeenCalled();
+    expect(v.lookAt).toHaveBeenLastCalledWith({ x: AT.x, y: AT.y, z: 95 }, D);
+    const fp = footprintCalls(v);
+    expect(fp).toHaveLength(1);
+    for (const p of (fp[0][1][0] as { points: { z: number }[] }).points) expect(p.z).toBe(95);
+  });
+
+  it("the pin fallback never picks where the pin is off the canvas", () => {
+    // Final review F2: above z = 70 the pin leaves the canvas (y < 300). potree's picker clamps an
+    // off-canvas position to the edge, so a pick there would answer for another spot: here the
+    // clamped edge "finds" a ghost 0.3 m away at z 90, which must never be taken.
+    const { v, ref } = fakeViewer((z) => (z > 70 ? hit(0.3, 90) : hit(20, 0)));
+    v.canvasRect.mockReturnValue({ left: 0, top: 300, right: 800, bottom: 1000 });
+    arrive(ref, `?at=${AT.x},${AT.y}${FP}`);
+    expect(v.pickAtClient).toHaveBeenCalled();
+    for (const [, y] of v.pickAtClient.mock.calls) expect(y).toBeGreaterThanOrEqual(300);
+    expect(footprintCalls(v)).toHaveLength(0);
+    expect(v.lookAt).toHaveBeenCalledTimes(1);
   });
 
   it("retries a pick that finds nothing before giving up", () => {
