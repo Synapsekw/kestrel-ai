@@ -115,15 +115,40 @@ def _plan(ctx: JobContext, item: ExportItem) -> bytes:
         )
 
 
-def _gpkgs(ctx: JobContext, partial, items: list[ExportItem]) -> list[str]:
-    by_crs: dict[str, list[ExportItem]] = {}
+def _unique(stem: str, used: set[str]) -> str:
+    """`stem`, or `stem-2`, `stem-3`... when an earlier file already took it."""
+    name, k = stem, 1
+    while name in used:
+        k += 1
+        name = f"{stem}-{k}"
+    used.add(name)
+    return name
+
+
+def gpkg_groups(items: list[ExportItem]) -> list[tuple[str, list[ExportItem]]]:
+    """One GeoPackage per CRS: keyed on the EPSG code when there is one (two WKT spellings of the
+    same code share a file), on the WKT only for a CRS without a code. Names never collide."""
+    groups: dict[tuple, list[ExportItem]] = {}
     for item in items:
-        by_crs.setdefault(item.crs_wkt or "", []).append(item)
+        key = ("epsg", item.epsg) if item.epsg else ("wkt", item.crs_wkt or "")
+        groups.setdefault(key, []).append(item)
+    if len(groups) == 1:
+        return [("volumes.gpkg", next(iter(groups.values())))]
+    used: set[str] = set()
+    out = []
+    for (kind, value), group in groups.items():
+        stem = f"volumes-epsg{value}" if kind == "epsg" else "volumes-local"
+        out.append((f"{_unique(stem, used)}.gpkg", group))
+    return out
+
+
+def _gpkgs(ctx: JobContext, partial, items: list[ExportItem]) -> list[str]:
     names = []
-    for crs_wkt, group in by_crs.items():
+    for name, group in gpkg_groups(items):
+        ctx.check_cancelled()
         epsg = group[0].epsg
-        name = "volumes.gpkg" if len(by_crs) == 1 else f"volumes-epsg{epsg or 'local'}.gpkg"
-        crs = CRS.from_user_input(crs_wkt) if crs_wkt else None
+        crs_wkt = group[0].crs_wkt
+        crs = CRS.from_epsg(epsg) if epsg else CRS.from_user_input(crs_wkt) if crs_wkt else None
         measurements = [
             (
                 i.polygon,
@@ -186,8 +211,10 @@ def _gpkgs(ctx: JobContext, partial, items: list[ExportItem]) -> list[str]:
             wkt=crs.to_wkt("WKT1_GDAL") if crs else 'LOCAL_CS["local metres",UNIT["metre",1]]',
         )
         names.append(name)
+    used: set[str] = set()
     for item in items:
-        stem = f"{slug(item.name)}-cutfill"
+        ctx.check_cancelled()
+        stem = _unique(f"{slug(item.name)}-cutfill", used)
         shutil.copyfile(diff_path(ctx.project, item.id), partial / f"{stem}.tif")
         write_qml(partial / f"{stem}.qml", item.results["diff_scale_m"])
         names += [f"{stem}.tif", f"{stem}.qml"]
@@ -215,6 +242,7 @@ def run_volume_export(ctx: JobContext) -> dict:
                 from app.volumes.report_pdf import write_report
 
                 for item in items:
+                    ctx.check_cancelled()
                     item.plan_png = _plan(ctx, item)
                 with ctx.project.session() as s:
                     project_name = ctx.project.row(s).name

@@ -184,7 +184,7 @@ def create_volume_export(
         title = body.title or handle.row(s).name
     params = {
         "measurement_ids": list(dict.fromkeys(body.measurement_ids)),
-        "formats": body.formats,
+        "formats": list(dict.fromkeys(body.formats)),
         "title": title,
     }
     job = request.app.state.jobs.submit(handle, "volume_export", params)

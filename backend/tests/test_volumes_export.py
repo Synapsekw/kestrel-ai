@@ -6,9 +6,12 @@ import sqlite3
 
 import pytest
 from openpyxl import load_workbook
+from pyproj import CRS
 from surfaces import CX, CY, circle, cone, fixture_spec, plane
 from volume_rows import add_surface
 
+from app.volumes.items import ExportItem
+from app.volumes.jobs_export import gpkg_groups
 from app.volumes.paths import diff_path
 
 BASE = "/api/v1/projects"
@@ -77,12 +80,78 @@ def test_every_format_is_written(client, wait_job, project_id, handle, measured)
 def test_stale_or_unknown_measurements_are_refused(client, project_id, measured):
     url = f"{BASE}/{project_id}/volume-exports"
     assert client.post(url, json={"measurement_ids": ["nope"], "formats": ["csv"]}).status_code == 404
-    client.patch(f"{BASE}/{project_id}/volumes/{measured[0]}", json={"base": {"kind": "flat", "z": 50.0}})
+    patched = client.patch(
+        f"{BASE}/{project_id}/volumes/{measured[0]}", json={"base": {"kind": "flat", "z": 50.0}}
+    )
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["status"] == "stale"
     r = client.post(url, json={"measurement_ids": measured, "formats": ["csv"]})
     assert r.status_code == 409, r.text
     error = r.json()["error"]
     assert error["code"] == "not_ready"
     assert "recalculate" in error["message"]
+
+
+def test_same_named_measurements_get_distinct_cutfill_files(client, wait_job, project_id, handle):
+    top = add_surface(handle, fixture_spec(0.1), lambda x, y: plane(x, y) + cone(x, y), name="April")
+    ids = []
+    for r in (12.0, 11.0):
+        body = {
+            "name": "Pile",
+            "polygon_native": circle(CX, CY, r),
+            "top_surface_id": top,
+            "base": {"kind": "toe_plane"},
+        }
+        res = client.post(f"{BASE}/{project_id}/volumes", json=body).json()
+        assert wait_job(project_id, res["job"]["id"])["state"] == "succeeded"
+        ids.append(res["measurement"]["id"])
+    job = _export(client, wait_job, project_id, ids, ["gpkg", "gpkg"])
+    assert job["state"] == "succeeded", job
+    files = job["result"]["files"]
+    assert files == [
+        "volumes.gpkg",
+        "pile-cutfill.tif",
+        "pile-cutfill.qml",
+        "pile-cutfill-2.tif",
+        "pile-cutfill-2.qml",
+        "summary.json",
+    ]
+    folder = handle.folder / job["result"]["folder"]
+    assert (folder / "pile-cutfill.tif").read_bytes() == diff_path(handle, ids[0]).read_bytes()
+    assert (folder / "pile-cutfill-2.tif").read_bytes() == diff_path(handle, ids[1]).read_bytes()
+
+
+def _item(epsg, wkt):
+    return ExportItem(
+        id="m",
+        name="m",
+        status="ready",
+        polygon=[],
+        base={"kind": "toe_plane"},
+        masks={},
+        alignment={},
+        results={},
+        epsg=epsg,
+        crs_wkt=wkt,
+    )
+
+
+def test_geopackages_group_by_epsg_and_never_share_a_name():
+    utm = CRS.from_epsg(32639)
+    a, b = _item(32639, utm.to_wkt()), _item(32639, utm.to_wkt("WKT1_GDAL"))
+    assert [(n, len(g)) for n, g in gpkg_groups([a, b])] == [("volumes.gpkg", 2)]
+    local1, local2 = (
+        _item(None, 'LOCAL_CS["a",UNIT["metre",1]]'),
+        _item(None, 'LOCAL_CS["b",UNIT["metre",1]]'),
+    )
+    other = _item(32633, CRS.from_epsg(32633).to_wkt())
+    names = [n for n, _ in gpkg_groups([a, local1, b, local2, other])]
+    assert names == [
+        "volumes-epsg32639.gpkg",
+        "volumes-local.gpkg",
+        "volumes-local-2.gpkg",
+        "volumes-epsg32633.gpkg",
+    ]
 
 
 def test_the_title_defaults_to_the_project_name(client, wait_job, project_id, measured):
