@@ -11,6 +11,9 @@ import { CloudList } from "@/clouds/CloudList";
 import { CloudViewer, type CloudViewerHandle } from "@/clouds/CloudViewer";
 import { ExportWatch } from "@/clouds/ExportWatch";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
+import { MeasurePanel } from "@/clouds/MeasurePanel";
+import { overlayShapes } from "@/clouds/measure";
+import { useMeasureTool } from "@/clouds/useMeasureTool";
 import { ViewPanel, type ViewSettings } from "@/clouds/ViewPanel";
 import { readBudget, writeBudget } from "@/clouds/viewer/budget";
 import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOptions";
@@ -19,10 +22,11 @@ import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useJobsStore } from "@/store/jobs";
 import { Alert, Button, EmptyState, Segmented, toast } from "@/ui";
 
-type Tab = "details" | "view";
+type Tab = "details" | "view" | "measure";
 const TABS: { value: Tab; label: string }[] = [
   { value: "details", label: "Details" },
   { value: "view", label: "View" },
+  { value: "measure", label: "Measure" },
 ];
 
 function report(action: string, err: unknown): string {
@@ -52,6 +56,23 @@ export function CloudsScreen() {
   );
   const [tab, setTab] = useState<Tab>("details");
   const [settings, setSettings] = useState<ViewSettings | null>(null);
+  const measure = useMeasureTool();
+  const { cancel: cancelMeasure } = measure;
+
+  // The overlay follows the tool (an effect that only talks to the viewer, never to React state).
+  useEffect(() => {
+    viewer.current?.setOverlay(
+      "measure",
+      tab === "measure" && measure.tool ? overlayShapes(measure.tool, measure.picks, measure.hover) : [],
+    );
+  }, [tab, measure.tool, measure.picks, measure.hover]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancelMeasure();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [cancelMeasure]);
 
   const reload = useCallback(() => {
     void listPointClouds(api, projectId)
@@ -79,6 +100,8 @@ export function CloudsScreen() {
   const seedKey = cloud ? `${cloud.id}|${cloud.status}` : null;
   if (cloud && seedKey !== settingsFor) {
     setSettingsFor(seedKey);
+    // Picks belong to one cloud's coordinates; a switch puts the tool down.
+    if (settingsFor?.split("|")[0] !== cloud.id) measure.cancel();
     setSettings({
       budget: readBudget(),
       colour: defaultColour(cloud.has_rgb),
@@ -191,6 +214,9 @@ export function CloudsScreen() {
             colour={settings.colour}
             elevationRange={settings.elevationRange}
             pointSize={settings.pointSize}
+            armed={tab === "measure" && !!measure.tool}
+            onPick={(p) => tab === "measure" && measure.add(p)}
+            onHover={measure.setHover}
           />
         ) : (
           <EmptyState
@@ -209,7 +235,16 @@ export function CloudsScreen() {
         {cloud && (
           <>
             <h2 className="min-w-0 truncate text-base font-semibold">{cloud.name}</h2>
-            <Segmented label="Cloud panel" size="sm" value={tab} onChange={setTab} options={TABS} />
+            <Segmented
+              label="Cloud panel"
+              size="sm"
+              value={tab}
+              onChange={(t) => {
+                setTab(t);
+                if (t !== "measure") measure.cancel();
+              }}
+              options={TABS}
+            />
             {tab === "details" && (
               <CloudDetails
                 // Keyed: an error, EPSG draft or export of one cloud never carries over to the next.
@@ -237,6 +272,15 @@ export function CloudsScreen() {
                 }}
                 onFit={() => viewer.current?.fit()}
                 onTop={() => viewer.current?.topView()}
+              />
+            )}
+            {tab === "measure" && (
+              <MeasurePanel
+                key={cloud.id}
+                projectId={projectId}
+                cloud={cloud}
+                tool={measure}
+                onFlyTo={(p) => viewer.current?.lookAt({ x: p.x, y: p.y, z: p.z }, 30)}
               />
             )}
           </>

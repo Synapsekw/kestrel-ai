@@ -231,3 +231,67 @@ test("export LAZ ends with a toast that reveals the folder", async ({ page }) =>
   await expect(page.getByText("LAZ export finished")).toBeVisible({ timeout: 10_000 });
   await expect(page.getByRole("button", { name: "Show folder" })).toBeVisible();
 });
+
+test("measure a distance with two picks, save it, copy the CSV", async ({ page, context }) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  const saved: unknown[] = [];
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
+  await routeOctree(
+    page,
+    CLOUD,
+    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 })),
+  );
+  await page.route(
+    (u) => u.pathname.endsWith(`/pointclouds/${CLOUD}/measurements`),
+    async (route) => {
+      if (route.request().method() === "POST") {
+        const body = route.request().postDataJSON() as { kind: string; points: unknown[] };
+        const m = {
+          id: `m${saved.length + 1}`,
+          point_cloud_id: CLOUD,
+          kind: body.kind,
+          name: `Distance ${saved.length + 1}`,
+          note: null,
+          points: body.points,
+          results: { distance_3d: 12.5, uncertainty_m: 0.04 },
+          created_at: "2026-09-24T10:00:00Z",
+          updated_at: "2026-09-24T10:00:00Z",
+        };
+        saved.push(m);
+        return route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
+          body: JSON.stringify(m),
+        });
+      }
+      return route.fulfill({
+        contentType: "application/json",
+        headers: { "Access-Control-Allow-Origin": "*" },
+        body: JSON.stringify({ items: saved }),
+      });
+    },
+  );
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1, { timeout: 20_000 }).toBe(0);
+  await page.getByRole("radio", { name: "Measure" }).click();
+  await page.getByRole("button", { name: "Distance" }).click();
+  const box = (await page.getByTestId("cloud-canvas").boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.click(box.x + box.width / 2 + 80, box.y + box.height / 2);
+  await expect(page.getByText("3D distance")).toBeVisible();
+  await expect(page.getByTestId("pick-readout")).toContainText("EPSG:32639");
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.overlays())).toContain("measure");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(
+    page
+      .getByRole("list", { name: "Saved measurements" })
+      .getByRole("textbox", { name: "Name of Distance 1" }),
+  ).toHaveValue("Distance 1");
+  await page.getByRole("button", { name: "Copy all as CSV" }).click();
+  const csv = await page.evaluate(() => navigator.clipboard.readText());
+  expect(csv.split("\r\n")[0]).toBe(
+    "id,name,kind,note,x1,y1,z1,u1,x2,y2,z2,u2,lon,lat,dx,dy,dz,distance_3d,distance_horizontal,distance_vertical,height_difference,lean_offset_m,lean_angle_deg,lean_azimuth_deg,lean_mm_per_m,uncertainty_m,angle_uncertainty_deg",
+  );
+});
