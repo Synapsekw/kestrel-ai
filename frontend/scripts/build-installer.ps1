@@ -13,6 +13,8 @@
 
   Freeze the backend first: `backend\scripts\build.ps1`.
 
+  Before Inno Setup it runs check-packaged-webview.ps1, which needs Kestrel AI closed.
+
 .PARAMETER SkipTauriBuild
   Compile the installer around the release binary that is already in target/release.
 
@@ -61,6 +63,12 @@ if (-not $SkipTauriBuild) {
 
 $appExe = Join-Path $frontend "src-tauri\target\release\kestrel-ai.exe"
 if (-not (Test-Path $appExe)) { throw "no release binary at $appExe; run without -SkipTauriBuild" }
+
+# The packaged 3D viewer must render (spec section 13; ADR 2026-09-23 "packaged webview needs
+# worker-src blob:"). pnpm dev and tauri dev hide a blank viewer; only the release exe shows it. No
+# installer is built when the check fails.
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check-packaged-webview.ps1")
+if ($LASTEXITCODE -ne 0) { throw "the packaged-webview check failed; no installer was built (the reason is above)" }
 
 # The WebView2 bootstrapper is Microsoft's redistributable, never committed. It is shipped only
 # when a copy is already on this machine: dropped into frontend/installer/ by hand, or left in the
