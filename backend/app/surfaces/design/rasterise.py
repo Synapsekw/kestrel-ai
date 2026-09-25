@@ -19,9 +19,9 @@ import numpy as np
 from rasterio.windows import Window
 
 SMALL = 8  # triangles whose clipped range fits in SMALL x SMALL cells are scanned in batches
-BATCH = 8_192  # <= the spec's 65 536; keeps the (n, 8, 8) float64 temporaries near 4 MB each
+BATCH = 16_384  # <= the spec's 65 536; keeps the (n, 8, 8) float64 temporaries near 8 MB each
 CHUNK_CELLS = 4_000_000
-RANGE_CHUNK = 131_072
+RANGE_CHUNK = 65_536  # == the spec's 64 k cap; check_cancelled() runs once per this many triangles indexed
 INSIDE_EPS = -1e-9
 OVERLAP_DZ = 1e-3
 DEGENERATE_REL = 1e-12

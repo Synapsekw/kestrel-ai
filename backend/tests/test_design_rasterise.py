@@ -161,3 +161,24 @@ def test_memory_of_a_million_triangles_stays_within_the_arrays_plus_150_mb():
     peak = tracemalloc.get_traced_memory()[1] - base
     tracemalloc.stop()
     assert peak < 150 * 2**20, f"peak {peak / 2**20:.0f} MB beyond the TIN arrays"
+
+
+def test_check_cancelled_is_called_at_least_once_per_65536_triangles():
+    """The plan's global constraint: check_cancelled() at least once per <= 64 k triangles, whether
+    that's a chunk of indexing or a batch of one window's small triangles."""
+    n = 200
+    g = np.arange(n) * 2.0
+    xx, yy = np.meshgrid(g + E0, g + N0)
+    v = np.column_stack([xx.ravel(), yy.ravel(), plane_z(xx.ravel(), yy.ravel())])
+    i = np.arange(n - 1)
+    a = (i[:, None] * n + i[None, :]).ravel()
+    t = np.vstack([np.column_stack([a, a + 1, a + n + 1]), np.column_stack([a, a + n + 1, a + n])]).astype(
+        np.int32
+    )
+    assert len(t) > 65_536  # a single window's worth of triangles, well past the 64 k cap
+    lat = lattice_over((E0, N0, E0 + g[-1], N0 + g[-1]), 1.0)
+    side = max(lat.width, lat.height)  # one block covers the whole lattice: one window call
+    calls = []
+    r = TinRasteriser(v, t, lat, side=side, check_cancelled=lambda: calls.append(None))
+    r.rasterise_window(Window(0, 0, lat.width, lat.height))
+    assert len(calls) >= math.ceil(len(t) / 65_536)
