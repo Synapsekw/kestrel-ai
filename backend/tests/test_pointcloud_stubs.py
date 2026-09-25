@@ -13,6 +13,7 @@ import inspect
 import re
 
 import pytest
+import yaml
 
 from app.jobs.registry import get_job_type
 
@@ -56,6 +57,27 @@ def _project(client, tmp_path, kind):
     r = client.post("/api/v1/projects", json=body)
     assert r.status_code == 201, r.text
     return r.json()["id"]
+
+
+def test_expected_stubs_match_the_routers_stubs():
+    """EXPECTED_STUBS' point-cloud, surface and volume entries are exactly the four routers' STUBS.
+
+    Only the operations tagged `pointclouds`, `surfaces` or `volumes` (every one of them lives in
+    the four routers) are compared, so an unrelated EXPECTED_STUBS entry never trips this."""
+    from test_contract import EXPECTED_STUBS, METHODS, SPEC
+
+    ours = {
+        op["operationId"]
+        for ops in yaml.safe_load(SPEC.read_text("utf-8"))["paths"].values()
+        for m, op in ops.items()
+        if m in METHODS and set(op.get("tags", [])) & {"pointclouds", "surfaces", "volumes"}
+    }
+    routed = {op_id for _, _, op_id in _stubs()}
+    assert routed <= ours, sorted(routed - ours)
+    assert EXPECTED_STUBS & ours == routed, {
+        "expected but not a router stub": sorted((EXPECTED_STUBS & ours) - routed),
+        "a router stub but not expected": sorted(routed - EXPECTED_STUBS),
+    }
 
 
 def test_the_six_job_types_are_registered(app):

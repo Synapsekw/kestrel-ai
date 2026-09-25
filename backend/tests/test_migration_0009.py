@@ -52,8 +52,13 @@ def _opened(tmp_path):
 
 
 def test_the_chain_has_one_head_and_it_is_this_revision():
-    heads = ScriptDirectory.from_config(_cfg()).get_heads()
-    assert heads == [REVISION]
+    """One head (two would stop every project opening), and 0009 is on its chain - so a later,
+    unrelated migration on top of it does not have to edit this test."""
+    script = ScriptDirectory.from_config(_cfg())
+    heads = script.get_heads()
+    assert len(heads) == 1, heads
+    chain = {rev.revision for rev in script.walk_revisions(base="base", head=heads[0])}
+    assert REVISION in chain, (heads, sorted(chain))
 
 
 def test_upgrade_keeps_the_map_and_adds_the_four_tables(tmp_path):
