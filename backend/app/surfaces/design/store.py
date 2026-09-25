@@ -43,8 +43,11 @@ def new_id() -> str:
 
 
 def inspection_dir(handle, inspection_id: str) -> Path:
-    """The folder of one inspection. Ids are UUIDs only, so a crafted id cannot leave the cache."""
-    if not ID_RE.match(inspection_id or ""):
+    """The folder of one inspection. Ids are UUIDs only, so a crafted id cannot leave the cache.
+
+    `fullmatch`, not `match`: with `match`, `$` also matches just before a trailing newline, so
+    a UUID followed by "\\n" would otherwise be accepted."""
+    if not ID_RE.fullmatch(inspection_id or ""):
         raise not_found("design inspection", inspection_id)
     return inspections_root(handle) / inspection_id
 
@@ -57,7 +60,7 @@ def require_inspection(handle, inspection_id: str) -> Path:
 
 
 def preview_dir(idir: Path, preview_id: str) -> Path:
-    if not ID_RE.match(preview_id or ""):
+    if not ID_RE.fullmatch(preview_id or ""):
         raise not_found("design preview", preview_id)
     return idir / "previews" / preview_id
 

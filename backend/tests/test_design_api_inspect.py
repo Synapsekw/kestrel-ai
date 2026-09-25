@@ -26,6 +26,7 @@ def fake_reader(monkeypatch):
     yield fake_design_reader
     fake_design_reader.HOLD.clear()
     fake_design_reader.FAIL.clear()
+    fake_design_reader.LATE_WRITE.clear()
 
 
 def post(client, project_id, path):
@@ -155,3 +156,43 @@ def test_delete_is_refused_while_a_build_holds_the_inspection(
     r = client.delete(url(project_id, body["inspection"]["id"]))
     assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
     assert d.exists()
+
+
+def test_a_write_after_cancellation_ends_the_job_cancelled_not_failed(
+    client, project_id, wait_job, fake_reader, tmp_path, handle
+):
+    """Fix round 1, finding 1: a reader whose last check_cancelled() passed before the delete
+    cancelled the job and removed the folder must not turn that late write's FileNotFoundError
+    into a `failed` job — it is the cancellation."""
+    fake_reader.HOLD.set()
+    fake_reader.LATE_WRITE.set()
+    src = tmp_path / "slow.dxf"
+    src.write_text("0\nEOF\n")
+    body = post(client, project_id, src).json()
+    jid, iid = body["job"]["id"], body["inspection"]["id"]
+    wait_state(client, project_id, jid, "running")
+    assert client.delete(url(project_id, iid)).status_code == 204
+    fake_reader.HOLD.clear()  # let the reader past the loop and into its (now doomed) writes
+    job = wait_job(project_id, jid)
+    assert job["state"] == "cancelled", job
+    assert not (handle.folder / "cache" / "design-inspections" / iid).exists()
+
+
+def test_thumbnail_of_a_failed_inspection_is_404(client, project_id, wait_job, fake_reader, tmp_path):
+    """Fix round 1, finding 4: a `failed` inspection has no real candidates; 204 is only for a
+    genuinely still-running one whose thumbnail has not been written yet."""
+    fake_reader.FAIL.append("surface 'Ground': face refers to missing point 9")
+    src = tmp_path / "bad.xml"
+    src.write_text("<LandXML/>")
+    body = post(client, project_id, src).json()
+    wait_job(project_id, body["job"]["id"])
+    r = client.get(url(project_id, body["inspection"]["id"], "/candidates/c0/thumbnail"))
+    assert r.status_code == 404
+
+
+def test_a_training_project_may_not_delete_a_design_inspection(client, tmp_path):
+    """Fix round 1, finding 5."""
+    body = {"name": "t2", "folder": str(tmp_path / "t2"), "classes": [], "kind": "train"}
+    pid = client.post(BASE, json=body).json()["id"]
+    r = client.delete(url(pid, store.new_id()))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"

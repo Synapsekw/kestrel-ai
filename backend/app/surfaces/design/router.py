@@ -76,6 +76,8 @@ def get_design_candidate_thumbnail(
 ) -> Response:
     idir = store.require_inspection(handle, inspectionId)
     insp = store.read_json(idir / "inspection.json")
+    if insp["state"] == "failed":
+        raise not_found("design candidate", candidateId)
     if insp["state"] == "ready" and candidateId not in {c["id"] for c in insp["candidates"]}:
         raise not_found("design candidate", candidateId)
     thumb = store.thumb_path(idir, candidateId)

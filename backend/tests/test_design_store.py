@@ -57,6 +57,20 @@ def test_inspection_ids_must_be_uuids(tmp_path):
     assert store.inspection_dir(H, iid) == tmp_path / "cache" / "design-inspections" / iid
 
 
+def test_inspection_ids_reject_a_trailing_newline(tmp_path):
+    """Fix round 1, finding 3: `match` lets `$` match just before a trailing newline; a UUID plus
+    "\\n" must still be rejected, so the id check uses `fullmatch`."""
+
+    class H:
+        folder = tmp_path
+
+    with pytest.raises(AppError) as e:
+        store.inspection_dir(H, store.new_id() + "\n")
+    assert e.value.status == 404
+    with pytest.raises(AppError):
+        store.preview_dir(tmp_path, store.new_id() + "\n")
+
+
 def test_write_json_is_a_no_op_after_delete(tmp_path):
     d = tmp_path / "gone"
     assert store.write_json(d / "inspection.json", {"state": "ready"}) is False

@@ -19,9 +19,12 @@ log = logging.getLogger(__name__)
 
 def _created(request: dict, folder: Path) -> datetime:
     try:
-        return datetime.fromisoformat(request["created_at"])
+        created = datetime.fromisoformat(request["created_at"])
     except (KeyError, TypeError, ValueError):
         return datetime.fromtimestamp(folder.stat().st_mtime, UTC)
+    # A naive `created_at` (no tzinfo) would otherwise raise TypeError when compared against the
+    # aware `now` in sweep_interrupted; a corrupt or hand-written request.json must not crash it.
+    return created if created.tzinfo is not None else created.replace(tzinfo=UTC)
 
 
 def _fail_interrupted(folder: Path) -> None:
@@ -33,6 +36,25 @@ def _fail_interrupted(folder: Path) -> None:
             store.patch_json(p, state="failed", error=INTERRUPTED.format("preview again"))
 
 
+def _sweep_one(folder: Path, now: datetime, runner) -> bool:
+    """True when `folder` was removed as stale. Any other outcome (kept live, kept fresh, marked
+    interrupted) is False; the caller's per-folder try/except is what keeps one bad folder
+    (a non-dict request.json, a naive created_at, a stat() race) from aborting the rest."""
+    try:
+        request = store.read_json(folder / "request.json")
+    except (OSError, ValueError):
+        request = {}
+    if not isinstance(request, dict):
+        request = {}
+    if any(runner.is_live(j) for j in store.job_ids(request)):
+        return False
+    if now - _created(request, folder) > MAX_AGE:
+        shutil.rmtree(folder, ignore_errors=True)
+        return not folder.exists()  # a handle Windows still holds can leave files behind
+    _fail_interrupted(folder)
+    return False
+
+
 def sweep_interrupted(handle, runner) -> list[str]:
     """Remove inspection folders no live job holds and older than 24 h; fail interrupted ones."""
     root = store.inspections_root(handle)
@@ -41,19 +63,10 @@ def sweep_interrupted(handle, runner) -> list[str]:
     now, removed = datetime.now(UTC), []
     for folder in sorted(p for p in root.iterdir() if p.is_dir()):
         try:
-            request = store.read_json(folder / "request.json")
-        except (OSError, ValueError):
-            request = {}
-        if any(runner.is_live(j) for j in store.job_ids(request)):
-            continue
-        if now - _created(request, folder) > MAX_AGE:
-            shutil.rmtree(folder, ignore_errors=True)
-            removed.append(folder.name)
-            continue
-        try:
-            _fail_interrupted(folder)
-        except (OSError, ValueError):
-            log.exception("could not mark design inspection %s interrupted", folder.name)
+            if _sweep_one(folder, now, runner):
+                removed.append(folder.name)
+        except Exception:
+            log.exception("could not sweep design inspection %s", folder.name)
     if removed:
         log.info("removed %d stale design inspection(s) in project %s", len(removed), handle.id)
     return removed

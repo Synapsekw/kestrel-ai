@@ -55,13 +55,25 @@ def run(ctx) -> dict:
             progress=lambda f, m=MESSAGE: ctx.progress(HASH_SHARE + (0.98 - HASH_SHARE) * f, m),
             check_cancelled=ctx.check_cancelled,
         )
+        # The reader can return an instant after delete_design_inspection cancelled the job: check
+        # once more before treating this as a success and writing to a folder that may be gone.
+        ctx.check_cancelled()
     except JobCancelled:
         _fail(idir, "reading the file was cancelled")
         raise
     except JobFailure as e:
+        if ctx.cancelled.is_set():
+            # A write the reader made after its last check_cancelled() hit the folder
+            # delete_design_inspection already removed: that FileNotFoundError (or whatever the
+            # reader wraps into a JobFailure) is the cancellation, not a real failure.
+            _fail(idir, "reading the file was cancelled")
+            raise JobCancelled() from e
         _fail(idir, str(e))
         raise
     except Exception as e:
+        if ctx.cancelled.is_set():
+            _fail(idir, "reading the file was cancelled")
+            raise JobCancelled() from e
         _fail(idir, f"reading the file failed: {type(e).__name__}: {e}")
         raise
     stat = path.stat()

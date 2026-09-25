@@ -62,3 +62,18 @@ def test_a_corrupt_request_json_falls_back_to_the_folder_age(handle):
     old = time.time() - 30 * 3600
     os.utime(d, (old, old))
     assert sweep_interrupted(handle, Runner()) == [d.name]
+
+
+def test_corrupt_folders_do_not_abort_the_rest_of_the_sweep(handle):
+    """Fix round 1, finding 2: a non-dict request.json and a naive (tz-less) created_at each used
+    to raise out of sweep_interrupted entirely, so one bad folder skipped every folder after it."""
+    naive = make(handle, age_h=25)
+    store.patch_json(naive / "request.json", created_at="2020-01-01T00:00:00")  # no tzinfo
+    not_a_dict = make(handle, age_h=25)
+    store.write_json(not_a_dict / "request.json", ["oops"])  # replaces created_at too: age via mtime
+    old = time.time() - 30 * 3600
+    os.utime(not_a_dict, (old, old))
+    good = make(handle, age_h=25)
+    result = sweep_interrupted(handle, Runner())
+    assert set(result) == {naive.name, not_a_dict.name, good.name}
+    assert not naive.exists() and not not_a_dict.exists() and not good.exists()
