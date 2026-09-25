@@ -84,11 +84,6 @@ EXPECTED_STUBS: set[str] = {
     "deleteCloudMeasurement",
     "createPointCloudExport",
     # S2 surfaces (app/surfaces/router.py)
-    "listSurfaces",
-    "createSurface",
-    "getSurface",
-    "patchSurface",
-    "deleteSurface",
     "getSurfaceTile",
     "getSurfaceOrthoTile",
     "getSurfaceSample",
@@ -121,7 +116,13 @@ EXPECTED_STUBS: set[str] = {
 # `validation_error` (FastAPI's malformed-request answer). This is the only allowance mechanism:
 # S1, S2 and S3 add entries here and never loosen the test another way. Empty until a unit builds a
 # refusing operation; each status must be declared for its operation in openapi.yaml (guarded below).
-REFUSES_VALID_DATA: dict[str, set[int]] = {}
+REFUSES_VALID_DATA: dict[str, set[int]] = {
+    # S2 (plan deviation 14): a schema-valid build whose ids resolve can still be refused - a full
+    # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
+    # CRS-less cloud (`unsupported_crs`), a missing source (`source_missing`), a Z clip upside down
+    # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
+    "createSurface": {422},
+}
 
 
 @pytest.fixture

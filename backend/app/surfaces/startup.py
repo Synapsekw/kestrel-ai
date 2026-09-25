@@ -1,21 +1,43 @@
-"""Startup sweep, run by `app.main.project_opened` each time the project opens.
+"""Startup sweep for surfaces (spec 2026-09-23-volumes §3), wired into `project_opened` by F0.
 
-A `building` surface of any kind whose job is not live becomes `failed`; its `.build/` folder and
-orphan `*.partial` files are removed (spec 2026-09-23-volumes section 3).
-
-Foundation F0 wires it in as a no-op; S2 unit V2 fills in only this function's body and never edits
-`app/main.py`. It must log and continue on its own failures: a failing sweep never blocks opening
-the project.
+A `building` surface of any kind (S3's design builds included) whose job this process does not hold
+becomes `failed`; its `.build/` and any orphan `*.partial` under `surfaces/` are removed. Each step
+logs and continues: a failing sweep never stops a project from opening.
 """
 
-from __future__ import annotations
+import logging
+import shutil
 
-from typing import TYPE_CHECKING
+from sqlalchemy import select
 
-if TYPE_CHECKING:
-    from app.projects.service import ProjectHandle
+from app.db.models import Surface
+from app.projects.service import ProjectHandle
+from app.surfaces.paths import build_dir
+
+INTERRUPTED = "interrupted by application restart; build it again"
+log = logging.getLogger(__name__)
 
 
 def sweep_interrupted(handle: ProjectHandle, runner) -> list[str]:
-    """Returns the ids of the rows it changed; none until S2 unit V2 builds it."""
-    return []
+    swept: list[str] = []
+    live: set[str] = set()
+    with handle.session() as s:
+        for row in s.execute(select(Surface).where(Surface.status == "building")).scalars():
+            if row.job_id and runner.is_live(row.job_id):
+                live.add(row.id)
+                continue
+            row.status, row.error = "failed", INTERRUPTED
+            swept.append(row.id)
+    for surface_id in swept:
+        shutil.rmtree(build_dir(handle, surface_id), ignore_errors=True)
+    if handle.surfaces_dir.is_dir():
+        for partial in handle.surfaces_dir.glob("*/*.partial"):
+            if partial.parent.name in live:
+                continue
+            try:
+                partial.unlink()
+            except OSError:
+                log.warning("could not remove %s", partial)
+    if swept:
+        log.info("marked %d interrupted surface build(s) failed in project %s", len(swept), handle.id)
+    return swept

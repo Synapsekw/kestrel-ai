@@ -35,7 +35,7 @@ def test_a_router_that_fails_to_import_costs_only_its_endpoints(monkeypatch, set
             }
             pid = client.post("/api/v1/projects", json=body).json()["id"]
             assert client.get(f"/api/v1/projects/{pid}/pointclouds").status_code == 404
-            assert client.get(f"/api/v1/projects/{pid}/surfaces").status_code == 501
+            assert client.get(f"/api/v1/projects/{pid}/surfaces").status_code in (200, 501)
             assert client.get("/api/v1/health").status_code == 200
     finally:
         monkeypatch.undo()

@@ -1878,7 +1878,7 @@ export interface paths {
         };
         /**
          * One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent.
-         *     A surface that is not `ready` answers 409 `conflict` (through the `default` response).
+         *     A surface that is not `ready` answers 409 `not_ready` (through the `default` response).
          */
         get: operations["getSurfaceTile"];
         put?: never;
@@ -1928,7 +1928,7 @@ export interface paths {
         };
         /**
          * The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata.
-         *     A surface that is not `ready` answers 409 `conflict` (through the `default` response).
+         *     A surface that is not `ready` answers 409 `not_ready` (through the `default` response).
          */
         get: operations["getSurfaceSample"];
         put?: never;
@@ -5694,8 +5694,8 @@ export interface components {
             point_cloud_id: string;
             name: string;
             method: components["schemas"]["SurfaceBuildMethod"];
-            /** @description the cell size actually used */
-            cell_size_m: number;
+            /** @description the cell size actually used; null while an auto cell is being chosen */
+            cell_size_m: number | null;
             auto_cell: boolean;
             hole_fill_max_gap_m: number;
             despike_m: number | null;
@@ -10420,7 +10420,7 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            /** @description the point cloud is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the point cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;

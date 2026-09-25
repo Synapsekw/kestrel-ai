@@ -2621,7 +2621,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SurfaceWithJob" }
         "409":
-          description: "the point cloud is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          description: "the point cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2686,7 +2686,7 @@ paths:
       operationId: getSurfaceTile
       summary: |
         One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent.
-        A surface that is not `ready` answers 409 `conflict` (through the `default` response).
+        A surface that is not `ready` answers 409 `not_ready` (through the `default` response).
       parameters:
         - name: tint
           in: query
@@ -2744,7 +2744,7 @@ paths:
       operationId: getSurfaceSample
       summary: |
         The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata.
-        A surface that is not `ready` answers 409 `conflict` (through the `default` response).
+        A surface that is not `ready` answers 409 `not_ready` (through the `default` response).
       parameters:
         - { name: x, in: query, required: true, schema: { type: number } }
         - { name: y, in: query, required: true, schema: { type: number } }
@@ -6083,7 +6083,7 @@ components:
         point_cloud_id: { type: string }
         name: { type: string }
         method: { $ref: "#/components/schemas/SurfaceBuildMethod" }
-        cell_size_m: { type: number, description: the cell size actually used }
+        cell_size_m: { type: [number, "null"], description: "the cell size actually used; null while an auto cell is being chosen" }
         auto_cell: { type: boolean }
         hole_fill_max_gap_m: { type: number }
         despike_m: { type: [number, "null"] }
