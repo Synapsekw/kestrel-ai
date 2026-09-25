@@ -37,6 +37,7 @@ export function BuildSurfaceDialog({
     e.preventDefault();
     if (!form) return;
     setBusy(true);
+    setError(null);
     try {
       const created = await createSurface(api, projectId, buildRequest(form));
       useJobsStore.getState().upsert(created.job);

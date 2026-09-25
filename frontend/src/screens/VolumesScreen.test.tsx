@@ -17,7 +17,6 @@ vi.mock("@/volumes/volumeLayers", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/volumes/volumeLayers")>();
   return { ...actual, useVolumeLayers: vi.fn() };
 });
-vi.mock("@/volumes/diffLayer", () => ({ useDiffLayer: vi.fn() }));
 
 function layerOpts(): VolumeLayerOptions {
   const opts = vi.mocked(useVolumeLayers).mock.calls.at(-1)?.[1];
@@ -88,5 +87,8 @@ describe("VolumesScreen", () => {
       top_surface_id: exampleSurface.id,
       base: { kind: "toe_plane" },
     });
+    // The Draw tool must not stay armed: the next polygon drawn should not silently overwrite
+    // this measurement's own polygon.
+    await waitFor(() => expect(layerOpts().tool).toBe("pan"));
   });
 });

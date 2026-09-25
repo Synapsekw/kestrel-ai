@@ -87,6 +87,7 @@ export function VolumesScreen() {
 
   const active = measurements?.find((m) => m.id === measurementId) ?? null;
   const ready = useMemo(() => (surfaces ?? []).filter((s) => s.status === "ready"), [surfaces]);
+  const readyClouds = useMemo(() => clouds.filter((c) => c.status === "ready"), [clouds]);
   const top =
     (active && surfaces?.find((s) => s.id === active.top_surface_id)) ||
     ready.find((s) => s.id === pickedSurface) ||
@@ -121,6 +122,7 @@ export function VolumesScreen() {
             useJobsStore.getState().upsert(created.job);
             setMeasurements((all) => [created.measurement, ...(all ?? [])]);
             navigate(`/p/${projectId}/volumes/${created.measurement.id}`);
+            setTool("pan");
           })
           .catch((err: unknown) => report("create the measurement", err));
         return;
@@ -201,9 +203,9 @@ export function VolumesScreen() {
       <EmptyState
         className="h-full p-6"
         icon="volume"
-        title={clouds.length ? "Build a surface from a point cloud" : "Import a point cloud first"}
+        title={readyClouds.length ? "Build a surface from a point cloud" : "Import a point cloud first"}
         action={
-          clouds.length ? (
+          readyClouds.length ? (
             <Button variant="primary" icon="plus" onClick={() => setBuilding({})}>
               Build surface
             </Button>
