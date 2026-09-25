@@ -102,6 +102,17 @@ def test_grid_size_ceilings():
     assert [n.code for n in notes] == ["large_grid"]
 
 
+def test_a_grid_over_2_62_cells_is_grid_too_large_not_a_crs_problem():
+    """aligned_grid itself raises (width * height > 2**62) before the MAX_CELLS check ever runs;
+    that must still land on grid_too_large, not be misread as a CRS problem (a metre CRS declared
+    with a millimetre-sized cell over a huge bound, e.g. an mm drawing whose units were entered
+    wrong)."""
+    p = pl.resolve(opts(cell_size_m=0.01), "landxml", None)
+    with pytest.raises(pl.PlacementBlocked) as e:
+        pl.output_grid((E0, N0, E0 + 5e10, N0 + 5e10), p)
+    assert e.value.note.code == "grid_too_large" and e.value.note.level == "block"
+
+
 def test_unplaceable_coordinates_are_blocked():
     p = pl.resolve(opts(source_crs="EPSG:4326"), "landxml", target_spec())
     with pytest.raises(pl.PlacementBlocked) as e:
@@ -112,5 +123,5 @@ def test_unplaceable_coordinates_are_blocked():
 def test_raster_envelope_of_a_rotated_transform():
     from affine import Affine
 
-    t = Affine.translation(100, 200) * Affine.rotation(90) * Affine.scale(1, -1)
+    t = Affine.translation(100, 200) @ Affine.rotation(90) @ Affine.scale(1, -1)
     assert pl.raster_envelope(t, 10, 20) == pytest.approx((100.0, 200.0, 120.0, 210.0))

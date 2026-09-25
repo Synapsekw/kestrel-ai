@@ -76,7 +76,7 @@ def write_dem(
     transform = (
         Affine.identity()
         if identity
-        else Affine.translation(x0, y0) * Affine.rotation(rotation) * Affine.scale(cell, -cell)
+        else Affine.translation(x0, y0) @ Affine.rotation(rotation) @ Affine.scale(cell, -cell)
     )
     profile = dict(driver="GTiff", width=w, height=h, count=count, dtype=dtype, transform=transform)
     if crs:

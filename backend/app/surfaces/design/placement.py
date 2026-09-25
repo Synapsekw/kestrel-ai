@@ -123,12 +123,16 @@ def xy_bounds(v: np.ndarray) -> tuple[float, float, float, float]:
 
 
 def output_grid(bounds, p: Placement) -> tuple[grid.GridSpec, list[DesignNote]]:
+    problem = grid.crs_problem(p.out_crs_wkt)
+    if problem is not None:
+        geographic = p.out_crs_wkt is not None and CRS.from_user_input(p.out_crs_wkt).is_geographic
+        code = "geographic_output" if geographic else "non_metric_output"
+        raise PlacementBlocked(codes.block(code, problem))
     try:
         spec = grid.aligned_grid(tuple(bounds), p.cell_size, p.out_crs_wkt, p.out_epsg, max_cells=2**62)
     except grid.GridError as e:
-        raise PlacementBlocked(
-            codes.block("non_metric_output", f"the output grid can't be made: {e}")
-        ) from None
+        # Not a CRS problem (ruled out above): a cell size <= 0 or width * height over 2**62 cells.
+        raise PlacementBlocked(codes.block("grid_too_large", f"the output grid can't be made: {e}")) from None
     cells = spec.width * spec.height
     if cells > grid.MAX_CELLS:
         raise PlacementBlocked(
@@ -147,7 +151,13 @@ def output_grid(bounds, p: Placement) -> tuple[grid.GridSpec, list[DesignNote]]:
 
 
 def preview_grid(bounds, out: grid.GridSpec) -> tuple[grid.GridSpec, int]:
-    """aligned_grid at k x cell, k = ceil(max(w, h) / 512): each preview cell is k x k output cells."""
+    """aligned_grid at k x cell, k = ceil(max(w, h) / 512): each preview cell is k x k output cells.
+
+    Precondition: `bounds` must be the same bounds (or a superset) passed to `output_grid` to build
+    `out`. Flooring/ceiling to a coarser cell size that's a multiple of `out.cell_size` is monotone
+    in the cell size, so with matching bounds the preview's aligned extent is always a superset of
+    `out`'s. A narrower `bounds` here than what built `out` is not guaranteed to cover `out` in full.
+    """
     k = max(1, math.ceil(max(out.width, out.height) / PREVIEW_SIDE))
     return grid.aligned_grid(tuple(bounds), k * out.cell_size, out.crs_wkt, out.epsg), k
 
