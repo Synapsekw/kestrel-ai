@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { exampleProject, fakeClient, runningJob } from "@/test/fixtures";
-import { CLOUD_ID, PROJECT_ID, exampleMeasurement, exampleSurface } from "@/test/volumeFixtures";
+import {
+  CLOUD_ID,
+  MEASUREMENT_ID,
+  PROJECT_ID,
+  exampleMeasurement,
+  exampleSurface,
+} from "@/test/volumeFixtures";
 import { renderWithProviders } from "@/test/render";
 import { useVolumeLayers, type VolumeLayerOptions } from "@/volumes/volumeLayers";
 import { VolumesScreen } from "./VolumesScreen";
@@ -17,6 +23,7 @@ vi.mock("@/volumes/volumeLayers", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/volumes/volumeLayers")>();
   return { ...actual, useVolumeLayers: vi.fn() };
 });
+vi.mock("@/volumes/diffLayer", () => ({ useDiffLayer: vi.fn() }));
 
 function layerOpts(): VolumeLayerOptions {
   const opts = vi.mocked(useVolumeLayers).mock.calls.at(-1)?.[1];
@@ -51,6 +58,21 @@ describe("VolumesScreen", () => {
       path: "/p/:projectId/volumes",
     });
     expect(await screen.findByText("Build a surface from a point cloud")).toBeInTheDocument();
+  });
+
+  it("lists surfaces and measurements and shows a stale measurement's reasons", async () => {
+    const stale = { ...exampleMeasurement, status: "stale", stale_reasons: ["base changed"] };
+    const { api } = fakeClient(base([exampleSurface], [stale]));
+    renderWithProviders(<VolumesScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/volumes/:measurementId",
+    });
+    expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
+    expect(screen.getByRole("list", { name: "Surfaces" })).toHaveTextContent("From cloud");
+    expect(screen.getByRole("list", { name: "Measurements" })).toHaveTextContent("1 234.5 m³");
+    expect(await screen.findByText("Inputs changed: base changed — Recalculate")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Revert to last calculated inputs" })).toBeInTheDocument();
   });
 
   it("a polygon drawn with no measurement open creates one with the defaults", async () => {

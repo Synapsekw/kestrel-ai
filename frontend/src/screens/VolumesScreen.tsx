@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import type OlMap from "ol/Map";
-import { surfaceOrthoTileUrl, surfaceTileUrl, type Surface, type VolumeMeasurement } from "@contract/client";
+import {
+  surfaceOrthoTileUrl,
+  surfaceTileUrl,
+  volumeDiffTileUrl,
+  type Surface,
+  type VolumeMeasurement,
+} from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import {
@@ -11,18 +17,29 @@ import {
   sampleSurface,
   type PointCloudOut,
 } from "@/api/surfaces";
-import { createVolume, listVolumes, patchVolume, type VolumeMeasurementPatch } from "@/api/volumes";
+import {
+  calculateVolume,
+  createVolume,
+  fetchFootprints,
+  listVolumes,
+  patchVolume,
+  type VolumeMeasurementPatch,
+} from "@/api/volumes";
 import { pushLog } from "@/app/diagnostics";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, EmptyState, Pill, Switch, toast } from "@/ui";
+import { Alert, Button, EmptyState, Pill, Segmented, Switch, toast } from "@/ui";
 import { BuildSurfaceDialog } from "@/volumes/BuildSurfaceDialog";
+import { ExportVolumesDialog } from "@/volumes/ExportVolumesDialog";
+import { MeasurePanel } from "@/volumes/MeasurePanel";
 import { SurfaceList } from "@/volumes/SurfaceList";
 import { SurfaceOverlay, type SurfaceReadout } from "@/volumes/SurfaceOverlay";
 import { SurfaceView } from "@/volumes/SurfaceView";
+import { VolumeResultsPanel } from "@/volumes/VolumeResultsPanel";
 import { VolumeToolbar } from "@/volumes/VolumeToolbar";
-import { headline, nextName, pixelToNative } from "@/volumes/model";
+import { useDiffLayer } from "@/volumes/diffLayer";
+import { headline, nextName, pixelToNative, staleText } from "@/volumes/model";
 import { useVolumeLayers, type VolumeTool } from "@/volumes/volumeLayers";
 
 const SAMPLE_MS = 150;
@@ -58,13 +75,18 @@ export function VolumesScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pickedSurface, setPickedSurface] = useState<string | null>(null);
   const [building, setBuilding] = useState<{ cloudId?: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [olMap, setOlMap] = useState<OlMap | null>(null);
   const [resolution, setResolution] = useState(1);
   const [readout, setReadout] = useState<SurfaceReadout | null>(null);
   const [tool, setTool] = useState<VolumeTool>("pan");
   const [orthoOn, setOrthoOn] = useState(true);
+  const [diffOn, setDiffOn] = useState(true);
   const [selectedExclusion, setSelectedExclusion] = useState<string | null>(null);
-  const footprints: number[][][] = NO_FOOTPRINTS; // Task 16 loads the masked machines
+  const [loadedFootprints, setLoadedFootprints] = useState<{
+    measurementId: string;
+    rings: number[][][];
+  } | null>(null);
   const [picking, setPicking] = useState(false);
 
   const reload = useCallback(() => {
@@ -97,6 +119,23 @@ export function VolumesScreen() {
     active?.base.kind === "surface" ? (surfaces?.find((s) => s.id === active.base.surface_id) ?? null) : null;
   const gt = top?.geotransform ?? null;
   const onSurface = measurements?.filter((m) => m.top_surface_id === top?.id) ?? [];
+
+  // The masked machines of the open measurement; none when it masks no detection run.
+  const masksRuns = !!active && active.masks.detection_run_ids.length > 0;
+  const footprints =
+    masksRuns && loadedFootprints?.measurementId === active.id ? loadedFootprints.rings : NO_FOOTPRINTS;
+  useEffect(() => {
+    if (!active || !masksRuns) return;
+    let cancelled = false;
+    fetchFootprints(api, projectId, active.id)
+      .then((f) => {
+        if (!cancelled) setLoadedFootprints({ measurementId: active.id, rings: f.items.map((i) => i.ring) });
+      })
+      .catch((err: unknown) => report("load the machine footprints", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [api, projectId, active?.id, active?.masks]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = useCallback(
     (patch: VolumeMeasurementPatch) => {
@@ -152,6 +191,12 @@ export function VolumesScreen() {
     onEdited: (role, ring, id) => onRing(role, ring, id),
     onSelectExclusion: setSelectedExclusion,
   });
+
+  const diffUrl =
+    active?.results && top
+      ? volumeDiffTileUrl(baseUrl, token, projectId, active.id, active.results.computed_at)
+      : null;
+  useDiffLayer(olMap, top, diffOn ? diffUrl : null);
 
   const lastSample = useRef(0);
   const onPointer = useCallback(
@@ -317,6 +362,7 @@ export function VolumesScreen() {
             />
             <div className="absolute left-3 top-14 flex flex-col gap-1 rounded-md border border-line bg-panel p-2 shadow-float">
               {top.map_id && <Switch label="Ortho" checked={orthoOn} onChange={setOrthoOn} />}
+              {diffUrl && <Switch label="Cut / fill" checked={diffOn} onChange={setDiffOn} />}
             </div>
             <SurfaceOverlay map={olMap} surface={top} readout={readout} resolution={resolution} />
           </>
@@ -340,7 +386,7 @@ export function VolumesScreen() {
             picking={picking}
             onPick={() => setPicking(true)}
             onSave={save}
-            onExport={() => undefined}
+            onExport={() => setExporting(true)}
             onChanged={reload}
           />
         ) : (
@@ -362,6 +408,14 @@ export function VolumesScreen() {
           }}
         />
       )}
+      {exporting && measurements && (
+        <ExportVolumesDialog
+          projectId={projectId}
+          measurements={measurements}
+          preselected={active ? [active.id] : []}
+          onClose={() => setExporting(false)}
+        />
+      )}
     </div>
   );
 }
@@ -369,6 +423,12 @@ export function VolumesScreen() {
 function VolumeAside({
   projectId,
   measurement: m,
+  top,
+  surfaces,
+  picking,
+  onPick,
+  onSave,
+  onExport,
   onChanged,
 }: {
   projectId: string;
@@ -381,19 +441,67 @@ function VolumeAside({
   onExport: () => void;
   onChanged: () => void;
 }) {
-  // Task 16 replaces this with the Measure | Results panels.
+  const api = useApi();
+  const [tab, setTab] = useState<"measure" | "results">(m.results ? "results" : "measure");
+  const recalculate = () =>
+    calculateVolume(api, projectId, m.id)
+      .then((r) => {
+        useJobsStore.getState().upsert(r.job);
+        onChanged();
+      })
+      .catch((err: unknown) => report("start the calculation", err));
+  // "Revert to last calculated inputs": the one-step undo (section 9).
+  const revert = () => {
+    const inputs = m.results?.inputs as Partial<VolumeMeasurementPatch> | undefined;
+    if (!inputs) return;
+    const { polygon_native, top_surface_id, base, masks, alignment } = inputs;
+    onSave({ polygon_native, top_surface_id, base, masks, alignment });
+  };
   return (
     <>
       <div className="flex items-center justify-between gap-2">
         <h2 className="min-w-0 truncate text-base font-semibold">{m.name}</h2>
         <Pill tone={STATUS_TONE[m.status]}>{STATUS_TEXT[m.status]}</Pill>
       </div>
-      <p className="text-sm text-muted" data-project={projectId}>
-        {m.results ? headline(m) : "Calculating…"}
-      </p>
-      <Button size="sm" icon="refresh" onClick={onChanged}>
-        Refresh
-      </Button>
+      {m.status === "stale" && (
+        // The two buttons sit under the notice, not in its actions slot: in a 288 px aside that
+        // no-wrap slot squeezed the message itself to zero width.
+        <div className="flex flex-col gap-2">
+          <Alert tone="warn">{staleText(m.stale_reasons)}</Alert>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="primary" onClick={() => void recalculate()}>
+              Recalculate
+            </Button>
+            <Button size="sm" onClick={revert}>
+              Revert to last calculated inputs
+            </Button>
+          </div>
+        </div>
+      )}
+      <Segmented
+        label="Measurement panel"
+        size="sm"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: "measure", label: "Measure" },
+          { value: "results", label: "Results" },
+        ]}
+      />
+      {tab === "measure" ? (
+        <MeasurePanel
+          projectId={projectId}
+          measurement={m}
+          top={top}
+          surfaces={surfaces}
+          picking={picking}
+          onPick={onPick}
+          onSave={onSave}
+          onChanged={onChanged}
+        />
+      ) : (
+        <VolumeResultsPanel projectId={projectId} measurement={m} top={top} onExport={onExport} />
+      )}
     </>
   );
 }
