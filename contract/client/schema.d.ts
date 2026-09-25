@@ -10949,7 +10949,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurementWithJob"];
                 };
             };
-            /** @description the top or base surface is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the top or base surface is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11053,7 +11053,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurement"];
                 };
             };
-            /** @description the measurement is calculating, or a surface its changed inputs name is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is calculating (`code` is `conflict`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11143,7 +11143,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description the measurement has no results (`code` is `conflict`) */
+            /** @description the measurement has no results (`code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;

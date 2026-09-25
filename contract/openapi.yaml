@@ -2947,7 +2947,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/VolumeMeasurementWithJob" }
         "409":
-          description: "the top or base surface is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          description: "the top or base surface is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2987,7 +2987,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/VolumeMeasurement" }
         "409":
-          description: "the measurement is calculating, or a surface its changed inputs name is not `ready` (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`)"
+          description: "the measurement is calculating (`code` is `conflict`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3053,7 +3053,7 @@ paths:
               schema: { type: string, format: binary }
         "204": { description: the tile is outside the measured cells }
         "409":
-          description: "the measurement has no results (`code` is `conflict`)"
+          description: "the measurement has no results (`code` is `not_ready`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

@@ -1,0 +1,366 @@
+"""Volume measurement rows (spec 2026-09-23-volumes §3, §6.2, §6.10).
+
+Numbers come only from a `volume_calc` job. Each result stores the `inputs` it was computed from
+and their fingerprint; GET and list recompute the fingerprint (a few indexed lookups) and turn a
+ready measurement `stale` when anything it depends on changed, naming what.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+from collections.abc import Callable
+from pathlib import PureWindowsPath
+
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app.db.models import Job, MapDetection, MapRun, PointCloud, Surface, VolumeMeasurement
+from app.errors import AppError, not_found
+from app.projects.service import ProjectHandle
+from app.surfaces.grid import MAX_CELLS, _same_crs
+from app.surfaces.tiles import DIFF_TILES
+from app.volumes.engine import ENGINE_VERSION, MIN_POLYGON_CELLS, EngineFailure, ring_polygon
+from app.volumes.paths import measurement_dir
+from app.volumes.schemas import (
+    VolumeMeasurementCreate,
+    VolumeMeasurementOut,
+    VolumeMeasurementPatch,
+)
+
+DEFAULT_MASKS = {"detection_run_ids": [], "class_ids": None, "buffer_m": 1.0, "exclusion_polygons": []}
+REASONS = {
+    "polygon_native": "polygon changed",
+    "top_surface_id": "top surface changed",
+    "top_surface_job_id": "top surface rebuilt",
+    "base": "base changed",
+    "base_surface_job_id": "base surface rebuilt",
+    "masks": "masks changed",
+    "mask_runs": "masks: detection run changed",
+    "alignment": "alignment changed",
+    "engine_version": "the volume engine was updated",
+}
+INPUT_FIELDS = ("polygon_native", "top_surface_id", "base", "masks", "alignment")
+TERMINAL_JOB_STATES = ("cancelled", "failed", "succeeded")
+ENDED_BEFORE_START = "the calculation ended before it started; calculate it again"
+
+
+def _invalid(message: str, code: str = "invalid_geometry") -> AppError:
+    """A schema-valid request the rules refuse: 422 with its own code, never `validation_error`
+    (that one is FastAPI's malformed-request answer, and the contract test treats them apart)."""
+    return AppError(code, message, 422)
+
+
+def _conflict(message: str) -> AppError:
+    return AppError("conflict", message, 409)
+
+
+def _settle(s: Session, row: VolumeMeasurement) -> VolumeMeasurement:
+    """A `calculating` row whose job has ended without the job settling the row (a queued job
+    cancelled before it ran) goes back to `stale` or `failed`, as the job itself would have done;
+    otherwise it would refuse every change until the next startup sweep."""
+    if row.status == "calculating" and row.job_id:
+        job = s.get(Job, row.job_id)
+        if job is not None and job.state in TERMINAL_JOB_STATES:
+            if row.results:
+                row.status = "stale"
+            else:
+                row.status, row.error = "failed", ENDED_BEFORE_START
+            s.flush()
+    return row
+
+
+def _get(s: Session, measurement_id: str) -> VolumeMeasurement:
+    row = s.get(VolumeMeasurement, measurement_id)
+    if row is None:
+        raise not_found("volume measurement", measurement_id)
+    return _settle(s, row)
+
+
+def _ready_surface(s: Session, surface_id: str, role: str) -> Surface:
+    row = s.get(Surface, surface_id)
+    if row is None:
+        raise not_found(f"{role} surface", surface_id)
+    if row.status != "ready":
+        raise AppError("not_ready", f"{role} surface {row.name} is {row.status}, not ready", 409)
+    return row
+
+
+def normalise_base(base: dict) -> dict:
+    """The canonical base: `z` only for a flat base, `surface_id` only for a surface base, so a
+    stray field neither changes the fingerprint nor pins a surface against deletion."""
+    kind = base["kind"]
+    return {
+        "kind": kind,
+        "z": base.get("z") if kind == "flat" else None,
+        "surface_id": base.get("surface_id") if kind == "surface" else None,
+    }
+
+
+def _check_inputs(
+    s: Session, polygon: list, top_id: str, base: dict, masks: dict, alignment: dict
+) -> Surface:
+    """Lookups (404) and states (409) first, then the business rules (422). Returns the top."""
+    top = _ready_surface(s, top_id, "top")
+    if base["kind"] == "surface" and base.get("surface_id"):
+        _ready_surface(s, base["surface_id"], "base")
+    if base["kind"] == "surface" and not base.get("surface_id"):
+        raise _invalid("a surface base needs surface_id", "invalid_base")
+    if base["kind"] == "flat" and base.get("z") is None:
+        raise _invalid("a flat base needs z, the level in metres", "invalid_base")
+    try:
+        poly = ring_polygon(polygon)
+        for exclusion in masks["exclusion_polygons"]:
+            ring_polygon(exclusion["ring"])
+        if alignment.get("stable_polygon"):
+            ring_polygon(alignment["stable_polygon"])
+    except EngineFailure as e:
+        raise _invalid(str(e)) from e
+    cell = top.cell_size_m
+    if poly.area / (cell * cell) < MIN_POLYGON_CELLS:
+        raise _invalid(f"the polygon covers fewer than {MIN_POLYGON_CELLS} cells of {top.name}")
+    minx, miny, maxx, maxy = poly.bounds
+    if (maxx - minx) * (maxy - miny) / (cell * cell) > MAX_CELLS:
+        raise _invalid("the polygon is too large for this surface's cell size")
+    gx0, gy0, gx1, gy1 = top.bounds_native
+    if maxx <= gx0 or minx >= gx1 or maxy <= gy0 or miny >= gy1:
+        raise _invalid(f"the polygon does not overlap {top.name}")
+    return top
+
+
+def _masks(stored: dict | None, sent: dict | None) -> dict:
+    out = {**DEFAULT_MASKS, **(stored or {})}
+    for k, v in (sent or {}).items():
+        if v is not None or k == "class_ids":
+            out[k] = v
+    return out
+
+
+def _alignment(stored: dict | None, sent: dict | None) -> dict:
+    out = {"stable_polygon": None, "apply_shift": False, "measured": None, **(stored or {})}
+    for k, v in (sent or {}).items():
+        if k == "stable_polygon" or v is not None:
+            out[k] = v
+    return out
+
+
+def create(handle: ProjectHandle, body: VolumeMeasurementCreate) -> VolumeMeasurement:
+    masks = _masks(None, body.masks.model_dump(exclude_unset=True) if body.masks else None)
+    alignment = _alignment(None, body.alignment.model_dump(exclude_unset=True) if body.alignment else None)
+    base = normalise_base(body.base.model_dump())
+    with handle.session() as s:
+        _check_inputs(s, body.polygon_native, body.top_surface_id, base, masks, alignment)
+        row = VolumeMeasurement(
+            name=body.name,
+            polygon_native=body.polygon_native,
+            top_surface_id=body.top_surface_id,
+            base=base,
+            masks=masks,
+            alignment=alignment,
+            status="calculating",
+        )
+        s.add(row)
+        s.flush()
+        s.expunge(row)
+    return row
+
+
+def _job_time(s: Session, job_id: str | None) -> str | None:
+    job = s.get(Job, job_id) if job_id else None
+    return job.finished_at.isoformat() if job and job.finished_at else None
+
+
+def inputs_snapshot(s: Session, row: VolumeMeasurement) -> dict:
+    """Everything the numbers depend on, as a canonical dict (spec §6.10). The first five keys are
+    the PATCH fields themselves, so "Revert to last calculated inputs" can send them back."""
+    top = s.get(Surface, row.top_surface_id)
+    base_surface = s.get(Surface, row.base.get("surface_id")) if row.base.get("surface_id") else None
+    runs = []
+    for run_id in row.masks.get("detection_run_ids", []):
+        run = s.get(MapRun, run_id)
+        if run is None:
+            runs.append({"id": run_id, "missing": True})
+            continue
+        count = s.execute(select(func.count()).where(MapDetection.run_id == run_id)).scalar_one()
+        runs.append({"id": run_id, "finished_at": _job_time(s, run.job_id), "detection_count": count})
+    alignment = row.alignment or {}
+    return {
+        "polygon_native": row.polygon_native,
+        "top_surface_id": row.top_surface_id,
+        "base": row.base,
+        "masks": row.masks,
+        "alignment": {
+            "stable_polygon": alignment.get("stable_polygon"),
+            "apply_shift": bool(alignment.get("apply_shift")),
+        },
+        "top_surface_job_id": top.job_id if top else None,
+        "base_surface_job_id": base_surface.job_id if base_surface else None,
+        "mask_runs": runs,
+        "engine_version": ENGINE_VERSION,
+    }
+
+
+def fingerprint(inputs: dict) -> str:
+    canonical = json.dumps(inputs, sort_keys=True, separators=(",", ":"), default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def stale_reasons(stored: dict, current: dict) -> list[str]:
+    reasons = []
+    for key, text in REASONS.items():
+        if stored.get(key) == current.get(key):
+            continue
+        if key == "mask_runs" and any(r.get("missing") for r in current.get("mask_runs", [])):
+            text = "masks: detection run deleted"
+        reasons.append(text)
+    return reasons
+
+
+def _refresh(s: Session, row: VolumeMeasurement) -> tuple[list[str], bool]:
+    """(stale reasons, whether this call turned the row stale)."""
+    if not row.results or row.status == "calculating":
+        return [], False
+    current = inputs_snapshot(s, row)
+    if fingerprint(current) == row.results.get("inputs_fingerprint"):
+        return [], False
+    reasons = stale_reasons(row.results.get("inputs", {}), current)
+    if row.status == "ready":
+        row.status = "stale"
+        return reasons, True
+    return reasons, False
+
+
+def to_out(row: VolumeMeasurement, reasons: list[str]) -> VolumeMeasurementOut:
+    return VolumeMeasurementOut(
+        id=row.id,
+        name=row.name,
+        status=row.status,
+        error=row.error,
+        polygon_native=row.polygon_native,
+        top_surface_id=row.top_surface_id,
+        base=row.base,
+        masks=_masks(row.masks, None),
+        alignment=_alignment(row.alignment, None),
+        results=row.results,
+        stale_reasons=reasons,
+        job_id=row.job_id,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def list_measurements(handle: ProjectHandle) -> tuple[list[VolumeMeasurementOut], list[str]]:
+    """The measurements, newest first, and the ids that just turned stale (to publish)."""
+    with handle.session() as s:
+        out, changed = [], []
+        for row in s.execute(
+            select(VolumeMeasurement).order_by(VolumeMeasurement.created_at.desc())
+        ).scalars():
+            reasons, turned = _refresh(s, _settle(s, row))
+            if turned:
+                changed.append(row.id)
+            out.append(to_out(row, reasons))
+        return out, changed
+
+
+def get_measurement(handle: ProjectHandle, measurement_id: str) -> tuple[VolumeMeasurementOut, bool]:
+    with handle.session() as s:
+        row = _get(s, measurement_id)
+        reasons, turned = _refresh(s, row)
+        s.flush()
+        return to_out(row, reasons), turned
+
+
+def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPatch) -> VolumeMeasurementOut:
+    sent = body.model_dump(exclude_unset=True)
+    with handle.session() as s:
+        row = _get(s, measurement_id)
+        if sent.get("name"):
+            row.name = sent["name"]
+        changes = {k: v for k, v in sent.items() if k in INPUT_FIELDS and v is not None}
+        if changes:
+            if row.status == "calculating":
+                raise _conflict(f"{row.name} is being calculated; wait for it or cancel the job")
+            polygon = changes.get("polygon_native", row.polygon_native)
+            top_id = changes.get("top_surface_id", row.top_surface_id)
+            base = normalise_base(changes["base"]) if "base" in changes else row.base
+            masks = _masks(row.masks, changes.get("masks"))
+            alignment = _alignment(row.alignment, changes.get("alignment"))
+            new = _check_inputs(s, polygon, top_id, base, masks, alignment)
+            if top_id != row.top_surface_id:
+                old = s.get(Surface, row.top_surface_id)
+                if old is not None and not _same_crs(old.crs_wkt, new.crs_wkt):
+                    raise _invalid(
+                        f"{new.name} is in another coordinate system than the polygon", "invalid_base"
+                    )
+            row.polygon_native, row.top_surface_id, row.base = polygon, top_id, base
+            row.masks, row.alignment = masks, alignment
+            if row.results:
+                # back on the inputs the results were computed from ("revert"): they hold again
+                current = fingerprint(inputs_snapshot(s, row))
+                row.status = "ready" if current == row.results.get("inputs_fingerprint") else "stale"
+        s.flush()
+        reasons, _ = _refresh(s, row)
+        return to_out(row, reasons)
+
+
+def start_calculation(handle: ProjectHandle, measurement_id: str, submit: Callable[[], Job]) -> tuple:
+    with handle.session() as s:
+        row = _get(s, measurement_id)
+        if row.status == "calculating":
+            raise _conflict(f"{row.name} is already being calculated")
+        row.status, row.error = "calculating", None
+    job = submit()
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, measurement_id)
+        if row is None:
+            raise not_found("volume measurement", measurement_id)
+        row.job_id = job.id
+        s.flush()
+        return to_out(row, []), job
+
+
+def set_job(handle: ProjectHandle, measurement_id: str, job_id: str) -> VolumeMeasurementOut:
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, measurement_id)
+        if row is None:
+            raise not_found("volume measurement", measurement_id)
+        row.job_id = job_id
+        s.flush()
+        return to_out(row, [])
+
+
+def delete(handle: ProjectHandle, measurement_id: str) -> None:
+    with handle.session() as s:
+        row = _get(s, measurement_id)
+        if row.status == "calculating":
+            raise _conflict(f"{row.name} is being calculated; wait for it or cancel the job")
+        s.delete(row)
+    shutil.rmtree(measurement_dir(handle, measurement_id), ignore_errors=True)
+    DIFF_TILES.drop_map(measurement_id)
+
+
+def surface_ref(s: Session, surface: Surface) -> dict:
+    cloud = s.get(PointCloud, surface.point_cloud_id) if surface.point_cloud_id else None
+    return {
+        "id": surface.id,
+        "name": surface.name,
+        "kind": surface.kind,
+        "method": surface.method,
+        "cell_size_m": surface.cell_size_m,
+        "captured_on": cloud.captured_on.isoformat() if cloud and cloud.captured_on else None,
+        "cloud_file": PureWindowsPath(cloud.source_path).name if cloud else None,
+        "cloud_sha256": cloud.source_sha256 if cloud else None,
+    }
+
+
+def validate_export(handle: ProjectHandle, measurement_ids: list[str]) -> None:
+    """Every measurement must exist (404) and be ready with current inputs (409): an exported
+    number always matches its inputs (spec §6.10)."""
+    with handle.session() as s:
+        for measurement_id in dict.fromkeys(measurement_ids):
+            row = _get(s, measurement_id)
+            _refresh(s, row)
+            if row.status != "ready":
+                raise _conflict(f"{row.name} is {row.status}; recalculate it before exporting")

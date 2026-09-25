@@ -85,14 +85,6 @@ EXPECTED_STUBS: set[str] = {
     "deleteCloudMeasurement",
     "createPointCloudExport",
     # S2 volumes (app/volumes/router.py)
-    "listVolumeMeasurements",
-    "createVolumeMeasurement",
-    "getVolumeMeasurement",
-    "patchVolumeMeasurement",
-    "deleteVolumeMeasurement",
-    "calculateVolumeMeasurement",
-    "getVolumeDiffTile",
-    "getVolumeFootprints",
     "createVolumeExport",
     # S3 design surfaces (app/surfaces/design/router.py)
     "createDesignInspection",
@@ -120,6 +112,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
     "createSurface": {422},
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
+    "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
+    "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
 }
 
 
