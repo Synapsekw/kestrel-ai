@@ -69,7 +69,7 @@ class BaseFit:
 def densify_ring(ring: list[list[float]], step: float) -> tuple[np.ndarray, np.ndarray, float]:
     """Points every `step` metres along the closed ring (the step grows past MAX_EDGE_SAMPLES)."""
     pts = np.asarray(ring, dtype=np.float64)
-    if np.allclose(pts[0], pts[-1]):
+    if np.allclose(pts[0], pts[-1], rtol=0.0, atol=1e-9):
         pts = pts[:-1]
     closed = np.vstack([pts, pts[:1]])
     seg = np.hypot(np.diff(closed[:, 0]), np.diff(closed[:, 1]))

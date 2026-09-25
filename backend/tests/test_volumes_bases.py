@@ -37,6 +37,23 @@ def test_densify_ring_steps_one_cell_and_caps_the_count():
     assert densify_ring(closed, 0.1)[0].size == densify_ring(ring, 0.1)[0].size
 
 
+def test_densify_ring_does_not_drop_an_unclosed_vertex_at_utm_scale():
+    # Northing ~5e6: np.allclose's default relative tolerance (1e-5) treats an unclosed vertex a
+    # few metres from the first as "closed" and drops it — the fix must use an absolute tolerance.
+    ring = [
+        [500000, 5_000_000],
+        [500100, 5_000_000],
+        [500100, 5_000_100],
+        [500000, 5_000_100],
+        [500003, 5_000_030],  # ~30 m from the first vertex: not closed
+    ]
+    _, _, perimeter = densify_ring(ring, 0.5)
+    assert perimeter == pytest.approx(400.214, abs=1e-2)
+    closed_ring = ring + [ring[0]]
+    _, _, closed_perimeter = densify_ring(closed_ring, 0.5)
+    assert closed_perimeter == pytest.approx(perimeter, abs=1e-9)
+
+
 @pytest.mark.parametrize("pattern", ["spread", "arc"])
 def test_toe_plane_recovers_the_plane_with_ten_percent_pushed(pattern):
     xs, ys, _ = densify_ring(circle(CX, CY, 12.0), 0.1)
