@@ -1,10 +1,12 @@
 """A stand-in design reader for the inspect-phase API tests (Task 4): one 3-point TIN candidate.
 
-HOLD keeps the job running until a test cancels it; FAIL makes it raise a JobFailure. LATE_WRITE
-simulates a reader whose last check_cancelled() passed an instant before delete_design_inspection
-cancelled the job and removed the folder: while it is set, the HOLD loop stops calling
-check_cancelled() (as if that last check had already happened) so the writes below run into the
-gone folder instead.
+HOLD keeps the job running until a test cancels it; FAIL makes it raise a JobFailure. (The
+"cancelled between check and write" race against a deleted folder is tested by calling
+phase_inspect.run directly with a purpose-built fake reader - see
+test_design_api_inspect.py::test_a_late_write_after_cancellation_ends_the_job_cancelled_not_failed
+- since delete_design_inspection now waits for a live job to actually stop before it removes the
+folder (fix round 2), so a reader driven through the real HTTP/job-runner path no longer gets a
+realistic chance at hitting a folder that is gone while it is still marked live.)
 """
 
 from __future__ import annotations
@@ -20,13 +22,11 @@ from app.surfaces.design.inspection import Detected, InspectResult, candidate_fr
 
 HOLD = threading.Event()
 FAIL: list[str] = []
-LATE_WRITE = threading.Event()
 
 
 def inspect_file(path, idir, *, progress, check_cancelled) -> InspectResult:
     while HOLD.is_set():
-        if not LATE_WRITE.is_set():
-            check_cancelled()
+        check_cancelled()
         time.sleep(0.01)
     if FAIL:
         raise JobFailure(FAIL[0])

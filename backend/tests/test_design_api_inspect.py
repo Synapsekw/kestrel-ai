@@ -1,12 +1,17 @@
 """createDesignInspection, getDesignInspection, deleteDesignInspection, the thumbnail (spec §12, §4.2)."""
 
 import hashlib
+import logging
+import shutil
 import time
 
 import fake_design_reader
 import pytest
 
-from app.surfaces.design import store
+from app.db.models import Job
+from app.jobs.cancellation import JobCancelled
+from app.jobs.runner import JobContext
+from app.surfaces.design import phase_inspect, store
 
 BASE = "/api/v1/projects"
 
@@ -19,14 +24,11 @@ def project_kind() -> str:
 
 @pytest.fixture
 def fake_reader(monkeypatch):
-    from app.surfaces.design import phase_inspect
-
     monkeypatch.setitem(phase_inspect.READERS, "landxml", "fake_design_reader")
     monkeypatch.setitem(phase_inspect.READERS, "dxf", "fake_design_reader")
     yield fake_design_reader
     fake_design_reader.HOLD.clear()
     fake_design_reader.FAIL.clear()
-    fake_design_reader.LATE_WRITE.clear()
 
 
 def post(client, project_id, path):
@@ -158,24 +160,58 @@ def test_delete_is_refused_while_a_build_holds_the_inspection(
     assert d.exists()
 
 
-def test_a_write_after_cancellation_ends_the_job_cancelled_not_failed(
-    client, project_id, wait_job, fake_reader, tmp_path, handle
+def test_a_late_write_after_cancellation_ends_the_job_cancelled_not_failed(
+    app, handle, tmp_path, monkeypatch
 ):
     """Fix round 1, finding 1: a reader whose last check_cancelled() passed before the delete
     cancelled the job and removed the folder must not turn that late write's FileNotFoundError
-    into a `failed` job — it is the cancellation."""
-    fake_reader.HOLD.set()
-    fake_reader.LATE_WRITE.set()
+    into a `failed` job — it is the cancellation.
+
+    Fix round 2: this used to drive the race through the real HTTP DELETE endpoint (a fake reader's
+    HOLD loop, held until the test released it after calling delete()). Once
+    delete_design_inspection started waiting for a live job to actually stop before removing the
+    folder (fix round 2's own fix, for a real flake in that endpoint - see router.py), a reader that
+    never responds to cancellation until released by the test can no longer be driven through that
+    endpoint without either deadlocking on the wait or eating its full timeout every run. Calling
+    phase_inspect.run directly, with a fake reader that does the cancel-and-delete itself at the
+    exact instant needed, makes the race deterministic instead of depending on real thread timing
+    or a 5 s wait."""
     src = tmp_path / "slow.dxf"
     src.write_text("0\nEOF\n")
-    body = post(client, project_id, src).json()
-    jid, iid = body["job"]["id"], body["inspection"]["id"]
-    wait_state(client, project_id, jid, "running")
-    assert client.delete(url(project_id, iid)).status_code == 204
-    fake_reader.HOLD.clear()  # let the reader past the loop and into its (now doomed) writes
-    job = wait_job(project_id, jid)
-    assert job["state"] == "cancelled", job
-    assert not (handle.folder / "cache" / "design-inspections" / iid).exists()
+    iid = store.new_id()
+    idir = store.create_inspection(handle, iid, src, "dxf")
+    with handle.session() as s:
+        job = Job(type="design_import", params={})
+        s.add(job)
+        s.flush()
+        job_id = job.id
+    ctx = JobContext(
+        app.state.jobs,
+        handle,
+        job_id,
+        {"phase": "inspect", "inspection_id": iid, "path": str(src)},
+        logging.getLogger("test.design_import"),
+    )
+
+    class _LateWriteReader:
+        @staticmethod
+        def inspect_file(path, idir, *, progress, check_cancelled):
+            # Simulate delete_design_inspection landing between this reader's last
+            # check_cancelled() and its next write: cancel the job and remove the folder right
+            # here, then try to write anyway, exactly as a reader that does not check again would.
+            ctx.cancelled.set()
+            shutil.rmtree(idir)
+            store.CandidateWriter(store.candidate_dir(idir, "c0"), "faces")  # -> FileNotFoundError
+            raise AssertionError("unreachable: CandidateWriter should have raised FileNotFoundError")
+
+    import sys
+
+    monkeypatch.setitem(sys.modules, "late_write_fake_reader", _LateWriteReader)
+    monkeypatch.setitem(phase_inspect.READERS, "dxf", "late_write_fake_reader")
+
+    with pytest.raises(JobCancelled):
+        phase_inspect.run(ctx)
+    assert not idir.exists()
 
 
 def test_thumbnail_of_a_failed_inspection_is_404(client, project_id, wait_job, fake_reader, tmp_path):

@@ -81,7 +81,11 @@ def thumb_path(idir: Path, cid: str) -> Path:
 
 
 def read_json(path: Path) -> dict:
-    return json.loads(Path(path).read_text("utf-8"))
+    """Under the lock: unsynchronized with write_json/patch_json, a plain read can catch
+    os.replace() mid-rename (or vice versa) and raise a transient Windows PermissionError - the
+    lock (an RLock, so patch_json's own read_json call re-enters it harmlessly) closes that."""
+    with _LOCK:
+        return json.loads(Path(path).read_text("utf-8"))
 
 
 def write_json(path: Path, data: dict) -> bool:

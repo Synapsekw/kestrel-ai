@@ -7,6 +7,7 @@ from EXPECTED_STUBS in tests/test_contract.py.
 from __future__ import annotations
 
 import shutil
+import time
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -22,6 +23,23 @@ from app.surfaces.design.schemas import DesignInspectionCreate, DesignInspection
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["surfaces"])
 CANDIDATE = r"^c[0-9]{1,6}$"
+CANCEL_WAIT_S = 5.0
+CANCEL_POLL_S = 0.02
+
+
+def _wait_until_not_live(runner, job_id: str, timeout: float = CANCEL_WAIT_S) -> None:
+    """Block (this is a sync path op, run in FastAPI's thread pool) until the job's own thread has
+    fully exited, or `timeout` passes. Root cause (fix round 2): cancelling only sets a flag; the
+    job thread keeps running for a little while after, reading/writing files under the inspection
+    dir it is about to lose. Deleting that dir with `rmtree(ignore_errors=True)` while the job
+    thread still has one of those files open raises a Windows sharing violation on that file,
+    which `ignore_errors` swallows, leaving the (non-empty) folder behind. Waiting for
+    `runner.is_live` to go False - true only once the job thread's `finally` block has run - closes
+    that window; a job stuck past the timeout is swept up later (leftover files are exactly what
+    `startup.sweep_interrupted` exists for)."""
+    deadline = time.monotonic() + timeout
+    while runner.is_live(job_id) and time.monotonic() < deadline:
+        time.sleep(CANCEL_POLL_S)
 
 
 @router.post("/design-inspections", response_model=DesignInspectionWithJob, status_code=202)
@@ -64,7 +82,8 @@ def delete_design_inspection(
     for job_id in store.job_ids(req):
         if runner.is_live(job_id):
             runner.cancel(handle, job_id)
-    shutil.rmtree(idir, ignore_errors=True)  # a job still holding a memmap leaves files: the sweep ends it
+            _wait_until_not_live(runner, job_id)
+    shutil.rmtree(idir, ignore_errors=True)  # still live past the wait: best-effort; the sweep ends it
     return Response(status_code=204)
 
 
