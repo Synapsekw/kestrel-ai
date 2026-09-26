@@ -6,11 +6,11 @@ import { messageOf } from "@/api/errors";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
 import { chosenRun, listSourceRuns, reviewProgressText, type RunSummary } from "@/api/review";
 import { fetchAllSources } from "@/api/sources";
-import { useAddData } from "@/app/addDataStore";
 import { pushLog } from "@/app/diagnostics";
+import { ADD_DATA_LOADING, openAddData, useAddDataReady } from "@/data/addDataTiles";
 import { useImageList } from "@/data/useImageList";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
-import { Alert, Button, EmptyState, Field, Kbd, Pill, Progress, Select, Skeleton } from "@/ui";
+import { Alert, Button, EmptyState, Field, Kbd, Pill, Progress, Select, Skeleton, Tooltip } from "@/ui";
 import { AcceptAbove } from "./AcceptAbove";
 import { ImageReviewQueue } from "./ImageReviewQueue";
 
@@ -51,6 +51,7 @@ export function DetectReview({ projectId }: { projectId: string }) {
   const [params, setParams] = useSearchParams();
   const [sources, setSources] = useState<Source[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const addReady = useAddDataReady(projectId);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,9 +89,17 @@ export function DetectReview({ projectId }: { projectId: string }) {
       ) : sources.length === 0 || !source ? (
         <EmptyState icon="review" title="Nothing to review yet">
           Detections to check appear here after a model runs on your photos or a map.{" "}
-          <Button size="sm" icon="plus" onClick={() => useAddData.getState().show(null)}>
-            Add data
-          </Button>
+          {addReady ? (
+            <Button size="sm" icon="plus" onClick={() => openAddData()}>
+              Add data
+            </Button>
+          ) : (
+            <Tooltip label={ADD_DATA_LOADING}>
+              <Button size="sm" icon="plus" disabled>
+                Add data
+              </Button>
+            </Tooltip>
+          )}
         </EmptyState>
       ) : (
         <>

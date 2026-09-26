@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it } from "vitest";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import type { Source } from "@contract/client";
 import { exampleImagePage, exampleSource, fakeClient, MAP_ID, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import type { RunSummary } from "@/api/review";
+import { useAddData } from "@/app/addDataStore";
 import { ReviewScreen } from "@/screens/ReviewScreen";
 
 const photos: Source = {
@@ -53,6 +54,8 @@ function renderScreen(routes: Parameters<typeof fakeClient>[0], route = `/p/${PR
 }
 
 describe("Detection review", () => {
+  beforeEach(() => useAddData.setState({ open: false, tile: null, projectId: null }));
+
   it("picks the newest survey first and reviews its pinned run on the map", async () => {
     renderScreen([
       { method: "GET", path: /\/sources$/, body: { items: [photos, map], next_cursor: null } },
@@ -124,5 +127,14 @@ describe("Detection review", () => {
     renderScreen([{ method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } }]);
     expect(await screen.findByText("Nothing to review yet")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add data" })).toBeInTheDocument();
+  });
+
+  it("keeps Add data disabled until the project is loaded, then opens it", async () => {
+    renderScreen([{ method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } }]);
+    await screen.findByText("Nothing to review yet");
+    expect(screen.getByRole("button", { name: "Add data" })).toBeDisabled();
+    act(() => useAddData.getState().setProject(PROJECT_ID));
+    fireEvent.click(screen.getByRole("button", { name: "Add data" }));
+    expect(useAddData.getState()).toMatchObject({ open: true, tile: null });
   });
 });

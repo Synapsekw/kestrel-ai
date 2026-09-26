@@ -44,7 +44,7 @@ function renderList(items: unknown[], next: string | null = null) {
 describe("MapDataList", () => {
   beforeEach(() => {
     useChangesStore.setState({ dataRevision: 0 });
-    useAddData.setState({ open: false, tile: null });
+    useAddData.setState({ open: false, tile: null, projectId: null });
   });
 
   it("asks the data list for maps, elevation and drawings, one bounded page", async () => {
@@ -151,9 +151,11 @@ describe("MapDataList", () => {
     expect(screen.queryByRole("rowheader", { name: "Site north ortho" })).toBeNull();
   });
 
-  it("offers Add data when the project has no maps", async () => {
+  it("offers Add data when the project has no maps, once the project is loaded", async () => {
     renderList([]);
-    fireEvent.click(await screen.findByRole("button", { name: "Add an orthomosaic" }));
+    expect(await screen.findByRole("button", { name: "Add an orthomosaic" })).toBeDisabled();
+    act(() => useAddData.getState().setProject(PROJECT_ID));
+    fireEvent.click(screen.getByRole("button", { name: "Add an orthomosaic" }));
     expect(useAddData.getState()).toMatchObject({ open: true, tile: "orthomosaic" });
   });
 
