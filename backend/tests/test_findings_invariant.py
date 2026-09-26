@@ -8,7 +8,7 @@ from PIL import Image as PILImage
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Activity, Box, FindingCount
+from app.db.models import Activity, Box, FindingCount, QueryRun
 
 API = "/api/v1"
 
@@ -245,3 +245,74 @@ def test_an_image_finding_has_a_crop_thumbnail(client, ctx):
     r = client.get(f"{ctx['base']}/findings/{f['id']}/thumbnail")
     assert r.status_code == 200
     assert PILImage.open(BytesIO(r.content)).size == (160, 120)
+
+
+def _run_with_proposals(handle, ctx, n: int = 2) -> tuple[str, list[str]]:
+    """A photo run over the image with `n` pending crack detections of 0.9."""
+    with handle.session() as s:
+        run = QueryRun(
+            kind="cloud_provider",
+            provider="anthropic",
+            model_name="claude-opus-5",
+            query="cracks",
+            image_ids=[ctx["image_id"]],
+            tiling={"enabled": False, "tile_size": 1280, "overlap": 0.2, "nms_iou": 0.5},
+            conf=0.25,
+        )
+        s.add(run)
+        s.flush()
+        rows = [
+            Box(
+                image_id=ctx["image_id"],
+                class_id=ctx["crack"],
+                x=5 + 30 * i,
+                y=5,
+                w=20,
+                h=20,
+                confidence=0.9,
+                provenance_kind="cloud_provider",
+                provider="anthropic",
+                review_state="unreviewed",
+                query_run_id=run.id,
+            )
+            for i in range(n)
+        ]
+        s.add_all(rows)
+        s.flush()
+        return run.id, [r.id for r in rows]
+
+
+def _open_count(handle) -> int:
+    with handle.session() as s:
+        return sum(row.n for row in s.execute(select(FindingCount)).scalars())
+
+
+def test_promoting_a_run_makes_its_defect_detections_findings(client, handle, ctx):
+    run_id, box_ids = _run_with_proposals(handle, ctx)
+    r = client.post(f"{ctx['base']}/query-runs/{run_id}/promote", json={"min_confidence": 0.5})
+    assert r.status_code == 200 and r.json()["accepted"] == 2, r.text
+    found = _findings(client, ctx)
+    assert sorted(f["anchor"]["annotation_id"] for f in found) == sorted(box_ids)
+    assert {(f["status"], f["created_by"]) for f in found} == {("reviewed", "model:anthropic")}
+    assert _open_count(handle) == 2
+    with handle.session() as s:
+        rows = s.execute(select(Activity).where(Activity.kind == "detections.accepted")).scalars().all()
+    assert len(rows) == 1 and rows[0].payload["count"] == 2
+
+
+def test_unpromoting_a_run_removes_its_findings_and_bins_their_photos(
+    client, handle, ctx, tmp_path, make_jpeg
+):
+    run_id, _ = _run_with_proposals(handle, ctx)
+    client.post(f"{ctx['base']}/query-runs/{run_id}/promote", json={})
+    f = _findings(client, ctx)[0]
+    photo = make_jpeg(tmp_path / "p.jpg", 64, 48)
+    assert (
+        client.post(f"{ctx['base']}/findings/{f['id']}/attachments", json={"path": str(photo)}).status_code
+        == 201
+    )
+    r = client.post(f"{ctx['base']}/query-runs/{run_id}/unpromote")
+    assert r.status_code == 200 and r.json()["reverted"] == 2, r.text
+    assert _findings(client, ctx) == []
+    assert _open_count(handle) == 0
+    assert list((handle.folder / "findings" / "_trash").glob(f"{f['id']}-*"))

@@ -15,6 +15,7 @@ from app.datasets.empties import clear_mark_for_ground_truth, count_marked_empty
 from app.db.models import Box, Image, Job, QueryRun
 from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
+from app.findings import annotations, trash
 from app.inference.schemas import PreannotateRequest, QueryRunCreate
 from app.jobs.gpu import GpuBusy
 from app.library import service as library
@@ -229,7 +230,8 @@ def promote(
     """Accept the run's pending boxes at or above the threshold. A state change, never a copy.
 
     A dry run only counts them. Accepted boxes carry `reviewed_at == promoted_at`, which is how
-    `unpromote` tells them from boxes a person accepted.
+    `unpromote` tells them from boxes a person accepted. An accepted defect detection becomes a
+    `reviewed` finding (spec 2026-09-26-foundation section 8.5), with one `detections.accepted` row.
     """
     now = datetime.now(UTC)
     with handle.session() as s:
@@ -249,8 +251,11 @@ def promote(
             count = box_count(s, run_id)
             s.expunge(row)
             return row, count, len(pending), []
+        new_findings: list[str] = []
         for box in pending:
             box.review_state, box.reviewed_at = "accepted", now
+            annotations.on_box_changed(s, handle.id, handle.catalogue, box, accepted=new_findings)
+        annotations.record_accepted(s, new_findings)
         row.promoted_at = now
         s.flush()
         recount_query_run(s, row)  # the run's counts follow in the same transaction
@@ -266,7 +271,10 @@ def promote(
 
 
 def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, list[str]]:
-    """Undo `promote`: its boxes go back to unreviewed; anything a person reviewed since stays."""
+    """Undo `promote`: its boxes go back to unreviewed; anything a person reviewed since stays. A
+    reverted box is no longer ground truth, so its finding goes; the photos move to the trash after
+    the commit (spec 2026-09-26-foundation section 8.5)."""
+    trashed: list[str] = []
     with handle.session() as s:
         row = s.get(QueryRun, run_id)
         if row is None:
@@ -284,6 +292,7 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
             )
         for box in promoted:
             box.review_state, box.reviewed_at = "unreviewed", None
+            trashed += annotations.on_box_changed(s, handle.id, handle.catalogue, box)
         row.promoted_at = None
         s.flush()
         recount_query_run(s, row)
@@ -291,6 +300,7 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
         s.flush()
         count = box_count(s, run_id)
         s.expunge(row)
+    trash.move(handle, trashed)
     return row, count, len(promoted), image_ids
 
 
