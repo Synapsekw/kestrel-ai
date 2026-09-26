@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useApi } from "@/api/client";
 import { codeOf, messageOf } from "@/api/errors";
 import {
@@ -52,16 +52,29 @@ export function useFinding(projectId: string, findingId: string) {
   const current = loaded && loaded.id === findingId ? loaded : null;
   const before = current?.finding ?? null;
 
+  // Every write is id-guarded (the host may switch findings while a PATCH is in flight) and only
+  // the newest write of a finding applies its saved answer; a refused one reverts only its own keys.
+  const writeSeq = useRef(0);
   const update = useCallback(
     async (patch: FindingPatch) => {
       if (!before) return;
-      setLoaded({ id: findingId, finding: { ...before, ...patch } as FindingDetail, error: null });
+      const seq = ++writeSeq.current;
+      const keys = Object.keys(patch) as (keyof FindingPatch)[];
+      const onThis = (fn: (f: FindingDetail) => FindingDetail) =>
+        setLoaded((prev) =>
+          prev && prev.id === findingId && prev.finding ? { ...prev, finding: fn(prev.finding) } : prev,
+        );
+      onThis((f) => ({ ...f, ...patch }) as FindingDetail);
       try {
         const saved = await patchFinding(api, projectId, findingId, patch);
-        setLoaded({ id: findingId, finding: saved, error: null });
+        if (seq === writeSeq.current) onThis(() => saved);
         useChangesStore.getState().bumpFindings();
       } catch (e) {
-        setLoaded({ id: findingId, finding: before, error: null });
+        onThis((f) => {
+          const reverted: Record<string, unknown> = { ...f };
+          for (const k of keys) if (f[k] === patch[k]) reverted[k] = before[k];
+          return reverted as FindingDetail;
+        });
         toast("danger", updateFailure(e));
       }
     },

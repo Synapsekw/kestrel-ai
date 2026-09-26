@@ -1,9 +1,18 @@
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { errorBody, exampleModel, fakeClient, IMAGE_ID, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
-import { baseRoutes, exampleFindingDetail, FINDING_ID, TYPE_CRACK } from "@/test/findingFixtures";
+import {
+  baseRoutes,
+  exampleFinding2,
+  exampleFindingDetail,
+  FINDING_ID,
+  FINDING_ID_2,
+  TYPE_CRACK,
+} from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
+import { useToastStore } from "@/ui";
 import { FindingInspector, type FindingInspectorProps } from "./FindingInspector";
 import { useInspectorCommands } from "./inspectorStore";
 
@@ -153,5 +162,128 @@ describe("FindingInspector", () => {
     fireEvent.click(screen.getByRole("button", { name: "Finding actions" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Copy link" }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith(`/p/${PROJECT_ID}/findings/${FINDING_ID}`));
+  });
+});
+
+/** A PATCH that waits for `release()`, then answers from the fake routes or fails. */
+function gatePatches(api: ReturnType<typeof fakeClient>["api"], gated: number[]) {
+  const releases: Array<() => void> = [];
+  // openapi-fetch's PATCH is overloaded per path; the gate only forwards its arguments.
+  const real = api.PATCH.bind(api) as unknown as (...args: unknown[]) => Promise<unknown>;
+  let call = 0;
+  vi.spyOn(api, "PATCH").mockImplementation(((...args: unknown[]) => {
+    call += 1;
+    if (!gated.includes(call)) return real(...args);
+    return new Promise<void>((resolve) => releases.push(resolve)).then(() => real(...args));
+  }) as unknown as typeof api.PATCH);
+  return releases;
+}
+
+/** The PATCH has settled: a saved one bumps the findings revision, a refused one raises a toast. */
+function toastsOrRevision(status: number): boolean {
+  return status === 200
+    ? useChangesStore.getState().findingsRevision > 0
+    : useToastStore.getState().toasts.some((t) => t.tone === "danger");
+}
+
+function SwitchingHost({ projectId }: { projectId: string }) {
+  const [id, setId] = useState(FINDING_ID);
+  return (
+    <>
+      <button type="button" onClick={() => setId(FINDING_ID_2)}>
+        Next finding
+      </button>
+      <FindingInspector key="one-inspector" projectId={projectId} findingId={id} />
+    </>
+  );
+}
+
+describe("FindingInspector while switching findings", () => {
+  beforeEach(() => {
+    useChangesStore.setState({ findingsRevision: 0 });
+    useToastStore.getState().clear();
+  });
+
+  it.each([
+    ["saved", 200],
+    ["refused", 409],
+  ])("a PATCH %s after the switch leaves the next finding on screen", async (_, status) => {
+    const { api, requests } = fakeClient(
+      baseRoutes([
+        {
+          method: "PATCH",
+          path: /\/findings\/[^/]+$/,
+          status,
+          body: (r) =>
+            status === 200
+              ? { ...detail(), ...(r.body as object) }
+              : errorBody("invalid_transition", "closed findings must be reopened first"),
+        },
+        { method: "GET", path: /\/library\/models\/[^/]+$/, body: exampleModel },
+        {
+          method: "GET",
+          path: /\/findings\/[^/]+$/,
+          body: (r) =>
+            r.url.includes(FINDING_ID_2)
+              ? { ...exampleFinding2, attachment_count: 0, comment_count: 0 }
+              : detail(),
+        },
+      ]),
+    );
+    const releases = gatePatches(api, [1]);
+    renderWithProviders(<SwitchingHost projectId={PROJECT_ID} />, { api });
+    await screen.findByText("F-0217");
+    fireEvent.click(screen.getByRole("radio", { name: /Major/ }));
+    await waitFor(() => expect(releases).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "Next finding" }));
+    expect(await screen.findByText("F-0218")).toBeInTheDocument();
+    // Records any skeleton flash on B from here on (a revert or a saved answer landing on B).
+    let flashed = false;
+    const watch = new MutationObserver(() => {
+      if (document.querySelector('[role="status"][aria-label="Loading"]')) flashed = true;
+    });
+    watch.observe(document.body, { childList: true, subtree: true });
+    act(() => releases[0]());
+    await waitFor(() => expect(requests.some((r) => r.method === "PATCH")).toBe(true));
+    await waitFor(() => expect(toastsOrRevision(status)).toBe(true));
+    watch.disconnect();
+    expect(flashed).toBe(false);
+    expect(screen.getByText("F-0218")).toBeInTheDocument();
+    expect(screen.queryByText("F-0217")).toBeNull();
+    expect(screen.queryByRole("status", { name: /Loading/ })).toBeNull();
+    expect(screen.getByRole("radio", { name: "None" })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("a refused first edit does not revert a newer one", async () => {
+    let n = 0;
+    const { api } = fakeClient(
+      baseRoutes([
+        {
+          method: "PATCH",
+          path: /\/findings\/[^/]+$/,
+          status: () => (++n === 2 ? 409 : 200),
+          body: (r) =>
+            n === 2 ? errorBody("validation_error", "nope") : { ...detail(), ...(r.body as object) },
+        },
+        { method: "GET", path: /\/library\/models\/[^/]+$/, body: exampleModel },
+        {
+          method: "GET",
+          path: /\/findings\/[^/]+$/,
+          body: () => ({ ...detail(), severity: n ? 1 : 4 }),
+        },
+      ]),
+    );
+    const releases = gatePatches(api, [1]);
+    renderWithProviders(<FindingInspector projectId={PROJECT_ID} findingId={FINDING_ID} />, { api });
+    await screen.findByText("F-0217");
+    fireEvent.click(screen.getByRole("radio", { name: /Major/ }));
+    await waitFor(() => expect(releases).toHaveLength(1));
+    fireEvent.click(screen.getByRole("radio", { name: /Minor/ }));
+    await waitFor(() => expect(n).toBe(1));
+    act(() => releases[0]());
+    await waitFor(() => expect(n).toBe(2));
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: /Minor/ })).toHaveAttribute("aria-checked", "true"),
+    );
   });
 });
