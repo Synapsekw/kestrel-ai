@@ -31,22 +31,54 @@ def test_frozen_smoke_checks_the_library() -> None:
         assert path in text, f"smoke_frozen.ps1 does not call {path}"
 
 
-def test_frozen_smoke_creates_a_training_project() -> None:
-    # `kind` is required on POST /projects (BK), so every project the smoke creates names one. The
-    # main project trains (BL), so it must be "train". The point-cloud step (S1) needs a project that
-    # can hold clouds, which a training project cannot, so its own project is "detect".
+def test_frozen_smoke_creates_projects_via_the_catalogue() -> None:
+    # `type_ids` (catalogue type ids) replaced `kind`/`classes` on POST /projects (BC, task 13b):
+    # every project the smoke creates gets its types from the catalogue helper first.
     text = (SCRIPTS / "smoke_frozen.ps1").read_text("utf-8")
-    creates = [line.strip() for line in text.splitlines() if 'POST "/projects"' in line]
-    assert creates, "smoke_frozen.ps1 no longer creates a project"
-    for line in creates:
-        assert re.search(r'kind = "(train|detect)"', line), (
-            f"project created without an explicit kind: {line}"
-        )
-    main = [line for line in creates if line.startswith("$project =")]
-    assert len(main) == 1 and 'kind = "train"' in main[0], f"the main smoke project must train: {main}"
-    for line in creates:
-        if line in main:
-            continue
-        assert line.startswith("$pcProject =") and 'kind = "detect"' in line, (
-            f"only the point-cloud step's project may be other than train: {line}"
-        )
+    lines = text.splitlines()
+    call_idx = [
+        i
+        for i, line in enumerate(lines)
+        if "Get-CatalogueTypeId" in line and not line.strip().startswith("function")
+    ]
+    assert call_idx, "smoke_frozen.ps1 no longer calls the catalogue type helper"
+    create_idx = [i for i, line in enumerate(lines) if 'POST "/projects"' in line]
+    assert create_idx, "smoke_frozen.ps1 no longer creates a project"
+    first_call = min(call_idx)
+    for i in create_idx:
+        line = lines[i].strip()
+        assert "type_ids" in line, f"project created without type_ids: {line}"
+        assert "kind =" not in line, f"project create body still sends kind: {line}"
+        assert "classes =" not in line, f"project create body still sends classes: {line}"
+        assert i > first_call, f"project created before the catalogue helper ran: {line}"
+
+
+@pytest.mark.parametrize("script", ["checkpoint2_backend.py", "pointcloud_acceptance.py"])
+def test_python_script_creates_projects_via_the_catalogue(script: str) -> None:
+    """Same rule as the frozen smoke test (task 13b): the Python driver scripts also create their
+    project types through the catalogue, sending `type_ids` and never `kind`/`classes` on
+    POST /projects."""
+    text = (SCRIPTS / script).read_text("utf-8")
+    match = re.search(r'\.post\(\s*"(?:/api/v1)?/projects"', text)
+    assert match, f"{script} no longer posts to /projects"
+    # the call's own statement: from the opening paren of .post( to its matching close paren.
+    start = text.index("(", match.start())
+    depth = 0
+    end = start
+    for i, ch in enumerate(text[start:], start):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                end = i
+                break
+    body = text[start : end + 1]
+    if "json=body" in body:
+        # the dict is built separately just above the call (pointcloud_acceptance.py's new_project).
+        body_start = text.rindex("body = {", 0, start)
+        body_end = text.index("}", body_start)
+        body += text[body_start : body_end + 1]
+    assert '"type_ids"' in body, f"{script} does not send type_ids on POST /projects: {body}"
+    assert '"kind"' not in body, f"{script} still sends kind on POST /projects: {body}"
+    assert '"classes"' not in body, f"{script} still sends classes on POST /projects: {body}"

@@ -105,13 +105,30 @@ def wait_job(c: httpx.Client, project_id: str, job_id: str, timeout: float = 360
     raise TimeoutError(job_id)
 
 
+def ensure_catalogue_type(c: httpx.Client, name: str, colour: str, hotkey: str | None = None) -> str:
+    """POST /catalogue/types (spec 2026-09-26-foundation section 13b): a fresh type keeps its new
+    id; a 409 `type_exists` reuses the existing live type of that name; a 409 `hotkey_conflict`
+    retries once without the hotkey."""
+    body: dict = {"name": name, "colour": colour, "kind": "object"}
+    if hotkey:
+        body["hotkey"] = hotkey
+    r = c.post("/catalogue/types", json=body)
+    if r.status_code == 409 and r.json()["error"]["code"] == "hotkey_conflict":
+        body.pop("hotkey", None)
+        r = c.post("/catalogue/types", json=body)
+    if r.status_code == 409 and r.json()["error"]["code"] == "type_exists":
+        return r.json()["error"]["details"]["type_id"]
+    r.raise_for_status()
+    return r.json()["id"]
+
+
 def new_project(c: httpx.Client, folder: Path) -> str:
     folder.mkdir(parents=True, exist_ok=True)
+    type_id = ensure_catalogue_type(c, "excavator", "#f97316")
     body = {
         "name": "Point-cloud acceptance",
         "folder": str(folder),
-        "classes": [{"name": "excavator", "colour": "#f97316"}],
-        "kind": "detect",
+        "type_ids": [type_id],
     }
     r = c.post("/projects", json=body)
     r.raise_for_status()

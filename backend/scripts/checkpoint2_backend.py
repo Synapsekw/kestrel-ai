@@ -59,6 +59,22 @@ def wait_job(api: httpx.Client, pid: str | None, jid: str, timeout: float = 900)
     raise SystemExit(f"job {jid} timed out")
 
 
+def ensure_catalogue_type(api: httpx.Client, name: str, colour: str, hotkey: str | None = None) -> str:
+    """POST /catalogue/types (spec 2026-09-26-foundation section 13b): a fresh type keeps its new
+    id; a 409 `type_exists` reuses the existing live type of that name; a 409 `hotkey_conflict`
+    retries once without the hotkey."""
+    body: dict = {"name": name, "colour": colour, "kind": "object"}
+    if hotkey:
+        body["hotkey"] = hotkey
+    r = api.post("/api/v1/catalogue/types", json=body)
+    if r.status_code == 409 and r.json()["error"]["code"] == "hotkey_conflict":
+        body.pop("hotkey", None)
+        r = api.post("/api/v1/catalogue/types", json=body)
+    if r.status_code == 409 and r.json()["error"]["code"] == "type_exists":
+        return r.json()["error"]["details"]["type_id"]
+    return check(r, 201)["id"]
+
+
 def sha256_file(path: Path) -> str:
     """Streamed in chunks, like the library's own hash: weights files run to hundreds of megabytes."""
     h = hashlib.sha256()
@@ -126,14 +142,14 @@ def main() -> int:
     # 1. project
     folder = Path(a.project_folder)
     folder.mkdir(parents=True, exist_ok=True)
-    classes = [
-        {"name": n, "colour": c, "hotkey": str(i + 1)}
+    type_ids = [
+        ensure_catalogue_type(api, n, c, str(i + 1))
         for i, (n, c) in enumerate(zip(CLASSES, COLOURS, strict=True))
     ]
     project = check(
         api.post(
             "/api/v1/projects",
-            json={"name": "Checkpoint 2", "folder": str(folder), "classes": classes, "kind": "train"},
+            json={"name": "Checkpoint 2", "folder": str(folder), "type_ids": type_ids},
         )
     )
     pid = project["id"]

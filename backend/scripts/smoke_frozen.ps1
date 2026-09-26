@@ -119,6 +119,42 @@ function Wait-ApiJob([string] $Jobs, [string] $JobId, [int] $TimeoutSec = 1800) 
   throw "job $JobId did not finish within $TimeoutSec s"
 }
 
+# POST /catalogue/types (spec 2026-09-26-foundation section 13b): a fresh type keeps its new id; a
+# 409 type_exists reuses the existing live type of that name; a 409 hotkey_conflict retries once
+# without the hotkey. Invoke-Api re-wraps its exception as a plain string, so this talks to the
+# endpoint directly to keep the structured status code and error body.
+function Get-CatalogueTypeId([string] $Name, [string] $Colour, [string] $Hotkey) {
+  $body = [ordered]@{ name = $Name; colour = $Colour; kind = "object" }
+  if ($Hotkey) { $body.hotkey = $Hotkey }
+  for ($attempt = 0; $attempt -lt 2; $attempt++) {
+    $request = @{
+      Method          = "POST"
+      Uri             = "$script:Base/api/v1/catalogue/types"
+      Headers         = @{ Authorization = "Bearer $script:Token" }
+      UseBasicParsing = $true
+      ContentType     = "application/json"
+      Body            = ($body | ConvertTo-Json -Depth 8)
+    }
+    try {
+      $response = Invoke-WebRequest @request
+      return ($response.Content | ConvertFrom-Json).id
+    } catch {
+      if (-not $_.Exception.Response) { throw }
+      $reader = New-Object IO.StreamReader($_.Exception.Response.GetResponseStream())
+      $raw = $reader.ReadToEnd()
+      $reader.Close()
+      $err = ($raw | ConvertFrom-Json).error
+      if ($err.code -eq "type_exists") { return $err.details.type_id }
+      if ($err.code -eq "hotkey_conflict" -and $body.Contains("hotkey")) {
+        $body.Remove("hotkey")
+        continue
+      }
+      throw "POST /catalogue/types $Name failed: $raw"
+    }
+  }
+  throw "POST /catalogue/types $Name failed after retrying without the hotkey"
+}
+
 New-Item -ItemType Directory -Force $WorkDir | Out-Null
 $sample = Join-Path $WorkDir "sample"
 $projectFolder = Join-Path $WorkDir "project"
@@ -188,8 +224,8 @@ try {
   # 5. project, import, weights
   $names = @("excavator", "wheel_loader", "bulldozer", "dump_truck", "crane", "concrete_mixer", "roller", "backhoe")
   $colours = @("#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#ef4444")
-  $classes = 0..7 | ForEach-Object { @{ name = $names[$_]; colour = $colours[$_]; hotkey = "$($_ + 1)" } }
-  $project = Invoke-Api POST "/projects" @{ name = "Frozen smoke"; folder = $projectFolder; classes = $classes; kind = "train" }
+  $typeIds = 0..7 | ForEach-Object { Get-CatalogueTypeId $names[$_] $colours[$_] "$($_ + 1)" }
+  $project = Invoke-Api POST "/projects" @{ name = "Frozen smoke"; folder = $projectFolder; type_ids = $typeIds }
   $pid1 = $project.id
   Complete-Step "create_project"
 
@@ -207,7 +243,7 @@ try {
   $fixture = Join-Path $WorkDir "fixture.laz"
   $written = & $exe pointcloud-selftest --write-fixture $fixture 2>&1 | Out-String
   if ($LASTEXITCODE -ne 0) { throw "could not write the point-cloud fixture: $written" }
-  $pcProject = Invoke-Api POST "/projects" @{ name = "Frozen smoke clouds"; folder = $cloudsFolder; classes = $classes; kind = "detect" }
+  $pcProject = Invoke-Api POST "/projects" @{ name = "Frozen smoke clouds"; folder = $cloudsFolder; type_ids = $typeIds }
   $created = Invoke-Api POST "/projects/$($pcProject.id)/pointclouds" @{ path = $fixture }
   $job = Wait-ApiJob "/projects/$($pcProject.id)/jobs" $created.job.id
   if ($job.state -ne "succeeded") { throw "point-cloud import failed: $($job.error)" }
