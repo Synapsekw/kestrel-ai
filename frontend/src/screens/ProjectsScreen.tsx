@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Project } from "@contract/client";
 import { useAgentPanel } from "@/agent/panelStore";
@@ -11,6 +11,8 @@ import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
 import { Alert, Button, Dialog, EmptyState, Input, Select, Skeleton, stagger, toast } from "@/ui";
+import { NewProjectDialog } from "./projects/NewProjectDialog";
+import { OpenFolderDialog } from "./projects/OpenFolderDialog";
 import { ProjectCard } from "./projects/ProjectCard";
 import { visibleProjects, type ProjectSort } from "./projects/projectCards";
 
@@ -26,6 +28,10 @@ export function ProjectsScreen() {
   const [q, setQ] = useState("");
   const [sort, setSort] = useState<ProjectSort>("recent");
   const [removing, setRemoving] = useState<Project | null>(null);
+  const [dialog, setDialog] = useState<"new" | "open" | null>(null);
+  const [locating, setLocating] = useState<Project | null>(null);
+  // Folders whose retry request is in flight: a double click sends one POST, not two.
+  const retrying = useRef(new Set<string>());
   const [busy, setBusy] = useState(false);
   const reload = useCallback(() => setTick((t) => t + 1), []);
   useOnJobsFinished("project_migrate", reload);
@@ -75,12 +81,16 @@ export function ProjectsScreen() {
   );
 
   async function retry(p: Project) {
+    if (retrying.current.has(p.folder)) return;
+    retrying.current.add(p.folder);
     try {
       await retryMigration(api, p.folder);
       toast("info", `Upgrading ${p.name} again`);
       reload();
     } catch (e) {
       toast("danger", messageOf(e, "could not start the upgrade"));
+    } finally {
+      retrying.current.delete(p.folder);
     }
   }
 
@@ -111,6 +121,12 @@ export function ProjectsScreen() {
         <div className="flex flex-wrap gap-2">
           <Button variant="ghost" onClick={() => useAgentPanel.getState().setOpen(true)}>
             Plan with the setup agent
+          </Button>
+          <Button icon="folder" onClick={() => setDialog("open")}>
+            Open folder
+          </Button>
+          <Button variant="primary" icon="plus" onClick={() => setDialog("new")}>
+            New project
           </Button>
         </div>
       </header>
@@ -171,10 +187,27 @@ export function ProjectsScreen() {
                 onOpen={openProject}
                 onRetry={(x) => void retry(x)}
                 onRemove={setRemoving}
+                onLocate={setLocating}
               />
             </li>
           ))}
         </ul>
+      )}
+      {dialog === "new" && <NewProjectDialog onClose={() => setDialog(null)} onCreated={openProject} />}
+      {dialog === "open" && <OpenFolderDialog onClose={() => setDialog(null)} onOpened={openProject} />}
+      {locating && (
+        <OpenFolderDialog
+          title={`Locate ${locating.name}`}
+          submitLabel="Use this folder"
+          onClose={() => setLocating(null)}
+          onOpened={(opened) => {
+            setLocating(null);
+            // Same project id: the backend replaced the stale entry. A different project: drop the stale one.
+            if (opened.id !== locating.id) void forget(locating);
+            reload();
+            openProject(opened);
+          }}
+        />
       )}
       <Dialog
         open={removing !== null}

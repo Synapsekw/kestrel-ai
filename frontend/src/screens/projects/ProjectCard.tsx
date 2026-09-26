@@ -188,7 +188,13 @@ export function ProjectCard({
                 Open
               </Button>
             ) : (
-              <Tooltip label="It opens once the upgrade has finished.">
+              <Tooltip
+                label={
+                  state.kind === "failed"
+                    ? "Retry the upgrade first."
+                    : "It opens once the upgrade has finished."
+                }
+              >
                 <Button size="sm" variant="primary" disabled>
                   Open
                 </Button>
