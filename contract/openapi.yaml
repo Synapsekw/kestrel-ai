@@ -1928,12 +1928,16 @@ paths:
                       started_at: null
                       finished_at: null
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "neither `model_id` nor `provider` is given, or a cloud provider run's `query` is blank (`code` is `validation_error`); a library model that classifies segmentation (`task_not_supported`); a library model whose classes do not all map onto a project catalogue type (`unmapped_classes`); a malformed body is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: "the chosen library model's weights file is missing (`code` is `model_unavailable`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "422": { $ref: "#/components/responses/UnmappedClasses" }
         "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/runs/{runId}:
@@ -2117,6 +2121,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SiteArea" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule (both or neither given, or only one of `map_id`/`polygon_px`), has fewer than three or more than 1000 points, a point that is not a finite `[longitude, latitude]` or pixel `[x, y]`, or `map_id` names a map with no georeference (`code` is `validation_error`); a malformed body is also `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/site-areas/{areaId}:
     parameters:
@@ -2138,6 +2147,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SiteArea" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "a new outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule (both or neither given, or only one of `map_id`/`polygon_px`), has fewer than three or more than 1000 points, a point that is not a finite `[longitude, latitude]` or pixel `[x, y]`, or `map_id` names a map with no georeference (`code` is `validation_error`); a malformed body is also `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [detect]
@@ -4527,16 +4541,6 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
           example:
             error: { code: not_found, message: "run r0000000… not found", details: {} }
-    UnmappedClasses:
-      description: "the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued. Map them with `PUT /model-class-maps/{modelId}` and retry. A malformed body answers `validation_error`."
-      content:
-        application/json:
-          schema: { $ref: "#/components/schemas/UnmappedClassesError" }
-          example:
-            error:
-              code: unmapped_classes
-              message: "2 of the model's classes are not mapped to project classes."
-              details: { model_id: "m0000000-2222-4000-8000-000000000001", unmapped: [crane, "concrete mixer"] }
     CatalogueUnavailable:
       description: "the catalogue could not be opened at startup (`code` is `catalogue_unavailable`); projects still render from their type snapshots"
       content:
@@ -6628,31 +6632,6 @@ components:
       properties:
         pinned: { type: boolean, description: true pins this run and unpins the other runs of its source }
       example: { pinned: true }
-    UnmappedClassesError:
-      type: object
-      description: the `Error` envelope for `unmapped_classes`
-      required: [error]
-      properties:
-        error:
-          type: object
-          required: [code, message, details]
-          properties:
-            code: { type: string, description: "`unmapped_classes`, or `validation_error` for a malformed body" }
-            message: { type: string }
-            details:
-              type: object
-              additionalProperties: true
-              properties:
-                model_id: { type: string }
-                unmapped:
-                  type: array
-                  description: model class names with no project class
-                  items: { type: string }
-      example:
-        error:
-          code: unmapped_classes
-          message: "2 of the model's classes are not mapped to project classes."
-          details: { model_id: "m0000000-2222-4000-8000-000000000001", unmapped: [crane, "concrete mixer"] }
     ModelClassMapOut:
       type: object
       required: [model_id, model_classes, mapping, unmapped]
@@ -7343,7 +7322,7 @@ components:
       required: [point_cloud_id]
       properties:
         point_cloud_id: { type: string }
-        name: { type: string }
+        name: { type: string, minLength: 1 }
         method: { $ref: "#/components/schemas/SurfaceBuildMethod" }
         cell_size_m: { type: [number, "null"], minimum: 0.01, maximum: 5, description: auto when absent or null }
         hole_fill_max_gap_m: { type: number, minimum: 0, maximum: 10, description: "1.0 when absent; 0 = off" }
