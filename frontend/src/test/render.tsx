@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components --
    a test-only provider next to the render helper that mounts it; not a fast-refresh boundary. */
 import { useMemo, type ReactElement, type ReactNode } from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { render } from "@testing-library/react";
 import type { ApiClient } from "@contract/client";
 import { ApiContext, type ApiContextValue } from "@/api/client";
@@ -16,6 +16,12 @@ export function TestApiProvider({ api, children }: { api: ApiClient; children: R
     [api],
   );
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
+}
+
+/** Prints the router's current pathname, so a test can assert where a click navigated. */
+export function LocationProbe() {
+  const l = useLocation();
+  return <output data-testid="location">{l.pathname}</output>;
 }
 
 /** Renders `ui` inside the API context and a memory router; `path` mounts it as a route so `useParams` works. */

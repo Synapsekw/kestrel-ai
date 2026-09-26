@@ -1,270 +1,200 @@
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { Project } from "@contract/client";
 import { useAgentPanel } from "@/agent/panelStore";
-import { useApi, useBackend } from "@/api/client";
+import { useApi } from "@/api/client";
 import { messageOf, unwrap } from "@/api/errors";
+import { fetchJob } from "@/api/jobs";
+import { retryMigration } from "@/api/migrations";
 import { pushLog } from "@/app/diagnostics";
-import { Alert, Button, EmptyState, Field, Input, SkeletonRows } from "@/ui";
+import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
+import { useChangesStore } from "@/store/changes";
+import { useJobsStore } from "@/store/jobs";
+import { Alert, Button, Dialog, EmptyState, Input, Select, Skeleton, stagger, toast } from "@/ui";
+import { ProjectCard } from "./projects/ProjectCard";
+import { visibleProjects, type ProjectSort } from "./projects/projectCards";
 
-/** Folder input: a native directory picker inside Tauri, a plain text field in the browser. */
-function FolderField({
-  id,
-  label,
-  value,
-  onChange,
-  hint,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (folder: string) => void;
-  hint?: string;
-}) {
-  const { mode } = useBackend();
-  const pick = useCallback(async () => {
-    const { open } = await import("@tauri-apps/plugin-dialog");
-    const picked = await open({ directory: true });
-    if (typeof picked === "string") onChange(picked);
-  }, [onChange]);
+const GRID = "grid gap-3.5 sm:grid-cols-2 xl:grid-cols-3";
 
-  return (
-    <Field label={label} htmlFor={id} hint={hint}>
-      <div className="flex gap-2">
-        <Input
-          id={id}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="E:\Projects\Ahmadia"
-          className="font-mono"
-        />
-        {mode === "tauri" && (
-          <Button icon="folder" onClick={() => void pick()}>
-            Browse
-          </Button>
-        )}
-      </div>
-    </Field>
-  );
-}
-
+/** F §9.2: a card grid of the recent projects (≤ 20, pre-aggregated summaries), with search and sort. */
 export function ProjectsScreen() {
   const api = useApi();
   const navigate = useNavigate();
-  const [projects, setProjects] = useState<Project[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const revision = useChangesStore((s) => s.projectsRevision);
+  const [tick, setTick] = useState(0);
+  const [loaded, setLoaded] = useState<{ items: Project[]; error: string | null } | null>(null);
+  const [q, setQ] = useState("");
+  const [sort, setSort] = useState<ProjectSort>("recent");
+  const [removing, setRemoving] = useState<Project | null>(null);
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState("");
-  const [folder, setFolder] = useState("");
-  const [openFolder, setOpenFolder] = useState("");
-  const [removing, setRemoving] = useState<string | null>(null);
+  const reload = useCallback(() => setTick((t) => t + 1), []);
+  useOnJobsFinished("project_migrate", reload);
 
   useEffect(() => {
     let cancelled = false;
-    void api
+    api
       .GET("/api/v1/projects")
-      .then(({ data, error: err }) => {
+      .then(({ data, error }) => {
         if (cancelled) return;
-        if (data) setProjects(data.items);
-        else {
-          setProjects([]);
-          setError(messageOf(err, "could not list projects"));
-        }
+        setLoaded(
+          data
+            ? { items: data.items, error: null }
+            : { items: [], error: messageOf(error, "could not list the projects") },
+        );
       })
       .catch((e: unknown) => {
-        if (cancelled) return;
         pushLog(`list projects failed: ${e}`);
-        setProjects([]);
-        setError(String(e));
+        if (!cancelled) setLoaded({ items: [], error: String(e) });
       });
     return () => {
       cancelled = true;
     };
-  }, [api]);
+  }, [api, revision, tick]);
+
+  const items = useMemo(() => loaded?.items ?? [], [loaded]);
+
+  // Seed running upgrade jobs (library runner) so their progress shows and their finish is seen.
+  useEffect(() => {
+    for (const p of items) {
+      const id = p.migration.state === "running" ? p.migration.job_id : null;
+      if (id && !useJobsStore.getState().jobs[id])
+        fetchJob(api, "library", id)
+          .then((job) => useJobsStore.getState().upsert(job))
+          .catch((e: unknown) => pushLog(`migration job ${id} unavailable: ${messageOf(e, String(e))}`));
+    }
+  }, [api, items]);
+
+  const shown = useMemo(() => visibleProjects(items, q, sort), [items, q, sort]);
 
   const openProject = useCallback(
-    (project: Project) => {
-      pushLog(`open project ${project.id}`);
-      void navigate(`/p/${project.id}/overview`);
+    (p: Project) => {
+      pushLog(`open project ${p.id}`);
+      void navigate(`/p/${p.id}/overview`);
     },
     [navigate],
   );
 
-  async function onCreate(e: FormEvent) {
-    e.preventDefault();
-    if (!folder.trim()) {
-      setError("Choose a folder for the project.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
+  async function retry(p: Project) {
     try {
-      const { data, error: err } = await api.POST("/api/v1/projects", {
-        body: { name, folder, type_ids: [] },
-      });
-      if (data) openProject(data);
-      else setError(messageOf(err, "could not create the project"));
+      await retryMigration(api, p.folder);
+      toast("info", `Upgrading ${p.name} again`);
+      reload();
     } catch (e) {
-      pushLog(`create project failed: ${e}`);
-      setError(String(e));
-    } finally {
-      setBusy(false);
+      toast("danger", messageOf(e, "could not start the upgrade"));
     }
   }
 
-  async function onForget(project: Project) {
+  async function forget(p: Project) {
     setBusy(true);
-    setError(null);
     try {
-      await unwrap(
-        api.DELETE("/api/v1/projects/{projectId}", { params: { path: { projectId: project.id } } }),
-      );
-      setProjects((list) => (list ?? []).filter((p) => p.id !== project.id));
+      await unwrap(api.DELETE("/api/v1/projects/{projectId}", { params: { path: { projectId: p.id } } }));
+      setLoaded((s) => (s ? { ...s, items: s.items.filter((x) => x.id !== p.id) } : s));
       setRemoving(null);
     } catch (e) {
       pushLog(`forget project failed: ${messageOf(e, String(e))}`);
-      setError(messageOf(e, "could not remove the project from the list"));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onOpen(e: FormEvent) {
-    e.preventDefault();
-    if (!openFolder.trim()) {
-      setError("Choose the project folder to open.");
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const { data, error: err } = await api.POST("/api/v1/projects/open", {
-        body: { folder: openFolder },
-      });
-      if (data) openProject(data);
-      else setError(messageOf(err, "could not open the folder"));
-    } catch (e) {
-      pushLog(`open folder failed: ${e}`);
-      setError(String(e));
+      toast("danger", messageOf(e, "could not remove the project from the list"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold">Projects</h1>
-        <p className="text-sm text-muted">
-          A project is a folder on disk. It holds a site&apos;s photos, maps, elevation models and point
-          clouds, and the findings made on them.
-        </p>
+    <section aria-label="Projects" className="mx-auto flex max-w-7xl flex-col gap-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-xl font-semibold">Projects</h1>
+          <p className="max-w-prose text-sm text-muted">
+            A project is a folder on disk. It holds the photos, maps, elevation models and point clouds of a
+            site, and the findings recorded on them.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="ghost" onClick={() => useAgentPanel.getState().setOpen(true)}>
+            Plan with the setup agent
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-64">
+          <Input
+            type="search"
+            aria-label="Search projects"
+            placeholder="Search by name"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <Select
+          aria-label="Sort projects"
+          value={sort}
+          onChange={(e) => setSort(e.target.value as ProjectSort)}
+          wrapperClassName="w-48"
+        >
+          <option value="recent">Last opened</option>
+          <option value="name">Name</option>
+          <option value="findings">Open findings</option>
+        </Select>
       </div>
 
-      {error && (
-        <Alert tone="danger" onDismiss={() => setError(null)}>
-          {error}
+      {loaded?.error && (
+        <Alert
+          tone="danger"
+          actions={
+            <Button size="sm" onClick={reload}>
+              Retry
+            </Button>
+          }
+        >
+          {loaded.error}
         </Alert>
       )}
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_minmax(20rem,26rem)]">
-        <div className="flex min-w-0 flex-col gap-3">
-          <h2 id="recent-projects" className="text-base font-semibold">
-            Recent projects
-          </h2>
-          {projects === null ? (
-            <SkeletonRows rows={3} columns={2} />
-          ) : projects.length === 0 ? (
-            <EmptyState icon="folder" title="No projects yet">
-              Create one on the right, or open a folder that already holds a project.
-            </EmptyState>
-          ) : (
-            <ul aria-labelledby="recent-projects" className="flex flex-col gap-2">
-              {projects.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex flex-wrap items-center gap-3 rounded-panel border border-line bg-surface px-4 py-3 transition-[border-color,box-shadow] duration-fast ease-out hover:border-line-strong hover:shadow-sm reduce-motion:transition-none"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{p.name}</span>
-                    <span className="block truncate font-mono text-xs text-muted">{p.folder}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label={`Remove ${p.name} from the list`}
-                      onClick={() => setRemoving(removing === p.id ? null : p.id)}
-                    >
-                      Remove
-                    </Button>
-                    <Button variant="primary" size="sm" onClick={() => openProject(p)}>
-                      Open
-                    </Button>
-                  </span>
-                  {removing === p.id && (
-                    <div className="basis-full">
-                      <Alert
-                        tone="warn"
-                        role="status"
-                        actions={
-                          <>
-                            <Button size="sm" onClick={() => void onForget(p)} disabled={busy}>
-                              Remove from the list
-                            </Button>
-                            <Button size="sm" variant="ghost" onClick={() => setRemoving(null)}>
-                              Keep
-                            </Button>
-                          </>
-                        }
-                      >
-                        Remove {p.name} from this list? The folder and everything in it stay on disk; Open
-                        folder brings the project back.
-                      </Alert>
-                    </div>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+      {!loaded ? (
+        <div className={GRID}>
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-72 rounded-panel" />
+          ))}
         </div>
-
-        <div className="flex flex-col gap-10">
-          <form onSubmit={(e) => void onCreate(e)} className="flex flex-col gap-4" noValidate>
-            <h2 className="text-base font-semibold">Create a project</h2>
-            <Button onClick={() => useAgentPanel.getState().setOpen(true)} className="self-start">
-              Plan with the setup agent
-            </Button>
-            <Field label="Name" htmlFor="project-name">
-              <Input
-                id="project-name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                placeholder="Site name or campaign"
+      ) : loaded.error ? null : items.length === 0 ? (
+        <EmptyState icon="folder" title="No projects yet">
+          Create one with New project, or open a folder that already holds a project.
+        </EmptyState>
+      ) : shown.length === 0 ? (
+        <p className="py-6 text-sm text-muted">No project is called “{q.trim()}”.</p>
+      ) : (
+        <ul className={GRID}>
+          {shown.map((p, i) => (
+            <li key={p.id} className="stagger animate-rise" style={stagger(i)}>
+              <ProjectCard
+                project={p}
+                onOpen={openProject}
+                onRetry={(x) => void retry(x)}
+                onRemove={setRemoving}
               />
-            </Field>
-            <FolderField
-              id="project-folder"
-              label="Folder"
-              value={folder}
-              onChange={setFolder}
-              hint="A new or empty folder. Imported images are copied here; the originals are never touched."
-            />
-            <Button type="submit" variant="primary" loading={busy} icon="plus" className="self-start">
-              Create project
+            </li>
+          ))}
+        </ul>
+      )}
+      <Dialog
+        open={removing !== null}
+        title={removing ? `Remove ${removing.name} from the list?` : ""}
+        onClose={() => setRemoving(null)}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRemoving(null)}>
+              Keep
             </Button>
-          </form>
-
-          <form onSubmit={(e) => void onOpen(e)} className="flex flex-col gap-4" noValidate>
-            <h2 className="text-base font-semibold">Open a project folder</h2>
-            <FolderField id="open-folder" label="Folder" value={openFolder} onChange={setOpenFolder} />
-            <Button type="submit" loading={busy} icon="folder" className="self-start">
-              Open folder
+            <Button loading={busy} onClick={() => removing && void forget(removing)}>
+              Remove from the list
             </Button>
-          </form>
-        </div>
-      </div>
+          </>
+        }
+      >
+        <p className="text-sm text-muted">
+          The folder and everything in it stay on disk; Open folder brings the project back.
+        </p>
+      </Dialog>
     </section>
   );
 }
