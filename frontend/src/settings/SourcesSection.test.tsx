@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor, within } from "@testing-library/react";
 import {
   errorBody,
   exampleSource,
@@ -139,5 +139,29 @@ describe("SourcesSection", () => {
     renderWithProviders(<SourcesSection projectId={PROJECT_ID} />, { api });
     expect(await screen.findByRole("note")).toHaveTextContent("Sources are not available yet");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("corrects a photo folder's survey date in place", async () => {
+    const { api, requests } = fakeClient([
+      {
+        method: "GET",
+        path: /\/sources$/,
+        body: { items: [{ ...exampleSource, captured_on: null }], next_cursor: null },
+      },
+      { method: "PATCH", path: /\/sources\/[^/]+$/, body: { ...exampleSource, captured_on: "2019-04-15" } },
+    ]);
+    renderWithProviders(<SourcesSection projectId={PROJECT_ID} />, { api });
+    const section = await screen.findByTestId("sources-section");
+    await within(section).findByText("date not set");
+    fireEvent.click(within(section).getByRole("button", { name: new RegExp(exampleSource.site) }));
+    fireEvent.change(within(section).getByLabelText(/Survey date of/), { target: { value: "2019-04-15" } });
+    fireEvent.submit(
+      within(section)
+        .getByLabelText(/Survey date of/)
+        .closest("form")!,
+    );
+    await waitFor(() =>
+      expect(requests.find((r) => r.method === "PATCH")?.body).toEqual({ captured_on: "2019-04-15" }),
+    );
   });
 });

@@ -7,15 +7,13 @@ import { pushLog } from "@/app/diagnostics";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Progress } from "@/ui";
-import { useProjectKind } from "./useProjectKind";
 
 /**
- * Home's notice about a training project's old models moving into the app-wide library: progress
+ * Overview's notice about a project's old models moving into the app-wide library: progress
  * while the adoption job runs, the models it could not move with a Retry, and nothing once all are in.
  */
 export function AdoptionBanner({ projectId }: { projectId: string }) {
   const api = useApi();
-  const kind = useProjectKind(projectId);
   const [status, setStatus] = useState<AdoptionStatus | null>(null);
   const [revision, setRevision] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -24,7 +22,6 @@ export function AdoptionBanner({ projectId }: { projectId: string }) {
   useOnJobsFinished("library_adopt", reload);
 
   useEffect(() => {
-    if (kind !== "train") return;
     let cancelled = false;
     fetchAdoption(api, projectId)
       .then(async (s) => {
@@ -42,7 +39,7 @@ export function AdoptionBanner({ projectId }: { projectId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, kind, revision, reload]);
+  }, [api, projectId, revision, reload]);
 
   const job = useJobsStore((s) => (status?.job_id ? s.jobs[status.job_id] : undefined));
 
@@ -62,7 +59,7 @@ export function AdoptionBanner({ projectId }: { projectId: string }) {
     }
   }
 
-  if (kind !== "train" || !status) return null;
+  if (!status) return null;
 
   const running = status.job_id !== null && (!job || isActiveJob(job));
   // `job_id` is set only while the adoption job is queued or running.

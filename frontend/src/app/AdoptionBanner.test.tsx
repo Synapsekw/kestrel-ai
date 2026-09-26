@@ -4,7 +4,6 @@ import type { Job } from "@contract/client";
 import { fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
-import { useProjectKindStore } from "./useProjectKind";
 import { AdoptionBanner } from "./AdoptionBanner";
 
 const adoptJob: Job = { ...runningJob, type: "library_adopt", progress: 0.5, message: "Adopting yard-v2" };
@@ -18,7 +17,6 @@ function render(routes: Parameters<typeof fakeClient>[0]) {
 describe("AdoptionBanner", () => {
   beforeEach(() => {
     useJobsStore.setState({ jobs: {}, panelOpen: false });
-    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
   });
 
   it("shows progress while the project's models are moving into the library", async () => {
@@ -111,15 +109,6 @@ describe("AdoptionBanner", () => {
     await act(async () => {});
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByRole("alert")).toBeNull();
-  });
-
-  it("does not ask about adoption in a detection project", async () => {
-    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "detect" } });
-    const { requests } = render([
-      { method: "GET", path: /\/adoption$/, body: { pending: 0, adopted: 0, missing: [], job_id: null } },
-    ]);
-    await act(async () => {});
-    expect(requests).toHaveLength(0);
   });
 
   it("reloads the status when the adoption job finishes", async () => {

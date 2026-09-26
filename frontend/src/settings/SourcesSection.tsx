@@ -2,10 +2,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { Source, Stats } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
-import { createSource, fetchAllSources, fetchSourceStats } from "@/api/sources";
+import { createSource, fetchAllSources, fetchSourceStats, updateSource } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { formatDate, formatLocalDate } from "@/library/modelLabels";
+import { SurveyDateCell } from "@/sources/SurveyDateCell";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Skeleton } from "@/ui";
 
@@ -58,6 +59,7 @@ function SourceRow({
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [capturedOn, setCapturedOn] = useState(source.captured_on);
   const [reimportJobId, setReimportJobId] = useState<string | null>(null);
   const { job } = useTrackedJob(projectId, reimportJobId);
   // The counts only change once the import job has actually run, so the re-list waits for it.
@@ -111,6 +113,14 @@ function SourceRow({
           {source.image_count} images, {source.duplicate_count} duplicates
           {source.imported_at ? `, imported ${formatLocalDate(source.imported_at)}` : ", not imported yet"}
         </span>
+        <SurveyDateCell
+          label={source.site}
+          value={capturedOn}
+          onSave={async (next) => {
+            const saved = await updateSource(api, projectId, source.id, { captured_on: next });
+            setCapturedOn(saved.captured_on);
+          }}
+        />
         <Button
           size="sm"
           variant="ghost"
