@@ -382,7 +382,13 @@ export interface paths {
         delete: operations["deleteBox"];
         options?: never;
         head?: never;
-        /** Move, resize or reclassify. A proposal edited this way becomes `edited` (ground truth). */
+        /**
+         * Move, resize or reclassify. A proposal edited this way becomes `edited` (ground truth).
+         *     The box of a finding keeps its finding (foundation §8.5): reclassing it to another defect
+         *     type moves the finding to that type; reclassing it to an object type deletes the finding,
+         *     so it needs `confirm_finding_delete=true` and otherwise answers 409
+         *     `finding_would_be_deleted`.
+         */
         patch: operations["updateBox"];
         trace?: never;
     };
@@ -2638,6 +2644,266 @@ export interface paths {
          *     their author.
          */
         put: operations["putOperatorSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The project's findings, keyset-paged over indexed filters. Repeat a list parameter to
+         *     match any of its values (`status=open&status=reviewed`). The default sort is `-severity`:
+         *     highest level first, findings without a severity last, then `-number`.
+         */
+        get: operations["listFindings"];
+        put?: never;
+        /**
+         * Create a finding. An `image` anchor names an existing annotation (`annotation_id`) or
+         *     carries `box` geometry, which creates the annotation in the same transaction. A map anchor
+         *     should carry `lon`/`lat` (the anchor's WGS84 centroid). `severity` defaults to the type's
+         *     `default_severity`, `status` to `open`. A type of kind `object` answers 422 `not_a_defect`.
+         */
+        post: operations["createFinding"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Counts for the dashboard, read only from the pre-aggregated `finding_count` and `finding_daily` tables, never from `finding` itself. */
+        get: operations["getFindingSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the status, severity or type of up to 1000 findings in one transaction. A finding the change does not apply to (an invalid transition, an object type) is skipped with its code. */
+        post: operations["bulkUpdateFindings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/recount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebuild `finding_count` and `finding_daily` from the findings (a `findings_recount` job in this project); the repair tool for the dashboard counts. */
+        post: operations["recountFindings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getFinding"];
+        put?: never;
+        post?: never;
+        /** Delete the finding with its comments and attachments; an image finding's annotation goes too (an annotation on a defect type is the finding's geometry). Attachment files move to `findings/_trash/` and are purged after 30 days. */
+        delete: operations["deleteFinding"];
+        options?: never;
+        head?: never;
+        /**
+         * Change the type, severity, status or note, or move a map anchor (`anchor.geometry`) or a
+         *     cloud anchor (`anchor.x`, `y`, `z`, `uncertainty_m`). Status changes follow foundation
+         *     §8.2: closed to reviewed is refused with 409 `invalid_transition` (reopen first). Severity
+         *     is never required.
+         */
+        patch: operations["patchFinding"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        /** A 160 x 120 JPEG. Image findings get a crop around the annotation (cached); other findings the first attachment's thumbnail; else 404. */
+        get: operations["getFindingThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        /** The comment thread, oldest first. */
+        get: operations["listFindingComments"];
+        put?: never;
+        post: operations["createFindingComment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/comments/{commentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                commentId: components["parameters"]["commentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteFindingComment"];
+        options?: never;
+        head?: never;
+        patch: operations["patchFindingComment"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        /** The finding's photos, oldest first; a finding holds a handful, so this list is not paged. */
+        get: operations["listFindingAttachments"];
+        put?: never;
+        /**
+         * Attach a local photo chosen in the Tauri file dialog. The server checks it with Pillow
+         *     (JPEG, PNG or WebP, at most 50 MB), copies it into `findings/<findingId>/` and writes a
+         *     256 px thumbnail. The source file is only read. This one copy is synchronous: it is capped
+         *     and validated first, and takes well under a second.
+         */
+        post: operations["addFindingAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                attachmentId: components["parameters"]["attachmentId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteFindingAttachment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/attachments/{attachmentId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                attachmentId: components["parameters"]["attachmentId"];
+            };
+            cookie?: never;
+        };
+        /** The original photo, for the lightbox only. */
+        get: operations["getFindingAttachmentFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/attachments/{attachmentId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                attachmentId: components["parameters"]["attachmentId"];
+            };
+            cookie?: never;
+        };
+        /** The 256 px JPEG thumbnail written at upload; lists and grids use it, never the original. */
+        get: operations["getFindingAttachmentThumbnail"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -6886,6 +7152,592 @@ export interface components {
             /** @description the author of new finding comments; null means unset (comments say Operator) */
             operator_name: string | null;
         };
+        /**
+         * @description `drawing` is declared now; the map workspace adds its storage and provider
+         * @enum {string}
+         */
+        DataItemType: "image_set" | "map" | "elevation" | "drawing" | "point_cloud";
+        /** @enum {string} */
+        FindingStatus: "open" | "reviewed" | "closed";
+        /** @enum {string} */
+        FindingAnchorKind: "image" | "map" | "cloud";
+        /**
+         * @example {
+         *       "type": "Point",
+         *       "coordinates": [
+         *         583120.4,
+         *         3265410.2
+         *       ]
+         *     }
+         */
+        GeoJsonPoint: {
+            /** @enum {string} */
+            type: "Point";
+            coordinates: number[];
+        };
+        /**
+         * @example {
+         *       "type": "Polygon",
+         *       "coordinates": [
+         *         [
+         *           [
+         *             583120,
+         *             3265410
+         *           ],
+         *           [
+         *             583130,
+         *             3265410
+         *           ],
+         *           [
+         *             583130,
+         *             3265420
+         *           ],
+         *           [
+         *             583120,
+         *             3265410
+         *           ]
+         *         ]
+         *       ]
+         *     }
+         */
+        GeoJsonPolygon: {
+            /** @enum {string} */
+            type: "Polygon";
+            coordinates: number[][][];
+        };
+        /** @description a GeoJSON Point or Polygon in the anchor map's CRS */
+        FindingGeometry: components["schemas"]["GeoJsonPoint"] | components["schemas"]["GeoJsonPolygon"];
+        /**
+         * @description a new annotation's box in image pixels, as `BoxCreate` (the type is the finding's); `angle` is 0 when absent
+         * @example {
+         *       "x": 812,
+         *       "y": 404,
+         *       "w": 96,
+         *       "h": 40
+         *     }
+         */
+        FindingBox: {
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            angle?: number;
+        };
+        /**
+         * @example {
+         *       "kind": "image",
+         *       "image_id": "10000000-5555-4000-8000-000000000001",
+         *       "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *     }
+         */
+        FindingImageAnchor: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "image";
+            image_id: string;
+            /** @description the annotation (`Box.id`) that is the finding's geometry */
+            annotation_id: string;
+        };
+        /**
+         * @example {
+         *       "kind": "map",
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "geometry": {
+         *         "type": "Point",
+         *         "coordinates": [
+         *           583120.4,
+         *           3265410.2
+         *         ]
+         *       }
+         *     }
+         */
+        FindingMapAnchor: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "map";
+            map_id: string;
+            geometry: components["schemas"]["FindingGeometry"];
+        };
+        /**
+         * @example {
+         *       "kind": "cloud",
+         *       "cloud_id": "p0000000-1111-4000-8000-000000000001",
+         *       "x": 583121.2,
+         *       "y": 3265411.8,
+         *       "z": 41.3,
+         *       "uncertainty_m": 0.05
+         *     }
+         */
+        FindingCloudAnchor: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "cloud";
+            cloud_id: string;
+            x: number;
+            y: number;
+            z: number;
+            uncertainty_m: number | null;
+        };
+        /** @description where the finding is; its kind never changes */
+        FindingAnchor: components["schemas"]["FindingImageAnchor"] | components["schemas"]["FindingMapAnchor"] | components["schemas"]["FindingCloudAnchor"];
+        /**
+         * @description exactly one of `annotation_id` (an existing annotation) and `box` (a new one)
+         * @example {
+         *       "kind": "image",
+         *       "image_id": "10000000-5555-4000-8000-000000000001",
+         *       "box": {
+         *         "x": 812,
+         *         "y": 404,
+         *         "w": 96,
+         *         "h": 40
+         *       }
+         *     }
+         */
+        FindingImageAnchorInput: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "image";
+            image_id: string;
+            annotation_id?: string;
+            box?: components["schemas"]["FindingBox"];
+        } & (unknown | unknown);
+        FindingAnchorInput: components["schemas"]["FindingImageAnchorInput"] | components["schemas"]["FindingMapAnchor"] | components["schemas"]["FindingCloudAnchor"];
+        /**
+         * @description Moves a map anchor (`geometry`) or a cloud anchor (`x`, `y`, `z`, optional `uncertainty_m`); the map, cloud and anchor kind stay. An image anchor moves with its annotation (`PATCH /boxes/{boxId}`).
+         * @example {
+         *       "geometry": {
+         *         "type": "Point",
+         *         "coordinates": [
+         *           583122,
+         *           3265412.5
+         *         ]
+         *       }
+         *     }
+         */
+        FindingAnchorPatch: {
+            geometry?: components["schemas"]["FindingGeometry"];
+            x?: number;
+            y?: number;
+            z?: number;
+            uncertainty_m?: number | null;
+        };
+        /**
+         * @example {
+         *       "id": "f0000000-1212-4000-8000-000000000217",
+         *       "number": 217,
+         *       "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *       "severity": 3,
+         *       "status": "open",
+         *       "note": "Crack along the north parapet, about 40 cm.",
+         *       "created_by": "model:m0000000-2222-4000-8000-000000000001",
+         *       "confidence": 0.87,
+         *       "anchor": {
+         *         "kind": "image",
+         *         "image_id": "10000000-5555-4000-8000-000000000001",
+         *         "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *       },
+         *       "lon": 47.7625,
+         *       "lat": 29.4951,
+         *       "data_type": "image_set",
+         *       "data_id": "50000000-3333-4000-8000-000000000001",
+         *       "created_at": "2026-09-26T10:15:00Z",
+         *       "updated_at": "2026-09-26T10:20:00Z",
+         *       "reviewed_at": null,
+         *       "closed_at": null
+         *     }
+         */
+        Finding: {
+            id: string;
+            /** @description the human number, shown as `F-` plus at least four digits (`F-0217`); never reused */
+            number: number;
+            /** @description a catalogue type id of kind `defect` */
+            type_id: string;
+            /** @description a severity scale level; null is "No severity" */
+            severity: number | null;
+            status: components["schemas"]["FindingStatus"];
+            note: string;
+            /** @description `human`, or `model:<library model id>` for an accepted detection */
+            created_by: string;
+            confidence: number | null;
+            anchor: components["schemas"]["FindingAnchor"];
+            /** @description WGS84, for maps and dashboards */
+            lon: number | null;
+            lat: number | null;
+            data_type: components["schemas"]["DataItemType"];
+            /** @description the anchor's data item: the image's source, the map or the point cloud */
+            data_id: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            /** Format: date-time */
+            reviewed_at: string | null;
+            /** Format: date-time */
+            closed_at: string | null;
+        };
+        /**
+         * @example {
+         *       "id": "f0000000-1212-4000-8000-000000000217",
+         *       "number": 217,
+         *       "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *       "severity": 3,
+         *       "status": "open",
+         *       "note": "Crack along the north parapet, about 40 cm.",
+         *       "created_by": "model:m0000000-2222-4000-8000-000000000001",
+         *       "confidence": 0.87,
+         *       "anchor": {
+         *         "kind": "image",
+         *         "image_id": "10000000-5555-4000-8000-000000000001",
+         *         "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *       },
+         *       "lon": 47.7625,
+         *       "lat": 29.4951,
+         *       "data_type": "image_set",
+         *       "data_id": "50000000-3333-4000-8000-000000000001",
+         *       "created_at": "2026-09-26T10:15:00Z",
+         *       "updated_at": "2026-09-26T10:20:00Z",
+         *       "reviewed_at": null,
+         *       "closed_at": null,
+         *       "attachment_count": 2,
+         *       "comment_count": 3
+         *     }
+         */
+        FindingDetail: components["schemas"]["Finding"] & {
+            attachment_count: number;
+            comment_count: number;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "f0000000-1212-4000-8000-000000000217",
+         *           "number": 217,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "severity": 3,
+         *           "status": "open",
+         *           "note": "Crack along the north parapet, about 40 cm.",
+         *           "created_by": "model:m0000000-2222-4000-8000-000000000001",
+         *           "confidence": 0.87,
+         *           "anchor": {
+         *             "kind": "image",
+         *             "image_id": "10000000-5555-4000-8000-000000000001",
+         *             "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *           },
+         *           "lon": 47.7625,
+         *           "lat": 29.4951,
+         *           "data_type": "image_set",
+         *           "data_id": "50000000-3333-4000-8000-000000000001",
+         *           "created_at": "2026-09-26T10:15:00Z",
+         *           "updated_at": "2026-09-26T10:20:00Z",
+         *           "reviewed_at": null,
+         *           "closed_at": null
+         *         },
+         *         {
+         *           "id": "f0000000-1212-4000-8000-000000000218",
+         *           "number": 218,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "severity": null,
+         *           "status": "reviewed",
+         *           "note": "",
+         *           "created_by": "human",
+         *           "confidence": null,
+         *           "anchor": {
+         *             "kind": "map",
+         *             "map_id": "a0000000-6666-4000-8000-000000000001",
+         *             "geometry": {
+         *               "type": "Point",
+         *               "coordinates": [
+         *                 583120.4,
+         *                 3265410.2
+         *               ]
+         *             }
+         *           },
+         *           "lon": 47.7631,
+         *           "lat": 29.4948,
+         *           "data_type": "map",
+         *           "data_id": "a0000000-6666-4000-8000-000000000001",
+         *           "created_at": "2026-09-26T10:30:00Z",
+         *           "updated_at": "2026-09-26T10:31:00Z",
+         *           "reviewed_at": "2026-09-26T10:31:00Z",
+         *           "closed_at": null
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        FindingPage: {
+            items: components["schemas"]["Finding"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *       "anchor": {
+         *         "kind": "image",
+         *         "image_id": "10000000-5555-4000-8000-000000000001",
+         *         "box": {
+         *           "x": 812,
+         *           "y": 404,
+         *           "w": 96,
+         *           "h": 40
+         *         }
+         *       },
+         *       "severity": 3,
+         *       "note": "Crack along the north parapet."
+         *     }
+         */
+        FindingCreate: {
+            type_id: string;
+            anchor: components["schemas"]["FindingAnchorInput"];
+            /** @description the type's `default_severity` when absent */
+            severity?: number | null;
+            /** @description empty when absent */
+            note?: string;
+            status?: components["schemas"]["FindingStatus"];
+            /** @description WGS84; map anchors send the anchor's centroid; image anchors take the image's GPS when absent */
+            lon?: number | null;
+            lat?: number | null;
+        };
+        /**
+         * @description every field is optional; a field that is sent replaces the stored one
+         * @example {
+         *       "severity": 4,
+         *       "status": "reviewed"
+         *     }
+         */
+        FindingPatch: {
+            type_id?: string;
+            severity?: number | null;
+            status?: components["schemas"]["FindingStatus"];
+            note?: string;
+            anchor?: components["schemas"]["FindingAnchorPatch"];
+        };
+        /**
+         * @example {
+         *       "ids": [
+         *         "f0000000-1212-4000-8000-000000000217",
+         *         "f0000000-1212-4000-8000-000000000218"
+         *       ],
+         *       "set": {
+         *         "status": "closed"
+         *       }
+         *     }
+         */
+        FindingBulkUpdate: {
+            ids: string[];
+            set: {
+                status?: components["schemas"]["FindingStatus"];
+                severity?: number | null;
+                type_id?: string;
+            };
+        };
+        /**
+         * @example {
+         *       "updated": 1,
+         *       "skipped": [
+         *         {
+         *           "id": "f0000000-1212-4000-8000-000000000218",
+         *           "code": "invalid_transition"
+         *         }
+         *       ]
+         *     }
+         */
+        FindingBulkResult: {
+            updated: number;
+            skipped: {
+                id: string;
+                /** @description `invalid_transition`, `not_a_defect` or `not_found` */
+                code: string;
+            }[];
+        };
+        FindingTrendDay: {
+            /** Format: date */
+            day: string;
+            /** @description open findings at the end of the day */
+            open: number;
+            /** @description findings closed that day */
+            closed: number;
+            /** @description severity level (as a string, `"3"`) to open findings at that level */
+            open_by_severity: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * @description read only from `finding_count` and `finding_daily`
+         * @example {
+         *       "by_status": {
+         *         "open": 47,
+         *         "reviewed": 12,
+         *         "closed": 88
+         *       },
+         *       "open_by_severity": {
+         *         "1": 9,
+         *         "2": 21,
+         *         "3": 11,
+         *         "4": 3
+         *       },
+         *       "open_no_severity": 3,
+         *       "by_type": [
+         *         {
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "n": 30
+         *         }
+         *       ],
+         *       "trend": [
+         *         {
+         *           "day": "2026-09-25",
+         *           "open": 49,
+         *           "closed": 2,
+         *           "open_by_severity": {
+         *             "4": 4
+         *           }
+         *         },
+         *         {
+         *           "day": "2026-09-26",
+         *           "open": 47,
+         *           "closed": 3,
+         *           "open_by_severity": {
+         *             "4": 3
+         *           }
+         *         }
+         *       ]
+         *     }
+         */
+        FindingSummary: {
+            by_status: {
+                open: number;
+                reviewed: number;
+                closed: number;
+            };
+            /** @description every level of the scale (as a string) to its open findings */
+            open_by_severity: {
+                [key: string]: number;
+            };
+            open_no_severity: number;
+            /** @description the ten types with the most open findings, most first */
+            by_type: {
+                type_id: string;
+                /** @description open findings of the type */
+                n: number;
+            }[];
+            /** @description up to 60 days, oldest first */
+            trend: components["schemas"]["FindingTrendDay"][];
+        };
+        /**
+         * @example {
+         *       "id": "k0000000-1313-4000-8000-000000000001",
+         *       "finding_id": "f0000000-1212-4000-8000-000000000217",
+         *       "author": "Danijel",
+         *       "text": "Seen again on the May flight, slightly longer.",
+         *       "created_at": "2026-09-26T10:40:00Z",
+         *       "edited_at": null
+         *     }
+         */
+        FindingComment: {
+            id: string;
+            finding_id: string;
+            author: string;
+            text: string;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            edited_at: string | null;
+        };
+        /**
+         * @example {
+         *       "text": "Seen again on the May flight, slightly longer."
+         *     }
+         */
+        FindingCommentCreate: {
+            text: string;
+        };
+        /**
+         * @example {
+         *       "text": "Seen again on the May flight, about 45 cm now."
+         *     }
+         */
+        FindingCommentUpdate: {
+            text: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "k0000000-1313-4000-8000-000000000001",
+         *           "finding_id": "f0000000-1212-4000-8000-000000000217",
+         *           "author": "Danijel",
+         *           "text": "Seen again on the May flight, slightly longer.",
+         *           "created_at": "2026-09-26T10:40:00Z",
+         *           "edited_at": null
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        FindingCommentPage: {
+            items: components["schemas"]["FindingComment"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "id": "h0000000-1414-4000-8000-000000000001",
+         *       "finding_id": "f0000000-1212-4000-8000-000000000217",
+         *       "path": "findings/f0000000-1212-4000-8000-000000000217/h0000000-1414-4000-8000-000000000001.jpg",
+         *       "original_name": "IMG_2041.JPG",
+         *       "width": 4000,
+         *       "height": 3000,
+         *       "bytes": 5242880,
+         *       "created_at": "2026-09-26T10:45:00Z"
+         *     }
+         */
+        FindingAttachment: {
+            id: string;
+            finding_id: string;
+            /** @description project-relative: `findings/<finding_id>/<id>.<ext>` */
+            path: string;
+            original_name: string;
+            width: number;
+            height: number;
+            bytes: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @example {
+         *       "path": "E:\\Site photos\\IMG_2041.JPG"
+         *     }
+         */
+        FindingAttachmentCreate: {
+            /** @description absolute path of a local JPEG, PNG or WebP file; only read */
+            path: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "h0000000-1414-4000-8000-000000000001",
+         *           "finding_id": "f0000000-1212-4000-8000-000000000217",
+         *           "path": "findings/f0000000-1212-4000-8000-000000000217/h0000000-1414-4000-8000-000000000001.jpg",
+         *           "original_name": "IMG_2041.JPG",
+         *           "width": 4000,
+         *           "height": 3000,
+         *           "bytes": 5242880,
+         *           "created_at": "2026-09-26T10:45:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        FindingAttachmentList: {
+            items: components["schemas"]["FindingAttachment"][];
+        };
     };
     responses: {
         /** @description error envelope */
@@ -7006,6 +7858,11 @@ export interface components {
         candidateId: string;
         /** @description a catalogue type id */
         typeId: string;
+        findingId: string;
+        commentId: string;
+        attachmentId: string;
+        /** @description findings pages hold at most 500 */
+        findingsLimit: number;
     };
     requestBodies: never;
     headers: never;
@@ -7774,7 +8631,10 @@ export interface operations {
     };
     updateBox: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description false when absent */
+                confirm_finding_delete?: boolean;
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -7795,6 +8655,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Box"];
+                };
+            };
+            /** @description the reclass would delete the box's finding (`code` is `finding_would_be_deleted`, details `{finding_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
@@ -12601,6 +13470,576 @@ export interface operations {
                     "application/json": components["schemas"]["OperatorSettings"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    listFindings: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["FindingStatus"][];
+                /** @description a level, or `none` for findings without a severity */
+                severity?: string[];
+                type_id?: string[];
+                anchor_kind?: components["schemas"]["FindingAnchorKind"][];
+                /** @description the anchor's data item (an images source, a map, an elevation or a point cloud) */
+                data_id?: string;
+                /** @description image anchors on this image (image inspection spec §3, an agreed addition to this group) */
+                image_id?: string;
+                created_by?: "human" | "model";
+                /** @description matches the note, the type name, or a number written as `F-0123` */
+                q?: string;
+                updated_from?: string;
+                updated_to?: string;
+                /** @description only findings with (true) or without (false) `lon`/`lat` */
+                has_location?: boolean;
+                /** @description `-severity` when absent */
+                sort?: "-severity" | "number" | "-updated_at" | "type";
+                /** @description findings pages hold at most 500 */
+                limit?: components["parameters"]["findingsLimit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description findings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the annotation already has a finding (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the type is an object type (`code` is `not_a_defect`), the type is not in the catalogue (`code` is `unknown_type`), or the level is not on the scale (`code` is `severity_unknown`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFindingSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    bulkUpdateFindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingBulkUpdate"];
+            };
+        };
+        responses: {
+            /** @description what changed and what was skipped */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingBulkResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    recountFindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description recount job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job": {
+                     *         "id": "j0000000-4444-4000-8000-000000000042",
+                     *         "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+                     *         "type": "findings_recount",
+                     *         "state": "queued",
+                     *         "progress": 0,
+                     *         "message": "",
+                     *         "log_path": "runs/j0000000-4444-4000-8000-000000000042/job.log",
+                     *         "params": {},
+                     *         "result": null,
+                     *         "error": null,
+                     *         "created_at": "2026-09-26T11:00:00Z",
+                     *         "started_at": null,
+                     *         "finished_at": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a recount is already queued or running (`code` is `job_running`, details `{job_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the finding with its attachment and comment counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchFinding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated finding */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingDetail"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the status change is not allowed (`code` is `invalid_transition`, details `{from, to}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the new type is an object type (`code` is `not_a_defect`), the level is not on the scale (`code` is `severity_unknown`), or `anchor` does not fit the finding's anchor kind; an image anchor moves with its annotation (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getFindingThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listFindingComments: {
+        parameters: {
+            query?: {
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description comments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingCommentPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createFindingComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingCommentCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingComment"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteFindingComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                commentId: components["parameters"]["commentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchFindingComment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                commentId: components["parameters"]["commentId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingCommentUpdate"];
+            };
+        };
+        responses: {
+            /** @description the edited comment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingComment"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listFindingAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description attachments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingAttachmentList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    addFindingAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FindingAttachmentCreate"];
+            };
+        };
+        responses: {
+            /** @description attached */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FindingAttachment"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description not a JPEG, PNG or WebP, over 50 MB, or unreadable (`code` is `attachment_invalid`, details `{reason}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteFindingAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                attachmentId: components["parameters"]["attachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getFindingAttachmentFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                attachmentId: components["parameters"]["attachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                    "image/webp": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getFindingAttachmentThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+                attachmentId: components["parameters"]["attachmentId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["Error"];
         };
     };

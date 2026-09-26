@@ -594,7 +594,14 @@ paths:
     patch:
       tags: [boxes]
       operationId: updateBox
-      summary: Move, resize or reclassify. A proposal edited this way becomes `edited` (ground truth).
+      summary: |
+        Move, resize or reclassify. A proposal edited this way becomes `edited` (ground truth).
+        The box of a finding keeps its finding (foundation §8.5): reclassing it to another defect
+        type moves the finding to that type; reclassing it to an object type deletes the finding,
+        so it needs `confirm_finding_delete=true` and otherwise answers 409
+        `finding_would_be_deleted`.
+      parameters:
+        - { name: confirm_finding_delete, in: query, required: false, schema: { type: boolean }, description: false when absent }
       requestBody:
         required: true
         content:
@@ -606,6 +613,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Box" }
+        "409":
+          description: "the reclass would delete the box's finding (`code` is `finding_would_be_deleted`, details `{finding_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [boxes]
@@ -3623,6 +3635,383 @@ paths:
               schema: { $ref: "#/components/schemas/OperatorSettings" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ foundation: findings (F-C0)
+  /api/v1/projects/{projectId}/findings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [findings]
+      operationId: listFindings
+      summary: |
+        The project's findings, keyset-paged over indexed filters. Repeat a list parameter to
+        match any of its values (`status=open&status=reviewed`). The default sort is `-severity`:
+        highest level first, findings without a severity last, then `-number`.
+      parameters:
+        - name: status
+          in: query
+          required: false
+          schema: { type: array, items: { $ref: "#/components/schemas/FindingStatus" } }
+        - name: severity
+          in: query
+          required: false
+          description: a level, or `none` for findings without a severity
+          schema: { type: array, items: { type: string, pattern: "^([1-9]|none)$" } }
+        - name: type_id
+          in: query
+          required: false
+          schema: { type: array, items: { type: string } }
+        - name: anchor_kind
+          in: query
+          required: false
+          schema: { type: array, items: { $ref: "#/components/schemas/FindingAnchorKind" } }
+        - { name: data_id, in: query, required: false, schema: { type: string }, description: "the anchor's data item (an images source, a map, an elevation or a point cloud)" }
+        - { name: image_id, in: query, required: false, schema: { type: string }, description: "image anchors on this image (image inspection spec §3, an agreed addition to this group)" }
+        - { name: created_by, in: query, required: false, schema: { type: string, enum: [human, model] } }
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 200 }, description: "matches the note, the type name, or a number written as `F-0123`" }
+        - { name: updated_from, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: updated_to, in: query, required: false, schema: { type: string, format: date-time } }
+        - { name: has_location, in: query, required: false, schema: { type: boolean }, description: only findings with (true) or without (false) `lon`/`lat` }
+        - { name: sort, in: query, required: false, schema: { type: string, enum: ["-severity", number, "-updated_at", type] }, description: "`-severity` when absent" }
+        - $ref: "#/components/parameters/findingsLimit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: findings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [findings]
+      operationId: createFinding
+      summary: |
+        Create a finding. An `image` anchor names an existing annotation (`annotation_id`) or
+        carries `box` geometry, which creates the annotation in the same transaction. A map anchor
+        should carry `lon`/`lat` (the anchor's WGS84 centroid). `severity` defaults to the type's
+        `default_severity`, `status` to `open`. A type of kind `object` answers 422 `not_a_defect`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the annotation already has a finding (`code` is `conflict`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the type is an object type (`code` is `not_a_defect`), the type is not in the catalogue (`code` is `unknown_type`), or the level is not on the scale (`code` is `severity_unknown`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/summary:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [findings]
+      operationId: getFindingSummary
+      summary: Counts for the dashboard, read only from the pre-aggregated `finding_count` and `finding_daily` tables, never from `finding` itself.
+      responses:
+        "200":
+          description: the summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/bulk:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [findings]
+      operationId: bulkUpdateFindings
+      summary: Set the status, severity or type of up to 1000 findings in one transaction. A finding the change does not apply to (an invalid transition, an object type) is skipped with its code.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingBulkUpdate" }
+      responses:
+        "200":
+          description: what changed and what was skipped
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingBulkResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/recount:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [findings]
+      operationId: recountFindings
+      summary: Rebuild `finding_count` and `finding_daily` from the findings (a `findings_recount` job in this project); the repair tool for the dashboard counts.
+      responses:
+        "202":
+          description: recount job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+              example:
+                job:
+                  id: "j0000000-4444-4000-8000-000000000042"
+                  project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+                  type: findings_recount
+                  state: queued
+                  progress: 0
+                  message: ""
+                  log_path: "runs/j0000000-4444-4000-8000-000000000042/job.log"
+                  params: {}
+                  result: null
+                  error: null
+                  created_at: "2026-09-26T11:00:00Z"
+                  started_at: null
+                  finished_at: null
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a recount is already queued or running (`code` is `job_running`, details `{job_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    get:
+      tags: [findings]
+      operationId: getFinding
+      responses:
+        "200":
+          description: the finding with its attachment and comment counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [findings]
+      operationId: patchFinding
+      summary: |
+        Change the type, severity, status or note, or move a map anchor (`anchor.geometry`) or a
+        cloud anchor (`anchor.x`, `y`, `z`, `uncertainty_m`). Status changes follow foundation
+        §8.2: closed to reviewed is refused with 409 `invalid_transition` (reopen first). Severity
+        is never required.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingPatch" }
+      responses:
+        "200":
+          description: the updated finding
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingDetail" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the status change is not allowed (`code` is `invalid_transition`, details `{from, to}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the new type is an object type (`code` is `not_a_defect`), the level is not on the scale (`code` is `severity_unknown`), or `anchor` does not fit the finding's anchor kind; an image anchor moves with its annotation (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [findings]
+      operationId: deleteFinding
+      summary: Delete the finding with its comments and attachments; an image finding's annotation goes too (an annotation on a defect type is the finding's geometry). Attachment files move to `findings/_trash/` and are purged after 30 days.
+      responses:
+        "204":
+          description: deleted
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    get:
+      tags: [findings]
+      operationId: getFindingThumbnail
+      summary: A 160 x 120 JPEG. Image findings get a crop around the annotation (cached); other findings the first attachment's thumbnail; else 404.
+      responses:
+        "200":
+          description: the thumbnail
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/comments:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    get:
+      tags: [findings]
+      operationId: listFindingComments
+      summary: The comment thread, oldest first.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: comments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingCommentPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [findings]
+      operationId: createFindingComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingCommentCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingComment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/comments/{commentId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+      - $ref: "#/components/parameters/commentId"
+    patch:
+      tags: [findings]
+      operationId: patchFindingComment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingCommentUpdate" }
+      responses:
+        "200":
+          description: the edited comment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingComment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [findings]
+      operationId: deleteFindingComment
+      responses:
+        "204":
+          description: deleted
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/attachments:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    get:
+      tags: [findings]
+      operationId: listFindingAttachments
+      summary: The finding's photos, oldest first; a finding holds a handful, so this list is not paged.
+      responses:
+        "200":
+          description: attachments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingAttachmentList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [findings]
+      operationId: addFindingAttachment
+      summary: |
+        Attach a local photo chosen in the Tauri file dialog. The server checks it with Pillow
+        (JPEG, PNG or WebP, at most 50 MB), copies it into `findings/<findingId>/` and writes a
+        256 px thumbnail. The source file is only read. This one copy is synchronous: it is capped
+        and validated first, and takes well under a second.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FindingAttachmentCreate" }
+      responses:
+        "201":
+          description: attached
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FindingAttachment" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "not a JPEG, PNG or WebP, over 50 MB, or unreadable (`code` is `attachment_invalid`, details `{reason}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/attachments/{attachmentId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+      - $ref: "#/components/parameters/attachmentId"
+    delete:
+      tags: [findings]
+      operationId: deleteFindingAttachment
+      responses:
+        "204":
+          description: deleted
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/attachments/{attachmentId}/file:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+      - $ref: "#/components/parameters/attachmentId"
+    get:
+      tags: [findings]
+      operationId: getFindingAttachmentFile
+      summary: The original photo, for the lightbox only.
+      responses:
+        "200":
+          description: the file
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+            image/png:
+              schema: { type: string, format: binary }
+            image/webp:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/attachments/{attachmentId}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+      - $ref: "#/components/parameters/attachmentId"
+    get:
+      tags: [findings]
+      operationId: getFindingAttachmentThumbnail
+      summary: The 256 px JPEG thumbnail written at upload; lists and grids use it, never the original.
+      responses:
+        "200":
+          description: the thumbnail
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3763,6 +4152,26 @@ components:
       required: true
       description: a catalogue type id
       schema: { type: string }
+    findingId:
+      name: findingId
+      in: path
+      required: true
+      schema: { type: string }
+    commentId:
+      name: commentId
+      in: path
+      required: true
+      schema: { type: string }
+    attachmentId:
+      name: attachmentId
+      in: path
+      required: true
+      schema: { type: string }
+    findingsLimit:
+      name: limit
+      in: query
+      description: findings pages hold at most 500
+      schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
 
   responses:
     Error:
@@ -7293,3 +7702,403 @@ components:
       properties:
         operator_name: { type: [string, "null"], maxLength: 80, description: "the author of new finding comments; null means unset (comments say Operator)" }
       example: { operator_name: Danijel }
+    # ------------------------------------------------------------ foundation: findings (F-C0)
+    DataItemType:
+      type: string
+      enum: [image_set, map, elevation, drawing, point_cloud]
+      description: "`drawing` is declared now; the map workspace adds its storage and provider"
+    FindingStatus:
+      type: string
+      enum: [open, reviewed, closed]
+    FindingAnchorKind:
+      type: string
+      enum: [image, map, cloud]
+    GeoJsonPoint:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [Point] }
+        coordinates: { type: array, items: { type: number }, minItems: 2, maxItems: 3 }
+      example: { type: Point, coordinates: [583120.4, 3265410.2] }
+    GeoJsonPolygon:
+      type: object
+      required: [type, coordinates]
+      properties:
+        type: { type: string, enum: [Polygon] }
+        coordinates:
+          type: array
+          minItems: 1
+          items:
+            type: array
+            minItems: 4
+            items: { type: array, items: { type: number }, minItems: 2, maxItems: 3 }
+      example: { type: Polygon, coordinates: [[[583120.0, 3265410.0], [583130.0, 3265410.0], [583130.0, 3265420.0], [583120.0, 3265410.0]]] }
+    FindingGeometry:
+      description: a GeoJSON Point or Polygon in the anchor map's CRS
+      oneOf:
+        - $ref: "#/components/schemas/GeoJsonPoint"
+        - $ref: "#/components/schemas/GeoJsonPolygon"
+    FindingBox:
+      type: object
+      description: "a new annotation's box in image pixels, as `BoxCreate` (the type is the finding's); `angle` is 0 when absent"
+      required: [x, y, w, h]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        w: { type: number, exclusiveMinimum: 0 }
+        h: { type: number, exclusiveMinimum: 0 }
+        angle: { type: number }
+      example: { x: 812, y: 404, w: 96, h: 40 }
+    FindingImageAnchor:
+      type: object
+      required: [kind, image_id, annotation_id]
+      properties:
+        kind: { type: string, enum: [image] }
+        image_id: { type: string }
+        annotation_id: { type: string, description: "the annotation (`Box.id`) that is the finding's geometry" }
+      example: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
+    FindingMapAnchor:
+      type: object
+      required: [kind, map_id, geometry]
+      properties:
+        kind: { type: string, enum: [map] }
+        map_id: { type: string }
+        geometry: { $ref: "#/components/schemas/FindingGeometry" }
+      example: { kind: map, map_id: "a0000000-6666-4000-8000-000000000001", geometry: { type: Point, coordinates: [583120.4, 3265410.2] } }
+    FindingCloudAnchor:
+      type: object
+      required: [kind, cloud_id, x, y, z, uncertainty_m]
+      properties:
+        kind: { type: string, enum: [cloud] }
+        cloud_id: { type: string }
+        x: { type: number }
+        y: { type: number }
+        z: { type: number }
+        uncertainty_m: { type: [number, "null"], minimum: 0 }
+      example: { kind: cloud, cloud_id: "p0000000-1111-4000-8000-000000000001", x: 583121.2, y: 3265411.8, z: 41.3, uncertainty_m: 0.05 }
+    FindingAnchor:
+      description: where the finding is; its kind never changes
+      oneOf:
+        - $ref: "#/components/schemas/FindingImageAnchor"
+        - $ref: "#/components/schemas/FindingMapAnchor"
+        - $ref: "#/components/schemas/FindingCloudAnchor"
+      discriminator:
+        propertyName: kind
+        mapping:
+          image: "#/components/schemas/FindingImageAnchor"
+          map: "#/components/schemas/FindingMapAnchor"
+          cloud: "#/components/schemas/FindingCloudAnchor"
+    FindingImageAnchorInput:
+      type: object
+      description: exactly one of `annotation_id` (an existing annotation) and `box` (a new one)
+      required: [kind, image_id]
+      properties:
+        kind: { type: string, enum: [image] }
+        image_id: { type: string }
+        annotation_id: { type: string }
+        box: { $ref: "#/components/schemas/FindingBox" }
+      oneOf:
+        - required: [annotation_id]
+        - required: [box]
+      example: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", box: { x: 812, y: 404, w: 96, h: 40 } }
+    FindingAnchorInput:
+      oneOf:
+        - $ref: "#/components/schemas/FindingImageAnchorInput"
+        - $ref: "#/components/schemas/FindingMapAnchor"
+        - $ref: "#/components/schemas/FindingCloudAnchor"
+      discriminator:
+        propertyName: kind
+        mapping:
+          image: "#/components/schemas/FindingImageAnchorInput"
+          map: "#/components/schemas/FindingMapAnchor"
+          cloud: "#/components/schemas/FindingCloudAnchor"
+    FindingAnchorPatch:
+      type: object
+      description: >-
+        Moves a map anchor (`geometry`) or a cloud anchor (`x`, `y`, `z`, optional `uncertainty_m`);
+        the map, cloud and anchor kind stay. An image anchor moves with its annotation
+        (`PATCH /boxes/{boxId}`).
+      properties:
+        geometry: { $ref: "#/components/schemas/FindingGeometry" }
+        x: { type: number }
+        y: { type: number }
+        z: { type: number }
+        uncertainty_m: { type: [number, "null"], minimum: 0 }
+      example: { geometry: { type: Point, coordinates: [583122.0, 3265412.5] } }
+    Finding:
+      type: object
+      required: [id, number, type_id, severity, status, note, created_by, confidence, anchor, lon, lat, data_type, data_id, created_at, updated_at, reviewed_at, closed_at]
+      properties:
+        id: { type: string }
+        number: { type: integer, minimum: 1, description: "the human number, shown as `F-` plus at least four digits (`F-0217`); never reused" }
+        type_id: { type: string, description: a catalogue type id of kind `defect` }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "a severity scale level; null is \"No severity\"" }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        note: { type: string }
+        created_by: { type: string, pattern: "^(human|model:.+)$", description: "`human`, or `model:<library model id>` for an accepted detection" }
+        confidence: { type: [number, "null"], minimum: 0, maximum: 1 }
+        anchor: { $ref: "#/components/schemas/FindingAnchor" }
+        lon: { type: [number, "null"], description: "WGS84, for maps and dashboards" }
+        lat: { type: [number, "null"] }
+        data_type: { $ref: "#/components/schemas/DataItemType" }
+        data_id: { type: string, description: "the anchor's data item: the image's source, the map or the point cloud" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+        reviewed_at: { type: [string, "null"], format: date-time }
+        closed_at: { type: [string, "null"], format: date-time }
+      example:
+        id: "f0000000-1212-4000-8000-000000000217"
+        number: 217
+        type_id: "c1a2b3c4-0000-4000-8000-000000000009"
+        severity: 3
+        status: open
+        note: "Crack along the north parapet, about 40 cm."
+        created_by: "model:m0000000-2222-4000-8000-000000000001"
+        confidence: 0.87
+        anchor: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
+        lon: 47.7625
+        lat: 29.4951
+        data_type: image_set
+        data_id: "50000000-3333-4000-8000-000000000001"
+        created_at: "2026-09-26T10:15:00Z"
+        updated_at: "2026-09-26T10:20:00Z"
+        reviewed_at: null
+        closed_at: null
+    FindingDetail:
+      allOf:
+        - $ref: "#/components/schemas/Finding"
+        - type: object
+          required: [attachment_count, comment_count]
+          properties:
+            attachment_count: { type: integer, minimum: 0 }
+            comment_count: { type: integer, minimum: 0 }
+      example:
+        id: "f0000000-1212-4000-8000-000000000217"
+        number: 217
+        type_id: "c1a2b3c4-0000-4000-8000-000000000009"
+        severity: 3
+        status: open
+        note: "Crack along the north parapet, about 40 cm."
+        created_by: "model:m0000000-2222-4000-8000-000000000001"
+        confidence: 0.87
+        anchor: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
+        lon: 47.7625
+        lat: 29.4951
+        data_type: image_set
+        data_id: "50000000-3333-4000-8000-000000000001"
+        created_at: "2026-09-26T10:15:00Z"
+        updated_at: "2026-09-26T10:20:00Z"
+        reviewed_at: null
+        closed_at: null
+        attachment_count: 2
+        comment_count: 3
+    FindingPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Finding" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - id: "f0000000-1212-4000-8000-000000000217"
+            number: 217
+            type_id: "c1a2b3c4-0000-4000-8000-000000000009"
+            severity: 3
+            status: open
+            note: "Crack along the north parapet, about 40 cm."
+            created_by: "model:m0000000-2222-4000-8000-000000000001"
+            confidence: 0.87
+            anchor: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
+            lon: 47.7625
+            lat: 29.4951
+            data_type: image_set
+            data_id: "50000000-3333-4000-8000-000000000001"
+            created_at: "2026-09-26T10:15:00Z"
+            updated_at: "2026-09-26T10:20:00Z"
+            reviewed_at: null
+            closed_at: null
+          - id: "f0000000-1212-4000-8000-000000000218"
+            number: 218
+            type_id: "c1a2b3c4-0000-4000-8000-000000000009"
+            severity: null
+            status: reviewed
+            note: ""
+            created_by: human
+            confidence: null
+            anchor: { kind: map, map_id: "a0000000-6666-4000-8000-000000000001", geometry: { type: Point, coordinates: [583120.4, 3265410.2] } }
+            lon: 47.7631
+            lat: 29.4948
+            data_type: map
+            data_id: "a0000000-6666-4000-8000-000000000001"
+            created_at: "2026-09-26T10:30:00Z"
+            updated_at: "2026-09-26T10:31:00Z"
+            reviewed_at: "2026-09-26T10:31:00Z"
+            closed_at: null
+        next_cursor: null
+    FindingCreate:
+      type: object
+      required: [type_id, anchor]
+      properties:
+        type_id: { type: string }
+        anchor: { $ref: "#/components/schemas/FindingAnchorInput" }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "the type's `default_severity` when absent" }
+        note: { type: string, maxLength: 20000, description: empty when absent }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        lon: { type: [number, "null"], description: "WGS84; map anchors send the anchor's centroid; image anchors take the image's GPS when absent" }
+        lat: { type: [number, "null"] }
+      example: { type_id: "c1a2b3c4-0000-4000-8000-000000000009", anchor: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", box: { x: 812, y: 404, w: 96, h: 40 } }, severity: 3, note: "Crack along the north parapet." }
+    FindingPatch:
+      type: object
+      description: every field is optional; a field that is sent replaces the stored one
+      properties:
+        type_id: { type: string }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9 }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        note: { type: string, maxLength: 20000 }
+        anchor: { $ref: "#/components/schemas/FindingAnchorPatch" }
+      example: { severity: 4, status: reviewed }
+    FindingBulkUpdate:
+      type: object
+      required: [ids, set]
+      properties:
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          uniqueItems: true
+          items: { type: string }
+        set:
+          type: object
+          minProperties: 1
+          properties:
+            status: { $ref: "#/components/schemas/FindingStatus" }
+            severity: { type: [integer, "null"], minimum: 1, maximum: 9 }
+            type_id: { type: string }
+      example: { ids: ["f0000000-1212-4000-8000-000000000217", "f0000000-1212-4000-8000-000000000218"], set: { status: closed } }
+    FindingBulkResult:
+      type: object
+      required: [updated, skipped]
+      properties:
+        updated: { type: integer, minimum: 0 }
+        skipped:
+          type: array
+          items:
+            type: object
+            required: [id, code]
+            properties:
+              id: { type: string }
+              code: { type: string, description: "`invalid_transition`, `not_a_defect` or `not_found`" }
+      example: { updated: 1, skipped: [{ id: "f0000000-1212-4000-8000-000000000218", code: invalid_transition }] }
+    FindingTrendDay:
+      type: object
+      required: [day, open, closed, open_by_severity]
+      properties:
+        day: { type: string, format: date }
+        open: { type: integer, minimum: 0, description: open findings at the end of the day }
+        closed: { type: integer, minimum: 0, description: findings closed that day }
+        open_by_severity:
+          type: object
+          description: "severity level (as a string, `\"3\"`) to open findings at that level"
+          additionalProperties: { type: integer, minimum: 0 }
+    FindingSummary:
+      type: object
+      description: read only from `finding_count` and `finding_daily`
+      required: [by_status, open_by_severity, open_no_severity, by_type, trend]
+      properties:
+        by_status:
+          type: object
+          required: [open, reviewed, closed]
+          properties:
+            open: { type: integer, minimum: 0 }
+            reviewed: { type: integer, minimum: 0 }
+            closed: { type: integer, minimum: 0 }
+        open_by_severity:
+          type: object
+          description: "every level of the scale (as a string) to its open findings"
+          additionalProperties: { type: integer, minimum: 0 }
+        open_no_severity: { type: integer, minimum: 0 }
+        by_type:
+          type: array
+          maxItems: 10
+          description: the ten types with the most open findings, most first
+          items:
+            type: object
+            required: [type_id, n]
+            properties:
+              type_id: { type: string }
+              n: { type: integer, minimum: 0, description: open findings of the type }
+        trend: { type: array, maxItems: 60, items: { $ref: "#/components/schemas/FindingTrendDay" }, description: "up to 60 days, oldest first" }
+      example:
+        by_status: { open: 47, reviewed: 12, closed: 88 }
+        open_by_severity: { "1": 9, "2": 21, "3": 11, "4": 3 }
+        open_no_severity: 3
+        by_type: [{ type_id: "c1a2b3c4-0000-4000-8000-000000000009", n: 30 }]
+        trend:
+          - { day: "2026-09-25", open: 49, closed: 2, open_by_severity: { "4": 4 } }
+          - { day: "2026-09-26", open: 47, closed: 3, open_by_severity: { "4": 3 } }
+    FindingComment:
+      type: object
+      required: [id, finding_id, author, text, created_at, edited_at]
+      properties:
+        id: { type: string }
+        finding_id: { type: string }
+        author: { type: string }
+        text: { type: string, maxLength: 4000 }
+        created_at: { type: string, format: date-time }
+        edited_at: { type: [string, "null"], format: date-time }
+      example: { id: "k0000000-1313-4000-8000-000000000001", finding_id: "f0000000-1212-4000-8000-000000000217", author: Danijel, text: "Seen again on the May flight, slightly longer.", created_at: "2026-09-26T10:40:00Z", edited_at: null }
+    FindingCommentCreate:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 4000, pattern: '\S' }
+      example: { text: "Seen again on the May flight, slightly longer." }
+    FindingCommentUpdate:
+      type: object
+      required: [text]
+      properties:
+        text: { type: string, minLength: 1, maxLength: 4000, pattern: '\S' }
+      example: { text: "Seen again on the May flight, about 45 cm now." }
+    FindingCommentPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FindingComment" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - { id: "k0000000-1313-4000-8000-000000000001", finding_id: "f0000000-1212-4000-8000-000000000217", author: Danijel, text: "Seen again on the May flight, slightly longer.", created_at: "2026-09-26T10:40:00Z", edited_at: null }
+        next_cursor: null
+    FindingAttachment:
+      type: object
+      required: [id, finding_id, path, original_name, width, height, bytes, created_at]
+      properties:
+        id: { type: string }
+        finding_id: { type: string }
+        path: { type: string, description: "project-relative: `findings/<finding_id>/<id>.<ext>`" }
+        original_name: { type: string }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        bytes: { type: integer, minimum: 1, maximum: 52428800 }
+        created_at: { type: string, format: date-time }
+      example: { id: "h0000000-1414-4000-8000-000000000001", finding_id: "f0000000-1212-4000-8000-000000000217", path: "findings/f0000000-1212-4000-8000-000000000217/h0000000-1414-4000-8000-000000000001.jpg", original_name: "IMG_2041.JPG", width: 4000, height: 3000, bytes: 5242880, created_at: "2026-09-26T10:45:00Z" }
+    FindingAttachmentCreate:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: "absolute path of a local JPEG, PNG or WebP file; only read" }
+      example: { path: "E:\\Site photos\\IMG_2041.JPG" }
+    FindingAttachmentList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FindingAttachment" }
+      example:
+        items:
+          - { id: "h0000000-1414-4000-8000-000000000001", finding_id: "f0000000-1212-4000-8000-000000000217", path: "findings/f0000000-1212-4000-8000-000000000217/h0000000-1414-4000-8000-000000000001.jpg", original_name: "IMG_2041.JPG", width: 4000, height: 3000, bytes: 5242880, created_at: "2026-09-26T10:45:00Z" }

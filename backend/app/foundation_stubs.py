@@ -26,6 +26,24 @@ BK_APP_STUBS: list[Stub] = []
 # BC: project types (§7.3), findings core (§8.3), the overview (§9.1) and the catalogue (§7).
 BC_PROJECT_STUBS: list[Stub] = [
     ("PUT", "/types", "putProjectTypes"),
+    ("GET", "/findings", "listFindings"),
+    ("POST", "/findings", "createFinding"),
+    ("GET", "/findings/summary", "getFindingSummary"),
+    ("POST", "/findings/bulk", "bulkUpdateFindings"),
+    ("POST", "/findings/recount", "recountFindings"),
+    ("GET", "/findings/{findingId}", "getFinding"),
+    ("PATCH", "/findings/{findingId}", "patchFinding"),
+    ("DELETE", "/findings/{findingId}", "deleteFinding"),
+    ("GET", "/findings/{findingId}/thumbnail", "getFindingThumbnail"),
+    ("GET", "/findings/{findingId}/comments", "listFindingComments"),
+    ("POST", "/findings/{findingId}/comments", "createFindingComment"),
+    ("PATCH", "/findings/{findingId}/comments/{commentId}", "patchFindingComment"),
+    ("DELETE", "/findings/{findingId}/comments/{commentId}", "deleteFindingComment"),
+    ("GET", "/findings/{findingId}/attachments", "listFindingAttachments"),
+    ("POST", "/findings/{findingId}/attachments", "addFindingAttachment"),
+    ("DELETE", "/findings/{findingId}/attachments/{attachmentId}", "deleteFindingAttachment"),
+    ("GET", "/findings/{findingId}/attachments/{attachmentId}/file", "getFindingAttachmentFile"),
+    ("GET", "/findings/{findingId}/attachments/{attachmentId}/thumbnail", "getFindingAttachmentThumbnail"),
 ]
 BC_APP_STUBS: list[Stub] = [
     ("GET", "/catalogue/types", "listCatalogueTypes"),

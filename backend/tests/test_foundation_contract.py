@@ -13,6 +13,7 @@ SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 
 P = "/api/v1/projects/{projectId}"
+F = P + "/findings/{findingId}"
 
 # operationId -> (method, path) of every operation the foundation adds.
 FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
@@ -31,6 +32,25 @@ FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
     "completeCatalogueClassification": ("post", "/api/v1/catalogue/classification/done"),
     "getOperatorSettings": ("get", "/api/v1/settings/operator"),
     "putOperatorSettings": ("put", "/api/v1/settings/operator"),
+    # findings (Task 4)
+    "listFindings": ("get", P + "/findings"),
+    "createFinding": ("post", P + "/findings"),
+    "getFindingSummary": ("get", P + "/findings/summary"),
+    "bulkUpdateFindings": ("post", P + "/findings/bulk"),
+    "recountFindings": ("post", P + "/findings/recount"),
+    "getFinding": ("get", F),
+    "patchFinding": ("patch", F),
+    "deleteFinding": ("delete", F),
+    "getFindingThumbnail": ("get", F + "/thumbnail"),
+    "listFindingComments": ("get", F + "/comments"),
+    "createFindingComment": ("post", F + "/comments"),
+    "patchFindingComment": ("patch", F + "/comments/{commentId}"),
+    "deleteFindingComment": ("delete", F + "/comments/{commentId}"),
+    "listFindingAttachments": ("get", F + "/attachments"),
+    "addFindingAttachment": ("post", F + "/attachments"),
+    "deleteFindingAttachment": ("delete", F + "/attachments/{attachmentId}"),
+    "getFindingAttachmentFile": ("get", F + "/attachments/{attachmentId}/file"),
+    "getFindingAttachmentThumbnail": ("get", F + "/attachments/{attachmentId}/thumbnail"),
 }
 
 # Response schemas the Prism mock serves: each carries its own example (spec §18 "Prism examples").
@@ -44,6 +64,14 @@ EXAMPLED_SCHEMAS = [
     "CatalogueTypeUpdated",
     "SeverityScale",
     "OperatorSettings",
+    "Finding",
+    "FindingDetail",
+    "FindingPage",
+    "FindingSummary",
+    "FindingComment",
+    "FindingCommentPage",
+    "FindingAttachment",
+    "FindingAttachmentList",
 ]
 
 
@@ -157,3 +185,28 @@ def test_the_severity_scale_has_at_most_nine_levels(spec):
         "Major",
         "Critical",
     ]
+
+
+# ------------------------------------------------------------------------------ Task 4
+
+
+def test_a_finding_anchor_is_one_of_three_kinds(spec):
+    anchor = _schemas(spec)["FindingAnchor"]
+    assert anchor["discriminator"]["propertyName"] == "kind"
+    assert set(anchor["discriminator"]["mapping"]) == {"image", "map", "cloud"}
+    cloud = _schemas(spec)["FindingCloudAnchor"]["properties"]
+    assert set(cloud) == {"kind", "cloud_id", "x", "y", "z", "uncertainty_m"}  # C10: no normal here
+
+
+def test_the_findings_list_filters_by_image_and_pages_at_500(spec):
+    _, _, op = _operations(spec)["listFindings"]
+    names = {p.get("name") for p in op["parameters"] if "name" in p}
+    assert {"status", "severity", "type_id", "anchor_kind", "data_id", "image_id", "q", "sort"} <= names
+    assert {"$ref": "#/components/parameters/findingsLimit"} in op["parameters"]
+    assert spec["components"]["parameters"]["findingsLimit"]["schema"]["maximum"] == 500
+
+
+def test_a_box_reclass_that_would_delete_a_finding_needs_confirmation(spec):
+    _, _, op = _operations(spec)["updateBox"]
+    assert any(p.get("name") == "confirm_finding_delete" for p in op["parameters"])
+    assert "409" in op["responses"]

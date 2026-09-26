@@ -73,6 +73,20 @@ export type CatalogueTypeUpdated = Schemas["CatalogueTypeUpdated"];
 export type SeverityLevel = Schemas["SeverityLevel"];
 export type SeverityScale = Schemas["SeverityScale"];
 export type OperatorSettings = Schemas["OperatorSettings"];
+export type DataItemType = Schemas["DataItemType"];
+export type Finding = Schemas["Finding"];
+export type FindingDetail = Schemas["FindingDetail"];
+export type FindingPage = Schemas["FindingPage"];
+export type FindingStatus = Schemas["FindingStatus"];
+export type FindingAnchor = Schemas["FindingAnchor"];
+export type FindingAnchorKind = Schemas["FindingAnchorKind"];
+export type FindingAnchorInput = Schemas["FindingAnchorInput"];
+export type FindingAnchorPatch = Schemas["FindingAnchorPatch"];
+export type FindingCreate = Schemas["FindingCreate"];
+export type FindingPatch = Schemas["FindingPatch"];
+export type FindingSummary = Schemas["FindingSummary"];
+export type FindingComment = Schemas["FindingComment"];
+export type FindingAttachment = Schemas["FindingAttachment"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */
