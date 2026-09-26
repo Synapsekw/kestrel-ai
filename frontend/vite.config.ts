@@ -18,6 +18,10 @@ export default defineConfig({
   // them mid-session and reload the page once; pre-bundling them up front avoids that.
   optimizeDeps: { include: ["three", "potree-core"] },
   envPrefix: ["VITE_", "APP_"],
+  // Fonts ship as files: the packaged CSP (default-src 'self') blocks data: fonts.
+  build: {
+    assetsInlineLimit: (file: string) => (file.endsWith(".woff2") || file.endsWith(".woff") ? false : undefined),
+  },
   // VITE_DEV_PORT moves the dev server (e2e beside another checkout that holds 1420).
   server: {
     port: Number(process.env.VITE_DEV_PORT ?? 1420),
