@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
@@ -139,6 +139,54 @@ describe("Menu", () => {
     await userEvent.click(screen.getByRole("button", { name: "More" }));
     await userEvent.keyboard("{ArrowUp}");
     expect(screen.getByRole("menuitem", { name: /Point cloud/ })).toHaveFocus();
+    expect(onWindow).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", onWindow);
+  });
+
+  it("keeps focus where an item's onSelect put it instead of returning it to the button", async () => {
+    function Host() {
+      const input = useRef<HTMLInputElement>(null);
+      return (
+        <>
+          <input ref={input} aria-label="Rename" />
+          <MenuButton
+            label="More"
+            items={[{ id: "rename", label: "Rename", onSelect: () => input.current?.focus() }]}
+          />
+        </>
+      );
+    }
+    render(<Host />);
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    await userEvent.keyboard("{Enter}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByRole("textbox", { name: "Rename" })).toHaveFocus();
+  });
+
+  it("keeps the trigger's ArrowDown from the workspace", async () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    render(<MenuButton label="More" items={items()} />);
+    screen.getByRole("button", { name: "More" }).focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(screen.getByRole("menu", { name: "More" })).toBeInTheDocument();
+    expect(onWindow).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", onWindow);
+  });
+
+  it("keeps arrow keys from the workspace when every item is disabled", async () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    render(
+      <MenuButton
+        label="More"
+        items={[{ id: "a", label: "Nothing yet", disabled: true, onSelect: () => {} }]}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "More" }));
+    // Fired inside the item list itself (where a still-focused item would send it).
+    const list = screen.getByRole("menuitem", { name: "Nothing yet" }).parentElement!;
+    for (const key of ["ArrowDown", "ArrowUp", "Home", "End"]) fireEvent.keyDown(list, { key });
     expect(onWindow).not.toHaveBeenCalled();
     window.removeEventListener("keydown", onWindow);
   });

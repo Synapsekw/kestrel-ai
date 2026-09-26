@@ -28,8 +28,14 @@ export interface MenuProps {
   align?: Align;
 }
 
+const MENU_KEYS = new Set(["ArrowDown", "ArrowUp", "Home", "End"]);
+
 function MenuItems({ items, onClose }: { items: readonly MenuItem[]; onClose: () => void }) {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!MENU_KEYS.has(e.key)) return;
+    // The list owns these keys even when it has nothing to move to: none reaches the workspace.
+    e.preventDefault();
+    e.stopPropagation();
     const buttons = Array.from(
       e.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not([disabled])'),
     );
@@ -45,10 +51,7 @@ function MenuItems({ items, onClose }: { items: readonly MenuItem[]; onClose: ()
             : e.key === "End"
               ? buttons[buttons.length - 1]
               : undefined;
-    if (!next) return;
-    e.preventDefault();
-    e.stopPropagation();
-    next.focus();
+    next?.focus();
   };
   return (
     <div className="flex flex-col gap-0.5" onKeyDown={onKeyDown}>
@@ -131,6 +134,7 @@ export function MenuButton({
     onKeyDown: (e: KeyboardEvent<HTMLButtonElement>) => {
       if (e.key === "ArrowDown") {
         e.preventDefault();
+        e.stopPropagation();
         setOpen(true);
       }
     },

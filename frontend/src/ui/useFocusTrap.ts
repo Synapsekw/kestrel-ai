@@ -6,7 +6,8 @@ export const FOCUSABLE =
 /**
  * While `active`: focus moves inside `ref` (`initialFocus`, else the first focusable, else the
  * container), the returned keydown handler keeps Tab inside it, and focus returns to the element that
- * had it once `active` ends or the component unmounts, unless that element has left the page.
+ * had it once `active` ends or the component unmounts, unless that element has left the page or
+ * focus has already moved elsewhere (outside the trap, not to the body) on purpose.
  * Shared by Dialog, Popover and CommandPalette.
  */
 export function useFocusTrap(
@@ -25,7 +26,11 @@ export function useFocusTrap(
     return () => {
       const back = opener.current;
       opener.current = null;
-      if (back && back.isConnected) back.focus();
+      // Return focus only if it is still ours to return: a menu item's onSelect or a palette
+      // command may just have moved it somewhere on purpose.
+      const now = document.activeElement;
+      const ours = now === null || now === document.body || (root !== null && root.contains(now));
+      if (ours && back && back.isConnected) back.focus();
     };
   }, [active, ref, initialFocus]);
 
