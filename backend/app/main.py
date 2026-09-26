@@ -46,6 +46,10 @@ def project_opened(handle, runner) -> None:
         # A project below the foundation schema queues its upgrade (foundation spec §11.3).
         ("project upgrade", lambda: migration_gate.ensure_submitted(handle, runner)),
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
+        (
+            "findings counts check",
+            lambda: importlib.import_module("app.findings.jobs").check_on_open(handle, runner),
+        ),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
         ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),

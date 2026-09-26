@@ -21,14 +21,6 @@ Stub = tuple[str, str, str]
 
 # BC: project types (§7.3), findings core (§8.3), the overview (§9.1) and the catalogue (§7).
 BC_PROJECT_STUBS: list[Stub] = [
-    ("GET", "/findings", "listFindings"),
-    ("POST", "/findings", "createFinding"),
-    ("GET", "/findings/summary", "getFindingSummary"),
-    ("POST", "/findings/bulk", "bulkUpdateFindings"),
-    ("POST", "/findings/recount", "recountFindings"),
-    ("GET", "/findings/{findingId}", "getFinding"),
-    ("PATCH", "/findings/{findingId}", "patchFinding"),
-    ("DELETE", "/findings/{findingId}", "deleteFinding"),
     ("GET", "/findings/{findingId}/thumbnail", "getFindingThumbnail"),
     ("GET", "/findings/{findingId}/comments", "listFindingComments"),
     ("POST", "/findings/{findingId}/comments", "createFindingComment"),
@@ -40,7 +32,6 @@ BC_PROJECT_STUBS: list[Stub] = [
     ("GET", "/findings/{findingId}/attachments/{attachmentId}/file", "getFindingAttachmentFile"),
     ("GET", "/findings/{findingId}/attachments/{attachmentId}/thumbnail", "getFindingAttachmentThumbnail"),
     ("GET", "/overview", "getProjectOverview"),
-    ("GET", "/activity", "listActivity"),
 ]
 BC_APP_STUBS: list[Stub] = [
     ("POST", "/catalogue/types/{typeId}/backfill", "backfillCatalogueType"),

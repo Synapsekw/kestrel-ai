@@ -163,6 +163,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "putSeverityScale": {422},
     # BC: a generated type id the catalogue does not know (`unknown_type`).
     "putProjectTypes": {422},
+    # BC: generated type ids are unknown (`unknown_type`), a level above the scale
+    # (`severity_unknown`), a generated geometry that is not a closed ring (`invalid_geometry`),
+    # a patch of an image anchor (`anchor_immutable`).
+    "createFinding": {422},
+    "patchFinding": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
