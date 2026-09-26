@@ -9,8 +9,11 @@ leaves a half-written folder where training would read it. Bounded: 500 items pe
 
 from __future__ import annotations
 
+import logging
 import os
+import re
 import shutil
+import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -25,17 +28,29 @@ from app.datasets.materialise import (
     detect_boxes,
     materialised_name,
 )
-from app.db.models import Image
+from app.db.models import Image, Job
 from app.geometry import corners_of
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
-from app.library.datasets.service import SEGMENT_NOT_SUPPORTED, folder_name
+from app.library.datasets.service import LIVE, SEGMENT_NOT_SUPPORTED, folder_name
 from app.library.datasets.sources import open_source
 from app.library.db import LibraryDataset, LibraryDatasetItem, LibraryDatasetSource
 
+log = logging.getLogger(__name__)
+
 PAGE = 500
 SPLITS = ("train", "val")
+# The names this module writes under `<library>/datasets/`: `<slug>-<id8>` and, while it is being
+# written, `.<slug>-<id8>.partial-<job8>`. The startup sweep touches nothing else.
+EXPORT_NAME_RE = re.compile(r"^[a-z0-9-]+-[0-9a-f]{8}$")
+PARTIAL_NAME_RE = re.compile(r"^\.[a-z0-9-]+-[0-9a-f]{8}\.partial-[0-9a-f]{8}$")
+# Library jobs that write or read an export folder: while one is live the sweep leaves every folder.
+SWEEP_BLOCKING_JOBS = ("dataset", "train")
+# Recorded when this module first loads (effectively "when this process started"), as
+# `app.exports.job` does: the sweep never touches a folder younger than that, since it could belong
+# to an export this very process is writing.
+_PROCESS_STARTED_AT = time.time()
 
 
 def obb_label_text(labels: list[dict], class_index: dict[str, int], width: int, height: int) -> str:
@@ -185,8 +200,7 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
             shutil.rmtree(final)
         os.replace(staging, final)
     except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
-        _set_export_state(lib, dataset_id, "failed")
+        _settle_failed(ctx, dataset_id, staging)
         raise
     _set_export_state(lib, dataset_id, "ready", export_path=f"datasets/{name}")
     ctx.log.info(
@@ -195,8 +209,72 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
     return {"dataset_id": dataset_id, **counts, "skipped": skipped, "files": placements}
 
 
+def _state_after_failure(lib, dataset_id: str) -> str:
+    """`ready` when the previous export is still whole on disk where the row points, else `failed`:
+    a failed or cancelled re-export must not throw away a good export."""
+    with lib.session() as s:
+        row = s.get(LibraryDataset, dataset_id)
+        if row is None or not row.export_path:
+            return "failed"
+        return "ready" if (lib.folder / row.export_path / "data.yaml").is_file() else "failed"
+
+
+def _settle_failed(ctx: JobContext, dataset_id: str, staging: Path) -> None:
+    """Clean up after a failed export without masking the error that ended it (as
+    `app.training.jobs._settle` does): a failing cleanup is logged, and the caller re-raises."""
+    try:
+        shutil.rmtree(staging, ignore_errors=True)
+        _set_export_state(ctx.project, dataset_id, _state_after_failure(ctx.project, dataset_id))
+    except Exception:
+        ctx.log.exception("could not record the failed export of dataset %s", dataset_id)
+
+
 def _cancelled_before_start(ctx: JobContext) -> None:
-    _set_export_state(ctx.project, ctx.params["dataset_id"], "failed")
+    lib, dataset_id = ctx.project, ctx.params["dataset_id"]
+    _set_export_state(lib, dataset_id, _state_after_failure(lib, dataset_id))
+
+
+def _sweep_candidate(root: Path, entry: Path) -> bool:
+    """A real folder directly under `root`, older than this process (never a symlink or junction)."""
+    try:
+        if entry.is_symlink() or not entry.is_dir() or entry.resolve().parent != root:
+            return False
+        return entry.stat().st_mtime < _PROCESS_STARTED_AT
+    except OSError:
+        return False
+
+
+def sweep_export_folders(lib) -> list[str]:
+    """Remove what a crash or a held file left in `<library>/datasets/`; returns the names removed.
+
+    Two kinds, both only when older than this process: `.partial-` folders an export never swapped
+    in, and `<slug>-<id8>` folders no dataset row claims (a delete whose folder removal failed).
+    Skipped entirely while a library `dataset` or `train` job is queued or running. Reads the
+    dataset rows, never their items; nothing outside the datasets folder is touched.
+    """
+    root = lib.datasets_dir
+    if not root.is_dir():
+        return []
+    with lib.session() as s:
+        live = select(Job.id).where(Job.state.in_(LIVE), Job.type.in_(SWEEP_BLOCKING_JOBS)).limit(1)
+        if s.execute(live).first() is not None:
+            return []
+        claimed = set()
+        for row in s.execute(select(LibraryDataset).where(LibraryDataset.origin == "built")).scalars():
+            claimed.add(folder_name(row))
+            if row.export_path:
+                claimed.add(Path(row.export_path).name)
+    root = root.resolve()
+    removed = []
+    for entry in root.iterdir():
+        name = entry.name
+        stale = PARTIAL_NAME_RE.match(name) or (EXPORT_NAME_RE.match(name) and name not in claimed)
+        if stale and _sweep_candidate(root, entry):
+            shutil.rmtree(entry, ignore_errors=True)
+            removed.append(name)
+    if removed:
+        log.info("removed %d leftover dataset export folder(s): %s", len(removed), removed)
+    return removed
 
 
 @register_job_type("dataset", on_cancelled_before_start=_cancelled_before_start)

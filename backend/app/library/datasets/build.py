@@ -92,7 +92,12 @@ def run_build(ctx: JobContext) -> dict:
     try:
         return _build(ctx)
     except BaseException:
-        _mark_failed(ctx.project, ctx.params["dataset_id"])
+        # A failing cleanup is logged, never raised over the error that ended the build (as
+        # `app.training.jobs._settle` does).
+        try:
+            _mark_failed(ctx.project, ctx.params["dataset_id"])
+        except Exception:
+            ctx.log.exception("could not mark dataset %s failed", ctx.params["dataset_id"])
         raise
 
 

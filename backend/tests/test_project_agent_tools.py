@@ -781,3 +781,25 @@ def test_list_jobs_offers_only_project_job_types():
     job_type = tools.ListJobsArgs.model_json_schema()["properties"]["type"]
     offered = {v for option in job_type["anyOf"] for v in option.get("enum", [])}
     assert offered == project_types
+
+
+def test_delete_dataset_approval_says_a_legacy_folder_is_left_alone(tool, app, tmp_path):
+    """A legacy dataset's folder belongs to its project: the approval text says only the library
+    entry goes."""
+    from app.library.db import LibraryDataset
+
+    with app.state.library.session() as s:
+        row = LibraryDataset(
+            name="old v1",
+            origin="legacy",
+            state="ready",
+            counts={"images": 3},
+            legacy_path=str(tmp_path / "proj" / "datasets" / "v1"),
+        )
+        s.add(row)
+        s.flush()
+        dataset_id = row.id
+    prepared = tool("delete_dataset", {"dataset_id": dataset_id})
+    assert isinstance(prepared, Prepared)
+    assert "library entry" in prepared.detail and "project folder" in prepared.detail
+    assert "untouched" in prepared.detail and "its export" not in prepared.detail

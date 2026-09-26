@@ -249,3 +249,16 @@ def test_the_export_path_reads_absolute_and_the_job_id_is_the_latest_job(client,
     assert got["export_path"] == str(lib.datasets_dir / folder)
     assert got["job_id"] == "export-job"
     assert got["export_state"] == "stale"  # ready on record, but no data.yaml on disk
+
+
+def test_a_failing_cleanup_never_masks_why_the_build_failed(client, two_sites, catalogue, monkeypatch):  # noqa: F811
+    a, _, _, _, _ = two_sites
+    crane = catalogue.add("Crane")
+
+    def broken(lib, dataset_id):
+        raise OSError("database is locked")
+
+    monkeypatch.setattr("app.library.datasets.build._mark_failed", broken)
+    r = client.post(f"{LIB}/datasets", json=create_body("cranes", [a.id], [crane.id]))
+    done = wait_library_job(client, r.json()["job"]["id"])
+    assert done["state"] == "failed" and NOTHING_TO_TRAIN_ON in done["error"]

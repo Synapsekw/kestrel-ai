@@ -83,9 +83,15 @@ def preview(registry, body: DatasetFilter) -> DatasetPreview:
 # ---------------------------------------------------------------- folders and states
 
 
+FOLDER_SLUG_MAX = 40
+
+
 def folder_name(row: LibraryDataset) -> str:
-    """The export folder's name: file-safe whatever the dataset is called, unique by the id."""
-    return f"{slug(row.name)}-{row.id[:8]}"
+    """The export folder's name: file-safe whatever the dataset is called, unique by the id. The
+    slug is cut to `FOLDER_SLUG_MAX` characters so a long name never pushes a label file past the
+    Windows path limit; the `-<id8>` suffix keeps it unique."""
+    stem = slug(row.name)[:FOLDER_SLUG_MAX].rstrip("-") or "dataset"
+    return f"{stem}-{row.id[:8]}"
 
 
 def own_export_folder(lib: LibraryHandle, row: LibraryDataset) -> Path | None:

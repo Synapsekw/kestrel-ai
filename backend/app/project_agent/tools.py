@@ -1463,12 +1463,19 @@ class DeleteDataset(Tool):
 
     async def prepare(self, ctx, args):
         d = await ctx.api.call("GET", f"{LIBRARY}/datasets/{_seg(args.dataset_id)}")
+        images = _plural(d["counts"].get("images", 0), "image")
+        if d.get("origin") == "legacy":
+            detail = (
+                f"Removes the library entry only ({images}); the project folder it was registered "
+                "from is left untouched, and project images, labels and models are kept."
+            )
+        else:
+            detail = (
+                f"Removes the dataset and its export ({images}); project images, labels and models are kept."
+            )
         return Prepared(
             title=f"Delete dataset {d['name']}",
-            detail=(
-                f"Removes the dataset and its export ({_plural(d['counts'].get('images', 0), 'image')}); "
-                "project images, labels and models are kept."
-            ),
+            detail=detail,
             estimated_cost=None,
             args={"dataset_id": d["id"], "name": d["name"]},
         )

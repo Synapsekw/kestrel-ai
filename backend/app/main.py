@@ -142,6 +142,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 sweep_orphans(app.state.library, app.state.jobs)
             except Exception:
                 logging.getLogger(__name__).exception("orphan job sweep failed for the model library")
+            try:
+                # After the job sweep, so a job a previous run left `running` no longer blocks it.
+                from app.library.datasets import export as dataset_export
+
+                dataset_export.sweep_export_folders(app.state.library)
+            except Exception:
+                logging.getLogger(__name__).exception("dataset export folder sweep failed")
         # Upgrade recent projects that predate the foundation schema in the background (spec §11.3).
         # After the library (and, once unit BC has landed, the catalogue) opened.
         try:

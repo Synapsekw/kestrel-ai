@@ -206,3 +206,151 @@ def test_the_per_project_dataset_routes_are_gone(client, sites):
     a, _, _, _ = sites
     assert client.get(f"/api/v1/projects/{a.id}/datasets").status_code in (404, 405)
     assert client.post(f"/api/v1/projects/{a.id}/datasets", json={"name": "v1"}).status_code in (404, 405)
+
+
+# ---------------------------------------------------------------- leftovers, re-exports, long names
+
+
+def _old(path: Path) -> Path:
+    """Backdate a folder to before this process started, as a crash in an earlier run leaves it."""
+    os.utime(path, (1_000_000_000, 1_000_000_000))
+    return path
+
+
+def test_the_startup_sweep_removes_an_old_partial_export_folder(client, app):
+    from app.library.datasets.export import sweep_export_folders
+
+    lib = app.state.library
+    partial = lib.datasets_dir / ".machines-0123abcd.partial-89abcdef"
+    (partial / "images" / "train").mkdir(parents=True)
+    _old(partial)
+    young = lib.datasets_dir / ".other-0123abce.partial-89abcdee"
+    young.mkdir()  # younger than this process: it could be an export this process is writing
+    sweep_export_folders(lib)
+    assert not partial.exists()
+    assert young.is_dir()
+
+
+def test_the_startup_sweep_removes_an_export_folder_no_dataset_claims(client, app, tmp_path):
+    from app.library.datasets.export import sweep_export_folders
+
+    lib = app.state.library
+    orphan = _old_dir(lib.datasets_dir / "machines-0123abcd")
+    foreign = _old_dir(lib.datasets_dir / "notes")  # not a folder BM writes
+    loose = lib.datasets_dir / "readme-0123abcd"  # a file, not an export folder
+    loose.write_text("x", "utf-8")
+    sweep_export_folders(lib)
+    assert not orphan.exists()
+    assert foreign.is_dir() and loose.is_file()
+
+
+def test_the_startup_sweep_keeps_a_claimed_export_folder(client, app, sites):
+    from app.library.datasets.export import sweep_export_folders
+
+    a, _, exc, _ = sites
+    d = build_dataset(client, create_body("machines", [a.id], [exc.id]))
+    assert _export(client, d["id"])["state"] == "succeeded"
+    folder = Path(client.get(f"{LIB}/datasets/{d['id']}").json()["export_path"])
+    _old(folder)
+    sweep_export_folders(app.state.library)
+    assert (folder / "data.yaml").is_file()
+
+
+@pytest.mark.parametrize("job_type", ["dataset", "train"])
+def test_the_startup_sweep_is_skipped_while_a_library_job_is_live(client, app, job_type):
+    from app.library.datasets.export import sweep_export_folders
+
+    lib = app.state.library
+    with lib.session() as s:
+        s.add(Job(type=job_type, state="running", params={"dataset_id": "x"}, log_path=""))
+    partial = _old_dir(lib.datasets_dir / ".machines-0123abcd.partial-89abcdef")
+    orphan = _old_dir(lib.datasets_dir / "machines-0123abcd")
+    sweep_export_folders(lib)
+    assert partial.is_dir() and orphan.is_dir()
+
+
+def _old_dir(path: Path) -> Path:
+    path.mkdir(parents=True)
+    return _old(path)
+
+
+def test_the_app_sweeps_leftover_export_folders_when_it_starts(app, settings):
+    from fastapi.testclient import TestClient
+
+    from app.library.handle import library_root
+
+    datasets = library_root(settings.data_dir) / "datasets"
+    partial = _old_dir(datasets / ".machines-0123abcd.partial-89abcdef")
+    with TestClient(app):
+        assert not partial.exists()
+
+
+def test_a_failing_export_folder_sweep_never_stops_the_app_starting(app, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    def broken(lib):
+        raise OSError("disk gone")
+
+    monkeypatch.setattr("app.library.datasets.export.sweep_export_folders", broken)
+    with TestClient(app) as c:
+        assert c.get("/api/v1/health").status_code in (200, 401)
+
+
+def test_a_failed_re_export_keeps_the_good_export(client, app, sites):
+    a, b, exc, truck = sites
+    d = build_dataset(client, create_body("machines", [a.id, b.id], [exc.id, truck.id]))
+    assert _export(client, d["id"])["state"] == "succeeded"
+    folder = Path(client.get(f"{LIB}/datasets/{d['id']}").json()["export_path"])
+    app.state.projects.forget(b.id)
+    os.replace(b.folder, b.folder.with_name("b-moved"))
+    assert _export(client, d["id"])["state"] == "failed"
+    after = client.get(f"{LIB}/datasets/{d['id']}").json()
+    assert after["export_state"] == "ready" and after["export_path"] == str(folder)
+    assert (folder / "data.yaml").is_file()
+
+
+def test_a_re_export_cancelled_before_it_starts_keeps_the_good_export(client, app, sites):
+    from types import SimpleNamespace
+
+    from app.library.datasets.export import _cancelled_before_start
+
+    a, _, exc, _ = sites
+    lib = app.state.library
+    d = build_dataset(client, create_body("machines", [a.id], [exc.id]))
+    assert _export(client, d["id"])["state"] == "succeeded"
+    with lib.session() as s:
+        s.get(LibraryDataset, d["id"]).export_state = "building"
+    _cancelled_before_start(SimpleNamespace(project=lib, params={"dataset_id": d["id"]}))
+    with lib.session() as s:
+        assert s.get(LibraryDataset, d["id"]).export_state == "ready"
+    # without a good export on disk, the same cancel reads `failed`
+    (Path(client.get(f"{LIB}/datasets/{d['id']}").json()["export_path"]) / "data.yaml").unlink()
+    _cancelled_before_start(SimpleNamespace(project=lib, params={"dataset_id": d["id"]}))
+    with lib.session() as s:
+        assert s.get(LibraryDataset, d["id"]).export_state == "failed"
+
+
+def test_a_long_dataset_name_keeps_the_folder_name_short(client, app, sites):
+    a, _, exc, _ = sites
+    name = ("Excavators and dump trucks " * 5)[:120]  # the longest name the API accepts
+    assert len(name) == 120 and name == name.strip()
+    d = build_dataset(client, create_body(name, [a.id], [exc.id]))
+    assert _export(client, d["id"])["state"] == "succeeded", d
+    folder = Path(client.get(f"{LIB}/datasets/{d['id']}").json()["export_path"])
+    stem = folder.name[: -len(f"-{d['id'][:8]}")]
+    assert len(stem) <= 40 and not stem.endswith("-") and stem.startswith("excavators-and-dump-trucks")
+    assert folder.name.endswith(f"-{d['id'][:8]}") and (folder / "data.yaml").is_file()
+
+
+def test_a_failing_cleanup_never_masks_why_the_export_failed(client, app, sites, monkeypatch):
+    a, b, exc, truck = sites
+    d = build_dataset(client, create_body("machines", [a.id, b.id], [exc.id, truck.id]))
+    app.state.projects.forget(b.id)
+    os.replace(b.folder, b.folder.with_name("b-moved"))
+
+    def broken(*args, **kwargs):
+        raise OSError("database is locked")
+
+    monkeypatch.setattr("app.library.datasets.export._set_export_state", broken)
+    done = _export(client, d["id"])
+    assert done["state"] == "failed" and "Site B" in done["error"]
