@@ -43,7 +43,7 @@ def check(r: httpx.Response, *codes: int) -> dict:
 
 
 def wait_job(api: httpx.Client, pid: str | None, jid: str, timeout: float = 900) -> dict:
-    """Poll a project job, or a library job (import, export) when `pid` is None."""
+    """Poll a project job, or a library job (import, dataset, train, export) when `pid` is None."""
     jobs = "/api/v1/library/jobs" if pid is None else f"/api/v1/projects/{pid}/jobs"
     t0 = time.time()
     last = ""
@@ -184,28 +184,30 @@ def main() -> int:
     step("label", {"labeled_count": stats["labeled_count"], "box_count": stats["box_count"]})
     assert stats["labeled_count"] == 10 and stats["box_count"] == 20
 
-    # 4. dataset
+    # 4. dataset: a library dataset over this project's labelled boxes (foundation F §12)
     ds = check(
         api.post(
-            f"/api/v1/projects/{pid}/datasets",
-            json={"name": "v1", "split_method": "by_group", "val_fraction": 0.2, "seed": 42},
+            "/api/v1/library/datasets",
+            json={
+                "name": "checkpoint2-v1",
+                "task": "detect",
+                "filter": {
+                    "project_ids": [pid],
+                    "type_ids": [c["id"] for c in project["classes"]],
+                    "reviewed_only": False,
+                },
+                "split_method": "by_group",
+                "val_fraction": 0.2,
+                "seed": 42,
+            },
         )
     )
-    job = wait_job(api, pid, ds["job"]["id"])
+    job = wait_job(api, None, ds["job"]["id"])
     assert job["state"] == "succeeded", job
-    dataset = check(api.get(f"/api/v1/projects/{pid}/datasets/{ds['dataset']['id']}"))
-    data_yaml = folder / dataset["path"] / "data.yaml"
-    dstats = check(api.get(f"/api/v1/projects/{pid}/datasets/{dataset['id']}/stats"))
-    step(
-        "dataset",
-        {
-            "train": dataset["train_count"],
-            "val": dataset["val_count"],
-            "data_yaml": data_yaml.read_text("utf-8"),
-            "stats": dstats,
-        },
-    )
-    assert data_yaml.exists() and dataset["train_count"] + dataset["val_count"] == 10
+    dataset = check(api.get(f"/api/v1/library/datasets/{ds['dataset']['id']}"))
+    counts = dataset["counts"]
+    step("dataset", {"train": counts["train"], "val": counts["val"], "per_class": counts["per_class"]})
+    assert counts["train"] + counts["val"] == 10
 
     # 5. import base weights into the model library and train
     imp = check(
@@ -224,7 +226,7 @@ def main() -> int:
     step("import model", {"id": base["id"], "class_names": len(base["class_names"])})
     tr = check(
         api.post(
-            f"/api/v1/projects/{pid}/train",
+            "/api/v1/library/training-runs",
             json={
                 "name": "cp2",
                 "dataset_id": dataset["id"],
@@ -239,7 +241,7 @@ def main() -> int:
         )
     )
     t0 = time.time()
-    job = wait_job(api, pid, tr["job"]["id"])
+    job = wait_job(api, None, tr["job"]["id"])
     assert job["state"] == "succeeded", job
     model = check(api.get(f"/api/v1/library/models/{job['result']['model_id']}"))
     progress_events = [

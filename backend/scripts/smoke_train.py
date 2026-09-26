@@ -1,6 +1,6 @@
 """Manual smoke test: train against a running dev backend and print live progress.
 
-    python scripts/smoke_train.py --project <id> --dataset <id> --weights E:\\Dev\\Yolo\\models\\yolo11n.pt
+    python scripts/smoke_train.py --dataset <library dataset id> --weights E:\\Dev\\Yolo\\models\\yolo11n.pt
 
 It imports the base weights into the model library (unless `--base-model` names one already
 there), starts a training job and prints `job.progress` and `job.state` events from the websocket
@@ -42,8 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--base", default="http://127.0.0.1:8765", help="backend origin")
     p.add_argument("--token", default="dev-token", help="per-launch token")
-    p.add_argument("--project", required=True, help="project id")
-    p.add_argument("--dataset", required=True, help="materialised dataset id")
+    p.add_argument("--dataset", required=True, help="library dataset id")
     p.add_argument("--weights", help="absolute path to base .pt weights to import")
     p.add_argument("--base-model", help="library model id to train from instead of importing")
     p.add_argument("--name", default="smoke run")
@@ -81,7 +80,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     ws_url = a.base.replace("http", "ws", 1) + "/api/v1/events?" + urlencode({"token": a.token})
     with ws_client.connect(ws_url) as ws:
-        job = check(client.post(f"/api/v1/projects/{a.project}/train", json=body))["job"]
+        job = check(client.post("/api/v1/library/training-runs", json=body))["job"]
         print(f"job {job['id']} queued; log at {job['log_path']}")
         while True:
             event = json.loads(ws.recv())

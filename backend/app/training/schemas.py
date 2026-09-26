@@ -2,7 +2,8 @@
 
 Library models themselves are in `app.library.schemas`."""
 
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -59,4 +60,29 @@ class ExportRequest(BaseModel):
 
 
 class JobRef(BaseModel):
+    job: JobOut
+
+
+class TrainingRunOut(BaseModel):
+    id: str
+    name: str
+    dataset_id: str
+    base_model_id: str
+    params: dict[str, Any]
+    job_id: str | None
+    state: Literal["queued", "running", "succeeded", "failed", "cancelled"]
+    model_id: str | None
+    #: Null until the model registers; live curves come from the job's progress events (decision 13).
+    metrics: ModelMetrics | None
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class TrainingRunPage(BaseModel):
+    items: list[TrainingRunOut]
+    next_cursor: str | None
+
+
+class TrainingRunWithJob(BaseModel):
+    training_run: TrainingRunOut
     job: JobOut

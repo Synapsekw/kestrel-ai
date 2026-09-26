@@ -20,7 +20,6 @@ from app.inference.router import router as inference_router
 from app.jobs.app_router import router as app_jobs_router
 from app.jobs.router import router as jobs_router
 from app.library.adoption_router import router as adoption_router
-from app.library.router import project_router as train_router
 from app.library.router import router as library_router
 from app.migration.router import router as migration_router
 from app.overview.router import router as overview_router
@@ -57,7 +56,6 @@ for r in (
     jobs_router,
     app_jobs_router,
     exports_router,
-    train_router,
     adoption_router,
 ):
     api_router.include_router(r)

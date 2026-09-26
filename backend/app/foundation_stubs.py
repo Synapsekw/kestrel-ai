@@ -19,16 +19,9 @@ from app.stubs import add_stubs
 # (method, path, operationId)
 Stub = tuple[str, str, str]
 
-# BM: datasets across projects, training runs and the model class map (§12, §7.4).
-BM_APP_STUBS: list[Stub] = [
-    ("GET", "/library/training-runs", "listTrainingRuns"),
-    ("POST", "/library/training-runs", "startTrainingRun"),
-    ("GET", "/library/training-runs/{runId}", "getTrainingRun"),
-]
-
-# Every project-scoped foundation operation is built; the router stays for the machinery.
+# Every foundation operation is built; the routers stay until the module is deleted.
 PROJECT_STUBS: list[Stub] = []
-APP_STUBS: list[Stub] = [*BM_APP_STUBS]
+APP_STUBS: list[Stub] = []
 
 project_router = APIRouter(prefix="/projects/{projectId}", tags=["foundation-stubs"])
 add_stubs(project_router, PROJECT_STUBS)

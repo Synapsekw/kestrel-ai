@@ -12,6 +12,7 @@ import typing
 
 import pytest
 from catalogue_fake import FakeCatalogue
+from fakes import FakeTrainer
 from library_helpers import add_library_model, wait_library_job
 from PIL import Image as PILImage
 
@@ -575,7 +576,7 @@ def test_execute_approved_deletes_the_prepared_images(tool, agent, client, proje
 
 
 def test_dataset_training_and_deletion_flow(
-    tool, agent, app, client, project_id, project, image_ids, model_id
+    tool, agent, app, client, project_id, project, image_ids, model_id, monkeypatch
 ):
     cls = project["classes"][0]["id"]
     for image_id in image_ids[:4]:
@@ -600,6 +601,15 @@ def test_dataset_training_and_deletion_flow(
     assert isinstance(train, Prepared)
     assert train.title == "Train yolo-v2 for 50 epochs"
     assert train.detail == "Dataset v1 · base coco-n · imgsz 1280"
+    monkeypatch.setattr("app.training.jobs.get_trainer", lambda: FakeTrainer())
+    started = agent(
+        lambda ctx: execute_approved(ctx, "train_model", {**train.args, "epochs": 2, "device": "cpu"})
+    )
+    run = ok(started)
+    assert started.job_ids == []  # a library job: the training run, not a project job
+    assert wait_library_job(client, run["job_id"])["state"] == "succeeded"
+    got = client.get(f"/api/v1/library/training-runs/{run['training_run_id']}").json()
+    assert got["job_id"] == run["job_id"] and got["state"] == "succeeded"
 
     delete = tool("delete_dataset", {"dataset_id": body["dataset_id"]})
     assert isinstance(delete, Prepared) and "v1" in delete.title

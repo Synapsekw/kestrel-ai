@@ -1360,9 +1360,10 @@ class TrainModel(Tool):
     risk = "approval"
     Args = TrainArgs
     description = (
-        "Train a new detection model on a dataset, starting from a registered model, through a "
-        "background job (can take hours and occupies the GPU). Needs the user's approval. The "
-        "finished job's result.model_id is the new model."
+        "Train a new model on a library dataset (an id from list_datasets), starting from a "
+        "registered model, through a background library job (can take hours and occupies the GPU). "
+        "Needs the user's approval. Follow the job with get_job or wait_for_job; the finished "
+        "job's result.model_id is the new model."
     )
 
     async def prepare(self, ctx, args):
@@ -1376,8 +1377,13 @@ class TrainModel(Tool):
         )
 
     async def run(self, ctx, args):
-        job = (await ctx.api.call("POST", "/train", json=args))["job"]
-        return _ok({"job_id": job["id"]}, f"Started training {args['name']}", job_ids=[job["id"]])
+        res = await ctx.api.call("POST", f"{LIBRARY}/training-runs", json=args)
+        job = res["job"]
+        # A library job, not a project job: read it with get_job or wait_for_job.
+        return _ok(
+            {"job_id": job["id"], "training_run_id": res["training_run"]["id"]},
+            f"Started training {args['name']}",
+        )
 
 
 class DeleteImagesArgs(_Args):

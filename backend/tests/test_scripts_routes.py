@@ -27,7 +27,13 @@ def test_script_calls_no_removed_project_model_route(script: str) -> None:
 
 def test_frozen_smoke_checks_the_library() -> None:
     text = (SCRIPTS / "smoke_frozen.ps1").read_text("utf-8")
-    for path in ("/library/status", "/library/starters/yolo11n/acquire", "/library/jobs", "/train"):
+    for path in (
+        "/library/status",
+        "/library/starters/yolo11n/acquire",
+        "/library/jobs",
+        "/library/datasets",
+        "/library/training-runs",
+    ):
         assert path in text, f"smoke_frozen.ps1 does not call {path}"
 
 

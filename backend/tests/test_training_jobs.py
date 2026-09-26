@@ -1,68 +1,34 @@
-"""The train job end to end with the in-process FakeTrainer (no GPU, no ultralytics). The trained
-weights land in the model library; exports are library jobs (`test_library_jobs.py`)."""
+"""The `train` job in the library (foundation F §12.2 step 4; plan BM Task 10, decisions 5, 9, 10 and
+13; Review Focus 2 and 3), end to end with the in-process FakeTrainer (no GPU, no ultralytics)."""
 
 import time
+from pathlib import Path
 
 import pytest
-import yaml
+from catalogue_fake import catalogue  # noqa: F401 - fixture
 from fakes import FakeTrainer
-from library_helpers import LIB, add_library_model
+from library_datasets_helpers import (
+    LIB,
+    build_dataset,
+    create_body,
+    legacy_project_dataset,
+    make_project,
+    two_projects,
+)
+from library_helpers import add_library_model, wait_library_job
 
-from app.db.models import Dataset
+from app.db.models import Job
+from app.jobs.startup import sweep_orphans
+from app.library import service
+from app.library.datasets.legacy import register_legacy_dataset
+from app.library.db import LibraryDataset, TrainingRun
 
-BASE = "/api/v1/projects"
-
-
-def train_url(project_id: str) -> str:
-    return f"{BASE}/{project_id}/train"
-
-
-@pytest.fixture
-def base_model(client, app, tmp_path) -> dict:
-    row = add_library_model(app, tmp_path, name="yolo11n", origin="starter")
-    return client.get(f"{LIB}/models/{row.id}").json()
-
-
-def library_origins(client) -> list[str]:
-    return sorted(m["origin"] for m in client.get(f"{LIB}/models").json()["items"])
-
-
-def make_dataset(handle, name: str = "v1", materialise: bool = True) -> Dataset:
-    """The layout S1's materialise job produces; S3 only reads it, so the tests build it by hand."""
-    path = f"datasets/{name}"
-    folder = handle.folder / path
-    if materialise:
-        for split in ("train", "val"):
-            (folder / "images" / split).mkdir(parents=True, exist_ok=True)
-            (folder / "labels" / split).mkdir(parents=True, exist_ok=True)
-        (folder / "data.yaml").write_text(
-            yaml.safe_dump(
-                {
-                    "path": str(folder),
-                    "train": "images/train",
-                    "val": "images/val",
-                    "names": {0: "excavator", 1: "dump_truck"},
-                }
-            ),
-            encoding="utf-8",
-        )
-    row = Dataset(
-        name=name,
-        classes=[{"id": "c1", "name": "excavator"}, {"id": "c2", "name": "dump_truck"}],
-        split_method="by_group",
-        split_params={"val_fraction": 0.2, "seed": 1},
-        path=path,
-    )
-    with handle.session() as s:
-        s.add(row)
-        s.flush()
-        s.expunge(row)
-    return row
+RUNS = f"{LIB}/training-runs"
 
 
 @pytest.fixture
-def dataset(handle) -> Dataset:
-    return make_dataset(handle)
+def base_model(app, tmp_path):
+    return add_library_model(app, tmp_path, name="yolo11n", origin="starter")
 
 
 @pytest.fixture
@@ -75,30 +41,20 @@ def use_fake_trainer(monkeypatch):
     return install
 
 
-def wait_for(client, project_id, job_id, timeout=20) -> dict:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        job = client.get(f"{BASE}/{project_id}/jobs/{job_id}").json()
-        if job["state"] in ("succeeded", "failed", "cancelled"):
-            return job
-        time.sleep(0.05)
-    raise AssertionError(f"job {job_id} did not finish")
+@pytest.fixture
+def built(client, app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+    a, b, exc, truck = two_projects(app, tmp_path, make_jpeg, catalogue)
+    return build_dataset(client, create_body("machines", [a.id, b.id], [exc.id, truck.id]))
 
 
-def wait_for_progress(client, project_id, job_id, timeout=20) -> dict:
-    """Block until the job reports its first epoch, so a cancel lands mid-training."""
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        job = client.get(f"{BASE}/{project_id}/jobs/{job_id}").json()
-        if job["progress"] > 0:
-            return job
-        assert job["state"] in ("queued", "running"), job
-        time.sleep(0.02)
-    raise AssertionError(f"job {job_id} reported no progress")
+@pytest.fixture
+def legacy(app, tmp_path, make_jpeg) -> str:
+    handle = make_project(app, tmp_path / "old", "Ahmadia")
+    return register_legacy_dataset(app.state.library, handle, legacy_project_dataset(handle, make_jpeg))
 
 
-def start_train(client, project_id, dataset_id, base_model_id, **over) -> dict:
-    body = {
+def train_body(dataset_id: str, base_model_id: str, **over) -> dict:
+    return {
         "name": "ahmadia v1 n",
         "dataset_id": dataset_id,
         "base_model_id": base_model_id,
@@ -108,46 +64,59 @@ def start_train(client, project_id, dataset_id, base_model_id, **over) -> dict:
         "device": "cpu",
         **over,
     }
-    r = client.post(train_url(project_id), json=body)
+
+
+def start(client, dataset_id: str, base_model_id: str, **over) -> dict:
+    r = client.post(RUNS, json=train_body(dataset_id, base_model_id, **over))
     assert r.status_code == 202, r.text
-    return r.json()["job"]
+    assert r.json()["job"]["type"] == "train" and r.json()["job"]["project_id"] == "library"
+    return r.json()
 
 
-def test_train_job_registers_the_model(client, project_id, handle, dataset, base_model, use_fake_trainer):
+def test_training_a_built_dataset_exports_it_first_and_registers_the_model(
+    client, app, built, base_model, use_fake_trainer
+):
     use_fake_trainer(map50=0.61)
-    job = start_train(client, project_id, dataset.id, base_model["id"])
-    assert job["type"] == "train"
-    assert job["state"] in ("queued", "running")
-
-    done = wait_for(client, project_id, job["id"])
+    started = start(client, built["id"], base_model.id)
+    assert started["training_run"]["state"] in ("queued", "running")
+    done = wait_library_job(client, started["job"]["id"])
     assert done["state"] == "succeeded", done["error"]
-    assert done["progress"] == 1.0
-    model_id = done["result"]["model_id"]
-    assert done["result"]["metrics"]["map50"] == 0.61
 
-    model = client.get(f"{LIB}/models/{model_id}").json()
-    assert model["origin"] == "trained" and model["state"] == "ready"
-    assert model["name"] == "ahmadia v1 n"
-    assert model["metrics"]["map50"] == 0.61
-    assert model["metrics"]["per_class"][0]["class_name"] == "excavator"
-    assert model["provenance"]["dataset_id"] == dataset.id
-    assert model["provenance"]["base_model_id"] == base_model["id"]
-    assert model["provenance"]["run_id"] == job["id"]
-    assert model["class_names"] == ["excavator", "dump_truck"]
-    assert model["hyperparameters"]["epochs"] == 3
-    assert model["hyperparameters"]["augmentation"] == "aerial"
-    assert model["artifacts"]["results_csv"] == "artifacts/results.csv"
-    assert model["artifacts"]["confusion_matrix"] == "artifacts/confusion_matrix.png"
-    # the run's own files stay in the project's run folder
-    assert (handle.runs_dir / job["id"] / "train" / "results.csv").exists()
+    assert client.get(f"{LIB}/datasets/{built['id']}").json()["export_state"] == "ready"
+    run = client.get(f"{RUNS}/{started['training_run']['id']}").json()
+    assert run["state"] == "succeeded" and run["model_id"] == done["result"]["model_id"]
+    assert run["metrics"]["map50"] == 0.61 and run["finished_at"] is not None
+    model = client.get(f"{LIB}/models/{run['model_id']}").json()
+    assert model["origin"] == "trained" and model["task"] == "detect"
+    assert model["class_names"] == ["Excavator", "Dump truck"]
+    exc, truck = (c["type_id"] for c in built["classes"])
+    assert model["class_map"] == {"Excavator": exc, "Dump truck": truck}  # pre-filled (F §12.2)
+    p = model["provenance"]
+    assert p["dataset_id"] == built["id"] and p["run_id"] == started["job"]["id"]
+    assert p["base_model_id"] == base_model.id and "project_id" not in p  # two projects: none named
+    assert (app.state.library.runs_dir / started["job"]["id"] / "train" / "results.csv").is_file()
 
 
-def test_train_job_publishes_epoch_progress(client, project_id, dataset, base_model, use_fake_trainer):
+def test_training_a_legacy_dataset_reads_its_own_folder(client, app, legacy, base_model, use_fake_trainer):
+    use_fake_trainer()
+    started = start(client, legacy, base_model.id)
+    done = wait_library_job(client, started["job"]["id"])
+    assert done["state"] == "succeeded", done["error"]
+    log = client.get(f"{LIB}/jobs/{started['job']['id']}/log").json()["lines"]
+    with app.state.library.session() as s:
+        legacy_path = s.get(LibraryDataset, legacy).legacy_path
+    assert any(legacy_path in line for line in log)
+    assert list(app.state.library.datasets_dir.iterdir()) == []  # nothing exported for a legacy set
+    p = client.get(f"{LIB}/models/{done['result']['model_id']}").json()["provenance"]
+    assert p["project_name"] == "Ahmadia" and p["dataset_id"] == legacy
+
+
+def test_training_publishes_epoch_progress(client, built, base_model, use_fake_trainer):
     use_fake_trainer()
     with client.websocket_connect("/api/v1/events?token=test-token") as ws:
-        job = start_train(client, project_id, dataset.id, base_model["id"])
+        job = start(client, built["id"], base_model.id)["job"]
         messages: list[str] = []
-        for _ in range(60):
+        for _ in range(200):
             ev = ws.receive_json()
             if ev["job_id"] != job["id"]:
                 continue
@@ -163,67 +132,200 @@ def test_train_job_publishes_epoch_progress(client, project_id, dataset, base_mo
     ]
 
 
-def test_cancelling_training_leaves_no_model(
-    client, project_id, handle, dataset, base_model, use_fake_trainer
+def test_cancelling_training_leaves_no_model_and_the_run_cancelled(
+    client, legacy, base_model, use_fake_trainer
 ):
     use_fake_trainer(epoch_sleep_s=0.3)
-    job = start_train(client, project_id, dataset.id, base_model["id"], epochs=50)
-    wait_for_progress(client, project_id, job["id"])  # cancel mid-training, not before it starts
-    assert client.post(f"{BASE}/{project_id}/jobs/{job['id']}/cancel").status_code == 200
-    done = wait_for(client, project_id, job["id"])
-    assert done["state"] == "cancelled"
-    assert done["result"] is None
-    assert library_origins(client) == ["starter"]
+    started = start(client, legacy, base_model.id, epochs=50)
+    job_id = started["job"]["id"]
+    deadline = time.time() + 20
+    while client.get(f"{LIB}/jobs/{job_id}").json()["progress"] == 0 and time.time() < deadline:
+        time.sleep(0.02)
+    assert client.post(f"{LIB}/jobs/{job_id}/cancel").status_code == 200
+    assert wait_library_job(client, job_id)["state"] == "cancelled"
+    assert client.get(f"{RUNS}/{started['training_run']['id']}").json()["state"] == "cancelled"
+    assert [m["origin"] for m in client.get(f"{LIB}/models").json()["items"]] == ["starter"]
 
 
-def test_failing_training_marks_the_job_failed(
-    client, project_id, handle, dataset, base_model, use_fake_trainer
-):
+def test_a_failing_trainer_fails_the_job_and_the_run(client, legacy, base_model, use_fake_trainer):
     use_fake_trainer(fail=True)
-    job = start_train(client, project_id, dataset.id, base_model["id"])
-    done = wait_for(client, project_id, job["id"])
-    assert done["state"] == "failed"
-    assert "fake trainer failure" in done["error"]
-    assert library_origins(client) == ["starter"]
-    log = client.get(f"{BASE}/{project_id}/jobs/{job['id']}/log").json()
-    assert any("Traceback" in line for line in log["lines"])
+    started = start(client, legacy, base_model.id)
+    done = wait_library_job(client, started["job"]["id"])
+    assert done["state"] == "failed" and "fake trainer failure" in done["error"]
+    assert client.get(f"{RUNS}/{started['training_run']['id']}").json()["state"] == "failed"
 
 
-def test_train_needs_a_materialised_dataset(client, project_id, handle, base_model):
-    empty = make_dataset(handle, name="not-yet", materialise=False)
-    body = {"name": "x", "dataset_id": empty.id, "base_model_id": base_model["id"]}
-    r = client.post(train_url(project_id), json=body)
-    assert r.status_code == 422, r.text
-    assert r.json()["error"]["code"] == "validation_error"
-    assert "data.yaml" in r.json()["error"]["message"]
+def test_refusals_come_before_any_job(client, app, tmp_path, built, legacy, base_model):
+    assert client.post(RUNS, json=train_body(built["id"], "nope")).status_code == 404
+    assert client.post(RUNS, json=train_body("nope", base_model.id)).status_code == 404
+    assert client.post(RUNS, json=train_body(built["id"], base_model.id, epochs=0)).status_code == 422
+    gone = add_library_model(app, tmp_path, name="gone")
+    service.weights_file(app.state.library, gone).unlink()
+    r = client.post(RUNS, json=train_body(built["id"], gone.id))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "model_unavailable"
+    assert client.get(f"{LIB}/jobs", params={"type": "train"}).json()["items"] == []
+    app.state.library = None
+    r = client.post(RUNS, json=train_body(built["id"], base_model.id))
+    assert r.status_code == 503 and r.json()["error"]["code"] == "library_unavailable"
 
 
-def test_train_with_unknown_ids_is_404(client, project_id, dataset, base_model):
-    unknown_base = {"name": "x", "dataset_id": dataset.id, "base_model_id": "nope"}
-    r = client.post(train_url(project_id), json=unknown_base)
-    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
-    unknown_dataset = {"name": "x", "dataset_id": "nope", "base_model_id": base_model["id"]}
-    assert client.post(train_url(project_id), json=unknown_dataset).status_code == 404
+def test_a_detect_base_on_an_obb_dataset_is_refused(client, app, tmp_path, make_jpeg, catalogue, base_model):  # noqa: F811
+    a, b, exc, truck = two_projects(app, tmp_path, make_jpeg, catalogue)
+    oriented = build_dataset(client, create_body("oriented", [b.id], [truck.id], task="obb"))
+    r = client.post(RUNS, json=train_body(oriented["id"], base_model.id))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "task_mismatch"
+    assert r.json()["error"]["details"] == {"base_task": "detect", "dataset_task": "obb"}
+    assert client.get(f"{LIB}/jobs", params={"type": "train"}).json()["items"] == []
 
 
-def test_train_rejects_zero_epochs(client, project_id, dataset, base_model):
-    body = {"name": "x", "dataset_id": dataset.id, "base_model_id": base_model["id"], "epochs": 0}
-    assert client.post(train_url(project_id), json=body).status_code == 422
+def test_a_segment_dataset_cannot_train_yet(client, app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+    a, _, exc, _ = two_projects(app, tmp_path, make_jpeg, catalogue)
+    masks = build_dataset(client, create_body("masks", [a.id], [exc.id], task="segment"))
+    seg_base = add_library_model(app, tmp_path, name="yolo11n-seg", task="segment", origin="starter")
+    r = client.post(RUNS, json=train_body(masks["id"], seg_base.id))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "task_not_supported"
 
 
-def test_train_rejects_a_dataset_whose_yaml_drifted_from_its_class_snapshot(
-    client, project_id, handle, base_model
+def test_a_legacy_dataset_whose_yaml_drifted_is_refused(client, app, legacy, base_model):
+    with app.state.library.session() as s:
+        path = Path(s.get(LibraryDataset, legacy).legacy_path) / "data.yaml"
+    path.write_text(path.read_text("utf-8").replace("excavator", "digger"), "utf-8")
+    r = client.post(RUNS, json=train_body(legacy, base_model.id))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert "digger" in r.json()["error"]["message"] and "excavator" in r.json()["error"]["message"]
+
+
+def test_a_dataset_still_being_built_is_409(client, app, base_model):
+    lib = app.state.library
+    with lib.session() as s:
+        job = Job(type="dataset_build", state="running", params={}, log_path="")
+        s.add(job)
+        s.flush()
+        row = LibraryDataset(name="busy", classes=[], split_method="random", state="resolving", job_id=job.id)
+        s.add(row)
+        s.flush()
+        dataset_id = row.id
+    r = client.post(RUNS, json=train_body(dataset_id, base_model.id))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+
+
+def test_a_legacy_dataset_whose_yaml_is_gone_is_not_ready(client, app, legacy, base_model):
+    with app.state.library.session() as s:
+        (Path(s.get(LibraryDataset, legacy).legacy_path) / "data.yaml").unlink()
+    r = client.post(RUNS, json=train_body(legacy, base_model.id))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+
+
+def test_a_dataset_whose_export_is_being_written_is_409(client, app, base_model):
+    lib = app.state.library
+    with lib.session() as s:
+        job = Job(type="dataset", state="running", params={}, log_path="")
+        s.add(job)
+        s.flush()
+        row = LibraryDataset(
+            name="exporting",
+            classes=[],
+            split_method="random",
+            state="ready",
+            export_state="building",
+            export_job_id=job.id,
+        )
+        s.add(row)
+        s.flush()
+        dataset_id = row.id
+    r = client.post(RUNS, json=train_body(dataset_id, base_model.id))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
+    assert client.get(f"{LIB}/jobs", params={"type": "train"}).json()["items"] == []
+
+
+def test_a_restart_mid_training_shows_the_run_failed(client, app, legacy, base_model):
+    lib = app.state.library
+    with lib.session() as s:
+        job = Job(type="train", state="running", params={"dataset_id": legacy}, log_path="")
+        s.add(job)
+        s.flush()
+        run = TrainingRun(
+            name="x",
+            dataset_id=legacy,
+            base_model_id=base_model.id,
+            params={},
+            job_id=job.id,
+            state="running",
+        )
+        s.add(run)
+        s.flush()
+        run_id = run.id
+    sweep_orphans(lib, app.state.jobs)
+    assert client.get(f"{RUNS}/{run_id}").json()["state"] == "failed"
+
+
+def test_runs_list_newest_first(client, legacy, base_model, use_fake_trainer):
+    use_fake_trainer()
+    first = start(client, legacy, base_model.id, name="first")
+    wait_library_job(client, first["job"]["id"])
+    second = start(client, legacy, base_model.id, name="second")
+    wait_library_job(client, second["job"]["id"])
+    page = client.get(RUNS, params={"limit": 1}).json()
+    assert [r["name"] for r in page["items"]] == ["second"] and page["next_cursor"]
+    rest = client.get(RUNS, params={"limit": 1, "cursor": page["next_cursor"]}).json()
+    assert [r["name"] for r in rest["items"]] == ["first"]
+
+
+def test_runs_filter_by_dataset(client, app, tmp_path, make_jpeg, legacy, base_model, use_fake_trainer):
+    use_fake_trainer()
+    other_project = make_project(app, tmp_path / "other", "Other")
+    other = register_legacy_dataset(
+        app.state.library, other_project, legacy_project_dataset(other_project, make_jpeg)
+    )
+    for dataset_id, name in ((legacy, "on legacy"), (other, "on other")):
+        wait_library_job(client, start(client, dataset_id, base_model.id, name=name)["job"]["id"])
+    items = client.get(RUNS, params={"dataset_id": other}).json()["items"]
+    assert [r["name"] for r in items] == ["on other"]
+
+
+def test_runs_filter_by_the_state_they_read(client, app, legacy, base_model, use_fake_trainer):
+    """`state` filters on the effective state: a run a restart interrupted is found as `failed`."""
+    use_fake_trainer()
+    done = start(client, legacy, base_model.id, name="done")
+    wait_library_job(client, done["job"]["id"])
+    lib = app.state.library
+    with lib.session() as s:
+        job = Job(type="train", state="failed", params={"dataset_id": legacy}, log_path="")
+        s.add(job)
+        s.flush()
+        s.add(
+            TrainingRun(
+                name="interrupted",
+                dataset_id=legacy,
+                base_model_id=base_model.id,
+                params={},
+                job_id=job.id,
+                state="running",
+            )
+        )
+
+    def names(state: str) -> list[str]:
+        return [r["name"] for r in client.get(RUNS, params={"state": state}).json()["items"]]
+
+    assert names("failed") == ["interrupted"]
+    assert names("succeeded") == ["done"]
+    assert names("running") == []
+
+
+def test_the_per_project_train_route_is_gone(client, app, tmp_path):
+    handle = make_project(app, tmp_path / "p", "P")
+    assert client.post(f"/api/v1/projects/{handle.id}/train", json={}).status_code in (404, 405)
+
+
+def test_a_run_whose_weights_are_already_in_the_library_returns_that_model(
+    client, legacy, base_model, use_fake_trainer
 ):
-    """A stale data.yaml would silently train class 0 as the wrong name (S1 owns materialising)."""
-    dataset = make_dataset(handle, name="drifted")
-    folder = handle.folder / dataset.path
-    data = yaml.safe_load((folder / "data.yaml").read_text(encoding="utf-8"))
-    data["names"] = {0: "dump_truck", 1: "excavator"}  # swapped
-    (folder / "data.yaml").write_text(yaml.safe_dump(data), encoding="utf-8")
-
-    body = {"name": "x", "dataset_id": dataset.id, "base_model_id": base_model["id"]}
-    r = client.post(train_url(project_id), json=body)
-    assert r.status_code == 422, r.text
-    assert r.json()["error"]["code"] == "validation_error"
-    message = r.json()["error"]["message"]
-    assert "excavator" in message and "dump_truck" in message
+    use_fake_trainer()  # writes the same bytes every run: the second run's weights are a sha hit
+    results = []
+    for name in ("first", "second"):
+        done = wait_library_job(client, start(client, legacy, base_model.id, name=name)["job"]["id"])
+        assert done["state"] == "succeeded", done["error"]
+        results.append(done["result"])
+    assert results[1]["model_id"] == results[0]["model_id"]
+    trained = [m for m in client.get(f"{LIB}/models").json()["items"] if m["origin"] == "trained"]
+    assert [m["name"] for m in trained] == ["first"]

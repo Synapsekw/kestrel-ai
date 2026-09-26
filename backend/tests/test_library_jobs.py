@@ -1,5 +1,5 @@
-"""Jobs that fill and use the library: training, export, starters, and runs that load a library
-model (spec sections 4.3 and 4.4). The FakeTrainer stands in for Ultralytics; no test loads torch
+"""Jobs that fill and use the library: export, starters, and runs that load a library model
+(spec sections 4.3 and 4.4; training is in `test_training_jobs.py`). No test loads torch
 except the one real-checkpoint import, which is skipped when `yolo11n.pt` is absent."""
 
 import threading
@@ -11,7 +11,6 @@ from fakes import FakeTrainer
 from library_helpers import LIB, add_library_model, stub_checkpoint, wait_library_job
 from local_paths import MODELS_DIR
 from project_factory import new_project
-from test_training_jobs import make_dataset, wait_for
 
 from app.library import service
 from app.training import starter
@@ -30,112 +29,6 @@ def fake_trainer(monkeypatch) -> FakeTrainer:
     monkeypatch.setattr("app.training.jobs.get_trainer", lambda: trainer)
     monkeypatch.setattr("app.library.jobs.get_trainer", lambda: trainer)
     return trainer
-
-
-@pytest.fixture
-def train_project(client, tmp_path) -> dict:
-    return new_project(client, tmp_path / "train-proj", name="Ahmadia")
-
-
-def train_body(dataset_id: str, base_model_id: str, **over) -> dict:
-    return {
-        "name": "ahmadia v1 n",
-        "dataset_id": dataset_id,
-        "base_model_id": base_model_id,
-        "epochs": 3,
-        "imgsz": 640,
-        "augmentation": "aerial",
-        "device": "cpu",
-        **over,
-    }
-
-
-# ------------------------------------------------------------------------ train
-
-
-def test_a_finished_training_run_is_registered_in_the_library(
-    client, app, tmp_path, train_project, fake_trainer
-):
-    handle = app.state.projects.get(train_project["id"])
-    dataset = make_dataset(handle)
-    base = add_library_model(app, tmp_path, name="yolo11n-coco", origin="starter")
-
-    r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, base.id))
-    assert r.status_code == 202, r.text
-    job = r.json()["job"]
-    assert job["type"] == "train" and job["project_id"] == train_project["id"]
-    done = wait_for(client, train_project["id"], job["id"])
-    assert done["state"] == "succeeded", done["error"]
-    assert done["result"]["metrics"]["map50"] == 0.61
-
-    trained = [m for m in client.get(f"{LIB}/models").json()["items"] if m["origin"] == "trained"]
-    assert len(trained) == 1
-    m = trained[0]
-    assert m["id"] == done["result"]["model_id"]
-    assert m["name"] == "ahmadia v1 n" and m["task"] == "detect" and m["state"] == "ready"
-    assert m["class_names"] == ["excavator", "dump_truck"]
-    assert m["metrics"]["map50"] == 0.61
-    assert m["hyperparameters"]["epochs"] == 3 and m["hyperparameters"]["augmentation"] == "aerial"
-    assert "base_weights" not in m["hyperparameters"] and "data_yaml" not in m["hyperparameters"]
-    p = m["provenance"]
-    assert p["project_id"] == train_project["id"]
-    assert p["project_name"] == "Ahmadia"
-    assert p["project_folder"] == str(handle.folder)
-    assert p["dataset_id"] == dataset.id and p["dataset_name"] == "v1"
-    assert p["run_id"] == job["id"]
-    assert p["base_model_id"] == base.id and p["base_model_name"] == "yolo11n-coco"
-    assert set(m["artifacts"]) == {"results_csv", "confusion_matrix"}
-    assert m["artifacts"]["results_csv"] == "artifacts/results.csv"
-    r = client.get(f"{LIB}/models/{m['id']}/artifacts/results_csv")
-    assert r.status_code == 200 and "epoch" in r.text
-    # nothing is copied into the project's own models folder any more
-    assert list(handle.models_dir.glob("*")) == []
-
-
-def test_a_run_whose_weights_are_already_in_the_library_returns_that_model(
-    client, app, tmp_path, train_project, fake_trainer
-):
-    # The FakeTrainer writes the same bytes every run, so the second run's weights are a sha hit.
-    handle = app.state.projects.get(train_project["id"])
-    dataset = make_dataset(handle)
-    base = add_library_model(app, tmp_path, name="yolo11n-coco", origin="starter")
-    results = []
-    for name in ("first", "second"):
-        body = train_body(dataset.id, base.id, name=name)
-        r = client.post(f"{BASE}/{train_project['id']}/train", json=body)
-        assert r.status_code == 202, r.text
-        done = wait_for(client, train_project["id"], r.json()["job"]["id"])
-        assert done["state"] == "succeeded", done["error"]
-        results.append(done["result"])
-    assert results[1]["model_id"] == results[0]["model_id"]
-    trained = [m for m in client.get(f"{LIB}/models").json()["items"] if m["origin"] == "trained"]
-    assert [m["name"] for m in trained] == ["first"]
-
-
-def test_training_from_an_unknown_base_model_is_a_404(client, app, train_project):
-    dataset = make_dataset(app.state.projects.get(train_project["id"]))
-    r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, "nope"))
-    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
-
-
-def test_training_from_an_unavailable_base_model_is_a_409(client, app, tmp_path, train_project):
-    dataset = make_dataset(app.state.projects.get(train_project["id"]))
-    base = add_library_model(app, tmp_path)
-    service.weights_file(app.state.library, base).unlink()
-    r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, base.id))
-    assert r.status_code == 409 and r.json()["error"]["code"] == "model_unavailable"
-
-
-def test_training_without_a_library_is_a_503(client, app, train_project):
-    dataset = make_dataset(app.state.projects.get(train_project["id"]))
-    app.state.library = None
-    r = client.post(f"{BASE}/{train_project['id']}/train", json=train_body(dataset.id, "any"))
-    assert r.status_code == 503 and r.json()["error"]["code"] == "library_unavailable"
-
-
-def test_the_old_project_model_routes_are_gone(client, train_project):
-    assert client.get(f"{BASE}/{train_project['id']}/models").status_code == 404
-    assert client.post(f"{BASE}/{train_project['id']}/models/train", json={}).status_code == 404
 
 
 # ----------------------------------------------------------------------- export

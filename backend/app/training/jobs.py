@@ -1,83 +1,75 @@
-"""The `train` job (spec section 7): trains in a project and registers the result in the
-model library (spec 2026-09-23 section 4.3). Registered with the S0 job runner."""
+"""The `train` library job (foundation F §12.2 step 4): trains a library dataset and registers the
+result in the model library. It runs on the library handle, so its run folder is
+`<library>/runs/<job_id>`. A built dataset whose export is not ready is exported first, inside
+this same job. GPU use is unchanged: `hold_gpu` and the worker subprocess (`training/worker.py`)."""
 
 from dataclasses import asdict
 from pathlib import Path
 
-import yaml
+from sqlalchemy import select
 
-from app.db.models import Dataset
-from app.errors import AppError, not_found
-from app.jobs.cancellation import JobFailure
+from app.errors import AppError
+from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.gpu import hold_gpu
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.library import service as library
-from app.projects.service import ProjectHandle
+from app.library.datasets.export import export_dataset
+from app.library.datasets.service import effective_export_state, job_states
+from app.library.db import LibraryDataset, LibraryDatasetSource
+from app.training import runs
 from app.training.presets import TrainParams
 from app.training.trainer import get_trainer
 
 # Paths that are only meaningful inside this run; they are not kept as the model's hyperparameters.
 PATH_PARAMS = ("data_yaml", "base_weights", "run_dir")
-LIBRARY_GONE = "The model library is not available, so training cannot start. Restart the app."
+#: The share of the job's progress bar an export takes when it has to run first.
+EXPORT_SHARE = 0.1
 
 
-def get_dataset(handle: ProjectHandle, dataset_id: str) -> Dataset:
-    with handle.session() as s:
-        row = s.get(Dataset, dataset_id)
+def _dataset(lib, dataset_id: str) -> LibraryDataset:
+    with lib.session() as s:
+        row = s.get(LibraryDataset, dataset_id)
         if row is None:
-            raise not_found("dataset", dataset_id)
+            raise JobFailure("The dataset this run trains on was deleted.")
         s.expunge(row)
         return row
 
 
-def data_yaml_path(handle: ProjectHandle, dataset) -> Path:
-    return handle.folder / dataset.path / "data.yaml"
+def _export_ready(lib, dataset: LibraryDataset) -> bool:
+    with lib.session() as s:
+        jobs = job_states(s, [dataset.export_job_id])
+    return effective_export_state(lib, dataset, jobs) == "ready"
 
 
-def yaml_class_names(data_yaml: Path) -> list[str]:
-    """`names` from a YOLO data.yaml, in class-index order (a mapping or a plain list)."""
-    names = (yaml.safe_load(data_yaml.read_text(encoding="utf-8")) or {}).get("names") or {}
-    if isinstance(names, dict):
-        return [str(names[k]) for k in sorted(names, key=lambda k: int(k))]
-    return [str(n) for n in names]
-
-
-def check_materialised(handle: ProjectHandle, dataset) -> Path:
-    """S1's materialise job writes data.yaml; training cannot start before it exists.
-
-    The class snapshot on the Dataset row is what the trained model is registered with, so it has to
-    agree with the file the trainer reads: a drifted data.yaml would label the classes wrongly.
-    """
-    path = data_yaml_path(handle, dataset)
-    if not path.is_file():
-        raise AppError(
-            "validation_error",
-            f"dataset {dataset.name!r} has no data.yaml at {dataset.path}; materialise it first",
-            422,
+def _single_project(lib, dataset: LibraryDataset) -> dict:
+    """The project keys of the provenance snapshot, when the dataset came from exactly one project
+    (a legacy dataset always does). A dataset across projects names none of them."""
+    with lib.session() as s:
+        sources = list(
+            s.execute(
+                select(LibraryDatasetSource).where(LibraryDatasetSource.dataset_id == dataset.id)
+            ).scalars()
         )
-    snapshot = [str(c.get("name")) for c in (dataset.classes or [])]
-    in_file = yaml_class_names(path)
-    if snapshot != in_file:
-        raise AppError(
-            "validation_error",
-            f"dataset {dataset.name!r} lists classes {snapshot} but {dataset.path}/data.yaml has "
-            f"{in_file}; re-materialise the dataset",
-            422,
-        )
-    return path
+        if len(sources) != 1:
+            return {}
+        src = sources[0]
+        return {
+            "project_id": src.project_id,
+            "project_name": src.project_name,
+            "project_folder": src.project_folder,
+        }
 
 
-def _train_gsd(ctx: JobContext, handle: ProjectHandle, dataset, imgsz: int) -> float | None:
+def _train_gsd(ctx: JobContext, lib, registry, dataset_id: str, imgsz: int) -> float | None:
     """The scale the finished model was trained at, or None (spec 2026-09-23 section 4).
 
     Best effort by design: a model that cannot be measured is registered anyway and the operator is
-    asked the first time they start a run with it. Registration must never fail because a median
-    over a column and eight EXIF headers did not work out. An implausible estimate (spec 3.3) is
-    discarded rather than stored, so nothing silently defaults to an order-of-magnitude error.
+    asked the first time they start a run with it. An implausible estimate (spec 3.3) is discarded
+    rather than stored, so nothing silently defaults to an order-of-magnitude error.
     """
     try:
-        estimate = library.estimate_for_dataset(handle, dataset.id, imgsz)
+        estimate = library.estimate_for_library_dataset(lib, registry, dataset_id, imgsz)
     except Exception:
         ctx.log.exception("could not derive the training scale of this run")
         return None
@@ -96,21 +88,51 @@ def _train_gsd(ctx: JobContext, handle: ProjectHandle, dataset, imgsz: int) -> f
     return estimate.train_gsd_cm
 
 
-@register_job_type("train")
+def _cancelled_before_start(ctx: JobContext) -> None:
+    runs.finish(ctx.project, ctx.params["training_run_id"], "cancelled")
+
+
+@register_job_type("train", on_cancelled_before_start=_cancelled_before_start)
 def run_train(ctx: JobContext) -> dict:
-    handle, p = ctx.project, ctx.params
-    lib = ctx.runner.library
-    if lib is None:
-        raise JobFailure(LIBRARY_GONE)
+    lib, run_id = ctx.project, ctx.params["training_run_id"]
+    runs.mark_running(lib, run_id)
+    try:
+        result = _train(ctx)
+    except JobCancelled:
+        runs.finish(lib, run_id, "cancelled")
+        raise
+    except BaseException:
+        runs.finish(lib, run_id, "failed")
+        raise
+    runs.finish(lib, run_id, "succeeded", model_id=result["model_id"], metrics=result["metrics"])
+    return result
+
+
+def _train(ctx: JobContext) -> dict:
+    lib, registry, p = ctx.project, ctx.runner.projects, ctx.params
     try:
         base_model = library.require_ready(lib, p["base_model_id"])
     except AppError as e:
         raise JobFailure(e.message) from e
-    dataset = get_dataset(handle, p["dataset_id"])
+    dataset = _dataset(lib, p["dataset_id"])
+
+    progress = ctx.progress
+    if dataset.origin == "built" and not _export_ready(lib, dataset):
+        ctx.log.info("exporting dataset %s before training", dataset.name)
+        export_dataset(ctx, dataset.id, lambda f, m: ctx.progress(EXPORT_SHARE * f, m))
+        dataset = _dataset(lib, dataset.id)
+
+        def progress(f: float, m: str = "") -> None:
+            ctx.progress(EXPORT_SHARE + (1 - EXPORT_SHARE) * f, m)
+
+    try:
+        data_yaml = runs.check_data_yaml(runs.data_yaml_of(lib, dataset), dataset)
+    except AppError as e:
+        raise JobFailure(e.message) from e
     params = TrainParams(
-        data_yaml=str(check_materialised(handle, dataset)),
+        data_yaml=str(data_yaml),
         base_weights=str(library.weights_file(lib, base_model)),
-        run_dir=str(handle.runs_dir / ctx.job_id),
+        run_dir=str(lib.runs_dir / ctx.job_id),
         epochs=int(p.get("epochs", 50)),
         imgsz=int(p.get("imgsz", 1280)),
         batch=p.get("batch"),
@@ -118,37 +140,34 @@ def run_train(ctx: JobContext) -> dict:
         augmentation=p.get("augmentation", "default"),
         device=p.get("device", "0"),
     )
-    ctx.log.info("training %s on dataset %s for %s epochs", p["name"], dataset.name, params.epochs)
+    ctx.log.info(
+        "training %s on dataset %s (%s) for %s epochs", p["name"], dataset.name, data_yaml, params.epochs
+    )
     with hold_gpu(ctx.log, "train", cancelled=ctx.cancelled):
-        result = get_trainer().train(params, ctx.progress, ctx.cancelled, ctx.log)
+        result = get_trainer().train(params, progress, ctx.cancelled, ctx.log)
     ctx.check_cancelled()
-    with handle.session() as s:
-        project = handle.row(s)
-        project_name = project.name
     artifacts = {
         "results_csv": result.results_csv,
         "confusion_matrix": result.confusion_matrix,
         "pr_curve": result.pr_curve,
     }
-    train_gsd_cm = _train_gsd(ctx, handle, dataset, params.imgsz)
+    train_gsd_cm = _train_gsd(ctx, lib, registry, dataset.id, params.imgsz)
+    classes = list(dataset.classes or [])
     try:
         model = library.add_model(
             lib,
             source_weights=Path(result.best_weights),
             name=p["name"],
             origin="trained",
-            # Datasets record no task yet: every dataset is axis-aligned boxes. An OBB dataset
-            # would register an `obb` model here.
-            task=getattr(dataset, "task", None) or "detect",
-            class_names=[str(c.get("name")) for c in (dataset.classes or [])],
+            task=dataset.task,
+            class_names=[str(c["name"]) for c in classes],
+            class_map={str(c["name"]): str(c["type_id"]) for c in classes},  # pre-filled (F §12.2)
             metrics=result.final_metrics or None,
             hyperparameters={k: v for k, v in asdict(params).items() if k not in PATH_PARAMS},
             train_gsd_cm=train_gsd_cm,
             artifacts={k: Path(v) for k, v in artifacts.items() if v is not None},
             provenance={
-                "project_id": handle.id,
-                "project_name": project_name,
-                "project_folder": str(handle.folder),
+                **_single_project(lib, dataset),
                 "dataset_id": dataset.id,
                 "dataset_name": dataset.name,
                 "run_id": ctx.job_id,

@@ -7,22 +7,22 @@ It builds a tiny dataset from real aerial frames (copied, never modified) and tr
 import importlib.util
 import json
 import shutil
-import time
 
 import pytest
 import yaml
+from library_datasets_helpers import make_project
 from library_helpers import LIB, wait_library_job
 from local_paths import FRAMES_DIR, MODELS_DIR
 from PIL import Image as PILImage
 
 from app.db.models import Dataset
+from app.library.datasets.legacy import register_legacy_dataset
 
 pytestmark = pytest.mark.gpu
 
 FRAMES = FRAMES_DIR
 YOLO11N = MODELS_DIR / "yolo11n.pt"
 CLASSES = ["excavator", "dump_truck"]
-BASE = "/api/v1/projects"
 TRAIN_TIMEOUT_S = 600
 EXPORT_TIMEOUT_S = 600
 
@@ -33,16 +33,6 @@ def needs_cuda():
 
     if not torch.cuda.is_available():
         pytest.skip("no CUDA device")
-
-
-def wait_for(client, project_id, job_id, timeout) -> dict:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        job = client.get(f"{BASE}/{project_id}/jobs/{job_id}").json()
-        if job["state"] in ("succeeded", "failed", "cancelled"):
-            return job
-        time.sleep(1.0)
-    raise AssertionError(f"job {job_id} still {job['state']} after {timeout}s")
 
 
 def build_dataset(handle, frames: int = 8, side: int = 640) -> Dataset:
@@ -85,8 +75,11 @@ def build_dataset(handle, frames: int = 8, side: int = 640) -> Dataset:
     return row
 
 
-def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_path):
-    dataset = build_dataset(handle)
+def test_train_one_epoch_on_the_gpu_and_export(client, app, tmp_path):
+    handle = make_project(app, tmp_path / "gpu-project", "GPU")
+    project_dataset = build_dataset(handle)
+    dataset_id = register_legacy_dataset(app.state.library, handle, project_dataset.id)
+    assert dataset_id is not None
     weights = tmp_path / "yolo11n.pt"
     shutil.copy2(YOLO11N, weights)  # the shared models folder is a read-only input
     r = client.post(f"{LIB}/models/import", json={"name": "yolo11n", "weights_path": str(weights)})
@@ -98,7 +91,7 @@ def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_p
 
     body = {
         "name": "gpu smoke",
-        "dataset_id": dataset.id,
+        "dataset_id": dataset_id,
         "base_model_id": base["id"],
         "epochs": 1,
         "imgsz": 320,
@@ -107,15 +100,17 @@ def test_train_one_epoch_on_the_gpu_and_export(client, project_id, handle, tmp_p
         "augmentation": "aerial",
         "device": "0",
     }
-    r = client.post(f"{BASE}/{project_id}/train", json=body)
+    r = client.post(f"{LIB}/training-runs", json=body)
     assert r.status_code == 202, r.text
     job = r.json()["job"]
-    done = wait_for(client, project_id, job["id"], TRAIN_TIMEOUT_S)
+    done = wait_library_job(client, job["id"], TRAIN_TIMEOUT_S)
     assert done["state"] == "succeeded", (done["error"], done["message"])
 
     events = [
         json.loads(line)
-        for line in (handle.runs_dir / job["id"] / "progress.jsonl").read_text(encoding="utf-8").splitlines()
+        for line in (app.state.library.runs_dir / job["id"] / "progress.jsonl")
+        .read_text(encoding="utf-8")
+        .splitlines()
         if line.strip()
     ]
     assert [e["kind"] for e in events][0] == "start"

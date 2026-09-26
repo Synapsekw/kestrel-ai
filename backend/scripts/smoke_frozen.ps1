@@ -286,21 +286,24 @@ try {
     Invoke-Api POST "/projects/$pid1/images/$($image.id)/boxes" `
       @{ class_id = $project.classes[0].id; x = 400; y = 600; w = 180; h = 120 } | Out-Null
   }
-  $dataset = Invoke-Api POST "/projects/$pid1/datasets" `
-    @{ name = "v1"; split_method = "random"; val_fraction = 0.34; seed = 42 }
-  $job = Wait-ApiJob "/projects/$pid1/jobs" $dataset.job.id
+  $typeIds = @($project.classes | ForEach-Object { $_.id })
+  $dataset = Invoke-Api POST "/library/datasets" @{
+    name = "smoke-v1"; task = "detect"; split_method = "random"; val_fraction = 0.34; seed = 42
+    filter = @{ project_ids = @($pid1); type_ids = $typeIds; reviewed_only = $false }
+  }
+  $job = Wait-ApiJob "/library/jobs" $dataset.job.id
   if ($job.state -ne "succeeded") { throw "dataset failed: $($job.error)" }
-  $frozen = Invoke-Api GET "/projects/$pid1/datasets/$($dataset.dataset.id)"
+  $frozen = Invoke-Api GET "/library/datasets/$($dataset.dataset.id)"
   Complete-Step "dataset"
-  Write-Host "dataset ok train $($frozen.train_count) val $($frozen.val_count)"
+  Write-Host "dataset ok train $($frozen.counts.train) val $($frozen.counts.val)"
 
-  $training = Invoke-Api POST "/projects/$pid1/train" @{
+  $training = Invoke-Api POST "/library/training-runs" @{
     name = "smoke"; dataset_id = $frozen.id; base_model_id = $model.id
     epochs = 1; imgsz = $Imgsz; batch = 2; patience = 5; augmentation = "aerial"; device = "0"
   }
-  $job = Wait-ApiJob "/projects/$pid1/jobs" $training.job.id
+  $job = Wait-ApiJob "/library/jobs" $training.job.id
   if ($job.state -ne "succeeded") {
-    $log = Invoke-Api GET "/projects/$pid1/jobs/$($training.job.id)/log?tail=40"
+    $log = Invoke-Api GET "/library/jobs/$($training.job.id)/log?tail=40"
     throw "training failed: $($job.error)`n$($log.lines -join "`n")"
   }
   $trained = Invoke-Api GET "/library/models/$($job.result.model_id)"

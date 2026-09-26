@@ -137,6 +137,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "putLibraryModelClassMap": {422},  # unknown_type (bad/archived type id) or validation_error (bad key)
     "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
     "exportLibraryDataset": {422},  # task_not_supported: a segment dataset cannot be exported yet
+    "startTrainingRun": {422},  # task_not_supported / task_mismatch: a segment dataset or a wrong-task base
     "createSurface": {422},
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
