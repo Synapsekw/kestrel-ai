@@ -38,7 +38,7 @@ import { useSiteAreaOverlay } from "@/analytics/useSiteAreaOverlay";
 import { addMapDetection, type MapDetection } from "@/api/review";
 import { pushLog } from "@/app/diagnostics";
 import { cloudsForMap, jumpQuery, mapPixelToCloud, parseAt, type XY } from "@/clouds/jump";
-import { isTypingTarget } from "@/editor/hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { ExportMapDialog } from "@/maps/ExportMapDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";

@@ -31,7 +31,7 @@ import {
 } from "@/data/selection";
 import { useImageList } from "@/data/useImageList";
 import { IMAGE_PAGE_SIZE } from "@/api/images";
-import { isTypingTarget } from "@/editor/hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
 import { useNavigationStore } from "@/store/navigation";
 import { Alert, Button, IconButton, Kbd, Skeleton, buttonClass, type AlertTone } from "@/ui";
 

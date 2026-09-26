@@ -25,7 +25,7 @@ import { useMeasureTool } from "@/clouds/useMeasureTool";
 import { ViewPanel, type ViewSettings } from "@/clouds/ViewPanel";
 import { readBudget, writeBudget } from "@/clouds/viewer/budget";
 import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOptions";
-import { isTypingTarget } from "@/editor/hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, EmptyState, Segmented, toast } from "@/ui";

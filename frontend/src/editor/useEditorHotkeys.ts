@@ -1,7 +1,8 @@
 import { useLayoutEffect } from "react";
 import type { ClassDef } from "@contract/client";
 import { useEditorStore } from "@/store/editor";
-import { actionForKey, isTypingTarget } from "./hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
+import { actionForKey } from "./hotkeys";
 import type { EditorActions } from "./useEditorActions";
 
 interface Options {

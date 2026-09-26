@@ -85,13 +85,6 @@ export function actionForKey(e: KeyLike): EditorAction | null {
   return null;
 }
 
-export function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  // `isContentEditable` is undefined in jsdom, so compare explicitly.
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable === true;
-}
-
 export const HOTKEY_HELP: ReadonlyArray<{ keys: string; does: string }> = [
   {
     keys: "1-9",

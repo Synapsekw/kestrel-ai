@@ -12,7 +12,7 @@ import {
   toggleSelect,
 } from "@/data/selection";
 import type { useImageList } from "@/data/useImageList";
-import { isTypingTarget } from "@/editor/hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
 import { useNavigationStore } from "@/store/navigation";
 import { Alert, SkeletonRows } from "@/ui";
 

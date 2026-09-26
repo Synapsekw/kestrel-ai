@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { isTypingTarget } from "@/editor/hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
 import { Button, Kbd } from "@/ui";
 import type { VolumeTool } from "./volumeLayers";
 

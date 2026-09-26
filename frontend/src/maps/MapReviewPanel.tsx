@@ -10,7 +10,7 @@ import {
   type ReviewAction,
 } from "@/api/review";
 import { pushLog } from "@/app/diagnostics";
-import { isTypingTarget } from "@/editor/hotkeys";
+import { isTypingTarget } from "@/ui/keymap";
 import { AcceptAbove } from "@/review/AcceptAbove";
 import { Button, Field, Kbd, Pill, Progress, Select, cx, toast, type PillTone } from "@/ui";
 

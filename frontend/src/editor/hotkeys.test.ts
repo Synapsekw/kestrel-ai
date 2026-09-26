@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { actionForKey, isTypingTarget, type KeyLike } from "./hotkeys";
+import { actionForKey, type KeyLike } from "./hotkeys";
 
 function key(k: string, mods: Partial<KeyLike> = {}): KeyLike {
   return { type: "keydown", key: k, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...mods };
@@ -44,16 +44,6 @@ describe("actionForKey", () => {
   it("ignores shifted letters and non-printable keys", () => {
     expect(actionForKey(key("X", { shiftKey: true }))).toBeNull();
     expect(actionForKey(key("ArrowUp"))).toBeNull();
-  });
-});
-
-describe("isTypingTarget", () => {
-  it("is true for inputs, textareas and selects", () => {
-    expect(isTypingTarget(document.createElement("input"))).toBe(true);
-    expect(isTypingTarget(document.createElement("textarea"))).toBe(true);
-    expect(isTypingTarget(document.createElement("select"))).toBe(true);
-    expect(isTypingTarget(document.createElement("div"))).toBe(false);
-    expect(isTypingTarget(null)).toBe(false);
   });
 });
 

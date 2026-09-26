@@ -15,6 +15,23 @@ export { Field } from "./Field";
 export { Icon, type IconName } from "./Icon";
 export { Input, Select, Textarea, fieldClass } from "./Input";
 export { Kbd } from "./Kbd";
+export {
+  GLOBAL_KEYS,
+  KEYMAP,
+  REVIEW_KEYS,
+  WORKSPACE_KEYS,
+  chordOf,
+  findCollisions,
+  formatChord,
+  isTypingTarget,
+  keysFor,
+  normaliseChord,
+  useToolShortcuts,
+  type KeyEntry,
+  type KeyScope,
+  type ToolShortcut,
+  type WorkspaceScope,
+} from "./keymap";
 export { Pill, type PillTone } from "./Pill";
 export { Progress } from "./Progress";
 export { Segmented } from "./Segmented";
