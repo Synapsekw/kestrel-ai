@@ -1,7 +1,7 @@
 import { useEffect, type KeyboardEvent, type MouseEvent } from "react";
 import type { Image as ImageRow } from "@contract/client";
 import { Button, Checkbox, Icon, cx } from "@/ui";
-import { computeWindow, useVirtualRows } from "./useVirtualRows";
+import { computeWindow, useVirtualRows } from "@/ui/useVirtualRows";
 import type { ColumnDef, Order, RowContext, SortKey } from "./listModel";
 
 export const ROW_HEIGHT = 36;

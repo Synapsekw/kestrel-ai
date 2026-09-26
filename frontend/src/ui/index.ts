@@ -8,6 +8,7 @@ export {
   type ButtonSize,
 } from "./Button";
 export { Checkbox } from "./Checkbox";
+export { DataTable, ROW_HEIGHT, type Column, type DataTableProps, type Sort } from "./DataTable";
 export { Dialog } from "./Dialog";
 export { Disclosure } from "./Disclosure";
 export { EmptyState } from "./EmptyState";
@@ -80,4 +81,5 @@ export { useCountUp } from "./useCountUp";
 export { FOCUSABLE, useFocusTrap } from "./useFocusTrap";
 export { claimJobOutcome, useJobToasts, jobToastText, reportedInline } from "./useJobToasts";
 export { INDICATOR_BASE, useSlidingIndicator } from "./useSlidingIndicator";
+export { computeWindow, useVirtualRows, type RowWindow, type VirtualViewport } from "./useVirtualRows";
 export { cx, focusRing, lift, pressable, transition } from "./tokens";

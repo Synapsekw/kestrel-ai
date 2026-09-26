@@ -2,7 +2,7 @@ import { useEffect, useState, type KeyboardEvent, type MouseEvent } from "react"
 import { thumbnailUrl, type Image as ImageRow } from "@contract/client";
 import { useBackend } from "@/api/client";
 import { Checkbox, cx, transition } from "@/ui";
-import { computeWindow, useVirtualRows } from "./useVirtualRows";
+import { computeWindow, useVirtualRows } from "@/ui/useVirtualRows";
 import type { ImageTableProps } from "./ImageTable";
 
 export const CELL_WIDTH = 232;
