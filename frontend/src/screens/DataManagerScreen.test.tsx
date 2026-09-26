@@ -1,32 +1,36 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { screen, fireEvent, waitFor } from "@testing-library/react";
-import { Route, Routes, useLocation } from "react-router-dom";
-import { exampleImagePage, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { screen, fireEvent } from "@testing-library/react";
+import { Route, Routes } from "react-router-dom";
+import {
+  errorBody,
+  exampleImagePage,
+  exampleProject,
+  fakeClient,
+  PROJECT_ID,
+  type FakeBody,
+  type RecordedRequest,
+} from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { DataManagerScreen } from "./DataManagerScreen";
 
-function Search() {
-  return <p data-testid="search">{useLocation().search}</p>;
-}
+const emptyPage = { items: [], next_cursor: null, total: 0 };
+const failure = errorBody("internal_error", "disk full");
 
-function renderScreen(route: string) {
+function renderScreen(route: string, images: (r: RecordedRequest) => FakeBody = () => exampleImagePage) {
   const { api, requests } = fakeClient([
     { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
-    { method: "GET", path: /\/images$/, body: exampleImagePage },
+    {
+      method: "GET",
+      path: /\/images$/,
+      status: (r) => (images(r) === failure ? 500 : 200),
+      body: images,
+    },
     { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
   ]);
   renderWithProviders(
     <Routes>
-      <Route
-        path="/p/:projectId/images"
-        element={
-          <>
-            <DataManagerScreen />
-            <Search />
-          </>
-        }
-      />
+      <Route path="/p/:projectId/images" element={<DataManagerScreen />} />
       <Route path="/p/:projectId/images/:imageId" element={<p data-testid="editor-route" />} />
     </Routes>,
     { api, route },
@@ -56,22 +60,39 @@ describe("DataManagerScreen", () => {
     expect(screen.queryByRole("dialog", { name: "Keyboard shortcuts" })).toBeNull();
   });
 
-  it("says every image is labeled when sent with ?notice=all-labeled, then drops the parameter", async () => {
-    renderScreen(`/p/${PROJECT_ID}/images?notice=all-labeled`);
+  it("Label next says every image is labeled and points at the dataset builder", async () => {
+    // The unlabeled page is empty; any other read lists the project's images.
+    renderScreen(`/p/${PROJECT_ID}/images`, (r) =>
+      r.url.includes("labeled=false") ? emptyPage : exampleImagePage,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Label next" }));
     expect(
-      screen.getByText("Every image is labeled. Build a dataset from them in Models."),
+      await screen.findByText("Every image is labeled. Build a dataset from them in Models."),
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Build a dataset" })).toHaveAttribute(
       "href",
       `/models/datasets?new=1&project=${PROJECT_ID}`,
     );
-    await waitFor(() => expect(screen.getByTestId("search")).toHaveTextContent(/^$/));
-    // Read once: dropping the parameter does not take the notice away.
-    expect(
-      screen.getByText("Every image is labeled. Build a dataset from them in Models."),
-    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText(/Every image is labeled/)).toBeNull();
+  });
+
+  it("Label next says so when the project has no images yet", async () => {
+    renderScreen(`/p/${PROJECT_ID}/images`, () => emptyPage);
+    fireEvent.click(await screen.findByRole("button", { name: "Label next" }));
+    expect(await screen.findByTestId("label-next-notice")).toHaveTextContent("No images to label yet.");
+    expect(screen.queryByTestId("editor-route")).toBeNull();
+  });
+
+  it("Label next tells the operator when the images cannot be read", async () => {
+    renderScreen(`/p/${PROJECT_ID}/images`, (r) =>
+      r.url.includes("labeled=false") ? failure : exampleImagePage,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Label next" }));
+    expect(await screen.findByTestId("label-next-notice")).toHaveTextContent(
+      "Couldn't find the next image to label. Try again.",
+    );
+    expect(screen.queryByTestId("editor-route")).toBeNull();
   });
 
   it("lists only unlabeled images when opened with ?filter=unlabeled", async () => {

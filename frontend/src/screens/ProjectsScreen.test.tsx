@@ -27,7 +27,13 @@ describe("ProjectsScreen", () => {
         path: /\/projects$/,
         status: 422,
         body: errorBody("validation_error", "request validation failed", {
-          errors: [{ loc: ["body", "classes"], msg: "List should have at least 1 item", type: "too_short" }],
+          errors: [
+            {
+              loc: ["body", "name"],
+              msg: "String should have at least 1 character",
+              type: "string_too_short",
+            },
+          ],
         }),
       },
     ]);
@@ -36,7 +42,7 @@ describe("ProjectsScreen", () => {
     fireEvent.change(screen.getAllByLabelText("Folder")[0], { target: { value: "E:\\Projects\\A" } });
     fireEvent.click(screen.getByRole("button", { name: "Create project" }));
     await waitFor(() =>
-      expect(screen.getByRole("alert")).toHaveTextContent("classes: List should have at least 1 item"),
+      expect(screen.getByRole("alert")).toHaveTextContent("name: String should have at least 1 character"),
     );
   });
 

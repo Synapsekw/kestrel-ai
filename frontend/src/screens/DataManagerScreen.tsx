@@ -136,21 +136,12 @@ export function DataManagerScreen() {
   const navigate = useNavigate();
   const { project } = useProject(projectId);
   const sourceNames = useSourceNames(projectId);
-  // `?notice=all-labeled` (sent by the Label step when nothing is left to label) is read once and
-  // then dropped from the URL, so a reload or a back navigation does not show it again.
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [allLabeled, setAllLabeled] = useState(() => searchParams.get("notice") === "all-labeled");
-  useEffect(() => {
-    if (!searchParams.has("notice")) return;
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("notice");
-        return next;
-      },
-      { replace: true },
-    );
-  }, [searchParams, setSearchParams]);
+  // `?filter=unlabeled` (where the old Label step's address redirects) opens on the unlabeled images.
+  const [searchParams] = useSearchParams();
+  // Set by Label next when every image already has labels.
+  const [allLabeled, setAllLabeled] = useState(false);
+  // What Label next says when it has nothing to open: an empty project, or a failed read.
+  const [nextNotice, setNextNotice] = useState<{ tone: AlertTone; text: string } | null>(null);
   const [query, setQuery] = useState<ListQuery>(() =>
     searchParams.get("filter") === "unlabeled"
       ? { ...DEFAULT_QUERY, filters: { ...DEFAULT_FILTERS, labeled: "no" } }
@@ -227,10 +218,14 @@ export function DataManagerScreen() {
   const [nexting, setNexting] = useState(false);
   const onLabelNext = () => {
     setNexting(true);
+    setNextNotice(null);
     void labelNext(api, projectId).then((next) => {
       setNexting(false);
       if (next === "all-labeled") setAllLabeled(true);
-      else if (next !== "no-images") void navigate(`/p/${projectId}/images/${next.imageId}`);
+      else if (next === "no-images") setNextNotice({ tone: "info", text: "No images to label yet." });
+      else if (next === "failed")
+        setNextNotice({ tone: "danger", text: "Couldn't find the next image to label. Try again." });
+      else void navigate(`/p/${projectId}/images/${next.imageId}`);
     });
   };
 
@@ -265,6 +260,11 @@ export function DataManagerScreen() {
           }
         >
           Every image is labeled. Build a dataset from them in Models.
+        </Alert>
+      )}
+      {nextNotice && (
+        <Alert testId="label-next-notice" tone={nextNotice.tone} onDismiss={() => setNextNotice(null)}>
+          {nextNotice.text}
         </Alert>
       )}
       {importing && project && (

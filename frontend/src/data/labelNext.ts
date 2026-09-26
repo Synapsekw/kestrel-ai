@@ -5,7 +5,7 @@ import { pushLog } from "@/app/diagnostics";
 import { useNavigationStore } from "@/store/navigation";
 import { DEFAULT_QUERY, toImageParams } from "./listModel";
 
-export type LabelNext = { imageId: string } | "all-labeled" | "no-images";
+export type LabelNext = { imageId: string } | "all-labeled" | "no-images" | "failed";
 
 /**
  * The Images tab's "Label next" (was the Label step): the first image that still needs labels,
@@ -27,6 +27,6 @@ export async function labelNext(api: ApiClient, projectId: string): Promise<Labe
     return any.items.length > 0 ? "all-labeled" : "no-images";
   } catch (e) {
     pushLog(`label next failed: ${messageOf(e, String(e))}`);
-    return "no-images";
+    return "failed";
   }
 }
