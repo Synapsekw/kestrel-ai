@@ -27,12 +27,13 @@ class LibraryModelOut(BaseModel):
     name: str
     notes: str
     supplier: str | None
-    task: Literal["detect", "obb"]
+    task: Literal["detect", "obb", "segment"]
     format: Literal["pt", "onnx"]
     origin: Literal["trained", "imported", "starter"]
     state: Literal["ready", "unavailable"]
     class_names: list[str]
     class_aliases: dict[str, str]
+    class_map: dict[str, str | None]
     provenance: dict[str, str | None]
     hyperparameters: dict[str, Any]
     metrics: ModelMetrics | None
@@ -56,6 +57,7 @@ class LibraryModelOut(BaseModel):
             state=state,
             class_names=list(row.class_names or []),
             class_aliases=dict(row.class_aliases or {}),
+            class_map=dict(row.class_map or {}),
             provenance={
                 k: (None if provenance[k] is None else str(provenance[k]))
                 for k in PROVENANCE_KEYS
@@ -132,3 +134,9 @@ class LibraryStatus(BaseModel):
 
 class StarterAcquire(BaseModel):
     name: str | None = Field(None, min_length=1)
+
+
+class LibraryModelClassMapPut(BaseModel):
+    """`{model class name: catalogue type id | null}`, merged over the model's stored map (F10)."""
+
+    mapping: dict[str, str | None]

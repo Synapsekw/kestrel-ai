@@ -21,7 +21,6 @@ Stub = tuple[str, str, str]
 
 # BM: datasets across projects, training runs and the model class map (§12, §7.4).
 BM_APP_STUBS: list[Stub] = [
-    ("PUT", "/library/models/{modelId}/class-map", "putLibraryModelClassMap"),
     ("GET", "/library/datasets", "listLibraryDatasets"),
     ("POST", "/library/datasets", "createLibraryDataset"),
     ("POST", "/library/datasets/preview", "previewLibraryDataset"),

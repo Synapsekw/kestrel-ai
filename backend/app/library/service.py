@@ -123,6 +123,7 @@ def add_model(
     task: str,
     class_names: list[str],
     class_aliases: dict | None = None,
+    class_map: dict | None = None,
     provenance: dict | None = None,
     metrics: dict | None = None,
     hyperparameters: dict | None = None,
@@ -160,6 +161,7 @@ def add_model(
             weights_path=target.relative_to(lib.folder).as_posix(),
             class_names=list(class_names or []),
             class_aliases=dict(class_aliases or {}),
+            class_map=dict(class_map or {}),
             provenance=dict(provenance or {}),
             hyperparameters=dict(hyperparameters or {}),
             metrics=metrics or None,
@@ -231,6 +233,16 @@ def update_model(lib: LibraryHandle, model_id: str, **fields) -> LibraryModel:
             raise not_found("model", model_id)
         for k, v in fields.items():
             setattr(row, k, dict(v) if k == "class_aliases" else v)
+        return _detached(s, row)
+
+
+def set_class_map(lib: LibraryHandle, model_id: str, mapping: dict) -> LibraryModel:
+    """Replace the model's app-wide class map (F10). `detect.class_maps.put_map` validates it first."""
+    with lib.session() as s:
+        row = s.get(LibraryModel, model_id)
+        if row is None:
+            raise not_found("model", model_id)
+        row.class_map = dict(mapping)
         return _detached(s, row)
 
 

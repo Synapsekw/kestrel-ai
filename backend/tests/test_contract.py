@@ -105,9 +105,7 @@ EXPECTED_STUBS: set[str] = stub_operation_ids()
 # `group` and `LibraryModel.class_map`, which the backend fills only when the named units land.
 # For these the request must still not crash (< 500); conformance is checked again once the entry
 # is gone. The unit that lands last for an entry deletes it.
-BACKEND_PENDING: dict[str, str] = {
-    "listLibraryModels": "BM",
-}
+BACKEND_PENDING: dict[str, str] = {}
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
@@ -136,6 +134,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
     # CRS-less cloud (`unsupported_crs`), a missing source (`source_missing`), a Z clip upside down
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
+    "putLibraryModelClassMap": {422},  # unknown_type (bad/archived type id) or validation_error (bad key)
     "createSurface": {422},
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base

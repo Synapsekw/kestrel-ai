@@ -92,11 +92,13 @@ def test_an_unloadable_checkpoint_fails_the_job_and_leaves_nothing(client, app, 
     assert not any(p.suffix == ".pt" for p in lib.runs_dir.rglob("*"))
 
 
-def test_a_non_detection_checkpoint_is_refused(client, app, tmp_path, monkeypatch):
-    stub_checkpoint(monkeypatch, task="segment")
+def test_a_checkpoint_that_is_neither_detection_nor_segmentation_is_refused(
+    client, app, tmp_path, monkeypatch
+):
+    stub_checkpoint(monkeypatch, task="pose")
     done = wait_library_job(client, import_model(client, fake_weights(tmp_path))["id"])
     assert done["state"] == "failed"
-    assert "segment" in done["error"]
+    assert "pose" in done["error"]
     assert client.get(f"{LIB}/models").json()["items"] == []
 
 

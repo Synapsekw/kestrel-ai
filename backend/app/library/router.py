@@ -7,14 +7,17 @@ from typing import Literal
 from fastapi import APIRouter, Body, Depends, Query, Request, Response
 from fastapi.responses import FileResponse
 
+from app.detect import class_maps
 from app.errors import AppError, not_found
 from app.jobs import router as jobs_router
 from app.jobs.schemas import JobLog, JobOut, JobPage
 from app.library import jobs as library_jobs  # noqa: F401 - the import registers the library job types
 from app.library import service
+from app.library.catalogue_port import CataloguePort, get_catalogue
 from app.library.handle import LibraryHandle, get_library
 from app.library.paths import library_root
 from app.library.schemas import (
+    LibraryModelClassMapPut,
     LibraryModelImport,
     LibraryModelOut,
     LibraryModelPage,
@@ -53,7 +56,7 @@ def library_status(request: Request) -> LibraryStatus:
 @router.get("/models", response_model=LibraryModelPage)
 def list_models(
     lib: LibraryHandle = Depends(get_library),
-    task: Literal["detect", "obb"] | None = None,
+    task: Literal["detect", "obb", "segment"] | None = None,
     limit: int | None = Query(None, ge=1, le=1000),
     cursor: str | None = None,
 ) -> LibraryModelPage:
@@ -99,6 +102,17 @@ def update_model(
     if fields.get("class_aliases", {}) is None:
         fields["class_aliases"] = {}
     return _out(lib, service.update_model(lib, modelId, **fields))
+
+
+@router.put("/models/{modelId}/class-map", response_model=LibraryModelOut)
+def put_model_class_map(
+    modelId: str,  # noqa: N803
+    body: LibraryModelClassMapPut,
+    lib: LibraryHandle = Depends(get_library),
+    catalogue: CataloguePort = Depends(get_catalogue),
+) -> LibraryModelOut:
+    """The model's classes onto catalogue types, once for every project (F10)."""
+    return _out(lib, class_maps.put_map(lib, catalogue, modelId, body.mapping))
 
 
 @router.delete("/models/{modelId}", status_code=204)

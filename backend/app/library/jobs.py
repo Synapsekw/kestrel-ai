@@ -13,7 +13,8 @@ from app.jobs.runner import JobContext
 from app.library import service
 from app.training.trainer import get_trainer
 
-DETECTION_TASKS = ("detect", "obb")
+#: What the library holds: detection (boxes, rotated boxes) and segmentation models (F §12.3).
+LIBRARY_TASKS = ("detect", "obb", "segment")
 # ONNX exports fine on the CPU; TensorRT engines have to be built on the GPU they run on.
 EXPORT_DEVICE = {"onnx": "cpu", "engine": "0"}
 
@@ -24,8 +25,10 @@ def load_check(weights: Path, shown: str) -> tuple[str, list[str]]:
         task, names = service.read_checkpoint(weights)
     except Exception as e:
         raise JobFailure(f"{shown} is not a loadable YOLO checkpoint: {e}") from e
-    if task not in DETECTION_TASKS:
-        raise JobFailure(f"{shown} is a {task} model; the library holds detection models only.")
+    if task not in LIBRARY_TASKS:
+        raise JobFailure(
+            f"{shown} is a {task} model; the library holds detection and segmentation models only."
+        )
     return task, names
 
 
