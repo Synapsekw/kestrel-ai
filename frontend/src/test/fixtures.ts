@@ -182,6 +182,7 @@ export const exampleModel: LibraryModel = {
   state: "ready",
   class_names: ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck"],
   class_aliases: { truck: "dump_truck" },
+  class_map: {},
   provenance: {},
   hyperparameters: {},
   metrics: null,
@@ -224,6 +225,7 @@ export const exampleTrainedModel: LibraryModel = {
   state: "ready",
   class_names: ["excavator", "dump_truck"],
   class_aliases: {},
+  class_map: {},
   provenance: {
     project_id: PROJECT_ID,
     project_name: "Ahmadia",

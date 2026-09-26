@@ -94,6 +94,13 @@ export type DataItemPage = Schemas["DataItemPage"];
 export type ProjectOverview = Schemas["ProjectOverview"];
 export type ProjectSearchResult = Schemas["ProjectSearchResult"];
 export type Activity = Schemas["Activity"];
+export type ModelTask = Schemas["ModelTask"];
+export type LibraryModelClassMapPut = Schemas["LibraryModelClassMapPut"];
+export type LibraryDataset = Schemas["LibraryDataset"];
+export type LibraryDatasetItem = Schemas["LibraryDatasetItem"];
+export type DatasetFilter = Schemas["DatasetFilter"];
+export type DatasetPreview = Schemas["DatasetPreview"];
+export type TrainingRun = Schemas["TrainingRun"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */

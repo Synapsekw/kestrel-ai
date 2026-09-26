@@ -66,7 +66,19 @@ BC_APP_STUBS: list[Stub] = [
 ]
 
 # BM: datasets across projects, training runs and the model class map (§12, §7.4).
-BM_APP_STUBS: list[Stub] = []
+BM_APP_STUBS: list[Stub] = [
+    ("PUT", "/library/models/{modelId}/class-map", "putLibraryModelClassMap"),
+    ("GET", "/library/datasets", "listLibraryDatasets"),
+    ("POST", "/library/datasets", "createLibraryDataset"),
+    ("POST", "/library/datasets/preview", "previewLibraryDataset"),
+    ("GET", "/library/datasets/{datasetId}", "getLibraryDataset"),
+    ("DELETE", "/library/datasets/{datasetId}", "deleteLibraryDataset"),
+    ("POST", "/library/datasets/{datasetId}/export", "exportLibraryDataset"),
+    ("GET", "/library/datasets/{datasetId}/items", "listLibraryDatasetItems"),
+    ("GET", "/library/training-runs", "listTrainingRuns"),
+    ("POST", "/library/training-runs", "startTrainingRun"),
+    ("GET", "/library/training-runs/{runId}", "getTrainingRun"),
+]
 
 # MG: the migration's retry (§11.3) and the backup reveal on the Projects card (§9.2).
 MG_APP_STUBS: list[Stub] = [

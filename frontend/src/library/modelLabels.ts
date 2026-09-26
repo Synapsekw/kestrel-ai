@@ -6,7 +6,11 @@ const ORIGIN_LABEL: Record<LibraryModel["origin"], string> = {
   starter: "Starter",
 };
 
-const TASK_LABEL: Record<LibraryModel["task"], string> = { detect: "Boxes", obb: "Rotated boxes" };
+const TASK_LABEL: Record<LibraryModel["task"], string> = {
+  detect: "Boxes",
+  obb: "Rotated boxes",
+  segment: "Polygons",
+};
 
 /** An en dash stands in for a metric the model does not have (an imported model has none). */
 export function formatMetric(v: number | null | undefined): string {

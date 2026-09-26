@@ -14,6 +14,7 @@ METHODS = ("get", "post", "put", "patch", "delete")
 
 P = "/api/v1/projects/{projectId}"
 F = P + "/findings/{findingId}"
+D = "/api/v1/library/datasets/{datasetId}"
 
 # operationId -> (method, path) of every operation the foundation adds.
 FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
@@ -58,6 +59,18 @@ FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
     "getProjectOverview": ("get", P + "/overview"),
     "searchProject": ("get", P + "/search"),
     "listActivity": ("get", P + "/activity"),
+    # models (Task 7)
+    "putLibraryModelClassMap": ("put", "/api/v1/library/models/{modelId}/class-map"),
+    "listLibraryDatasets": ("get", "/api/v1/library/datasets"),
+    "createLibraryDataset": ("post", "/api/v1/library/datasets"),
+    "previewLibraryDataset": ("post", "/api/v1/library/datasets/preview"),
+    "getLibraryDataset": ("get", D),
+    "deleteLibraryDataset": ("delete", D),
+    "exportLibraryDataset": ("post", D + "/export"),
+    "listLibraryDatasetItems": ("get", D + "/items"),
+    "listTrainingRuns": ("get", "/api/v1/library/training-runs"),
+    "startTrainingRun": ("post", "/api/v1/library/training-runs"),
+    "getTrainingRun": ("get", "/api/v1/library/training-runs/{runId}"),
 }
 
 # Response schemas the Prism mock serves: each carries its own example (spec §18 "Prism examples").
@@ -86,6 +99,12 @@ EXAMPLED_SCHEMAS = [
     "ProjectOverview",
     "ProjectSearchResult",
     "ActivityPage",
+    "LibraryDataset",
+    "LibraryDatasetPage",
+    "DatasetPreview",
+    "LibraryDatasetItemPage",
+    "TrainingRun",
+    "TrainingRunPage",
 ]
 
 
@@ -224,3 +243,14 @@ def test_a_box_reclass_that_would_delete_a_finding_needs_confirmation(spec):
     _, _, op = _operations(spec)["updateBox"]
     assert any(p.get("name") == "confirm_finding_delete" for p in op["parameters"])
     assert "409" in op["responses"]
+
+
+# ------------------------------------------------------------------------------ Task 7
+
+
+def test_a_model_has_a_segment_task_and_a_class_map(spec):
+    assert _schemas(spec)["ModelTask"]["enum"] == ["detect", "obb", "segment"]
+    model = _schemas(spec)["LibraryModel"]
+    assert model["properties"]["task"] == {"$ref": "#/components/schemas/ModelTask"}
+    assert "class_map" in model["required"]
+    assert "added_type_ids" in _schemas(spec)["RunCreated"]["required"]  # a run start says what it added

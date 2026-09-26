@@ -33,5 +33,6 @@ def test_maps_router_import_failure_leaves_the_rest_of_the_app_working(tmp_path,
     # disables the `/openapi.json` route) is the stable way to read the actually-registered paths.
     paths = set(app.openapi()["paths"])
     assert "/api/v1/projects" in paths, paths
-    # `/model-class-maps` is the detect router's class mapping (a library model's classes), not a map.
-    assert not any("map" in p.lower() and "model-class-maps" not in p for p in paths), paths
+    # `/model-class-maps` (the detect router) and `/library/models/{modelId}/class-map` (the model
+    # library) map a model's classes, not a map.
+    assert not any("map" in p.lower() and "class-map" not in p for p in paths), paths

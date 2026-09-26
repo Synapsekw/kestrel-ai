@@ -3014,6 +3014,181 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/library/models/{modelId}/class-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Merge `mapping` into the model's app-wide class map: model class name to catalogue type id,
+         *     or null to ignore that class; names not sent keep their entry. Run creation resolves a model
+         *     class by exact normalised name against the catalogue first, then the model's
+         *     `class_aliases`, then this map; leftovers still answer `422 unmapped_classes` before any job
+         *     is queued.
+         */
+        put: operations["putLibraryModelClassMap"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Training datasets built across projects (and the legacy per-project datasets the migration registered), newest first. */
+        get: operations["listLibraryDatasets"];
+        put?: never;
+        /**
+         * Create a dataset from a filter over projects and a `dataset_build` library job that pages
+         *     each project's matching images 500 at a time, freezes the items and their labels, and
+         *     assigns splits (a flight never straddles train and val). No image is copied until an export
+         *     is built.
+         */
+        post: operations["createLibraryDataset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/datasets/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a filter would hold, from COUNT queries only (images with ground truth, boxes per type)
+         *     with a 2-second timeout per project; a project that timed out or could not be opened is
+         *     flagged, never fatal. The builder calls it as the filter changes.
+         */
+        post: operations["previewLibraryDataset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/datasets/{datasetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryDataset"];
+        put?: never;
+        post?: never;
+        /** Delete the dataset row and its export folder. Project images are never touched; models trained on it are kept. */
+        delete: operations["deleteLibraryDataset"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/datasets/{datasetId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Build the YOLO export (`images/`, `labels/`, `data.yaml`) under `library\datasets\<slug>-<id8>\`
+         *     through a `dataset` library job, hard-linking images on the same volume and copying
+         *     otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; `segment` answers 422
+         *     `task_not_supported` until image inspection adds YOLO-seg. A missing source project fails
+         *     the job with the list of missing projects.
+         */
+        post: operations["exportLibraryDataset"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/datasets/{datasetId}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        /** The dataset's frozen items, for the detail screen's sample grid; thumbnails come from each project's own image thumbnail route. */
+        get: operations["listLibraryDatasetItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/training-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Training runs, newest first. */
+        get: operations["listTrainingRuns"];
+        put?: never;
+        /**
+         * Start a `train` library job on a library dataset. It builds the export first when the
+         *     dataset's `export_state` is not `ready`, as a step of the same job. The run folder is
+         *     `library\runs\<job_id>`. When it succeeds the model is registered in the library
+         *     (`origin: trained`, the dataset's `task`, a `class_map` pre-filled from the dataset's
+         *     classes) and `model_id` is set.
+         */
+        post: operations["startTrainingRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/training-runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /** The run with its metrics; its curves and artefacts come from the registered model (`/library/models/{modelId}/artifacts/...`). */
+        get: operations["getTrainingRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4113,6 +4288,10 @@ export interface components {
          *         "dump_truck"
          *       ],
          *       "class_aliases": {},
+         *       "class_map": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump_truck": "c1a2b3c4-0000-4000-8000-000000000004"
+         *       },
          *       "provenance": {
          *         "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
          *         "project_name": "Ahmadia",
@@ -4172,11 +4351,7 @@ export interface components {
             notes: string;
             /** @description free text for imported models, e.g. the client or partner who supplied it */
             supplier: string | null;
-            /**
-             * @description `detect` for boxes, `obb` for rotated boxes
-             * @enum {string}
-             */
-            task: "detect" | "obb";
+            task: components["schemas"]["ModelTask"];
             /** @enum {string} */
             format: "pt" | "onnx";
             /** @enum {string} */
@@ -4191,6 +4366,10 @@ export interface components {
             /** @description model class name to project class name (for COCO weights, `truck` to `dump_truck`) */
             class_aliases: {
                 [key: string]: string;
+            };
+            /** @description app-wide: model class name to catalogue type id, or null when the class is ignored (`PUT /library/models/{modelId}/class-map`) */
+            class_map: {
+                [key: string]: string | null;
             };
             provenance: components["schemas"]["ModelProvenance"];
             hyperparameters: {
@@ -4229,6 +4408,10 @@ export interface components {
          *             "dump_truck"
          *           ],
          *           "class_aliases": {},
+         *           "class_map": {
+         *             "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *             "dump_truck": "c1a2b3c4-0000-4000-8000-000000000004"
+         *           },
          *           "provenance": {
          *             "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
          *             "project_name": "Ahmadia",
@@ -4302,6 +4485,10 @@ export interface components {
          *           ],
          *           "class_aliases": {
          *             "truck": "dump_truck"
+         *           },
+         *           "class_map": {
+         *             "truck": "c1a2b3c4-0000-4000-8000-000000000004",
+         *             "person": null
          *           },
          *           "provenance": {},
          *           "hyperparameters": {},
@@ -5689,6 +5876,8 @@ export interface components {
         };
         RunCreated: {
             runs: components["schemas"]["RunCreatedItem"][];
+            /** @description catalogue types this run added to the project's type list (foundation §7.4); empty when none */
+            added_type_ids: string[];
         };
         /**
          * @example {
@@ -8207,6 +8396,414 @@ export interface components {
             items: components["schemas"]["Activity"][];
             next_cursor: string | null;
         };
+        /**
+         * @description `detect` for boxes, `obb` for rotated boxes, `segment` for polygons (YOLO-seg, trained once image inspection lands)
+         * @enum {string}
+         */
+        ModelTask: "detect" | "obb" | "segment";
+        /**
+         * @example {
+         *       "mapping": {
+         *         "truck": "c1a2b3c4-0000-4000-8000-000000000004",
+         *         "person": null
+         *       }
+         *     }
+         */
+        LibraryModelClassMapPut: {
+            /** @description model class name to catalogue type id, or null to ignore the class; merged over the stored map */
+            mapping: {
+                [key: string]: string | null;
+            };
+        };
+        /**
+         * @description which annotated images a dataset takes, across projects
+         * @example {
+         *       "project_ids": [
+         *         "7f1c2e3a-1111-4000-8000-000000000001",
+         *         "7f1c2e3a-1111-4000-8000-000000000002"
+         *       ],
+         *       "type_ids": [
+         *         "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "c1a2b3c4-0000-4000-8000-000000000004"
+         *       ],
+         *       "captured_from": null,
+         *       "captured_to": "2026-06-30",
+         *       "reviewed_only": true
+         *     }
+         */
+        DatasetFilter: {
+            project_ids: string[];
+            /** @description catalogue type ids; they fix the dataset's classes, in this order */
+            type_ids: string[];
+            /**
+             * Format: date
+             * @description null when absent
+             */
+            captured_from?: string | null;
+            /**
+             * Format: date
+             * @description null when absent
+             */
+            captured_to?: string | null;
+            /** @description only ground truth (accepted, edited or person-drawn annotations); false when absent */
+            reviewed_only?: boolean;
+        };
+        DatasetSource: {
+            project_id: string;
+            /** @description at build time */
+            project_folder: string;
+            /** @description at build time */
+            project_name: string;
+            image_count: number;
+        };
+        /**
+         * @example {
+         *       "id": "d0000000-7777-4000-8000-000000000010",
+         *       "name": "machinery-2026",
+         *       "task": "detect",
+         *       "origin": "built",
+         *       "filter": {
+         *         "project_ids": [
+         *           "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "7f1c2e3a-1111-4000-8000-000000000002"
+         *         ],
+         *         "type_ids": [
+         *           "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "c1a2b3c4-0000-4000-8000-000000000004"
+         *         ],
+         *         "captured_from": null,
+         *         "captured_to": "2026-06-30",
+         *         "reviewed_only": true
+         *       },
+         *       "classes": [
+         *         {
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "name": "excavator"
+         *         },
+         *         {
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000004",
+         *           "name": "dump_truck"
+         *         }
+         *       ],
+         *       "split_method": "by_group",
+         *       "split_params": {
+         *         "val_fraction": 0.2,
+         *         "seed": 42
+         *       },
+         *       "state": "ready",
+         *       "counts": {
+         *         "images": 412,
+         *         "train": 330,
+         *         "val": 82,
+         *         "per_class": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 750,
+         *           "c1a2b3c4-0000-4000-8000-000000000004": 499
+         *         }
+         *       },
+         *       "export_path": null,
+         *       "export_state": "none",
+         *       "legacy_path": null,
+         *       "job_id": "j0000000-4444-4000-8000-000000000043",
+         *       "sources": [
+         *         {
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "project_folder": "E:\\Projects\\Ahmadia",
+         *           "project_name": "Ahmadia",
+         *           "image_count": 300
+         *         },
+         *         {
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000002",
+         *           "project_folder": "E:\\Projects\\North",
+         *           "project_name": "North site",
+         *           "image_count": 112
+         *         }
+         *       ],
+         *       "created_at": "2026-09-26T12:00:00Z"
+         *     }
+         */
+        LibraryDataset: {
+            id: string;
+            name: string;
+            task: components["schemas"]["ModelTask"];
+            /**
+             * @description `legacy` is a project dataset the migration registered; it trains from its own `data.yaml`
+             * @enum {string}
+             */
+            origin: "built" | "legacy";
+            /** @description null for a legacy dataset */
+            filter: components["schemas"]["DatasetFilter"] | null;
+            /** @description frozen at creation; the order is the class index order */
+            classes: {
+                type_id: string;
+                name: string;
+            }[];
+            /** @description `by_group`, `by_tile` or `random` */
+            split_method: string;
+            /** @description `val_fraction` and `seed` */
+            split_params: {
+                [key: string]: number;
+            };
+            /** @enum {string} */
+            state: "resolving" | "ready" | "failed";
+            counts: {
+                images: number;
+                train: number;
+                val: number;
+                /** @description type id to its label count */
+                per_class: {
+                    [key: string]: number;
+                };
+            };
+            /** @description absolute; `library\datasets\<slug>-<id8>`, null until built */
+            export_path: string | null;
+            /** @enum {string} */
+            export_state: "none" | "building" | "ready" | "stale" | "failed";
+            /** @description a legacy dataset's folder inside its project */
+            legacy_path: string | null;
+            /** @description the latest build or export job */
+            job_id: string | null;
+            sources: components["schemas"]["DatasetSource"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "d0000000-7777-4000-8000-000000000011",
+         *           "name": "v1 (Ahmadia)",
+         *           "task": "detect",
+         *           "origin": "legacy",
+         *           "filter": null,
+         *           "classes": [
+         *             {
+         *               "type_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *               "name": "excavator"
+         *             }
+         *           ],
+         *           "split_method": "by_group",
+         *           "split_params": {
+         *             "val_fraction": 0.2,
+         *             "seed": 42
+         *           },
+         *           "state": "ready",
+         *           "counts": {
+         *             "images": 30,
+         *             "train": 24,
+         *             "val": 6,
+         *             "per_class": {
+         *               "c1a2b3c4-0000-4000-8000-000000000001": 40
+         *             }
+         *           },
+         *           "export_path": null,
+         *           "export_state": "ready",
+         *           "legacy_path": "E:\\Projects\\Ahmadia\\datasets\\v1",
+         *           "job_id": null,
+         *           "sources": [
+         *             {
+         *               "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *               "project_folder": "E:\\Projects\\Ahmadia",
+         *               "project_name": "Ahmadia",
+         *               "image_count": 30
+         *             }
+         *           ],
+         *           "created_at": "2026-09-17T12:00:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        LibraryDatasetPage: {
+            items: components["schemas"]["LibraryDataset"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "name": "machinery-2026",
+         *       "task": "detect",
+         *       "filter": {
+         *         "project_ids": [
+         *           "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "7f1c2e3a-1111-4000-8000-000000000002"
+         *         ],
+         *         "type_ids": [
+         *           "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "c1a2b3c4-0000-4000-8000-000000000004"
+         *         ],
+         *         "captured_from": null,
+         *         "captured_to": "2026-06-30",
+         *         "reviewed_only": true
+         *       },
+         *       "split_method": "by_group",
+         *       "val_fraction": 0.2
+         *     }
+         */
+        LibraryDatasetCreate: {
+            name: string;
+            task?: components["schemas"]["ModelTask"];
+            filter: components["schemas"]["DatasetFilter"];
+            split_method?: components["schemas"]["SplitMethod"];
+            /** @description 0.2 when absent */
+            val_fraction?: number;
+            /** @description 42 when absent */
+            seed?: number;
+        };
+        LibraryDatasetWithJob: {
+            dataset: components["schemas"]["LibraryDataset"];
+            job: components["schemas"]["Job"];
+        };
+        /**
+         * @example {
+         *       "images": 300,
+         *       "boxes_per_type": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 750
+         *       },
+         *       "projects": [
+         *         {
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "project_name": "Ahmadia",
+         *           "images": 300,
+         *           "boxes": 750,
+         *           "state": "ok"
+         *         }
+         *       ]
+         *     }
+         */
+        DatasetPreview: {
+            /** @description images with ground truth of the chosen types */
+            images: number;
+            /** @description type id to its box count */
+            boxes_per_type: {
+                [key: string]: number;
+            };
+            projects: {
+                project_id: string;
+                project_name: string | null;
+                images: number;
+                boxes: number;
+                /**
+                 * @description `timed_out` after 2 s, `missing` when not on the recent list, `unavailable` when it cannot be opened; its counts are 0
+                 * @enum {string}
+                 */
+                state: "ok" | "missing" | "unavailable" | "timed_out";
+            }[];
+        };
+        LibraryDatasetItem: {
+            project_id: string;
+            image_id: string;
+            /** @enum {string} */
+            split: "train" | "val";
+            label_count: number;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "image_id": "10000000-5555-4000-8000-000000000001",
+         *           "split": "train",
+         *           "label_count": 4
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        LibraryDatasetItemPage: {
+            items: components["schemas"]["LibraryDatasetItem"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "id": "u0000000-1616-4000-8000-000000000001",
+         *       "name": "machinery-2026-n",
+         *       "dataset_id": "d0000000-7777-4000-8000-000000000010",
+         *       "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *       "params": {
+         *         "name": "machinery-2026-n",
+         *         "dataset_id": "d0000000-7777-4000-8000-000000000010",
+         *         "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *         "epochs": 50,
+         *         "imgsz": 1280,
+         *         "batch": null,
+         *         "patience": 50,
+         *         "augmentation": "aerial",
+         *         "device": "0"
+         *       },
+         *       "job_id": "j0000000-4444-4000-8000-000000000044",
+         *       "state": "succeeded",
+         *       "model_id": "m0000000-2222-4000-8000-000000000003",
+         *       "metrics": {
+         *         "map50": 0.71,
+         *         "map50_95": 0.44,
+         *         "precision": 0.78,
+         *         "recall": 0.66,
+         *         "per_class": [
+         *           {
+         *             "class_name": "excavator",
+         *             "map50": 0.8,
+         *             "map50_95": 0.5,
+         *             "precision": 0.82,
+         *             "recall": 0.7
+         *           }
+         *         ]
+         *       },
+         *       "created_at": "2026-09-26T12:30:00Z",
+         *       "finished_at": "2026-09-26T14:10:00Z"
+         *     }
+         */
+        TrainingRun: {
+            id: string;
+            name: string;
+            dataset_id: string;
+            base_model_id: string;
+            /** @description the `TrainRequest` the run started with */
+            params: {
+                [key: string]: unknown;
+            };
+            job_id: string | null;
+            state: components["schemas"]["JobState"];
+            /** @description the registered library model, once the run succeeded */
+            model_id: string | null;
+            /** @description null until the model registers */
+            metrics: components["schemas"]["ModelMetrics"] | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            finished_at: string | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "u0000000-1616-4000-8000-000000000001",
+         *           "name": "machinery-2026-n",
+         *           "dataset_id": "d0000000-7777-4000-8000-000000000010",
+         *           "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *           "params": {
+         *             "name": "machinery-2026-n",
+         *             "dataset_id": "d0000000-7777-4000-8000-000000000010",
+         *             "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *             "epochs": 50
+         *           },
+         *           "job_id": "j0000000-4444-4000-8000-000000000044",
+         *           "state": "running",
+         *           "model_id": null,
+         *           "metrics": null,
+         *           "created_at": "2026-09-26T12:30:00Z",
+         *           "finished_at": null
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        TrainingRunPage: {
+            items: components["schemas"]["TrainingRun"][];
+            next_cursor: string | null;
+        };
+        TrainingRunWithJob: {
+            training_run: components["schemas"]["TrainingRun"];
+            job: components["schemas"]["Job"];
+        };
     };
     responses: {
         /** @description error envelope */
@@ -9441,7 +10038,7 @@ export interface operations {
     listLibraryModels: {
         parameters: {
             query?: {
-                task?: "detect" | "obb";
+                task?: components["schemas"]["ModelTask"];
                 limit?: components["parameters"]["limit"];
                 /** @description opaque cursor from the previous page's `next_cursor` */
                 cursor?: components["parameters"]["cursor"];
@@ -11215,6 +11812,7 @@ export interface operations {
                 content: {
                     /**
                      * @example {
+                     *       "added_type_ids": [],
                      *       "runs": [
                      *         {
                      *           "run_id": "q0000000-8888-4000-8000-000000000002",
@@ -14648,6 +15246,378 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putLibraryModelClassMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryModelClassMapPut"];
+            };
+        };
+        responses: {
+            /** @description the updated library model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryModel"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`), or a key is not one of the model's class names (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the model library (`code` is `library_unavailable`) or the catalogue (`code` is `catalogue_unavailable`) could not be opened */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryDatasets: {
+        parameters: {
+            query?: {
+                task?: components["schemas"]["ModelTask"];
+                origin?: "built" | "legacy";
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description datasets */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryDatasetPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createLibraryDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryDatasetCreate"];
+            };
+        };
+        responses: {
+            /** @description dataset created in `resolving`, build job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryDatasetWithJob"];
+                };
+            };
+            /** @description a dataset with that name exists (`code` is `already_exists`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    previewLibraryDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatasetFilter"];
+            };
+        };
+        responses: {
+            /** @description the counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetPreview"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the dataset with its sources and counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryDataset"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteLibraryDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description its build or export job, or a training run that uses it, is queued or running (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    exportLibraryDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description export job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the dataset is not `ready` (`code` is `not_ready`), or its export is already building (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a `segment` dataset (`code` is `task_not_supported`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryDatasetItems: {
+        parameters: {
+            query?: {
+                split?: "train" | "val";
+                project_id?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                datasetId: components["parameters"]["datasetId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryDatasetItemPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listTrainingRuns: {
+        parameters: {
+            query?: {
+                dataset_id?: string;
+                state?: components["schemas"]["JobState"];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description training runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingRunPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    startTrainingRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainRequest"];
+            };
+        };
+        responses: {
+            /** @description run created, training job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingRunWithJob"];
+                };
+            };
+            /** @description the dataset or the base library model does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the base model's weights file is missing (`code` is `model_unavailable`), or the dataset is not `ready` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a `segment` dataset (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getTrainingRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingRun"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };

@@ -840,7 +840,7 @@ paths:
       parameters:
         - name: task
           in: query
-          schema: { type: string, enum: [detect, obb] }
+          schema: { $ref: "#/components/schemas/ModelTask" }
         - $ref: "#/components/parameters/limit"
         - $ref: "#/components/parameters/cursor"
       responses:
@@ -1944,6 +1944,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RunCreated" }
               example:
+                added_type_ids: []
                 runs:
                   - run_id: "q0000000-8888-4000-8000-000000000002"
                     source_id: "50000000-3333-4000-8000-000000000001"
@@ -4122,6 +4123,261 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ foundation: models (F-C0)
+  /api/v1/library/models/{modelId}/class-map:
+    parameters:
+      - $ref: "#/components/parameters/modelId"
+    put:
+      tags: [library]
+      operationId: putLibraryModelClassMap
+      summary: |
+        Merge `mapping` into the model's app-wide class map: model class name to catalogue type id,
+        or null to ignore that class; names not sent keep their entry. Run creation resolves a model
+        class by exact normalised name against the catalogue first, then the model's
+        `class_aliases`, then this map; leftovers still answer `422 unmapped_classes` before any job
+        is queued.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryModelClassMapPut" }
+      responses:
+        "200":
+          description: the updated library model
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryModel" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`), or a key is not one of the model's class names (`code` is `validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: "the model library (`code` is `library_unavailable`) or the catalogue (`code` is `catalogue_unavailable`) could not be opened"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/datasets:
+    get:
+      tags: [library]
+      operationId: listLibraryDatasets
+      summary: Training datasets built across projects (and the legacy per-project datasets the migration registered), newest first.
+      parameters:
+        - { name: task, in: query, required: false, schema: { $ref: "#/components/schemas/ModelTask" } }
+        - { name: origin, in: query, required: false, schema: { type: string, enum: [built, legacy] } }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: datasets
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryDatasetPage" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [library]
+      operationId: createLibraryDataset
+      summary: |
+        Create a dataset from a filter over projects and a `dataset_build` library job that pages
+        each project's matching images 500 at a time, freezes the items and their labels, and
+        assigns splits (a flight never straddles train and val). No image is copied until an export
+        is built.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LibraryDatasetCreate" }
+      responses:
+        "202":
+          description: dataset created in `resolving`, build job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryDatasetWithJob" }
+        "409":
+          description: "a dataset with that name exists (`code` is `already_exists`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/datasets/preview:
+    post:
+      tags: [library]
+      operationId: previewLibraryDataset
+      summary: |
+        What a filter would hold, from COUNT queries only (images with ground truth, boxes per type)
+        with a 2-second timeout per project; a project that timed out or could not be opened is
+        flagged, never fatal. The builder calls it as the filter changes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DatasetFilter" }
+      responses:
+        "200":
+          description: the counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DatasetPreview" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/datasets/{datasetId}:
+    parameters:
+      - $ref: "#/components/parameters/datasetId"
+    get:
+      tags: [library]
+      operationId: getLibraryDataset
+      responses:
+        "200":
+          description: the dataset with its sources and counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryDataset" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [library]
+      operationId: deleteLibraryDataset
+      summary: Delete the dataset row and its export folder. Project images are never touched; models trained on it are kept.
+      responses:
+        "204":
+          description: deleted
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "its build or export job, or a training run that uses it, is queued or running (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/datasets/{datasetId}/export:
+    parameters:
+      - $ref: "#/components/parameters/datasetId"
+    post:
+      tags: [library]
+      operationId: exportLibraryDataset
+      summary: |
+        Build the YOLO export (`images/`, `labels/`, `data.yaml`) under `library\datasets\<slug>-<id8>\`
+        through a `dataset` library job, hard-linking images on the same volume and copying
+        otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; `segment` answers 422
+        `task_not_supported` until image inspection adds YOLO-seg. A missing source project fails
+        the job with the list of missing projects.
+      responses:
+        "202":
+          description: export job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the dataset is not `ready` (`code` is `not_ready`), or its export is already building (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a `segment` dataset (`code` is `task_not_supported`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/datasets/{datasetId}/items:
+    parameters:
+      - $ref: "#/components/parameters/datasetId"
+    get:
+      tags: [library]
+      operationId: listLibraryDatasetItems
+      summary: The dataset's frozen items, for the detail screen's sample grid; thumbnails come from each project's own image thumbnail route.
+      parameters:
+        - { name: split, in: query, required: false, schema: { type: string, enum: [train, val] } }
+        - { name: project_id, in: query, required: false, schema: { type: string } }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LibraryDatasetItemPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/training-runs:
+    get:
+      tags: [library]
+      operationId: listTrainingRuns
+      summary: Training runs, newest first.
+      parameters:
+        - { name: dataset_id, in: query, required: false, schema: { type: string } }
+        - { name: state, in: query, required: false, schema: { $ref: "#/components/schemas/JobState" } }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: training runs
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingRunPage" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [library]
+      operationId: startTrainingRun
+      summary: |
+        Start a `train` library job on a library dataset. It builds the export first when the
+        dataset's `export_state` is not `ready`, as a step of the same job. The run folder is
+        `library\runs\<job_id>`. When it succeeds the model is registered in the library
+        (`origin: trained`, the dataset's `task`, a `class_map` pre-filled from the dataset's
+        classes) and `model_id` is set.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TrainRequest" }
+      responses:
+        "202":
+          description: run created, training job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingRunWithJob" }
+        "404":
+          description: the dataset or the base library model does not exist (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "the base model's weights file is missing (`code` is `model_unavailable`), or the dataset is not `ready` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a `segment` dataset (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/training-runs/{runId}:
+    parameters:
+      - $ref: "#/components/parameters/runId"
+    get:
+      tags: [library]
+      operationId: getTrainingRun
+      summary: The run with its metrics; its curves and artefacts come from the registered model (`/library/models/{modelId}/artifacts/...`).
+      responses:
+        "200":
+          description: the run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TrainingRun" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -5170,13 +5426,13 @@ components:
     LibraryModel:
       type: object
       description: a model in the app-wide library (`%APPDATA%\kestrel-ai\library`), usable by every project
-      required: [id, name, notes, supplier, task, format, origin, state, class_names, class_aliases, provenance, hyperparameters, metrics, exports, artifacts, train_gsd_cm, sha256, created_at]
+      required: [id, name, notes, supplier, task, format, origin, state, class_names, class_aliases, class_map, provenance, hyperparameters, metrics, exports, artifacts, train_gsd_cm, sha256, created_at]
       properties:
         id: { type: string }
         name: { type: string }
         notes: { type: string }
         supplier: { type: [string, "null"], description: "free text for imported models, e.g. the client or partner who supplied it" }
-        task: { type: string, enum: [detect, obb], description: "`detect` for boxes, `obb` for rotated boxes" }
+        task: { $ref: "#/components/schemas/ModelTask" }
         format: { type: string, enum: [pt, onnx] }
         origin: { type: string, enum: [trained, imported, starter] }
         state: { type: string, enum: [ready, unavailable], description: "`unavailable` when the weights file is missing from the library folder" }
@@ -5188,6 +5444,10 @@ components:
           type: object
           description: model class name to project class name (for COCO weights, `truck` to `dump_truck`)
           additionalProperties: { type: string }
+        class_map:
+          type: object
+          description: "app-wide: model class name to catalogue type id, or null when the class is ignored (`PUT /library/models/{modelId}/class-map`)"
+          additionalProperties: { type: [string, "null"] }
         provenance: { $ref: "#/components/schemas/ModelProvenance" }
         hyperparameters:
           type: object
@@ -5218,6 +5478,7 @@ components:
         state: ready
         class_names: [excavator, dump_truck]
         class_aliases: {}
+        class_map: { excavator: "c1a2b3c4-0000-4000-8000-000000000001", dump_truck: "c1a2b3c4-0000-4000-8000-000000000004" }
         provenance:
           project_id: "7f1c2e3a-1111-4000-8000-000000000001"
           project_name: Ahmadia
@@ -5262,6 +5523,7 @@ components:
             state: ready
             class_names: [excavator, dump_truck]
             class_aliases: {}
+            class_map: { excavator: "c1a2b3c4-0000-4000-8000-000000000001", dump_truck: "c1a2b3c4-0000-4000-8000-000000000004" }
             provenance:
               project_id: "7f1c2e3a-1111-4000-8000-000000000001"
               project_name: Ahmadia
@@ -5296,6 +5558,7 @@ components:
             state: ready
             class_names: [person, bicycle, car, motorcycle, airplane, bus, train, truck]
             class_aliases: { truck: dump_truck }
+            class_map: { truck: "c1a2b3c4-0000-4000-8000-000000000004", person: null }
             provenance: {}
             hyperparameters: {}
             metrics: null
@@ -6391,11 +6654,15 @@ components:
         job: { $ref: "#/components/schemas/Job" }
     RunCreated:
       type: object
-      required: [runs]
+      required: [runs, added_type_ids]
       properties:
         runs:
           type: array
           items: { $ref: "#/components/schemas/RunCreatedItem" }
+        added_type_ids:
+          type: array
+          description: catalogue types this run added to the project's type list (foundation §7.4); empty when none
+          items: { type: string }
     RunPatch:
       type: object
       required: [pinned]
@@ -8425,3 +8692,243 @@ components:
         items:
           - { id: "e0000000-1515-4000-8000-000000000001", at: "2026-09-26T10:20:00Z", kind: finding.severity, subject_id: "f0000000-1212-4000-8000-000000000217", summary: "F-0217 set to Major", payload: { from: null, to: 3 } }
         next_cursor: null
+    # ------------------------------------------------------------ foundation: models (F-C0)
+    ModelTask:
+      type: string
+      enum: [detect, obb, segment]
+      description: "`detect` for boxes, `obb` for rotated boxes, `segment` for polygons (YOLO-seg, trained once image inspection lands)"
+    LibraryModelClassMapPut:
+      type: object
+      required: [mapping]
+      properties:
+        mapping:
+          type: object
+          description: model class name to catalogue type id, or null to ignore the class; merged over the stored map
+          additionalProperties: { type: [string, "null"] }
+      example: { mapping: { truck: "c1a2b3c4-0000-4000-8000-000000000004", person: null } }
+    DatasetFilter:
+      type: object
+      description: which annotated images a dataset takes, across projects
+      required: [project_ids, type_ids]
+      properties:
+        project_ids: { type: array, minItems: 1, maxItems: 50, items: { type: string } }
+        type_ids: { type: array, minItems: 1, maxItems: 200, items: { type: string }, description: "catalogue type ids; they fix the dataset's classes, in this order" }
+        captured_from: { type: [string, "null"], format: date, description: null when absent }
+        captured_to: { type: [string, "null"], format: date, description: null when absent }
+        reviewed_only: { type: boolean, description: "only ground truth (accepted, edited or person-drawn annotations); false when absent" }
+      example: { project_ids: ["7f1c2e3a-1111-4000-8000-000000000001", "7f1c2e3a-1111-4000-8000-000000000002"], type_ids: ["c1a2b3c4-0000-4000-8000-000000000001", "c1a2b3c4-0000-4000-8000-000000000004"], captured_from: null, captured_to: "2026-06-30", reviewed_only: true }
+    DatasetSource:
+      type: object
+      required: [project_id, project_folder, project_name, image_count]
+      properties:
+        project_id: { type: string }
+        project_folder: { type: string, description: at build time }
+        project_name: { type: string, description: at build time }
+        image_count: { type: integer, minimum: 0 }
+    LibraryDataset:
+      type: object
+      required: [id, name, task, origin, filter, classes, split_method, split_params, state, counts, export_path, export_state, legacy_path, job_id, sources, created_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        task: { $ref: "#/components/schemas/ModelTask" }
+        origin: { type: string, enum: [built, legacy], description: "`legacy` is a project dataset the migration registered; it trains from its own `data.yaml`" }
+        filter:
+          oneOf:
+            - $ref: "#/components/schemas/DatasetFilter"
+            - type: "null"
+          description: null for a legacy dataset
+        classes:
+          type: array
+          description: frozen at creation; the order is the class index order
+          items:
+            type: object
+            required: [type_id, name]
+            properties:
+              type_id: { type: string }
+              name: { type: string }
+        split_method: { type: string, description: "`by_group`, `by_tile` or `random`" }
+        split_params: { type: object, description: "`val_fraction` and `seed`", additionalProperties: { type: number } }
+        state: { type: string, enum: [resolving, ready, failed] }
+        counts:
+          type: object
+          required: [images, train, val, per_class]
+          properties:
+            images: { type: integer, minimum: 0 }
+            train: { type: integer, minimum: 0 }
+            val: { type: integer, minimum: 0 }
+            per_class: { type: object, description: type id to its label count, additionalProperties: { type: integer, minimum: 0 } }
+        export_path: { type: [string, "null"], description: "absolute; `library\\datasets\\<slug>-<id8>`, null until built" }
+        export_state: { type: string, enum: [none, building, ready, stale, failed] }
+        legacy_path: { type: [string, "null"], description: "a legacy dataset's folder inside its project" }
+        job_id: { type: [string, "null"], description: the latest build or export job }
+        sources: { type: array, items: { $ref: "#/components/schemas/DatasetSource" } }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "d0000000-7777-4000-8000-000000000010"
+        name: machinery-2026
+        task: detect
+        origin: built
+        filter: { project_ids: ["7f1c2e3a-1111-4000-8000-000000000001", "7f1c2e3a-1111-4000-8000-000000000002"], type_ids: ["c1a2b3c4-0000-4000-8000-000000000001", "c1a2b3c4-0000-4000-8000-000000000004"], captured_from: null, captured_to: "2026-06-30", reviewed_only: true }
+        classes: [{ type_id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator }, { type_id: "c1a2b3c4-0000-4000-8000-000000000004", name: dump_truck }]
+        split_method: by_group
+        split_params: { val_fraction: 0.2, seed: 42 }
+        state: ready
+        counts: { images: 412, train: 330, val: 82, per_class: { "c1a2b3c4-0000-4000-8000-000000000001": 750, "c1a2b3c4-0000-4000-8000-000000000004": 499 } }
+        export_path: null
+        export_state: none
+        legacy_path: null
+        job_id: "j0000000-4444-4000-8000-000000000043"
+        sources:
+          - { project_id: "7f1c2e3a-1111-4000-8000-000000000001", project_folder: "E:\\Projects\\Ahmadia", project_name: Ahmadia, image_count: 300 }
+          - { project_id: "7f1c2e3a-1111-4000-8000-000000000002", project_folder: "E:\\Projects\\North", project_name: North site, image_count: 112 }
+        created_at: "2026-09-26T12:00:00Z"
+    LibraryDatasetPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryDataset" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - id: "d0000000-7777-4000-8000-000000000011"
+            name: "v1 (Ahmadia)"
+            task: detect
+            origin: legacy
+            filter: null
+            classes: [{ type_id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator }]
+            split_method: by_group
+            split_params: { val_fraction: 0.2, seed: 42 }
+            state: ready
+            counts: { images: 30, train: 24, val: 6, per_class: { "c1a2b3c4-0000-4000-8000-000000000001": 40 } }
+            export_path: null
+            export_state: ready
+            legacy_path: "E:\\Projects\\Ahmadia\\datasets\\v1"
+            job_id: null
+            sources: [{ project_id: "7f1c2e3a-1111-4000-8000-000000000001", project_folder: "E:\\Projects\\Ahmadia", project_name: Ahmadia, image_count: 30 }]
+            created_at: "2026-09-17T12:00:00Z"
+        next_cursor: null
+    LibraryDatasetCreate:
+      type: object
+      required: [name, filter]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        task: { $ref: "#/components/schemas/ModelTask" }
+        filter: { $ref: "#/components/schemas/DatasetFilter" }
+        split_method: { $ref: "#/components/schemas/SplitMethod" }
+        val_fraction: { type: number, minimum: 0.05, maximum: 0.5, description: 0.2 when absent }
+        seed: { type: integer, description: 42 when absent }
+      example:
+        name: machinery-2026
+        task: detect
+        filter: { project_ids: ["7f1c2e3a-1111-4000-8000-000000000001", "7f1c2e3a-1111-4000-8000-000000000002"], type_ids: ["c1a2b3c4-0000-4000-8000-000000000001", "c1a2b3c4-0000-4000-8000-000000000004"], captured_from: null, captured_to: "2026-06-30", reviewed_only: true }
+        split_method: by_group
+        val_fraction: 0.2
+    LibraryDatasetWithJob:
+      type: object
+      required: [dataset, job]
+      properties:
+        dataset: { $ref: "#/components/schemas/LibraryDataset" }
+        job: { $ref: "#/components/schemas/Job" }
+    DatasetPreview:
+      type: object
+      required: [images, boxes_per_type, projects]
+      properties:
+        images: { type: integer, minimum: 0, description: images with ground truth of the chosen types }
+        boxes_per_type: { type: object, description: type id to its box count, additionalProperties: { type: integer, minimum: 0 } }
+        projects:
+          type: array
+          items:
+            type: object
+            required: [project_id, project_name, images, boxes, state]
+            properties:
+              project_id: { type: string }
+              project_name: { type: [string, "null"] }
+              images: { type: integer, minimum: 0 }
+              boxes: { type: integer, minimum: 0 }
+              state: { type: string, enum: [ok, missing, unavailable, timed_out], description: "`timed_out` after 2 s, `missing` when not on the recent list, `unavailable` when it cannot be opened; its counts are 0" }
+      example:
+        images: 300
+        boxes_per_type: { "c1a2b3c4-0000-4000-8000-000000000001": 750 }
+        projects: [{ project_id: "7f1c2e3a-1111-4000-8000-000000000001", project_name: Ahmadia, images: 300, boxes: 750, state: ok }]
+    LibraryDatasetItem:
+      type: object
+      required: [project_id, image_id, split, label_count]
+      properties:
+        project_id: { type: string }
+        image_id: { type: string }
+        split: { type: string, enum: [train, val] }
+        label_count: { type: integer, minimum: 0 }
+    LibraryDatasetItemPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/LibraryDatasetItem" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - { project_id: "7f1c2e3a-1111-4000-8000-000000000001", image_id: "10000000-5555-4000-8000-000000000001", split: train, label_count: 4 }
+        next_cursor: null
+    TrainingRun:
+      type: object
+      required: [id, name, dataset_id, base_model_id, params, job_id, state, model_id, metrics, created_at, finished_at]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        dataset_id: { type: string }
+        base_model_id: { type: string }
+        params: { type: object, additionalProperties: true, description: "the `TrainRequest` the run started with" }
+        job_id: { type: [string, "null"] }
+        state: { $ref: "#/components/schemas/JobState" }
+        model_id: { type: [string, "null"], description: "the registered library model, once the run succeeded" }
+        metrics:
+          oneOf:
+            - $ref: "#/components/schemas/ModelMetrics"
+            - type: "null"
+          description: null until the model registers
+        created_at: { type: string, format: date-time }
+        finished_at: { type: [string, "null"], format: date-time }
+      example:
+        id: "u0000000-1616-4000-8000-000000000001"
+        name: machinery-2026-n
+        dataset_id: "d0000000-7777-4000-8000-000000000010"
+        base_model_id: "m0000000-2222-4000-8000-000000000002"
+        params: { name: machinery-2026-n, dataset_id: "d0000000-7777-4000-8000-000000000010", base_model_id: "m0000000-2222-4000-8000-000000000002", epochs: 50, imgsz: 1280, batch: null, patience: 50, augmentation: aerial, device: "0" }
+        job_id: "j0000000-4444-4000-8000-000000000044"
+        state: succeeded
+        model_id: "m0000000-2222-4000-8000-000000000003"
+        metrics: { map50: 0.71, map50_95: 0.44, precision: 0.78, recall: 0.66, per_class: [{ class_name: excavator, map50: 0.8, map50_95: 0.5, precision: 0.82, recall: 0.7 }] }
+        created_at: "2026-09-26T12:30:00Z"
+        finished_at: "2026-09-26T14:10:00Z"
+    TrainingRunPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TrainingRun" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - id: "u0000000-1616-4000-8000-000000000001"
+            name: machinery-2026-n
+            dataset_id: "d0000000-7777-4000-8000-000000000010"
+            base_model_id: "m0000000-2222-4000-8000-000000000002"
+            params: { name: machinery-2026-n, dataset_id: "d0000000-7777-4000-8000-000000000010", base_model_id: "m0000000-2222-4000-8000-000000000002", epochs: 50 }
+            job_id: "j0000000-4444-4000-8000-000000000044"
+            state: running
+            model_id: null
+            metrics: null
+            created_at: "2026-09-26T12:30:00Z"
+            finished_at: null
+        next_cursor: null
+    TrainingRunWithJob:
+      type: object
+      required: [training_run, job]
+      properties:
+        training_run: { $ref: "#/components/schemas/TrainingRun" }
+        job: { $ref: "#/components/schemas/Job" }

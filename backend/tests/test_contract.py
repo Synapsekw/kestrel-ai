@@ -106,6 +106,7 @@ BACKEND_PENDING: dict[str, str] = {
     "getProject": "BK, BC",
     "updateProject": "BK, BC",
     "updateClasses": "BK, BC",
+    "listLibraryModels": "BM",
 }
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
