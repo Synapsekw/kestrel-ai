@@ -33,7 +33,19 @@ describe("ProjectTypesSection", () => {
     expect(requests.find((r) => r.method === "PUT")?.url).toBe(`/api/v1/projects/${PROJECT_ID}/types`);
     expect(requests.find((r) => r.method === "PUT")?.body).toEqual({
       type_ids: [TYPE_ID(1), TYPE_ID(3), TYPE_ID(2)],
-      hotkeys: { [TYPE_ID(1)]: "9" },
+      hotkeys: { [TYPE_ID(1)]: "9", [TYPE_ID(3)]: null, [TYPE_ID(2)]: null },
+    });
+  });
+
+  it("clearing a project's hotkey override sends null for that type, not a left-out entry", async () => {
+    const { requests } = renderSection([{ method: "PUT", path: /\/projects\/[^/]+\/types$/, body: project }]);
+    await screen.findByRole("button", { name: "Move Excavator down" });
+    fireEvent.change(screen.getByLabelText("Hotkey of Excavator"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save types" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "PUT")).toBe(true));
+    expect(requests.find((r) => r.method === "PUT")?.body).toEqual({
+      type_ids: [TYPE_ID(1), TYPE_ID(3)],
+      hotkeys: { [TYPE_ID(1)]: null, [TYPE_ID(3)]: null },
     });
   });
 

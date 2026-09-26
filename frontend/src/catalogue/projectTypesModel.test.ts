@@ -47,10 +47,20 @@ describe("project type list (F §7.3)", () => {
     expect(hotkeyProblem(rowsOf(projectClasses, exampleTypes))).toBeNull();
   });
 
-  it("sends the order and only the overrides", () => {
+  it("sends the order and a hotkey entry (string or null) for every row", () => {
     expect(toTypesBody(rowsOf(projectClasses, exampleTypes))).toEqual({
       type_ids: [TYPE_ID(1), TYPE_ID(3)],
-      hotkeys: { [TYPE_ID(1)]: "9" },
+      hotkeys: { [TYPE_ID(1)]: "9", [TYPE_ID(3)]: null },
+    });
+  });
+
+  it("clearing a project's override sends null for that type (a left-out entry would keep it)", () => {
+    const rows = rowsOf(projectClasses, exampleTypes).map((r) =>
+      r.name === "Excavator" ? { ...r, override: "" } : r,
+    );
+    expect(toTypesBody(rows)).toEqual({
+      type_ids: [TYPE_ID(1), TYPE_ID(3)],
+      hotkeys: { [TYPE_ID(1)]: null, [TYPE_ID(3)]: null },
     });
   });
 

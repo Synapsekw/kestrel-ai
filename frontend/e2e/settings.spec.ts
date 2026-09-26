@@ -77,5 +77,8 @@ test("the project's type list adds a catalogue type and saves the order with PUT
   await page.getByRole("button", { name: "Add Dump truck" }).click();
   const put = page.waitForRequest((r) => r.method() === "PUT" && r.url().endsWith(`/projects/${P}/types`));
   await page.getByRole("button", { name: "Save types" }).click();
-  expect((await put).postDataJSON()).toEqual({ type_ids: ["t-1", "t-2"], hotkeys: {} });
+  expect((await put).postDataJSON()).toEqual({
+    type_ids: ["t-1", "t-2"],
+    hotkeys: { "t-1": null, "t-2": null },
+  });
 });

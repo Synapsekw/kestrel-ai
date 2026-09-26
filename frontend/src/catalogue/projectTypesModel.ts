@@ -82,9 +82,15 @@ export function hotkeyProblem(rows: TypeRow[]): string | null {
   return null;
 }
 
+/**
+ * `hotkeys[type_id]` is the override string, or `null` to clear one; a type id left out of the map
+ * keeps whatever the project already has (the contract's `ProjectTypesUpdate.hotkeys`). Every row is
+ * sent explicitly (`null` for an empty override) so clearing one on the UI clears it on the server
+ * too, instead of silently leaving the previous override in place.
+ */
 export function toTypesBody(rows: TypeRow[]): ProjectTypesUpdate {
-  const hotkeys: Record<string, string> = {};
-  for (const r of rows) if (r.override) hotkeys[r.typeId] = r.override;
+  const hotkeys: Record<string, string | null> = {};
+  for (const r of rows) hotkeys[r.typeId] = r.override || null;
   return { type_ids: rows.map((r) => r.typeId), hotkeys };
 }
 
