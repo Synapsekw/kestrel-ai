@@ -44,3 +44,5 @@ Thumbs.db
 
 # built installers (copied out of the build tree)
 dist/
+# Brainstorm companion mockups are per-session scratch
+.superpowers/brainstorm/
