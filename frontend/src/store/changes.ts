@@ -12,10 +12,14 @@ interface ChangesState {
   volumesRevision: number;
   /** Bumped on `data.changed` (spec 2026-09-26-foundation section 13): the tab counts and the Data list. */
   dataRevision: number;
-  /** Bumped on `findings.changed`. */
+  /** Bumped on `findings.changed` and after this client's own finding writes (F §8.3). */
   findingsRevision: number;
+  /** Bumped on `migration.changed`: the Projects list re-reads (F §11.3). */
+  projectsRevision: number;
   applyEvent: (ev: AppEvent) => void;
   bumpImages: () => void;
+  bumpFindings: () => void;
+  bumpData: () => void;
 }
 
 export const useChangesStore = create<ChangesState>((set) => ({
@@ -25,7 +29,10 @@ export const useChangesStore = create<ChangesState>((set) => ({
   volumesRevision: 0,
   dataRevision: 0,
   findingsRevision: 0,
+  projectsRevision: 0,
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
+  bumpFindings: () => set((s) => ({ findingsRevision: s.findingsRevision + 1 })),
+  bumpData: () => set((s) => ({ dataRevision: s.dataRevision + 1 })),
   applyEvent: (ev) =>
     set((s) => {
       if (ev.type === "images.changed") return { imagesRevision: s.imagesRevision + 1 };
@@ -40,6 +47,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
       if (ev.type === "volumes.changed") return { volumesRevision: s.volumesRevision + 1 };
       if (ev.type === "data.changed") return { dataRevision: s.dataRevision + 1 };
       if (ev.type === "findings.changed") return { findingsRevision: s.findingsRevision + 1 };
+      if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
       return s;
     }),
 }));
