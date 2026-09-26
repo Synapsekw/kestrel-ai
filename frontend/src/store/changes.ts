@@ -10,6 +10,10 @@ interface ChangesState {
   surfacesRevision: number;
   /** Bumped on `volumes.changed`. */
   volumesRevision: number;
+  /** Bumped on `data.changed` (spec 2026-09-26-foundation section 13): the tab counts and the Data list. */
+  dataRevision: number;
+  /** Bumped on `findings.changed`. */
+  findingsRevision: number;
   applyEvent: (ev: AppEvent) => void;
   bumpImages: () => void;
 }
@@ -19,6 +23,8 @@ export const useChangesStore = create<ChangesState>((set) => ({
   boxesRevision: {},
   surfacesRevision: 0,
   volumesRevision: 0,
+  dataRevision: 0,
+  findingsRevision: 0,
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
   applyEvent: (ev) =>
     set((s) => {
@@ -32,6 +38,8 @@ export const useChangesStore = create<ChangesState>((set) => ({
       }
       if (ev.type === "surfaces.changed") return { surfacesRevision: s.surfacesRevision + 1 };
       if (ev.type === "volumes.changed") return { volumesRevision: s.volumesRevision + 1 };
+      if (ev.type === "data.changed") return { dataRevision: s.dataRevision + 1 };
+      if (ev.type === "findings.changed") return { findingsRevision: s.findingsRevision + 1 };
       return s;
     }),
 }));

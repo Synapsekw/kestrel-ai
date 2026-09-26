@@ -28,3 +28,14 @@ describe("changes store", () => {
     expect(useChangesStore.getState().boxesRevision).toEqual({});
   });
 });
+
+describe("data and findings revisions", () => {
+  it("bumps on data.changed and findings.changed and nothing else", () => {
+    useChangesStore.setState({ dataRevision: 0, findingsRevision: 0 });
+    const apply = useChangesStore.getState().applyEvent;
+    apply(ev("data.changed", {}));
+    apply(ev("findings.changed", { ids: ["f1"] }));
+    apply(ev("images.changed", {}));
+    expect(useChangesStore.getState()).toMatchObject({ dataRevision: 1, findingsRevision: 1 });
+  });
+});

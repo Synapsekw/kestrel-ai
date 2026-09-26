@@ -3,6 +3,7 @@ import {
   type ApiClient,
   type Box,
   type ClassDef,
+  type components,
   type CostEstimate,
   type Dataset,
   type GeoMap,
@@ -88,6 +89,21 @@ export const exampleProject: Project = {
     report_path: null,
   },
   availability: "ok",
+};
+
+/** GET /projects/{id}/overview (spec 2026-09-26-foundation section 9.1). */
+export const exampleOverview: components["schemas"]["ProjectOverview"] = {
+  findings: {
+    by_status: { open: 47, reviewed: 12, closed: 30 },
+    open_by_severity: { "1": 10, "2": 20, "3": 12, "4": 5 },
+    open_no_severity: 0,
+    by_type: [],
+    trend: [],
+  },
+  data: { image_sets: 2, images: 1284, maps: 3, elevations: 1, point_clouds: 2, drawings: 0 },
+  latest_volume: null,
+  hero_map_id: null,
+  banners: [],
 };
 
 export const exampleImage: ImageRow = {
