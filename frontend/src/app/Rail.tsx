@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { Icon, Tooltip, cx, focusRing } from "@/ui";
 import { Brand } from "./Brand";
-import { RAIL_ENTRIES, RAIL_SETTINGS, routeInfo, type RailEntry } from "./routeModel";
+import { RAIL_ENTRIES, RAIL_SETTINGS, railHref, routeInfo, type RailEntry } from "./routeModel";
 
 function RailLink({ entry, to, active }: { entry: RailEntry; to: string; active: boolean }) {
   return (
@@ -44,7 +44,7 @@ export function Rail({ projectId }: { projectId: string | undefined }) {
           key={entry.id}
           entry={entry}
           active={section === entry.id}
-          to={entry.id === "jobs" && projectId ? `/jobs?project=${projectId}` : entry.to}
+          to={railHref(entry, projectId)}
         />
       ))}
       <div className="flex-1" />

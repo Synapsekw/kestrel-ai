@@ -53,6 +53,11 @@ export const RAIL_SETTINGS: RailEntry = {
   to: "/settings",
 };
 
+/** Where a rail entry goes: Jobs keeps the current project (`/jobs?project=`), the rest are fixed. */
+export function railHref(entry: RailEntry, projectId: string | null | undefined): string {
+  return entry.id === "jobs" && projectId ? `/jobs?project=${projectId}` : entry.to;
+}
+
 export const SECTION_LABEL: Record<Section, string> = {
   projects: "Projects",
   models: "Models",

@@ -3,7 +3,7 @@ import { unwrap } from "@/api/errors";
 import type { Command, CommandSource, IconName } from "@/ui";
 import type { AddDataTile } from "./addDataStore";
 import type { RouteAction } from "./routeActions";
-import { PROJECT_TABS, RAIL_ENTRIES, RAIL_SETTINGS, SECONDARY_PAGES, type RouteInfo } from "./routeModel";
+import { PROJECT_TABS, RAIL_ENTRIES, RAIL_SETTINGS, SECONDARY_PAGES, railHref, type RouteInfo } from "./routeModel";
 
 /** The Go to group (spec 2026-09-26-foundation section 5.4). */
 export function goToCommands(
@@ -16,7 +16,7 @@ export function goToCommands(
     title: e.label,
     icon: e.icon,
     hint: "Section",
-    run: () => go(e.to),
+    run: () => go(railHref(e, info.projectId)),
   }));
   if (info.projectId) {
     const base = `/p/${info.projectId}`;

@@ -35,6 +35,19 @@ describe("palette commands", () => {
     expect(go).toHaveBeenCalledWith(`/p/${PROJECT_ID}/findings`);
   });
 
+  it("go to Jobs keeps the project, like the rail", () => {
+    const go = vi.fn();
+    goToCommands(routeInfo(`/p/${PROJECT_ID}/images`), [], go)
+      .find((c) => c.id === "go:jobs")
+      ?.run();
+    expect(go).toHaveBeenCalledWith(`/jobs?project=${PROJECT_ID}`);
+    go.mockClear();
+    goToCommands(routeInfo("/projects"), [], go)
+      .find((c) => c.id === "go:jobs")
+      ?.run();
+    expect(go).toHaveBeenCalledWith("/jobs");
+  });
+
   it("actions: the route's enabled actions, the importers, New project and reduced effects", () => {
     const go = vi.fn();
     const addData = vi.fn();
