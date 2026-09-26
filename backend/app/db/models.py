@@ -4,7 +4,18 @@ from datetime import date, datetime
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy import JSON, Boolean, Date, Float, ForeignKey, Index, Integer, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Date,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, UTCDateTime, new_id, utcnow
@@ -16,6 +27,9 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String)
     classes: Mapped[list] = mapped_column(JSON, default=list)  # [{id, name, colour, hotkey, order}]
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
+    # The high-water mark of finding numbers (spec section 8.1): allocation takes
+    # max(finding_seq, max(finding.number)) + 1, so a deleted number is never handed out again.
+    finding_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     preannotation_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     import_defaults: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
@@ -98,6 +112,7 @@ class Box(Base):
         Index("ix_box_image", "image_id"),
         Index("ix_box_query_run", "query_run_id"),
         Index("ix_box_review", "review_state"),
+        Index("ix_box_class", "class_id"),
     )
 
 
@@ -459,3 +474,157 @@ class VolumeMeasurement(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
     __table_args__ = (Index("ix_volume_measurement_top_surface", "top_surface_id"),)
+
+
+class ProjectType(Base):
+    """One entry of the project type list: a catalogue type this project uses, with a snapshot of it
+    so the project renders without the catalogue (spec 2026-09-26-foundation section 7.3, F2)."""
+
+    __tablename__ = "project_type"
+    type_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    position: Mapped[int] = mapped_column(Integer)
+    # None: the catalogue hotkey applies. "": no hotkey in this project (set only to clear a clash).
+    hotkey_override: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    name: Mapped[str] = mapped_column(String)
+    colour: Mapped[str] = mapped_column(String(7))
+    kind: Mapped[str] = mapped_column(String)  # defect | object
+    default_severity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hotkey: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    group: Mapped[str | None] = mapped_column(String, nullable=True)
+    refreshed_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_project_type_position", "position"),)
+
+
+ANCHOR_CHECK = (
+    "(anchor_kind = 'image' AND image_id IS NOT NULL AND annotation_id IS NOT NULL"
+    " AND map_id IS NULL AND geometry IS NULL AND cloud_id IS NULL"
+    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL)"
+    " OR (anchor_kind = 'map' AND map_id IS NOT NULL AND geometry IS NOT NULL"
+    " AND image_id IS NULL AND annotation_id IS NULL AND cloud_id IS NULL"
+    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL)"
+    " OR (anchor_kind = 'cloud' AND cloud_id IS NOT NULL AND x IS NOT NULL AND y IS NOT NULL"
+    " AND z IS NOT NULL AND image_id IS NULL AND annotation_id IS NULL AND map_id IS NULL"
+    " AND geometry IS NULL)"
+)
+
+
+class Finding(Base):
+    """A defect with one anchor (spec 2026-09-26-foundation section 8.1, umbrella section 3)."""
+
+    __tablename__ = "finding"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    number: Mapped[int] = mapped_column(Integer)  # shown as F-0217 (findings/numbers.py)
+    type_id: Mapped[str] = mapped_column(String(36))  # a catalogue type id
+    severity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(String, default="open")  # open | reviewed | closed
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_by: Mapped[str] = mapped_column(String, default="human")  # human | model:<id>
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    anchor_kind: Mapped[str] = mapped_column(String)  # image | map | cloud
+    image_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # No ON DELETE: a box delete that skips findings/annotations.py fails loudly instead of leaving
+    # a finding without its geometry and the counts wrong (plan BC, Review Focus 1).
+    annotation_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("box.id"), nullable=True)
+    map_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    # none_as_null: without it SQLAlchemy stores Python None as the JSON text 'null', which the CHECK
+    # would read as NOT NULL.
+    geometry: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    cloud_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    x: Mapped[float | None] = mapped_column(Float, nullable=True)
+    y: Mapped[float | None] = mapped_column(Float, nullable=True)
+    z: Mapped[float | None] = mapped_column(Float, nullable=True)
+    uncertainty_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lon: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lat: Mapped[float | None] = mapped_column(Float, nullable=True)
+    data_type: Mapped[str] = mapped_column(String)  # image_set | map | point_cloud
+    data_id: Mapped[str] = mapped_column(String(36))
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    closed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    __table_args__ = (
+        CheckConstraint(ANCHOR_CHECK, name="ck_finding_anchor"),
+        CheckConstraint("status IN ('open', 'reviewed', 'closed')", name="ck_finding_status"),
+        Index("ux_finding_number", "number", unique=True),
+        Index("ux_finding_annotation", "annotation_id", unique=True),
+        Index("ix_finding_status_severity_number", "status", "severity", "number"),
+        Index("ix_finding_type", "type_id"),
+        Index("ix_finding_data", "data_id"),
+        Index("ix_finding_updated", "updated_at"),
+        Index("ix_finding_image", "anchor_kind", "image_id"),
+        Index("ix_finding_location", "lon", "lat"),
+    )
+
+
+class FindingAttachment(Base):
+    __tablename__ = "finding_attachment"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    finding_id: Mapped[str] = mapped_column(String(36), ForeignKey("finding.id", ondelete="CASCADE"))
+    path: Mapped[str] = mapped_column(String)  # relative: findings/<finding_id>/<id>.<ext>
+    original_name: Mapped[str] = mapped_column(String)
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_finding_attachment_finding", "finding_id", "created_at"),)
+
+
+class FindingComment(Base):
+    __tablename__ = "finding_comment"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    finding_id: Mapped[str] = mapped_column(String(36), ForeignKey("finding.id", ondelete="CASCADE"))
+    author: Mapped[str] = mapped_column(String)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    edited_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    __table_args__ = (Index("ix_finding_comment_finding", "finding_id", "created_at"),)
+
+
+class FindingCount(Base):
+    """Pre-aggregated finding numbers; findings/counts.py is the only writer (spec section 8.4)."""
+
+    __tablename__ = "finding_count"
+    status: Mapped[str] = mapped_column(String, primary_key=True)
+    severity: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=False)  # -1 = none
+    type_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    n: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class FindingDaily(Base):
+    """One row per day with a finding write: the open numbers at the end of it and its closures."""
+
+    __tablename__ = "finding_daily"
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    open: Mapped[int] = mapped_column(Integer, default=0)  # not closed: open + reviewed
+    open_by_severity: Mapped[dict] = mapped_column(JSON, default=dict)  # {"1": n, ...}
+    closed: Mapped[int] = mapped_column(Integer, default=0)
+    # Not in the spec's column list: KPI 2 ("n closed this week" at the top level) needs it.
+    closed_by_severity: Mapped[dict] = mapped_column(JSON, default=dict)  # {"4": n, "none": n}
+
+
+class Activity(Base):
+    __tablename__ = "activity"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    kind: Mapped[str] = mapped_column(String)
+    subject_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    summary: Mapped[str] = mapped_column(String)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    __table_args__ = (Index("ix_activity_at", "at"), Index("ix_activity_subject", "subject_id", "at"))
+
+
+class MigrationStep(Base):
+    """MG's step records (spec section 11.4); BC only creates the table."""
+
+    __tablename__ = "migration_step"
+    name: Mapped[str] = mapped_column(String, primary_key=True)
+    done_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    detail: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ClassIdMap(Base):
+    """MG's old class id -> catalogue type id map (spec section 11.4 step 1)."""
+
+    __tablename__ = "class_id_map"
+    old_class_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    type_id: Mapped[str] = mapped_column(String(36))
