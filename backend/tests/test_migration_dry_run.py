@@ -126,3 +126,78 @@ def test_a_folder_listed_twice_runs_once_and_an_empty_run_is_not_a_pass(mod, rea
     report = mod.dry_run([busy, Path(str(busy).upper())], data_dir, tmp_path / "work")
     assert len(report["projects"]) == 1
     assert mod.dry_run([], data_dir, tmp_path / "empty")["ok"] is False
+
+
+def test_a_work_dir_inside_a_project_folder_is_refused(mod, real_like, tmp_path, capsys):
+    """SAFETY: a work dir under a project folder would have the copy's writes land inside it."""
+    data_dir, _old, busy = real_like
+    out = tmp_path / "report.json"
+    code = mod.main(
+        [
+            "--data-dir",
+            str(data_dir),
+            "--folders",
+            str(busy),
+            "--work-dir",
+            str(busy / "work"),
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == 1
+    assert not out.exists()
+    assert not (busy / "work").exists()
+    assert "overlaps" in capsys.readouterr().err
+
+
+def test_a_work_dir_containing_a_project_folder_is_refused(mod, real_like, tmp_path, capsys):
+    data_dir, _old, busy = real_like
+    out = tmp_path / "report.json"
+    code = mod.main(
+        [
+            "--data-dir",
+            str(data_dir),
+            "--folders",
+            str(busy),
+            "--work-dir",
+            str(tmp_path / "projects"),
+            "--out",
+            str(out),
+        ]
+    )
+    assert code == 1
+    assert not out.exists()
+    assert "overlaps" in capsys.readouterr().err
+
+
+def test_a_nonempty_reused_work_dir_is_refused(mod, real_like, tmp_path, capsys):
+    """A stale --keep dir from an earlier run must not be silently reused."""
+    data_dir, _old, busy = real_like
+    work = tmp_path / "reused"
+    work.mkdir()
+    (work / "leftover.txt").write_text("from an earlier --keep run", "utf-8")
+    out = tmp_path / "report.json"
+    code = mod.main(
+        ["--data-dir", str(data_dir), "--folders", str(busy), "--work-dir", str(work), "--out", str(out)]
+    )
+    assert code == 1
+    assert not out.exists()
+    assert [p.name for p in work.iterdir()] == ["leftover.txt"]
+    assert "not empty" in capsys.readouterr().err
+
+
+def test_the_temp_work_dir_is_removed_without_keep_and_kept_with_keep(mod, real_like, monkeypatch):
+    data_dir, _old, busy = real_like
+    made: list[Path] = []
+    original_mkdtemp = mod.tempfile.mkdtemp
+
+    def spy(*args, **kwargs):
+        path = original_mkdtemp(*args, **kwargs)
+        made.append(Path(path))
+        return path
+
+    monkeypatch.setattr(mod.tempfile, "mkdtemp", spy)
+    assert mod.main(["--data-dir", str(data_dir), "--folders", str(busy)]) == 0
+    assert not made[0].exists()
+    assert mod.main(["--data-dir", str(data_dir), "--folders", str(busy), "--keep"]) == 0
+    assert made[1].exists()

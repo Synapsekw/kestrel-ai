@@ -46,6 +46,37 @@ STORE_FILES = ("library.db", "catalogue.db")
 log = logging.getLogger("migration_dry_run")
 
 
+class UnsafeWorkDir(RuntimeError):
+    """The work dir could clobber an original project folder, or reuses a non-empty directory."""
+
+
+def _lower_resolved(p: Path) -> str:
+    return str(Path(p).resolve()).lower()
+
+
+def _within(inner: str, outer: str) -> bool:
+    return inner == outer or inner.startswith(outer + os.sep)
+
+
+def check_work_dir(work: Path, folders) -> None:
+    """Refuse a work dir that overlaps an input project folder (same as, inside, or containing
+    it — compared case-insensitively, since Windows paths are not case-sensitive), or that
+    already exists and is not empty (a reused `--keep` dir from an earlier run). Both are refused
+    before anything is created or copied, so a caller that catches `UnsafeWorkDir` has written
+    nothing.
+    """
+    work_key = _lower_resolved(work)
+    for folder in folders:
+        folder_key = _lower_resolved(folder)
+        if _within(work_key, folder_key) or _within(folder_key, work_key):
+            raise UnsafeWorkDir(
+                f"the work dir {work} overlaps the project folder {folder}; it must never be the "
+                "same as, inside, or contain a project folder"
+            )
+    if Path(work).is_dir() and any(Path(work).iterdir()):
+        raise UnsafeWorkDir(f"the work dir {work} already exists and is not empty; remove it or pick another")
+
+
 def default_data_dir() -> Path:
     """The installed app's data folder: `APP_DATA_DIR` as the launcher sets it, else Tauri's."""
     if os.environ.get("APP_DATA_DIR"):
@@ -185,6 +216,7 @@ def dry_run(folders, data_dir: Path, work: Path) -> dict:
         if key not in seen:
             seen.add(key)
             unique.append(Path(f))
+    check_work_dir(work, unique)
     work.mkdir(parents=True, exist_ok=True)
     library, catalogue = open_stores(copy_app_stores(Path(data_dir), work))
     try:
@@ -253,6 +285,9 @@ def main(argv: list[str] | None = None) -> int:
     work = args.work_dir or Path(tempfile.mkdtemp(prefix="kestrel-dry-run-"))
     try:
         report = dry_run(folders, data_dir, work)
+    except UnsafeWorkDir as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
     finally:
         if not args.keep and args.work_dir is None:
             shutil.rmtree(work, ignore_errors=True)
