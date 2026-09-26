@@ -4042,6 +4042,86 @@ paths:
               schema: { $ref: "#/components/schemas/AppJobPage" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ foundation: data, overview, search, activity (F-C0)
+  /api/v1/projects/{projectId}/data:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [data]
+      operationId: listDataItems
+      summary: |
+        Everything imported into the project in one list: image sets, maps, elevations, drawings and
+        point clouds, newest capture first (`captured_on desc nulls last, created_at desc, id`). A
+        view over each type's own table: a page asks each provider for `limit + 1` rows after the
+        cursor and merges them. Each type keeps its own endpoints for everything else.
+      parameters:
+        - name: type
+          in: query
+          required: false
+          schema: { type: array, items: { $ref: "#/components/schemas/DataItemType" } }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: data items
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DataItemPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/overview:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [data]
+      operationId: getProjectOverview
+      summary: The Overview dashboard in one read. It reads only pre-aggregated rows and small-table counts, a fixed number of statements whatever the project's size; it never scans findings, boxes or images.
+      responses:
+        "200":
+          description: the overview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectOverview" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/search:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [data]
+      operationId: searchProject
+      summary: "The command palette's project search: findings by number (`F-0123` or `123`), note or type name, and data items by label; at most `limit` of each. It never scans images."
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 2, maxLength: 200 } }
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 20, default: 8 }, description: per group }
+      responses:
+        "200":
+          description: the matches
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectSearchResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/activity:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [data]
+      operationId: listActivity
+      summary: The project's activity feed, newest first; `subject_id` narrows it to one finding or data item (the inspector's history).
+      parameters:
+        - { name: subject_id, in: query, required: false, schema: { type: string } }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: activity, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ActivityPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -8194,4 +8274,154 @@ components:
             started_at: "2026-09-17T10:05:01Z"
             finished_at: null
             project_name: Ahmadia
+        next_cursor: null
+    # ------------------------------------------------------------ foundation: data, overview, search, activity (F-C0)
+    DataItemSummary:
+      type: object
+      description: >-
+        The type's headline figures; each type fills its own fields. `image_set`: image_count,
+        duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min,
+        z_max. `point_cloud`: point_count, has_rgb, epsg. `drawing`: defined by the map workspace.
+      properties:
+        image_count: { type: integer, minimum: 0 }
+        duplicate_count: { type: integer, minimum: 0 }
+        gsd_cm: { type: [number, "null"] }
+        epsg: { type: [integer, "null"] }
+        width: { type: integer, minimum: 0 }
+        height: { type: integer, minimum: 0 }
+        kind: { $ref: "#/components/schemas/SurfaceKind" }
+        cell_size_m: { type: [number, "null"] }
+        z_min: { type: [number, "null"] }
+        z_max: { type: [number, "null"] }
+        point_count: { type: [integer, "null"] }
+        has_rgb: { type: [boolean, "null"] }
+    DataItem:
+      type: object
+      description: one thing imported into the project, a view over its own table (foundation §6.3)
+      required: [id, type, label, captured_on, status, created_at, summary]
+      properties:
+        id: { type: string, description: "the id in the type's own table: a source, map, surface or point cloud id" }
+        type: { $ref: "#/components/schemas/DataItemType" }
+        label: { type: string }
+        captured_on: { type: [string, "null"], format: date, description: the survey date; null when not set }
+        status: { type: string, enum: [importing, ready, failed] }
+        created_at: { type: string, format: date-time }
+        summary: { $ref: "#/components/schemas/DataItemSummary" }
+      example: { id: "50000000-3333-4000-8000-000000000001", type: image_set, label: "Flight 15 Apr", captured_on: "2019-04-15", status: ready, created_at: "2026-09-17T10:05:00Z", summary: { image_count: 3299, duplicate_count: 0 } }
+    DataItemPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DataItem" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - { id: "a0000000-6666-4000-8000-000000000001", type: map, label: "May survey", captured_on: "2026-05-02", status: ready, created_at: "2026-09-22T09:00:00Z", summary: { gsd_cm: 2.1, epsg: 32638, width: 24000, height: 18000 } }
+          - { id: "p0000000-1111-4000-8000-000000000001", type: point_cloud, label: "May survey cloud", captured_on: "2026-05-02", status: importing, created_at: "2026-09-24T09:00:00Z", summary: { point_count: 41200000, has_rgb: true, epsg: 32638 } }
+          - { id: "50000000-3333-4000-8000-000000000001", type: image_set, label: "Flight 15 Apr", captured_on: "2019-04-15", status: ready, created_at: "2026-09-17T10:05:00Z", summary: { image_count: 3299, duplicate_count: 0 } }
+        next_cursor: null
+    OverviewDataCounts:
+      type: object
+      required: [image_sets, images, maps, elevations, point_clouds, drawings]
+      properties:
+        image_sets: { type: integer, minimum: 0 }
+        images: { type: integer, minimum: 0, description: "`SUM(source.image_count)`" }
+        maps: { type: integer, minimum: 0 }
+        elevations: { type: integer, minimum: 0 }
+        point_clouds: { type: integer, minimum: 0 }
+        drawings: { type: integer, minimum: 0, description: 0 until the map workspace adds drawings }
+    OverviewVolume:
+      type: object
+      description: the newest ready volume measurement, and the net volume of the previous ready one over the same polygon (the KPI shows the difference)
+      required: [measurement_id, name, net_m3, previous_net_m3]
+      properties:
+        measurement_id: { type: string }
+        name: { type: string }
+        net_m3: { type: [number, "null"] }
+        previous_net_m3: { type: [number, "null"], description: null when there is no earlier measurement of the same polygon }
+    OverviewBanner:
+      type: object
+      required: [kind, tone, message]
+      properties:
+        kind: { type: string, description: "`migration_warning`, `model_adoption` or `types_to_classify`" }
+        tone: { type: string, enum: [info, warn, danger] }
+        message: { type: string }
+        action: { type: [string, "null"], description: "an in-app path the banner's button opens, or null" }
+    ProjectOverview:
+      type: object
+      required: [findings, data, latest_volume, hero_map_id, banners]
+      properties:
+        findings: { $ref: "#/components/schemas/FindingSummary" }
+        data: { $ref: "#/components/schemas/OverviewDataCounts" }
+        latest_volume:
+          oneOf:
+            - $ref: "#/components/schemas/OverviewVolume"
+            - type: "null"
+        hero_map_id: { type: [string, "null"], description: "the newest ready map, shown as tiles only" }
+        banners: { type: array, items: { $ref: "#/components/schemas/OverviewBanner" } }
+      example:
+        findings:
+          by_status: { open: 47, reviewed: 12, closed: 88 }
+          open_by_severity: { "1": 9, "2": 21, "3": 11, "4": 3 }
+          open_no_severity: 3
+          by_type: [{ type_id: "c1a2b3c4-0000-4000-8000-000000000009", n: 30 }]
+          trend:
+            - { day: "2026-09-25", open: 49, closed: 2, open_by_severity: { "4": 4 } }
+            - { day: "2026-09-26", open: 47, closed: 3, open_by_severity: { "4": 3 } }
+        data: { image_sets: 3, images: 3299, maps: 2, elevations: 1, point_clouds: 1, drawings: 0 }
+        latest_volume: { measurement_id: "v0000000-1111-4000-8000-000000000001", name: "North stockpile", net_m3: 1520.4, previous_net_m3: 1307.6 }
+        hero_map_id: "a0000000-6666-4000-8000-000000000001"
+        banners:
+          - { kind: types_to_classify, tone: info, message: "12 types came from your existing projects. Mark which are defects.", action: /catalogue }
+    ProjectSearchResult:
+      type: object
+      required: [findings, data]
+      properties:
+        findings: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/Finding" } }
+        data: { type: array, maxItems: 20, items: { $ref: "#/components/schemas/DataItem" } }
+      example:
+        findings:
+          - id: "f0000000-1212-4000-8000-000000000217"
+            number: 217
+            type_id: "c1a2b3c4-0000-4000-8000-000000000009"
+            severity: 3
+            status: open
+            note: "Crack along the north parapet, about 40 cm."
+            created_by: human
+            confidence: null
+            anchor: { kind: image, image_id: "10000000-5555-4000-8000-000000000001", annotation_id: "b0000000-6666-4000-8000-000000000003" }
+            lon: 47.7625
+            lat: 29.4951
+            data_type: image_set
+            data_id: "50000000-3333-4000-8000-000000000001"
+            created_at: "2026-09-26T10:15:00Z"
+            updated_at: "2026-09-26T10:20:00Z"
+            reviewed_at: null
+            closed_at: null
+        data:
+          - { id: "a0000000-6666-4000-8000-000000000001", type: map, label: "North parapet ortho", captured_on: "2026-05-02", status: ready, created_at: "2026-09-22T09:00:00Z", summary: { gsd_cm: 2.1, epsg: 32638, width: 24000, height: 18000 } }
+    Activity:
+      type: object
+      required: [id, at, kind, subject_id, summary, payload]
+      properties:
+        id: { type: string }
+        at: { type: string, format: date-time }
+        kind: { type: string, description: "`finding.created`, `finding.status`, `finding.severity`, `finding.comment`, `data.imported`, `job.finished` or `detections.accepted`" }
+        subject_id: { type: [string, "null"], description: the finding or data item it is about }
+        summary: { type: string, description: a short human sentence }
+        payload: { type: object, additionalProperties: true, description: "small, kind-specific" }
+      example: { id: "e0000000-1515-4000-8000-000000000001", at: "2026-09-26T10:20:00Z", kind: finding.severity, subject_id: "f0000000-1212-4000-8000-000000000217", summary: "F-0217 set to Major", payload: { from: null, to: 3 } }
+    ActivityPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Activity" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - { id: "e0000000-1515-4000-8000-000000000001", at: "2026-09-26T10:20:00Z", kind: finding.severity, subject_id: "f0000000-1212-4000-8000-000000000217", summary: "F-0217 set to Major", payload: { from: null, to: 3 } }
         next_cursor: null

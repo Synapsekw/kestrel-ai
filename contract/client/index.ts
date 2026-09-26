@@ -89,6 +89,11 @@ export type FindingComment = Schemas["FindingComment"];
 export type FindingAttachment = Schemas["FindingAttachment"];
 export type AppJob = Schemas["AppJob"];
 export type AppJobPage = Schemas["AppJobPage"];
+export type DataItem = Schemas["DataItem"];
+export type DataItemPage = Schemas["DataItemPage"];
+export type ProjectOverview = Schemas["ProjectOverview"];
+export type ProjectSearchResult = Schemas["ProjectSearchResult"];
+export type Activity = Schemas["Activity"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */

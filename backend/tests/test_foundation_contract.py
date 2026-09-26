@@ -53,6 +53,11 @@ FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
     "getFindingAttachmentThumbnail": ("get", F + "/attachments/{attachmentId}/thumbnail"),
     # app jobs (Task 5)
     "listAppJobs": ("get", "/api/v1/jobs"),
+    # data, overview, search, activity (Task 6)
+    "listDataItems": ("get", P + "/data"),
+    "getProjectOverview": ("get", P + "/overview"),
+    "searchProject": ("get", P + "/search"),
+    "listActivity": ("get", P + "/activity"),
 }
 
 # Response schemas the Prism mock serves: each carries its own example (spec §18 "Prism examples").
@@ -76,6 +81,11 @@ EXAMPLED_SCHEMAS = [
     "FindingAttachmentList",
     "AppJob",
     "AppJobPage",
+    "DataItem",
+    "DataItemPage",
+    "ProjectOverview",
+    "ProjectSearchResult",
+    "ActivityPage",
 ]
 
 

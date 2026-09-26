@@ -2933,6 +2933,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/data": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Everything imported into the project in one list: image sets, maps, elevations, drawings and
+         *     point clouds, newest capture first (`captured_on desc nulls last, created_at desc, id`). A
+         *     view over each type's own table: a page asks each provider for `limit + 1` rows after the
+         *     cursor and merges them. Each type keeps its own endpoints for everything else.
+         */
+        get: operations["listDataItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** The Overview dashboard in one read. It reads only pre-aggregated rows and small-table counts, a fixed number of statements whatever the project's size; it never scans findings, boxes or images. */
+        get: operations["getProjectOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** The command palette's project search: findings by number (`F-0123` or `123`), note or type name, and data items by label; at most `limit` of each. It never scans images. */
+        get: operations["searchProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/activity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** The project's activity feed, newest first; `subject_id` narrows it to one finding or data item (the inspector's history). */
+        get: operations["listActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7829,6 +7910,301 @@ export interface components {
          */
         AppJobPage: {
             items: components["schemas"]["AppJob"][];
+            next_cursor: string | null;
+        };
+        /** @description The type's headline figures; each type fills its own fields. `image_set`: image_count, duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min, z_max. `point_cloud`: point_count, has_rgb, epsg. `drawing`: defined by the map workspace. */
+        DataItemSummary: {
+            image_count?: number;
+            duplicate_count?: number;
+            gsd_cm?: number | null;
+            epsg?: number | null;
+            width?: number;
+            height?: number;
+            kind?: components["schemas"]["SurfaceKind"];
+            cell_size_m?: number | null;
+            z_min?: number | null;
+            z_max?: number | null;
+            point_count?: number | null;
+            has_rgb?: boolean | null;
+        };
+        /**
+         * @description one thing imported into the project, a view over its own table (foundation §6.3)
+         * @example {
+         *       "id": "50000000-3333-4000-8000-000000000001",
+         *       "type": "image_set",
+         *       "label": "Flight 15 Apr",
+         *       "captured_on": "2019-04-15",
+         *       "status": "ready",
+         *       "created_at": "2026-09-17T10:05:00Z",
+         *       "summary": {
+         *         "image_count": 3299,
+         *         "duplicate_count": 0
+         *       }
+         *     }
+         */
+        DataItem: {
+            /** @description the id in the type's own table: a source, map, surface or point cloud id */
+            id: string;
+            type: components["schemas"]["DataItemType"];
+            label: string;
+            /**
+             * Format: date
+             * @description the survey date; null when not set
+             */
+            captured_on: string | null;
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            /** Format: date-time */
+            created_at: string;
+            summary: components["schemas"]["DataItemSummary"];
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "a0000000-6666-4000-8000-000000000001",
+         *           "type": "map",
+         *           "label": "May survey",
+         *           "captured_on": "2026-05-02",
+         *           "status": "ready",
+         *           "created_at": "2026-09-22T09:00:00Z",
+         *           "summary": {
+         *             "gsd_cm": 2.1,
+         *             "epsg": 32638,
+         *             "width": 24000,
+         *             "height": 18000
+         *           }
+         *         },
+         *         {
+         *           "id": "p0000000-1111-4000-8000-000000000001",
+         *           "type": "point_cloud",
+         *           "label": "May survey cloud",
+         *           "captured_on": "2026-05-02",
+         *           "status": "importing",
+         *           "created_at": "2026-09-24T09:00:00Z",
+         *           "summary": {
+         *             "point_count": 41200000,
+         *             "has_rgb": true,
+         *             "epsg": 32638
+         *           }
+         *         },
+         *         {
+         *           "id": "50000000-3333-4000-8000-000000000001",
+         *           "type": "image_set",
+         *           "label": "Flight 15 Apr",
+         *           "captured_on": "2019-04-15",
+         *           "status": "ready",
+         *           "created_at": "2026-09-17T10:05:00Z",
+         *           "summary": {
+         *             "image_count": 3299,
+         *             "duplicate_count": 0
+         *           }
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        DataItemPage: {
+            items: components["schemas"]["DataItem"][];
+            next_cursor: string | null;
+        };
+        OverviewDataCounts: {
+            image_sets: number;
+            /** @description `SUM(source.image_count)` */
+            images: number;
+            maps: number;
+            elevations: number;
+            point_clouds: number;
+            /** @description 0 until the map workspace adds drawings */
+            drawings: number;
+        };
+        /** @description the newest ready volume measurement, and the net volume of the previous ready one over the same polygon (the KPI shows the difference) */
+        OverviewVolume: {
+            measurement_id: string;
+            name: string;
+            net_m3: number | null;
+            /** @description null when there is no earlier measurement of the same polygon */
+            previous_net_m3: number | null;
+        };
+        OverviewBanner: {
+            /** @description `migration_warning`, `model_adoption` or `types_to_classify` */
+            kind: string;
+            /** @enum {string} */
+            tone: "info" | "warn" | "danger";
+            message: string;
+            /** @description an in-app path the banner's button opens, or null */
+            action?: string | null;
+        };
+        /**
+         * @example {
+         *       "findings": {
+         *         "by_status": {
+         *           "open": 47,
+         *           "reviewed": 12,
+         *           "closed": 88
+         *         },
+         *         "open_by_severity": {
+         *           "1": 9,
+         *           "2": 21,
+         *           "3": 11,
+         *           "4": 3
+         *         },
+         *         "open_no_severity": 3,
+         *         "by_type": [
+         *           {
+         *             "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *             "n": 30
+         *           }
+         *         ],
+         *         "trend": [
+         *           {
+         *             "day": "2026-09-25",
+         *             "open": 49,
+         *             "closed": 2,
+         *             "open_by_severity": {
+         *               "4": 4
+         *             }
+         *           },
+         *           {
+         *             "day": "2026-09-26",
+         *             "open": 47,
+         *             "closed": 3,
+         *             "open_by_severity": {
+         *               "4": 3
+         *             }
+         *           }
+         *         ]
+         *       },
+         *       "data": {
+         *         "image_sets": 3,
+         *         "images": 3299,
+         *         "maps": 2,
+         *         "elevations": 1,
+         *         "point_clouds": 1,
+         *         "drawings": 0
+         *       },
+         *       "latest_volume": {
+         *         "measurement_id": "v0000000-1111-4000-8000-000000000001",
+         *         "name": "North stockpile",
+         *         "net_m3": 1520.4,
+         *         "previous_net_m3": 1307.6
+         *       },
+         *       "hero_map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "banners": [
+         *         {
+         *           "kind": "types_to_classify",
+         *           "tone": "info",
+         *           "message": "12 types came from your existing projects. Mark which are defects.",
+         *           "action": "/catalogue"
+         *         }
+         *       ]
+         *     }
+         */
+        ProjectOverview: {
+            findings: components["schemas"]["FindingSummary"];
+            data: components["schemas"]["OverviewDataCounts"];
+            latest_volume: components["schemas"]["OverviewVolume"] | null;
+            /** @description the newest ready map, shown as tiles only */
+            hero_map_id: string | null;
+            banners: components["schemas"]["OverviewBanner"][];
+        };
+        /**
+         * @example {
+         *       "findings": [
+         *         {
+         *           "id": "f0000000-1212-4000-8000-000000000217",
+         *           "number": 217,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "severity": 3,
+         *           "status": "open",
+         *           "note": "Crack along the north parapet, about 40 cm.",
+         *           "created_by": "human",
+         *           "confidence": null,
+         *           "anchor": {
+         *             "kind": "image",
+         *             "image_id": "10000000-5555-4000-8000-000000000001",
+         *             "annotation_id": "b0000000-6666-4000-8000-000000000003"
+         *           },
+         *           "lon": 47.7625,
+         *           "lat": 29.4951,
+         *           "data_type": "image_set",
+         *           "data_id": "50000000-3333-4000-8000-000000000001",
+         *           "created_at": "2026-09-26T10:15:00Z",
+         *           "updated_at": "2026-09-26T10:20:00Z",
+         *           "reviewed_at": null,
+         *           "closed_at": null
+         *         }
+         *       ],
+         *       "data": [
+         *         {
+         *           "id": "a0000000-6666-4000-8000-000000000001",
+         *           "type": "map",
+         *           "label": "North parapet ortho",
+         *           "captured_on": "2026-05-02",
+         *           "status": "ready",
+         *           "created_at": "2026-09-22T09:00:00Z",
+         *           "summary": {
+         *             "gsd_cm": 2.1,
+         *             "epsg": 32638,
+         *             "width": 24000,
+         *             "height": 18000
+         *           }
+         *         }
+         *       ]
+         *     }
+         */
+        ProjectSearchResult: {
+            findings: components["schemas"]["Finding"][];
+            data: components["schemas"]["DataItem"][];
+        };
+        /**
+         * @example {
+         *       "id": "e0000000-1515-4000-8000-000000000001",
+         *       "at": "2026-09-26T10:20:00Z",
+         *       "kind": "finding.severity",
+         *       "subject_id": "f0000000-1212-4000-8000-000000000217",
+         *       "summary": "F-0217 set to Major",
+         *       "payload": {
+         *         "from": null,
+         *         "to": 3
+         *       }
+         *     }
+         */
+        Activity: {
+            id: string;
+            /** Format: date-time */
+            at: string;
+            /** @description `finding.created`, `finding.status`, `finding.severity`, `finding.comment`, `data.imported`, `job.finished` or `detections.accepted` */
+            kind: string;
+            /** @description the finding or data item it is about */
+            subject_id: string | null;
+            /** @description a short human sentence */
+            summary: string;
+            /** @description small, kind-specific */
+            payload: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "e0000000-1515-4000-8000-000000000001",
+         *           "at": "2026-09-26T10:20:00Z",
+         *           "kind": "finding.severity",
+         *           "subject_id": "f0000000-1212-4000-8000-000000000217",
+         *           "summary": "F-0217 set to Major",
+         *           "payload": {
+         *             "from": null,
+         *             "to": 3
+         *           }
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        ActivityPage: {
+            items: components["schemas"]["Activity"][];
             next_cursor: string | null;
         };
     };
@@ -14162,6 +14538,116 @@ export interface operations {
                     "application/json": components["schemas"]["AppJobPage"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    listDataItems: {
+        parameters: {
+            query?: {
+                type?: components["schemas"]["DataItemType"][];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description data items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataItemPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getProjectOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the overview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectOverview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    searchProject: {
+        parameters: {
+            query: {
+                q: string;
+                /** @description per group */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the matches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSearchResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listActivity: {
+        parameters: {
+            query?: {
+                subject_id?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description activity, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ActivityPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["Error"];
         };
     };

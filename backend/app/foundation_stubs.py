@@ -20,7 +20,10 @@ from app.stubs import add_stubs
 Stub = tuple[str, str, str]
 
 # BK: the data list (§6.3), search (§10.3) and the app-wide jobs list (§10.1).
-BK_PROJECT_STUBS: list[Stub] = []
+BK_PROJECT_STUBS: list[Stub] = [
+    ("GET", "/data", "listDataItems"),
+    ("GET", "/search", "searchProject"),
+]
 BK_APP_STUBS: list[Stub] = [
     ("GET", "/jobs", "listAppJobs"),
 ]
@@ -46,6 +49,8 @@ BC_PROJECT_STUBS: list[Stub] = [
     ("DELETE", "/findings/{findingId}/attachments/{attachmentId}", "deleteFindingAttachment"),
     ("GET", "/findings/{findingId}/attachments/{attachmentId}/file", "getFindingAttachmentFile"),
     ("GET", "/findings/{findingId}/attachments/{attachmentId}/thumbnail", "getFindingAttachmentThumbnail"),
+    ("GET", "/overview", "getProjectOverview"),
+    ("GET", "/activity", "listActivity"),
 ]
 BC_APP_STUBS: list[Stub] = [
     ("GET", "/catalogue/types", "listCatalogueTypes"),
