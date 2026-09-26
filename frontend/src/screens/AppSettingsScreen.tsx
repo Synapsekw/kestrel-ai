@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { AppearanceSection } from "@/settings/AppearanceSection";
 import { ProvidersSection } from "@/settings/ProvidersSection";
 import { buttonClass } from "@/ui";
 
@@ -11,6 +12,7 @@ export function AppSettingsScreen() {
         <p className="text-sm text-muted">Settings for this computer, used by all projects.</p>
       </div>
       <div className="divide-y divide-line">
+        <AppearanceSection />
         <ProvidersSection />
       </div>
       <div className="border-t border-line pt-4">

@@ -21,4 +21,13 @@ describe("AppSettingsScreen", () => {
     renderWithProviders(<AppSettingsScreen />, { api, route: "/settings", path: "/settings" });
     expect(screen.getByRole("link", { name: "About Kestrel AI" })).toHaveAttribute("href", "/about");
   });
+
+  it("starts with Appearance", () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/providers$/, body: { items: exampleProviders } },
+      { method: "GET", path: /\/settings\/operator$/, body: { operator_name: null } },
+    ]);
+    renderWithProviders(<AppSettingsScreen />, { api, route: "/settings", path: "/settings" });
+    expect(screen.getByRole("heading", { name: "Appearance" })).toBeInTheDocument();
+  });
 });
