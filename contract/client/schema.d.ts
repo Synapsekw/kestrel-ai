@@ -10501,7 +10501,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description a volume measurement uses the surface or its job is queued or running (`code` is `conflict`; the message names them), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a volume measurement uses the surface (`code` is `conflict`; the message names them), its build job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10733,7 +10733,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description a build uses the inspection (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a build of this inspection is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10803,7 +10803,7 @@ export interface operations {
                     "application/json": components["schemas"]["DesignPreviewWithJob"];
                 };
             };
-            /** @description the inspection has not been read yet or reading it failed, or the target cloud surface is building, failed or missing its grid (`code` is `not_ready`); a design surface is being imported from this inspection (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the inspection has not been read yet or reading it failed, or the target cloud surface is building, failed or missing its grid (`code` is `not_ready`); a design surface is being imported from this inspection (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10907,7 +10907,7 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            /** @description the preview is not ready, or the target cloud surface is no longer ready (`code` is `not_ready`); the preview is not the newest, has `block` warnings, has `warn` warnings without `accept_warnings`, or the design is already being imported (`code` is `conflict`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the preview is not ready, or the target cloud surface is no longer ready (`code` is `not_ready`); the preview is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); the design is already being imported (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11032,7 +11032,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description the measurement is calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is calculating (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11070,7 +11070,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurement"];
                 };
             };
-            /** @description the measurement is calculating (`code` is `conflict`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is calculating (`code` is `job_running`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11113,7 +11113,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurementWithJob"];
                 };
             };
-            /** @description the measurement is already calculating (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is already calculating (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;

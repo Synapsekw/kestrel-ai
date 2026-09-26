@@ -13,7 +13,7 @@ import shutil
 from collections.abc import Callable
 from pathlib import PureWindowsPath
 
-from sqlalchemy import func, select, update
+from sqlalchemy import Integer, cast, func, select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Job, MapDetection, MapRun, PointCloud, Surface, VolumeMeasurement
@@ -52,8 +52,9 @@ def _invalid(message: str, code: str = "invalid_geometry") -> AppError:
     return AppError(code, message, 422)
 
 
-def _conflict(message: str) -> AppError:
-    return AppError("conflict", message, 409)
+def _job_running(message: str) -> AppError:
+    """A refusal because the measurement's `volume_calc` job is live (the coordinator's rule)."""
+    return AppError("job_running", message, 409)
 
 
 def _settle(s: Session, row: VolumeMeasurement) -> VolumeMeasurement | None:
@@ -192,16 +193,39 @@ def _job_time(s: Session, job_id: str | None) -> str | None:
     return job.finished_at.isoformat() if job and job.finished_at else None
 
 
-def _kept_by_class(s: Session, run_id: str) -> dict[str, int]:
-    """The run's detections the masking can use (not rejected), counted per class: one indexed
-    aggregate (`ix_map_detection_run_state`). Rejecting or reclassifying a box in the review
-    changes it, so the measurement turns stale (spec §6.10)."""
+def _milli_sum(col):
+    """The column's sum in integer thousandths of a pixel: exact and independent of row order, so
+    the same set of boxes always sums the same."""
+    return func.sum(cast(func.round(func.coalesce(col, 0.0) * 1000), Integer))
+
+
+def _kept_by_class(s: Session, run: MapRun) -> dict[str, dict[str, int]]:
+    """The set of boxes the masking uses (as `footprints.footprints_for`: not rejected, at or above
+    the run's confidence), per class: the count and the sums of x, y, w, h and angle. One aggregate
+    over the run's rows in the database, nothing loaded into memory. The sums matter: rejecting one
+    box and restoring another of its class keeps the count but moves what is masked, and a redrawn
+    box keeps it too - either way the measurement must turn stale (spec §6.10)."""
     rows = s.execute(
-        select(MapDetection.class_id, func.count())
-        .where(MapDetection.run_id == run_id, MapDetection.review_state != "rejected")
+        select(
+            MapDetection.class_id,
+            func.count(),
+            _milli_sum(MapDetection.x),
+            _milli_sum(MapDetection.y),
+            _milli_sum(MapDetection.w),
+            _milli_sum(MapDetection.h),
+            _milli_sum(MapDetection.angle),
+        )
+        .where(
+            MapDetection.run_id == run.id,
+            MapDetection.review_state != "rejected",
+            MapDetection.confidence >= run.conf,
+        )
         .group_by(MapDetection.class_id)
     ).all()
-    return {class_id: count for class_id, count in rows}
+    keys = ("n", "x", "y", "w", "h", "angle")
+    return {
+        class_id: dict(zip(keys, (int(v or 0) for v in values), strict=True)) for class_id, *values in rows
+    }
 
 
 def inputs_snapshot(s: Session, row: VolumeMeasurement) -> dict:
@@ -215,9 +239,7 @@ def inputs_snapshot(s: Session, row: VolumeMeasurement) -> dict:
         if run is None:
             runs.append({"id": run_id, "missing": True})
             continue
-        runs.append(
-            {"id": run_id, "finished_at": _job_time(s, run.job_id), "kept": _kept_by_class(s, run_id)}
-        )
+        runs.append({"id": run_id, "finished_at": _job_time(s, run.job_id), "kept": _kept_by_class(s, run)})
     alignment = row.alignment or {}
     return {
         "polygon_native": row.polygon_native,
@@ -263,6 +285,31 @@ def _refresh(s: Session, row: VolumeMeasurement) -> tuple[list[str], bool]:
         row.status = "stale"
         return reasons, True
     return reasons, False
+
+
+def refresh_mask_users(handle: ProjectHandle, run_ids: list[str]) -> list[str]:
+    """After a write that may change what a detection run masks (a review, a drawn box, the run or
+    its map deleted): every measurement masking with one of `run_ids` is refreshed now, so a ready
+    one whose inputs changed is `stale` in the database at once. Returns their ids, to publish as
+    `volumes.changed` so the Volumes screen reloads (spec §6.10).
+
+    Measurements are a project's handful of rows; only their `masks` are read to find the users."""
+    wanted = set(run_ids)
+    with handle.session() as s:
+        users = [
+            mid
+            for mid, masks in s.execute(select(VolumeMeasurement.id, VolumeMeasurement.masks)).all()
+            if wanted.intersection((masks or {}).get("detection_run_ids") or [])
+        ]
+        out = []
+        for mid in users:
+            row = s.get(VolumeMeasurement, mid)
+            row = _settle(s, row) if row is not None else None
+            if row is None:
+                continue
+            _refresh(s, row)
+            out.append(mid)
+        return out
 
 
 def to_out(row: VolumeMeasurement, reasons: list[str]) -> VolumeMeasurementOut:
@@ -317,7 +364,7 @@ def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPat
         changes = {k: v for k, v in sent.items() if k in INPUT_FIELDS}  # the schema refuses nulls
         if changes:
             if row.status == "calculating":
-                raise _conflict(f"{row.name} is being calculated; wait for it or cancel the job")
+                raise _job_running(f"{row.name} is being calculated; wait for it or cancel the job")
             polygon = changes.get("polygon_native", row.polygon_native)
             top_id = changes.get("top_surface_id", row.top_surface_id)
             base = normalise_base(changes["base"]) if "base" in changes else row.base
@@ -348,7 +395,7 @@ def start_calculation(handle: ProjectHandle, measurement_id: str, submit: Callab
     with handle.session() as s:
         row = _get(s, measurement_id)
         if row.status == "calculating":
-            raise _conflict(f"{row.name} is already being calculated")
+            raise _job_running(f"{row.name} is already being calculated")
         before = row.status, row.error, row.job_id
         row.status, row.error, row.job_id = "calculating", None, None
     try:
@@ -400,7 +447,7 @@ def delete(handle: ProjectHandle, measurement_id: str) -> None:
     with handle.session() as s:
         row = _get(s, measurement_id)
         if row.status == "calculating":
-            raise _conflict(f"{row.name} is being calculated; wait for it or cancel the job")
+            raise _job_running(f"{row.name} is being calculated; wait for it or cancel the job")
         s.delete(row)
     shutil.rmtree(measurement_dir(handle, measurement_id), ignore_errors=True)
     DIFF_TILES.drop_map(measurement_id)

@@ -11,7 +11,7 @@ from app.db.models import Job
 from app.errors import not_found
 from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.events import EventBus
-from app.jobs.registry import get_job_type
+from app.jobs.registry import cancelled_before_start_hook, get_job_type
 from app.projects.service import ProjectHandle
 
 PROGRESS_DB_INTERVAL_S = 0.25
@@ -130,7 +130,7 @@ class JobRunner:
         ctx = JobContext(self, project, job.id, params, logger)
         with self._lock:
             self._contexts[job.id] = ctx
-        self._pool.submit(self._run, ctx, fn)
+        self._pool.submit(self._run, ctx, fn, cancelled_before_start_hook(type))
         return job
 
     def cancel(self, project: ProjectHandle, job_id: str) -> Job:
@@ -177,9 +177,10 @@ class JobRunner:
             )
         return job
 
-    def _run(self, ctx: JobContext, fn) -> None:
+    def _run(self, ctx: JobContext, fn, on_cancelled_before_start=None) -> None:
         try:
             if ctx.cancelled.is_set():
+                self._cancelled_before_start(ctx, on_cancelled_before_start)
                 raise JobCancelled()
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
             ctx.log.info("job %s started", ctx.job_id)
@@ -201,6 +202,17 @@ class JobRunner:
             self._close_log(ctx)
             with self._lock:
                 self._contexts.pop(ctx.job_id, None)
+
+    @staticmethod
+    def _cancelled_before_start(ctx: JobContext, hook) -> None:
+        """Before the terminal `cancelled` write, so a client that reloads on `job.state` already
+        reads the settled rows. A failing hook is logged; the job still ends `cancelled`."""
+        if hook is None:
+            return
+        try:
+            hook(ctx)
+        except Exception:
+            log.exception("the cancel hook of queued job %s failed", ctx.job_id)
 
     def _finish(self, ctx: JobContext, **fields) -> None:
         """Terminal state write; a DB failure here is logged and never escapes into the executor future."""

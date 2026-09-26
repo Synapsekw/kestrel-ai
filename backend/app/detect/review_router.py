@@ -12,10 +12,12 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.detect import review
+from app.events_util import publish_volumes_changed
 from app.jobs.schemas import JobOut
 from app.maps.schemas import MapDetectionOut
 from app.projects.service import ProjectHandle, get_project
 from app.training.schemas import JobRef
+from app.volumes.service import refresh_mask_users
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["detect"])
 
@@ -55,13 +57,22 @@ class AcceptAbove(BaseModel):
     min_confidence: float = Field(ge=0, le=1)
 
 
+def _masks_changed(request: Request, handle: ProjectHandle, run_id: str) -> None:
+    """A volume measurement masking with this run may no longer match its numbers (volumes spec
+    §6.10): turn it stale now and tell the Volumes screen."""
+    publish_volumes_changed(request, handle, refresh_mask_users(handle, [run_id]))
+
+
 @router.post("/map-runs/{runId}/review", response_model=MapDetectionReviewResult)
 def review_map_detections(
     runId: str,  # noqa: N803
     body: MapDetectionReview,
+    request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> MapDetectionReviewResult:
     updated = review.review_map_detections(handle, runId, body.detection_ids, body.action, body.class_id)
+    if updated:
+        _masks_changed(request, handle, runId)
     return MapDetectionReviewResult(updated=updated)
 
 
@@ -69,9 +80,11 @@ def review_map_detections(
 def add_map_detection(
     runId: str,  # noqa: N803
     body: MapDetectionCreate,
+    request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> MapDetectionOut:
     row = review.add_map_detection(handle, runId, body.class_id, body.x, body.y, body.w, body.h, body.angle)
+    _masks_changed(request, handle, runId)
     return MapDetectionOut.from_row(row)
 
 

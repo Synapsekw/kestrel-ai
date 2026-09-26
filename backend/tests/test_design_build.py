@@ -14,6 +14,7 @@ from designs import CONE_CENTRE, E0, N0, cone_contour_runs, cone_z, plane_z, two
 from rasterio.windows import Window
 
 from app.db.models import Surface
+from app.jobs.registry import register_job_type
 from app.surfaces import grid
 from app.surfaces.design import phase_build, rasterise, store
 from app.surfaces.paths import surface_dir, surface_path
@@ -332,11 +333,11 @@ def test_cancel_leaves_no_partial_and_no_folder(
     r = commit(client, project_id, iid, p["id"]).json()
     assert started.wait(30)
     assert [x.name for x in partials] == ["surface.tif.partial"]
-    # A second commit while the build runs is refused (ruling 1: `conflict`), and leaves no row.
+    # A second commit while the build runs is refused (`job_running`: its job is live); no row.
     again = commit(client, project_id, iid, p["id"])
     assert (
         again.status_code == 409
-        and code(again) == "conflict"
+        and code(again) == "job_running"
         and "already" in again.json()["error"]["message"]
     )
     client.post(url(project_id, f"/jobs/{r['job']['id']}/cancel"))
@@ -428,7 +429,7 @@ def test_two_concurrent_commits_start_one_build(
         t.join(60)
     assert sorted(r.status_code for r in answers) == [202, 409]
     (refused,) = [r for r in answers if r.status_code == 409]
-    assert code(refused) == "conflict" and "already" in refused.json()["error"]["message"]
+    assert code(refused) == "job_running" and "already" in refused.json()["error"]["message"]
     with handle.session() as s:
         assert s.query(Surface).filter(Surface.kind == "design").count() == 1
     (ok,) = [r for r in answers if r.status_code == 202]
@@ -572,3 +573,80 @@ def test_an_inspection_removed_during_the_commit_is_404_not_500(
     assert r.status_code == 404 and code(r) == "not_found"
     with handle.session() as s:
         assert s.query(Surface).filter(Surface.kind == "design").count() == 0
+
+
+# --- follow-up fixes ---------------------------------------------------------------------------
+
+_RELEASE = threading.Event()
+
+
+@register_job_type("test_hold_a_worker")
+def _hold_a_worker(ctx):
+    _RELEASE.wait(30)
+    return None
+
+
+def test_a_queued_build_cancelled_before_it_starts_fails_the_row_and_says_so(
+    client, app, project_id, wait_job, tmp_path, handle, target, events
+):
+    """The runner never calls the build for a cancelled queued job; the Volumes list must still hear
+    `surfaces.changed` (a cloud build's list reloads on its job ending, a design import's does not)."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    _RELEASE.clear()
+    holders = [
+        app.state.jobs.submit(handle, "test_hold_a_worker", {}) for _ in range(app.state.jobs._workers)
+    ]
+    try:
+        r = commit(client, project_id, iid, p["id"])
+        assert r.status_code == 202, r.text
+        sid, job_id = r.json()["surface"]["id"], r.json()["job"]["id"]
+        assert client.post(url(project_id, f"/jobs/{job_id}/cancel")).status_code == 200
+    finally:
+        _RELEASE.set()
+    assert wait_job(project_id, job_id)["state"] == "cancelled"
+    for h in holders:
+        wait_job(project_id, h.id)
+    s = row(handle, sid)
+    assert (s.status, s.error) == ("failed", "import cancelled")
+    assert len(changed(events, sid)) == 2  # on create and on the cancel
+    assert not surface_dir(handle, sid).exists() and store.inspection_dir(handle, iid).exists()
+
+
+def test_a_preview_while_a_build_is_live_is_409_job_running(
+    client, app, project_id, wait_job, tmp_path, handle, target, monkeypatch
+):
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    store.patch_json(store.inspection_dir(handle, iid) / "request.json", build_job_id="build-1")
+    monkeypatch.setattr(app.state.jobs, "is_live", lambda job_id: job_id == "build-1")
+    opts = {
+        "candidate_ids": ["c0"],
+        "source_crs": "EPSG:32639",
+        "horizontal_unit": "metre",
+        "vertical_unit": "metre",
+        "target_surface_id": target,
+    }
+    r = client.post(url(project_id, f"/design-inspections/{iid}/previews"), json=opts)
+    assert r.status_code == 409 and code(r) == "job_running"
+
+
+@pytest.mark.parametrize("what", ["inspection", "preview"])
+def test_an_inspection_deleted_while_it_is_read_is_404_not_500(
+    client, project_id, wait_job, tmp_path, handle, target, monkeypatch, what
+):
+    """A dialog polls the preview while its close deletes the inspection: the read after the lookup
+    finds no file."""
+    iid = inspect(client, project_id, wait_job, site_landxml(tmp_path))
+    p = preview(client, project_id, wait_job, iid, target_surface_id=target)
+    name = f"require_{what}"
+    real = getattr(store, name)
+
+    def racing(*args):
+        found = real(*args)
+        shutil.rmtree(store.inspection_dir(handle, iid))
+        return found
+
+    monkeypatch.setattr(store, name, racing)
+    path = f"/design-inspections/{iid}" + (f"/previews/{p['id']}" if what == "preview" else "")
+    r = client.get(url(project_id, path))
+    assert r.status_code == 404, r.text

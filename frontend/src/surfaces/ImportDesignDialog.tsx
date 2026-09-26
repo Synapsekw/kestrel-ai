@@ -243,9 +243,10 @@ export function ImportDesignDialog({
       startedRef.current = "idle";
       setError(messageOf(err, "could not start the import"));
       const code = codeOf(err);
-      if (code === "not_ready" || code === "conflict") {
-        // The target (or the preview) changed under us: drop the preview so Preview is offered
-        // again, and reload the targets so a vanished one is no longer listed.
+      if (code === "not_ready" || code === "conflict" || code === "job_running") {
+        // The target (or the preview) changed under us, or this design is already being imported:
+        // drop the preview so Preview is offered again, and reload the targets so a vanished one is
+        // no longer listed.
         setPreview(null);
         setPreviewedKey(null);
         setAccepted(false);

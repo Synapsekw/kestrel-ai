@@ -36,12 +36,13 @@ def _not_ready(message: str) -> AppError:
 def check_commit(handle, idir: Path, preview_id: str, accept: bool, runner) -> tuple[dict, dict]:
     """Look before you commit (spec §2): a ready, newest preview; no block; warn needs accept.
 
-    `not_ready` when the preview or the target is not ready; `conflict` for everything else."""
+    `job_running` while a build of this inspection is live, `not_ready` when the preview or the
+    target is not ready, `conflict` for everything else."""
     inspection = store.read_json(idir / "inspection.json")
     preview = store.read_json(store.require_preview(idir, preview_id) / "preview.json")
     req = store.read_json(idir / "request.json")
     if store.build_live(req, runner):
-        raise _conflict("this design is already being imported")
+        raise AppError("job_running", "this design is already being imported", 409)
     if preview["state"] != "ready":
         raise _not_ready("the preview is not ready: wait for it, or preview again")
     # Before the newest/block/warn checks: a vanished target must not be answered "accept the warnings".
@@ -270,6 +271,12 @@ def _fail(ctx, sid: str, message: str) -> None:
     gc.collect()  # a memory map or a dataset still referenced by the traceback holds files on Windows
     shutil.rmtree(surface_dir(ctx.project, sid), ignore_errors=True)
     ctx.publish("surfaces.changed", {"surface_ids": [sid]})
+
+
+def cancelled_before_start(ctx) -> None:
+    """The runner's hook for a build cancelled while still queued: `run` never ran, so the row
+    would stay `building` and the Volumes list would not hear of it until its next read."""
+    _fail(ctx, ctx.params["surface_id"], CANCELLED)
 
 
 def run(ctx) -> dict:

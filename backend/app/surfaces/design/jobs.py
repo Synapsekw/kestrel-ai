@@ -23,7 +23,13 @@ MESSAGES = {
 }
 
 
-@register_job_type("design_import")
+def _cancelled_before_start(ctx) -> None:
+    """Only a build leaves a row behind (inspections and previews are folders their dialog owns)."""
+    if ctx.params.get("phase") == "build":
+        importlib.import_module(PHASES["build"]).cancelled_before_start(ctx)
+
+
+@register_job_type("design_import", on_cancelled_before_start=_cancelled_before_start)
 def run_design_import(ctx) -> dict:
     phase = ctx.params.get("phase")
     if phase not in PHASES:

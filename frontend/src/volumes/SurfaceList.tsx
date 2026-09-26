@@ -1,12 +1,14 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { Surface } from "@contract/client";
 import { useJobsStore } from "@/store/jobs";
-import { Button, Pill, Progress, cx, focusRing, transition } from "@/ui";
+import { Button, Dialog, Pill, Progress, cx, focusRing, transition } from "@/ui";
 
 /**
  * The surfaces of the project (spec section 9): name, kind, cell size, survey date and status with
  * the build's progress. `actions` sits next to "Build surface": S3 mounts its "Import design
  * surface" button there (design-surfaces spec section 11), the only edit S3 makes to this screen.
+ * A ready design surface can be deleted after a confirmation (a new import replaces it); the API
+ * refuses one a measurement uses, and the screen shows that message.
  */
 export function SurfaceList({
   surfaces,
@@ -26,6 +28,7 @@ export function SurfaceList({
   actions?: ReactNode;
 }) {
   const jobs = useJobsStore((s) => s.jobs);
+  const [confirming, setConfirming] = useState<Surface | null>(null);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center justify-between gap-2">
@@ -81,10 +84,46 @@ export function SurfaceList({
                   </Button>
                 </div>
               )}
+              {s.status === "ready" && s.kind === "design" && (
+                <div className="flex gap-1 px-2 pb-1">
+                  <Button size="sm" variant="ghost" icon="trash" onClick={() => setConfirming(s)}>
+                    Delete
+                  </Button>
+                </div>
+              )}
             </li>
           );
         })}
       </ul>
+      {confirming && (
+        <Dialog
+          open
+          title={`Delete ${confirming.name}?`}
+          description="The design surface's grid goes; the design file is not touched. A surface a measurement uses can't be deleted."
+          onClose={() => setConfirming(null)}
+          footer={
+            <>
+              <Button onClick={() => setConfirming(null)}>Keep it</Button>
+              <Button
+                variant="danger"
+                disabled={confirming.measurement_count > 0}
+                onClick={() => {
+                  onDelete(confirming);
+                  setConfirming(null);
+                }}
+              >
+                Delete
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-muted">
+            {confirming.measurement_count > 0
+              ? `Used by ${confirming.measurement_count} measurement${confirming.measurement_count === 1 ? "" : "s"}: delete those first.`
+              : "No measurement uses it."}
+          </p>
+        </Dialog>
+      )}
     </div>
   );
 }

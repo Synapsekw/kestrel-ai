@@ -321,47 +321,52 @@ describe("ImportDesignDialog", () => {
 
   // Final review 1: a 409 not_ready from createDesignSurface must not leave the dialog at a dead end
   // (Preview disabled, Import repeating the 409, the vanished target still listed).
-  it("offers Preview again and reloads the targets after a 409 not_ready on import", async () => {
-    let surfaceLists = 0;
-    const { api, requests } = fakeClient(
-      routes(readyPreview, [
-        {
-          method: "GET",
-          path: /\/surfaces$/,
-          body: () => {
-            surfaceLists += 1;
-            return { items: [exampleTarget] };
-          },
-        },
-        {
-          method: "POST",
-          path: /\/design-surfaces$/,
-          status: 409,
-          body: {
-            error: {
-              code: "not_ready",
-              message: "the target surface Chimney DSM is no longer ready; preview again",
-              details: {},
+  // `job_running` (the design is already being imported, e.g. from another window) gets the same
+  // recovery: the preview is dropped rather than left pointing at a build that is under way.
+  it.each(["not_ready", "job_running"])(
+    "offers Preview again and reloads the targets after a 409 %s on import",
+    async (code) => {
+      let surfaceLists = 0;
+      const { api, requests } = fakeClient(
+        routes(readyPreview, [
+          {
+            method: "GET",
+            path: /\/surfaces$/,
+            body: () => {
+              surfaceLists += 1;
+              return { items: [exampleTarget] };
             },
           },
-        },
-      ]),
-    );
-    renderWithProviders(
-      <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
-      { api },
-    );
-    await readFile();
-    await preview();
-    expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
-    expect(surfaceLists).toBe(1);
-    fireEvent.click(screen.getByRole("button", { name: "Import surface" }));
-    expect(await screen.findByText(/no longer ready; preview again/)).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
-    expect(screen.getByRole("button", { name: "Import surface" })).toBeDisabled();
-    await waitFor(() => expect(surfaceLists).toBe(2));
-    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
-  });
+          {
+            method: "POST",
+            path: /\/design-surfaces$/,
+            status: 409,
+            body: {
+              error: {
+                code,
+                message: "the target surface Chimney DSM is no longer ready; preview again",
+                details: {},
+              },
+            },
+          },
+        ]),
+      );
+      renderWithProviders(
+        <ImportDesignDialog projectId={PROJECT_ID} onClose={() => {}} onStarted={() => {}} />,
+        { api },
+      );
+      await readFile();
+      await preview();
+      expect(screen.getByRole("button", { name: "Preview" })).toBeDisabled();
+      expect(surfaceLists).toBe(1);
+      fireEvent.click(screen.getByRole("button", { name: "Import surface" }));
+      expect(await screen.findByText(/no longer ready; preview again/)).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole("button", { name: "Preview" })).toBeEnabled());
+      expect(screen.getByRole("button", { name: "Import surface" })).toBeDisabled();
+      await waitFor(() => expect(surfaceLists).toBe(2));
+      expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    },
+  );
 
   // Final review 2: the default name follows the selection until the user types their own.
   it("recomputes the default name when the selection changes, unless the user edited it", async () => {

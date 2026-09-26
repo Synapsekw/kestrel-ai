@@ -3,8 +3,10 @@
 import rasterio
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi import Path as PathParam
+from sqlalchemy import select
 
-from app.events_util import publish_map_labels_changed_event
+from app.db.models import MapRun
+from app.events_util import publish_map_labels_changed_event, publish_volumes_changed
 from app.jobs.schemas import JobOut
 from app.maps import move, service, timeline
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers map_detect
@@ -48,6 +50,7 @@ from app.maps.tiles import TILE_CACHE, render_tile
 from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.service import ProjectHandle, get_project
 from app.training.schemas import JobRef
+from app.volumes.service import refresh_mask_users
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["maps"])
 # Maps are detection work; a training project keeps the maps it had before the split readable.
@@ -119,7 +122,10 @@ def patch_map(  # noqa: N803
 
 @router.delete("/maps/{mapId}", status_code=204, dependencies=DETECT_WRITE)
 def delete_map(mapId: str, request: Request, handle: ProjectHandle = Depends(get_project)) -> Response:  # noqa: N803
+    with handle.session() as s:
+        run_ids = list(s.execute(select(MapRun.id).where(MapRun.map_id == mapId)).scalars())
     service.delete_map(handle, mapId, request.app.state.jobs.is_live)
+    publish_volumes_changed(request, handle, refresh_mask_users(handle, run_ids))
     return Response(status_code=204)
 
 
@@ -206,6 +212,7 @@ def get_map_run(runId: str, handle: ProjectHandle = Depends(get_project)) -> Map
 @router.delete("/map-runs/{runId}", status_code=204, dependencies=DETECT_WRITE)
 def delete_map_run(runId: str, request: Request, handle: ProjectHandle = Depends(get_project)) -> Response:  # noqa: N803
     service.delete_run(handle, runId, request.app.state.jobs.is_live)
+    publish_volumes_changed(request, handle, refresh_mask_users(handle, [runId]))
     return Response(status_code=204)
 
 

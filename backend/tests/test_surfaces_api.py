@@ -386,3 +386,16 @@ def test_a_build_that_cannot_be_queued_leaves_a_failed_row(client, project_id, h
     with handle.session() as s:
         (row,) = s.query(Surface).all()
         assert row.status == "failed" and "could not be queued: queue is closed" in row.error
+
+
+def test_delete_while_its_build_job_is_live_is_409_job_running(client, app, project_id, handle, monkeypatch):
+    """Coordinator rule: a refusal because a job is live on the resource is `job_running`; `conflict`
+    stays for "in use by a measurement"."""
+    with handle.session() as s:
+        row = Surface(name="Building", kind="cloud_dsm", status="building", job_id="live-build")
+        s.add(row)
+        s.flush()
+        sid = row.id
+    monkeypatch.setattr(app.state.jobs, "is_live", lambda job_id: job_id == "live-build")
+    r = client.delete(f"{BASE}/{project_id}/surfaces/{sid}")
+    assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"

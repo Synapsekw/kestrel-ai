@@ -298,7 +298,7 @@ def delete_surface(handle: ProjectHandle, surface_id: str, is_live: Callable[[st
     with handle.session() as s:
         row = _get(s, surface_id)
         if row.job_id and is_live(row.job_id):
-            raise AppError("conflict", f"surface {row.name} is still building; cancel the job first", 409)
+            raise AppError("job_running", f"surface {row.name} is still building; cancel the job first", 409)
         users = [m.name for m in s.execute(_users(s, surface_id)).scalars()]
         if users:
             raise AppError(

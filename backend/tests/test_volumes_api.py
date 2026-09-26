@@ -180,7 +180,7 @@ def test_calculating_rows_refuse_changes_and_the_sweep_resets_them(client, proje
         client.delete(url),
         client.post(f"{url}/calculate"),
     ):
-        assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+        assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
 
     class Runner:
         def is_live(self, job_id):
@@ -545,3 +545,107 @@ def test_sweep_removes_measurement_folders_no_row_names(handle, top, measure):
     (orphan / "diff.tif").write_bytes(b"x")
     sweep_interrupted(handle, Runner())
     assert not orphan.exists() and diff_path(handle, m["id"]).is_file()
+
+
+# --- follow-up fix 2: detection review and the masking set -----------------------------------
+
+
+@pytest.fixture
+def events(app, client):
+    seen = []
+    real = app.state.events.publish
+    app.state.events.publish = lambda e: (seen.append(e), real(e))
+    yield seen
+    app.state.events.publish = real
+
+
+def _two_box_run(handle) -> tuple[str, str, str]:
+    """The machine's run plus a second box of the same class far outside the measurement."""
+    _, run_id, (machine,) = _ll_map_with_machine(handle)
+    with handle.session() as s:
+        d = MapDetection(run_id=run_id, class_id="c-excavator", confidence=0.9, x=10, y=10, w=20, h=20)
+        s.add(d)
+        s.flush()
+        return run_id, machine, d.id
+
+
+def test_swapping_which_box_is_rejected_makes_it_stale_and_export_refuses_it(
+    client, project_id, handle, top, measure
+):
+    """The same count per class is not the same masking set: rejecting the machine and restoring
+    another box of its class moves what is masked, so the numbers no longer hold (money-relevant)."""
+    run_id, machine, other = _two_box_run(handle)
+    review_map_detections(handle, run_id, [other], "reject")
+    m, _ = measure(top, masks={"detection_run_ids": [run_id]})
+    url = f"{BASE}/{project_id}/volumes/{m['id']}"
+    assert m["status"] == "ready" and m["results"]["footprints_used"] == 1
+    review_map_detections(handle, run_id, [machine], "reject")
+    review_map_detections(handle, run_id, [other], "unreview")
+    got = client.get(url).json()
+    assert got["status"] == "stale" and got["stale_reasons"] == ["masks: detection run changed"]
+    r = client.post(
+        f"{BASE}/{project_id}/volume-exports", json={"measurement_ids": [m["id"]], "formats": ["csv"]}
+    )
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+
+
+def test_a_box_that_moves_makes_it_stale(client, project_id, handle, top, measure):
+    run_id, machine, _ = _two_box_run(handle)
+    m, _ = measure(top, masks={"detection_run_ids": [run_id]})
+    url = f"{BASE}/{project_id}/volumes/{m['id']}"
+    with handle.session() as s:
+        s.get(MapDetection, machine).x += 3.0  # a redrawn box: same class, same count
+    assert client.get(url).json()["stale_reasons"] == ["masks: detection run changed"]
+    with handle.session() as s:
+        s.get(MapDetection, machine).x -= 3.0
+    assert client.get(url).json()["stale_reasons"] == []
+
+
+def test_a_review_through_the_api_turns_users_stale_and_publishes_volumes_changed(
+    client, project_id, handle, top, measure, events
+):
+    _, run_id, (machine,) = _ll_map_with_machine(handle)
+    masked, _ = measure(top, masks={"detection_run_ids": [run_id]})
+    plain, _ = measure(top, name="unmasked")
+    events.clear()
+    r = client.post(
+        f"{BASE}/{project_id}/map-runs/{run_id}/review", json={"detection_ids": [machine], "action": "reject"}
+    )
+    assert r.status_code == 200 and r.json()["updated"] == 1
+    with handle.session() as s:  # written at once, not only on the Volumes screen's next read
+        assert s.get(VolumeMeasurement, masked["id"]).status == "stale"
+        assert s.get(VolumeMeasurement, plain["id"]).status == "ready"
+    published = [e["payload"] for e in events if e["type"] == "volumes.changed"]
+    assert published == [{"measurement_ids": [masked["id"]]}]
+    events.clear()
+    r = client.post(
+        f"{BASE}/{project_id}/map-runs/{run_id}/review", json={"detection_ids": [machine], "action": "reject"}
+    )
+    assert r.json()["updated"] == 0  # nothing changed: nothing to tell
+    assert [e for e in events if e["type"] == "volumes.changed"] == []
+    with handle.session() as s:
+        class_id = handle.row(s).classes[0]["id"]
+    r = client.post(
+        f"{BASE}/{project_id}/map-runs/{run_id}/detections",
+        json={"class_id": class_id, "x": 100, "y": 100, "w": 30, "h": 30},
+    )
+    assert r.status_code == 201, r.text
+    assert [e["payload"] for e in events if e["type"] == "volumes.changed"] == [
+        {"measurement_ids": [masked["id"]]}
+    ]
+
+
+@pytest.mark.parametrize("what", ["run", "map"])
+def test_deleting_the_mask_run_or_its_map_publishes_volumes_changed(
+    client, project_id, handle, top, measure, events, what
+):
+    map_id, run_id, _ = _ll_map_with_machine(handle)
+    m, _ = measure(top, masks={"detection_run_ids": [run_id]})
+    events.clear()
+    path = f"map-runs/{run_id}" if what == "run" else f"maps/{map_id}"
+    assert client.delete(f"{BASE}/{project_id}/{path}").status_code == 204
+    assert [e["payload"] for e in events if e["type"] == "volumes.changed"] == [
+        {"measurement_ids": [m["id"]]}
+    ]
+    with handle.session() as s:
+        assert s.get(VolumeMeasurement, m["id"]).status == "stale"

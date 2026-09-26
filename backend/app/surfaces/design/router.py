@@ -51,6 +51,15 @@ def _wait_until_not_live(runner, job_id: str, timeout: float = CANCEL_WAIT_S) ->
         time.sleep(CANCEL_POLL_S)
 
 
+def _read_or_404(path: Path, what: str, ident: str) -> dict:
+    """A read after the `require_*` lookup: a delete (a dialog closing while it polls) can remove
+    the folder in between, and that is a 404, not a 500."""
+    try:
+        return store.read_json(path)
+    except FileNotFoundError:
+        raise not_found(what, ident) from None
+
+
 @router.post("/design-inspections", response_model=DesignInspectionWithJob, status_code=202)
 def create_design_inspection(
     body: DesignInspectionCreate, request: Request, handle: ProjectHandle = Depends(get_project)
@@ -74,7 +83,7 @@ def get_design_inspection(
     inspectionId: str, handle: ProjectHandle = Depends(get_project)
 ) -> DesignInspectionOut:  # noqa: N803
     idir = store.require_inspection(handle, inspectionId)
-    return DesignInspectionOut(**store.read_json(idir / "inspection.json"))
+    return DesignInspectionOut(**_read_or_404(idir / "inspection.json", "design inspection", inspectionId))
 
 
 @router.delete("/design-inspections/{inspectionId}", status_code=204)
@@ -88,7 +97,7 @@ def delete_design_inspection(
     with store.commit_lock:  # no import may start between the build_live check and the delete
         req = store.read_json(idir / "request.json")
         if store.build_live(req, runner):
-            raise AppError("conflict", "a design surface is being imported from this inspection", 409)
+            raise AppError("job_running", "a design surface is being imported from this inspection", 409)
         for job_id in store.job_ids(req):
             if runner.is_live(job_id):
                 runner.cancel(handle, job_id)
@@ -104,7 +113,7 @@ def get_design_candidate_thumbnail(
     handle: ProjectHandle = Depends(get_project),
 ) -> Response:
     idir = store.require_inspection(handle, inspectionId)
-    insp = store.read_json(idir / "inspection.json")
+    insp = _read_or_404(idir / "inspection.json", "design inspection", inspectionId)
     if insp["state"] == "failed":
         raise not_found("design candidate", candidateId)
     if insp["state"] == "ready" and candidateId not in {c["id"] for c in insp["candidates"]}:
@@ -171,7 +180,7 @@ def create_design_preview(
     handle: ProjectHandle = Depends(get_project),
 ) -> DesignPreviewWithJob:
     idir = store.require_inspection(handle, inspectionId)
-    inspection = store.read_json(idir / "inspection.json")
+    inspection = _read_or_404(idir / "inspection.json", "design inspection", inspectionId)
     if inspection["state"] != "ready":
         raise AppError(
             "not_ready", "the file has not been read yet, or reading it failed: read it again", 409
@@ -183,7 +192,7 @@ def create_design_preview(
     with store.commit_lock:
         req = store.read_json(idir / "request.json")
         if store.build_live(req, runner):
-            raise AppError("conflict", "a design surface is being imported from this inspection", 409)
+            raise AppError("job_running", "a design surface is being imported from this inspection", 409)
         pid = store.new_id()
         pdir = store.preview_dir(idir, pid)
         # parents=False below the inspection dir (as CandidateWriter): never recreate a deleted inspection.
@@ -238,7 +247,7 @@ def get_design_preview(
     handle: ProjectHandle = Depends(get_project),
 ) -> DesignPreviewOut:
     pdir = store.require_preview(store.require_inspection(handle, inspectionId), previewId)
-    return DesignPreviewOut(**store.read_json(pdir / "preview.json"))
+    return DesignPreviewOut(**_read_or_404(pdir / "preview.json", "design preview", previewId))
 
 
 @router.get("/design-inspections/{inspectionId}/previews/{previewId}/image", response_class=Response)

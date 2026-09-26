@@ -651,7 +651,10 @@ cm at the operator's GSDs. They are constants in `app/volumes/engine.py`, and th
 
 - `polygon_native`, `top_surface_id` with that surface's `job_id`, and `base` (plus the base
   surface's `job_id`);
-- `masks`, with each run's `{id, finished_at, detection_count}`;
+- `masks`, with each run's `{id, finished_at, kept}`: `kept` is, per class, the count and the
+  integer sums (thousandths of a pixel) of x, y, w, h and angle of the boxes the masking uses (not
+  rejected, at or above the run's confidence), so swapping which box is rejected or redrawing one
+  changes it (follow-up fix wave, 2026-09-26);
 - the alignment inputs;
 - `engine_version` (a constant in `app/volumes/engine.py`, bumped on any maths change).
 
@@ -662,6 +665,9 @@ cm at the operator's GSDs. They are constants in `app/volumes/engine.py`, and th
   measurement whose fingerprint differs becomes `stale`, and `volumes.changed` is published.
   `stale_reasons` (response only) names the top-level `inputs` keys that differ, for example
   "masks: detection run deleted".
+- A detection review (accept/reject/unreview/reclass), a box drawn by a person, and deleting a
+  run or its map refresh every measurement masking with that run at once and publish
+  `volumes.changed`.
 - A surface used by any measurement **cannot be deleted** (409, naming them).
 - A deleted map run leaves the measurement stale. Recalculating then fails with "run X no longer
   exists", and the UI offers to remove it.

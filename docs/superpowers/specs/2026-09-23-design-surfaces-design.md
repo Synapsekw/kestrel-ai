@@ -160,7 +160,7 @@ any design size, apart from the TIN itself.
   pattern).
 - A new `preview` for an inspection cancels that inspection's running preview job first. Only
   the newest preview is shown.
-- `deleteDesignInspection` cancels a running `inspect` or `preview`. It returns `409 conflict`
+- `deleteDesignInspection` cancels a running `inspect` or `preview`. It returns `409 job_running`
   while a `build` holds the inspection.
 
 ### 4.3 Admission (RAM)
@@ -523,12 +523,12 @@ and adds each operationId to `EXPECTED_STUBS`.
 | --- | --- | --- | --- | --- |
 | POST | `/design-inspections` | `createDesignInspection` | `DesignInspectionCreate` | 202 `DesignInspectionWithJob`; 422 `validation_error` (file missing, unknown extension, DWG with `details.reason: "dwg"`) |
 | GET | `/design-inspections/{inspectionId}` | `getDesignInspection` | none | 200 `DesignInspection`; 404 |
-| DELETE | `/design-inspections/{inspectionId}` | `deleteDesignInspection` | none | 204; 409 `conflict` (a build uses it) |
+| DELETE | `/design-inspections/{inspectionId}` | `deleteDesignInspection` | none | 204; 409 `job_running` (a build uses it) |
 | GET | `/design-inspections/{inspectionId}/candidates/{candidateId}/thumbnail` | `getDesignCandidateThumbnail` | none | 200 `image/png`; 204 (no thumbnail); 404 |
-| POST | `/design-inspections/{inspectionId}/previews` | `createDesignPreview` | `DesignImportOptions` | 202 `DesignPreviewWithJob`; 409 `conflict` (inspection not ready); 422 `validation_error` (unknown candidate, unparseable CRS, a LandXML/DEM selection of ≠ 1 candidate) |
+| POST | `/design-inspections/{inspectionId}/previews` | `createDesignPreview` | `DesignImportOptions` | 202 `DesignPreviewWithJob`; 409 `not_ready` (inspection or target not ready), 409 `job_running` (a build uses it); 422 `validation_error` (unknown candidate, unparseable CRS, a LandXML/DEM selection of ≠ 1 candidate) |
 | GET | `/design-inspections/{inspectionId}/previews/{previewId}` | `getDesignPreview` | none | 200 `DesignPreview`; 404 |
 | GET | `/design-inspections/{inspectionId}/previews/{previewId}/image` | `getDesignPreviewImage` | none | 200 `image/png`; 204 (not ready or failed); 404 |
-| POST | `/design-surfaces` | `createDesignSurface` | `DesignSurfaceCreate` | 202 `SurfaceWithJob`; 409 `conflict` (preview not ready, not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings`) |
+| POST | `/design-surfaces` | `createDesignSurface` | `DesignSurfaceCreate` | 202 `SurfaceWithJob`; 409 `not_ready` (preview or target not ready), 409 `job_running` (already being imported), 409 `conflict` (not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings`) |
 
 The path parameters are components: `inspectionId` and `previewId` (`type: string`), and
 `candidateId` (`type: string, pattern: "^c[0-9]{1,6}$"`).

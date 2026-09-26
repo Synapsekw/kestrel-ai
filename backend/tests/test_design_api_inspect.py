@@ -156,7 +156,7 @@ def test_delete_is_refused_while_a_build_holds_the_inspection(
     store.patch_json(d / "request.json", build_job_id="build-1")
     monkeypatch.setattr(app.state.jobs, "is_live", lambda job_id: job_id == "build-1")
     r = client.delete(url(project_id, body["inspection"]["id"]))
-    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
+    assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
     assert d.exists()
 
 
