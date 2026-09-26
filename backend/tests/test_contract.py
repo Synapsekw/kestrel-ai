@@ -18,8 +18,6 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
-from app.foundation_stubs import stub_operation_ids
-
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 AUTH = {"Authorization": "Bearer test-token"}
@@ -91,10 +89,10 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Operations still served by 501 stubs: the inspection foundation's new operations (spec
-# 2026-09-26-foundation-design §13), derived from app/foundation_stubs.py. A unit that builds one
-# deletes its tuple there; any other 501 fails `test_responses_conform`.
-EXPECTED_STUBS: set[str] = stub_operation_ids()
+# Operations still served by 501 stubs. Empty: every foundation operation (spec
+# 2026-09-26-foundation-design §13) is built, and app/foundation_stubs.py went with the last one;
+# any 501 fails `test_responses_conform`.
+EXPECTED_STUBS: set[str] = set()
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
 # the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/
