@@ -12,12 +12,14 @@ projects must not both create "dump_truck".
 
 from __future__ import annotations
 
+import json
 import threading
 
 from sqlalchemy import text
 
 from app.migration import ports
 from app.migration.pipeline import Step, StepContext
+from app.migration.rekey import rekey_area_counts, rekey_counts, remap_classes, remap_values
 
 DEFAULT_COLOUR = "#4f46e5"
 STORE_LOCK = threading.Lock()
@@ -65,6 +67,83 @@ def catalogue_merge(ctx: StepContext) -> dict:
             {"old": old, "new": new},
         )
     return {"types_merged": len(merged), "types_created": len(created), "merged": merged, "created": created}
+
+
+ROW_TABLES = ("box", "map_detection", "map_label")
+# (table, key column, {json column: rekey function}): run rows are tens per project.
+JSON_ROWS = (
+    ("query_run", "id", {"counts": rekey_counts, "verified_counts": rekey_counts, "class_map": remap_values}),
+    (
+        "map_run",
+        "id",
+        {
+            "counts": rekey_counts,
+            "verified_counts": rekey_counts,
+            "area_counts": rekey_area_counts,
+            "class_map": remap_values,
+        },
+    ),
+    ("model_class_map", "library_model_id", {"mapping": remap_values}),
+    ("dataset", "id", {"classes": remap_classes}),
+)
+
+
+def _rewrite_json(s, table: str, key: str, columns: dict, mapping: dict[str, str]) -> int:
+    names = ", ".join(columns)
+    changed = 0
+    for row in s.execute(text(f"SELECT {key}, {names} FROM {table}")).mappings().all():
+        values = {}
+        for column, fn in columns.items():
+            old = json.loads(row[column]) if row[column] else None
+            new = fn(old, mapping)
+            if new != (old if old is not None else type(new)()):
+                values[column] = json.dumps(new)
+        if values:
+            sets = ", ".join(f"{c} = :{c}" for c in values)
+            s.execute(text(f"UPDATE {table} SET {sets} WHERE {key} = :key"), {**values, "key": row[key]})
+            changed += 1
+    return changed
+
+
+def rewrite_class_ids(ctx: StepContext) -> dict:
+    """Step 2: point every class id at its catalogue type id, where old differs from new. Row
+    tables with one set-based UPDATE each (no row is loaded); JSON only on run, model-map and
+    dataset rows. `dataset_image.boxes` is not rewritten: legacy datasets train from their
+    materialised data.yaml, whose class names are unchanged (spec §11.4)."""
+    s = ctx.session
+    mapping = dict(
+        s.execute(text("SELECT old_class_id, type_id FROM class_id_map WHERE old_class_id != type_id")).all()
+    )
+    rows = {}
+    for table in ROW_TABLES:
+        result = s.execute(
+            text(
+                f"UPDATE {table} SET class_id = (SELECT m.type_id FROM class_id_map m"
+                f" WHERE m.old_class_id = {table}.class_id)"
+                " WHERE class_id IN (SELECT old_class_id FROM class_id_map WHERE old_class_id != type_id)"
+            )
+        )
+        rows[table] = result.rowcount
+    json_rows = sum(_rewrite_json(s, table, key, columns, mapping) for table, key, columns in JSON_ROWS)
+    warnings = []
+    for table in ROW_TABLES:
+        orphans = s.execute(
+            text(
+                f"SELECT COUNT(*) FROM {table} WHERE class_id NOT IN"
+                " (SELECT type_id FROM class_id_map UNION SELECT type_id FROM project_type)"
+            )
+        ).scalar_one()
+        if orphans:
+            warnings.append(
+                f"{table}: {orphans} row(s) use a class that is not in the project's class list"
+                " and keep their old class id"
+            )
+    return {
+        "rows_rewritten": rows,
+        "json_rows": json_rows,
+        "classes_changed": len(mapping),
+        "warnings": warnings,
+    }
 
 
 PIPELINE: tuple[Step, ...] = ()
