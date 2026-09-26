@@ -7,6 +7,8 @@ from app.agent.router import router as agent_router
 from app.auth import require_token
 from app.datasets.router import router as datasets_router
 from app.exports.router import router as exports_router
+from app.foundation_stubs import app_router as foundation_app_stubs
+from app.foundation_stubs import project_router as foundation_project_stubs
 from app.health import router as health_router
 from app.inference.router import router as inference_router
 from app.jobs.router import router as jobs_router
@@ -115,3 +117,9 @@ for _module in (
         )
     except Exception:
         log.exception("%s failed to load; its endpoints will be unavailable", _module)
+
+# The foundation's new operations (spec 2026-09-26-foundation-design §13) answer 501 until their unit
+# lands; each unit deletes its tuples from app/foundation_stubs.py. Any kind of project reaches them:
+# unit BK removes the kind guard from every router, these included (decision F5).
+api_router.include_router(foundation_project_stubs, dependencies=[Depends(require_kind(ANY_KIND))])
+api_router.include_router(foundation_app_stubs)

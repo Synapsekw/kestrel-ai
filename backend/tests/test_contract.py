@@ -17,6 +17,8 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.foundation_stubs import stub_operation_ids
+
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 AUTH = {"Authorization": "Bearer test-token"}
@@ -54,9 +56,30 @@ def test_refusal_allowances_name_real_operations_and_declared_statuses():
 
 
 def test_every_spec_path_is_routed(app):
-    wanted = _operations(yaml.safe_load(SPEC.read_text("utf-8"))["paths"])
+    paths = yaml.safe_load(SPEC.read_text("utf-8"))["paths"]
+    retiring = {
+        (m.upper(), p)
+        for p, ops in paths.items()
+        for m, op in ops.items()
+        if m in METHODS and op["operationId"] in RETIRING
+    }
+    wanted = _operations(paths) - retiring
     have = _operations(app.openapi()["paths"])
     assert wanted <= have, sorted(wanted - have)
+
+
+def test_transition_allowances_name_real_operations():
+    """BACKEND_PENDING and RETIRING name real operations; RETIRING ones are deprecated with that unit."""
+    ops = {
+        op["operationId"]: op
+        for ops in yaml.safe_load(SPEC.read_text("utf-8"))["paths"].values()
+        for m, op in ops.items()
+        if m in METHODS
+    }
+    assert set(BACKEND_PENDING) <= set(ops), sorted(set(BACKEND_PENDING) - set(ops))
+    assert not set(BACKEND_PENDING) & EXPECTED_STUBS, sorted(set(BACKEND_PENDING) & EXPECTED_STUBS)
+    deprecated = {op_id: op.get("x-retire-with") for op_id, op in ops.items() if op.get("deprecated")}
+    assert deprecated == RETIRING
 
 
 def test_no_extra_api_routes(app):
@@ -67,10 +90,38 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Operations still served by 501 stubs: every operation of the point-cloud (S1), volumes (S2) and
-# design-surface (S3) specs, routed by foundation F0. Each unit that builds one removes it here and
-# from its router's STUBS; any other 501 fails `test_responses_conform`.
-EXPECTED_STUBS: set[str] = set()
+# Operations still served by 501 stubs: the inspection foundation's new operations (spec
+# 2026-09-26-foundation-design §13), derived from app/foundation_stubs.py. A unit that builds one
+# deletes its tuple there; any other 501 fails `test_responses_conform`.
+EXPECTED_STUBS: set[str] = stub_operation_ids()
+
+# Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
+# the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/
+# `group` and `LibraryModel.class_map`, which the backend fills only when the named units land.
+# For these the request must still not crash (< 500); conformance is checked again once the entry
+# is gone. The unit that lands last for an entry deletes it.
+BACKEND_PENDING: dict[str, str] = {
+    "listProjects": "BK, BC, MG",
+    "createProject": "BK, BC",
+    "getProject": "BK, BC",
+    "updateProject": "BK, BC",
+    "updateClasses": "BK, BC",
+}
+
+# Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
+# last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
+# §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path
+# from openapi.yaml deletes the entry.
+RETIRING: dict[str, str] = {
+    "updateClasses": "F-S2",
+    "listDatasets": "F-S2",
+    "createDataset": "F-S2",
+    "getDataset": "F-S2",
+    "deleteDataset": "F-S2",
+    "getDatasetStats": "F-S2",
+    "trainModel": "F-S2",
+    "moveMapToProject": "F-SH",
+}
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
 # the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an
@@ -122,9 +173,13 @@ def test_responses_conform(case, app, project_id, tmp_path):
     case.operation.schema.app = app  # in-process ASGI transport, no sockets
     case.operation.app = app
     response = case.call(headers=AUTH)
+    op_id = case.operation.definition.raw.get("operationId")
+    if op_id in BACKEND_PENDING:
+        # The contract is ahead of the backend until BACKEND_PENDING[op_id] lands.
+        assert response.status_code < 500, response.text
+        return
     if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
-        # S0 stub: the operation is routed but not built yet; it must still answer in the error envelope.
-        op_id = case.operation.definition.raw.get("operationId")
+        # A stub: the operation is routed but not built yet; it must still answer in the error envelope.
         assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"
         checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
         case.validate_response(response, checks=checks)
@@ -134,7 +189,6 @@ def test_responses_conform(case, app, project_id, tmp_path):
     # unsupported_method / allow_header_conformance: literal segments such as /projects/open share
     # a prefix with /projects/{projectId}, so Starlette answers for the union of both routes.
     excluded = [negative_data_rejection, unsupported_method, allow_header_conformance]
-    op_id = case.operation.definition.raw.get("operationId")
     # schemathesis also fuzzes negative (schema-invalid, e.g. a required param dropped) cases by
     # default; those legitimately hit FastAPI's own `validation_error`, so REFUSES_VALID_DATA (a
     # business-rule refusal of a *schema-valid* request) only judges positively-generated cases.

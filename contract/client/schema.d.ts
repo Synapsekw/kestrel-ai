@@ -14,7 +14,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Plan a detection project with the configured cloud provider. No files or project data are changed.
+         * Plan a project with the configured cloud provider. No files or project data are changed.
          * @description Bounded text conversation using the existing Credential Manager key. Cloud calls time out after 45 seconds. Missing credentials or a busy agent return 409; provider failures return a sanitized error. A draft must be applied through the ordinary project and background-job endpoints.
          */
         post: operations["chatWithSetupAgent"];
@@ -48,7 +48,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Recently opened projects, most recent first. Folders that no longer exist are skipped. */
+        /** Recently opened projects, most recent first. A project whose folder or project.db no longer exists is listed with availability missing. */
         get: operations["listProjects"];
         put?: never;
         /** Create a project in an empty or new folder and open it. */
@@ -111,6 +111,7 @@ export interface paths {
          *     items without one are new; order is the list order. A class that still has boxes
          *     cannot be removed: the request fails with 409 `class_in_use` and the caller must
          *     reassign or delete the boxes first.
+         * @deprecated
          */
         put: operations["updateClasses"];
         post?: never;
@@ -413,12 +414,14 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @deprecated */
         get: operations["listDatasets"];
         put?: never;
         /**
          * Freeze the accepted and edited boxes of the selected images (default: every labeled
          *     image), assign splits, and materialise `datasets/<name>/` in YOLO format through a job.
          *     Datasets are immutable after creation.
+         * @deprecated
          */
         post: operations["createDataset"];
         delete?: never;
@@ -437,10 +440,14 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @deprecated */
         get: operations["getDataset"];
         put?: never;
         post?: never;
-        /** Delete a dataset (its row and the frozen copy under `datasets/<name>`). Images, labels and models trained on it are kept. 409 `conflict` while a training job that uses it, or its own materialise job, is queued or running. */
+        /**
+         * Delete a dataset (its row and the frozen copy under `datasets/<name>`). Images, labels and models trained on it are kept. 409 `conflict` while a training job that uses it, or its own materialise job, is queued or running.
+         * @deprecated
+         */
         delete: operations["deleteDataset"];
         options?: never;
         head?: never;
@@ -457,6 +464,7 @@ export interface paths {
             };
             cookie?: never;
         };
+        /** @deprecated */
         get: operations["getDatasetStats"];
         put?: never;
         post?: never;
@@ -478,9 +486,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Start a training job in a training project. `base_model_id` is a library model id. When
+         * Start a training job. `base_model_id` is a library model id. When
          *     the job succeeds the trained weights are registered in the library (`origin: trained`)
          *     and `job.result.model_id` is the new library model id.
+         * @deprecated
          */
         post: operations["trainModel"];
         delete?: never;
@@ -499,7 +508,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Progress of moving this training project's old models into the library. Models whose
+         * Progress of moving this project's old models into the library. Models whose
          *     weights file is missing are listed in `missing`; `job_id` is the adoption job that is
          *     queued or running, if any.
          */
@@ -1052,10 +1061,11 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Copy a past map out of this training project into a detection project (a `map_move` job
+         * Copy a map out of this project into another project (a `map_move` job
          *     that lives in the **target** project, params `{source_project_id, map_id}`). The map row,
          *     its derived overview and tiles, its capture date, zones and labels are copied; its runs
          *     are not. The source file is only referenced, never copied or modified.
+         * @deprecated
          */
         post: operations["moveMapToProject"];
         delete?: never;
@@ -1412,7 +1422,7 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Photo runs (query runs) and map runs of a detection project in one list, newest first
+         * Photo runs (query runs) and map runs of the project in one list, newest first
          *     (`created_at desc, id desc`). Review progress comes from grouped counts.
          */
         get: operations["listRuns"];
@@ -2426,6 +2436,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/migrations/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit a new `project_migrate` job (a library job) for a project folder whose upgrade
+         *     failed or never started, and answer the project's migration state. The job resumes at the
+         *     first data step not yet recorded; the backup taken before the schema upgrade is kept and
+         *     never overwritten.
+         */
+        post: operations["retryProjectMigration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/migrations/reveal-backup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show the pre-upgrade backup of a project folder in Explorer (the Projects card's "Reveal
+         *     backup"). Only reads `migrations.json`; the project need not open, and nothing is
+         *     restored: the operator restores a backup by hand.
+         */
+        post: operations["revealProjectBackup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Replace the project's type list with catalogue types, in list order. `Project.classes` is
+         *     derived from this list (`id` is the catalogue type id, `order` the position). `hotkeys`
+         *     overrides a type's catalogue hotkey inside this project; null clears the override. Removing
+         *     a type that still has annotations or findings fails with 409 `class_in_use`. A type id the
+         *     catalogue does not know fails with 422 `unknown_type`: create it with `POST /catalogue/types`
+         *     first. Replaces the deprecated `PUT /projects/{projectId}/classes`.
+         */
+        put: operations["putProjectTypes"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2444,8 +2523,7 @@ export interface components {
                 /**
                  * @description machine-readable: unauthorized, not_found, validation_error, already_exists,
                  *     class_in_use, conflict, not_implemented, provider_error, internal_error,
-                 *     wrong_project_kind (409: the operation does not belong to this kind of project;
-                 *     details `{kind, allowed}`), library_unavailable (503: the model library could not
+                 *     library_unavailable (503: the model library could not
                  *     be opened), model_unavailable (409: the library model's weights file is missing),
                  *     unmapped_classes (422: the run's model has classes with no project class and no
                  *     remembered mapping; details `{model_id, unmapped}`), unsupported_point_cloud,
@@ -2460,7 +2538,25 @@ export interface components {
                  *     underlay without a CRS), invalid_geometry and invalid_base (422: a volume
                  *     measurement's polygon or base), job_running (409: the resource's job is queued
                  *     or running), not_ready (409: the resource has not finished importing),
-                 *     range_not_satisfiable (416)
+                 *     range_not_satisfiable (416), project_upgrading (409: the project's foundation
+                 *     upgrade is queued or running, or waits for the library or the catalogue; details
+                 *     `{job_id}`, null while waiting), project_upgrade_failed (409: the upgrade failed and
+                 *     the project stays closed; details `{error, backup_path}`), catalogue_unavailable
+                 *     (503: the catalogue could not be opened), unknown_type (422: a type id the
+                 *     catalogue does not know; details `{type_ids}`), type_exists (409: a catalogue type
+                 *     with that normalised name exists; details `{type_id}`), hotkey_conflict (409: the
+                 *     hotkey is taken; details `{type_id}` of the type holding it), severity_in_use (409:
+                 *     a severity level to remove is still used; details `{level, projects}` with project
+                 *     names), severity_unknown (422: a severity level not on the scale), invalid_scale
+                 *     (422: severity levels are not 1..n), not_a_defect (422: findings take defect types
+                 *     only; details `{type_id}`), invalid_transition (409: a finding status change that
+                 *     is not allowed), finding_would_be_deleted (409: reclassing the box to an object
+                 *     type deletes its finding; retry with `confirm_finding_delete=true`),
+                 *     attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
+                 *     `{reason}`), task_not_supported (422: a segment dataset cannot be exported yet),
+                 *     task_mismatch (422: the base model's task differs from the dataset's),
+                 *     class_in_use (409: also counts findings; details `{type_id, box_count,
+                 *     finding_count}`)
                  */
                 code: string;
                 message: string;
@@ -2511,20 +2607,29 @@ export interface components {
             hotkey?: string | null;
         };
         /**
+         * @description One entry of the project's type list, read from the project's snapshot of a catalogue type (foundation F2), so a project renders even when the catalogue cannot open. `id` is the catalogue type id, `order` the list position, and `hotkey` the project's override or else the catalogue hotkey.
          * @example {
          *       "id": "c1a2b3c4-0000-4000-8000-000000000001",
          *       "name": "excavator",
          *       "colour": "#f97316",
          *       "hotkey": "1",
-         *       "order": 0
+         *       "order": 0,
+         *       "kind": "object",
+         *       "default_severity": null,
+         *       "group": "Machinery"
          *     }
          */
         ClassDef: {
+            /** @description the catalogue type id */
             id: string;
             name: string;
             colour: string;
             hotkey: string | null;
             order: number;
+            kind: components["schemas"]["CatalogueKind"];
+            default_severity: number | null;
+            /** @description e.g. `Concrete defects`, shown as Catalogue › group */
+            group: string | null;
         };
         /**
          * @description preparation settings (spec section 5); missing fields take the project defaults
@@ -2552,73 +2657,91 @@ export interface components {
             group_regex: string;
         };
         /**
-         * @description `train` labels images, builds datasets and trains models; `detect` runs library models over sources. Set at creation, never changed.
-         * @example train
-         * @enum {string}
-         */
-        ProjectKind: "train" | "detect";
-        /**
+         * @description A project has no kind (foundation F5): every project may hold every data type and run every action. A project whose `migration.state` is not `ok` is still listed, but does not open (its project routes answer 409 `project_upgrading` or `project_upgrade_failed`); it is then built from its recent-list entry: `classes: []`, `schema_version: 0`, `summary: null`, and `created_at` equal to `last_opened_at`. A recent project whose folder or `project.db` is gone is listed too, with `availability: missing` (built the same way from its recent entry); it can only be removed from the list (`forgetProject`) or located again (`openProject` on its new folder, which replaces the stale recent entry of the same project id).
          * @example {
          *       "id": "7f1c2e3a-1111-4000-8000-000000000001",
          *       "name": "Ahmadia",
          *       "folder": "E:\\Projects\\Ahmadia",
-         *       "kind": "train",
          *       "classes": [
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
          *           "name": "excavator",
          *           "colour": "#f97316",
          *           "hotkey": "1",
-         *           "order": 0
+         *           "order": 0,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000002",
          *           "name": "wheel_loader",
          *           "colour": "#eab308",
          *           "hotkey": "2",
-         *           "order": 1
+         *           "order": 1,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000003",
          *           "name": "bulldozer",
          *           "colour": "#22c55e",
          *           "hotkey": "3",
-         *           "order": 2
+         *           "order": 2,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000004",
          *           "name": "dump_truck",
          *           "colour": "#06b6d4",
          *           "hotkey": "4",
-         *           "order": 3
+         *           "order": 3,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000005",
          *           "name": "crane",
          *           "colour": "#3b82f6",
          *           "hotkey": "5",
-         *           "order": 4
+         *           "order": 4,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000006",
          *           "name": "concrete_mixer",
          *           "colour": "#a855f7",
          *           "hotkey": "6",
-         *           "order": 5
+         *           "order": 5,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000007",
          *           "name": "roller",
          *           "colour": "#ec4899",
          *           "hotkey": "7",
-         *           "order": 6
+         *           "order": 6,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         },
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000008",
          *           "name": "backhoe",
          *           "colour": "#ef4444",
          *           "hotkey": "8",
-         *           "order": 7
+         *           "order": 7,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         }
          *       ],
          *       "preannotation_model_id": "m0000000-2222-4000-8000-000000000001",
@@ -2628,8 +2751,31 @@ export interface components {
          *         "dedupe_threshold": 4,
          *         "group_regex": "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)"
          *       },
-         *       "schema_version": 1,
-         *       "created_at": "2026-09-17T10:00:00Z"
+         *       "schema_version": 2,
+         *       "created_at": "2026-09-17T10:00:00Z",
+         *       "last_opened_at": "2026-09-26T08:00:00Z",
+         *       "summary": {
+         *         "image_count": 3299,
+         *         "maps": 2,
+         *         "point_clouds": 1,
+         *         "elevations": 1,
+         *         "open_findings": 47,
+         *         "open_top_severity": 3,
+         *         "cover": {
+         *           "kind": "map",
+         *           "id": "a0000000-6666-4000-8000-000000000001"
+         *         }
+         *       },
+         *       "migration": {
+         *         "state": "ok",
+         *         "job_id": null,
+         *         "error": null,
+         *         "code": null,
+         *         "step": null,
+         *         "backup_path": "E:\\Projects\\Ahmadia\\backups\\project.db.v1-20260926T090000Z.bak",
+         *         "report_path": "E:\\Projects\\Ahmadia\\backups\\migration-v2.json"
+         *       },
+         *       "availability": "ok"
          *     }
          */
         Project: {
@@ -2637,41 +2783,46 @@ export interface components {
             name: string;
             /** @description absolute path of the project folder */
             folder: string;
-            kind: components["schemas"]["ProjectKind"];
+            /** @description the project's type list (`PUT /projects/{projectId}/types`), in list order */
             classes: components["schemas"]["ClassDef"][];
             /** @description a library model id */
             preannotation_model_id: string | null;
             import_defaults: components["schemas"]["ImportSettings"];
+            /** @description 2 once the foundation migration has run */
             schema_version: number;
             /** Format: date-time */
             created_at: string;
+            /**
+             * Format: date-time
+             * @description from the recent list; null when never opened here
+             */
+            last_opened_at: string | null;
+            /** @description null while the project cannot be opened */
+            summary: components["schemas"]["ProjectSummary"] | null;
+            migration: components["schemas"]["MigrationState"];
+            availability: components["schemas"]["ProjectAvailability"];
         };
+        /**
+         * @description `missing` when the recent project's folder or `project.db` no longer exists (the card reads "Folder not found")
+         * @enum {string}
+         */
+        ProjectAvailability: "ok" | "missing";
         /**
          * @example {
          *       "name": "Ahmadia",
          *       "folder": "E:\\Projects\\Ahmadia",
-         *       "kind": "train",
-         *       "classes": [
-         *         {
-         *           "name": "excavator",
-         *           "colour": "#f97316",
-         *           "hotkey": "1"
-         *         },
-         *         {
-         *           "name": "dump_truck",
-         *           "colour": "#06b6d4",
-         *           "hotkey": "2"
-         *         }
+         *       "type_ids": [
+         *         "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "c1a2b3c4-0000-4000-8000-000000000009"
          *       ]
          *     }
          */
         ProjectCreate: {
             name: string;
-            /** @description absolute path; created when missing */
+            /** @description absolute path; created when missing, must not already hold a project */
             folder: string;
-            kind: components["schemas"]["ProjectKind"];
-            /** @description a detection project may start with an empty list */
-            classes: components["schemas"]["ClassDefInput"][];
+            /** @description catalogue type ids to start with, in list order; empty when absent */
+            type_ids?: string[];
         };
         /**
          * @example {
@@ -3270,7 +3421,10 @@ export interface components {
          *           "name": "excavator",
          *           "colour": "#f97316",
          *           "hotkey": "1",
-         *           "order": 0
+         *           "order": 0,
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "group": "Machinery"
          *         }
          *       ],
          *       "split_method": "by_group",
@@ -4871,7 +5025,7 @@ export interface components {
          *     }
          */
         MapMoveRequest: {
-            /** @description an open or recently opened detection project */
+            /** @description an open or recently opened project */
             target_project_id: string;
         };
         /**
@@ -6229,7 +6383,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -6264,7 +6418,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id} */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -6306,14 +6460,113 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed";
-            /** @description the project id, or `library` for library jobs */
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed";
+            /** @description the project id, or `library` for library jobs and `catalogue.changed` */
             project_id: string;
             job_id: string | null;
             progress: number | null;
             message: string;
             payload: {
                 [key: string]: unknown;
+            };
+        };
+        /**
+         * @description `defect` types become findings; `object` types are counted, not tracked (umbrella D7)
+         * @enum {string}
+         */
+        CatalogueKind: "defect" | "object";
+        /**
+         * @example {
+         *       "kind": "map",
+         *       "id": "a0000000-6666-4000-8000-000000000001"
+         *     }
+         */
+        ProjectCover: {
+            /** @enum {string} */
+            kind: "map" | "image";
+            /** @description a map id or an image id */
+            id: string;
+        };
+        /**
+         * @description pre-aggregated counts for the Projects card (foundation §9.2); never a scan of findings, boxes or images
+         * @example {
+         *       "image_count": 3299,
+         *       "maps": 2,
+         *       "point_clouds": 1,
+         *       "elevations": 1,
+         *       "open_findings": 47,
+         *       "open_top_severity": 3,
+         *       "cover": {
+         *         "kind": "map",
+         *         "id": "a0000000-6666-4000-8000-000000000001"
+         *       }
+         *     }
+         */
+        ProjectSummary: {
+            image_count: number;
+            maps: number;
+            point_clouds: number;
+            elevations: number;
+            open_findings: number;
+            /** @description open findings at the highest level of the severity scale */
+            open_top_severity: number;
+            /** @description the newest ready map, else the newest image; null for an empty project */
+            cover: components["schemas"]["ProjectCover"] | null;
+        };
+        /**
+         * @description The foundation upgrade of one project (foundation §11), from `migrations.json`. `pending` waits for its `project_migrate` job (or for the model library or the catalogue to open), `running` has a live job, `failed` keeps the reason, the failed step and the backup. Every field but `state` may be absent or null.
+         * @example {
+         *       "state": "failed",
+         *       "job_id": "j0000000-4444-4000-8000-000000000040",
+         *       "error": "database is locked",
+         *       "code": "step_failed",
+         *       "step": "rewrite_class_ids",
+         *       "backup_path": "E:\\Projects\\North\\backups\\project.db.v1-20260926T090000Z.bak",
+         *       "report_path": "E:\\Projects\\North\\backups\\migration-v2.json"
+         *     }
+         */
+        MigrationState: {
+            /** @enum {string} */
+            state: "ok" | "pending" | "running" | "failed";
+            /** @description the `project_migrate` library job */
+            job_id?: string | null;
+            /** @description readable text when `failed` */
+            error?: string | null;
+            /** @description why it failed: `backup_failed`, `step_failed`, `open_failed` or `cancelled` */
+            code?: string | null;
+            /** @description the data step that failed, e.g. `rewrite_class_ids` */
+            step?: string | null;
+            /** @description absolute path of the copy taken before the schema upgrade */
+            backup_path?: string | null;
+            /** @description absolute path of `backups\migration-v2.json` */
+            report_path?: string | null;
+        };
+        /**
+         * @example {
+         *       "folder": "E:\\Projects\\North"
+         *     }
+         */
+        MigrationFolder: {
+            /** @description absolute path of the project folder */
+            folder: string;
+        };
+        /**
+         * @example {
+         *       "type_ids": [
+         *         "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "c1a2b3c4-0000-4000-8000-000000000009"
+         *       ],
+         *       "hotkeys": {
+         *         "c1a2b3c4-0000-4000-8000-000000000009": "c"
+         *       }
+         *     }
+         */
+        ProjectTypesUpdate: {
+            /** @description catalogue type ids, in list order */
+            type_ids: string[];
+            /** @description type id to the project's hotkey override (a digit 1-9 or a letter); null clears it; a type left out keeps its override */
+            hotkeys?: {
+                [key: string]: string | null;
             };
         };
     };
@@ -6324,29 +6577,6 @@ export interface components {
                 [name: string]: unknown;
             };
             content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description the operation does not belong to this kind of project (`code` is `wrong_project_kind`, details `{kind, allowed}`) */
-        WrongProjectKind: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                /**
-                 * @example {
-                 *       "error": {
-                 *         "code": "wrong_project_kind",
-                 *         "message": "This is a detection project. Datasets belong in a training project.",
-                 *         "details": {
-                 *           "kind": "detect",
-                 *           "allowed": [
-                 *             "train"
-                 *           ]
-                 *         }
-                 *       }
-                 *     }
-                 */
                 "application/json": components["schemas"]["Error"];
             };
         };
@@ -6408,6 +6638,24 @@ export interface components {
                  *     }
                  */
                 "application/json": components["schemas"]["UnmappedClassesError"];
+            };
+        };
+        /** @description the catalogue could not be opened at startup (`code` is `catalogue_unavailable`); projects still render from their type snapshots */
+        CatalogueUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "catalogue_unavailable",
+                 *         "message": "The catalogue could not be opened.",
+                 *         "details": {}
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
             };
         };
     };
@@ -6871,7 +7119,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7119,7 +7366,7 @@ export interface operations {
                     "application/json": components["schemas"]["PreannotateResult"];
                 };
             };
-            /** @description the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            /** @description the chosen library model's weights file is missing (`code` is `model_unavailable`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7285,7 +7532,6 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetPage"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7313,7 +7559,6 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetWithJob"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7338,7 +7583,6 @@ export interface operations {
                     "application/json": components["schemas"]["Dataset"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7361,7 +7605,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7386,7 +7629,6 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetStats"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7423,7 +7665,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the base model's weights file is missing (`code` is `model_unavailable`) */
+            /** @description the base model's weights file is missing (`code` is `model_unavailable`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7474,7 +7716,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -7507,7 +7748,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description an adoption job is already queued or running (`code` is `conflict`), or the project is not a training project (`code` is `wrong_project_kind`) */
+            /** @description an adoption job is already queued or running (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8173,7 +8414,6 @@ export interface operations {
                     "application/json": components["schemas"]["CostEstimate"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8228,7 +8468,7 @@ export interface operations {
                     "application/json": components["schemas"]["QueryRunWithJob"];
                 };
             };
-            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            /** @description the chosen library model's weights file is missing (`code` is `model_unavailable`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8286,7 +8526,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description the run's job is still queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the run's job is still queued or running (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8323,7 +8563,6 @@ export interface operations {
                     "application/json": components["schemas"]["PromoteResult"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8348,7 +8587,6 @@ export interface operations {
                     "application/json": components["schemas"]["UnpromoteResult"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8399,7 +8637,6 @@ export interface operations {
                     "application/json": components["schemas"]["GeoMapWithJob"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8446,7 +8683,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description one of the map's jobs is queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description one of the map's jobs is queued or running (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8488,7 +8725,6 @@ export interface operations {
                     "application/json": components["schemas"]["GeoMap"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8526,7 +8762,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description this project is not a training project, or the target is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`); or the map has not finished importing (`code` is `conflict`) */
+            /** @description the map has not finished importing (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8645,7 +8881,6 @@ export interface operations {
                     "application/json": components["schemas"]["MapRunEstimate"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8673,7 +8908,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapRunWithJob"];
                 };
             };
-            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            /** @description the chosen library model's weights file is missing (`code` is `model_unavailable`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8729,7 +8964,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8754,7 +8988,6 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -8813,7 +9046,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9007,7 +9239,6 @@ export interface operations {
                     "application/json": components["schemas"]["MapZone"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9031,7 +9262,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9061,7 +9291,6 @@ export interface operations {
                     "application/json": components["schemas"]["MapZone"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9114,7 +9343,6 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabel"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9138,7 +9366,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9168,7 +9395,6 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabel"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9197,7 +9423,6 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabelSeedResult"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9225,7 +9450,6 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9308,7 +9532,6 @@ export interface operations {
                     "application/json": components["schemas"]["RunSummaryPage"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9365,7 +9588,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            /** @description the chosen library model's weights file is missing (`code` is `model_unavailable`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9405,7 +9628,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9435,7 +9657,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9461,7 +9682,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9487,7 +9707,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
@@ -9518,7 +9737,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             /** @description a mapped id is not a project class, or a name is not one of the model's classes (`code` is `validation_error`) */
             422: {
                 headers: {
@@ -9557,7 +9775,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9657,7 +9874,6 @@ export interface operations {
                     "application/json": components["schemas"]["SiteAreaList"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9686,7 +9902,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9710,7 +9925,6 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9740,7 +9954,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9834,7 +10047,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -9941,7 +10153,6 @@ export interface operations {
                     "application/json": components["schemas"]["AreaAnalytics"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -10031,7 +10242,6 @@ export interface operations {
                     "application/json": components["schemas"]["PhotoBatchAnalytics"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -10060,7 +10270,6 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -10111,7 +10320,7 @@ export interface operations {
                     "application/json": components["schemas"]["PointCloudWithJob"];
                 };
             };
-            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10156,7 +10365,6 @@ export interface operations {
                     "application/json": components["schemas"]["PointCloudFileInfo"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             /** @description the file is not a readable LAS/LAZ (`unsupported_point_cloud`) */
             422: {
                 headers: {
@@ -10212,7 +10420,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description its import or export job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description its import or export job is queued or running (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10249,7 +10457,7 @@ export interface operations {
                     "application/json": components["schemas"]["PointCloudOut"];
                 };
             };
-            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10383,7 +10591,7 @@ export interface operations {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
                 };
             };
-            /** @description the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the cloud is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10425,7 +10633,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -10456,7 +10663,6 @@ export interface operations {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -10485,7 +10691,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the cloud is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10544,7 +10750,7 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            /** @description the point cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the point cloud is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10608,7 +10814,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description a volume measurement uses the surface (`code` is `conflict`; the message names them), its build job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a volume measurement uses the surface (`code` is `conflict`; the message names them), or its build job is queued or running (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10645,7 +10851,6 @@ export interface operations {
                     "application/json": components["schemas"]["Surface"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -10783,7 +10988,6 @@ export interface operations {
                     "application/json": components["schemas"]["DesignInspectionWithJob"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             /** @description the file is a DWG (`code` is `validation_error`, `details.reason` is `"dwg"`) or an existing file has an unknown extension (`details.reason` is `"extension"`); a missing file is `404 not_found`, never a 422 */
             422: {
                 headers: {
@@ -10840,7 +11044,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description a build of this inspection is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a build of this inspection is queued or running (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10910,7 +11114,7 @@ export interface operations {
                     "application/json": components["schemas"]["DesignPreviewWithJob"];
                 };
             };
-            /** @description the inspection has not been read yet or reading it failed, or the target cloud surface is building, failed or missing its grid (`code` is `not_ready`); a design surface is being imported from this inspection (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the inspection has not been read yet or reading it failed, or the target cloud surface is building, failed or missing its grid (`code` is `not_ready`); a design surface is being imported from this inspection (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11014,7 +11218,7 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            /** @description the preview is not ready, or the target cloud surface is no longer ready (`code` is `not_ready`); the preview is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); the design is already being imported (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the preview is not ready, or the target cloud surface is no longer ready (`code` is `not_ready`); the preview is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); the design is already being imported (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11073,7 +11277,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurementWithJob"];
                 };
             };
-            /** @description the top or base surface is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the top or base surface is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11139,7 +11343,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description the measurement is calculating (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is calculating (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11177,7 +11381,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurement"];
                 };
             };
-            /** @description the measurement is calculating (`code` is `job_running`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is calculating (`code` is `job_running`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11220,7 +11424,7 @@ export interface operations {
                     "application/json": components["schemas"]["VolumeMeasurementWithJob"];
                 };
             };
-            /** @description the measurement is already calculating (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description the measurement is already calculating (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11328,7 +11532,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`); a measurement is being calculated (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`); a measurement is being calculated (`code` is `job_running`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11515,7 +11719,6 @@ export interface operations {
                     "application/json": components["schemas"]["AgentConversation"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -11537,7 +11740,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -11565,7 +11767,6 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -11590,7 +11791,6 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -11619,7 +11819,132 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
-            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    retryProjectMigration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrationFolder"];
+            };
+        };
+        responses: {
+            /** @description migration job queued in the library runner */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "state": "running",
+                     *       "job_id": "j0000000-4444-4000-8000-000000000040",
+                     *       "error": null,
+                     *       "code": null,
+                     *       "step": null,
+                     *       "backup_path": "E:\\Projects\\North\\backups\\project.db.v1-20260926T090000Z.bak",
+                     *       "report_path": null
+                     *     }
+                     */
+                    "application/json": components["schemas"]["MigrationState"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a migration job for the folder is already queued or running (`code` is `job_running`, details `{job_id}`), or the project is already upgraded (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    revealProjectBackup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MigrationFolder"];
+            };
+        };
+        responses: {
+            /** @description Explorer was started */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description no backup is recorded for that folder, or its file is gone (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putProjectTypes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectTypesUpdate"];
+            };
+        };
+        responses: {
+            /** @description the project with its new type list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a removed type still has annotations or findings (`code` is `class_in_use`, details `{type_id, box_count, finding_count}`), or a hotkey is taken in the project (`code` is `hotkey_conflict`, details `{type_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a type id is not in the catalogue (`code` is `unknown_type`, details `{type_ids}`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };

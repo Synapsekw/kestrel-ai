@@ -1,0 +1,129 @@
+"""Foundation unit C0: contract/openapi.yaml carries every path and schema of foundation spec §13.
+
+The spec is docs/superpowers/specs/2026-09-26-foundation-design.md. These tests read only the YAML;
+`test_contract.py` checks that the backend routes it and `pnpm -C contract check` lints it.
+"""
+
+from pathlib import Path
+
+import pytest
+import yaml
+
+SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
+METHODS = ("get", "post", "put", "patch", "delete")
+
+P = "/api/v1/projects/{projectId}"
+
+# operationId -> (method, path) of every operation the foundation adds.
+FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
+    # projects (Task 1)
+    "retryProjectMigration": ("post", "/api/v1/projects/migrations/retry"),
+    "revealProjectBackup": ("post", "/api/v1/projects/migrations/reveal-backup"),
+    "putProjectTypes": ("put", P + "/types"),
+}
+
+# Response schemas the Prism mock serves: each carries its own example (spec §18 "Prism examples").
+EXAMPLED_SCHEMAS = [
+    "Project",
+    "ProjectSummary",
+    "MigrationState",
+    "ClassDef",
+]
+
+
+@pytest.fixture(scope="module")
+def spec() -> dict:
+    return yaml.safe_load(SPEC.read_text("utf-8"))
+
+
+def _schemas(spec: dict) -> dict:
+    return spec["components"]["schemas"]
+
+
+def _operations(spec: dict) -> dict[str, tuple[str, str, dict]]:
+    return {
+        op["operationId"]: (method, path, op)
+        for path, ops in spec["paths"].items()
+        for method, op in ops.items()
+        if method in METHODS
+    }
+
+
+# ------------------------------------------------------------------------------ Task 1
+
+
+def test_no_project_kind_is_left():
+    text = SPEC.read_text("utf-8")
+    for word in ("ProjectKind", "wrong_project_kind", "training project", "detection project"):
+        assert word not in text, word
+
+
+def test_a_project_has_no_kind_but_a_summary_and_a_migration_state(spec):
+    project = _schemas(spec)["Project"]
+    assert "kind" not in project["properties"]
+    assert {"summary", "migration", "last_opened_at", "availability"} <= set(project["required"])
+    assert project["properties"]["availability"] == {"$ref": "#/components/schemas/ProjectAvailability"}
+    assert _schemas(spec)["ProjectAvailability"]["enum"] == ["ok", "missing"]
+    assert project["properties"]["migration"] == {"$ref": "#/components/schemas/MigrationState"}
+    states = _schemas(spec)["MigrationState"]["properties"]["state"]["enum"]
+    assert states == ["ok", "pending", "running", "failed"]
+    assert _schemas(spec)["MigrationState"]["required"] == ["state"]  # MG may leave the rest out
+
+
+def test_a_project_is_created_with_catalogue_type_ids(spec):
+    create = _schemas(spec)["ProjectCreate"]
+    assert create["required"] == ["name", "folder"]  # `type_ids` is empty when absent (BK)
+    assert set(create["properties"]) == {"name", "folder", "type_ids"}
+    assert "additionalProperties" not in create  # the kind shim's extra fields must stay accepted
+
+
+def test_a_class_def_is_a_catalogue_type_snapshot(spec):
+    class_def = _schemas(spec)["ClassDef"]
+    assert {"kind", "default_severity", "group"} <= set(class_def["required"])
+    assert _schemas(spec)["CatalogueKind"]["enum"] == ["defect", "object"]
+
+
+def test_the_new_job_types_and_events(spec):
+    job_types = _schemas(spec)["JobType"]["enum"]
+    for job_type in ("project_migrate", "findings_backfill", "findings_recount", "dataset_build", "map_move"):
+        assert job_type in job_types
+    events = _schemas(spec)["Event"]["properties"]["type"]["enum"]
+    for event in ("findings.changed", "data.changed", "catalogue.changed", "migration.changed"):
+        assert event in events
+
+
+def test_the_replaced_operations_are_deprecated_with_the_unit_that_removes_them(spec):
+    ops = _operations(spec).items()
+    retired = {op_id: op.get("x-retire-with") for op_id, (_, _, op) in ops if op.get("deprecated")}
+    assert retired == {
+        "updateClasses": "F-S2",
+        "listDatasets": "F-S2",
+        "createDataset": "F-S2",
+        "getDataset": "F-S2",
+        "deleteDataset": "F-S2",
+        "getDatasetStats": "F-S2",
+        "trainModel": "F-S2",
+        "moveMapToProject": "F-SH",
+    }
+
+
+# ------------------------------------------------------------------------------ every task
+
+
+@pytest.mark.parametrize("op_id", sorted(FOUNDATION_OPERATIONS))
+def test_the_foundation_operation_exists(spec, op_id):
+    ops = _operations(spec)
+    assert op_id in ops, op_id
+    method, path, op = ops[op_id]
+    assert (method, path) == FOUNDATION_OPERATIONS[op_id]
+    assert "default" in op["responses"], "every operation answers errors in the envelope"
+
+
+@pytest.mark.parametrize("name", EXAMPLED_SCHEMAS)
+def test_the_mock_has_an_example(spec, name):
+    assert name in _schemas(spec), name
+    example = _schemas(spec)[name].get("example")
+    assert example is not None, name
+    if name.endswith("Page"):
+        # A generated cursor would be the string "string": a client paging the mock never stops.
+        assert example["next_cursor"] is None, name
