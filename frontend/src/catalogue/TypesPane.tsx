@@ -14,7 +14,15 @@ import {
   TypeChip,
   type Column,
 } from "@/ui";
-import { DEFAULT_FILTERS, filterTypes, type KindFilter, type TypeFilters } from "./catalogueModel";
+import { BackfillOffer } from "./BackfillOffer";
+import {
+  DEFAULT_FILTERS,
+  filterTypes,
+  migratedCount,
+  type KindFilter,
+  type TypeFilters,
+} from "./catalogueModel";
+import { ClassificationBanner } from "./ClassificationBanner";
 import { TypeEditor } from "./TypeEditor";
 import type { Catalogue } from "./useCatalogue";
 
@@ -74,7 +82,17 @@ export function TypesPane({ catalogue }: { catalogue: Catalogue }) {
   const [params, setParams] = useSearchParams();
   const openId = params.get("type");
   const [filters, setFilters] = useState<TypeFilters>(DEFAULT_FILTERS);
-  const rows = useMemo(() => filterTypes(catalogue.types, filters), [catalogue.types, filters]);
+  // BC's Overview banner links to /catalogue?origin=migrated; the flag may also come from the list.
+  const fromBanner = params.get("origin") === "migrated";
+  const showBanner = catalogue.needsClassification || fromBanner;
+  // null follows the banner: filtered to migrated types while classification is pending (§7.5).
+  const [migratedChoice, setMigratedChoice] = useState<boolean | null>(null);
+  const migratedOnly = migratedChoice ?? showBanner;
+  const [backfill, setBackfill] = useState<CatalogueType | null>(null);
+  const rows = useMemo(
+    () => filterTypes(catalogue.types, { ...filters, migratedOnly }),
+    [catalogue.types, filters, migratedOnly],
+  );
 
   const open = useCallback(
     (id: string | null) =>
@@ -95,6 +113,27 @@ export function TypesPane({ catalogue }: { catalogue: Catalogue }) {
 
   return (
     <div className="flex flex-col gap-4">
+      {showBanner && (
+        <ClassificationBanner
+          count={migratedCount(catalogue.types)}
+          filtered={migratedOnly}
+          onShowAll={() => setMigratedChoice(false)}
+          onShowMigrated={() => setMigratedChoice(true)}
+          onDone={() => {
+            setMigratedChoice(false);
+            setParams(
+              (p) => {
+                const next = new URLSearchParams(p);
+                next.delete("origin");
+                return next;
+              },
+              { replace: true },
+            );
+            catalogue.reload();
+          }}
+        />
+      )}
+      {backfill && <BackfillOffer key={backfill.id} type={backfill} onDismiss={() => setBackfill(null)} />}
       <div className="flex flex-wrap items-center gap-3">
         <Input
           aria-label="Search types"
@@ -146,8 +185,9 @@ export function TypesPane({ catalogue }: { catalogue: Catalogue }) {
               key={openId}
               type={editing}
               types={catalogue.types}
-              onSaved={(t) => {
+              onSaved={(t, backfillCandidates) => {
                 catalogue.put(t);
+                if (backfillCandidates) setBackfill(t);
                 open(t.id);
               }}
               onUseExisting={(id) => open(id)}

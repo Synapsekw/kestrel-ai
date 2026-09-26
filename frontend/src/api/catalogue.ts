@@ -103,6 +103,18 @@ export function isHotkeyConflict(err: unknown): boolean {
   return codeOf(err) === "hotkey_conflict";
 }
 
+/** 409 `job_running`: a backfill of this type is already queued or running (controller ruling P13). */
+export function isBackfillRunning(err: unknown): boolean {
+  return codeOf(err) === "job_running";
+}
+
+/** BC's `details.job_id` on a `job_running` 409, when it carries one. */
+export function backfillRunningJobId(err: unknown): string | null {
+  if (!(err instanceof ApiFailure) || err.code !== "job_running") return null;
+  const id = err.details.job_id;
+  return typeof id === "string" ? id : null;
+}
+
 export interface SeverityInUse {
   level: number;
   projects: string[];

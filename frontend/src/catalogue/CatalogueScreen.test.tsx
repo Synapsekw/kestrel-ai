@@ -98,4 +98,40 @@ describe("CatalogueScreen, types", () => {
     expect(screen.getByRole("button", { name: "Copy folder path" })).toBeInTheDocument();
     expect(screen.queryByRole("row", { name: /Crack/ })).not.toBeInTheDocument();
   });
+
+  it("starts filtered to migrated types while the banner shows, and can show all", async () => {
+    renderCatalogue([{ method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage }]);
+    expect(
+      await screen.findByText("2 types came from your existing projects. Mark which are defects."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("row", { name: /Excavator/ })).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /Crack/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show all types" }));
+    expect(screen.getByRole("row", { name: /Crack/ })).toBeInTheDocument();
+  });
+
+  it("shows the banner from the Overview's link even when the list carries no flag", async () => {
+    renderCatalogue([LIST], "/catalogue?origin=migrated");
+    expect(
+      await screen.findByText("2 types came from your existing projects. Mark which are defects."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("row", { name: /Crack/ })).not.toBeInTheDocument();
+  });
+
+  it("offers the backfill after a type becomes a defect", async () => {
+    renderCatalogue([
+      { method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage },
+      {
+        method: "PATCH",
+        path: /\/catalogue\/types\/[^/]+$/,
+        body: { ...exampleTypes[0], kind: "defect", backfill_candidates: true },
+      },
+    ]);
+    fireEvent.click(await screen.findByRole("row", { name: /Excavator/ }));
+    fireEvent.click(screen.getByRole("radio", { name: "Defect" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save type" }));
+    expect(
+      await screen.findByRole("button", { name: "Create findings from accepted annotations of this type" }),
+    ).toBeInTheDocument();
+  });
 });
