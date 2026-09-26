@@ -45,34 +45,52 @@ def _out(handle: ProjectHandle, last_opened_at: datetime | None, runner=None) ->
     return out
 
 
+def _list_item(reg, runner, r: dict, opened: datetime | None, states: dict) -> ProjectOut:
+    folder = Path(r["folder"])
+    if not (folder / "project.db").exists():
+        # Listed, not hidden (operator decision 2026-09-26): the card offers Remove and Locate.
+        return ProjectOut.unavailable(r, MigrationStateOut(), opened, availability="missing")
+    live = live_job_id(runner, states.get(MigrationStates.key(folder)))
+    if live is not None:
+        return ProjectOut.unavailable(r, MigrationStateOut(state="running", job_id=live), opened)
+    handle = reg.cached(folder) or reg.open(folder, remember=False)
+    return _out(handle, opened, runner)
+
+
+def _failed_item(reg, r: dict, opened: datetime | None, error: Exception) -> ProjectOut:
+    """A recent project that could not be listed: an open that failed, or a folder that cannot
+    even be checked (a `PermissionError` from `exists()`), is `failed` with `open_failed` (or the
+    failure `migrations.json` records). Never raises: one project never fails the list."""
+    try:
+        state = MigrationStateOut(**unavailable_state(reg, Path(r["folder"]), error))
+    except Exception:
+        log.exception("the migration state of %s could not be read", r.get("folder"))
+        state = MigrationStateOut(
+            state="failed", code="open_failed", error=f"{type(error).__name__}: {error}"
+        )
+    return ProjectOut.unavailable(r, state, opened)
+
+
 @router.get("", response_model=ProjectPage)
 def list_projects(request: Request) -> ProjectPage:
-    """Every recent project, each on its own: one that fails to open or upgrade is listed as
-    `failed`, never failing the list, and one whose upgrade job is live is listed as `running`
-    without opening it. An open project is read from the registry cache without its lock, so the
-    list never waits on a job's backup (foundation spec §9.2, F12)."""
+    """Every recent project, each on its own: one that fails to open or upgrade, or whose folder
+    cannot be read, is listed as `failed`, never failing the list, and one whose upgrade job is
+    live is listed as `running` without opening it. An open project is read from the registry
+    cache without its lock, so the list never waits on a job's backup (foundation spec §9.2, F12)."""
     reg, runner = _registry(request), request.app.state.jobs
     entries = reg.recent()  # one read of the recent list for the whole page
     last_opened = reg.last_opened_map(entries)
-    states = states_for(reg).all()  # one read of migrations.json for the whole page
+    # One read of migrations.json for the live-job check; `_out` and `unavailable_state` still read
+    # it per row (at most MAX_RECENT rows).
+    states = states_for(reg).all()
     items: list[ProjectOut] = []
     for r in entries:
-        folder, opened = Path(r["folder"]), last_opened.get(r["id"])
-        if not (folder / "project.db").exists():
-            # Listed, not hidden (operator decision 2026-09-26): the card offers Remove and Locate.
-            items.append(ProjectOut.unavailable(r, MigrationStateOut(), opened, availability="missing"))
-            continue
-        live = live_job_id(runner, states.get(MigrationStates.key(folder)))
-        if live is not None:
-            items.append(ProjectOut.unavailable(r, MigrationStateOut(state="running", job_id=live), opened))
-            continue
+        opened = last_opened.get(r["id"])
         try:
-            handle = reg.cached(folder) or reg.open(folder, remember=False)
-            items.append(_out(handle, opened, runner))
+            items.append(_list_item(reg, runner, r, opened, states))
         except Exception as e:
-            log.warning("project at %s could not be listed: %s", folder, e)
-            state = MigrationStateOut(**unavailable_state(reg, folder, e))
-            items.append(ProjectOut.unavailable(r, state, opened))
+            log.warning("project at %s could not be listed: %s", r["folder"], e)
+            items.append(_failed_item(reg, r, opened, e))
     return ProjectPage(items=items, next_cursor=None)
 
 

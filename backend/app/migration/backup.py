@@ -62,14 +62,18 @@ def quick_check(path: Path) -> str:
 
 
 def latest_backup(folder: Path) -> Path | None:
-    """The newest backup in `<folder>/backups`, by its stamp and then its `-n` suffix."""
+    """The newest backup in `<folder>/backups`, by its stamp and then its `-n` suffix. A folder
+    that cannot be read (`PermissionError`, a vanished drive) has no backup to offer: None."""
     found = []
     d = backups_dir(folder)
-    if d.is_dir():
-        for p in d.iterdir():
-            m = _NAME.match(p.name)
-            if m and p.is_file():
-                found.append(((m["stamp"], int(m["n"] or 1)), p))
+    try:
+        if d.is_dir():
+            for p in d.iterdir():
+                m = _NAME.match(p.name)
+                if m and p.is_file():
+                    found.append(((m["stamp"], int(m["n"] or 1)), p))
+    except OSError:
+        return None
     return max(found)[1] if found else None
 
 

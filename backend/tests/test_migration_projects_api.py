@@ -224,3 +224,43 @@ def test_forgetting_a_project_whose_upgrade_runs_is_409(app, client, tmp_path, h
     assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
     assert r.json()["error"]["details"] == {"job_id": job.id}
     assert "p-legacy" in _items(client)
+
+
+def test_a_folder_that_cannot_be_read_is_listed_as_failed(app, client, project_id, tmp_path, monkeypatch):
+    """Python 3.11's `Path.exists` re-raises a `PermissionError`: one such folder never fails the list."""
+    import pathlib
+
+    locked = tmp_path / "locked"
+    app.state.projects.appdata.remember("p-locked", "Locked", str(locked))
+    real_exists = pathlib.Path.exists
+
+    def exists(self, *args, **kwargs):
+        if self.parent == locked:
+            raise PermissionError(13, "Access is denied", str(self))
+        return real_exists(self, *args, **kwargs)
+
+    monkeypatch.setattr(pathlib.Path, "exists", exists)
+    items = _items(client)
+    assert items[project_id]["migration"]["state"] == "ok"
+    item = items["p-locked"]
+    assert (item["name"], item["availability"]) == ("Locked", "ok")
+    assert item["migration"]["state"] == "failed" and item["migration"]["code"] == "open_failed"
+    assert "PermissionError" in item["migration"]["error"]
+
+
+def test_reveal_backup_of_an_unreadable_backups_folder_is_404(client, tmp_path, monkeypatch, launched):
+    import pathlib
+
+    folder = legacy_at_head(tmp_path / "legacy")
+    (folder / "backups").mkdir()
+    real_iterdir = pathlib.Path.iterdir
+
+    def iterdir(self):
+        if self == folder / "backups":
+            raise PermissionError(13, "Access is denied", str(self))
+        return real_iterdir(self)
+
+    monkeypatch.setattr(pathlib.Path, "iterdir", iterdir)
+    r = client.post(REVEAL, json={"folder": str(folder)})
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+    assert launched == []
