@@ -113,9 +113,10 @@ export function FloatingToolbar({
     if (e.key !== previous && e.key !== next) return;
     const buttons = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>("button:not([disabled])"));
     const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    // The toolbar owns its arrow keys even when there is no enabled tool to move from.
+    e.stopPropagation();
     if (at < 0) return;
     e.preventDefault();
-    e.stopPropagation();
     buttons[(at + (e.key === next ? 1 : -1) + buttons.length) % buttons.length].focus();
   };
   return (

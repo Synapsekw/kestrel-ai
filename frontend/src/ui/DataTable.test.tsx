@@ -49,6 +49,21 @@ describe("DataTable", () => {
     window.removeEventListener("keydown", onWindow);
   });
 
+  it("owns Space inside the focused grid, selectable or not, so it never reaches the pan-hold key", () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    const { rerender } = render(
+      <DataTable label="Findings" columns={COLUMNS} rows={make(5)} rowKey={(r) => r.id} />,
+    );
+    const grid = screen.getByRole("grid", { name: "Findings" });
+    grid.focus();
+    expect(fireEvent.keyDown(grid, { key: " " })).toBe(false); // default prevented
+    rerender(<DataTable label="Findings" columns={COLUMNS} rows={[]} rowKey={(r) => r.id} />);
+    expect(fireEvent.keyDown(screen.getByRole("grid", { name: "Findings" }), { key: " " })).toBe(false);
+    expect(onWindow).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", onWindow);
+  });
+
   it("selects one row by click and a range with shift-click", async () => {
     function Host() {
       const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());

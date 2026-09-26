@@ -122,7 +122,16 @@ export function DataTable<T>({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey || rows.length === 0) return;
+    if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (e.key === " ") {
+      // The focused grid owns Space whether or not it selects, so it never reaches the global
+      // pan-hold key (or scrolls the page).
+      e.preventDefault();
+      e.stopPropagation();
+      if (selectable && rows.length > 0) toggle(cur, e.shiftKey);
+      return;
+    }
+    if (rows.length === 0) return;
     const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
     let next: number | null = null;
     if (k === "ArrowDown" || k === "j") next = Math.min(rows.length - 1, cur + 1);
@@ -133,11 +142,6 @@ export function DataTable<T>({
       e.preventDefault();
       e.stopPropagation();
       onOpen?.(rows[cur]);
-      return;
-    } else if (k === " " && selectable) {
-      e.preventDefault();
-      e.stopPropagation();
-      toggle(cur, e.shiftKey);
       return;
     }
     if (next === null) return;

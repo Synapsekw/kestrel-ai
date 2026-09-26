@@ -71,4 +71,14 @@ describe("FloatingToolbar", () => {
     expect(onWindow).not.toHaveBeenCalled();
     window.removeEventListener("keydown", onWindow);
   });
+
+  it("keeps its arrow keys from the workspace even when focus is not on an enabled tool", () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    render(<FloatingToolbar label="Tools" tools={tools()} />);
+    fireEvent.keyDown(screen.getByRole("toolbar", { name: "Tools" }), { key: "ArrowDown" });
+    fireEvent.keyDown(screen.getByRole("button", { name: "Pan" }), { key: "ArrowUp" });
+    expect(onWindow).not.toHaveBeenCalled();
+    window.removeEventListener("keydown", onWindow);
+  });
 });
