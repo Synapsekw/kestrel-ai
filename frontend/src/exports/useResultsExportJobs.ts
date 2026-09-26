@@ -10,7 +10,7 @@ const EXPORT_TYPES = new Set<Job["type"]>(["results_export", "map_export", "dete
 
 /** This project's file-producing exports (a `results_export` or a `detect_export` from the Export
  * screen, or a `map_export` from the Maps screen), newest first across every kind; kept fresh by
- * the jobs panel's websocket too. */
+ * the websocket through the jobs store too. */
 function selectExportJobs(jobs: Record<string, Job>, projectId: string): Job[] {
   return Object.values(jobs)
     .filter((j) => EXPORT_TYPES.has(j.type) && j.project_id === projectId)

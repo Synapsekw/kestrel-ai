@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { exampleAppJobs } from "@/test/appSectionFixtures";
-import { inSegment, jobsViewParams, mergeJobs, projectLabel, readJobsView } from "./jobsFilters";
+import { inSegment, jobUrl, jobsViewParams, mergeJobs, projectLabel, readJobsView } from "./jobsFilters";
 
 describe("jobs view <-> URL", () => {
   it("defaults to Running with no project and no open job", () => {
@@ -30,6 +30,16 @@ describe("segments", () => {
     expect(inSegment("finished", "cancelled")).toBe(true);
     expect(inSegment("finished", "failed")).toBe(false);
     expect(inSegment("running", "queued")).toBe(false);
+  });
+});
+
+describe("jobUrl", () => {
+  it("opens the job in the segment that lists it", () => {
+    expect(jobUrl({ id: "j1", state: "running" })).toBe("/jobs?job=j1");
+    expect(jobUrl({ id: "j1", state: "queued" })).toBe("/jobs?state=queued&job=j1");
+    expect(jobUrl({ id: "j1", state: "failed" })).toBe("/jobs?state=failed&job=j1");
+    expect(jobUrl({ id: "j1", state: "succeeded" })).toBe("/jobs?state=finished&job=j1");
+    expect(jobUrl({ id: "j1", state: "cancelled" })).toBe("/jobs?state=finished&job=j1");
   });
 });
 

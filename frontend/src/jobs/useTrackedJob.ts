@@ -29,7 +29,7 @@ function isMissing(e: unknown): boolean {
  *
  * The poller stops on a 404 and after `JOB_POLL_MAX_FAILURES` consecutive failures, so a stale
  * `?job=` / `?run=` in the URL cannot spin forever; `error` then carries the reason. Giving up is
- * not final: anything that reaches the store for this id (a websocket event, the jobs panel, another
+ * not final: anything that reaches the store for this id (a websocket event, the Jobs section, another
  * tracker) proves the backend is back, so the poller re-arms and the error clears; `retry()` does
  * the same on demand.
  */

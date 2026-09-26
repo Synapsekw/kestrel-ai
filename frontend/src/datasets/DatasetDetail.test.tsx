@@ -20,7 +20,7 @@ const STATS = {
 };
 
 describe("DatasetDetail", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("shows per-class and group stats, the folder, and a link to train on it", async () => {
     const { api } = fakeClient([{ method: "GET", path: /\/stats$/, body: STATS }]);

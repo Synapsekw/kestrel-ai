@@ -42,7 +42,7 @@ function recoveringClient(downFor: number) {
 }
 
 describe("useTrackedJob", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("fetches an unknown job into the store and returns it", async () => {
     const { api, requests } = fakeClient([{ method: "GET", path: /\/jobs\/[^/]+$/, body: runningJob }]);
@@ -92,7 +92,7 @@ describe("useTrackedJob", () => {
       expect(result.current.error).toBe("job j1 not found");
       expect(calls.n).toBe(1);
 
-      // A websocket event or the jobs panel puts the job in the store: the backend is alive again.
+      // A websocket event or the Jobs section puts the job in the store: the backend is alive again.
       await act(async () => {
         useJobsStore.getState().upsert(runningJob);
         await vi.advanceTimersByTimeAsync(1);

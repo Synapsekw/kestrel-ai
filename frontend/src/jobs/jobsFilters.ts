@@ -50,6 +50,13 @@ export function inSegment(segment: JobSegment, state: JobState): boolean {
   return SEGMENT_STATES[segment].includes(state);
 }
 
+/** The Jobs section URL with this job open in the segment that lists it (toasts, re-imports). */
+export function jobUrl(job: Pick<AppJob, "id" | "state">): string {
+  const segment = SEGMENTS.find((s) => inSegment(s, job.state)) ?? "running";
+  const query = jobsViewParams({ segment, project: null, jobId: job.id }).toString();
+  return `/jobs?${query}`;
+}
+
 /** By id, `incoming` wins; newest first by `created_at`, then id, as the API orders them. */
 export function mergeJobs(current: AppJob[], incoming: AppJob[]): AppJob[] {
   const byId = new Map(current.map((j) => [j.id, j]));

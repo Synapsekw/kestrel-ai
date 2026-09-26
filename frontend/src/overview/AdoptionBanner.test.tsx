@@ -16,7 +16,7 @@ function render(routes: Parameters<typeof fakeClient>[0]) {
 
 describe("AdoptionBanner", () => {
   beforeEach(() => {
-    useJobsStore.setState({ jobs: {}, panelOpen: false });
+    useJobsStore.setState({ jobs: {} });
   });
 
   it("shows progress while the project's models are moving into the library", async () => {

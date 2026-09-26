@@ -48,7 +48,7 @@ function routes(overrides: FakeRoute[] = []): FakeRoute[] {
   ];
 }
 
-beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
 describe("AnalyticsScreen", () => {
   it("has the four sections", async () => {

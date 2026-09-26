@@ -20,7 +20,7 @@ function renderBar(path: string, projectId?: string, projectName: string | null 
 
 describe("TopBar", () => {
   beforeEach(() => {
-    useJobsStore.setState({ jobs: {}, panelOpen: false });
+    useJobsStore.setState({ jobs: {} });
     useAgentPanel.setState({ open: false });
     useAddData.setState({ open: false, tile: null, projectId: PROJECT_ID });
     useProvidedRouteActions.setState({ entries: [] });

@@ -6,7 +6,7 @@ import { useJobsStore } from "@/store/jobs";
 import { TrainProgress } from "./TrainProgress";
 
 describe("TrainProgress", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("shows epoch, mAP50 and elapsed from the running job", async () => {
     const { api } = fakeClient([

@@ -1,7 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, renderHook } from "@testing-library/react";
 import type { Job } from "@contract/client";
+import { useJobsStore } from "@/store/jobs";
 import { runningJob } from "@/test/fixtures";
-import { claimJobOutcome, jobToastText, reportedInline } from "./useJobToasts";
+import { useToastStore } from "./toastStore";
+import { claimJobOutcome, jobToastText, reportedInline, useJobToasts } from "./useJobToasts";
 
 const base: Job = {
   id: "j1",
@@ -70,5 +73,54 @@ describe("reportedInline", () => {
     again();
     expect(reportedInline(job, "/p/p1/clouds")).toBe(false);
     expect(reportedInline({ ...job, type: "import" } as Job, "/p/p1/images/x")).toBe(false);
+  });
+});
+
+describe("useJobToasts (app-wide)", () => {
+  beforeEach(() => {
+    useJobsStore.setState({ jobs: {} });
+    useToastStore.getState().clear();
+  });
+  afterEach(() => useToastStore.getState().clear());
+
+  const libraryTrain: Job = { ...base, id: "j-lib", project_id: "library", type: "train", state: "running" };
+
+  it("toasts a failed library job while no project route is open", () => {
+    renderHook(() => useJobToasts({ current: "/models/library" }));
+    act(() => useJobsStore.getState().upsert(libraryTrain));
+    act(() =>
+      useJobsStore.getState().upsert({ ...libraryTrain, state: "failed", error: "CUDA out of memory" }),
+    );
+    expect(useToastStore.getState().toasts).toMatchObject([
+      { tone: "danger", text: "Training failed: CUDA out of memory", action: { label: "Show log" } },
+    ]);
+  });
+
+  it("toasts a succeeded project job on an app-level route, once", () => {
+    renderHook(() => useJobToasts({ current: "/catalogue" }));
+    act(() => useJobsStore.getState().upsert({ ...base, state: "running" }));
+    act(() =>
+      useJobsStore.getState().upsert({ ...base, result: { imported: 40, duplicates: 0, failed: 0 } }),
+    );
+    act(() => useJobsStore.getState().upsert({ ...base, message: "again" }));
+    expect(useToastStore.getState().toasts).toMatchObject([
+      { tone: "ok", text: "Import finished: 40 images" },
+    ]);
+  });
+
+  it("stays quiet on the screen that reports the job inline", () => {
+    renderHook(() => useJobToasts({ current: "/p/p1/images" }));
+    act(() => useJobsStore.getState().upsert({ ...base, state: "running" }));
+    act(() => useJobsStore.getState().upsert(base));
+    expect(useToastStore.getState().toasts).toEqual([]);
+  });
+
+  it("'Show log' hands the failed job to openJob", () => {
+    const openJob = vi.fn();
+    renderHook(() => useJobToasts({ current: "/jobs" }, openJob));
+    act(() => useJobsStore.getState().upsert(libraryTrain));
+    act(() => useJobsStore.getState().upsert({ ...libraryTrain, state: "failed" }));
+    act(() => useToastStore.getState().toasts[0].action?.onClick());
+    expect(openJob).toHaveBeenCalledWith(expect.objectContaining({ id: "j-lib", state: "failed" }));
   });
 });

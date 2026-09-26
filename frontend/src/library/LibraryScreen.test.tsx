@@ -42,7 +42,7 @@ const rowNames = () =>
     .map((b) => b.textContent);
 
 describe("LibraryScreen", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("lists the library models and filters them by origin and task", async () => {
     const { requests } = renderScreen(base());

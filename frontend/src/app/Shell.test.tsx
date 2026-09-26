@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { Route, Routes } from "react-router-dom";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { collectDiagnostics } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
-import { exampleOverview, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { exampleOverview, exampleProject, fakeClient, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { Shell } from "./Shell";
+
+function Where() {
+  const { pathname, search } = useLocation();
+  return <output data-testid="where">{pathname + search}</output>;
+}
 
 function renderShell(route: string, projectStatus = 200) {
   const { api, requests } = fakeClient([
@@ -28,6 +33,7 @@ function renderShell(route: string, projectStatus = 200) {
       <Route path="/" element={<Shell />}>
         <Route path="projects" element={<p>projects page</p>} />
         <Route path="models/library" element={<p>library page</p>} />
+        <Route path="jobs" element={<Where />} />
         <Route path="p/:projectId/images" element={<input aria-label="Filter" />} />
         <Route path="p/:projectId/maps/:mapId" element={<p>map surface</p>} />
       </Route>
@@ -38,7 +44,18 @@ function renderShell(route: string, projectStatus = 200) {
 }
 
 describe("Shell", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
+
+  it("toasts a failed library job on an app route; 'Show log' opens it in the Jobs section", async () => {
+    renderShell("/models/library");
+    expect(await screen.findByText("library page")).toBeInTheDocument();
+    const lib = { ...runningJob, id: "j-lib", project_id: "library", type: "train" as const };
+    act(() => useJobsStore.getState().upsert(lib));
+    act(() => useJobsStore.getState().upsert({ ...lib, state: "failed", error: "CUDA out of memory" }));
+    expect(await screen.findByText("Training failed: CUDA out of memory")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show log" }));
+    expect(await screen.findByTestId("where")).toHaveTextContent("/jobs?state=failed&job=j-lib");
+  });
 
   it("frames an app page with the rail and the top bar, and no project tabs", async () => {
     renderShell("/projects");

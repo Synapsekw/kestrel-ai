@@ -34,7 +34,7 @@ const posted = (requests: { method: string; url: string; body?: unknown }[]) =>
   requests.filter((r) => r.method === "POST" && r.url.endsWith("/detect-exports"));
 
 describe("DetectExportForm", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("exports the CSV of every source by default", async () => {
     const { requests } = renderForm();

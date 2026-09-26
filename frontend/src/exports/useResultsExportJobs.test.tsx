@@ -7,7 +7,7 @@ import { useJobsStore } from "@/store/jobs";
 import { useResultsExportJobs } from "./useResultsExportJobs";
 
 describe("useResultsExportJobs", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("surfaces a finished map export in the same list as results exports, with its folder", async () => {
     const mapExport = {

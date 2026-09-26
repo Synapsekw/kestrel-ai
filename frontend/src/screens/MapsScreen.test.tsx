@@ -61,7 +61,7 @@ function latestLabelLayerOpts(): LabelLayerOptions {
 }
 
 describe("MapsScreen", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("teaches the empty state", async () => {
     const { api } = fakeClient([

@@ -22,7 +22,7 @@ function renderScreen(routes: Parameters<typeof fakeClient>[0]) {
 
 describe("ExportScreen", () => {
   beforeEach(() => {
-    useJobsStore.setState({ jobs: {}, panelOpen: false });
+    useJobsStore.setState({ jobs: {} });
   });
 
   it("shows the Export heading, the results form and points model exports to the library", async () => {

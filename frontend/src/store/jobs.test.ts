@@ -20,7 +20,7 @@ const job = {
 
 describe("jobs store", () => {
   beforeEach(() => {
-    useJobsStore.setState({ jobs: {}, panelOpen: false });
+    useJobsStore.setState({ jobs: {} });
   });
 
   it("applies progress and state events", () => {
@@ -97,7 +97,7 @@ describe("jobs store", () => {
     expect(useJobsStore.getState().jobs.j1.finished_at).toBe("2026-09-17T00:05:00Z");
   });
 
-  it("ignores events for unknown jobs, merges lists and toggles the panel", () => {
+  it("ignores events for unknown jobs, and merges lists", () => {
     useJobsStore.getState().applyEvent({
       type: "job.progress",
       project_id: "p",
@@ -111,7 +111,5 @@ describe("jobs store", () => {
     useJobsStore.getState().upsertMany([{ ...job, id: "j2", state: "running" }]);
     expect(Object.keys(useJobsStore.getState().jobs).sort()).toEqual(["j1", "j2"]);
     expect(useJobsStore.getState().jobs.j2.state).toBe("running");
-    useJobsStore.getState().setPanelOpen(true);
-    expect(useJobsStore.getState().panelOpen).toBe(true);
   });
 });

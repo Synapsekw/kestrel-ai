@@ -31,7 +31,7 @@ const base = [
 
 describe("QueryScreen", () => {
   beforeEach(() => {
-    useJobsStore.setState({ jobs: {}, panelOpen: false });
+    useJobsStore.setState({ jobs: {} });
     useNavigationStore.setState({ ids: [], source: null });
   });
 

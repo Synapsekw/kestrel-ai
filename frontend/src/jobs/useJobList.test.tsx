@@ -11,7 +11,7 @@ function wrapperFor(api: ReturnType<typeof fakeClient>["api"]) {
 }
 
 describe("useInitialJobs", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("loads the project's jobs into the store once, so the counter is right before the panel opens", async () => {
     const { api, requests } = fakeClient([

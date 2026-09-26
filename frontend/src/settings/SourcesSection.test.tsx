@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { useLocation } from "react-router-dom";
 import {
   errorBody,
   exampleSource,
@@ -14,16 +15,28 @@ import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { SourcesSection } from "./SourcesSection";
 
-describe("SourcesSection", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+/** Shows the router location, so a test can see where the section navigated. */
+function Where() {
+  const { pathname, search } = useLocation();
+  return <output data-testid="where">{pathname + search}</output>;
+}
 
-  it("lists sources with counts, loads stats on demand and re-imports the same folder", async () => {
+describe("SourcesSection", () => {
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
+
+  it("lists sources with counts, loads stats on demand and re-imports the same folder into the Jobs section", async () => {
     const { api, requests } = fakeClient([
       { method: "GET", path: /\/sources$/, body: { items: [exampleSource], next_cursor: null } },
       { method: "GET", path: /\/sources\/[^/]+\/stats$/, body: exampleStats },
       { method: "POST", path: /\/sources$/, status: 202, body: { source: exampleSource, job: runningJob } },
     ]);
-    renderWithProviders(<SourcesSection projectId={PROJECT_ID} />, { api });
+    renderWithProviders(
+      <>
+        <SourcesSection projectId={PROJECT_ID} />
+        <Where />
+      </>,
+      { api },
+    );
     const section = await screen.findByTestId("sources-section");
     await waitFor(() => expect(section).toHaveTextContent("ahmadia"));
     expect(section).toHaveTextContent("3299 images");
@@ -34,7 +47,7 @@ describe("SourcesSection", () => {
     expect(section).toHaveTextContent("2 groups");
     expect(requests[1].url).toBe(`/api/v1/projects/${PROJECT_ID}/sources/${SOURCE_ID}/stats`);
     fireEvent.click(screen.getByRole("button", { name: "Re-import new files" }));
-    await waitFor(() => expect(useJobsStore.getState().panelOpen).toBe(true));
+    await waitFor(() => expect(screen.getByTestId("where")).toHaveTextContent(`/jobs?job=${runningJob.id}`));
     expect(requests[2]).toMatchObject({
       method: "POST",
       url: `/api/v1/projects/${PROJECT_ID}/sources`,

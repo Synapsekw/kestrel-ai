@@ -8,9 +8,9 @@ import { ImportImagesDialog } from "./ImportImagesDialog";
 const ADVANCED = "Advanced settings (the defaults suit most imports)";
 
 describe("ImportImagesDialog", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
-  it("prefills the project's import defaults, posts the folder and opens the jobs panel", async () => {
+  it("prefills the project's import defaults, posts the folder and tracks the job", async () => {
     const { api, requests } = fakeClient([
       { method: "POST", path: /\/sources$/, status: 202, body: { source: exampleSource, job: runningJob } },
     ]);
@@ -42,8 +42,6 @@ describe("ImportImagesDialog", () => {
       },
     });
     expect(useJobsStore.getState().jobs[runningJob.id]).toBeDefined();
-    // The Images screen reports the import in its own banner; the panel no longer covers the toolbar.
-    expect(useJobsStore.getState().panelOpen).toBe(false);
   });
 
   it("sends the site name when given and shows the envelope message on failure", async () => {

@@ -6,7 +6,7 @@ import { useJobsStore } from "@/store/jobs";
 import { JobCard } from "./JobCard";
 
 describe("JobCard", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("shows progress and message, cancels through the api and toggles the log", async () => {
     const { api, requests } = fakeClient([

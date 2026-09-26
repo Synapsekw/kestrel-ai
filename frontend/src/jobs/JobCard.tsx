@@ -57,7 +57,7 @@ const STATE_TONE: Record<Job["state"], PillTone> = {
   cancelled: "neutral",
 };
 
-/** One job as a row of the jobs drawer: type icon, name, state, progress, elapsed time, actions. */
+/** One job as a card (dataset and export screens): type icon, name, state, progress, elapsed time, actions. */
 export function JobCard({ projectId, job, showLog = false }: Props) {
   const api = useApi();
   const active = isActiveJob(job);

@@ -52,7 +52,7 @@ export function useJobList(
 
 /**
  * One `GET /jobs` when a project opens, so the active-job counter and the training screen's recent
- * jobs are right after a restart instead of staying empty until the jobs panel is opened.
+ * jobs are right after a restart instead of staying empty until the Jobs section is opened.
  */
 export function useInitialJobs(projectId: string): void {
   const api = useApi();

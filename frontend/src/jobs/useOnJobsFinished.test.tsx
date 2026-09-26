@@ -5,7 +5,7 @@ import { useJobsStore } from "@/store/jobs";
 import { useOnJobsFinished } from "./useOnJobsFinished";
 
 describe("useOnJobsFinished", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("fires once when a job of the watched type leaves the active states", () => {
     const onFinished = vi.fn();

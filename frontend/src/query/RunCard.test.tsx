@@ -18,7 +18,7 @@ import { RunCard } from "./RunCard";
 const RUN_JOB_ID = exampleQueryRun.job_id as string;
 
 describe("RunCard", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("shows the run, its job, the box count, the review link and promotes", async () => {
     const { api, requests } = fakeClient([

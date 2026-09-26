@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Job } from "@contract/client";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { toast } from "./toastStore";
@@ -169,20 +169,21 @@ export function reportedInline(job: Job, pathname: string): boolean {
 }
 
 /**
- * Shows a toast when a job of this project that was seen running reaches a terminal state, unless
- * the current screen already reports it (`pathnameRef` is read at the moment the job ends).
- * Failures carry a "Show log" action that opens the jobs drawer.
+ * Shows a toast when any job that was seen running, a project's or the library's, reaches a
+ * terminal state, unless the current screen already reports it (`pathnameRef` is read at the moment
+ * the job ends). Failures carry a "Show log" action that calls `openJob` (the Shell opens the job in
+ * the Jobs section).
  */
-export function useJobToasts(
-  projectId: string | undefined,
-  pathnameRef: { current: string } = NO_PATH,
-): void {
+export function useJobToasts(pathnameRef: { current: string } = NO_PATH, openJob?: (job: Job) => void): void {
+  // Read at click time: a new callback per render must not resubscribe and forget running jobs.
+  const openJobRef = useRef(openJob);
   useEffect(() => {
-    if (!projectId) return;
+    openJobRef.current = openJob;
+  }, [openJob]);
+  useEffect(() => {
     const active = new Set<string>();
     const scan = (jobs: Record<string, Job>) => {
       for (const job of Object.values(jobs)) {
-        if (job.project_id !== projectId) continue;
         if (isActiveJob(job)) {
           active.add(job.id);
           continue;
@@ -192,7 +193,7 @@ export function useJobToasts(
         if (job.state === "failed") {
           toast("danger", jobToastText(job), {
             label: "Show log",
-            onClick: () => useJobsStore.getState().setPanelOpen(true),
+            onClick: () => openJobRef.current?.(job),
           });
         } else if (job.state === "cancelled") {
           toast("info", jobToastText(job));
@@ -203,5 +204,5 @@ export function useJobToasts(
     };
     scan(useJobsStore.getState().jobs);
     return useJobsStore.subscribe((s) => scan(s.jobs));
-  }, [projectId, pathnameRef]);
+  }, [pathnameRef]);
 }

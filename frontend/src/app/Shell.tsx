@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Outlet, useLocation, useParams } from "react-router-dom";
+import { Outlet, useLocation, useNavigate, useParams } from "react-router-dom";
 import type { Project } from "@contract/client";
 import { AgentDrawer } from "@/agent/AgentDrawer";
 import { useAgentPanel } from "@/agent/panelStore";
@@ -7,7 +7,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { fetchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
-import { JobsPanel } from "@/jobs/JobsPanel";
+import { jobUrl } from "@/jobs/jobsFilters";
 import { useInitialJobs } from "@/jobs/useJobList";
 import { useChangesStore } from "@/store/changes";
 import { Toaster, useJobToasts } from "@/ui";
@@ -58,7 +58,9 @@ export function Shell() {
   useEffect(() => {
     pathnameRef.current = pathname;
   }, [pathname]);
-  useJobToasts(projectId, pathnameRef);
+  const navigate = useNavigate();
+  // App-wide: library jobs and jobs of any project toast on every route; "Show log" opens the job.
+  useJobToasts(pathnameRef, (job) => navigate(jobUrl(job)));
   useEffect(() => {
     useChangesStore.getState().setOpenProject(projectId ?? null);
   }, [projectId]);
@@ -85,8 +87,6 @@ export function Shell() {
             <Outlet />
           </PageTransition>
         </main>
-        {/* Kept until the Jobs section replaces it: toasts' "Show log" and re-imports open it. */}
-        {projectId && <JobsPanel projectId={projectId} />}
         <AgentDrawer
           projectId={projectId}
           projectName={project?.name ?? null}

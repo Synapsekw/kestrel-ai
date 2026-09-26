@@ -9,11 +9,8 @@ export function isActiveJob(job: Job): boolean {
 
 export interface JobsState {
   jobs: Record<string, Job>;
-  /** The global jobs slide-over (Shell). */
-  panelOpen: boolean;
   upsert: (job: Job) => void;
   upsertMany: (jobs: Job[]) => void;
-  setPanelOpen: (open: boolean) => void;
   /** `nowIso` stamps `finished_at` on terminal `job.state` events (injected by tests). */
   applyEvent: (ev: AppEvent, nowIso?: string) => void;
   active: () => Job[];
@@ -23,7 +20,6 @@ export const selectActiveCount = (s: JobsState): number => Object.values(s.jobs)
 
 export const useJobsStore = create<JobsState>((set, get) => ({
   jobs: {},
-  panelOpen: false,
   upsert: (job) => set((s) => ({ jobs: { ...s.jobs, [job.id]: job } })),
   upsertMany: (jobs) =>
     set((s) => {
@@ -31,7 +27,6 @@ export const useJobsStore = create<JobsState>((set, get) => ({
       for (const job of jobs) next[job.id] = job;
       return { jobs: next };
     }),
-  setPanelOpen: (open) => set({ panelOpen: open }),
   applyEvent: (ev, nowIso = new Date().toISOString()) =>
     set((s) => {
       const id = ev.job_id;

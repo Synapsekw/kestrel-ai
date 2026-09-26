@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 import { beforeEach, describe, it, expect, vi } from "vitest";
-import { act, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import type { Job } from "@contract/client";
-import { JobsButton } from "@/jobs/JobsButton";
-import { useJobsStore } from "@/store/jobs";
+import { selectActiveCount, useJobsStore } from "@/store/jobs";
 import { fakeClient, runningJob } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { useLibraryJobs } from "./useLibraryJobs";
@@ -21,16 +20,15 @@ const importJob: Job = {
 };
 
 describe("useLibraryJobs", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
-  it("upserts library jobs into the store so the jobs button counts them", async () => {
+  it("upserts library jobs into the store so the active count includes them", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/library\/jobs$/, body: { items: [importJob], next_cursor: null } },
     ]);
     renderHook(() => useLibraryJobs(undefined, { intervalMs: 20 }), { wrapper: wrapperFor(api) });
-    render(<JobsButton />);
     await waitFor(() => expect(useJobsStore.getState().jobs[importJob.id]).toBeDefined());
-    expect(screen.getByRole("button", { name: "1 active job" })).toBeInTheDocument();
+    expect(selectActiveCount(useJobsStore.getState())).toBe(1);
   });
 
   it("polls while a job runs and reports each finished job once", async () => {

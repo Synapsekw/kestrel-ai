@@ -6,7 +6,7 @@ import { useJobsStore } from "@/store/jobs";
 import { NewDatasetForm } from "./NewDatasetForm";
 
 describe("NewDatasetForm", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("posts name, split, fraction and seed without image_ids, then shows the job", async () => {
     const { api, requests } = fakeClient([

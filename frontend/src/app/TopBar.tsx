@@ -150,10 +150,7 @@ export function TopBar({
         label={projectId ? "Project agent" : "Setup agent"}
         aria-controls={projectId ? "project-agent" : "setup-agent"}
         aria-expanded={agentOpen}
-        onClick={() => {
-          useJobsStore.getState().setPanelOpen(false);
-          useAgentPanel.getState().setOpen(true);
-        }}
+        onClick={() => useAgentPanel.getState().setOpen(true)}
       />
     </header>
   );

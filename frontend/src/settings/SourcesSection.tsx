@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Source, Stats } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
 import { createSource, fetchAllSources, fetchSourceStats, updateSource } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
+import { jobUrl } from "@/jobs/jobsFilters";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
 import { formatDate, formatLocalDate } from "@/library/modelLabels";
 import { SurveyDateCell } from "@/sources/SurveyDateCell";
@@ -61,6 +63,7 @@ function SourceRow({
   const [error, setError] = useState<string | null>(null);
   const [capturedOn, setCapturedOn] = useState(source.captured_on);
   const [reimportJobId, setReimportJobId] = useState<string | null>(null);
+  const navigate = useNavigate();
   const { job } = useTrackedJob(projectId, reimportJobId);
   // The counts only change once the import job has actually run, so the re-list waits for it.
   const finished = job !== null && !isActiveJob(job);
@@ -93,9 +96,10 @@ function SourceRow({
         settings: source.settings,
       });
       useJobsStore.getState().upsert(result.job);
-      useJobsStore.getState().setPanelOpen(true);
       setReimportJobId(result.job.id);
       setStatus(`Re-import started (job ${result.job.id.slice(0, 8)})`);
+      // The Jobs section follows the re-import with its log (spec 2026-09-26-foundation section 5.1).
+      navigate(jobUrl(result.job));
     } catch (e) {
       pushLog(`re-import ${source.id} failed: ${messageOf(e, String(e))}`);
       setError(messageOf(e, "could not start the re-import"));

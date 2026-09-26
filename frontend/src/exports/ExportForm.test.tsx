@@ -38,7 +38,7 @@ function renderForm(props: Partial<FormProps> = {}) {
 }
 
 describe("ExportForm", () => {
-  beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+  beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
   it("shows the export summary and defaults to CSV + HTML", () => {
     renderForm();

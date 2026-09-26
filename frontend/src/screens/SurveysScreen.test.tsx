@@ -8,7 +8,7 @@ import { useJobsStore } from "@/store/jobs";
 const route = `/p/${PROJECT_ID}/surveys`;
 const path = "/p/:projectId/surveys";
 
-beforeEach(() => useJobsStore.setState({ jobs: {}, panelOpen: false }));
+beforeEach(() => useJobsStore.setState({ jobs: {} }));
 
 describe("SurveysScreen", () => {
   it("lists surveys newest first with the change since the previous one", async () => {
