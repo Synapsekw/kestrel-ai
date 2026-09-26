@@ -7,7 +7,7 @@ import logging
 import shutil
 from pathlib import Path
 
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import delete, func, or_, select, tuple_, update
 
 from app.db.models import Job
 from app.errors import AppError, not_found
@@ -338,6 +338,11 @@ def mark_export_queued(lib: LibraryHandle, dataset_id: str, job_id: str) -> None
     """Record the queued export. The job may already have started (it records itself) or even
     finished by now; its own writes win, so a quick export never reads `building` again."""
     with lib.session() as s:
-        row = s.get(LibraryDataset, dataset_id)
-        if row is not None and row.export_job_id != job_id:
-            row.export_state, row.export_job_id = "building", job_id
+        s.execute(
+            update(LibraryDataset)
+            .where(
+                LibraryDataset.id == dataset_id,
+                or_(LibraryDataset.export_job_id.is_(None), LibraryDataset.export_job_id != job_id),
+            )
+            .values(export_state="building", export_job_id=job_id)
+        )

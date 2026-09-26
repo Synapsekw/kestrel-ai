@@ -1274,7 +1274,9 @@ class CancelJob(Tool):
     )
 
     async def run(self, ctx, args):
-        j = await ctx.api.call("POST", f"/jobs/{_seg(args['job_id'])}/cancel")
+        job_id = _seg(args["job_id"])
+        base, _ = await _find_job(ctx, job_id)  # datasets and training are library jobs
+        j = await ctx.api.call("POST", f"{base}/{job_id}/cancel")
         return _ok(_job(j), f"Asked the {j['type']} job to stop")
 
 

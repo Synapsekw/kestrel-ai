@@ -575,7 +575,7 @@ def test_execute_approved_deletes_the_prepared_images(tool, agent, client, proje
 
 
 def test_dataset_training_and_deletion_flow(
-    tool, agent, app, client, project_id, project, image_ids, model_id, wait_job
+    tool, agent, app, client, project_id, project, image_ids, model_id
 ):
     cls = project["classes"][0]["id"]
     for image_id in image_ids[:4]:
@@ -588,6 +588,8 @@ def test_dataset_training_and_deletion_flow(
     body = ok(created)
     assert created.job_ids == []  # a library job, like starters
     assert wait_library_job(client, body["job_id"])["state"] == "succeeded"
+    waited = ok(tool("wait_for_job", {"job_id": body["job_id"], "seconds": 5}))  # the library path
+    assert waited["finished"] is True and waited["state"] == "succeeded" and waited["type"] == "dataset_build"
     ds = ok(tool("get_dataset", {"dataset_id": body["dataset_id"]}))
     assert ds["name"] == "v1" and ds["image_count"] == 4
     assert ok(tool("list_datasets"))["datasets"][0]["id"] == body["dataset_id"]
@@ -603,6 +605,22 @@ def test_dataset_training_and_deletion_flow(
     assert isinstance(delete, Prepared) and "v1" in delete.title
     ok(agent(lambda ctx: execute_approved(ctx, "delete_dataset", delete.args)))
     assert ok(tool("list_datasets")) == {"datasets": []}
+
+
+def test_cancel_job_cancels_a_library_dataset_job(tool, app, project_id):
+    """create_dataset starts a library job; cancel_job must reach it through the library route."""
+    from app.db.models import Job
+
+    lib = app.state.library
+    with lib.session() as s:
+        job = Job(type="dataset_build", state="queued", params={"dataset_id": "gone"}, log_path="")
+        s.add(job)
+        s.flush()
+        job_id = job.id
+    out = ok(tool("cancel_job", {"job_id": job_id}))
+    assert out["id"] == job_id and out["state"] == "cancelled"
+    with lib.session() as s:
+        assert s.get(Job, job_id).state == "cancelled"
 
 
 @pytest.mark.parametrize(
