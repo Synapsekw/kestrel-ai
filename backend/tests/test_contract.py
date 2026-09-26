@@ -40,7 +40,8 @@ def test_stub_list_matches_routers(app):
 
 
 def test_refusal_allowances_name_real_operations_and_declared_statuses():
-    """Every REFUSES_VALID_DATA entry is a real operationId and each status is declared for it."""
+    """Every REFUSES_VALID_DATA and CONTRACT_FOLLOWUP entry is a real operationId; each
+    REFUSES_VALID_DATA status is also declared for its operation."""
     # REFUSES_VALID_DATA is empty at F0, so this loop checks nothing; it becomes live as S1-S3 add
     # entries.
     ops = {
@@ -53,6 +54,8 @@ def test_refusal_allowances_name_real_operations_and_declared_statuses():
         assert op_id in ops, op_id
         declared = {int(code) for code in ops[op_id]["responses"] if str(code).isdigit()}
         assert statuses <= declared, (op_id, sorted(statuses - declared))
+    for op_id in CONTRACT_FOLLOWUP:
+        assert op_id in ops, op_id
 
 
 def test_every_spec_path_is_routed(app):
@@ -148,6 +151,21 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
 }
 
+# Transitional (foundation unit BK, 2026-09-26): these routes were hidden behind the kind guard's
+# `409` until BK removed it (spec 2026-09-26-foundation section 6.1). With the guard gone, the
+# backend refuses some schema-valid bodies with `422 validation_error` for a rule the contract does
+# not declare or express - runs: neither `model_id` nor `provider`; site areas: the
+# `polygon_wgs84`/`map_id`+`polygon_px` shape rules; surfaces: an empty `name` meets pydantic's
+# `min_length=1`. The fix is a contract change (declare `422` on `createRuns`/`createSiteArea`/
+# `updateSiteArea`, `minLength: 1` on `SurfaceBuildRequest.name`, or matching backend error codes),
+# not a backend one - BK does not edit `contract/openapi.yaml`. Each entry is deleted with its fix.
+CONTRACT_FOLLOWUP: dict[str, str] = {
+    "createRuns": "refuses a body with neither model_id nor provider; undeclared in the contract",
+    "createSiteArea": "refuses a body whose polygon shape breaks the polygon_wgs84/map_id rule",
+    "updateSiteArea": "refuses a body whose polygon shape breaks the polygon_wgs84/map_id rule",
+    "createSurface": "an empty name meets pydantic's min_length=1; undeclared in the contract",
+}
+
 
 @pytest.fixture
 def project_id(client, project_dir) -> str:
@@ -194,7 +212,12 @@ def test_responses_conform(case, app, project_id, tmp_path):
     # default; those legitimately hit FastAPI's own `validation_error`, so REFUSES_VALID_DATA (a
     # business-rule refusal of a *schema-valid* request) only judges positively-generated cases.
     is_positive = case.meta is None or case.meta.generation.mode == GenerationMode.POSITIVE
-    if is_positive and response.status_code in REFUSES_VALID_DATA.get(op_id, set()):
+    if is_positive and op_id in CONTRACT_FOLLOWUP and response.status_code == 422:
+        # A transitional allowance (see CONTRACT_FOLLOWUP): the contract does not yet declare this
+        # refusal, so `validation_error` is allowed here too, unlike REFUSES_VALID_DATA below.
+        assert response.json().get("error", {}).get("code"), response.text
+        excluded.append(positive_data_acceptance)
+    elif is_positive and response.status_code in REFUSES_VALID_DATA.get(op_id, set()):
         # A deliberate refusal of a schema-valid request: skip only positive-data acceptance.
         code = response.json()["error"]["code"]
         assert code and code != "validation_error", response.text
