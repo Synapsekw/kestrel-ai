@@ -69,4 +69,15 @@ describe("Combobox", () => {
     expect(screen.queryByRole("listbox")).toBeNull();
     expect(screen.getByRole("button", { name: "Type: Spalling" })).toHaveFocus();
   });
+
+  it("keeps ArrowDown on the closed trigger from reaching the workspace shortcuts", async () => {
+    const onWindow = vi.fn();
+    window.addEventListener("keydown", onWindow);
+    render(<Combobox label="Type" items={ITEMS} value="crack" onChange={() => {}} />);
+    screen.getByRole("button", { name: "Type: Crack" }).focus();
+    await userEvent.keyboard("{ArrowDown}");
+    expect(onWindow).not.toHaveBeenCalled();
+    expect(screen.getByRole("combobox", { name: "Type" })).toBeInTheDocument();
+    window.removeEventListener("keydown", onWindow);
+  });
 });
