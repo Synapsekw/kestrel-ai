@@ -9,6 +9,32 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Foundation SH: app shell — 2026-09-26 (`task/f-sh`, merged to `main`)
+
+Spec `docs/superpowers/specs/2026-09-26-foundation-design.md` §5, §6.2, plan
+`docs/superpowers/plans/2026-09-26-foundation-sh-shell.md`. The Aero glass shell S1 and S2 build on.
+
+What changed:
+
+- **Shell:** a 64px rail (Projects, Models, Catalogue, Jobs, Settings), a top bar (breadcrumb with
+  the project's live dot, a Ctrl K palette field, the route's actions, the running pill, the agent
+  button), the seven project tabs with counts from the overview and a More menu, and a page
+  entrance keyed on the tab. Full-bleed map viewer without tabs.
+- **Palette:** Go to (sections, tabs, pages, recent projects), Actions (route actions, each
+  importer, New project, reduced effects), project search; screens add commands with `useCommands`.
+- **Routes:** `routes/projectRoutes.tsx` and `routes/appRoutes.tsx` (S1/S2 add entries there only),
+  redirects for every old address with the query kept, an in-shell not-found page.
+- **No project kind in the UI:** the kind sidebar, step pipeline, next-step bar and kind routes are
+  deleted; Review, Export and the selection bar offer everything to every project; "Label next"
+  and "Use in dataset…" replace the Label step and Add to dataset.
+- **Interim hosts:** Images, Maps (a Data-list table with survey-date correction) and
+  Measurements host today's screens on Aero glass tokens; Overview, Findings, Catalogue,
+  Datasets, Training, Reports and Jobs are placeholders or interim pages until S1, S2 and R.
+
+Verified on the rebased branch (2026-09-26) with the AGENTS.md gate: contract clean; ruff clean;
+pytest 2263 passed, 11 skipped, 9 deselected; frontend lint clean, vitest 1287 passed (226 files),
+build ok; e2e 89 passed; cargo test skipped (no frozen sidecar in the worktree).
+
 ## Design surfaces (S3) — 2026-09-24
 
 Import a design as a `Surface` (`kind = design`) on the cloud DSM's own grid: a DEM GeoTIFF (copied
