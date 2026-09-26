@@ -1,10 +1,9 @@
 """foundation: project types, findings, counts, activity, migration bookkeeping
 
 The one project schema change of the foundation sub-project (spec 2026-09-26-foundation section
-11.1). Only new tables and one new column (`project.finding_seq`); no row is rewritten here. Unit BK
-(which removes `project.kind`) has not merged onto this branch yet, so this revision does not drop
-that column — a later task adds the drop once BK is in. The data steps are MG's job (section 11.4),
-and MG's copy-first backup runs before this revision (section 11.2).
+11.1). New tables, one new column (`project.finding_seq`) and one dropped column (`project.kind`,
+which unit BK unmapped from the Project model); no row is rewritten here. The data steps are MG's
+job (section 11.4), and MG's copy-first backup runs before this revision (section 11.2).
 
 Revision ID: 0010
 Revises: 0009
@@ -25,6 +24,7 @@ depends_on = None
 def upgrade() -> None:
     with op.batch_alter_table("project") as b:
         b.add_column(sa.Column("finding_seq", sa.Integer(), nullable=False, server_default="0"))
+        b.drop_column("kind")
     op.create_index("ix_box_class", "box", ["class_id"])
     op.create_table(
         "project_type",
@@ -160,3 +160,4 @@ def downgrade() -> None:
     op.drop_index("ix_box_class", table_name="box")
     with op.batch_alter_table("project") as b:
         b.drop_column("finding_seq")
+        b.add_column(sa.Column("kind", sa.String(), nullable=False, server_default="train"))

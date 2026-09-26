@@ -1,7 +1,6 @@
 """Migration 0010 (spec 2026-09-26-foundation section 11.1): the project type list, the finding
 tables, the counts, the activity feed and MG's bookkeeping tables. A project at 0009 upgrades with
-every row it had, and the anchor CHECK and the box foreign key hold. `project.kind` is not dropped
-by this revision (unit BK, which removes it, has not merged yet; a later task adds that drop)."""
+every row it had and without `project.kind`, and the anchor CHECK and the box foreign key hold."""
 
 import sqlite3
 
@@ -119,6 +118,7 @@ def test_a_0009_project_upgrades_with_its_rows_and_without_kind(engine):
         assert (row[0], row[1], row[3]) == ("p1", "Old", 0)
         assert "excavator" in row[2]
         assert c.exec_driver_sql("SELECT count(*) FROM box").scalar_one() == 1
+    assert "kind" not in _columns(engine, "project")
 
 
 @pytest.mark.parametrize("table", sorted(TABLES))
