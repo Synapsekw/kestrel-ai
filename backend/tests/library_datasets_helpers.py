@@ -96,3 +96,27 @@ def add_box(
         s.add(row)
         s.flush()
         return row.id
+
+
+def create_body(name: str, project_ids: list[str], type_ids: list[str], **over) -> dict:
+    body = {
+        "name": name,
+        "task": "detect",
+        "filter": {"project_ids": project_ids, "type_ids": type_ids, "reviewed_only": False},
+        "split_method": "by_group",
+        "val_fraction": 0.4,
+        "seed": 1,
+    }
+    body.update(over)
+    return body
+
+
+def build_dataset(client, body: dict) -> dict:
+    """POST the dataset, wait for its `dataset_build` job, and return the finished dataset."""
+    from library_helpers import wait_library_job
+
+    r = client.post(f"{LIB}/datasets", json=body)
+    assert r.status_code == 202, r.text
+    done = wait_library_job(client, r.json()["job"]["id"])
+    assert done["state"] == "succeeded", done["error"]
+    return client.get(f"{LIB}/datasets/{r.json()['dataset']['id']}").json()

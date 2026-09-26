@@ -135,6 +135,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # CRS-less cloud (`unsupported_crs`), a missing source (`source_missing`), a Z clip upside down
     # (`invalid_build_request`). Never `validation_error`: F0's branch asserts that.
     "putLibraryModelClassMap": {422},  # unknown_type (bad/archived type id) or validation_error (bad key)
+    "createLibraryDataset": {409},  # conflict: a whitespace-only name (minLength cannot say "not blank")
     "createSurface": {422},
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
@@ -224,16 +225,14 @@ def test_responses_conform(case, app, project_id, tmp_path):
         # The contract is ahead of the backend until BACKEND_PENDING[op_id] lands.
         assert response.status_code < 500, response.text
         return
-    if case.method.upper() != case.operation.method.upper():
-        # unsupported_method's own negative case: a literal path (e.g. /library/datasets/preview)
-        # shares a prefix with a sibling parameter path (/library/datasets/{datasetId}), so a
-        # mismatched method can land on that sibling's own operation - a real route, or still one
-        # of *its* stubs - rather than a 405. Same aliasing the checks below already exclude for;
-        # only the request's own method is checked against EXPECTED_STUBS.
-        is_stub = response.status_code == 501 and response.json()["error"]["code"] == "not_implemented"
-        assert is_stub or response.status_code < 500, response.text
+    is_stub = response.status_code == 501 and response.json()["error"]["code"] == "not_implemented"
+    if is_stub and case.method.upper() != case.operation.method.upper():
+        # unsupported_method's own negative case: a literal path shares a prefix with a sibling
+        # parameter path, so a mismatched method can land on one of that sibling's still-stubbed
+        # operations rather than a 405. Only the request's own method is checked against
+        # EXPECTED_STUBS; a wrong-method answer from a real route is validated below as usual.
         return
-    if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
+    if is_stub:
         # A stub: the operation is routed but not built yet; it must still answer in the error envelope.
         assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"
         checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
