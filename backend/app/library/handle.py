@@ -29,6 +29,7 @@ class LibraryHandle:
 
     runs_dir = property(lambda s: s.folder / "runs")
     models_dir = property(lambda s: s.folder / "models")
+    datasets_dir = property(lambda s: s.folder / "datasets")
 
     @contextmanager
     def session(self) -> Iterator[Session]:
@@ -50,7 +51,7 @@ def _db_url(folder: Path) -> str:
 def open_library(data_dir: Path) -> LibraryHandle:
     """Create the library folders if needed and bring `library.db` to its newest schema."""
     root = library_root(data_dir)
-    for sub in ("runs", "models"):
+    for sub in ("runs", "models", "datasets"):
         (root / sub).mkdir(parents=True, exist_ok=True)
     engine = create_engine(_db_url(root), future=True, connect_args={"check_same_thread": False})
 
