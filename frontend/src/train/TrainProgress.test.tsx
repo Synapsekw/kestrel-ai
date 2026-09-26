@@ -57,7 +57,10 @@ describe("TrainProgress", () => {
     });
     renderWithProviders(<TrainProgress projectId={PROJECT_ID} jobId={runningJob.id} />, { api });
     expect(screen.getByText("Training finished: the model is in the library.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open model" })).toHaveAttribute("href", "/library?model=m9");
+    expect(screen.getByRole("link", { name: "Open model" })).toHaveAttribute(
+      "href",
+      "/models/library?model=m9",
+    );
     expect(screen.getByTestId("map50")).toHaveTextContent("71.0%");
     expect(screen.getByTestId("elapsed")).toHaveTextContent("14 min 59 s");
   });

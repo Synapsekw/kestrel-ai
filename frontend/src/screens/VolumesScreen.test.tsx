@@ -48,15 +48,15 @@ describe("VolumesScreen", () => {
     const { api } = fakeClient(base([], [], []));
     renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/volumes`,
-      path: "/p/:projectId/volumes",
+      route: `/p/${PROJECT_ID}/measurements`,
+      path: "/p/:projectId/measurements",
     });
     expect(await screen.findByText("Import a point cloud first")).toBeInTheDocument();
     const second = fakeClient(base([], []));
     renderWithProviders(<VolumesScreen />, {
       api: second.api,
-      route: `/p/${PROJECT_ID}/volumes`,
-      path: "/p/:projectId/volumes",
+      route: `/p/${PROJECT_ID}/measurements`,
+      path: "/p/:projectId/measurements",
     });
     expect(await screen.findByText("Build a surface from a point cloud")).toBeInTheDocument();
   });
@@ -71,15 +71,15 @@ describe("VolumesScreen", () => {
     const empty = fakeClient([notBuilt, ...base([], [], [])]);
     renderWithProviders(<VolumesScreen />, {
       api: empty.api,
-      route: `/p/${PROJECT_ID}/volumes`,
-      path: "/p/:projectId/volumes",
+      route: `/p/${PROJECT_ID}/measurements`,
+      path: "/p/:projectId/measurements",
     });
     expect(await screen.findByText("Import a point cloud first")).toBeInTheDocument();
     const listed = fakeClient([notBuilt, ...base([exampleSurface], [exampleMeasurement], [])]);
     renderWithProviders(<VolumesScreen />, {
       api: listed.api,
-      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/volumes/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
     expect(screen.getByRole("list", { name: "Measurements" })).toHaveTextContent("Pile 1");
@@ -92,8 +92,8 @@ describe("VolumesScreen", () => {
     const { api } = fakeClient(base([exampleSurface, other], [moved]));
     const first = renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/volumes/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("May survey");
     expect(vi.mocked(useDiffLayer).mock.calls.at(-1)?.[2]).toBeNull();
@@ -104,8 +104,8 @@ describe("VolumesScreen", () => {
     vi.mocked(useDiffLayer).mockClear();
     renderWithProviders(<VolumesScreen />, {
       api: same.api,
-      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/volumes/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/:measurementId",
     });
     await waitFor(() => expect(vi.mocked(useDiffLayer).mock.calls.at(-1)?.[2]).toContain("/diff-tiles/"));
   });
@@ -115,8 +115,8 @@ describe("VolumesScreen", () => {
     const { api } = fakeClient(base([exampleSurface], [stale]));
     renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/volumes/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/volumes/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
     expect(screen.getByRole("list", { name: "Surfaces" })).toHaveTextContent("From cloud");
@@ -140,8 +140,8 @@ describe("VolumesScreen", () => {
     ]);
     renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/volumes`,
-      path: "/p/:projectId/volumes/*",
+      route: `/p/${PROJECT_ID}/measurements`,
+      path: "/p/:projectId/measurements/*",
     });
     await screen.findByTestId("surface-view");
     fireEvent.click(screen.getByRole("button", { name: /Draw measurement/ }));

@@ -210,7 +210,7 @@ describe("QueryScreen", () => {
     // Synchronous: the models request has not resolved yet, so the hint must not appear early.
     expect(screen.queryByRole("link", { name: "Add a model to the library" })).not.toBeInTheDocument();
     const link = await screen.findByRole("link", { name: "Add a model to the library" });
-    expect(link).toHaveAttribute("href", "/library");
+    expect(link).toHaveAttribute("href", "/models/library");
   });
 
   it("says so when the model library is unavailable or failed, and offers no library hint", async () => {

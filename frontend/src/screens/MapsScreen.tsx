@@ -141,7 +141,7 @@ function MapFacts({ m }: { m: GeoMap }) {
  */
 export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   const { projectId = "", mapId } = useParams();
-  const mapsBase = readOnly ? `/p/${projectId}/past/maps` : `/p/${projectId}/maps`;
+  const mapsBase = `/p/${projectId}/maps`;
   const Heading = readOnly ? "h2" : "h1";
   const api = useApi();
   const navigate = useNavigate();

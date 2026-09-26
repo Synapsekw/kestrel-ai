@@ -37,7 +37,7 @@ describe("job labels", () => {
       resultTarget({ ...runningJob, type: "train", state: "succeeded", result: { model_id: "m9" } }, "p"),
     ).toEqual({
       label: "Open model",
-      to: "/library?model=m9",
+      to: "/models/library?model=m9",
     });
     expect(
       resultTarget(
@@ -56,12 +56,12 @@ describe("job labels", () => {
         },
         "p",
       ),
-    ).toEqual({ label: "Open model", to: "/library?model=m1" });
+    ).toEqual({ label: "Open model", to: "/models/library?model=m1" });
     expect(
       resultTarget({ ...runningJob, type: "dataset", state: "succeeded", result: { dataset_id: "d1" } }, "p"),
     ).toEqual({
       label: "Train on it",
-      to: "/p/p/train",
+      to: "/models/training",
     });
     expect(resultTarget({ ...runningJob, type: "train", state: "succeeded", result: null }, "p")).toBeNull();
     expect(
@@ -72,7 +72,7 @@ describe("job labels", () => {
     ).toBeNull();
     expect(
       resultTarget({ ...runningJob, type: "map_import", state: "succeeded", result: { map_id: "m1" } }, "p"),
-    ).toEqual({ label: "Open sources", to: "/p/p/sources" });
+    ).toEqual({ label: "Open maps", to: "/p/p/maps" });
     // Runs, photo and map, are listed on Runs: the Detect and Maps screens are no longer steps.
     expect(
       resultTarget(
@@ -136,7 +136,7 @@ it("links a downloaded starter to the model and labels it clearly", () => {
     result: { model_id: "m1" },
   };
   expect(jobTitle(job)).toBe("Model download: yolo26n");
-  expect(resultTarget(job, "p")).toEqual({ label: "Open model", to: "/library?model=m1" });
+  expect(resultTarget(job, "p")).toEqual({ label: "Open model", to: "/models/library?model=m1" });
 });
 
 it("titles and links library jobs", () => {
@@ -148,7 +148,7 @@ it("titles and links library jobs", () => {
     result: { model_id: "m2" },
   };
   expect(jobTitle(imported)).toBe("Model import: client-x");
-  expect(resultTarget(imported, "library")).toEqual({ label: "Open model", to: "/library?model=m2" });
+  expect(resultTarget(imported, "library")).toEqual({ label: "Open model", to: "/models/library?model=m2" });
   const starter = {
     ...lib,
     type: "library_starter" as const,
@@ -156,14 +156,14 @@ it("titles and links library jobs", () => {
     result: { model_id: "m3" },
   };
   expect(jobTitle(starter)).toBe("Model download: yolo11n");
-  expect(resultTarget(starter, "library")).toEqual({ label: "Open model", to: "/library?model=m3" });
+  expect(resultTarget(starter, "library")).toEqual({ label: "Open model", to: "/models/library?model=m3" });
   const exported = { ...lib, type: "library_export" as const, params: { model_id: "m4", format: "onnx" } };
   expect(jobTitle(exported)).toBe("Model export");
-  expect(resultTarget(exported, "library")).toEqual({ label: "Open model", to: "/library?model=m4" });
+  expect(resultTarget(exported, "library")).toEqual({ label: "Open model", to: "/models/library?model=m4" });
   const adopted = { ...runningJob, type: "library_adopt" as const, state: "succeeded" as const };
   expect(jobTitle(adopted)).toBe("Moving models to the library");
-  expect(resultTarget(adopted, "p")).toEqual({ label: "Open library", to: "/library" });
+  expect(resultTarget(adopted, "p")).toEqual({ label: "Open library", to: "/models/library" });
   const moved = { ...runningJob, type: "map_move" as const, state: "succeeded" as const };
   expect(jobTitle(moved)).toBe("Map move");
-  expect(resultTarget(moved, "p")).toEqual({ label: "Open sources", to: "/p/p/sources" });
+  expect(resultTarget(moved, "p")).toEqual({ label: "Open maps", to: "/p/p/maps" });
 });

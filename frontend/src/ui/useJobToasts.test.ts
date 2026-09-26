@@ -45,13 +45,14 @@ describe("jobToastText", () => {
 
 describe("reportedInline", () => {
   it("is true only on the screen that shows the job's outcome", () => {
-    expect(reportedInline(base, "/p/p1/data")).toBe(true);
-    expect(reportedInline(base, "/p/p1/data/")).toBe(true);
-    expect(reportedInline(base, "/p/p1/train")).toBe(false);
-    expect(reportedInline({ ...base, type: "train" }, "/p/p1/train")).toBe(true);
+    expect(reportedInline(base, "/p/p1/images")).toBe(true);
+    expect(reportedInline(base, "/p/p1/images/")).toBe(true);
+    expect(reportedInline(base, "/models/training")).toBe(false);
+    expect(reportedInline({ ...base, type: "train" }, "/models/training")).toBe(true);
+    expect(reportedInline({ ...base, type: "train" }, "/p/p1/models/training")).toBe(false);
     expect(reportedInline({ ...base, type: "infer" }, "/p/p1/query")).toBe(true);
-    expect(reportedInline({ ...base, type: "export" }, "/library")).toBe(false);
-    expect(reportedInline(base, "/p/other/data")).toBe(false);
+    expect(reportedInline({ ...base, type: "export" }, "/models/library")).toBe(false);
+    expect(reportedInline(base, "/p/other/images")).toBe(false);
   });
 
   it("a LAZ export is quiet only while a mounted watcher claims it, on any screen", () => {
@@ -68,6 +69,6 @@ describe("reportedInline", () => {
     expect(reportedInline(job, "/p/p1/clouds")).toBe(true);
     again();
     expect(reportedInline(job, "/p/p1/clouds")).toBe(false);
-    expect(reportedInline({ ...job, type: "import" } as Job, "/p/p1/data/x")).toBe(false);
+    expect(reportedInline({ ...job, type: "import" } as Job, "/p/p1/images/x")).toBe(false);
   });
 });

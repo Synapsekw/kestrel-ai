@@ -111,7 +111,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
         )}
         {isIncomplete && <Pill tone="warn">Incomplete</Pill>}
         {!isWriting && !isIncomplete && (
-          <Link to={`/p/${projectId}/train?dataset=${dataset.id}`} className={buttonClass("secondary", "sm")}>
+          <Link to={`/models/training?dataset=${dataset.id}`} className={buttonClass("secondary", "sm")}>
             Train on this dataset
           </Link>
         )}

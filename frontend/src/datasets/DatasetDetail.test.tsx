@@ -40,7 +40,7 @@ describe("DatasetDetail", () => {
     expect(screen.getByText(exampleDataset.path)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Train on this dataset" })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/train?dataset=${exampleDataset.id}`,
+      `/models/training?dataset=${exampleDataset.id}`,
     );
   });
 

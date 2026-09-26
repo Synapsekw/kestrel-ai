@@ -82,7 +82,8 @@ export interface ResultTarget {
 export function resultTarget(job: Job, projectId: string): ResultTarget | null {
   if (job.state !== "succeeded") return null;
   const p = `/p/${projectId}`;
-  const model = (id: string | null) => (id ? { label: "Open model", to: `/library?model=${id}` } : null);
+  const model = (id: string | null) =>
+    id ? { label: "Open model", to: `/models/library?model=${id}` } : null;
   switch (job.type) {
     case "train":
     case "library_import":
@@ -92,22 +93,21 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "library_export":
       return model(str(job.params, "model_id"));
     case "library_adopt":
-      return { label: "Open library", to: "/library" };
-    // Maps are sources and every run, photo or map, is listed on Runs: the old Detect and Maps
-    // screens are no longer steps of a detection project, and neither opens in a training one.
+      return { label: "Open library", to: "/models/library" };
+    // Maps are listed on the Maps tab; every run, photo or map, is on Runs.
     case "map_move":
-      return { label: "Open sources", to: `${p}/sources` };
+      return { label: "Open maps", to: `${p}/maps` };
     case "infer":
       return str(job.result, "query_run_id") ? { label: "Open runs", to: `${p}/runs` } : null;
     case "dataset":
-      return { label: "Train on it", to: `${p}/train` };
+      return { label: "Train on it", to: "/models/training" };
     case "import":
       if (job.params?.purpose === "starter_model") return model(str(job.result, "model_id"));
-      return { label: "Open images", to: `${p}/data` };
+      return { label: "Open images", to: `${p}/images` };
     case "results_export":
       return null; // it already lives on the Export screen that started it
     case "map_import":
-      return { label: "Open sources", to: `${p}/sources` };
+      return { label: "Open maps", to: `${p}/maps` };
     case "map_detect":
       return { label: "Open runs", to: `${p}/runs` };
     case "map_export":
@@ -128,7 +128,7 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "volume_calc":
     case "volume_export":
     case "design_import":
-      return { label: "Open volumes", to: `${p}/volumes` };
+      return { label: "Open measurements", to: `${p}/measurements` };
     // Library jobs of the foundation: the Models and Catalogue sections that show their results
     // arrive with units S1 and S2, until then the job card has no link.
     case "project_migrate":

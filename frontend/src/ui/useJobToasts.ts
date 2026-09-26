@@ -126,11 +126,15 @@ export function jobToastText(job: Job): string {
 /** Stable default: a new object per render would resubscribe the hook and forget running jobs. */
 const NO_PATH = { current: "" };
 
-/** The screen (route segment) that already reports each job type's outcome inline. */
+/**
+ * The screen that already reports each job type's outcome inline: a project-relative segment
+ * (checked against `/p/{projectId}/{segment}`), or an absolute app path (checked exactly) for a
+ * screen that moved off the project routes.
+ */
 const REPORTED_ON: Partial<Record<Job["type"], string>> = {
-  import: "data",
-  dataset: "data",
-  train: "train",
+  import: "images",
+  dataset: "images",
+  train: "/models/training",
   infer: "query",
 };
 
@@ -160,6 +164,7 @@ export function reportedInline(job: Job, pathname: string): boolean {
   const segment = REPORTED_ON[job.type];
   if (!segment) return false;
   const path = pathname.replace(/\/$/, "");
+  if (segment.startsWith("/")) return path === segment;
   return path.endsWith(`/p/${job.project_id}/${segment}`);
 }
 

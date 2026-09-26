@@ -22,9 +22,9 @@ describe("useEditorNavigation", () => {
     const { api, requests } = fakeClient([{ method: "GET", path: /\/images$/, body: exampleImagePage }]);
     const wrapper = ({ children }: { children: ReactNode }) => (
       <TestApiProvider api={api}>
-        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/edit/${IMAGE_ID}`]}>
+        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/images/${IMAGE_ID}`]}>
           <Routes>
-            <Route path="/p/:projectId/edit/:imageId" element={children} />
+            <Route path="/p/:projectId/images/:imageId" element={children} />
           </Routes>
         </MemoryRouter>
       </TestApiProvider>
@@ -36,10 +36,12 @@ describe("useEditorNavigation", () => {
 
     useEditorStore.getState().beginRequest();
     act(() => result.current.nav.next());
-    await new Promise((r) => setTimeout(r, 20));
-    expect(result.current.path).toBe(`/p/${PROJECT_ID}/edit/${IMAGE_ID}`);
+    // `go` awaits `waitForIdle` before navigating; the store is still pending, so the promise
+    // chain cannot have resolved yet, deterministically (no wall-clock wait needed).
+    await act(() => Promise.resolve());
+    expect(result.current.path).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
     act(() => useEditorStore.getState().endRequest());
-    await waitFor(() => expect(result.current.path).toBe(`/p/${PROJECT_ID}/edit/${IMAGE_ID_2}`));
+    await waitFor(() => expect(result.current.path).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID_2}`));
   });
 
   it("uses an existing context without fetching", async () => {
@@ -47,12 +49,13 @@ describe("useEditorNavigation", () => {
     const { api, requests } = fakeClient([]);
     const wrapper = ({ children }: { children: ReactNode }) => (
       <TestApiProvider api={api}>
-        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/edit/${IMAGE_ID}`]}>{children}</MemoryRouter>
+        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/images/${IMAGE_ID}`]}>{children}</MemoryRouter>
       </TestApiProvider>
     );
     const { result } = renderHook(() => useEditorNavigation(PROJECT_ID, IMAGE_ID), { wrapper });
     expect(result.current.position).toEqual({ index: 1, count: 3 });
-    await new Promise((r) => setTimeout(r, 10));
+    // `known` is true from the start, so the effect returns before it would fetch; nothing async
+    // to wait on (deterministic, no wall-clock wait needed).
     expect(requests).toHaveLength(0);
   });
 });

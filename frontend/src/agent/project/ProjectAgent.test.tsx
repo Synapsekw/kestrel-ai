@@ -67,7 +67,7 @@ function renderDrawer(conv: () => AgentConversation, opts: { providers?: typeof 
       <Where />
       <AgentDrawer projectId={PROJECT_ID} projectName="Ahmadia" open onClose={() => {}} />
     </>,
-    { api: fake.api, route: `/p/${PROJECT_ID}/data`, path: "/p/:projectId/*" },
+    { api: fake.api, route: `/p/${PROJECT_ID}/images`, path: "/p/:projectId/*" },
   );
   return { ...fake, ...utils };
 }
@@ -342,7 +342,8 @@ describe("ProjectAgent", () => {
     const { requests } = renderDrawer(() => ({ items, turn: turn("running") }));
     await screen.findByText("Done");
     expect(requests.filter((r) => r.method === "GET" && r.url.endsWith("/agent"))).toHaveLength(1);
-    expect(screen.getByLabelText("Current location")).toHaveTextContent(`/p/${PROJECT_ID}/data`);
+    // The first load treats existing items as history: no navigation for it, so the location holds.
+    expect(screen.getByLabelText("Current location")).toHaveTextContent(`/p/${PROJECT_ID}/images`);
 
     items.push(
       item("tool", {
@@ -353,7 +354,7 @@ describe("ProjectAgent", () => {
     );
     act(() => useProjectAgentEvents.getState().bump(PROJECT_ID));
     await waitFor(() =>
-      expect(screen.getByLabelText("Current location")).toHaveTextContent(`/p/${PROJECT_ID}/edit/img-9`),
+      expect(screen.getByLabelText("Current location")).toHaveTextContent(`/p/${PROJECT_ID}/images/img-9`),
     );
   });
 
@@ -374,9 +375,20 @@ describe("ProjectAgent", () => {
 
 describe("screenRoute", () => {
   it("encodes the image id of an editor route", () => {
-    expect(screenRoute("p1", { screen: "editor", image_id: "a/b?c" })).toBe("/p/p1/edit/a%2Fb%3Fc");
+    expect(screenRoute("p1", { screen: "editor", image_id: "a/b?c" })).toBe("/p/p1/images/a%2Fb%3Fc");
     expect(screenRoute("p1", { screen: "editor", image_id: null })).toBeNull();
     // Detection runs are started and listed on Runs; the old Detect screen is no longer a step.
     expect(screenRoute("p1", { screen: "detect", image_id: null })).toBe("/p/p1/runs");
+  });
+
+  it("keeps project-relative screens under /p/:projectId", () => {
+    expect(screenRoute("p1", { screen: "images", image_id: null })).toBe("/p/p1/images");
+    expect(screenRoute("p1", { screen: "label", image_id: null })).toBe("/p/p1/images?filter=unlabeled");
+  });
+
+  it("sends the Models screens to their app-level routes, not a project-relative one", () => {
+    expect(screenRoute("p1", { screen: "datasets", image_id: null })).toBe("/models/datasets");
+    expect(screenRoute("p1", { screen: "train", image_id: null })).toBe("/models/training");
+    expect(screenRoute("p1", { screen: "models", image_id: null })).toBe("/models/library");
   });
 });

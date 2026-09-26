@@ -50,7 +50,7 @@ describe("ReviewScreen", () => {
     renderWithProviders(
       <Routes>
         <Route path="/p/:projectId/review" element={<ReviewScreen />} />
-        <Route path="/p/:projectId/edit/:imageId" element={<p>editor route</p>} />
+        <Route path="/p/:projectId/images/:imageId" element={<p>editor route</p>} />
       </Routes>,
       { api, route: `/p/${PROJECT_ID}/review` },
     );

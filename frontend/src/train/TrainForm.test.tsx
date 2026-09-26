@@ -30,10 +30,7 @@ describe("TrainForm", () => {
     expect(screen.getByLabelText("Image size")).toHaveValue(1280);
     expect(screen.getByLabelText("Automatic batch size")).toBeChecked();
     expect(screen.getByLabelText("Batch size")).toBeDisabled();
-    expect(screen.getByRole("link", { name: "Create dataset" })).toHaveAttribute(
-      "href",
-      `/p/${PROJECT_ID}/datasets`,
-    );
+    expect(screen.getByRole("link", { name: "Create dataset" })).toHaveAttribute("href", "/models/datasets");
     // "30 images" also appears in the option label, so match the split summary line.
     expect(screen.getByText(/30 images: 24 train \/ 6 val/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "3" } });
@@ -175,7 +172,7 @@ describe("TrainForm", () => {
     );
     expect(screen.queryByText(/Any model in your library, including starter models/)).not.toBeInTheDocument();
     const link = screen.getByRole("link", { name: "Add a starter model" });
-    expect(link).toHaveAttribute("href", "/library");
+    expect(link).toHaveAttribute("href", "/models/library");
   });
 
   it("shows the usual base model help text once the registry has a model", () => {

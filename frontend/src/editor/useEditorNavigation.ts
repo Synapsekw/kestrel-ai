@@ -47,7 +47,7 @@ export function useEditorNavigation(
   const go = useCallback(
     (target: string | null) => {
       if (!target) return;
-      void waitForIdle(useEditorStore).then(() => navigate(`/p/${projectId}/edit/${target}`));
+      void waitForIdle(useEditorStore).then(() => navigate(`/p/${projectId}/images/${target}`));
     },
     [navigate, projectId],
   );

@@ -28,16 +28,21 @@ export const MESSAGE_MAX = 4000;
 const DEBOUNCE_MS = 150;
 const POLL_MS = 3000;
 
-const SCREEN_PATH: Record<Exclude<AgentNavigate["screen"], "home" | "editor">, string> = {
-  images: "data",
-  label: "label",
+/** Project-relative screens (appended to `/p/:projectId/`). */
+const SCREEN_PATH: Partial<Record<Exclude<AgentNavigate["screen"], "home" | "editor">, string>> = {
+  images: "images",
+  label: "images?filter=unlabeled",
   review: "review",
-  datasets: "datasets",
-  models: "models",
-  train: "train",
   detect: "runs",
   export: "export",
   settings: "settings",
+};
+
+/** App-level screens (absolute `/models/...` paths, not project-relative). */
+const APP_SCREEN_PATH: Partial<Record<Exclude<AgentNavigate["screen"], "home" | "editor">, string>> = {
+  datasets: "/models/datasets",
+  models: "/models/library",
+  train: "/models/training",
 };
 
 /** The route an `open_screen` item points at; null for an editor target without an image. */
@@ -45,7 +50,9 @@ export function screenRoute(projectId: string, nav: AgentNavigate): string | nul
   const base = `/p/${projectId}`;
   if (nav.screen === "home") return base;
   if (nav.screen === "editor")
-    return nav.image_id ? `${base}/edit/${encodeURIComponent(nav.image_id)}` : null;
+    return nav.image_id ? `${base}/images/${encodeURIComponent(nav.image_id)}` : null;
+  const appPath = APP_SCREEN_PATH[nav.screen];
+  if (appPath) return appPath;
   return `${base}/${SCREEN_PATH[nav.screen]}`;
 }
 

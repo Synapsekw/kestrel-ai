@@ -45,7 +45,7 @@ export function ImageReviewQueue({ projectId, list, empty: emptyState }: ImageRe
   const open = useCallback(
     (id: string) => {
       useNavigationStore.getState().setContext(ids, "review", location.pathname + location.search);
-      void navigate(`/p/${projectId}/edit/${id}`);
+      void navigate(`/p/${projectId}/images/${id}`);
     },
     [ids, navigate, projectId, location.pathname, location.search],
   );

@@ -56,7 +56,7 @@ export function SourcePicker({
               ) : !modelsLoading && !modelsError && models.length === 0 ? (
                 <span>
                   No models yet.{" "}
-                  <Link to="/library" className={link}>
+                  <Link to="/models/library" className={link}>
                     Add a model to the library
                   </Link>{" "}
                   to get started.

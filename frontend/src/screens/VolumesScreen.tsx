@@ -165,7 +165,7 @@ export function VolumesScreen() {
           .then((created) => {
             useJobsStore.getState().upsert(created.job);
             setMeasurements((all) => [created.measurement, ...(all ?? [])]);
-            navigate(`/p/${projectId}/volumes/${created.measurement.id}`);
+            navigate(`/p/${projectId}/measurements/${created.measurement.id}`);
             setTool("pan");
           })
           .catch((err: unknown) => report("create the measurement", err));
@@ -301,7 +301,7 @@ export function VolumesScreen() {
             activeId={top?.id ?? null}
             onSelect={(id) => {
               setPickedSurface(id);
-              navigate(`/p/${projectId}/volumes`);
+              navigate(`/p/${projectId}/measurements`);
             }}
             onBuild={() => setBuilding({})}
             onRebuild={(s) => setBuilding({ cloudId: s.point_cloud_id ?? undefined })}
@@ -323,7 +323,7 @@ export function VolumesScreen() {
               aria-label="New measurement"
               title="New measurement (P)"
               onClick={() => {
-                navigate(`/p/${projectId}/volumes`);
+                navigate(`/p/${projectId}/measurements`);
                 setTool("measure");
               }}
             >
@@ -339,7 +339,7 @@ export function VolumesScreen() {
                   <Button
                     variant={m.id === active?.id ? "secondary" : "ghost"}
                     className="w-full justify-between"
-                    onClick={() => navigate(`/p/${projectId}/volumes/${m.id}`)}
+                    onClick={() => navigate(`/p/${projectId}/measurements/${m.id}`)}
                   >
                     <span className="truncate">{m.name}</span>
                     <span className="flex items-center gap-1.5 text-xs tabular-nums text-muted">

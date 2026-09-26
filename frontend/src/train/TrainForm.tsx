@@ -48,7 +48,6 @@ function firstReady(models: LibraryModel[]): LibraryModel | undefined {
 
 /** Spec section 7 parameters. Preselects when the lists arrive (or change) without touching what the user typed. */
 export function TrainForm({
-  projectId,
   datasets,
   models,
   datasetsUnavailable,
@@ -160,7 +159,7 @@ export function TrainForm({
       {dataset
         ? `${dataset.image_count} images: ${dataset.train_count} train / ${dataset.val_count} val, ${dataset.classes.length} classes.`
         : "Datasets are frozen from labeled images."}{" "}
-      <Link to={`/p/${projectId}/datasets`} className={link}>
+      <Link to="/models/datasets" className={link}>
         Create dataset
       </Link>
       , or select images on the Images screen and use Add to dataset.
@@ -180,7 +179,7 @@ export function TrainForm({
         !modelsError && (
           <>
             No models yet.{" "}
-            <Link to="/library" className={link}>
+            <Link to="/models/library" className={link}>
               Add a starter model
             </Link>{" "}
             to get started.
