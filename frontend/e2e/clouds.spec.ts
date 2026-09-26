@@ -13,6 +13,20 @@ async function viewerStats(page: Page) {
   return page.evaluate(() => window.__kestrelCloudViewer?.stats() ?? null);
 }
 
+/**
+ * The viewer's code has loaded (CloudsScreen -> CloudViewer -> three, potree-core) and it has drawn
+ * the cloud with nothing left loading. On the CI runner that code alone took over 5 s to arrive
+ * through the dev server, so every wait that needs the viewer allows 20 s. `nodesLoading === 0` on
+ * its own is no such signal: the hook reports 0 from the first frame, before the octree is even asked
+ * for, and a pick made then hits nothing.
+ */
+async function viewerSettled(page: Page) {
+  await expect
+    .poll(async () => (await viewerStats(page))?.settledMs ?? null, { timeout: 20_000 })
+    .not.toBeNull();
+  await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
+}
+
 /** The fixture cloud, and a list holding only it: the mock's example cloud has other bounds. */
 async function routeCloud(page: Page) {
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
@@ -66,7 +80,11 @@ test("a missing 3D view copy says so instead of a blank canvas", async ({ page }
       }),
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
-  await expect(page.getByRole("alert")).toContainText("the 3D view copy is missing; import the file again");
+  // The octree is asked for only once the viewer's code has loaded (see viewerSettled): on the CI
+  // runner that was still arriving 5 s after the page loaded, before any octree request was made.
+  await expect(page.getByRole("alert")).toContainText("the 3D view copy is missing; import the file again", {
+    timeout: 20_000,
+  });
 });
 
 const CORS = { "Access-Control-Allow-Origin": "*" };
@@ -98,7 +116,9 @@ const admission = (ok: boolean) => ({
 
 test("import: inspect, a refusal, then an admissible file goes importing then ready", async ({ page }) => {
   let list: unknown[] = [];
-  let polls = 0;
+  // The job finishes only after the test has seen the row importing: finishing on a poll count let
+  // a slow page fetch the list after the job had already succeeded, so "importing" was never shown.
+  let importingSeen = false;
   await page.route(
     (u) => u.pathname === `/api/v1/projects/${P}/pointclouds`,
     async (route) => {
@@ -146,8 +166,7 @@ test("import: inspect, a refusal, then an admissible file goes importing then re
   await page.route(
     (u) => u.pathname.endsWith(`/jobs/${job("running").id}`),
     (route) => {
-      polls += 1;
-      const done = polls > 1;
+      const done = importingSeen;
       if (done) list = [cloudJson()];
       return route.fulfill({
         contentType: "application/json",
@@ -176,6 +195,7 @@ test("import: inspect, a refusal, then an admissible file goes importing then re
   await dialog.getByRole("button", { name: "Import" }).click();
   const row = page.getByRole("list", { name: "Point clouds" });
   await expect(row).toContainText("importing");
+  importingSeen = true;
   await expect(row).toContainText("ready", { timeout: 15_000 });
 });
 
@@ -278,7 +298,7 @@ test("measure a distance with two picks, save it, copy the CSV", async ({ page, 
     },
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
-  await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1, { timeout: 20_000 }).toBe(0);
+  await viewerSettled(page);
   await page.getByRole("radio", { name: "Measure" }).click();
   await page.getByRole("button", { name: "Distance" }).click();
   const box = (await page.getByTestId("cloud-canvas").boundingBox())!;
@@ -447,7 +467,7 @@ test("arriving at a spot on a thin rim refines Z to the rim, not the flue floor 
   await expect
     .poll(() => page.evaluate(() => window.__kestrelCloudViewer?.overlays() ?? []), { timeout: 20_000 })
     .toContain("pin");
-  await expect.poll(async () => (await viewerStats(page))?.nodesLoading, { timeout: 20_000 }).toBe(0);
+  await viewerSettled(page);
   const down = await page.evaluate(
     ([x, y]) => window.__kestrelCloudViewer!.pickDown(x, y, 2),
     [spot.x, spot.y],
