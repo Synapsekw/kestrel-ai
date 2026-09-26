@@ -1,7 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cx } from "./tokens";
 
-export type PillTone = "neutral" | "ok" | "warn" | "danger" | "accent" | "inverse";
+export type PillTone = "neutral" | "ok" | "warn" | "danger" | "accent" | "info" | "inverse";
 
 export interface PillProps extends HTMLAttributes<HTMLSpanElement> {
   tone?: PillTone;
@@ -19,6 +19,8 @@ const TONE: Record<PillTone, string> = {
   warn: "bg-warn-soft text-warn",
   danger: "bg-danger-soft text-danger",
   accent: "bg-accent-soft text-accent-ink",
+  info: "bg-info/15 text-info",
+  // Kept for existing callers: the tooltip surface.
   inverse: "bg-tip text-tip-fg",
 };
 
@@ -26,8 +28,8 @@ export function Pill({ tone = "neutral", live, dot, size = "md", className, chil
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full font-medium",
-        size === "sm" ? "h-[18px] px-1.5 text-[11px]" : "h-[22px] px-2.5 text-xs",
+        "inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-chip font-medium",
+        size === "sm" ? "h-[18px] px-1.5 text-2xs" : "h-[22px] px-2.5 text-xs",
         TONE[tone],
         className,
       )}

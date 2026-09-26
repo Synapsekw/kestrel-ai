@@ -2,7 +2,7 @@
    the class helper is exported next to the component that uses it; not a fast-refresh boundary. */
 import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { Icon, type IconName } from "./Icon";
-import { cx, disabledClass, focusRing, pressable, transition } from "./tokens";
+import { cx, disabledClass, focusRing, lift, pressable, transition } from "./tokens";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
 export type ButtonSize = "sm" | "md";
@@ -16,20 +16,21 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: "border-transparent bg-accent text-accent-fg hover:bg-accent-ink",
-  secondary: "border-line bg-surface text-ink hover:border-line-strong hover:bg-hover",
-  ghost: "border-transparent bg-transparent text-ink hover:bg-hover",
+  // The mockup's .btn.pri: the violet → indigo gradient and its glow (the glow drops in reduced effects).
+  primary: cx("border-transparent bg-grad-primary text-accent-fg shadow-glow", lift),
+  secondary: cx("border-line bg-surface text-ink hover:border-line-strong hover:bg-surface-2", lift),
+  ghost: "border-transparent bg-transparent text-ink hover:bg-surface-2",
   danger: "border-line bg-surface text-danger hover:border-danger/40 hover:bg-danger-soft",
 };
 
 const SIZE: Record<ButtonSize, string> = {
-  sm: "h-7 gap-1.5 px-2.5 text-[13px]",
-  md: "h-9 gap-2 px-3.5 text-sm",
+  sm: "h-7 gap-1.5 px-2.5 text-xs",
+  md: "h-[34px] gap-2 px-3.5 text-sm",
 };
 
 export const buttonClass = (variant: ButtonVariant, size: ButtonSize, className?: string) =>
   cx(
-    "inline-flex items-center justify-center whitespace-nowrap rounded-md border font-medium",
+    "inline-flex items-center justify-center whitespace-nowrap rounded-control border font-semibold",
     VARIANT[variant],
     SIZE[size],
     transition,
@@ -91,7 +92,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(functio
       size={size}
       aria-label={label}
       title={label}
-      className={cx(size === "sm" ? "w-7 px-0" : "w-9 px-0", className)}
+      className={cx(size === "sm" ? "w-7 px-0" : "w-[34px] px-0", className)}
       {...rest}
     >
       <Icon name={icon} size={size === "sm" ? 14 : 16} />

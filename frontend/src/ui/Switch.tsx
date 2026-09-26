@@ -22,24 +22,23 @@ export function Switch({ checked, onChange, label, disabled, className, id, hide
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cx(
-        "group inline-flex items-center gap-2 text-sm text-ink disabled:opacity-45 disabled:pointer-events-none",
+        "group inline-flex items-center gap-2 rounded-control text-sm text-ink disabled:pointer-events-none disabled:opacity-45",
         focusRing,
-        "rounded-md",
         className,
       )}
     >
       <span
         aria-hidden="true"
         className={cx(
-          "relative h-5 w-[34px] shrink-0 rounded-full",
-          checked ? "bg-accent" : "bg-line-strong group-hover:bg-dim",
+          "relative h-[18px] w-8 shrink-0 rounded-chip",
+          checked ? "bg-accent" : "bg-surface-2 ring-1 ring-inset ring-control-line group-hover:bg-hover",
           transition,
         )}
       >
         <span
+          data-part="thumb"
           className={cx(
-            "absolute left-0.5 top-0.5 h-4 w-4 rounded-full shadow-[0_1px_2px_rgb(0_0_0/0.3)]",
-            checked ? "bg-accent-fg" : "bg-ink",
+            "absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-ink shadow-elev-1",
             "transition-transform duration-base ease-out reduce-motion:transition-none",
             checked && "translate-x-3.5",
           )}

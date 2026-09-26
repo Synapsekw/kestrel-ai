@@ -36,8 +36,8 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         <span
           aria-hidden="true"
           className={cx(
-            "grid h-4 w-4 place-items-center rounded-sm border",
-            onDark ? "border-white/70 bg-black/30" : "border-muted bg-surface",
+            "grid h-4 w-4 place-items-center rounded-[5px] border",
+            onDark ? "border-white/70 bg-black/30" : "border-control-line bg-field",
             "peer-hover:border-accent",
             "peer-checked:border-accent peer-checked:bg-accent peer-checked:[&>svg]:scale-100 peer-checked:[&>svg]:opacity-100",
             "peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2",

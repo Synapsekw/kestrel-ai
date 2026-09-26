@@ -9,20 +9,20 @@ import {
 import { Icon } from "./Icon";
 import { cx, transition } from "./tokens";
 
-/** Shared field chrome: border, panel background, accent focus ring, invalid state. */
+/** Shared field chrome: the field token, a quiet border, the accent focus ring, the invalid state. */
 export const fieldClass = (invalid?: boolean, className?: string) =>
   cx(
-    "w-full rounded-md border bg-surface text-sm text-ink placeholder:text-muted",
-    "hover:border-muted focus:outline-none focus:border-accent focus:ring-[3px] focus:ring-accent/20",
+    "w-full rounded-control border bg-field text-base text-ink placeholder:text-dim",
+    "hover:border-line-strong focus:outline-none focus:border-accent/60 focus:ring-[3px] focus:ring-accent/20",
     "disabled:opacity-45 disabled:pointer-events-none",
-    invalid ? "border-danger" : "border-control-line",
+    invalid ? "border-danger" : "border-line",
     transition,
     className,
   );
 
 export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   invalid?: boolean;
-  /** 28px for dense rows; the default is 36px. */
+  /** 28px for dense rows; the default is 34px. */
   dense?: boolean;
 }
 
@@ -34,7 +34,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
     <input
       ref={ref}
       aria-invalid={invalid || undefined}
-      className={fieldClass(invalid, cx(dense ? "h-7 px-2 text-[13px]" : "h-9 px-3", className))}
+      className={fieldClass(invalid, cx(dense ? "h-7 px-2 text-sm" : "h-[34px] px-3", className))}
       {...rest}
     />
   );
@@ -85,7 +85,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         aria-invalid={invalid || undefined}
         className={fieldClass(
           invalid,
-          cx("appearance-none pr-8", dense ? "h-7 pl-2 text-[13px]" : "h-9 pl-3", className),
+          cx("appearance-none pr-8", dense ? "h-7 pl-2 text-sm" : "h-[34px] pl-3", className),
         )}
         {...rest}
       >

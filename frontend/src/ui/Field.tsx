@@ -21,7 +21,7 @@ export function Field({ label, htmlFor, hint, error, children, className, inline
     <div
       className={cx("flex min-w-0", inline ? "flex-row items-center gap-2" : "flex-col gap-1.5", className)}
     >
-      <label htmlFor={htmlFor} className="text-[13px] font-medium text-ink">
+      <label htmlFor={htmlFor} className="text-xs font-medium text-muted">
         {label}
       </label>
       {children}

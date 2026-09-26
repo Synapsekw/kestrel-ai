@@ -6,6 +6,8 @@ import { Checkbox } from "./Checkbox";
 import { Disclosure } from "./Disclosure";
 import { Field } from "./Field";
 import { Input, Select } from "./Input";
+import { Kbd } from "./Kbd";
+import { Pill } from "./Pill";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
 import { Tooltip } from "./Tooltip";
@@ -143,5 +145,67 @@ describe("Select", () => {
       </Select>,
     );
     expect(screen.getByRole("combobox", { name: "Class" }).parentElement!.className).toContain("w-full");
+  });
+});
+
+describe("Aero glass controls", () => {
+  it("fields sit on the field token with a quiet border, and a danger border when invalid", () => {
+    render(
+      <>
+        <Input aria-label="Name" />
+        <Input aria-label="Folder" invalid />
+      </>,
+    );
+    const name = screen.getByLabelText("Name");
+    expect(name.className).toContain("bg-field");
+    expect(name.className).toMatch(/(^| )border-line( |$)/);
+    const folder = screen.getByLabelText("Folder");
+    expect(folder.className).toContain("border-danger");
+    expect(folder).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("Kbd is a mono key cap", () => {
+    render(<Kbd>K</Kbd>);
+    const cap = screen.getByText("K");
+    expect(cap.tagName).toBe("KBD");
+    expect(cap.className).toContain("font-mono");
+  });
+
+  it("Pill keeps the inverse tone for old callers, adds info, and pulses only when live", () => {
+    render(
+      <>
+        <Pill tone="inverse">old</Pill>
+        <Pill tone="info">reviewed</Pill>
+        <Pill tone="accent" live>
+          running
+        </Pill>
+        <Pill tone="ok" dot>
+          done
+        </Pill>
+      </>,
+    );
+    expect(screen.getByText("old").className).toContain("bg-tip");
+    expect(screen.getByText("reviewed").className).toContain("text-info");
+    const liveDot = screen.getByText("running").querySelector('[aria-hidden="true"]')!;
+    expect(liveDot.className).toContain("animate-pulse-dot");
+    expect(liveDot.className).toContain("reduce-motion:animate-none");
+    expect(screen.getByText("done").querySelector('[aria-hidden="true"]')!.className).not.toContain(
+      "animate",
+    );
+  });
+
+  it("Switch slides its thumb on the base duration and stops under reduced motion", () => {
+    render(<Switch checked onChange={() => {}} label="Suggestions" />);
+    const thumb = screen.getByRole("switch", { name: "Suggestions" }).querySelector("[data-part='thumb']")!;
+    expect(thumb.className).toContain("duration-base");
+    expect(thumb.className).toContain("reduce-motion:transition-none");
+    expect(thumb.className).toContain("translate-x-3.5");
+  });
+
+  it("Checkbox draws a control-line box that turns accent when checked", () => {
+    render(<Checkbox label="Reviewed only" />);
+    const box = screen.getByRole("checkbox", { name: "Reviewed only" }).nextElementSibling!;
+    expect(box.className).toContain("border-control-line");
+    expect(box.className).toContain("peer-checked:bg-accent");
   });
 });

@@ -8,7 +8,10 @@ export const focusRing =
 export const transition =
   "transition-[background-color,border-color,color,transform,box-shadow,opacity] duration-fast ease-out reduce-motion:transition-none";
 
-export const pressable = "active:scale-[.97] reduce-motion:active:scale-100";
+export const pressable = "active:scale-[.98] reduce-motion:active:scale-100";
+
+/** The mockup's hover lift on buttons (.btn:hover translateY −1px). */
+export const lift = "hover:-translate-y-px reduce-motion:hover:translate-y-0";
 
 export const disabledClass = "disabled:opacity-45 disabled:pointer-events-none";
 
