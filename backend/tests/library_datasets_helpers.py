@@ -4,7 +4,8 @@ so the tests do not depend on the project-creation API that BK and BC change in 
 import inspect
 from pathlib import Path
 
-from app.db.models import Box, Image, Source
+from app.datasets.materialise import data_yaml
+from app.db.models import Box, Dataset, DatasetImage, Image, Source
 from app.projects.service import ProjectHandle
 
 LIB = "/api/v1/library"
@@ -137,3 +138,40 @@ def two_projects(app, tmp_path: Path, make_jpeg, catalogue):
             angle = 30.0 if (handle is b and i == 2) else 0.0
             add_box(handle, image_id, type_id, x=50, y=20, w=60, h=30, angle=angle)
     return a, b, exc, truck
+
+
+def legacy_project_dataset(
+    handle: ProjectHandle,
+    make_jpeg,
+    *,
+    name: str = "v1",
+    classes: tuple[tuple[str, str], ...] = (("c1", "excavator"), ("c2", "dump_truck")),
+    images: int = 2,
+) -> str:
+    """A dataset exactly as the old per-project materialise job left it: the `Dataset` row with its
+    `dataset_image` rows, and `datasets/<name>/` holding images, labels and `data.yaml`. After the
+    migration's step 2 the class ids are catalogue type ids; here they are whatever `classes` says."""
+    folder = handle.datasets_dir / name
+    site = f"legacy-{name}"
+    src = add_source(handle, site=site)
+    with handle.session() as s:
+        row = Dataset(
+            name=name,
+            classes=[{"id": i, "name": n} for i, n in classes],
+            split_method="random",
+            split_params={"val_fraction": 0.5, "seed": 1},
+            path=f"datasets/{name}",
+        )
+        s.add(row)
+        s.flush()
+        dataset_id = row.id
+    for i in range(images):
+        split = "train" if i % 2 == 0 else "val"
+        image_id = add_image(handle, make_jpeg, src, f"{name}-{i}.jpg", site=site, seed=i)
+        make_jpeg(folder / "images" / split / f"{name}-{i}.jpg", 64, 48, seed=i)
+        (folder / "labels" / split).mkdir(parents=True, exist_ok=True)
+        (folder / "labels" / split / f"{name}-{i}.txt").write_text("0 0.5 0.5 0.25 0.25\n", "utf-8")
+        with handle.session() as s:
+            s.add(DatasetImage(dataset_id=dataset_id, image_id=image_id, split=split, boxes=[]))
+    (folder / "data.yaml").write_text(data_yaml(folder, [n for _, n in classes]), "utf-8")
+    return dataset_id
