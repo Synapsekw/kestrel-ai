@@ -152,3 +152,16 @@ export async function trainModel(api: ApiClient, projectId: string, body: TrainR
   );
   return r.job;
 }
+
+/** Model class name → catalogue type id, or null for "ignore" (F §7.4, F10). */
+export type ClassMap = Record<string, string | null>;
+
+/** Merged over the model's stored map on the server (BM `LibraryModelClassMapPut`): absent names keep theirs. */
+export function saveClassMap(api: ApiClient, modelId: string, classMap: ClassMap): Promise<LibraryModel> {
+  return unwrap(
+    api.PUT("/api/v1/library/models/{modelId}/class-map", {
+      params: { path: { modelId } },
+      body: { mapping: classMap },
+    }),
+  );
+}

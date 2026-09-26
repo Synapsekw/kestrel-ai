@@ -29,6 +29,7 @@ import {
   importLibraryModel,
   isLibraryUnavailable,
   libraryArtifactUrl,
+  saveClassMap,
   trainModel,
   updateLibraryModel,
 } from "./library";
@@ -225,5 +226,17 @@ describe("library api", () => {
     ]);
     const failure = await fetchLibraryModels(api).catch((e: unknown) => e);
     expect(isLibraryUnavailable(failure)).toBe(false);
+  });
+});
+
+describe("saveClassMap", () => {
+  it("puts the whole map for one model", async () => {
+    const { api, requests } = fakeClient([
+      { method: "PUT", path: /\/class-map$/, body: { ...exampleModel, class_map: { truck: "t-2" } } },
+    ]);
+    const saved = await saveClassMap(api, MODEL_ID, { truck: "t-2", bicycle: null });
+    expect(saved.class_map).toEqual({ truck: "t-2" });
+    expect(requests[0].url).toBe(`/api/v1/library/models/${MODEL_ID}/class-map`);
+    expect(requests[0].body).toEqual({ mapping: { truck: "t-2", bicycle: null } });
   });
 });
