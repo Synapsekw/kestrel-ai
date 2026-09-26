@@ -95,13 +95,14 @@ def _cloud_model_name(config: ProviderConfigStore, keys: KeyStore, body: RunCrea
 def create_runs(
     handle: ProjectHandle,
     lib: LibraryHandle | None,
-    catalogue: CataloguePort,
+    catalogue: CataloguePort | None,
     keys: KeyStore,
     config: ProviderConfigStore,
     body: RunCreate,
     submit: Callable[[str, dict], Job],
 ) -> tuple[list[tuple[_Target, str, Job]], list[str]]:
-    """One run per source, each with its job queued: `([(target, run_id, job)], added_type_ids)`."""
+    """One run per source, each with its job queued: `([(target, run_id, job)], added_type_ids)`.
+    `catalogue` is None for a cloud-provider run, which never maps classes (plan BM A11)."""
     if not body.model_id and not body.provider:
         raise AppError("model_or_provider_required", "a run needs a library model_id or a provider", 422)
     targets = _targets(handle, body.source_ids)  # unknown sources: 404 before anything else
@@ -122,6 +123,7 @@ def create_runs(
                 422,
                 {"model_id": model.id},
             )
+        assert catalogue is not None, "a library-model run resolves the catalogue first"
         mapping, unmapped = class_maps.resolve_for_model(catalogue, model)
         if unmapped:
             raise AppError(

@@ -4,7 +4,7 @@ mapping before any job, the union list, pinning, recount, and the timeline's pin
 from datetime import UTC, date, datetime
 
 import pytest
-from catalogue_fake import FakeCatalogue, project_catalogue  # noqa: F401 - fixture
+from catalogue_fake import create_type
 from geotiffs import make_squares_geotiff
 from library_datasets_helpers import make_project
 from library_helpers import add_library_model
@@ -99,23 +99,21 @@ def test_mapped_types_join_the_project_list_when_the_run_starts(
     client, app, tmp_path, make_jpeg, wait_job, model_provider
 ):
     empty = make_project(app, tmp_path / "empty", "Empty")
-    fake = FakeCatalogue()
-    car, truck = fake.add("Car"), fake.add("Truck")
-    app.state.catalogue_port = fake
+    car, truck = create_type(client, "Car"), create_type(client, "Truck")
     source_id = _add_images_source(empty, make_jpeg)
     m = add_library_model(app, tmp_path, class_names=["car", "truck"])
 
     r = _post(client, empty.id, source_ids=[source_id], model_id=m.id)
 
     assert r.status_code == 202, r.text
-    assert r.json()["added_type_ids"] == [car.id, truck.id]
-    assert _ids(client, empty.id) == {"Car": car.id, "Truck": truck.id}
+    assert r.json()["added_type_ids"] == [car["id"], truck["id"]]
+    assert _ids(client, empty.id) == {"Car": car["id"], "Truck": truck["id"]}
     run = r.json()["runs"][0]
     assert run["kind"] == "images" and run["source_id"] == source_id
     assert wait_job(empty.id, run["job"]["id"])["state"] == "succeeded"
     got = client.get(f"{BASE}/{empty.id}/query-runs/{run['run_id']}").json()
-    assert got["class_map"] == {"car": car.id, "truck": truck.id}
-    assert got["counts"] == {car.id: 2, truck.id: 2}  # one of each per photo
+    assert got["class_map"] == {"car": car["id"], "truck": truck["id"]}
+    assert got["counts"] == {car["id"]: 2, truck["id"]: 2}  # one of each per photo
     again = _post(client, empty.id, source_ids=[source_id], model_id=m.id)
     assert again.json()["added_type_ids"] == []
 
@@ -126,7 +124,6 @@ def test_a_segmentation_model_is_refused_before_any_job(
     tmp_path,
     project_id,
     images_source,
-    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, task="segment", class_names=["excavator"])
     r = _post(client, project_id, source_ids=[images_source], model_id=m.id)
@@ -140,7 +137,6 @@ def test_unmapped_classes_are_refused_before_any_job(
     tmp_path,
     project_id,
     images_source,
-    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, class_names=["excavator", "tower crane", "car"])
     r = _post(client, project_id, source_ids=[images_source], model_id=m.id)
@@ -161,7 +157,6 @@ def test_after_mapping_the_same_request_succeeds_and_stores_the_map(
     map_source,
     wait_job,
     model_provider,
-    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, class_names=["excavator", "tower crane"], train_gsd_cm=3.0)
     ids = _ids(client, project_id)
@@ -206,7 +201,6 @@ def test_an_ignored_class_is_never_written(
     map_source,
     wait_job,
     model_provider,
-    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, class_names=["excavator", "tower crane"])
     client.put(f"{BASE}/{project_id}/model-class-maps/{m.id}", json={"mapping": {"tower crane": None}})
@@ -270,7 +264,6 @@ def test_an_unknown_source_is_404_and_nothing_is_queued(
     tmp_path,
     project_id,
     images_source,
-    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, class_names=["excavator"])
     r = _post(client, project_id, source_ids=[images_source, "nope"], model_id=m.id)

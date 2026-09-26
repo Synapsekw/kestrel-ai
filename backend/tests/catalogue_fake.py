@@ -1,21 +1,16 @@
-"""An in-memory catalogue behind the models backend's port (plan BM Task 2).
+"""An in-memory catalogue behind the models backend's port (plan BM Task 2), and `create_type`, a
+real catalogue type through BC's API (Task 11).
 
-Tests install it on `app.state.catalogue_port`. Import the fixtures into a test module by name
+Tests install the fake on `app.state.catalogue_port`. Import the fixtures into a test module by name
 (`from catalogue_fake import catalogue  # noqa: F401`) - conftest.py is shared with BK and BC, so
-BM keeps its fixtures here.
+BM keeps its fixtures here. After BC, a project's type list is BC's `project_type` table, which only
+the real catalogue writes: the fake serves the dataset tests, which never touch type lists.
 """
-
-import re
 
 import pytest
 
+from app.catalogue.service import normalise_name  # noqa: F401 - re-exported for tests
 from app.library.catalogue_port import TypeRef
-from app.projects.service import normalise_classes
-
-
-def normalise_name(name: str) -> str:
-    """Foundation F §7.1: casefold, trim, `_` and `-` become spaces, runs of spaces collapse."""
-    return re.sub(r"\s+", " ", re.sub(r"[_-]", " ", name.casefold())).strip()
 
 
 class FakeCatalogue:
@@ -51,30 +46,17 @@ class FakeCatalogue:
                 out[name] = self.match_names([name]).get(name) or self.add(name)
         return out
 
-    def add_to_project(self, handle, type_ids: list[str]) -> list[str]:
-        """Before BC, a project's type list is its `classes` JSON; a type id is used as the class id."""
-        with handle.session() as s:
-            row = handle.row(s)
-            classes = [dict(c) for c in row.classes or []]
-            have = {c["id"] for c in classes}
-            new = [t for t in dict.fromkeys(type_ids) if t not in have]
-            if new:
-                classes += [{"id": t, "name": self.types[t].name} for t in new]
-                row.classes = normalise_classes(classes)
-            return new
+
+def create_type(client, name: str, kind: str = "object") -> dict:
+    """A real catalogue type through BC's API (after Task 11)."""
+    r = client.post("/api/v1/catalogue/types", json={"name": name, "colour": "#3b82f6", "kind": kind})
+    assert r.status_code == 201, r.text
+    return r.json()
 
 
 @pytest.fixture
 def catalogue(app) -> FakeCatalogue:
     """An empty fake catalogue installed on the app."""
     fake = FakeCatalogue()
-    app.state.catalogue_port = fake
-    return fake
-
-
-@pytest.fixture
-def project_catalogue(app, project) -> FakeCatalogue:
-    """A fake catalogue that knows the `project` fixture's classes under their own ids."""
-    fake = FakeCatalogue.from_classes(project["classes"])
     app.state.catalogue_port = fake
     return fake

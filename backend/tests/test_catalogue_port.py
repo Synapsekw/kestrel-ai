@@ -1,5 +1,5 @@
-"""The catalogue as the models backend sees it (plan BM Task 2): one port, a pre-BC default that
-knows no types, and the in-memory fake every BM test uses."""
+"""The catalogue as the models backend sees it (plan BM Tasks 2 and 11): one port, a 503 when BC's
+catalogue did not open, and the in-memory fake the dataset tests use."""
 
 from types import SimpleNamespace
 
@@ -7,15 +7,12 @@ import pytest
 from catalogue_fake import FakeCatalogue, normalise_name
 
 from app.errors import AppError
-from app.library.catalogue_port import NO_CATALOGUE, catalogue_of
+from app.library.catalogue_port import catalogue_of
 
 
-def test_without_a_catalogue_nothing_resolves_and_creating_is_503():
-    port = catalogue_of(SimpleNamespace())
-    assert port is NO_CATALOGUE
-    assert port.resolve_types(["a"]) == {} and port.match_names(["a"]) == {}
+def test_a_catalogue_that_did_not_open_is_a_503():
     with pytest.raises(AppError) as e:
-        port.ensure_types(["crane"])
+        catalogue_of(SimpleNamespace(catalogue=None))
     assert e.value.status == 503 and e.value.code == "catalogue_unavailable"
 
 

@@ -3,9 +3,11 @@
 The models backend needs four things from the catalogue that unit BC builds: resolve type ids,
 match model class names to types by `normalise_name`, create missing types, and put types on a
 project's type list. This module is the only place in the models backend that knows where those
-come from. Until BC is on main nothing in the app provides a catalogue, so production code sees
-`NO_CATALOGUE`, which knows no types; tests install a fake on `app.state.catalogue_port`. Task 11
-points `catalogue_of` at BC's catalogue, and no caller changes.
+come from.
+
+Tests may install a port on app.state.catalogue_port; otherwise the app's catalogue (BC's
+CatalogueHandle) is wrapped in CatalogueAdapter, the only place in the models backend that imports
+app.catalogue.
 """
 
 from __future__ import annotations
@@ -54,29 +56,49 @@ def catalogue_unavailable() -> AppError:
     return AppError("catalogue_unavailable", CATALOGUE_UNAVAILABLE, 503)
 
 
-class _NoCatalogue:
-    """Before BC: a catalogue that knows no types. Nothing resolves; creating a type is a 503."""
+class CatalogueAdapter:
+    """BC's catalogue behind this port. The only place in the models backend that imports
+    `app.catalogue`; if BC renames a function, only the matching method body here changes."""
+
+    def __init__(self, handle):
+        self.handle = handle
+
+    @staticmethod
+    def _ref(t) -> TypeRef:
+        return TypeRef(id=t.id, name=t.name, kind=t.kind, archived=bool(t.archived))
 
     def resolve_types(self, type_ids: Iterable[str]) -> dict[str, TypeRef]:
-        return {}
+        from app.catalogue import service as catalogue
+
+        return {i: self._ref(t) for i, t in catalogue.resolve_types(self.handle, list(type_ids)).items()}
 
     def match_names(self, names: Iterable[str]) -> dict[str, TypeRef]:
-        return {}
+        from app.catalogue import service as catalogue
+
+        return {n: self._ref(t) for n, t in catalogue.find_by_names(self.handle, list(names)).items()}
 
     def ensure_types(self, names: Iterable[str]) -> dict[str, TypeRef]:
-        raise catalogue_unavailable()
+        from app.catalogue import service as catalogue
+
+        made = catalogue.ensure_types(self.handle, list(names), kind="object")
+        return {n: self._ref(t) for n, t in made.items()}
 
     def add_to_project(self, handle: ProjectHandle, type_ids: list[str]) -> list[str]:
-        return []
+        from app.catalogue.service import add_project_types
 
-
-NO_CATALOGUE = _NoCatalogue()
+        return add_project_types(handle, self.handle, list(type_ids))
 
 
 def catalogue_of(state) -> CataloguePort:
-    """The port on `app.state`: an installed one (tests), else the app's catalogue."""
+    """An installed port (tests), else BC's catalogue; 503 `catalogue_unavailable` when it failed
+    to open (foundation F §15)."""
     port = getattr(state, "catalogue_port", None)
-    return port if port is not None else NO_CATALOGUE
+    if port is not None:
+        return port
+    handle = getattr(state, "catalogue", None)
+    if handle is None:
+        raise catalogue_unavailable()
+    return CatalogueAdapter(handle)
 
 
 def get_catalogue(request: Request) -> CataloguePort:

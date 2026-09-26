@@ -20,7 +20,7 @@ from app.errors import AppError
 from app.inference.jobs import run_infer  # noqa: F401 - registers `infer`
 from app.jobs.schemas import JobOut
 from app.library import service as library
-from app.library.catalogue_port import NO_CATALOGUE, catalogue_of
+from app.library.catalogue_port import catalogue_of
 from app.library.db import LibraryModel
 from app.library.handle import library_unavailable
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers `map_detect`
@@ -93,7 +93,7 @@ def create_runs(
     state = request.app.state
     # A cloud-provider run never touches the catalogue: resolve it only when a local library model
     # needs mapping, so a cloud run never fails on an unavailable catalogue (foundation plan BM A11).
-    catalogue = catalogue_of(state) if body.model_id else NO_CATALOGUE
+    catalogue = catalogue_of(state) if body.model_id else None
     created, added = runs.create_runs(
         handle,
         getattr(state, "library", None),

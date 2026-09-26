@@ -5,7 +5,6 @@ review on both, a site area, and then the analytics, a recount and the CSV expor
 import csv
 
 import pytest
-from catalogue_fake import project_catalogue  # noqa: F401 - fixture
 from geotiffs import make_squares_geotiff
 from library_helpers import add_library_model
 
@@ -66,7 +65,6 @@ def test_a_detection_project_from_sources_to_a_csv(
     import_source,
     wait_job,
     fake_model,
-    project_catalogue,  # noqa: F811
 ):
     # --- Sources: a photo batch and a map, each dated.
     photos = tmp_path / "flight"

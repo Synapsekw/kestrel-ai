@@ -11,7 +11,6 @@ import time
 import typing
 
 import pytest
-from catalogue_fake import FakeCatalogue
 from fakes import FakeTrainer
 from library_helpers import add_library_model, wait_library_job
 from PIL import Image as PILImage
@@ -584,7 +583,6 @@ def test_dataset_training_and_deletion_flow(
             f"/api/v1/projects/{project_id}/images/{image_id}/boxes",
             json={"class_id": cls, "x": 1, "y": 1, "w": 10, "h": 10},
         )
-    app.state.catalogue_port = FakeCatalogue.from_classes(project["classes"])
     created = tool("create_dataset", {"name": "v1", "split_method": "random"})
     body = ok(created)
     assert created.job_ids == []  # a library job, like starters
