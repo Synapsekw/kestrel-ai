@@ -1,4 +1,4 @@
-"""A library model's classes mapped onto a detection project's classes (spec 2026-09-23 section 7.3).
+"""A library model's classes mapped onto a project's classes (spec 2026-09-23 section 7.3).
 
 A mapping is `{model_class_name: project_class_id | None}`; `None` ignores that class, so its
 detections are never written. Per model class the order is:

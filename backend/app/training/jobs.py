@@ -1,4 +1,4 @@
-"""The `train` job (spec section 7): trains in a training project and registers the result in the
+"""The `train` job (spec section 7): trains in a project and registers the result in the
 model library (spec 2026-09-23 section 4.3). Registered with the S0 job runner."""
 
 from dataclasses import asdict
