@@ -130,3 +130,18 @@ test("secondary pages open from More", async ({ page }) => {
   await expect(page).toHaveURL(new RegExp(`/p/${P}/analytics$`));
   await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
 });
+
+test("the palette field's Ctrl K key caps sit on one line", async ({ page }) => {
+  await page.goto(`/p/${P}/overview`);
+  const field = page.getByRole("button", { name: "Search and commands" });
+  await expect(field).toBeVisible();
+  const caps = field.locator("kbd");
+  await expect(caps.first()).toBeVisible();
+  const boxes = await caps.evaluateAll((els) => els.map((el) => el.getBoundingClientRect().toJSON()));
+  for (const box of boxes) {
+    expect(box.height).toBeLessThanOrEqual(18);
+    expect(box.top).toBe(boxes[0].top);
+  }
+  const wrapper = await caps.first().evaluate((el) => el.parentElement!.getBoundingClientRect().height);
+  expect(wrapper).toBeLessThanOrEqual(18);
+});

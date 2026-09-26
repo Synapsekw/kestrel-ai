@@ -58,7 +58,8 @@ function report(action: string, err: unknown): void {
 }
 
 /**
- * Volumes (spec 2026-09-23-volumes section 9): surfaces and measurements on the left, the top
+ * Measurements, the interim host of the Measurements tab: today's Volumes screen (spec
+ * 2026-09-23-volumes section 9): surfaces and measurements on the left, the top
  * surface's hillshade (over the ortho of the same flight) with the drawing tools in the middle, and
  * a Measure | Results aside. Every drawn or edited ring is saved at once; numbers only ever come
  * from a `volume_calc` job.
@@ -282,7 +283,7 @@ export function VolumesScreen() {
   return (
     <div className="flex h-full min-h-0 w-full">
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
-        <h1 className="text-xl font-semibold">Volumes</h1>
+        <h1 className="text-xl font-semibold">Measurements</h1>
         {loadError && (
           <Alert
             tone="danger"

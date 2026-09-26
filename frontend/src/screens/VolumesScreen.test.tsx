@@ -82,6 +82,7 @@ describe("VolumesScreen", () => {
       path: "/p/:projectId/measurements/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
+    expect(screen.getByRole("heading", { level: 1, name: "Measurements" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Measurements" })).toHaveTextContent("Pile 1");
     expect(screen.queryByText(/could not load/)).not.toBeInTheDocument();
   });

@@ -1,7 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAgentPanel } from "@/agent/panelStore";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
-import { Button, Icon, IconButton, Kbd, StatusDot, Tooltip, buttonClass, cx, focusRing } from "@/ui";
+import { Button, Icon, IconButton, KeyChord, StatusDot, Tooltip, buttonClass, cx, focusRing } from "@/ui";
 import { useRouteActions, type RouteAction } from "./routeActions";
 import { SECTION_LABEL, routeInfo } from "./routeModel";
 import { RunningPill } from "./RunningPill";
@@ -139,10 +139,8 @@ export function TopBar({
         )}
       >
         <Icon name="search" size={14} />
-        <span className="truncate">Search findings, data, measurements…</span>
-        <span className="ml-auto">
-          <Kbd>Ctrl K</Kbd>
-        </span>
+        <span className="min-w-0 flex-1 truncate text-left">Search findings, data, measurements…</span>
+        <KeyChord chord="Ctrl+K" className="shrink-0" />
       </button>
       {actions.map((action) => (
         <ActionControl key={action.id} action={action} />

@@ -55,7 +55,7 @@ describe("TopBar", () => {
     const { banner, onOpenPalette } = renderBar("/projects");
     const field = within(banner).getByRole("button", { name: "Search and commands" });
     expect(field).toHaveAttribute("aria-keyshortcuts", "Control+K");
-    expect(field).toHaveTextContent("Ctrl K");
+    expect([...field.querySelectorAll("kbd")].map((k) => k.textContent)).toEqual(["Ctrl", "K"]);
     fireEvent.click(field);
     expect(onOpenPalette).toHaveBeenCalled();
   });

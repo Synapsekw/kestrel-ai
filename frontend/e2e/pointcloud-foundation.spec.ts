@@ -13,7 +13,7 @@ test("Point clouds and Measurements open from the project tabs", async ({ page }
 
   await page.getByRole("tab", { name: /^Measurements/ }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/measurements$`));
-  await expect(page.getByRole("heading", { name: "Volumes" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Measurements", exact: true })).toBeVisible();
 
   // A deep link with the 3D-jump parameters lands on the same screen.
   await page.goto(`/p/${P}/clouds/c1?at=553100.5,2847300.25`);
