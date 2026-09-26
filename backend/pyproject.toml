@@ -20,6 +20,7 @@ markers = [
     "gpu: needs an NVIDIA GPU",
     "live: calls a cloud provider, needs an API key in the environment",
     "potreeconverter: runs the real PotreeConverter from backend/third_party (skipped when fetch_potreeconverter.ps1 has not run)",
+    "real_data: runs the migration dry run on the operator's real project folders (KESTREL_REAL_PROJECTS); skipped when unset",
 ]
 addopts = "-m 'not gpu and not live'"
 filterwarnings = [
