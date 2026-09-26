@@ -109,6 +109,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         reset_shutdown()  # a fresh app (or the next test's app) starts with no shutdown signalled
         app.state.events = EventBus()
         app.state.events.bind(asyncio.get_running_loop())
+        from app.findings import events as findings_events
+
+        findings_events.set_bus(app.state.events)
         app.state.jobs = JobRunner(app.state.events)
         # Projects open lazily, so these sweeps hang off the registry rather than startup.
         app.state.projects = ProjectRegistry(
