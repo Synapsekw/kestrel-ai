@@ -1,8 +1,8 @@
 import type { RouteObject } from "react-router-dom";
-import { InterimOverview } from "@/app/InterimScreens";
 import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { FindingsScreen } from "@/findings/FindingsScreen";
 import { MapDataList } from "@/maps/MapDataList";
+import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
 import { DataManagerScreen } from "@/screens/DataManagerScreen";
@@ -20,7 +20,8 @@ import { SiteAreasScreen } from "@/screens/SiteAreasScreen";
  * M, C and R add or swap entries here only; `routes.tsx` and `routes/tree.tsx` stay SH's.
  */
 export const projectRoutes: RouteObject[] = [
-  { path: "overview", element: <InterimOverview /> },
+  // F §9.1: the project opens here.
+  { path: "overview", element: <OverviewScreen /> },
   // Images: interim host, today's screens (I replaces them).
   { path: "images", element: <DataManagerScreen /> },
   { path: "images/:imageId", element: <EditorScreen /> },
