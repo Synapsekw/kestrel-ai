@@ -28,7 +28,7 @@ export class ErrorBoundary extends Component<Props, State> {
       <div className="flex h-full w-full items-center justify-center bg-bg p-8 text-ink">
         <div
           role="alert"
-          className="flex max-w-xl flex-col gap-4 rounded-lg border border-line bg-surface p-6 shadow-float"
+          className="flex max-w-xl flex-col gap-4 rounded-panel border border-line bg-surface p-6 shadow-elev-2"
         >
           <div className="flex items-center gap-2.5">
             <span className="grid h-8 w-8 place-items-center rounded-full bg-danger-soft text-danger">
