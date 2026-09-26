@@ -31,6 +31,16 @@ for (const e of keysFor("findings")) {
   if (HANDLED.has(e.action)) for (const k of e.keys) ACTION_OF.set(k, e.action);
 }
 
+/**
+ * DS's isTypingTarget counts every INPUT; a ticked row checkbox (or a radio) keeps focus after the
+ * click, and the keys must still reach the checked rows then (ambiguity 4).
+ */
+function isTextEntry(target: EventTarget | null): boolean {
+  if (target instanceof HTMLInputElement && (target.type === "checkbox" || target.type === "radio"))
+    return false;
+  return isTypingTarget(target);
+}
+
 /** An open dialog, listbox or menu owns its keys (Esc closes it, not the inspector: ambiguity 19). */
 function insideOverlay(target: EventTarget | null): boolean {
   return (
@@ -51,7 +61,7 @@ export function useFindingKeys(enabled: boolean, scaleSize: number, handlers: Fi
   useEffect(() => {
     if (!enabled) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || isTypingTarget(e.target) || insideOverlay(e.target)) return;
+      if (e.defaultPrevented || isTextEntry(e.target) || insideOverlay(e.target)) return;
       const action = ACTION_OF.get(chordOf(e));
       if (!action) return;
       const moving = action === "next-row" || action === "previous-row";

@@ -117,8 +117,14 @@ describe("Findings tab keys and bulk", () => {
   it("applies a key to the checked rows rather than the open finding", async () => {
     const requests = renderTab(`/${exampleFinding.id}`);
     await screen.findByText("Selected finding");
-    for (const box of screen.getAllByRole("checkbox", { name: /^Select row/ })) fireEvent.click(box);
-    key("R", { shiftKey: true });
+    // A clicked checkbox keeps focus in the webview; the key must still reach the checked rows.
+    const boxes = screen.getAllByRole("checkbox", { name: /^Select row/ });
+    for (const box of boxes) {
+      fireEvent.click(box);
+      box.focus();
+    }
+    expect(document.activeElement).toBe(boxes[1]);
+    fireEvent.keyDown(boxes[1], { key: "R", shiftKey: true });
     await waitFor(() =>
       expect(bulkBodies(requests)).toEqual([
         { ids: [exampleFinding.id, exampleFinding2.id], set: { status: "reviewed" } },
@@ -193,9 +199,11 @@ describe("Findings tab keys and bulk", () => {
   it("Esc clears the checked rows when no inspector is open", async () => {
     renderTab();
     await screen.findByText("F-0217");
-    fireEvent.click(screen.getAllByRole("checkbox", { name: /^Select row/ })[0]);
+    const box = screen.getAllByRole("checkbox", { name: /^Select row/ })[0];
+    fireEvent.click(box);
+    box.focus();
     expect(screen.getByText("1 selected")).toBeInTheDocument();
-    key("Escape");
+    fireEvent.keyDown(box, { key: "Escape" });
     await waitFor(() => expect(screen.queryByText("1 selected")).toBeNull());
   });
 });
