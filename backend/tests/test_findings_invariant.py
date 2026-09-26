@@ -191,11 +191,17 @@ def test_rejecting_an_accepted_defect_removes_its_finding(client, handle, ctx):
     assert _findings(client, ctx) == []
 
 
-def test_bulk_image_delete_takes_the_findings_along(client, handle, ctx):
+def test_bulk_image_delete_takes_the_findings_along(client, handle, ctx, tmp_path, make_jpeg):
     _box(client, ctx, ctx["crack"])
+    [f] = _findings(client, ctx)
+    photo = make_jpeg(tmp_path / "site.jpg", 64, 48)
+    r = client.post(f"{ctx['base']}/findings/{f['id']}/attachments", json={"path": str(photo)})
+    assert r.status_code == 201, r.text
     r = client.post(f"{ctx['base']}/images/bulk-delete", json={"image_ids": [ctx["image_id"]]})
     assert r.status_code == 200, r.text
     assert _findings(client, ctx) == []
+    [binned] = (handle.folder / "findings" / "_trash").glob(f"{f['id']}-*")
+    assert [p for p in binned.rglob("*") if p.is_file()]  # the photo is recoverable from the trash
     with handle.session() as s:
         assert [row for row in s.execute(select(FindingCount)).scalars() if row.n] == []
 

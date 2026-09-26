@@ -268,3 +268,23 @@ def test_counts_equal_a_recount_after_random_writes(client, handle, crack, cloud
         assert incremental == _counts(s)
         assert open_today == s.get(FindingDaily, counts.today()).open
         s.rollback()
+
+
+@pytest.mark.parametrize(
+    "sort, cursor",
+    [
+        ("-severity", {"sort": "-severity", "n": 3}),
+        ("-updated_at", {"sort": "-updated_at", "n": 3}),
+        ("-updated_at", {"sort": "-updated_at", "n": 3, "u": "not a date"}),
+        ("-updated_at", {"sort": "-updated_at", "n": 3, "u": 7}),
+        ("type", {"sort": "type", "n": 3}),
+    ],
+)
+def test_a_tampered_cursor_is_422_not_500(client, project, crack, cloud, handle, sort, cursor):
+    from app.pagination import encode_cursor
+
+    _make(handle, crack["id"], cloud)
+    r = client.get(
+        f"/api/v1/projects/{project['id']}/findings", params={"sort": sort, "cursor": encode_cursor(**cursor)}
+    )
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "validation_error")

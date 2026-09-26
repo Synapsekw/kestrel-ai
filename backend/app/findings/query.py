@@ -24,6 +24,7 @@ from app.findings import counts, numbers, service
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 
 SORTS = ("-severity", "number", "-updated_at", "type")
+SORT_KEYS = {"-severity": ("s",), "number": (), "-updated_at": ("u",), "type": ("t",)}
 MAX_PAGE = 500
 MAX_BULK = 1000
 TREND_DAYS = 60
@@ -123,6 +124,7 @@ def list_findings(
     c = decode_cursor(cursor, "sort", "n")
     if c and c["sort"] != sort:
         raise AppError("validation_error", "the cursor belongs to another sort order", 422)
+    c = decode_cursor(cursor, "sort", "n", *SORT_KEYS[sort])
     names: dict[str, str] = {}
     if sort == "-severity":
         sev = func.coalesce(Finding.severity, counts.NO_SEVERITY)  # "no severity" sorts last
@@ -135,7 +137,10 @@ def list_findings(
         q = q.order_by(Finding.number.asc())
     elif sort == "-updated_at":
         if c:
-            at = datetime.fromisoformat(c["u"])
+            try:
+                at = datetime.fromisoformat(c["u"])
+            except (TypeError, ValueError):
+                raise AppError("validation_error", "invalid cursor", 422) from None
             q = q.where(or_(Finding.updated_at < at, and_(Finding.updated_at == at, Finding.number < c["n"])))
         q = q.order_by(Finding.updated_at.desc(), Finding.number.desc())
     else:

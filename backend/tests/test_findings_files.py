@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from findings_helpers import insert_box, insert_cloud
@@ -216,3 +217,37 @@ def test_the_trash_is_purged_when_the_project_opens(client, handle):
     entry.mkdir(parents=True)
     project_opened(handle, client.app.state.jobs)
     assert not entry.exists()
+
+
+def test_a_truncated_jpeg_is_attachment_invalid_and_leaves_no_copy(client, handle, ctx, tmp_path, make_jpeg):
+    """Its header passes `verify()`; decoding it for the thumbnail is what fails."""
+    whole = make_jpeg(tmp_path / "whole.jpg", 640, 480, seed=5).read_bytes()
+    cut = tmp_path / "cut.jpg"
+    cut.write_bytes(whole[: len(whole) // 2])
+    r = client.post(f"{ctx['url']}/attachments", json={"path": str(cut)})
+    assert _error(r) == (422, "attachment_invalid")
+    assert r.json()["error"]["details"]["reason"] == "not_an_image"
+    folder = handle.folder / "findings" / ctx["fid"]
+    assert not folder.exists() or list(folder.iterdir()) == []
+
+
+def test_a_failed_copy_leaves_no_partial_file(client, handle, ctx, tmp_path, make_jpeg, monkeypatch):
+    src = make_jpeg(tmp_path / "p.jpg", 64, 48)
+
+    def half_copy(a, b):
+        Path(b).write_bytes(b"partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(attachments.shutil, "copy2", half_copy)
+    with pytest.raises(OSError):
+        attachments.add(handle, ctx["fid"], str(src))
+    folder = handle.folder / "findings" / ctx["fid"]
+    assert list(folder.iterdir()) == []
+
+
+def test_a_tampered_activity_cursor_is_422(client, ctx):
+    from app.pagination import encode_cursor
+
+    for cursor in (encode_cursor(at="yesterday", id="x"), encode_cursor(at=5, id="x")):
+        r = client.get(f"{ctx['base']}/activity", params={"cursor": cursor})
+        assert _error(r) == (422, "validation_error")

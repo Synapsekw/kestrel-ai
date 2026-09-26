@@ -38,7 +38,10 @@ def page(
         q = q.where(Activity.subject_id == subject_id)
     c = decode_cursor(cursor, "at", "id")
     if c:
-        at = datetime.fromisoformat(c["at"])
+        try:
+            at = datetime.fromisoformat(c["at"])
+        except (TypeError, ValueError):
+            raise AppError("validation_error", "invalid cursor", 422) from None
         q = q.where(or_(Activity.at < at, and_(Activity.at == at, Activity.id < c["id"])))
     rows = s.execute(q.order_by(Activity.at.desc(), Activity.id.desc()).limit(n + 1)).scalars().all()
     nxt = encode_cursor(at=rows[n - 1].at.isoformat(), id=rows[n - 1].id) if len(rows) > n else None

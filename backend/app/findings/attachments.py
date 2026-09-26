@@ -77,9 +77,12 @@ def add(handle, finding_id: str, source: str) -> FindingAttachment:
     rel = f"findings/{finding_id}/{aid}{FORMATS[fmt][0]}"
     dest = handle.folder / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(src, dest)
     try:
-        _write_thumb(dest, thumb_path(handle, aid))
+        shutil.copy2(src, dest)
+        try:
+            _write_thumb(dest, thumb_path(handle, aid))
+        except OSError as e:  # a truncated file passes verify(); decoding it is what fails
+            raise _invalid("not_an_image", f"{src.name} is damaged or incomplete.") from e
         with handle.session() as s:
             f = service.get_or_404(s, finding_id)  # deleted while the file copied: undo the copy
             row = FindingAttachment(
