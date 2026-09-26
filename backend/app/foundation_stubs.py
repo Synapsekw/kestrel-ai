@@ -19,12 +19,6 @@ from app.stubs import add_stubs
 # (method, path, operationId)
 Stub = tuple[str, str, str]
 
-# BK: the data list (§6.3), search (§10.3) and the app-wide jobs list (§10.1).
-BK_PROJECT_STUBS: list[Stub] = []
-BK_APP_STUBS: list[Stub] = [
-    ("GET", "/jobs", "listAppJobs"),
-]
-
 # BC: project types (§7.3), findings core (§8.3), the overview (§9.1) and the catalogue (§7).
 BC_PROJECT_STUBS: list[Stub] = [
     ("PUT", "/types", "putProjectTypes"),
@@ -83,8 +77,8 @@ MG_APP_STUBS: list[Stub] = [
     ("POST", "/projects/migrations/reveal-backup", "revealProjectBackup"),
 ]
 
-PROJECT_STUBS: list[Stub] = [*BK_PROJECT_STUBS, *BC_PROJECT_STUBS]
-APP_STUBS: list[Stub] = [*BK_APP_STUBS, *BC_APP_STUBS, *BM_APP_STUBS, *MG_APP_STUBS]
+PROJECT_STUBS: list[Stub] = [*BC_PROJECT_STUBS]
+APP_STUBS: list[Stub] = [*BC_APP_STUBS, *BM_APP_STUBS, *MG_APP_STUBS]
 
 project_router = APIRouter(prefix="/projects/{projectId}", tags=["foundation-stubs"])
 add_stubs(project_router, PROJECT_STUBS)

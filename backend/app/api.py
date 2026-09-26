@@ -13,6 +13,7 @@ from app.foundation_stubs import app_router as foundation_app_stubs
 from app.foundation_stubs import project_router as foundation_project_stubs
 from app.health import router as health_router
 from app.inference.router import router as inference_router
+from app.jobs.app_router import router as app_jobs_router
 from app.jobs.router import router as jobs_router
 from app.library.adoption_router import router as adoption_router
 from app.library.router import project_router as train_router
@@ -40,6 +41,7 @@ for r in (
     inference_router,
     project_agent_router,
     jobs_router,
+    app_jobs_router,
     exports_router,
     train_router,
     adoption_router,

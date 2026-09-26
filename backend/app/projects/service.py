@@ -192,6 +192,13 @@ class ProjectRegistry:
     def recent(self) -> list[dict]:
         return self.appdata.recent()
 
+    def open_recent(self) -> list[ProjectHandle]:
+        """The recent projects open in this process, in recent-list order (at most MAX_RECENT).
+        Only an open project can have a live job; opening one sweeps its orphans."""
+        ids = [r["id"] for r in self.appdata.recent()]
+        with self._lock:
+            return [self._handles[i] for i in ids if i in self._handles]
+
     def last_opened_at(self, project_id: str) -> datetime | None:
         return self.appdata.last_opened_at(project_id)
 
