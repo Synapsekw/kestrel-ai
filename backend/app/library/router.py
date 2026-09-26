@@ -138,7 +138,7 @@ def model_gsd_estimate(
     no longer opens, or imagery with no usable camera EXIF.
     """
     model = service.get_model(lib, modelId)
-    estimate = service.estimate_train_gsd(request.app.state.projects, model)
+    estimate = service.estimate_train_gsd(lib, request.app.state.projects, model)
     if estimate is None:
         raise not_found("gsd estimate", modelId)
     return ModelGsdEstimate(**asdict(estimate))

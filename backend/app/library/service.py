@@ -367,19 +367,77 @@ class GsdEstimate:
     plausible: bool
 
 
-def estimate_train_gsd(registry: ProjectRegistry, model: LibraryModel) -> GsdEstimate | None:
-    """The scale `model` was trained at, derived from the dataset it was trained on (spec section 3).
+def _estimate(
+    alts: list[float],
+    sample: list[Path],
+    stored_w: int,
+    stored_h: int,
+    widths: dict[str, float],
+    imgsz: int,
+) -> GsdEstimate | None:
+    """The derivation shared by project and library datasets (spec 2026-09-23 section 3).
 
-    The library is app-wide, so the dataset lives in another database: the model's `provenance`
-    snapshot names the originating project folder and dataset id, and the project is opened the same
-    way `usage()` opens it. A model with no usable provenance simply has no estimate - there is
-    nothing to measure, and inventing a fallback would be inventing the answer.
+    `alts` are the frames' altitudes, `sample` at most EXIF_SAMPLE image files to read the lens
+    from, `widths` the mean ground-truth box width in stored pixels per class name.
     """
+    from PIL import Image as PILImage
+
+    if not alts:
+        return None
+    median_alt = statistics.median(alts)
+    intr = None
+    read = 0
+    for path in sample[:EXIF_SAMPLE]:
+        try:
+            with PILImage.open(path) as im:
+                read += 1
+                intr = intrinsics_from_exif(im.getexif())
+        except OSError:
+            continue
+        if intr:
+            break
+    if intr is None:
+        return None
+    # The long side, not the width: see image_gsd_cm (EXIF-transposed portrait frames).
+    img_gsd = image_gsd_cm(median_alt, intr, max(stored_w, stored_h))
+    train_gsd = model_gsd_cm(img_gsd, stored_w, stored_h, imgsz)
+    per_class = {name: round(float(w) * img_gsd / 100.0, 2) for name, w in widths.items() if w}
+    median_object = statistics.median(per_class.values()) if per_class else 0.0
+    return GsdEstimate(
+        train_gsd_cm=round(train_gsd, 2),
+        image_gsd_cm=round(img_gsd, 3),
+        median_alt_m=round(median_alt, 2),
+        focal_mm=round(intr.focal_mm, 2),
+        sensor_width_mm=round(intr.sensor_width_mm, 3),
+        sensor_source=intr.source,
+        sample_size=read,
+        imgsz=imgsz,
+        median_object_m=round(median_object, 2),
+        per_class_m=per_class,
+        plausible=bool(per_class) and plausible(median_object),
+    )
+
+
+def estimate_train_gsd(
+    lib: LibraryHandle | None, registry: ProjectRegistry, model: LibraryModel
+) -> GsdEstimate | None:
+    """The scale `model` was trained at, derived from the dataset it was trained on (spec
+    2026-09-23 section 3). A model trained since the foundation names a library dataset; an older
+    one names a project folder and that project's dataset id. No usable provenance, no estimate."""
+    from app.library.db import LibraryDataset
+
     provenance = model.provenance or {}
-    folder = provenance.get("project_folder")
     dataset_id = provenance.get("dataset_id")
     imgsz = int((model.hyperparameters or {}).get("imgsz") or 0)
-    if not folder or not dataset_id or imgsz <= 0:
+    if not dataset_id or imgsz <= 0:
+        return None
+    if lib is not None:
+        with lib.session() as s:
+            in_library = s.get(LibraryDataset, str(dataset_id)) is not None
+        if in_library:
+            return estimate_for_library_dataset(lib, registry, str(dataset_id), imgsz)
+    folder = provenance.get("project_folder")
+    if not folder:
         return None
     try:
         handle = registry.open(Path(str(folder)), remember=False)
@@ -397,8 +455,6 @@ def estimate_for_dataset(handle: ProjectHandle, dataset_id: str, imgsz: int) -> 
     headers are opened, however large the dataset. That is what keeps this a bounded read and a
     plain request rather than a background job.
     """
-    from PIL import Image as PILImage
-
     from app.db.models import Box, Dataset, DatasetImage, Image
 
     if imgsz <= 0:
@@ -431,49 +487,110 @@ def estimate_for_dataset(handle: ProjectHandle, dataset_id: str, imgsz: int) -> 
             )
         )
 
-    alts = [r.alt for r in rows if r.alt is not None]
-    if not alts or not rows:
+    if not rows:
         return None
-    median_alt = statistics.median(alts)
-
-    intr = None
-    read = 0
-    for r in rows[:EXIF_SAMPLE]:
-        try:
-            with PILImage.open(handle.folder / r.path) as im:
-                read += 1
-                intr = intrinsics_from_exif(im.getexif())
-        except OSError:
-            continue
-        if intr:
-            break
-    if intr is None:
-        return None
-
-    stored_w = rows[0].width
-    stored_h = rows[0].height
-    # The long side, not the width: import applies `ImageOps.exif_transpose`, so a frame shot at
-    # orientation 6/8 is *stored* portrait while the EXIF copied with it still reports the sensor's
-    # long axis. Dividing the ground width by the stored width would then no longer cancel against
-    # the letterbox below, and the estimate would come out 1.5x too large.
-    img_gsd = image_gsd_cm(median_alt, intr, max(stored_w, stored_h))
-    train_gsd = model_gsd_cm(img_gsd, stored_w, stored_h, imgsz)
-
-    per_class = {
-        names[str(cid)]: round(float(avg_w) * img_gsd / 100.0, 2) for cid, avg_w, _n in sizes if avg_w
-    }
-    median_object = statistics.median(per_class.values()) if per_class else 0.0
-
-    return GsdEstimate(
-        train_gsd_cm=round(train_gsd, 2),
-        image_gsd_cm=round(img_gsd, 3),
-        median_alt_m=round(median_alt, 2),
-        focal_mm=round(intr.focal_mm, 2),
-        sensor_width_mm=round(intr.sensor_width_mm, 3),
-        sensor_source=intr.source,
-        sample_size=read,
-        imgsz=imgsz,
-        median_object_m=round(median_object, 2),
-        per_class_m=per_class,
-        plausible=bool(per_class) and plausible(median_object),
+    widths = {names[str(cid)]: float(avg_w) for cid, avg_w, _n in sizes if avg_w}
+    return _estimate(
+        [r.alt for r in rows if r.alt is not None],
+        [handle.folder / r.path for r in rows[:EXIF_SAMPLE]],
+        rows[0].width,
+        rows[0].height,
+        widths,
+        imgsz,
     )
+
+
+#: Items read per page when measuring a library dataset: bounded like every other dataset read.
+ITEM_PAGE = 500
+
+
+def estimate_for_library_dataset(
+    lib: LibraryHandle, registry: ProjectRegistry, dataset_id: str, imgsz: int
+) -> GsdEstimate | None:
+    """The training scale of a library dataset (foundation F §12.2 step 4), same contract as
+    `estimate_for_dataset`: best effort, None when nothing can be measured.
+
+    A built dataset samples its frames across projects: `dataset_item` is paged ITEM_PAGE rows at
+    a time for the altitudes and frozen box widths, and at most EXIF_SAMPLE headers are opened. A
+    project that is gone is skipped. A legacy dataset is measured in its project, exactly as before
+    the move: through `legacy_dataset_id` when it is set, or (amendment A12, for a row the
+    migration unit wrote without one) the project `Dataset` whose resolved path equals
+    `legacy_path`.
+    """
+    from app.db.models import Dataset, Image
+    from app.library.datasets.sources import open_source
+    from app.library.db import LibraryDataset, LibraryDatasetItem, LibraryDatasetSource
+
+    if imgsz <= 0:
+        return None
+    with lib.session() as s:
+        row = s.get(LibraryDataset, dataset_id)
+        if row is None:
+            return None
+        origin, legacy_id, legacy_path = row.origin, row.legacy_dataset_id, row.legacy_path
+        names = {str(c["type_id"]): str(c["name"]) for c in row.classes or []}
+        sources = [
+            (src.project_id, src.project_folder)
+            for src in s.execute(
+                select(LibraryDatasetSource).where(LibraryDatasetSource.dataset_id == dataset_id)
+            ).scalars()
+        ]
+    if origin == "legacy":
+        handle = open_source(registry, *sources[0]) if sources else None
+        if handle is None:
+            return None
+        if not legacy_id and legacy_path:
+            with handle.session() as s:
+                for d in s.execute(select(Dataset.id, Dataset.path)).all():
+                    if str((handle.folder / d.path).resolve()) == legacy_path:
+                        legacy_id = d.id
+                        break
+        return estimate_for_dataset(handle, legacy_id, imgsz) if legacy_id else None
+
+    alts: list[float] = []
+    sample: list[Path] = []
+    sums: dict[str, list[float]] = {}
+    size: tuple[int, int] | None = None
+    for project_id, folder in sources:
+        handle = open_source(registry, project_id, folder)
+        if handle is None:
+            log.info("dataset %s: project %s is gone; measuring without it", dataset_id, project_id)
+            continue
+        after = ""
+        while True:
+            with lib.session() as s:
+                page = s.execute(
+                    select(LibraryDatasetItem.image_id, LibraryDatasetItem.labels)
+                    .where(
+                        LibraryDatasetItem.dataset_id == dataset_id,
+                        LibraryDatasetItem.project_id == project_id,
+                        LibraryDatasetItem.image_id > after,
+                    )
+                    .order_by(LibraryDatasetItem.image_id)
+                    .limit(ITEM_PAGE)
+                ).all()
+            if not page:
+                break
+            after = page[-1].image_id
+            for _, labels in page:
+                for label in labels or []:
+                    acc = sums.setdefault(str(label["type_id"]), [0.0, 0])
+                    acc[0] += float(label["w"])
+                    acc[1] += 1
+            with handle.session() as s:
+                rows = s.execute(
+                    select(Image.path, Image.width, Image.height, Image.alt).where(
+                        Image.id.in_([p.image_id for p in page])
+                    )
+                ).all()
+            for r in rows:
+                if r.alt is not None:
+                    alts.append(r.alt)
+                if size is None:
+                    size = (r.width, r.height)
+                if len(sample) < EXIF_SAMPLE:
+                    sample.append(handle.folder / r.path)
+    if size is None:
+        return None
+    widths = {names[t]: total / n for t, (total, n) in sums.items() if n and t in names}
+    return _estimate(alts, sample, size[0], size[1], widths, imgsz)
