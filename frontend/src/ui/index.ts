@@ -58,6 +58,7 @@ export {
   type SeverityLevel,
 } from "./severityScale";
 export { Skeleton, SkeletonRows } from "./Skeleton";
+export { Slider, snapValue, stepValue, type SliderProps, type SliderRange } from "./Slider";
 export { SPARK_MAX, Sparkline, sparkPaths } from "./Sparkline";
 export { StatTile, type StatDelta, type StatTileProps } from "./StatTile";
 export { StatusDot, type DotStatus } from "./StatusDot";
