@@ -10,6 +10,7 @@ from alembic import command
 from alembic.config import Config
 from conftest import COLOURS, EIGHT_CLASSES
 from library_helpers import stub_checkpoint
+from migration_helpers import wait_library_job
 from project_factory import new_project
 from sqlalchemy import func, select
 
@@ -359,6 +360,9 @@ def test_real_project_copy(app, client, tmp_path, wait_job, monkeypatch):
     assert r.status_code == 200, r.text
     project = r.json()
     assert project["id"] == ids["project"] and "kind" not in project
+    # A version-1 project is upgraded by a library job before its routes answer (foundation §11.3).
+    assert project["migration"]["state"] in ("pending", "running"), project["migration"]
+    assert wait_library_job(client, project["migration"]["job_id"])["state"] == "succeeded"
 
     jobs = client.get(f"{BASE}/{ids['project']}/jobs").json()["items"]
     adopt = [j for j in jobs if j["type"] == adoption.ADOPT_JOB]

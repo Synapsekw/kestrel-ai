@@ -119,10 +119,11 @@ def copy_app_stores(data_dir: Path, work: Path) -> Path:
 
 
 def open_stores(appdata: Path):
-    """The library (and, once unit BC has landed, the catalogue) opened on the copies."""
+    """The library and the catalogue, opened on the copies."""
     from app.library.handle import open_library
+    from app.migration import ports
 
-    return open_library(appdata), None
+    return open_library(appdata), ports.open_catalogue_db(appdata)
 
 
 def project_checks(handle) -> dict:

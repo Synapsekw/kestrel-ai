@@ -28,6 +28,7 @@ from app.migration.state import MigrationStates
 
 JOB_TYPE = "project_migrate"
 WAITING_FOR_LIBRARY = "Waiting for the model library: this project opens once the library is available."
+WAITING_FOR_CATALOGUE = "Waiting for the catalogue: this project opens once the catalogue is available."
 CANCELLED = "The upgrade was cancelled. Retry to finish it."
 log = logging.getLogger(__name__)
 
@@ -66,6 +67,8 @@ def blocked_reason(runner) -> str | None:
     """Why no upgrade job can run right now, or None (foundation spec §15)."""
     if getattr(runner, "library", None) is None:
         return WAITING_FOR_LIBRARY
+    if armed() and getattr(runner, "catalogue", None) is None:
+        return WAITING_FOR_CATALOGUE
     return None
 
 

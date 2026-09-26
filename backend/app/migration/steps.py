@@ -6,7 +6,7 @@ own: a re-run after a crash finds what it wrote and writes nothing twice. `STORE
 the catalogue and library write sections: the library runner runs two upgrades at once, and two
 projects must not both create "dump_truck".
 
-`PIPELINE` stays empty until Task 15 arms it (see the ADR
+`PIPELINE` is armed: every project below schema version 2 runs it (ADR
 2026-09-26-migration-framework-ships-disarmed).
 """
 
@@ -357,4 +357,16 @@ def counts_rebuild(ctx: StepContext) -> dict:
     return {"findings": result["findings"]}
 
 
-PIPELINE: tuple[Step, ...] = ()
+PIPELINE: tuple[Step, ...] = (
+    Step("catalogue_merge", "Merging the project's classes into the catalogue", catalogue_merge),
+    Step("rewrite_class_ids", "Pointing annotations and detections at catalogue types", rewrite_class_ids),
+    Step("project_types", "Building the project's type list", project_types),
+    Step("library_class_maps", "Moving model class mappings into the library", library_class_maps),
+    Step("legacy_datasets", "Registering the project's datasets in Models", legacy_datasets),
+    Step(
+        "findings_from_annotations",
+        "Creating findings from accepted defect annotations",
+        findings_from_annotations,
+    ),
+    Step("counts_rebuild", "Counting findings", counts_rebuild),
+)

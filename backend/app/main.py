@@ -150,13 +150,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except Exception:
                 logging.getLogger(__name__).exception("dataset export folder sweep failed")
         # Upgrade recent projects that predate the foundation schema in the background (spec §11.3).
-        # After the library (and, once unit BC has landed, the catalogue) opened.
+        # After the library and the catalogue opened: an upgrade waits for both.
         try:
             from app.migration import startup as migration_startup
 
             migration_startup.submit_pending(app)
         except Exception:
             logging.getLogger(__name__).exception("queuing project upgrades failed")
+        try:
+            # The Overview's migration-warning banner (spec §9.1); registering twice is a no-op.
+            from app.migration import banners as migration_banners
+
+            migration_banners.register()
+        except Exception:
+            logging.getLogger(__name__).exception("registering the migration banner failed")
         # The project agent's turn loops run as tasks on this event loop; the model call is a seam
         # (`agent_llm`) so tests can script the model without reaching a provider.
         from app.project_agent import llm as agent_llm
