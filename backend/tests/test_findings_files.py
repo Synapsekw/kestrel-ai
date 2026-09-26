@@ -155,6 +155,7 @@ def test_the_finding_thumbnail_falls_back_to_the_first_attachment(client, ctx, t
     client.post(f"{ctx['url']}/attachments", json={"path": str(make_jpeg(tmp_path / "p.jpg", 300, 200))})
     r = client.get(f"{ctx['url']}/thumbnail")
     assert (r.status_code, r.headers["content-type"]) == (200, "image/jpeg")
+    assert PILImage.open(BytesIO(r.content)).size == thumbnails.SIZE  # a 3:2 photo, letterboxed
 
 
 def test_an_image_finding_thumbnail_crops_around_its_box_and_follows_a_move(client, handle, crack, make_jpeg):

@@ -58,17 +58,26 @@ def finding_thumbnail(handle, finding_id: str) -> Path:
         sig = hashlib.sha1(",".join(f"{v:.2f}" for v in geometry).encode()).hexdigest()[:12]
         dest = handle.thumbs_dir / "findings" / f"{finding_id}-{sig}.jpg"
         if not dest.is_file():
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            src = images.image_file(handle, image_id, None)
-            tmp = dest.with_name(f"{dest.name}.{uuid4().hex}.tmp")
-            try:
-                with PILImage.open(src) as im:
-                    crop = im.crop(crop_window(*geometry, *size)).convert("RGB")
-                    ImageOps.pad(crop, SIZE, color=LETTERBOX).save(tmp, "JPEG", quality=85)
-                os.replace(tmp, dest)
-            finally:
-                tmp.unlink(missing_ok=True)
+            _write_padded(images.image_file(handle, image_id, None), dest, crop_window(*geometry, *size))
         return dest
     if first is not None:
-        return attachments.thumbnail(handle, finding_id, first)
+        # The attachment's own thumbnail is 256 px with the photo's aspect; the finding's is 160x120.
+        dest = handle.thumbs_dir / "findings" / f"{finding_id}-att-{first}.jpg"
+        if not dest.is_file():
+            _write_padded(attachments.thumbnail(handle, finding_id, first), dest)
+        return dest
     raise not_found("thumbnail", finding_id)
+
+
+def _write_padded(src: Path, dest: Path, window: tuple[int, int, int, int] | None = None) -> None:
+    """`src` (cropped to `window` if given) letterboxed to SIZE, through a temp name and a rename:
+    a concurrent reader sees all of it or none."""
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(f"{dest.name}.{uuid4().hex}.tmp")
+    try:
+        with PILImage.open(src) as im:
+            picture = (im.crop(window) if window is not None else im).convert("RGB")
+            ImageOps.pad(picture, SIZE, color=LETTERBOX).save(tmp, "JPEG", quality=85)
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
