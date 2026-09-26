@@ -3,7 +3,7 @@ import { IMAGE_ID, MAP_ID, PROJECT_ID, SOURCE_ID } from "@/test/fixtures";
 import { exampleFinding, exampleFinding2, FINDING_ID } from "@/test/findingFixtures";
 import { formatFindingNumber, formatPercent, parseCreatedBy, relativeTime } from "./format";
 import { canTransition } from "./status";
-import { findingHref, findingPath } from "./links";
+import { findingHref, findingPath, findingsTabPath } from "./links";
 import {
   DEFAULT_FILTERS,
   filtersToQuery,
@@ -70,6 +70,19 @@ describe("finding links (F §8.7)", () => {
       anchor: { kind: "cloud", cloud_id: "c1", x: 1, y: 2, z: 3, uncertainty_m: 0.1 },
     } as const;
     expect(findingHref(PROJECT_ID, cloud)).toBe(`/p/${PROJECT_ID}/clouds/c1?finding=f9`);
+  });
+
+  it("builds the Findings tab path, keeping a raw search as-is (F24)", () => {
+    expect(findingsTabPath(PROJECT_ID)).toBe(`/p/${PROJECT_ID}/findings`);
+    expect(findingsTabPath(PROJECT_ID, "")).toBe(`/p/${PROJECT_ID}/findings`);
+    expect(findingsTabPath(PROJECT_ID, "?status=open&q=crack")).toBe(
+      `/p/${PROJECT_ID}/findings?status=open&q=crack`,
+    );
+    expect(findingsTabPath(PROJECT_ID, "severity=4")).toBe(`/p/${PROJECT_ID}/findings?severity=4`);
+    expect(findingsTabPath(PROJECT_ID, new URLSearchParams([["status", "closed"]]))).toBe(
+      `/p/${PROJECT_ID}/findings?status=closed`,
+    );
+    expect(findingsTabPath(PROJECT_ID, new URLSearchParams())).toBe(`/p/${PROJECT_ID}/findings`);
   });
 });
 
