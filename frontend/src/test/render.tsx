@@ -18,10 +18,10 @@ export function TestApiProvider({ api, children }: { api: ApiClient; children: R
   return <ApiContext.Provider value={value}>{children}</ApiContext.Provider>;
 }
 
-/** Prints the router's current pathname, so a test can assert where a click navigated. */
+/** Prints the router's current pathname and query, so a test can assert where a click navigated. */
 export function LocationProbe() {
   const l = useLocation();
-  return <output data-testid="location">{l.pathname}</output>;
+  return <output data-testid="location">{l.pathname + l.search}</output>;
 }
 
 /** Renders `ui` inside the API context and a memory router; `path` mounts it as a route so `useParams` works. */

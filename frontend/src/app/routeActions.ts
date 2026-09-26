@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { create } from "zustand";
+import { ADD_DATA_LOADING } from "@/data/addDataTiles";
 import type { IconName } from "@/ui";
 import { useAddData } from "./addDataStore";
 import { routeInfo, type RouteInfo } from "./routeModel";
@@ -41,7 +42,7 @@ export function defaultRouteActions(info: RouteInfo, openAddData: (() => void) |
           icon: "plus",
           variant: "secondary",
           disabled: true,
-          tooltip: "Project is still loading",
+          tooltip: ADD_DATA_LOADING,
         },
   );
   actions.push({

@@ -1,0 +1,37 @@
+/* Severity bars and hero pins (F §4.2). Card and row entrances use DS's `.stagger animate-rise`.
+   Durations, easings and stagger come only from the DS tokens, so reduced motion (the OS setting or
+   Settings → Reduce motion, both zero the tokens) shows the final state at once. Transform and
+   opacity only; fill `backwards`, so nothing lasts after the end (ADR "lasting opacity animation
+   disables glass blur"). The index `--i` comes from DS's `stagger(i)`. */
+
+/* Severity bars grow from the left to their inline `transform: scaleX(f)`. */
+.ov-bar {
+  transform-origin: left center;
+  animation: ov-grow var(--dur-emphasis) var(--ease-out) backwards;
+  animation-delay: calc(var(--stagger-step) * min(var(--i, 0), var(--stagger-max) - 1));
+}
+@keyframes ov-grow {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Pins pop once on arrival; never a looping pulse on static data. They keep their centring
+   translate, and start small and transparent rather than from nothing. */
+.ov-pin {
+  animation: ov-pop var(--dur-base) var(--ease-spring) backwards;
+  animation-delay: calc(var(--stagger-step) * min(var(--i, 0), var(--stagger-max) - 1));
+}
+@keyframes ov-pop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ov-bar,
+  .ov-pin {
+    animation: none;
+  }
+}

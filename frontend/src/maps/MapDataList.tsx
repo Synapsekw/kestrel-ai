@@ -4,10 +4,10 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { updateMapDate } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
-import { ADD_DATA_LOADING, openAddData, useAddDataReady } from "@/data/addDataTiles";
+import { AddDataButton } from "@/data/AddDataButton";
 import { SurveyDateCell } from "@/sources/SurveyDateCell";
 import { useChangesStore } from "@/store/changes";
-import { Alert, Button, EmptyState, Pill, SkeletonRows, Tooltip, type PillTone } from "@/ui";
+import { Alert, Button, EmptyState, Pill, SkeletonRows, type PillTone } from "@/ui";
 import { detailOf, fetchMapItems, type DataItem } from "./dataItems";
 
 const TYPE_LABEL: Record<string, string> = { map: "Orthomosaic", elevation: "Elevation", drawing: "Drawing" };
@@ -25,7 +25,6 @@ export function MapDataList() {
   const { projectId = "" } = useParams();
   const api = useApi();
   const revision = useChangesStore((s) => s.dataRevision);
-  const addReady = useAddDataReady(projectId);
   const [list, setList] = useState<{
     key: string;
     projectId: string;
@@ -91,17 +90,9 @@ export function MapDataList() {
           icon="map"
           title="No maps yet"
           action={
-            addReady ? (
-              <Button variant="primary" icon="plus" onClick={() => openAddData("orthomosaic")}>
-                Add an orthomosaic
-              </Button>
-            ) : (
-              <Tooltip label={ADD_DATA_LOADING}>
-                <Button variant="primary" icon="plus" disabled>
-                  Add an orthomosaic
-                </Button>
-              </Tooltip>
-            )
+            <AddDataButton projectId={projectId} tile="orthomosaic" variant="primary" icon="plus">
+              Add an orthomosaic
+            </AddDataButton>
           }
         >
           Add a GeoTIFF orthomosaic of the site. Elevation models and drawings are listed here too.
