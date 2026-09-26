@@ -120,6 +120,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const sceneKey = `${cloud.id}|${octreeUrl}|${generation}`;
   const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
   const [lostKey, setLostKey] = useState<string | null>(null);
+  const [noWebGlKey, setNoWebGlKey] = useState<string | null>(null);
   const [bar, setBar] = useState<{ pts: number; loading: number; pick: CloudPick | null }>({
     pts: 0,
     loading: 0,
@@ -233,11 +234,19 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     const host = box.current;
     if (!canvas || !host) return;
     const key = `${cloud.id}|${octreeUrl}|${generation}`;
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      antialias: false,
-      powerPreference: "high-performance",
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        antialias: false,
+        powerPreference: "high-performance",
+      });
+    } catch {
+      // No WebGL (a graphics driver that cannot start it): three throws here. Say so in the view
+      // rather than letting the throw take the whole screen down to the router's error page.
+      setNoWebGlKey(key);
+      return;
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     const clear = tokenRgb("canvas");
     renderer.setClearColor(tokenColor(clear));
@@ -575,6 +584,14 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         className="absolute inset-0 h-full w-full bg-canvas"
         style={{ cursor: armed ? "crosshair" : "grab" }}
       />
+      {noWebGlKey === sceneKey && (
+        <div className="absolute inset-x-4 top-4">
+          <Alert tone="danger" title="The 3D view could not start">
+            This computer&apos;s graphics could not start WebGL, which the 3D view draws with. Updating the
+            graphics driver usually fixes this; the cloud&apos;s details and export still work.
+          </Alert>
+        </div>
+      )}
       {loadError?.key === sceneKey && (
         <div className="absolute inset-x-4 top-4">
           <Alert tone="danger" title="The 3D view could not be shown">
