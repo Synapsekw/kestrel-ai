@@ -16,6 +16,11 @@ interface ChangesState {
   findingsRevision: number;
   /** Bumped on `migration.changed`: the Projects list re-reads (F §11.3). */
   projectsRevision: number;
+  /** The project the route has open (set by the Shell), or null. The events socket is app-wide, so
+   * `findings.changed` / `data.changed` of another project (a job running in B while A is open) are
+   * ignored rather than re-reading A's screens. */
+  openProjectId: string | null;
+  setOpenProject: (projectId: string | null) => void;
   applyEvent: (ev: AppEvent) => void;
   bumpImages: () => void;
   bumpFindings: () => void;
@@ -30,11 +35,15 @@ export const useChangesStore = create<ChangesState>((set) => ({
   dataRevision: 0,
   findingsRevision: 0,
   projectsRevision: 0,
+  openProjectId: null,
+  setOpenProject: (openProjectId) => set({ openProjectId }),
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
   bumpFindings: () => set((s) => ({ findingsRevision: s.findingsRevision + 1 })),
   bumpData: () => set((s) => ({ dataRevision: s.dataRevision + 1 })),
   applyEvent: (ev) =>
     set((s) => {
+      const elsewhere = s.openProjectId !== null && ev.project_id !== s.openProjectId;
+      if ((ev.type === "findings.changed" || ev.type === "data.changed") && elsewhere) return s;
       if (ev.type === "images.changed") return { imagesRevision: s.imagesRevision + 1 };
       if (ev.type === "boxes.changed") {
         const ids = (ev.payload as { image_ids?: unknown }).image_ids;

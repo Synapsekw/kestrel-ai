@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import { collectDiagnostics } from "@/app/diagnostics";
+import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
 import { exampleOverview, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
@@ -53,6 +54,11 @@ describe("Shell", () => {
     expect(await within(banner).findByRole("link", { name: exampleProject.name })).toBeInTheDocument();
     expect(within(banner).getByText("Images")).toBeInTheDocument();
     expect(screen.getByRole("tablist")).toBeInTheDocument();
+  });
+
+  it("tells the changes store which project is open, so other projects' changes are ignored", async () => {
+    renderShell(`/p/${PROJECT_ID}/images`);
+    await waitFor(() => expect(useChangesStore.getState().openProjectId).toBe(PROJECT_ID));
   });
 
   it("hides the tabs on the full-bleed map and names the tab in the breadcrumb", async () => {

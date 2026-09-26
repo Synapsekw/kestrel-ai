@@ -9,6 +9,7 @@ import { fetchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
 import { JobsPanel } from "@/jobs/JobsPanel";
 import { useInitialJobs } from "@/jobs/useJobList";
+import { useChangesStore } from "@/store/changes";
 import { Toaster, useJobToasts } from "@/ui";
 import { AddDataHost } from "./AddDataHost";
 import { PageTransition } from "./PageTransition";
@@ -58,6 +59,9 @@ export function Shell() {
     pathnameRef.current = pathname;
   }, [pathname]);
   useJobToasts(projectId, pathnameRef);
+  useEffect(() => {
+    useChangesStore.getState().setOpenProject(projectId ?? null);
+  }, [projectId]);
   const bare = info.layout !== "page";
 
   return (
