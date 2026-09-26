@@ -195,8 +195,8 @@ class ProjectRegistry:
     def last_opened_at(self, project_id: str) -> datetime | None:
         return self.appdata.last_opened_at(project_id)
 
-    def last_opened_map(self) -> dict[str, datetime | None]:
-        return self.appdata.last_opened_map()
+    def last_opened_map(self, entries: list[dict] | None = None) -> dict[str, datetime | None]:
+        return self.appdata.last_opened_map(entries)
 
     def close_all(self) -> None:
         with self._lock:

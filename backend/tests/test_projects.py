@@ -248,3 +248,15 @@ def test_a_malformed_last_opened_at_answers_null_not_500(client, settings, proje
 
     assert r.status_code == 200
     assert r.json()["last_opened_at"] is None
+
+
+def test_a_recent_entry_with_no_last_opened_at_key_answers_null(client, settings, project_dir):
+    p = _create(client, project_dir, "A")
+    entries = _recent_entries(settings)
+    del entries[0]["last_opened_at"]
+    (settings.data_dir / "recent_projects.json").write_text(json.dumps(entries), "utf-8")
+
+    r = client.get(f"/api/v1/projects/{p['id']}")
+
+    assert r.status_code == 200
+    assert r.json()["last_opened_at"] is None

@@ -36,9 +36,10 @@ def _out(handle: ProjectHandle, last_opened_at: datetime | None) -> ProjectOut:
 @router.get("", response_model=ProjectPage)
 def list_projects(request: Request) -> ProjectPage:
     reg = _registry(request)
-    last_opened = reg.last_opened_map()  # one read of the recent list for the whole page
+    entries = reg.recent()  # one read of the recent list for the whole page
+    last_opened = reg.last_opened_map(entries)
     items: list[ProjectOut] = []
-    for r in reg.recent():
+    for r in entries:
         folder = Path(r["folder"])
         if not (folder / "project.db").exists():
             continue

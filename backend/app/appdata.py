@@ -64,10 +64,13 @@ class AppData:
                 return _parse_last_opened_at(r.get("last_opened_at"))
         return None
 
-    def last_opened_map(self) -> dict[str, datetime | None]:
-        """id -> `last_opened_at`, read from the recent list once (bounded by `MAX_RECENT`). Used
-        by `list_projects` so it does not re-read the file once per project."""
-        return {r["id"]: _parse_last_opened_at(r.get("last_opened_at")) for r in self.recent()}
+    def last_opened_map(self, entries: list[dict] | None = None) -> dict[str, datetime | None]:
+        """id -> `last_opened_at`, bounded by `MAX_RECENT`. Pass `entries` (a list already fetched
+        from `recent()`) when the caller also needs the raw list itself, e.g. `list_projects`, so
+        the recent-list file is read once per request rather than once per call."""
+        if entries is None:
+            entries = self.recent()
+        return {r["id"]: _parse_last_opened_at(r.get("last_opened_at")) for r in entries}
 
     def forget(self, folder: str) -> None:
         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
