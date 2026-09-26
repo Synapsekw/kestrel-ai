@@ -8,6 +8,7 @@ from app.jobs.schemas import JobOut
 from app.library.catalogue_port import CataloguePort, get_catalogue
 from app.library.datasets import (
     build,  # noqa: F401 - the import registers `dataset_build`
+    export,  # noqa: F401 - the import registers the `dataset` job
     service,
 )
 from app.library.datasets.schemas import (
@@ -21,6 +22,7 @@ from app.library.datasets.schemas import (
     LibraryDatasetWithJob,
 )
 from app.library.handle import LibraryHandle, get_library
+from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/datasets", tags=["library"])
 
@@ -74,6 +76,15 @@ def get_dataset(datasetId: str, lib: LibraryHandle = Depends(get_library)) -> Li
 def delete_dataset(datasetId: str, lib: LibraryHandle = Depends(get_library)) -> Response:  # noqa: N803
     service.delete_dataset(lib, datasetId)
     return Response(status_code=204)
+
+
+@router.post("/{datasetId}/export", response_model=JobRef, status_code=202)
+def export_dataset(datasetId: str, request: Request, lib: LibraryHandle = Depends(get_library)) -> JobRef:  # noqa: N803
+    """Write the YOLO export as a `dataset` job; images are hard-linked when possible (F §12.2)."""
+    service.check_exportable(lib, datasetId)
+    job = request.app.state.jobs.submit(lib, "dataset", {"dataset_id": datasetId})
+    service.mark_export_queued(lib, datasetId, job.id)
+    return JobRef(job=JobOut.from_row(job, lib.id))
 
 
 @router.get("/{datasetId}/items", response_model=DatasetItemPage)

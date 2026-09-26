@@ -120,3 +120,20 @@ def build_dataset(client, body: dict) -> dict:
     done = wait_library_job(client, r.json()["job"]["id"])
     assert done["state"] == "succeeded", done["error"]
     return client.get(f"{LIB}/datasets/{r.json()['dataset']['id']}").json()
+
+
+def two_projects(app, tmp_path: Path, make_jpeg, catalogue):
+    """Two projects that both hold `images/site/DJI_0001.jpg` and `DJI_0002.jpg` (the same relative
+    paths on purpose). A has an excavator on each; B has a dump truck on each, the second rotated 30°."""
+    exc, truck = catalogue.add("Excavator"), catalogue.add("Dump truck")
+    a = make_project(app, tmp_path / "a", "Site A")
+    b = make_project(app, tmp_path / "b", "Site B")
+    for handle, type_id, seed in ((a, exc.id, 0), (b, truck.id, 10)):
+        src = add_source(handle)
+        for i in (1, 2):
+            image_id = add_image(
+                handle, make_jpeg, src, f"DJI_000{i}.jpg", w=200, h=100, group_key=f"g{i}", seed=seed + i
+            )
+            angle = 30.0 if (handle is b and i == 2) else 0.0
+            add_box(handle, image_id, type_id, x=50, y=20, w=60, h=30, angle=angle)
+    return a, b, exc, truck

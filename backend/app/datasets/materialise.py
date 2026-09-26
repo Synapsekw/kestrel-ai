@@ -1,9 +1,10 @@
-"""Freezing a dataset and the `dataset` job that writes it to disk in YOLO format (spec section 5).
+"""YOLO label writing shared by the library export and the detection exports, and the sweep that
+settles dataset folders a pre-foundation delete left half-moved (foundation F §6.1, §12.2).
 
-A dataset is immutable: `freeze` copies the ground truth of the selected images into
-`dataset_image` rows, and the job materialises those rows. Images are hard-linked when the
-dataset folder is on the project's volume and copied otherwise, so a dataset normally costs no
-extra disk space.
+Per-project datasets are read-only since the foundation: the library's `dataset` job
+(`app.library.datasets.export`) writes exports now, and each project's materialised folders are
+kept and registered as legacy datasets (`app.library.datasets.legacy`). `reconcile_tombstones`
+still runs on project open, so a folder a crashed delete moved aside is put back.
 """
 
 from __future__ import annotations
@@ -15,23 +16,12 @@ import threading
 import uuid
 from pathlib import Path
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import select
 
-from app.datasets.grouping import tile_key
-from app.datasets.schemas import DatasetCreate
-from app.datasets.splits import assign_splits
-from app.db.models import Box, Dataset, DatasetImage, Image, Job
-from app.errors import AppError, not_found
+from app.db.models import Dataset
 from app.geometry import aabb_of
-from app.jobs.registry import register_job_type
-from app.jobs.runner import JobContext
 from app.projects.service import ProjectHandle
 
-ACTIVE_JOB_STATES = ("queued", "running")
-
-GROUND_TRUTH = ("accepted", "edited")
-
-SPLITS = ("train", "val")
 PROGRESS_EVERY = 50
 
 
@@ -115,25 +105,8 @@ def _clip01(value: float) -> float:
 log = logging.getLogger(__name__)
 
 TOMBSTONE_PREFIX = ".deleting-"
-# Windows device names: a folder called CON or NUL cannot be created or removed normally.
-_RESERVED = {"con", "prn", "aux", "nul"} | {f"{port}{i}" for port in ("com", "lpt") for i in range(1, 10)}
-# One delete, discard or tombstone sweep at a time: a sweep must never meet a tombstone whose
-# delete has not committed yet (it would give the folder back underneath that delete).
+# One tombstone sweep at a time per process: two sweeps must never settle the same tombstone.
 _FOLDER_LOCK = threading.Lock()
-
-
-def unusable_name(name: str) -> str | None:
-    """Why `name` cannot be a dataset folder on Windows, or None. Deleting relies on these rules.
-
-    The schema already limits names to letters, digits, dot, dash and underscore.
-    """
-    if name.startswith("."):
-        return "a dataset name cannot start with a dot"
-    if name.endswith("."):
-        return "a dataset name cannot end with a dot"
-    if name.split(".")[0].casefold() in _RESERVED:
-        return f"{name} is a reserved name on Windows"
-    return None
 
 
 def _own_folder(handle: ProjectHandle, relative_path: str) -> Path | None:
@@ -154,33 +127,6 @@ def _own_folder(handle: ProjectHandle, relative_path: str) -> Path | None:
     return resolved
 
 
-def _dataset_folder_to_remove(handle: ProjectHandle, s, dataset: Dataset) -> Path:
-    """The folder of `dataset`, proven safe to remove; 409 for anything else.
-
-    Safe means its own folder (see `_own_folder`) and not the folder of another dataset (`V1` and
-    `v1` are one folder on Windows). The row is data, and a wrong row must never cost the operator
-    a folder.
-    """
-    folder = _own_folder(handle, dataset.path or "")
-    others = s.execute(select(Dataset.path).where(Dataset.id != dataset.id)).scalars()
-    shared = folder is not None and any((handle.folder / (o or "")).resolve() == folder for o in others)
-    if folder is None or shared:
-        raise AppError(
-            "conflict",
-            f"The folder of dataset {dataset.name} ({dataset.path or 'empty path'}) is not its own folder "
-            "inside this project's datasets folder, so nothing was deleted.",
-            409,
-        )
-    return folder
-
-
-def _move_aside(folder: Path, dataset_id: str) -> Path:
-    """Rename `folder` to its tombstone (atomic); the caller commits the row deletion after this."""
-    tombstone = folder.with_name(f"{TOMBSTONE_PREFIX}{dataset_id}")
-    os.replace(folder, tombstone)
-    return tombstone
-
-
 def _remove_quietly(folder: Path) -> None:
     """Remove a committed tombstone outside the lock; a failure is left for the next sweep."""
     try:
@@ -189,37 +135,6 @@ def _remove_quietly(folder: Path) -> None:
         pass  # a concurrent sweep got there first
     except OSError as e:
         log.warning("could not remove %s yet: %s", folder, e)
-
-
-def discard(handle: ProjectHandle, dataset_id: str) -> None:
-    """Drop a dataset that was never fully written, so its name is free again.
-
-    The folder is moved aside before the row goes, so a new dataset under the same name never
-    writes into a folder that is still being removed.
-    """
-    tombstone = None
-    with _FOLDER_LOCK, handle.session() as s:
-        dataset = s.get(Dataset, dataset_id)
-        if dataset is None:
-            return
-        try:
-            folder = _dataset_folder_to_remove(handle, s, dataset)
-        except AppError:
-            folder = None
-            log.warning("dataset %s names %r; its folder is left alone", dataset_id, dataset.path)
-        if folder is not None and folder.is_dir():
-            try:
-                tombstone = _move_aside(folder, dataset_id)
-            except OSError as e:
-                # A file is open. Removing the rows would leave a half-written folder under a free
-                # name that the next dataset of that name would write into; keep the dataset
-                # instead (its failed job marks it incomplete) so the ordinary delete removes it.
-                log.warning("could not move %s aside, the dataset is kept: %s", folder, e)
-                return
-        s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
-        s.delete(dataset)
-    if tombstone is not None:
-        _remove_quietly(tombstone)
 
 
 def _leftovers(handle: ProjectHandle) -> list[Path]:
@@ -231,8 +146,8 @@ def _leftovers(handle: ProjectHandle) -> list[Path]:
     for p in handle.datasets_dir.glob(f"{TOMBSTONE_PREFIX}*"):
         suffix = p.name[len(TOMBSTONE_PREFIX) :]
         try:
-            # Only the exact form delete_dataset and discard write (str(uuid4())); anything else was
-            # made by someone else (a dataset from before the name rules, a person).
+            # Only the exact form the pre-foundation delete and discard wrote (str(uuid4())); anything
+            # else was made by someone else (a dataset from before the name rules, a person).
             if str(uuid.UUID(suffix)) != suffix:
                 continue
             if p.is_dir() and not p.is_symlink() and p.resolve().parent == root:
@@ -244,7 +159,7 @@ def _leftovers(handle: ProjectHandle) -> list[Path]:
 
 
 def reconcile_tombstones(handle: ProjectHandle) -> None:
-    """Settle folders that deletions moved aside; never raises. Runs after a delete and on open.
+    """Settle folders that deletions moved aside; never raises. Runs on project open.
 
     A tombstone whose dataset row still exists is the trace of a delete that never committed (the
     process was killed, the commit failed): the folder goes back to its dataset. Only a tombstone
@@ -284,215 +199,3 @@ def _restore_tombstones(handle: ProjectHandle) -> list[Path]:
         except Exception as e:
             log.warning("could not settle %s yet: %s", leftover, e)
     return garbage
-
-
-def delete_dataset(handle: ProjectHandle, dataset_id: str) -> None:
-    """Remove a dataset's row and frozen folder. Images, labels and trained models are kept.
-
-    Refused while a job that depends on the dataset -- its own materialise job or a `train` job
-    reading it -- is queued or running. Order: prove the folder safe, move it aside (atomic, so a
-    folder in use refuses the delete with nothing changed), delete the rows and commit, then remove
-    the moved folder. If anything fails before the commit the folder is put back; if the process
-    dies in between, `reconcile_tombstones` puts it back on the next delete or project open.
-    """
-    with _FOLDER_LOCK:
-        folder = tombstone = None
-        try:
-            with handle.session() as s:
-                dataset = s.get(Dataset, dataset_id)
-                if dataset is None:
-                    raise not_found("dataset", dataset_id)
-                for job in s.execute(select(Job).where(Job.state.in_(ACTIVE_JOB_STATES))).scalars():
-                    params = job.params or {}
-                    uses_it = job.type in ("train", "dataset") and params.get("dataset_id") == dataset_id
-                    if job.id == dataset.job_id or uses_it:
-                        raise AppError("conflict", f"Dataset {dataset.name} is in use by a running job.", 409)
-                candidate = _dataset_folder_to_remove(handle, s, dataset)
-                if candidate.is_dir():
-                    try:
-                        moved_to = _move_aside(candidate, dataset_id)
-                    except OSError as e:
-                        raise AppError(
-                            "conflict",
-                            f"The folder of dataset {dataset.name} is in use ({e.strerror or e}). "
-                            "Close programs that have it open and try again.",
-                            409,
-                        ) from e
-                    folder, tombstone = candidate, moved_to
-                s.execute(delete(DatasetImage).where(DatasetImage.dataset_id == dataset_id))
-                s.delete(dataset)
-            # committed: from here on the folder is garbage
-        except BaseException:
-            if tombstone is not None and tombstone.exists() and not folder.exists():
-                try:
-                    os.replace(tombstone, folder)  # the rows stay, so the folder comes back
-                except OSError as e:  # never mask the real error; the next reconcile retries
-                    log.warning("could not put %s back yet: %s", folder, e)
-            raise
-    # Committed, and out of the lock: removing thousands of files must not hold up other deletes
-    # or the opening of a project (the registry opens projects under its own lock, then takes ours).
-    if tombstone is not None:
-        _remove_quietly(tombstone)
-    reconcile_tombstones(handle)
-
-
-@register_job_type("dataset")
-def materialise(ctx: JobContext) -> dict:
-    """A dataset is immutable, so anything short of a complete write is rolled back."""
-    try:
-        return _materialise(ctx)
-    except Exception:
-        discard(ctx.project, ctx.params["dataset_id"])
-        ctx.log.warning("discarded the incomplete dataset %s", ctx.params["dataset_id"])
-        raise
-
-
-def _materialise(ctx: JobContext) -> dict:
-    handle = ctx.project
-    dataset_id = ctx.params["dataset_id"]
-    ctx.check_cancelled()
-    with handle.session() as s:
-        dataset = s.get(Dataset, dataset_id)
-        if dataset is None:
-            raise ValueError(f"dataset {dataset_id} no longer exists")
-        classes, rel_path = list(dataset.classes or []), dataset.path
-        rows = [
-            (di.split, di.boxes or [], image)
-            for di, image in s.execute(
-                select(DatasetImage, Image)
-                .join(Image, Image.id == DatasetImage.image_id)
-                .where(DatasetImage.dataset_id == dataset_id)
-                .order_by(Image.path)
-            ).all()
-        ]
-        for _, _, image in rows:
-            s.expunge(image)
-
-    root = handle.folder / rel_path
-    for split in SPLITS:
-        (root / "images" / split).mkdir(parents=True, exist_ok=True)
-        (root / "labels" / split).mkdir(parents=True, exist_ok=True)
-    class_index = {c["id"]: i for i, c in enumerate(classes)}
-
-    counts = {"train": 0, "val": 0}
-    placements: dict[str, int] = {}
-    for done, (split, boxes, image) in enumerate(rows, 1):
-        ctx.check_cancelled()
-        name = materialised_name(image.path)
-        how = _place(handle.folder / image.path, root / "images" / split / name)
-        placements[how] = placements.get(how, 0) + 1
-        label = root / "labels" / split / f"{Path(name).stem}.txt"
-        label.write_text(_label_text(detect_boxes(boxes), class_index, image.width, image.height), "utf-8")
-        counts[split] += 1
-        if done % PROGRESS_EVERY == 0 or done == len(rows):
-            ctx.progress(done / len(rows), f"{done} / {len(rows)} images")
-
-    (root / "data.yaml").write_text(data_yaml(root, [c["name"] for c in classes]), "utf-8")
-    ctx.log.info("materialised %s: %s, files %s", rel_path, counts, placements)
-    return {"dataset_id": dataset_id, **counts}
-
-
-NOTHING_TO_TRAIN_ON = (
-    "Nothing to train on: the selection has no accepted boxes. A dataset needs at least one "
-    "labeled image; images marked empty are added as negative examples."
-)
-
-
-def freeze(handle: ProjectHandle, body: DatasetCreate) -> str:
-    """Snapshot the ground truth of the selected images into a new, immutable dataset row."""
-    with handle.session() as s:
-        project = handle.row(s)
-        classes = list(project.classes or [])
-        known = {c["id"] for c in classes}
-        selected = _select_images(s, body.image_ids)
-        frozen = _frozen_boxes(s, [i.id for i in selected], known)
-        # The box count is resolved before the name is validated: a selection with nothing to
-        # train on is the failure a caller will hit first, and it must not be masked by a name
-        # complaint. A selection of only marked-empty images passes `selected` (they are valid
-        # negatives) but still has zero boxes, so `not selected` alone is not the right check.
-        if sum(len(boxes) for boxes in frozen.values()) == 0:
-            # 409, not 422: `image_ids: []` (or an all-negative default selection) is schema-valid
-            # data, and the contract's positive-data-acceptance check forbids rejecting a
-            # schema-valid body with 422 (see router.create_source for the same rule).
-            raise AppError("conflict", NOTHING_TO_TRAIN_ON, 409)
-        problem = unusable_name(body.name)
-        if problem:
-            # 409 for the same reason as above: the name is schema-valid.
-            raise AppError("conflict", f"{problem[0].upper()}{problem[1:]}.", 409)
-        # `V1` and `v1` are one folder on Windows, so names are unique without regard to case.
-        taken = s.execute(select(Dataset.name)).scalars()
-        if any(n.casefold() == body.name.casefold() for n in taken):
-            raise AppError("already_exists", f"dataset {body.name!r} already exists", 409)
-        # A folder without a row (left by a failed build whose files were open) must never be
-        # written into: the new dataset would silently include the old images.
-        if (handle.datasets_dir / body.name).exists():
-            raise AppError(
-                "already_exists",
-                f"A folder named {body.name} is still in this project's datasets folder, left from an "
-                "earlier dataset. Choose another name, or delete that folder.",
-                409,
-            )
-
-        keys = {i.id: _split_key(i, body.split_method) for i in selected}
-        splits = assign_splits(
-            [(i.id, keys[i.id]) for i in selected], body.split_method, body.val_fraction, body.seed
-        )
-        dataset = Dataset(
-            name=body.name,
-            classes=classes,
-            split_method=body.split_method,
-            split_params={"val_fraction": body.val_fraction, "seed": body.seed},
-            path=f"datasets/{body.name}",
-        )
-        s.add(dataset)
-        s.flush()
-        for image in selected:
-            s.add(
-                DatasetImage(
-                    dataset_id=dataset.id,
-                    image_id=image.id,
-                    split=splits[image.id],
-                    boxes=frozen.get(image.id, []),
-                )
-            )
-        return dataset.id
-
-
-def _select_images(s, image_ids: list[str] | None) -> list[Image]:
-    q = select(Image).order_by(Image.path)
-    if image_ids is not None:
-        q = q.where(Image.id.in_(image_ids))
-    else:
-        has_ground_truth = Image.id.in_(
-            select(Box.image_id).where(Box.review_state.in_(GROUND_TRUTH)).distinct()
-        )
-        q = q.where(or_(has_ground_truth, Image.marked_empty))
-    return list(s.execute(q).scalars())
-
-
-def _frozen_boxes(s, image_ids: list[str], known_classes: set[str]) -> dict[str, list[dict]]:
-    """The ground truth of each image, frozen verbatim — `angle` included.
-
-    The row records what the annotator drew, not what this wave's label format can express: the
-    flattening to an envelope happens in `detect_boxes` when the label is written, so a dataset
-    frozen today still knows its boxes were rotated when wave 2 materialises oriented labels.
-    """
-    frozen: dict[str, list[dict]] = {}
-    rows = s.execute(
-        select(Box)
-        .where(Box.image_id.in_(image_ids), Box.review_state.in_(GROUND_TRUTH))
-        .order_by(Box.created_at, Box.id)
-    ).scalars()
-    for b in rows:
-        if b.class_id not in known_classes:  # the class was deleted; its boxes cannot be trained on
-            continue
-        frozen.setdefault(b.image_id, []).append(
-            {"class_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h, "angle": b.angle}
-        )
-    return frozen
-
-
-def _split_key(image: Image, method: str) -> str:
-    if method == "by_tile" and image.lat is not None and image.lon is not None:
-        return tile_key(image.lat, image.lon)
-    return image.group_key

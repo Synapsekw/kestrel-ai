@@ -1,14 +1,14 @@
-"""Sources, images, boxes and datasets (spec sections 5 and 6)."""
+"""Sources, images and boxes (spec sections 5 and 6); datasets live in `app.library.datasets`."""
 
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import FileResponse
-from sqlalchemy import func, select, tuple_, update
+from sqlalchemy import select, tuple_, update
 
-# importer and materialise register the "import" and "dataset" job types on import.
-from app.datasets import boxes, empties, images, importer, materialise, stats  # noqa: F401
+# importer registers the "import" job type on import.
+from app.datasets import boxes, empties, images, importer, stats  # noqa: F401
 from app.datasets.grouping import slugify
 from app.datasets.schemas import (
     BoxCreate,
@@ -21,11 +21,6 @@ from app.datasets.schemas import (
     BulkDeleteResult,
     BulkMarkEmpty,
     BulkMarkEmptyResult,
-    DatasetCreate,
-    DatasetOut,
-    DatasetPage,
-    DatasetStats,
-    DatasetWithJob,
     ImageOut,
     ImagePage,
     ImageSort,
@@ -37,7 +32,7 @@ from app.datasets.schemas import (
     SourcePatch,
     SourceWithJob,
 )
-from app.db.models import Dataset, DatasetImage, GeoMap, Source
+from app.db.models import GeoMap, Source
 from app.errors import AppError, not_found
 from app.events_util import publish_image_ids_event
 from app.jobs.schemas import JobOut
@@ -59,24 +54,6 @@ def _set_job_id(handle: ProjectHandle, table, row_id: str, job_id: str) -> None:
     """The job is already running and may have finished (or removed the row); never fail on it."""
     with handle.session() as s:
         s.execute(update(table).where(table.id == row_id).values(job_id=job_id))
-
-
-def _split_counts(handle: ProjectHandle, dataset_ids: list[str]) -> dict[tuple[str, str], int]:
-    """Train and val counts for a whole page of datasets in one query."""
-    with handle.session() as s:
-        rows = s.execute(
-            select(DatasetImage.dataset_id, DatasetImage.split, func.count())
-            .where(DatasetImage.dataset_id.in_(dataset_ids))
-            .group_by(DatasetImage.dataset_id, DatasetImage.split)
-        ).all()
-    return {(dataset_id, split): n for dataset_id, split, n in rows}
-
-
-def _datasets_out(handle: ProjectHandle, rows: list[Dataset]) -> list[DatasetOut]:
-    counts = _split_counts(handle, [r.id for r in rows])
-    return [
-        DatasetOut.from_row(r, counts.get((r.id, "train"), 0), counts.get((r.id, "val"), 0)) for r in rows
-    ]
 
 
 def _source(handle: ProjectHandle, source_id: str) -> Source:
@@ -307,62 +284,3 @@ def delete_box(boxId: str, handle: ProjectHandle = Depends(get_project)) -> None
 @router.post("/boxes/review", response_model=BoxReviewResult)
 def review_boxes(body: BoxReview, handle: ProjectHandle = Depends(get_project)) -> BoxReviewResult:
     return BoxReviewResult(updated=boxes.review_boxes(handle, body.box_ids, body.action))
-
-
-@router.get("/datasets", response_model=DatasetPage)
-def list_datasets(
-    handle: ProjectHandle = Depends(get_project),
-    limit: int | None = Query(None, ge=1, le=1000),
-    cursor: str | None = None,
-) -> DatasetPage:
-    n = clamp_limit(limit)
-    q = select(Dataset).order_by(Dataset.created_at.desc(), Dataset.id.desc())
-    c = decode_cursor(cursor, "created_at", "id")
-    if c:
-        before = _cursor_datetime(c["created_at"])
-        q = q.where(tuple_(Dataset.created_at, Dataset.id) < (before, str(c["id"])))
-    with handle.session() as s:
-        rows = list(s.execute(q.limit(n + 1)).scalars())
-        for r in rows:
-            s.expunge(r)
-    next_cursor = None
-    if len(rows) > n:
-        rows = rows[:n]
-        next_cursor = encode_cursor(created_at=rows[-1].created_at.isoformat(), id=rows[-1].id)
-    return DatasetPage(items=_datasets_out(handle, rows), next_cursor=next_cursor)
-
-
-@router.post("/datasets", response_model=DatasetWithJob, status_code=202)
-def create_dataset(
-    body: DatasetCreate, request: Request, handle: ProjectHandle = Depends(get_project)
-) -> DatasetWithJob:
-    dataset_id = materialise.freeze(handle, body)
-    with handle.session() as s:
-        row = s.get(Dataset, dataset_id)
-        s.expunge(row)
-    out = _datasets_out(handle, [row])[0]  # read before the job starts: it may discard and fail
-    job = request.app.state.jobs.submit(handle, "dataset", {"dataset_id": dataset_id})
-    _set_job_id(handle, Dataset, dataset_id, job.id)
-    return DatasetWithJob(
-        dataset=out.model_copy(update={"job_id": job.id}), job=JobOut.from_row(job, handle.id)
-    )
-
-
-@router.get("/datasets/{datasetId}", response_model=DatasetOut)
-def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetOut:  # noqa: N803
-    with handle.session() as s:
-        row = s.get(Dataset, datasetId)
-        if row is None:
-            raise not_found("dataset", datasetId)
-        s.expunge(row)
-    return _datasets_out(handle, [row])[0]
-
-
-@router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
-def get_dataset_stats(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetStats:  # noqa: N803
-    return stats.dataset_stats(handle, datasetId)
-
-
-@router.delete("/datasets/{datasetId}", status_code=204)
-def delete_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> None:  # noqa: N803
-    materialise.delete_dataset(handle, datasetId)

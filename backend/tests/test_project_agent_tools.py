@@ -11,7 +11,8 @@ import time
 import typing
 
 import pytest
-from library_helpers import add_library_model
+from catalogue_fake import FakeCatalogue
+from library_helpers import add_library_model, wait_library_job
 from PIL import Image as PILImage
 
 from app.project_agent import dispatch, tools
@@ -574,7 +575,7 @@ def test_execute_approved_deletes_the_prepared_images(tool, agent, client, proje
 
 
 def test_dataset_training_and_deletion_flow(
-    tool, agent, client, project_id, project, image_ids, model_id, wait_job
+    tool, agent, app, client, project_id, project, image_ids, model_id, wait_job
 ):
     cls = project["classes"][0]["id"]
     for image_id in image_ids[:4]:
@@ -582,10 +583,11 @@ def test_dataset_training_and_deletion_flow(
             f"/api/v1/projects/{project_id}/images/{image_id}/boxes",
             json={"class_id": cls, "x": 1, "y": 1, "w": 10, "h": 10},
         )
+    app.state.catalogue_port = FakeCatalogue.from_classes(project["classes"])
     created = tool("create_dataset", {"name": "v1", "split_method": "random"})
     body = ok(created)
-    assert created.job_ids == [body["job_id"]]
-    wait_job(project_id, body["job_id"])
+    assert created.job_ids == []  # a library job, like starters
+    assert wait_library_job(client, body["job_id"])["state"] == "succeeded"
     ds = ok(tool("get_dataset", {"dataset_id": body["dataset_id"]}))
     assert ds["name"] == "v1" and ds["image_count"] == 4
     assert ok(tool("list_datasets"))["datasets"][0]["id"] == body["dataset_id"]
@@ -747,8 +749,8 @@ def test_get_project_lists_the_cloud_providers_with_a_key(tool, app, image_ids):
 
 
 def test_list_jobs_offers_only_project_job_types():
-    # exports are library jobs (`library_export`) now; a project job list never holds a new one
-    project_types = {"import", "dataset", "train", "infer", "results_export"}
+    # exports, datasets and training are library jobs now; a project job list never holds a new one
+    project_types = {"import", "infer", "results_export"}
     assert set(typing.get_args(tools.JOB_TYPES)) == project_types
     job_type = tools.ListJobsArgs.model_json_schema()["properties"]["type"]
     offered = {v for option in job_type["anyOf"] for v in option.get("enum", [])}

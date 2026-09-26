@@ -65,8 +65,8 @@ JOB_STATES = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 # The model library's routes are app-wide, outside this project's path.
 LIBRARY = "/api/v1/library"
 CATALOGUE_TYPES = "/api/v1/catalogue/types"
-# Project job types. A model export is a library job (`library_export`), not one of these.
-JOB_TYPES = Literal["import", "dataset", "train", "infer", "results_export"]
+# Project job types. Model exports, starters, datasets and training are library jobs, not these.
+JOB_TYPES = Literal["import", "infer", "results_export"]
 
 
 # --------------------------------------------------------------------- types
@@ -540,14 +540,20 @@ class ListStarterModels(Tool):
 
 
 def _dataset(d: dict) -> dict:
+    counts = d["counts"]
     return {
         "id": d["id"],
         "name": d["name"],
-        "image_count": d["image_count"],
-        "train_count": d["train_count"],
-        "val_count": d["val_count"],
+        "task": d["task"],
+        "origin": d["origin"],
+        "state": d["state"],
+        "export_state": d["export_state"],
+        "image_count": counts.get("images", 0),
+        "train_count": counts.get("train", 0),
+        "val_count": counts.get("val", 0),
         "split_method": d["split_method"],
         "classes": [c["name"] for c in d["classes"]],
+        "projects": [s["project_name"] for s in d["sources"]],
         "job_id": d["job_id"],
         "created_at": d["created_at"],
     }
@@ -559,12 +565,13 @@ class ListDatasets(Tool):
     risk = "read"
     Args = NoArgs
     description = (
-        "List the project's frozen training datasets (at most 50): id, name, image, train and "
-        "val counts, split method, classes and the job that materialised it."
+        "List the training datasets in the app-wide Models section (at most 50): id, name, task, "
+        "state, export state, image, train and val counts, split method, classes and the projects "
+        "they were built from."
     )
 
     async def run(self, ctx, args):
-        page = await ctx.api.call("GET", "/datasets", params={"limit": LIST_ROWS})
+        page = await ctx.api.call("GET", f"{LIBRARY}/datasets", params={"limit": LIST_ROWS})
         rows = [_dataset(d) for d in page["items"]]
         return _ok(_page("datasets", rows, page["next_cursor"]), f"Listed {_plural(len(rows), 'dataset')}")
 
@@ -579,22 +586,16 @@ class GetDataset(Tool):
     risk = "read"
     Args = DatasetIdArgs
     description = (
-        "Get one dataset with its statistics: train/val boxes per class and how many groups "
-        "went to each split. Use it before training to check the class balance."
+        "Get one dataset with its labels per class. Use it before training to check the class balance."
     )
 
     async def run(self, ctx, args):
-        dataset_id = _seg(args["dataset_id"])
-        d = await ctx.api.call("GET", f"/datasets/{dataset_id}")
-        stats = await ctx.api.call("GET", f"/datasets/{dataset_id}/stats")
+        d = await ctx.api.call("GET", f"{LIBRARY}/datasets/{_seg(args['dataset_id'])}")
         body = _dataset(d)
+        names = {c["type_id"]: c["name"] for c in d["classes"]}
         body["boxes_per_class"] = [
-            {"class": b["class_name"], "train": b["train"], "val": b["val"]} for b in stats["boxes_per_class"]
+            {"class": names.get(t, t), "count": n} for t, n in d["counts"].get("per_class", {}).items()
         ]
-        body["groups"] = {
-            "train": sum(1 for g in stats["groups"] if g["split"] == "train"),
-            "val": sum(1 for g in stats["groups"] if g["split"] == "val"),
-        }
         return _ok(body, f"Read dataset {d['name']}")
 
 
@@ -645,9 +646,10 @@ class ListJobs(Tool):
     risk = "read"
     Args = ListJobsArgs
     description = (
-        "List the 20 newest background jobs (import, dataset, train, infer = labeling, "
+        "List the 20 newest background jobs of this project (import, infer = labeling, "
         "results_export), optionally filtered by state or type: id, state, progress 0-1, "
-        "message and error."
+        "message and error. Datasets, training and model jobs run in the library: read one "
+        "with get_job."
     )
 
     async def run(self, ctx, args):
@@ -662,6 +664,16 @@ class JobIdArgs(_Args):
     job_id: str = Field(pattern=ID_PATTERN, description="A job id.")
 
 
+async def _find_job(ctx, job_id: str) -> tuple[str, dict]:
+    """`(base path, job)`: a project job, else a library one (starters, exports, datasets, training)."""
+    try:
+        return "/jobs", await ctx.api.call("GET", f"/jobs/{job_id}")
+    except ApiCallError as e:
+        if e.status != 404:
+            raise
+    return f"{LIBRARY}/jobs", await ctx.api.call("GET", f"{LIBRARY}/jobs/{job_id}")
+
+
 class GetJob(Tool):
     name = "get_job"
     label = "Read a job"
@@ -674,14 +686,7 @@ class GetJob(Tool):
 
     async def run(self, ctx, args):
         job_id = _seg(args["job_id"])
-        base = "/jobs"
-        try:
-            j = await ctx.api.call("GET", f"{base}/{job_id}")
-        except ApiCallError as e:
-            if e.status != 404:
-                raise
-            base = f"{LIBRARY}/jobs"  # starter and export jobs run in the model library
-            j = await ctx.api.call("GET", f"{base}/{job_id}")
+        base, j = await _find_job(ctx, job_id)
         lines = (await ctx.api.call("GET", f"{base}/{job_id}/log", params={"tail": LOG_TAIL}))["lines"]
         body = {**_job(j), "params": j["params"], "result": j["result"], "log": [ln[:300] for ln in lines]}
         return _ok(body, f"Read {j['type']} job ({j['state']})")
@@ -1130,13 +1135,14 @@ class AcquireStarterModel(Tool):
 
 
 class CreateDatasetArgs(_Args):
-    name: str = Field(pattern=r"^[A-Za-z0-9._-]+$", description="Folder-safe name, e.g. v1.")
+    name: str = Field(min_length=1, max_length=120, description="A name for the dataset, e.g. site-v1.")
+    task: Literal["detect", "obb"] = Field("detect", description="detect (boxes) or obb (rotated boxes).")
     split_method: Literal["by_group", "by_tile", "random"] | None = Field(
         None, description="by_group (default: whole flights go to one split), by_tile or random."
     )
     val_fraction: float | None = Field(None, ge=0.05, le=0.5, description="Validation share, default 0.2.")
     seed: int | None = None
-    selection: ImageSelector | None = _selection_field(optional=True)
+    reviewed_only: bool = Field(False, description="Leave out images that still have unreviewed suggestions.")
 
 
 class CreateDataset(Tool):
@@ -1145,25 +1151,31 @@ class CreateDataset(Tool):
     risk = "write"
     Args = CreateDatasetArgs
     description = (
-        "Freeze the accepted and edited boxes (and images marked empty) into an immutable "
-        "training dataset, split into train/val, through a background job. By default every "
-        "labeled image is included; a selection narrows it. Unreviewed suggestions are never "
-        "included."
+        "Build a training dataset in the Models section from this project's accepted and edited "
+        "boxes of every project class (and images marked empty, as negatives), split into "
+        "train/val, through a background library job. Unreviewed suggestions are never labels. "
+        "No image is copied until the dataset is exported or trained."
     )
 
     async def run(self, ctx, args):
-        body: dict = {"name": args["name"]}
+        project = await ctx.api.call("GET", "")
+        body: dict = {
+            "name": args["name"],
+            "task": args["task"],
+            "filter": {
+                "project_ids": [ctx.project_id],
+                "type_ids": [c["id"] for c in project["classes"]],
+                "reviewed_only": args["reviewed_only"],
+            },
+        }
         for k in ("split_method", "val_fraction", "seed"):
             if args[k] is not None:
                 body[k] = args[k]
-        if args["selection"] is not None:
-            body["image_ids"] = await _select(ctx, args["selection"])
-        res = await ctx.api.call("POST", "/datasets", json=body)
+        res = await ctx.api.call("POST", f"{LIBRARY}/datasets", json=body)
         d, job = res["dataset"], res["job"]
+        # A library job, not a project job: it is not attached to this project's job list.
         return _ok(
-            {"dataset_id": d["id"], "name": d["name"], "job_id": job["id"]},
-            f"Started dataset {d['name']}",
-            job_ids=[job["id"]],
+            {"dataset_id": d["id"], "name": d["name"], "job_id": job["id"]}, f"Started dataset {d['name']}"
         )
 
 
@@ -1283,15 +1295,16 @@ class WaitForJob(Tool):
     )
 
     async def run(self, ctx, args):
-        path = f"/jobs/{_seg(args['job_id'])}"
+        job_id = _seg(args["job_id"])
+        base, j = await _find_job(ctx, job_id)
         deadline = time.monotonic() + args["seconds"]
         while True:
-            j = await ctx.api.call("GET", path)
             finished = j["state"] not in ("queued", "running")
             left = deadline - time.monotonic()
             if finished or left <= 0:
                 break
             await asyncio.sleep(min(WAIT_POLL_S, left))
+            j = await ctx.api.call("GET", f"{base}/{job_id}")
         body = {**_job(j), "result": j["result"], "finished": finished}
         summary = f"{j['type'].capitalize()} job {j['state']}" + (
             "" if finished else f" ({j['progress']:.0%})"
@@ -1351,7 +1364,7 @@ class TrainModel(Tool):
     )
 
     async def prepare(self, ctx, args):
-        d = await ctx.api.call("GET", f"/datasets/{_seg(args.dataset_id)}")
+        d = await ctx.api.call("GET", f"{LIBRARY}/datasets/{_seg(args.dataset_id)}")
         m = await ctx.api.call("GET", f"{LIBRARY}/models/{_seg(args.base_model_id)}")
         return Prepared(
             title=f"Train {args.name} for {_plural(args.epochs, 'epoch')}",
@@ -1436,24 +1449,24 @@ class DeleteDataset(Tool):
     risk = "approval"
     Args = DatasetIdArgs
     description = (
-        "Delete a dataset and its frozen copy. Images, labels and models trained on it are "
-        "kept. Needs the user's approval. Fails while a job that uses it is running."
+        "Delete a dataset and its export. Project images, labels and models trained on it are kept. "
+        "Needs the user's approval. Fails while a job that uses it is running."
     )
 
     async def prepare(self, ctx, args):
-        d = await ctx.api.call("GET", f"/datasets/{_seg(args.dataset_id)}")
+        d = await ctx.api.call("GET", f"{LIBRARY}/datasets/{_seg(args.dataset_id)}")
         return Prepared(
             title=f"Delete dataset {d['name']}",
             detail=(
-                f"Removes {d['path']} ({_plural(d['image_count'], 'image')}); "
-                "images, labels and models are kept."
+                f"Removes the dataset and its export ({_plural(d['counts'].get('images', 0), 'image')}); "
+                "project images, labels and models are kept."
             ),
             estimated_cost=None,
             args={"dataset_id": d["id"], "name": d["name"]},
         )
 
     async def run(self, ctx, args):
-        await ctx.api.call("DELETE", f"/datasets/{_seg(args['dataset_id'])}")
+        await ctx.api.call("DELETE", f"{LIBRARY}/datasets/{_seg(args['dataset_id'])}")
         return _ok({"deleted": args["dataset_id"]}, f"Deleted dataset {args.get('name', '')}".strip())
 
 

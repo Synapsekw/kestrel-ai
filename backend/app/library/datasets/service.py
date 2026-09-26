@@ -309,3 +309,35 @@ def list_items(
     return [
         DatasetItemOut(project_id=p, image_id=i, split=sp, label_count=int(k or 0)) for p, i, sp, k in rows
     ], next_cursor
+
+
+# ---------------------------------------------------------------- export
+
+
+def check_exportable(lib: LibraryHandle, dataset_id: str) -> None:
+    """404 unknown; 422 `task_not_supported` for segment; 409 `conflict` for a legacy dataset,
+    `not_ready` for one not built, `job_running` while its export is being written (amendment A3)."""
+    with lib.session() as s:
+        row = s.get(LibraryDataset, dataset_id)
+        if row is None:
+            raise not_found("dataset", dataset_id)
+        jobs = job_states(s, [row.job_id, row.export_job_id])
+        state, export_state = effective_state(row, jobs), effective_export_state(lib, row, jobs)
+        task, origin, name = row.task, row.origin, row.name
+    if task == "segment":
+        raise AppError("task_not_supported", SEGMENT_NOT_SUPPORTED, 422)
+    if origin == "legacy":
+        raise AppError("conflict", f"{name} is a legacy dataset; it trains from its own folder.", 409)
+    if state != "ready":
+        raise AppError("not_ready", f"Dataset {name} is {state}; export it once it is built.", 409)
+    if export_state == "building":
+        raise AppError("job_running", f"The export of {name} is already being written.", 409)
+
+
+def mark_export_queued(lib: LibraryHandle, dataset_id: str, job_id: str) -> None:
+    """Record the queued export. The job may already have started (it records itself) or even
+    finished by now; its own writes win, so a quick export never reads `building` again."""
+    with lib.session() as s:
+        row = s.get(LibraryDataset, dataset_id)
+        if row is not None and row.export_job_id != job_id:
+            row.export_state, row.export_job_id = "building", job_id
