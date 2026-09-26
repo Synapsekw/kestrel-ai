@@ -25,7 +25,12 @@ export function MapDataList() {
   const { projectId = "" } = useParams();
   const api = useApi();
   const revision = useChangesStore((s) => s.dataRevision);
-  const [list, setList] = useState<{ key: string; items: DataItem[]; next: string | null } | null>(null);
+  const [list, setList] = useState<{
+    key: string;
+    projectId: string;
+    items: DataItem[];
+    next: string | null;
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [more, setMore] = useState(false);
   const key = `${projectId}|${revision}`;
@@ -35,7 +40,7 @@ export function MapDataList() {
     fetchMapItems(api, projectId, null)
       .then((page) => {
         if (cancelled) return;
-        setList({ key, items: page.items, next: page.next_cursor });
+        setList({ key, projectId, items: page.items, next: page.next_cursor });
         setError(null);
       })
       .catch((e: unknown) => {
@@ -48,18 +53,24 @@ export function MapDataList() {
     };
   }, [api, projectId, key]);
 
+  // Another project's list is never shown; after a data change the old list stays up until the new one lands.
+  const current = list?.projectId === projectId ? list : null;
+
   const loadMore = useCallback(async () => {
-    if (!list?.next) return;
+    if (!current?.next) return;
     setMore(true);
     try {
-      const page = await fetchMapItems(api, projectId, list.next);
-      setList((l) => (l ? { ...l, items: [...l.items, ...page.items], next: page.next_cursor } : l));
+      const page = await fetchMapItems(api, projectId, current.next);
+      // A page that arrives after a switch or a reload belongs to a list that is gone.
+      setList((l) =>
+        l && l.key === current.key ? { ...l, items: [...l.items, ...page.items], next: page.next_cursor } : l,
+      );
     } catch (e) {
       setError(messageOf(e, "could not load more maps"));
     } finally {
       setMore(false);
     }
-  }, [api, projectId, list]);
+  }, [api, projectId, current]);
 
   const saveDate = async (item: DataItem, next: string | null) => {
     await updateMapDate(api, projectId, item.id, next);
@@ -68,7 +79,7 @@ export function MapDataList() {
     );
   };
 
-  const items = list?.items ?? null;
+  const items = current?.items ?? null;
   return (
     <section className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold">Maps</h1>
@@ -152,7 +163,7 @@ export function MapDataList() {
           </tbody>
         </table>
       )}
-      {list?.next && (
+      {current?.next && (
         <Button className="self-start" onClick={() => void loadMore()} loading={more}>
           Load more
         </Button>

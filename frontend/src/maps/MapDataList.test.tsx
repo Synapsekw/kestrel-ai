@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { useNavigate } from "react-router-dom";
+import type { ApiClient } from "@contract/client";
 import { useAddData } from "@/app/addDataStore";
 import { useChangesStore } from "@/store/changes";
 import { exampleGeoMap, fakeClient, MAP_ID, PROJECT_ID } from "@/test/fixtures";
@@ -89,6 +91,64 @@ describe("MapDataList", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Load more" }));
     await waitFor(() => expect(requests).toHaveLength(2));
     expect(new URL(`http://x${requests[1].url}`).searchParams.get("cursor")).toBe("cursor-2");
+  });
+
+  it("never shows one project's maps under another, nor appends a stale page after the switch", async () => {
+    // Project A answers at once with a next page; A's second page and all of B wait for release.
+    const held: (() => void)[] = [];
+    const base = fakeClient([
+      {
+        method: "GET",
+        path: /\/projects\/pa\/data$/,
+        body: (r) =>
+          new URL(`http://x${r.url}`).searchParams.get("cursor")
+            ? { items: [{ ...elevationItem, id: "a2", label: "A second page" }], next_cursor: null }
+            : { items: [mapItem], next_cursor: "a-2" },
+      },
+      { method: "GET", path: /\/projects\/pb\/data$/, body: { items: [elevationItem], next_cursor: null } },
+    ]).api;
+    const api = {
+      ...base,
+      GET: ((path: never, init: { params: { path: { projectId: string }; query?: { cursor?: string } } }) =>
+        init.params.path.projectId === "pa" && !init.params.query?.cursor
+          ? base.GET(path, init as never)
+          : new Promise<void>((resolve) => held.push(resolve)).then(() =>
+              base.GET(path, init as never),
+            )) as never,
+    } as ApiClient;
+    function ToB() {
+      const navigate = useNavigate();
+      return (
+        <button type="button" onClick={() => void navigate("/p/pb/maps")}>
+          to B
+        </button>
+      );
+    }
+    renderWithProviders(
+      <>
+        <MapDataList />
+        <ToB />
+      </>,
+      { api, route: "/p/pa/maps", path: "/p/:projectId/maps" },
+    );
+    expect(await screen.findByRole("rowheader", { name: "Site north ortho" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Load more" }));
+    await waitFor(() => expect(held).toHaveLength(1));
+    fireEvent.click(screen.getByRole("button", { name: "to B" }));
+    expect(screen.queryByRole("rowheader", { name: "Site north ortho" })).toBeNull();
+    await waitFor(() => expect(held).toHaveLength(2));
+    // B's first page lands, then A's late second page: it must not join B's list.
+    await act(async () => {
+      held[1]();
+      await Promise.resolve();
+    });
+    expect(await screen.findByRole("rowheader", { name: "Design surface" })).toBeInTheDocument();
+    await act(async () => {
+      held[0]();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(screen.queryByRole("rowheader", { name: "A second page" })).toBeNull();
+    expect(screen.queryByRole("rowheader", { name: "Site north ortho" })).toBeNull();
   });
 
   it("offers Add data when the project has no maps", async () => {
