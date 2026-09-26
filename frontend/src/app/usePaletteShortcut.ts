@@ -16,7 +16,7 @@ export function usePaletteShortcut(): [boolean, (open: boolean) => void] {
     const onKey = (e: KeyboardEvent) => {
       if (!isPaletteChord(e)) return;
       e.preventDefault();
-      e.stopPropagation();
+      e.stopImmediatePropagation();
       setOpen(true);
     };
     window.addEventListener("keydown", onKey, true);

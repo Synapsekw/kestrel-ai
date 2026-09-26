@@ -1,3 +1,4 @@
+import createClient from "openapi-fetch";
 import {
   createApiClient,
   type ApiClient,
@@ -18,6 +19,7 @@ import {
   type LibraryStatus,
   type MapZone,
   type ModelUsage,
+  type paths,
   type Project,
   type Provider,
   type QueryRun,
@@ -447,36 +449,87 @@ export type FakeBody = object | string | number | boolean | null;
 export interface FakeRoute {
   method: string;
   path: RegExp;
-  status?: number;
+  /** A function lets a route answer differently across calls (e.g. fail once, then recover). */
+  status?: number | ((req: RecordedRequest) => number);
   body?: FakeBody | ((req: RecordedRequest) => FakeBody);
   /** Send `body` verbatim as `text/csv` instead of JSON (artifact downloads). */
   raw?: boolean;
 }
 
+export interface FakeClientOptions {
+  /**
+   * Build the client so a real `AbortSignal` can be threaded through it in tests (a `CommandSource`
+   * search, an abort/retry test — anything that calls `unwrap(api.GET(..., { signal }))` with a
+   * signal from a live `AbortController`).
+   *
+   * Under Vitest's jsdom environment, `openapi-fetch`'s internal `new Request(url, { signal })`
+   * throws ("Expected signal to be an instance of AbortSignal") for any such signal, no matter what
+   * `fetch` implementation is supplied: jsdom's bundled, private `undici` (which backs jsdom's
+   * `Request`) validates `signal` against its own `AbortSignal` class, not the DOM
+   * `AbortController`/`AbortSignal` this environment exposes globally (reproduces with a bare
+   * `new Request(url, {signal: new AbortController().signal})`, no app code involved). A real
+   * browser or webview has no such split, so this is a test-environment-only defect. `signalSafe`
+   * builds the client with a plain-object `Request` stand-in instead of `globalThis.Request`,
+   * sidestepping the broken check while still exercising real cache/abort logic under test.
+   */
+  signalSafe?: boolean;
+}
+
+/** `signalSafe`'s `Request` stand-in: carries only what `fakeFetch` reads back out. */
+class SafeRequest {
+  readonly url: string;
+  readonly method: string;
+  readonly body?: BodyInit | null;
+  readonly signal?: AbortSignal | null;
+  constructor(url: string, init: RequestInit = {}) {
+    this.url = url;
+    this.method = init.method ?? "GET";
+    this.body = init.body;
+    this.signal = init.signal;
+  }
+}
+
 /** A `fetch` that answers from `routes` (first match wins) and records every request. */
-export function fakeFetch(routes: FakeRoute[]): { fetch: typeof fetch; requests: RecordedRequest[] } {
+export function fakeFetch(
+  routes: FakeRoute[],
+  opts: FakeClientOptions = {},
+): { fetch: typeof fetch; requests: RecordedRequest[] } {
   const requests: RecordedRequest[] = [];
   const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
-    const req = input instanceof Request ? input : new Request(input, init);
-    const url = new URL(req.url);
-    const text = await req.text();
+    let method: string;
+    let urlStr: string;
+    let bodyText: string;
+    if (opts.signalSafe) {
+      // Already a `SafeRequest` built by `openapi-fetch` itself (its `Request:` client option);
+      // never a bare string/URL, since `openapi-fetch` always constructs its own Request first.
+      const req = input as unknown as SafeRequest;
+      method = req.method;
+      urlStr = req.url;
+      bodyText = typeof req.body === "string" ? req.body : "";
+    } else {
+      const req = input instanceof Request ? input : new Request(input, init);
+      method = req.method;
+      urlStr = req.url;
+      bodyText = await req.text();
+    }
+    const url = new URL(urlStr);
     const rec: RecordedRequest = {
-      method: req.method,
+      method,
       url: url.pathname + url.search,
-      body: text ? JSON.parse(text) : null,
+      body: bodyText ? JSON.parse(bodyText) : null,
     };
     requests.push(rec);
-    const route = routes.find((r) => r.method === req.method && r.path.test(url.pathname));
+    const route = routes.find((r) => r.method === method && r.path.test(url.pathname));
     if (!route) {
       return new Response(
-        JSON.stringify(errorBody("not_found", `no fake route for ${req.method} ${url.pathname}`)),
+        JSON.stringify(errorBody("not_found", `no fake route for ${method} ${url.pathname}`)),
         {
           status: 404,
           headers: { "Content-Type": "application/json" },
         },
       );
     }
-    const status = route.status ?? 200;
+    const status = typeof route.status === "function" ? route.status(rec) : (route.status ?? 200);
     const payload =
       typeof route.body === "function" ? (route.body as (r: RecordedRequest) => unknown)(rec) : route.body;
     if (route.raw) {
@@ -488,9 +541,19 @@ export function fakeFetch(routes: FakeRoute[]): { fetch: typeof fetch; requests:
   return { fetch: fetchImpl, requests };
 }
 
-export function fakeClient(routes: FakeRoute[]): { api: ApiClient; requests: RecordedRequest[] } {
-  const { fetch: fetchImpl, requests } = fakeFetch(routes);
-  return { api: createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl }), requests };
+export function fakeClient(
+  routes: FakeRoute[],
+  opts: FakeClientOptions = {},
+): { api: ApiClient; requests: RecordedRequest[] } {
+  const { fetch: fetchImpl, requests } = fakeFetch(routes, opts);
+  const api = opts.signalSafe
+    ? (createClient<paths>({
+        baseUrl: "http://fake",
+        fetch: fetchImpl,
+        Request: SafeRequest as unknown as typeof Request,
+      }) as ApiClient)
+    : createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
+  return { api, requests };
 }
 
 export const MAP_ID = "a0000000-6666-4000-8000-000000000001";

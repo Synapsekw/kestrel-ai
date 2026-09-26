@@ -1,7 +1,5 @@
-import createClient from "openapi-fetch";
-import type { ApiClient, paths } from "@contract/client";
 import { describe, expect, it, vi } from "vitest";
-import { errorBody, exampleClasses, PROJECT_ID, type FakeRoute, type RecordedRequest } from "@/test/fixtures";
+import { errorBody, exampleClasses, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import {
   actionCommands,
   dataHref,
@@ -11,59 +9,6 @@ import {
 } from "./paletteCommands";
 import { defaultRouteActions } from "./routeActions";
 import { routeInfo } from "./routeModel";
-
-/**
- * jsdom (via its bundled, private `undici`) validates a `Request`'s `signal` against undici's own
- * `AbortSignal` class, not the DOM `AbortController`/`AbortSignal` that `new AbortController()`
- * returns under Vitest's jsdom environment — so `openapi-fetch`'s internal `new Request(url, {
- * signal })` throws "Expected signal to be an instance of AbortSignal" for any *real* signal,
- * regardless of which `fetch` implementation is supplied (reproduces with a bare `new Request(url,
- * {signal: new AbortController().signal})`, no app code involved). This is a test-environment-only
- * defect — the production app runs in a real browser/webview, where these classes agree — so tests
- * that must thread a live `AbortSignal` through `unwrap(api.GET(...))` build their client with a
- * plain-object `Request` stand-in instead of `globalThis.Request`, sidestepping the broken check
- * while still exercising the real cache/abort logic under test.
- */
-class SafeRequest {
-  readonly url: string;
-  readonly method: string;
-  readonly signal?: AbortSignal | null;
-  constructor(url: string, init: RequestInit = {}) {
-    this.url = url;
-    this.method = init.method ?? "GET";
-    this.signal = init.signal;
-  }
-}
-
-function signalSafeClient(routes: FakeRoute[]): { api: ApiClient; requests: RecordedRequest[] } {
-  const requests: RecordedRequest[] = [];
-  const fetchImpl = (async (input: unknown) => {
-    const req = input as SafeRequest;
-    const url = new URL(req.url);
-    const rec: RecordedRequest = { method: req.method, url: url.pathname + url.search, body: null };
-    requests.push(rec);
-    const route = routes.find((r) => r.method === req.method && r.path.test(url.pathname));
-    if (!route) {
-      return new Response(
-        JSON.stringify(errorBody("not_found", `no fake route for ${req.method} ${url.pathname}`)),
-        {
-          status: 404,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
-    const status = route.status ?? 200;
-    const payload = typeof route.body === "function" ? route.body(rec) : route.body;
-    if (status === 204 || payload === undefined) return new Response(null, { status });
-    return new Response(JSON.stringify(payload), { status, headers: { "Content-Type": "application/json" } });
-  }) as typeof fetch;
-  const api = createClient<paths>({
-    baseUrl: "http://fake",
-    fetch: fetchImpl,
-    Request: SafeRequest as unknown as typeof Request,
-  });
-  return { api: api as ApiClient, requests };
-}
 
 describe("palette commands", () => {
   it("go to: the sections everywhere; the tabs, pages and other recent projects inside a project", () => {
@@ -137,33 +82,36 @@ describe("palette commands", () => {
   });
 
   it("searches findings and data in two groups, naming the type from the project's classes", async () => {
-    const { api, requests } = signalSafeClient([
-      {
-        method: "GET",
-        path: /\/search$/,
-        body: {
-          findings: [
-            {
-              id: "f1",
-              number: 217,
-              type_id: exampleClasses[0].id,
-              note: "Crack along the north face of column C4, 40cm",
-            },
-          ],
-          data: [
-            {
-              id: "m1",
-              type: "map",
-              label: "May survey",
-              captured_on: null,
-              status: "ready",
-              summary: {},
-              created_at: "2026-05-20T00:00:00Z",
-            },
-          ],
+    const { api, requests } = fakeClient(
+      [
+        {
+          method: "GET",
+          path: /\/search$/,
+          body: {
+            findings: [
+              {
+                id: "f1",
+                number: 217,
+                type_id: exampleClasses[0].id,
+                note: "Crack along the north face of column C4, 40cm",
+              },
+            ],
+            data: [
+              {
+                id: "m1",
+                type: "map",
+                label: "May survey",
+                captured_on: null,
+                status: "ready",
+                summary: {},
+                created_at: "2026-05-20T00:00:00Z",
+              },
+            ],
+          },
         },
-      },
-    ]);
+      ],
+      { signalSafe: true },
+    );
     const go = vi.fn();
     const [findings, data] = projectSearchSources(api, PROJECT_ID, exampleClasses, go);
     expect([findings.label, data.label]).toEqual(["Findings", "Data"]);
@@ -180,9 +128,12 @@ describe("palette commands", () => {
   });
 
   it("never replays an aborted request: retyping the same query after an abort makes a fresh one", async () => {
-    const { api, requests } = signalSafeClient([
-      { method: "GET", path: /\/search$/, body: { findings: [], data: [] } },
-    ]);
+    const { api, requests } = fakeClient(
+      [{ method: "GET", path: /\/search$/, body: { findings: [], data: [] } }],
+      {
+        signalSafe: true,
+      },
+    );
     const go = vi.fn();
     const [findings] = projectSearchSources(api, PROJECT_ID, exampleClasses, go);
     // A prior debounce cycle for "cr" that was cancelled: its signal is already aborted.
@@ -201,24 +152,17 @@ describe("palette commands", () => {
     // The first call fails (500); every call after answers 200 with empty results, simulating the
     // backend recovering by the time the same query is retyped.
     let calls = 0;
-    const fetchImpl = (async () => {
-      calls += 1;
-      if (calls === 1) {
-        return new Response(JSON.stringify(errorBody("http_error", "boom")), {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ findings: [], data: [] }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
-    }) as typeof fetch;
-    const api = createClient<paths>({
-      baseUrl: "http://fake",
-      fetch: fetchImpl,
-      Request: SafeRequest as unknown as typeof Request,
-    }) as ApiClient;
+    const { api } = fakeClient(
+      [
+        {
+          method: "GET",
+          path: /\/search$/,
+          status: () => (++calls === 1 ? 500 : 200),
+          body: () => (calls === 1 ? errorBody("http_error", "boom") : { findings: [], data: [] }),
+        },
+      ],
+      { signalSafe: true },
+    );
     const go = vi.fn();
     const [findings] = projectSearchSources(api, PROJECT_ID, exampleClasses, go);
     const c1 = new AbortController();

@@ -29,4 +29,23 @@ describe("Ctrl K", () => {
     expect(notCancelled).toBe(false);
     expect(reachedPage).toBe(false);
   });
+
+  it("never reaches a window-level bubble listener either", () => {
+    renderHook(() => usePaletteShortcut());
+    let reachedWindow = false;
+    // Bubble phase (the default): this is what any other global shortcut handler on window uses.
+    const onWindowKeydown = () => (reachedWindow = true);
+    window.addEventListener("keydown", onWindowKeydown);
+    render(<input aria-label="Field" />);
+    const input = screen.getByLabelText("Field");
+    input.focus();
+    try {
+      act(() => {
+        fireEvent.keyDown(input, { key: "k", ctrlKey: true });
+      });
+      expect(reachedWindow).toBe(false);
+    } finally {
+      window.removeEventListener("keydown", onWindowKeydown);
+    }
+  });
 });
