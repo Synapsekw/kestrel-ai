@@ -1,6 +1,7 @@
 import type { RouteObject } from "react-router-dom";
-import { InterimFindings, InterimOverview } from "@/app/InterimScreens";
+import { InterimOverview } from "@/app/InterimScreens";
 import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
+import { FindingsScreen } from "@/findings/FindingsScreen";
 import { MapDataList } from "@/maps/MapDataList";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
@@ -49,8 +50,8 @@ export const projectRoutes: RouteObject[] = [
       </Later>
     ),
   },
-  { path: "findings", element: <InterimFindings /> },
-  { path: "findings/:findingId", element: <InterimFindings /> },
+  // F §8.6: the list, and the inspector at findings/:findingId (the canonical finding link).
+  { path: "findings/:findingId?", element: <FindingsScreen /> },
   // Measurements: interim host, today's Volumes screen.
   {
     path: "measurements",
