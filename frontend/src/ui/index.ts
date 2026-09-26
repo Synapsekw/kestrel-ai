@@ -49,13 +49,23 @@ export {
 export { Pill, type PillTone } from "./Pill";
 export { Progress } from "./Progress";
 export { Segmented } from "./Segmented";
+export { SeverityPicker, SeverityPill, type SeverityPickerProps, type SeverityPillProps } from "./Severity";
+export {
+  DEFAULT_SEVERITY_SCALE,
+  SeverityScaleContext,
+  severityOf,
+  useSeverityScale,
+  type SeverityLevel,
+} from "./severityScale";
 export { Skeleton, SkeletonRows } from "./Skeleton";
 export { SPARK_MAX, Sparkline, sparkPaths } from "./Sparkline";
 export { StatTile, type StatDelta, type StatTileProps } from "./StatTile";
+export { StatusDot, type DotStatus } from "./StatusDot";
 export { Switch } from "./Switch";
 export { Toaster } from "./Toaster";
 export { toast, dismissToast, useToastStore } from "./toastStore";
 export { Tooltip } from "./Tooltip";
+export { TypeChip, type TypeKind } from "./TypeChip";
 export { useCountUp } from "./useCountUp";
 export { claimJobOutcome, useJobToasts, jobToastText, reportedInline } from "./useJobToasts";
 export { cx, focusRing, lift, pressable, transition } from "./tokens";
