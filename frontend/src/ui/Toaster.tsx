@@ -27,7 +27,7 @@ function ToastItem({ toast }: { toast: Toast }) {
       role={toast.tone === "danger" ? "alert" : "status"}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="pointer-events-auto flex min-w-[18rem] max-w-md items-center gap-2.5 rounded-md bg-tip py-2 pl-3 pr-2 text-sm font-medium text-tip-fg shadow-float animate-reveal reduce-motion:animate-none"
+      className="pointer-events-auto flex min-w-[18rem] max-w-md items-center gap-2.5 rounded-control border border-glass-line bg-tip py-2 pl-3 pr-2 text-sm font-medium text-tip-fg shadow-elev-2 animate-reveal reduce-motion:animate-none"
     >
       <span
         className={cx(

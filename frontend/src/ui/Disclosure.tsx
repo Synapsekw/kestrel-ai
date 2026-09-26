@@ -40,7 +40,7 @@ export function Disclosure({
         aria-controls={id}
         onClick={toggle}
         className={cx(
-          "inline-flex h-7 w-fit items-center gap-1.5 rounded-md pl-1 pr-2 text-[13px] font-medium text-muted hover:bg-hover hover:text-ink",
+          "inline-flex h-7 w-fit items-center gap-1.5 rounded-md pl-1 pr-2 text-sm font-medium text-muted hover:bg-hover hover:text-ink",
           transition,
           focusRing,
         )}

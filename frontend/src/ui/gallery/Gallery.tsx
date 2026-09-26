@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import { Toaster } from "@/ui/Toaster";
 
 interface SectionModule {
   default: ComponentType;
@@ -34,6 +35,7 @@ export function Gallery() {
           </div>
         </section>
       ))}
+      <Toaster />
     </div>
   );
 }

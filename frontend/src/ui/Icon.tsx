@@ -41,7 +41,17 @@ export type IconName =
   | "trend"
   | "minus"
   | "cloud"
-  | "volume";
+  | "volume"
+  | "catalogue"
+  | "findings"
+  | "measure"
+  | "report"
+  | "overview"
+  | "pin"
+  | "sparkle"
+  | "layers"
+  | "drawing"
+  | "elevation";
 
 /** 24-unit line icons, one path each, drawn with the current colour. */
 const PATHS: Record<IconName, string> = {
@@ -94,7 +104,28 @@ const PATHS: Record<IconName, string> = {
   cloud: "M3 20h18M6 17h.01M9 14h.01M12 11h.01M15 14h.01M18 17h.01M9 18h.01M12 15h.01M15 18h.01M12 7h.01",
   // A stockpile with its height dimension: the volume icon of every surface and volume job.
   volume: "M3 20h18M5 20c2-6 4-9 7-9s5 3 7 9M12 3v5M10 6l2 2 2-2",
+  // Catalogue: three type tiles and an add mark.
+  catalogue: "M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM17 14v6M14 17h6",
+  // A finding: a flag.
+  findings: "M5 21V4M5 4h11l-2 4 2 4H5",
+  // Measure: a ruler.
+  measure: "M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2",
+  report: "M6 3h9l4 4v14H6zM14 3v5h5M9 13h6M9 17h6",
+  // Overview: the dashboard grid.
+  overview: "M4 4h7v9H4zM13 4h7v5h-7zM13 11h7v9h-7zM4 15h7v5H4z",
+  pin: "M12 21s-6-5.3-6-11a6 6 0 0 1 12 0c0 5.7-6 11-6 11zM12 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+  // AI provenance.
+  sparkle:
+    "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.7 1.8 1.8.7-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z",
+  layers: "M12 4 3 8.5l9 4.5 9-4.5L12 4zM3 13l9 4.5 9-4.5",
+  // A drawing: a floor plan.
+  drawing: "M4 4h16v16H4zM4 10h6v10M10 4v6h10",
+  // Elevation: terrain with an up mark.
+  elevation: "M3 19 9 11l4 5 3-3 5 6zM17 4v5M15 6l2-2 2 2",
 };
+
+// eslint-disable-next-line react-refresh/only-export-components -- a list for the gallery, not a component
+export const ICON_NAMES = Object.keys(PATHS) as IconName[];
 
 export interface IconProps {
   name: IconName;

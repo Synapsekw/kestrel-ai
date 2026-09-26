@@ -1,16 +1,8 @@
 import { cx } from "./tokens";
 
-/** A well-coloured placeholder block with a slow shimmer; size it with `className`. */
+/** A surface-2 placeholder block with a slow shimmer; size it with `className`. */
 export function Skeleton({ className }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={cx(
-        "rounded-md bg-surface-2 bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.6),transparent)] bg-[length:200%_100%] animate-shimmer reduce-motion:animate-none",
-        className,
-      )}
-    />
-  );
+  return <div aria-hidden="true" className={cx("rounded-sm bg-surface-2 animate-shimmer", className)} />;
 }
 
 /** Placeholder rows for a table or list while it loads. */

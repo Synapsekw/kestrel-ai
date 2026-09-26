@@ -7,13 +7,18 @@ export interface ProgressProps {
   running?: boolean;
   label?: string;
   className?: string;
-  /** Height in Tailwind units; 1.5 (6px) by default. */
+  /** 4px instead of 6px. */
   thin?: boolean;
 }
 
+/**
+ * A job's progress. The fill is a full-width bar moved with translateX (motion stays on transform),
+ * shimmering only while `running`; an indeterminate bar slides, and both stop under reduced motion.
+ */
 export function Progress({ value, running, label, className, thin }: ProgressProps) {
   const indeterminate = value === undefined;
-  const pct = indeterminate ? 40 : Math.max(0, Math.min(100, Math.round(value * 100)));
+  const pct =
+    value === undefined || !Number.isFinite(value) ? 0 : Math.max(0, Math.min(100, Math.round(value * 100)));
   return (
     <div
       role="progressbar"
@@ -21,17 +26,27 @@ export function Progress({ value, running, label, className, thin }: ProgressPro
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={indeterminate ? undefined : pct}
-      className={cx("w-full overflow-hidden rounded-full bg-surface-2", thin ? "h-1" : "h-1.5", className)}
+      className={cx(
+        "relative w-full overflow-hidden rounded-chip bg-surface-2",
+        thin ? "h-1" : "h-1.5",
+        className,
+      )}
     >
-      <div
-        className={cx(
-          "h-full rounded-full bg-accent transition-[width] duration-slow ease-out reduce-motion:transition-none",
-          running &&
-            "bg-[linear-gradient(90deg,rgb(var(--accent))_0%,rgb(var(--accent-ink))_45%,rgb(var(--accent))_100%),linear-gradient(90deg,transparent,rgb(255_255_255/0.35),transparent)] bg-[length:100%_100%,200%_100%] animate-shimmer reduce-motion:animate-none",
-          indeterminate && "animate-[shimmer_1.2s_linear_infinite] reduce-motion:animate-none",
-        )}
-        style={indeterminate ? { width: `${pct}%`, marginLeft: "30%" } : { width: `${pct}%` }}
-      />
+      {indeterminate ? (
+        <div
+          data-part="fill"
+          className="animate-indeterminate absolute inset-y-0 left-0 w-2/5 rounded-chip bg-accent"
+        />
+      ) : (
+        <div
+          data-part="fill"
+          className={cx(
+            "absolute inset-0 rounded-chip bg-accent transition-transform duration-base ease-out reduce-motion:transition-none",
+            running && "animate-shimmer",
+          )}
+          style={{ transform: `translateX(${pct - 100}%)` }}
+        />
+      )}
     </div>
   );
 }
