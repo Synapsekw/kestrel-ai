@@ -9,6 +9,20 @@ from pathlib import Path
 MAX_RECENT = 20
 
 
+def _parse_last_opened_at(value: object) -> datetime | None:
+    """A malformed or missing timestamp answers `None` rather than raising: a damaged app-data
+    file must never turn into a 500 (AGENTS.md "the app must start even when startup work fails")."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed
+
+
 class AppData:
     def __init__(self, data_dir: Path):
         self.data_dir = data_dir
@@ -41,6 +55,19 @@ class AppData:
             },
         )
         self._write(self._recent, items[:MAX_RECENT])
+
+    def last_opened_at(self, project_id: str) -> datetime | None:
+        """The recent-list entry's `last_opened_at` for one project id; `None` if the project has
+        no entry (or the entry's timestamp is malformed)."""
+        for r in self.recent():
+            if r["id"] == project_id:
+                return _parse_last_opened_at(r.get("last_opened_at"))
+        return None
+
+    def last_opened_map(self) -> dict[str, datetime | None]:
+        """id -> `last_opened_at`, read from the recent list once (bounded by `MAX_RECENT`). Used
+        by `list_projects` so it does not re-read the file once per project."""
+        return {r["id"]: _parse_last_opened_at(r.get("last_opened_at")) for r in self.recent()}
 
     def forget(self, folder: str) -> None:
         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]

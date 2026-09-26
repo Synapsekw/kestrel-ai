@@ -75,9 +75,12 @@ class ProjectOut(BaseModel):
     import_defaults: ImportSettings
     schema_version: int
     created_at: datetime
+    last_opened_at: datetime | None
 
     @classmethod
-    def from_row(cls, row: Project, folder: Path) -> "ProjectOut":
+    def from_row(cls, row: Project, folder: Path, last_opened_at: datetime | None) -> "ProjectOut":
+        """`last_opened_at` comes from the recent-projects list (`AppData`), not the project's own
+        row: it is per-user app data, not part of the project file (see `app/appdata.py`)."""
         return cls(
             id=row.id,
             name=row.name,
@@ -87,6 +90,7 @@ class ProjectOut(BaseModel):
             import_defaults=ImportSettings(**(row.import_defaults or {})),
             schema_version=row.schema_version,
             created_at=row.created_at,
+            last_opened_at=last_opened_at,
         )
 
 

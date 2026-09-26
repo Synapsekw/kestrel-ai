@@ -4,6 +4,7 @@ import logging
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 from fastapi import Request
@@ -190,6 +191,12 @@ class ProjectRegistry:
 
     def recent(self) -> list[dict]:
         return self.appdata.recent()
+
+    def last_opened_at(self, project_id: str) -> datetime | None:
+        return self.appdata.last_opened_at(project_id)
+
+    def last_opened_map(self) -> dict[str, datetime | None]:
+        return self.appdata.last_opened_map()
 
     def close_all(self) -> None:
         with self._lock:

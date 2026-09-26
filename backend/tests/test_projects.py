@@ -1,3 +1,6 @@
+import json
+from datetime import datetime
+
 from project_factory import new_project
 
 CLASSES = [
@@ -192,3 +195,56 @@ def test_folder_spellings_resolve_to_one_project(client, project_dir):
         assert r.json()["folder"] == str(project_dir)
     assert len(client.get("/api/v1/projects").json()["items"]) == 1
     assert len(client.app.state.projects._handles) == 1
+
+
+# last_opened_at comes from the recent list (AppData), not the project's own row (task 2b).
+
+
+def _recent_entries(settings) -> list[dict]:
+    return json.loads((settings.data_dir / "recent_projects.json").read_text("utf-8"))
+
+
+def test_last_opened_at_matches_the_recent_entry_on_create_get_and_list(client, settings, project_dir):
+    p = _create(client, project_dir, "A")
+    expected = datetime.fromisoformat(_recent_entries(settings)[0]["last_opened_at"])
+    assert datetime.fromisoformat(p["last_opened_at"]) == expected
+    got = client.get(f"/api/v1/projects/{p['id']}").json()["last_opened_at"]
+    assert datetime.fromisoformat(got) == expected
+    listed = client.get("/api/v1/projects").json()["items"][0]["last_opened_at"]
+    assert datetime.fromisoformat(listed) == expected
+
+
+def test_opening_a_project_again_moves_last_opened_at_forward(client, settings, project_dir):
+    p = _create(client, project_dir, "A")
+    entries = _recent_entries(settings)
+    entries[0]["last_opened_at"] = "2020-01-01T00:00:00+00:00"
+    (settings.data_dir / "recent_projects.json").write_text(json.dumps(entries), "utf-8")
+
+    reopened = client.post("/api/v1/projects/open", json={"folder": str(project_dir)}).json()
+
+    assert reopened["id"] == p["id"]
+    before = datetime.fromisoformat("2020-01-01T00:00:00+00:00")
+    after = datetime.fromisoformat(reopened["last_opened_at"])
+    assert after > before
+
+
+def test_a_project_not_in_the_recent_list_has_null_last_opened_at(client, settings, project_dir):
+    p = _create(client, project_dir, "A")
+    (settings.data_dir / "recent_projects.json").write_text("[]", "utf-8")
+
+    r = client.get(f"/api/v1/projects/{p['id']}")
+
+    assert r.status_code == 200
+    assert r.json()["last_opened_at"] is None
+
+
+def test_a_malformed_last_opened_at_answers_null_not_500(client, settings, project_dir):
+    p = _create(client, project_dir, "A")
+    entries = _recent_entries(settings)
+    entries[0]["last_opened_at"] = "not-a-timestamp"
+    (settings.data_dir / "recent_projects.json").write_text(json.dumps(entries), "utf-8")
+
+    r = client.get(f"/api/v1/projects/{p['id']}")
+
+    assert r.status_code == 200
+    assert r.json()["last_opened_at"] is None
