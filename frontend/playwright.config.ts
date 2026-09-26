@@ -14,8 +14,9 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${webPort}`,
     headless: true,
     trace: process.env.CI ? "retain-on-failure" : "off",
-    // No SwiftShader here: forcing software GL on every worker's browser starves the CPU at
-    // start-up and the first test of each worker times out. clouds.spec.ts asks for it itself.
+    // No GL flags here: clouds.spec.ts, the only file that draws WebGL, asks for SwiftShader for
+    // WebGL itself. Never `--use-angle=swiftshader`: it puts the compositor on SwiftShader too, and
+    // every CSS animation then costs whole cores (vault/decisions/2026-09-26-gotcha-swiftshader-compositing.md).
   },
   webServer: [
     {

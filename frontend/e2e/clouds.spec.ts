@@ -5,9 +5,10 @@ import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 
-// WebGL in headless Chromium needs SwiftShader asked for explicitly (plan decision 13). Only this
-// file renders WebGL, so only its workers pay for software GL (playwright.config.ts).
-test.use({ launchOptions: { args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] } });
+// WebGL in headless Chromium needs SwiftShader asked for explicitly (plan decision 13), and for
+// WebGL only: `swiftshader-webgl`, not `swiftshader`, which also moves the compositor and raster onto
+// SwiftShader and starved the CI runner's 4 vCPUs (vault/decisions/2026-09-26-gotcha-swiftshader-compositing.md).
+test.use({ launchOptions: { args: ["--use-angle=swiftshader-webgl", "--enable-unsafe-swiftshader"] } });
 
 async function viewerStats(page: Page) {
   return page.evaluate(() => window.__kestrelCloudViewer?.stats() ?? null);
@@ -38,10 +39,39 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("kestrel.diagnostics", "1"));
 });
 
+test("WebGL runs on SwiftShader, but the page's own compositing and raster do not", async ({ browser }) => {
+  // `--use-angle=swiftshader` moved Chromium's compositor and raster onto SwiftShader as well: every
+  // repaint of a CSS animation (the importing row's shimmer, a live pill) then went through a
+  // software GPU that takes every core. Measured on the 4-vCPU runner: the GPU process at 399 % while
+  // the viewer loaded and ~200 % with nothing but CSS animating, against 98 % and 29 % with
+  // compositing left in plain software (vault/decisions/2026-09-26-gotcha-swiftshader-compositing.md).
+  const cdp = await browser.newBrowserCDPSession();
+  const info = (await cdp.send("SystemInfo.getInfo")) as {
+    gpu: { featureStatus: Record<string, string>; auxAttributes: Record<string, unknown> };
+  };
+  await cdp.detach();
+  const glRenderer = String(info.gpu.auxAttributes.glRenderer ?? "");
+  // GPU compositing on a real GPU is fine; on SwiftShader it is the CPU sink this file must not ask
+  // for. (WebGL itself working is what the next test's colour sample proves.)
+  expect(
+    { glRenderer, gpuCompositing: info.gpu.featureStatus.gpu_compositing },
+    "the compositor must not run on SwiftShader",
+  ).not.toEqual({ glRenderer: expect.stringContaining("SwiftShader"), gpuCompositing: "enabled" });
+});
+
 test("the viewer renders the cloud and its canvas fills the centre", async ({ page }) => {
   const files = buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 1 }));
   await routeCloud(page);
   const served = await routeOctree(page, CLOUD, files);
+  await page.addInitScript(() => {
+    const w = window as unknown as { __frames: number };
+    const raf = window.requestAnimationFrame.bind(window);
+    w.__frames = 0;
+    window.requestAnimationFrame = (cb) => {
+      w.__frames++;
+      return raf(cb);
+    };
+  });
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await expect
     .poll(async () => (await viewerStats(page))?.numVisiblePoints ?? 0, { timeout: 20_000 })
@@ -59,6 +89,12 @@ test("the viewer renders the cloud and its canvas fills the centre", async ({ pa
   expect(pick).not.toBeNull();
   expect(pick!.x).toBeGreaterThan(243500);
   expect(pick!.uncertainty_m).toBeGreaterThan(0);
+  // settled and untouched, the render loop stops (idle.ts): no frame is asked for a second later
+  const frames = () => page.evaluate(() => (window as unknown as { __frames: number }).__frames);
+  await page.waitForTimeout(1_200); // IDLE_AFTER_MS past the last pick's render
+  const before = await frames();
+  await page.waitForTimeout(1_000);
+  expect(await frames()).toBe(before);
 });
 
 test("a missing 3D view copy says so instead of a blank canvas", async ({ page }) => {
