@@ -1,6 +1,6 @@
 import { useParams } from "react-router-dom";
 import { useProject } from "@/api/project";
-import { ClassesSection } from "@/settings/ClassesSection";
+import { ProjectTypesSection } from "@/catalogue/ProjectTypesSection";
 import { ImportDefaultsSection } from "@/settings/ImportDefaultsSection";
 import { PreannotationSection } from "@/settings/PreannotationSection";
 import { ProvidersSection } from "@/settings/ProvidersSection";
@@ -15,7 +15,7 @@ export function SettingsScreen() {
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold">Project settings</h1>
         <p className="text-sm text-muted">
-          Classes, pre-annotation, import defaults and the imported folders of this project.
+          Types, pre-annotation, import defaults and the imported folders of this project.
         </p>
       </div>
       {error && <Alert tone="danger">{error}</Alert>}
@@ -30,7 +30,7 @@ export function SettingsScreen() {
       {project && (
         <div className="divide-y divide-line">
           {/* keys remount the form sections with fresh drafts whenever the saved project changes */}
-          <ClassesSection key={JSON.stringify(project.classes)} project={project} onSaved={setProject} />
+          <ProjectTypesSection key={JSON.stringify(project.classes)} project={project} onSaved={setProject} />
           <PreannotationSection project={project} onSaved={setProject} />
           <ImportDefaultsSection
             key={JSON.stringify(project.import_defaults)}

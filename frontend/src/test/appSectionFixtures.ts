@@ -1,4 +1,4 @@
-import type { components } from "@contract/client";
+import type { ClassDef, components } from "@contract/client";
 import { IMAGE_ID, JOB_ID, MODEL_ID, PROJECT_ID, TRAINED_MODEL_ID, runningJob } from "./fixtures";
 
 type S = components["schemas"];
@@ -62,6 +62,30 @@ export const exampleSeverity: S["SeverityLevel"][] = [
 ];
 
 export const exampleCataloguePage = { items: exampleTypes, next_cursor: null, needs_classification: true };
+
+/** A project's derived type list (F §7.3): Excavator first with a project hotkey override "9", then Crack. */
+export const exampleProjectClasses: ClassDef[] = [
+  {
+    id: TYPE_ID(3),
+    name: "Crack",
+    colour: "#ef4444",
+    hotkey: "c",
+    order: 1,
+    kind: "defect",
+    default_severity: 2,
+    group: "Concrete defects",
+  },
+  {
+    id: TYPE_ID(1),
+    name: "Excavator",
+    colour: "#f97316",
+    hotkey: "9",
+    order: 0,
+    kind: "object",
+    default_severity: null,
+    group: null,
+  },
+];
 
 export const LIB_DATASET_ID = "d1000000-7777-4000-8000-000000000001";
 export const LIB_JOB_ID = "j1000000-4444-4000-8000-000000000001";

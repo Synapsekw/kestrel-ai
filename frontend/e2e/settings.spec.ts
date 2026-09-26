@@ -1,55 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { evidencePath } from "./evidence";
+import { CATALOGUE_PAGE, fulfilJson } from "./fixtures/appSections";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
-const CLASS1 = "c1a2b3c4-0000-4000-8000-000000000001";
-const CLASS4 = "c1a2b3c4-0000-4000-8000-000000000004";
 const MODEL = "m0000000-2222-4000-8000-000000000001";
-
-test("renames and rehotkeys a class and saves the full list with PUT", async ({ page }) => {
-  await page.goto(`/p/${P}/settings`);
-  await expect(page.getByRole("heading", { name: "Project settings" })).toBeVisible();
-  await page.getByLabel("Name of class 1").fill("digger");
-  await page.getByLabel("Hotkey of class 1").selectOption("9");
-  const put = page.waitForRequest((r) => r.method() === "PUT" && r.url().endsWith(`/projects/${P}/classes`));
-  await page.getByRole("button", { name: "Save classes" }).click();
-  const body = (await put).postDataJSON() as Array<{
-    id?: string;
-    name: string;
-    colour: string;
-    hotkey: string | null;
-  }>;
-  expect(body).toHaveLength(8);
-  expect(body[0]).toEqual({ id: CLASS1, name: "digger", colour: "#f97316", hotkey: "9" });
-  await expect(page.getByRole("status").filter({ hasText: "Classes saved" })).toBeVisible();
-});
-
-test("removing a class that still has boxes is refused with an explanation", async ({ page }) => {
-  await page.route(`**/api/v1/projects/${P}/classes`, (route) =>
-    route.request().method() === "PUT"
-      ? route.fulfill({
-          status: 409,
-          contentType: "application/json",
-          headers: { "Access-Control-Allow-Origin": "*" },
-          body: JSON.stringify({
-            error: {
-              code: "class_in_use",
-              message: "class still has boxes",
-              details: { class_id: CLASS4, box_count: 40 },
-            },
-          }),
-        })
-      : route.continue(),
-  );
-  await page.goto(`/p/${P}/settings`);
-  await page.getByRole("button", { name: "Remove class 4" }).click();
-  await expect(page.getByLabel("Name of class 8")).toHaveCount(0);
-  await page.getByRole("button", { name: "Save classes" }).click();
-  await expect(page.getByRole("alert")).toContainText(
-    'Class "dump_truck" still has 40 boxes. Reassign or delete those boxes in the editor before removing it.',
-  );
-  await expect(page.getByLabel("Name of class 4")).toHaveValue("dump_truck");
-});
 
 test("pre-annotation model selection patches the project and tolerates a missing registry", async ({
   page,
@@ -92,13 +45,37 @@ test("import defaults save with PATCH and the provider placeholder is present", 
   await expect(page.getByText(/Windows Credential Manager/)).toBeVisible();
 });
 
-test("class-name fields keep their width beside the narrow hotkey select", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 800 });
+test("the project's type list adds a catalogue type and saves the order with PUT /types", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname === "/api/v1/catalogue/types",
+    (route) => fulfilJson(route, CATALOGUE_PAGE),
+  );
+  await page.route(`**/api/v1/projects/${P}`, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const project = (await response.json()) as Record<string, unknown>;
+    project.classes = [
+      {
+        id: "t-1",
+        name: "Excavator",
+        colour: "#f97316",
+        hotkey: "1",
+        order: 0,
+        kind: "object",
+        default_severity: null,
+        group: null,
+      },
+    ];
+    return route.fulfill({ response, json: project });
+  });
+  await page.route(`**/api/v1/projects/${P}/types`, (route) => fulfilJson(route, {}));
   await page.goto(`/p/${P}/settings`);
-  const name = await page.getByLabel("Name of class 1").boundingBox();
-  const hotkey = await page.getByLabel("Hotkey of class 1").boundingBox();
-  // The hotkey select is sized 4.5rem (72 px); before the fix it took the whole row.
-  expect(hotkey!.width).toBeLessThan(80);
-  expect(name!.width).toBeGreaterThan(hotkey!.width * 3);
-  await page.screenshot({ path: evidencePath("cleanup-a", "settings-classes.png") });
+  await expect(page.getByRole("heading", { name: "Types" })).toBeVisible({ timeout: 15_000 });
+  await page.getByLabel("Add type").fill("dump");
+  await page.getByRole("button", { name: "Add Dump truck" }).click();
+  const put = page.waitForRequest((r) => r.method() === "PUT" && r.url().endsWith(`/projects/${P}/types`));
+  await page.getByRole("button", { name: "Save types" }).click();
+  expect((await put).postDataJSON()).toEqual({ type_ids: ["t-1", "t-2"], hotkeys: {} });
 });

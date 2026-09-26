@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { ApiClient, ClassDefInput, Project, Source, components } from "@contract/client";
+import type { ApiClient, Project, Source, components } from "@contract/client";
 import { useApi } from "./client";
 import { messageOf, unwrap } from "./errors";
 import { pushLog } from "@/app/diagnostics";
@@ -9,13 +9,6 @@ export type ProjectUpdate = components["schemas"]["ProjectUpdate"];
 
 export function fetchProject(api: ApiClient, projectId: string): Promise<Project> {
   return unwrap(api.GET("/api/v1/projects/{projectId}", { params: { path: { projectId } } }));
-}
-
-/** Replace the class list; items with an `id` keep it. 409 `class_in_use` when a removed class still has boxes. */
-export function saveClasses(api: ApiClient, projectId: string, classes: ClassDefInput[]): Promise<Project> {
-  return unwrap(
-    api.PUT("/api/v1/projects/{projectId}/classes", { params: { path: { projectId } }, body: classes }),
-  );
 }
 
 export function patchProject(api: ApiClient, projectId: string, patch: ProjectUpdate): Promise<Project> {

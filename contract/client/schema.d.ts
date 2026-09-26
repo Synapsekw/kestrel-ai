@@ -96,31 +96,6 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/classes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Replace the class list. Items with an `id` keep it (rename, recolour, rehotkey);
-         *     items without one are new; order is the list order. A class that still has boxes
-         *     cannot be removed: the request fails with 409 `class_in_use` and the caller must
-         *     reassign or delete the boxes first.
-         * @deprecated
-         */
-        put: operations["updateClasses"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/projects/{projectId}/stats": {
         parameters: {
             query?: never;
@@ -3250,22 +3225,6 @@ export interface components {
                 available: boolean;
                 name: string | null;
             } | null;
-        };
-        /**
-         * @example {
-         *       "name": "excavator",
-         *       "colour": "#f97316",
-         *       "hotkey": "1"
-         *     }
-         */
-        ClassDefInput: {
-            /** @description keep the id to rename or recolour an existing class */
-            id?: string;
-            /** @description must contain a non-whitespace character */
-            name: string;
-            colour: string;
-            /** @description single character, 1 to 9 recommended */
-            hotkey?: string | null;
         };
         /**
          * @description One entry of the project's type list, read from the project's snapshot of a catalogue type (foundation F2), so a project renders even when the catalogue cannot open. `id` is the catalogue type id, `order` the list position, and `hotkey` the project's override or else the catalogue hotkey.
@@ -9127,42 +9086,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Project"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    updateClasses: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ClassDefInput"][];
-            };
-        };
-        responses: {
-            /** @description updated project */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Project"];
-                };
-            };
-            /** @description a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`), or two classes share a name or a hotkey, or a name is blank (`code` is `conflict`) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

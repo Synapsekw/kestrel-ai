@@ -12,7 +12,6 @@ export type MigrationState = Schemas["MigrationState"];
 export type ProjectTypesUpdate = Schemas["ProjectTypesUpdate"];
 export type CatalogueKind = Schemas["CatalogueKind"];
 export type ClassDef = Schemas["ClassDef"];
-export type ClassDefInput = Schemas["ClassDefInput"];
 export type ImportSettings = Schemas["ImportSettings"];
 export type Stats = Schemas["Stats"];
 export type Source = Schemas["Source"];

@@ -106,7 +106,6 @@ BACKEND_PENDING: dict[str, str] = {}
 # §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path
 # from openapi.yaml deletes the entry.
 RETIRING: dict[str, str] = {
-    "updateClasses": "F-S2",
     "listDatasets": "F-S2",
     "createDataset": "F-S2",
     "getDataset": "F-S2",

@@ -211,38 +211,6 @@ paths:
         "204":
           description: forgotten
         default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/classes:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-    put:
-      tags: [projects]
-      operationId: updateClasses
-      deprecated: true
-      x-retire-with: F-S2
-      summary: |
-        Replace the class list. Items with an `id` keep it (rename, recolour, rehotkey);
-        items without one are new; order is the list order. A class that still has boxes
-        cannot be removed: the request fails with 409 `class_in_use` and the caller must
-        reassign or delete the boxes first.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: array
-              items: { $ref: "#/components/schemas/ClassDefInput" }
-      responses:
-        "200":
-          description: updated project
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Project" }
-        "409":
-          description: "a removed class still has boxes (`code` is `class_in_use`, details `{class_id, box_count}`), or two classes share a name or a hotkey, or a name is blank (`code` is `conflict`)"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/stats:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -4652,18 +4620,6 @@ components:
         started_at: "2026-09-17T10:00:00Z"
         gpu: { available: true, name: "NVIDIA GeForce RTX 5070 Ti" }
 
-    ClassDefInput:
-      type: object
-      required: [name, colour]
-      properties:
-        id: { type: string, description: keep the id to rename or recolour an existing class }
-        name: { type: string, minLength: 1, maxLength: 64, pattern: '\S', description: must contain a non-whitespace character }
-        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
-        hotkey:
-          type: [string, "null"]
-          description: single character, 1 to 9 recommended
-          maxLength: 1
-      example: { name: excavator, colour: "#f97316", hotkey: "1" }
     ClassDef:
       type: object
       description: >-

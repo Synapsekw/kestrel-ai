@@ -6,26 +6,21 @@ import {
   errorBody,
   fakeClient,
   PROJECT_ID,
-  CLASS_ID,
   SOURCE_ID,
   runningJob,
   exampleStats,
 } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
-import { patchProject, saveClasses, useGroups, useProject, useSourceNames } from "./project";
+import { patchProject, useGroups, useProject, useSourceNames } from "./project";
 
 describe("project api", () => {
-  it("saves classes with PUT and patches the project", async () => {
+  it("patches the project", async () => {
     const { api, requests } = fakeClient([
-      { method: "PUT", path: /\/classes$/, body: exampleProject },
       { method: "PATCH", path: /\/projects\/[^/]+$/, body: exampleProject },
     ]);
-    await saveClasses(api, PROJECT_ID, [{ id: CLASS_ID(1), name: "digger", colour: "#ffffff", hotkey: "1" }]);
     await patchProject(api, PROJECT_ID, { preannotation_model_id: null });
-    expect(requests[0]).toMatchObject({ method: "PUT", url: `/api/v1/projects/${PROJECT_ID}/classes` });
-    expect(requests[0].body).toEqual([{ id: CLASS_ID(1), name: "digger", colour: "#ffffff", hotkey: "1" }]);
-    expect(requests[1]).toMatchObject({ method: "PATCH", body: { preannotation_model_id: null } });
+    expect(requests[0]).toMatchObject({ method: "PATCH", body: { preannotation_model_id: null } });
   });
 
   it("useProject loads the project; useSourceNames tolerates 501 and maps ids to sites", async () => {
