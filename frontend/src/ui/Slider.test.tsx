@@ -59,6 +59,7 @@ describe("Slider", () => {
     fireEvent.keyDown(slider, { key: "Home" });
     expect(slider).toHaveAttribute("aria-valuenow", "0");
     expect(screen.getByText("0 px").className).toContain("font-mono");
+    expect(slider.querySelector(".ring-control-line")).not.toBeNull();
   });
 
   it("walks discrete stops", () => {

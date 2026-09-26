@@ -163,7 +163,7 @@ export function Slider({
           disabled && "pointer-events-none opacity-45",
         )}
       >
-        <span className="relative h-1 w-full overflow-hidden rounded-chip bg-surface-2">
+        <span className="relative h-1 w-full overflow-hidden rounded-chip bg-surface-2 ring-1 ring-inset ring-control-line">
           <span
             data-part="fill"
             className="absolute inset-0 rounded-chip bg-accent"
