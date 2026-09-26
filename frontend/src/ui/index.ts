@@ -16,6 +16,14 @@ export {
   type ComboboxListProps,
   type ComboboxProps,
 } from "./Combobox";
+export {
+  CommandPalette,
+  SEARCH_DEBOUNCE_MS,
+  type Command,
+  type CommandGroup,
+  type CommandPaletteProps,
+  type CommandSource,
+} from "./CommandPalette";
 export { DataTable, ROW_HEIGHT, type Column, type DataTableProps, type Sort } from "./DataTable";
 export { Dialog } from "./Dialog";
 export { Disclosure } from "./Disclosure";
