@@ -212,3 +212,14 @@ def project_id(project) -> str:
 def handle(app, project_id):
     """The open ProjectHandle behind `project_id` (folders, session)."""
     return app.state.projects.get(project_id)
+
+
+@pytest.fixture
+def crack(client, project) -> dict:
+    """A defect type "crack" (default severity 2) in the catalogue and at the end of `project`'s
+    type list (plan BC)."""
+    from findings_helpers import add_type, use_types
+
+    t = add_type(client, "crack", colour="#ff5a4f", default_severity=2)
+    use_types(client, project, t)
+    return t

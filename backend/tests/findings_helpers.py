@@ -18,3 +18,44 @@ def use_types(client, project: dict, *types: dict) -> dict:
     )
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def insert_map(handle, *, name: str = "April", crs_wkt: str | None = None) -> str:
+    """A ready map row, straight into the project DB (no GeoTIFF needed for anchors)."""
+    from app.db.models import GeoMap
+
+    with handle.session() as s:
+        row = GeoMap(name=name, status="ready", source_path="C:/maps/x.tif", source_size=1, crs_wkt=crs_wkt)
+        s.add(row)
+        s.flush()
+        return row.id
+
+
+def insert_cloud(handle, *, name: str = "Scan", crs_wkt: str | None = None) -> str:
+    """A ready point-cloud row, straight into the project DB."""
+    from app.db.models import PointCloud
+
+    with handle.session() as s:
+        row = PointCloud(
+            name=name, status="ready", source_path="C:/clouds/x.laz", source_size=1, crs_wkt=crs_wkt
+        )
+        s.add(row)
+        s.flush()
+        return row.id
+
+
+def insert_box(handle, class_id: str) -> tuple[str, str]:
+    """An image (in a fresh image set) with one box of `class_id`; returns (image_id, box_id)."""
+    from app.db.models import Box, Image, Source
+
+    with handle.session() as s:
+        src = Source(folder="C:/flights/a", site="A")
+        s.add(src)
+        s.flush()
+        image = Image(path="images/a.jpg", width=100, height=100, source_id=src.id)
+        s.add(image)
+        s.flush()
+        box = Box(image_id=image.id, class_id=class_id, x=0.5, y=0.5, w=0.1, h=0.1, provenance_kind="person")
+        s.add(box)
+        s.flush()
+        return image.id, box.id
