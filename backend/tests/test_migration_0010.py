@@ -164,3 +164,18 @@ def test_a_box_with_a_finding_cannot_be_deleted_behind_its_back(engine):
     with factory() as s, pytest.raises(IntegrityError):
         s.delete(s.get(Box, "b1"))
         s.commit()
+
+
+def test_0010_freezes_its_anchor_check_instead_of_importing_the_model():
+    """A later model edit must not rewrite 0010's history: the revision carries its own copy of the
+    CHECK text, identical to the model's today."""
+    import importlib.util
+
+    from app.db.models import ANCHOR_CHECK
+
+    path = MIGRATIONS / "versions" / "0010_foundation.py"
+    assert "from app.db.models" not in path.read_text(encoding="utf-8")
+    spec = importlib.util.spec_from_file_location("rev_0010", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.ANCHOR_CHECK == ANCHOR_CHECK

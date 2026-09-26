@@ -13,7 +13,19 @@ Create Date: 2026-09-26 00:00:00.000000
 import sqlalchemy as sa
 from alembic import op
 
-from app.db.models import ANCHOR_CHECK
+# Frozen here (the text of app.db.models.ANCHOR_CHECK on 2026-09-26), so a later model edit
+# cannot rewrite this revision's history.
+ANCHOR_CHECK = (
+    "(anchor_kind = 'image' AND image_id IS NOT NULL AND annotation_id IS NOT NULL"
+    " AND map_id IS NULL AND geometry IS NULL AND cloud_id IS NULL"
+    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL)"
+    " OR (anchor_kind = 'map' AND map_id IS NOT NULL AND geometry IS NOT NULL"
+    " AND image_id IS NULL AND annotation_id IS NULL AND cloud_id IS NULL"
+    " AND x IS NULL AND y IS NULL AND z IS NULL AND uncertainty_m IS NULL)"
+    " OR (anchor_kind = 'cloud' AND cloud_id IS NOT NULL AND x IS NOT NULL AND y IS NOT NULL"
+    " AND z IS NOT NULL AND image_id IS NULL AND annotation_id IS NULL AND map_id IS NULL"
+    " AND geometry IS NULL)"
+)
 
 revision = "0010"
 down_revision = "0009"  # main's project head at merge time
