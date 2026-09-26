@@ -2,11 +2,11 @@
 defects only, the status table, anchors, activity and counts in the same transaction."""
 
 import pytest
-from findings_helpers import add_type, insert_box, insert_cloud, insert_map
+from findings_helpers import add_type, insert_box, insert_cloud, insert_map, use_types
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.db.models import Activity, Finding, FindingCount
+from app.db.models import Activity, Finding, FindingCount, ProjectType
 from app.errors import AppError
 from app.findings import service, trash
 from app.findings.anchors import AnchorIn
@@ -283,3 +283,30 @@ def test_purge_counts_only_entries_that_really_went(handle, monkeypatch):
     monkeypatch.setattr(trash.shutil, "rmtree", lambda *a, **k: None)  # a locked file keeps the folder
     assert trash.purge(handle, now=datetime(2026, 1, 1, tzinfo=UTC) + timedelta(days=31)) == 0
     assert stuck.exists()
+
+
+def _shrink_scale_to_three(client) -> None:
+    levels = client.get("/api/v1/catalogue/severity").json()["levels"][:3]
+    r = client.put("/api/v1/catalogue/severity", json={"levels": levels})
+    assert r.status_code == 200, r.text
+
+
+def test_a_scale_shrink_refreshes_the_default_severity_of_open_projects(client, handle, project):
+    spall = add_type(client, "spall", default_severity=4)
+    use_types(client, project, spall)
+    _shrink_scale_to_three(client)
+    [c] = [
+        c for c in client.get(f"/api/v1/projects/{project['id']}").json()["classes"] if c["id"] == spall["id"]
+    ]
+    assert c["default_severity"] is None
+
+
+def test_a_stale_snapshot_default_off_the_scale_is_dropped(client, handle, project, cloud):
+    """A project that missed the refresh (closed, or its refresh failed) still carries the old
+    default: a new finding takes no severity rather than one the scale no longer has."""
+    spall = add_type(client, "spall", default_severity=4)
+    use_types(client, project, spall)
+    _shrink_scale_to_three(client)
+    with handle.session() as s:
+        s.get(ProjectType, spall["id"]).default_severity = 4
+    assert service.create_finding(handle, type_id=spall["id"], anchor=_at(cloud)).severity is None

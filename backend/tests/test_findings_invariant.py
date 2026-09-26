@@ -137,6 +137,18 @@ def test_moving_a_box_leaves_its_finding_alone(client, ctx):
     assert [(f["id"], f["number"]) for f in after] == [(f["id"], f["number"]) for f in before]
 
 
+def test_a_type_flipped_to_object_keeps_its_findings_through_a_geometry_edit(client, ctx):
+    """Spec section 7.2 (defect -> object keeps existing findings) and section 8.5 (geometry edited
+    -> nothing): only a class change of the box itself can delete its finding."""
+    box = _box(client, ctx, ctx["crack"])
+    [before] = _findings(client, ctx)
+    r = client.patch(f"{API}/catalogue/types/{ctx['crack']}", json={"kind": "object"})
+    assert r.status_code == 200, r.text
+    r = client.patch(f"{ctx['base']}/boxes/{box['id']}", json={"x": 50, "y": 60, "angle": 10})
+    assert r.status_code == 200, r.text
+    assert [f["id"] for f in _findings(client, ctx)] == [before["id"]]
+
+
 def test_deleting_the_box_deletes_its_finding_and_bins_its_photos(client, handle, ctx, tmp_path, make_jpeg):
     box = _box(client, ctx, ctx["crack"])
     [f] = _findings(client, ctx)

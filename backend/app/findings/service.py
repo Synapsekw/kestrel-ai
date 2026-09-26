@@ -111,6 +111,10 @@ def create_in_session(
     pt = defect_type(s, catalogue, type_id)  # the last check: it may append the type to the list
     if severity is UNSET:
         severity = pt.default_severity
+        # A snapshot that missed a scale shrink may name a level the live scale no longer has.
+        if severity is not None and catalogue is not None:
+            if severity not in {lv.level for lv in catalogue_service.get_scale(catalogue)}:
+                severity = None
     now = utcnow()
     row = Finding(
         number=number if number is not None else numbers.allocate(s),

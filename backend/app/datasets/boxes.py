@@ -166,6 +166,7 @@ def update_box(handle: ProjectHandle, box_id: str, *, confirm_finding_delete: bo
         moved = {k: fields.get(k, getattr(row, k)) for k in ("x", "y", "w", "h", "angle")}
         _check_bounds(_image(s, row.image_id), **moved)
         old = _entry(row)
+        old_class_id = row.class_id
         for k, v in fields.items():
             setattr(row, k, v)
         if row.review_state not in GROUND_TRUTH:  # editing a proposal is a review decision
@@ -174,7 +175,12 @@ def update_box(handle: ProjectHandle, box_id: str, *, confirm_finding_delete: bo
             clear_mark_for_ground_truth(s, [row.image_id])
         _count_transition(s, {}, row.query_run_id, old, _entry(row))
         trashed = annotations.on_box_changed(
-            s, handle.id, handle.catalogue, row, confirm_finding_delete=confirm_finding_delete
+            s,
+            handle.id,
+            handle.catalogue,
+            row,
+            confirm_finding_delete=confirm_finding_delete,
+            previous_class_id=old_class_id,
         )
         s.flush()
         s.expunge(row)

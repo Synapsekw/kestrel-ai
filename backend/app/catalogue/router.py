@@ -112,6 +112,8 @@ def put_severity_scale(
         [lv.model_dump() for lv in body.levels],
         level_in_use=lambda level: projects_using_level(registry, level),
     )
+    # A shrink clears catalogue defaults above the new top; open projects' snapshots follow.
+    project_types.refresh_open_projects(registry, cat, None)
     publish_catalogue_changed(request, {"severity": True})
     return SeverityScale(levels=[SeverityLevelOut.from_ref(lv) for lv in levels])
 

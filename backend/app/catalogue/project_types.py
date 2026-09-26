@@ -49,11 +49,13 @@ def effective_hotkey(row: ProjectType) -> str | None:
 
 def project_classes(s: Session, legacy: Project | None = None) -> list[dict]:
     """The list as ClassDef dicts, in order. A project from before the foundation (`schema_version`
-    below 2) that has no type rows yet shows its legacy classes, whose ids its boxes still carry,
-    until MG's migration fills `project_type` (spec section 11.4 steps 1-3)."""
+    below 2) shows its legacy classes, whose ids its boxes still carry, followed by any type rows
+    written since (a run's mapped type, a finding's type), until MG's migration fills
+    `project_type` (spec section 11.4 steps 1-3)."""
     rows = s.execute(select(ProjectType).order_by(ProjectType.position, ProjectType.type_id)).scalars().all()
-    if not rows and legacy is not None and (legacy.schema_version or 1) < 2:
-        return [
+    out: list[dict] = []
+    if legacy is not None and (legacy.schema_version or 1) < 2:
+        out = [
             {
                 "id": c["id"],
                 "name": c["name"],
@@ -66,18 +68,21 @@ def project_classes(s: Session, legacy: Project | None = None) -> list[dict]:
             }
             for i, c in enumerate(legacy.legacy_classes or [])
         ]
-    return [
+    held = {c["id"] for c in out}
+    base = max((c["order"] for c in out), default=-1) + 1
+    return out + [
         {
             "id": r.type_id,
             "name": r.name,
             "colour": r.colour,
             "hotkey": effective_hotkey(r),
-            "order": r.position,
+            "order": base + r.position if out else r.position,
             "kind": r.kind,
             "default_severity": r.default_severity,
             "group": r.group,
         }
         for r in rows
+        if r.type_id not in held
     ]
 
 
@@ -222,9 +227,9 @@ def refresh_handle(handle) -> int:
         return refresh_snapshots(s, handle.catalogue)
 
 
-def refresh_open_projects(registry, cat: CatalogueHandle | None, type_ids: Sequence[str]) -> None:
-    """After a catalogue edit: every open project's snapshot of these types. A failing project is
-    logged; its snapshot refreshes on its next open."""
+def refresh_open_projects(registry, cat: CatalogueHandle | None, type_ids: Sequence[str] | None) -> None:
+    """After a catalogue edit: every open project's snapshot of these types (None: all of them). A
+    failing project is logged; its snapshot refreshes on its next open."""
     for h in registry.open_handles():
         try:
             with h.session() as s:

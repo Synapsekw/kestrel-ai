@@ -67,15 +67,19 @@ def on_box_changed(
     *,
     confirm_finding_delete: bool = False,
     accepted: list[str] | None = None,
+    previous_class_id: str | None = None,
 ) -> list[str]:
-    """After a box's class or review state changed (the row carries the new values):
+    """After a box's class, review state or geometry changed (the row carries the new values):
 
     - ground truth on a defect type, no finding yet -> a finding
     - no longer ground truth (rejected, or unreviewed again) -> its finding is deleted
     - reclassed to an object type -> its finding is deleted, but only with
       `confirm_finding_delete` (409 `finding_would_be_deleted` otherwise)
     - reclassed to another defect type -> the finding's type follows
+    - class unchanged (a geometry edit) on a type the catalogue turned into an object type -> the
+      finding is kept (spec section 7.2: defect -> object keeps existing findings)
 
+    `previous_class_id` is the box's class before the change; None means it did not change.
     `accepted` collects a review batch's new findings for one `detections.accepted` row."""
     f = finding_of(s, box.id)
     ground_truth = box.review_state in GROUND_TRUTH
@@ -86,7 +90,8 @@ def on_box_changed(
             if accepted is not None:
                 accepted.append(new.id)
         return []
-    if not (ground_truth and defect):
+    reclassed = previous_class_id is not None and previous_class_id != box.class_id
+    if not ground_truth or (reclassed and not defect):
         if ground_truth and not confirm_finding_delete:
             raise AppError(
                 "finding_would_be_deleted",
@@ -95,7 +100,7 @@ def on_box_changed(
                 {"finding_id": f.id, "number": f.number},
             )
         return [service.delete_in_session(s, project_id=project_id, finding_id=f.id, delete_annotation=False)]
-    if f.type_id != box.class_id:
+    if defect and f.type_id != box.class_id:
         service.patch_in_session(
             s, project_id=project_id, catalogue=catalogue, finding_id=f.id, fields={"type_id": box.class_id}
         )

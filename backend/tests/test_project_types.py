@@ -4,7 +4,7 @@ catalogue is down (decision F2)."""
 
 import pytest
 from conftest import EIGHT_CLASSES
-from findings_helpers import add_type, use_types
+from findings_helpers import add_type, insert_box, use_types
 
 from app.catalogue import project_types
 from app.catalogue import service as catalogue
@@ -205,3 +205,25 @@ def test_a_pre_foundation_project_shows_its_legacy_classes_until_migrated(handle
                 "group": None,
             }
         ]
+
+
+def test_a_pre_foundation_project_keeps_its_legacy_classes_once_a_type_row_is_written(client, handle):
+    """Until MG migrates it, a v1 project lists its legacy classes followed by any `project_type` row
+    (a run's mapped type, a finding's type), so its existing boxes stay editable."""
+    from app.datasets import boxes
+
+    crack = add_type(client, "crack")
+    with handle.session() as s:
+        s.query(project_types.ProjectType).delete()
+        row = handle.row(s)
+        row.schema_version = 1
+        row.legacy_classes = [
+            {"id": "c1", "name": "excavator", "colour": "#ff0000", "hotkey": "1", "order": 0}
+        ]
+    _, box_id = insert_box(handle, "c1")
+    with handle.session() as s:
+        project_types.add_types(s, handle.catalogue, [crack["id"]])
+    with handle.session() as s:
+        classes = handle.row(s).classes
+    assert [(c["id"], c["order"]) for c in classes] == [("c1", 0), (crack["id"], 1)]
+    assert boxes.update_box(handle, box_id, x=0.4).x == 0.4
