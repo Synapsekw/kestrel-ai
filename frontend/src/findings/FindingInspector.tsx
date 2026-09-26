@@ -17,7 +17,11 @@ import {
   toast,
 } from "@/ui";
 import { formatFindingNumber, parseCreatedBy } from "./format";
+import { Attachments } from "./inspector/Attachments";
+import { Comments } from "./inspector/Comments";
 import { StatusField, TypeField } from "./inspector/fields";
+import { History } from "./inspector/History";
+import { NoteField } from "./inspector/NoteField";
 import { Provenance } from "./inspector/Provenance";
 import { useFinding } from "./inspector/useFinding";
 import { findingHref, findingPath, findingsTabPath } from "./links";
@@ -164,6 +168,18 @@ export function FindingInspector({
         </InspectorSection>
         {measureSlot && <InspectorSection title="Measured size">{measureSlot}</InspectorSection>}
         <Provenance finding={finding} nowMs={nowMs} />
+        <InspectorSection title="Note">
+          <NoteField key={finding.id} projectId={projectId} findingId={finding.id} initial={finding.note} />
+        </InspectorSection>
+        <InspectorSection title={`Attached photos · ${finding.attachment_count}`}>
+          <Attachments projectId={projectId} findingId={finding.id} />
+        </InspectorSection>
+        <InspectorSection title={`Comments · ${finding.comment_count}`}>
+          <Comments projectId={projectId} findingId={finding.id} />
+        </InspectorSection>
+        <InspectorSection title="History">
+          <History projectId={projectId} findingId={finding.id} />
+        </InspectorSection>
       </InspectorPane>
       <Dialog
         open={confirming}
