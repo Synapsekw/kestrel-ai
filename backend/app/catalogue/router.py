@@ -17,6 +17,11 @@ from app.catalogue.schemas import (
     TypeKind,
 )
 from app.catalogue.usage import projects_using_level
+from app.errors import AppError
+from app.findings.backfill import submit_backfill
+from app.jobs.schemas import JobOut
+from app.library.handle import LibraryHandle, get_library
+from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/catalogue", tags=["catalogue"])
 
@@ -109,3 +114,21 @@ def put_severity_scale(
     )
     publish_catalogue_changed(request, {"severity": True})
     return SeverityScale(levels=[SeverityLevelOut.from_ref(lv) for lv in levels])
+
+
+@router.post("/types/{typeId}/backfill", response_model=JobRef, status_code=202)
+def backfill_catalogue_type(
+    typeId: str,  # noqa: N803
+    request: Request,
+    cat: CatalogueHandle = Depends(get_catalogue),
+    lib: LibraryHandle = Depends(get_library),
+) -> JobRef:
+    """`findings_backfill` on the library runner (spec section 7.2). The backfill is idempotent, but
+    a second one of the same type while one is queued or running answers 409 `job_running`."""
+    ref = service.get_type(cat, typeId)
+    if ref.kind != "defect":
+        raise AppError(
+            "not_a_defect", f"{ref.name} is an object type; mark it a defect first.", 422, {"type_id": typeId}
+        )
+    job = submit_backfill(lib, request.app.state.jobs, typeId)
+    return JobRef(job=JobOut.from_row(job, lib.id))

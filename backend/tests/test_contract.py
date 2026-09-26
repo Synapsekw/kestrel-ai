@@ -170,6 +170,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchFinding": {422},
     # BC: a generated path is never a readable photo (`attachment_invalid`, details {reason}).
     "addFindingAttachment": {422},
+    # BC: a generated type that exists but is an object type (`not_a_defect`).
+    "backfillCatalogueType": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

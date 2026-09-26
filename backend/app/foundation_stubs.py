@@ -23,9 +23,6 @@ Stub = tuple[str, str, str]
 BC_PROJECT_STUBS: list[Stub] = [
     ("GET", "/overview", "getProjectOverview"),
 ]
-BC_APP_STUBS: list[Stub] = [
-    ("POST", "/catalogue/types/{typeId}/backfill", "backfillCatalogueType"),
-]
 
 # BM: datasets across projects, training runs and the model class map (§12, §7.4).
 BM_APP_STUBS: list[Stub] = [
@@ -43,7 +40,7 @@ BM_APP_STUBS: list[Stub] = [
 ]
 
 PROJECT_STUBS: list[Stub] = [*BC_PROJECT_STUBS]
-APP_STUBS: list[Stub] = [*BC_APP_STUBS, *BM_APP_STUBS]
+APP_STUBS: list[Stub] = [*BM_APP_STUBS]
 
 project_router = APIRouter(prefix="/projects/{projectId}", tags=["foundation-stubs"])
 add_stubs(project_router, PROJECT_STUBS)
