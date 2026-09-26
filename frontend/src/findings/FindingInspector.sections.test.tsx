@@ -19,6 +19,7 @@ import {
 } from "@/test/findingFixtures";
 import { renderWithProviders, TestApiProvider } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
+import { useToastStore } from "@/ui";
 import { MemoryRouter } from "react-router-dom";
 import { FindingInspector } from "./FindingInspector";
 import { NoteField } from "./inspector/NoteField";
@@ -64,6 +65,7 @@ describe("inspector note", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     useChangesStore.setState({ findingsRevision: 0 });
+    useToastStore.setState({ toasts: [] });
   });
   afterEach(() => vi.useRealTimers());
 
@@ -132,6 +134,36 @@ describe("inspector note", () => {
     expect(patches.map((r) => [r.url.split("/findings/")[1], r.body])).toEqual([
       [FINDING_ID, { note: "for 217" }],
     ]);
+  });
+  it("says so in a toast when the flush on switch fails", async () => {
+    const second = { ...exampleFindingDetail, id: FINDING_ID_2, number: 218, note: "" };
+    const { api, requests } = fakeClient(
+      routes([
+        { method: "GET", path: new RegExp(`/findings/${FINDING_ID_2}$`), body: second },
+        {
+          method: "PATCH",
+          path: new RegExp(`/findings/${FINDING_ID}$`),
+          status: 500,
+          body: errorBody("internal", "database is locked"),
+        },
+      ]),
+    );
+    const view = (findingId: string) => (
+      <TestApiProvider api={api}>
+        <MemoryRouter>
+          <FindingInspector projectId={PROJECT_ID} findingId={findingId} />
+        </MemoryRouter>
+      </TestApiProvider>
+    );
+    const { rerender } = render(view(FINDING_ID));
+    fireEvent.change(await screen.findByRole("textbox", { name: "Note" }), { target: { value: "for 217" } });
+    rerender(view(FINDING_ID_2));
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts).toEqual([
+        expect.objectContaining({ tone: "danger", text: "Note on F-0217 was not saved: database is locked" }),
+      ]),
+    );
+    expect(requests.filter((r) => r.method === "PATCH").map((r) => r.body)).toEqual([{ note: "for 217" }]);
   });
 });
 

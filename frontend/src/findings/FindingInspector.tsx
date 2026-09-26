@@ -169,7 +169,13 @@ export function FindingInspector({
         {measureSlot && <InspectorSection title="Measured size">{measureSlot}</InspectorSection>}
         <Provenance finding={finding} nowMs={nowMs} />
         <InspectorSection title="Note">
-          <NoteField key={finding.id} projectId={projectId} findingId={finding.id} initial={finding.note} />
+          <NoteField
+            key={finding.id}
+            projectId={projectId}
+            findingId={finding.id}
+            initial={finding.note}
+            number={finding.number}
+          />
         </InspectorSection>
         <InspectorSection title={`Attached photos · ${finding.attachment_count}`}>
           <Attachments projectId={projectId} findingId={finding.id} />
