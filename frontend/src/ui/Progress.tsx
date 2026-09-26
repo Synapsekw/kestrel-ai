@@ -27,7 +27,7 @@ export function Progress({ value, running, label, className, thin }: ProgressPro
         className={cx(
           "h-full rounded-full bg-accent transition-[width] duration-slow ease-out reduce-motion:transition-none",
           running &&
-            "bg-[linear-gradient(90deg,rgb(var(--accent))_0%,rgb(var(--accent-hover))_45%,rgb(var(--accent))_100%),linear-gradient(90deg,transparent,rgb(255_255_255/0.35),transparent)] bg-[length:100%_100%,200%_100%] animate-shimmer reduce-motion:animate-none",
+            "bg-[linear-gradient(90deg,rgb(var(--accent))_0%,rgb(var(--accent-ink))_45%,rgb(var(--accent))_100%),linear-gradient(90deg,transparent,rgb(255_255_255/0.35),transparent)] bg-[length:100%_100%,200%_100%] animate-shimmer reduce-motion:animate-none",
           indeterminate && "animate-[shimmer_1.2s_linear_infinite] reduce-motion:animate-none",
         )}
         style={indeterminate ? { width: `${pct}%`, marginLeft: "30%" } : { width: `${pct}%` }}

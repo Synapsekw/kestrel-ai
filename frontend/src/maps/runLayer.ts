@@ -96,7 +96,7 @@ function boxStyle(spec: RunLayerSpec, f: FeatureLike, resolution: number): Style
         ? new Text({
             text: spec.nameOf?.(classId) ?? "",
             // The registered family is 'Space Grotesk Variable' (tailwind.config.ts, from
-            // @fontsource-variable/instrument-sans); the unquoted two-word name resolved to
+            // @fontsource-variable/space-grotesk); the unquoted two-word name resolved to
             // nothing and fell through to the generic sans-serif.
             font: '12px "Space Grotesk Variable", system-ui, sans-serif',
             fill: new Fill({ color: tokenColour("ink") }),
