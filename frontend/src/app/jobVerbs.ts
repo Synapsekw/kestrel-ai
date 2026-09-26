@@ -1,0 +1,33 @@
+import type { Job } from "@contract/client";
+
+/** Present-tense verbs for the running pill; TypeScript checks the record covers every job type. */
+export const JOB_VERB: Record<Job["type"], string> = {
+  import: "Importing",
+  dataset: "Building a dataset",
+  train: "Training",
+  infer: "Detecting",
+  export: "Exporting",
+  results_export: "Exporting results",
+  map_import: "Importing a map",
+  map_detect: "Detecting on a map",
+  map_export: "Exporting map results",
+  library_import: "Importing a model",
+  library_export: "Exporting a model",
+  library_starter: "Adding a starter model",
+  library_adopt: "Moving models into the library",
+  map_move: "Moving a map",
+  accept_above: "Accepting detections",
+  recount: "Recounting a run",
+  area_recount: "Recounting site areas",
+  detect_export: "Exporting counts",
+  pointcloud_import: "Importing a point cloud",
+  pointcloud_export: "Exporting a point cloud",
+  surface_build: "Building a surface",
+  volume_calc: "Calculating a volume",
+  volume_export: "Exporting volumes",
+  design_import: "Importing a design surface",
+  project_migrate: "Upgrading a project",
+  findings_backfill: "Creating findings",
+  findings_recount: "Recounting findings",
+  dataset_build: "Building a dataset",
+};
