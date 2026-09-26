@@ -84,6 +84,9 @@ class JobRunner:
         # The app-wide model library (a LibraryHandle), wired in the lifespan like `keys`; None when
         # it could not be opened. Jobs that resolve library models read it from here.
         self.library = None
+        # The app-wide catalogue (a CatalogueHandle), wired in the lifespan like `library`; None when
+        # it could not be opened. The findings backfill reads it from here.
+        self.catalogue = None
 
     def start(self) -> None:
         self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="job")

@@ -78,6 +78,22 @@ def open_model_library(app: FastAPI, settings: Settings) -> None:
     app.state.jobs.library = app.state.library
 
 
+def open_catalogue(app: FastAPI, settings: Settings) -> None:
+    """Open the app-wide catalogue. A failure is logged and the app starts without it: catalogue
+    endpoints then answer 503 `catalogue_unavailable`, and projects render from their type
+    snapshots (spec 2026-09-26-foundation section 7.1 and decision F2)."""
+    from app.catalogue import handle as catalogue_handle
+
+    app.state.catalogue, app.state.catalogue_error = None, None
+    try:
+        app.state.catalogue = catalogue_handle.open_catalogue(settings.data_dir)
+    except Exception as e:
+        logging.getLogger(__name__).exception("the catalogue could not be opened")
+        app.state.catalogue_error = f"{type(e).__name__}: {e}"
+    app.state.jobs.catalogue = app.state.catalogue
+    app.state.projects.catalogue = app.state.catalogue
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings()
     settings.data_dir.mkdir(parents=True, exist_ok=True)
@@ -105,6 +121,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # Jobs that reach other projects find the registry on the runner.
         app.state.jobs.projects = app.state.projects
         open_model_library(app, settings)
+        open_catalogue(app, settings)
         app.state.jobs.start()
         if app.state.library is not None:
             try:
@@ -141,6 +158,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.projects.close_all()
         if app.state.library is not None:
             app.state.library.engine.dispose()
+        if app.state.catalogue is not None:
+            app.state.catalogue.engine.dispose()
 
     app = FastAPI(
         title="kestrel-backend",
