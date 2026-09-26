@@ -19,7 +19,7 @@ const at =
 describe("route actions", () => {
   beforeEach(() => {
     useProvidedRouteActions.setState({ entries: [] });
-    useAddData.setState({ open: false, tile: null });
+    useAddData.setState({ open: false, tile: null, projectId: "p1" });
   });
 
   it("gives every project route Add data and Generate report, the report opening the Reports tab", () => {
@@ -35,6 +35,17 @@ describe("route actions", () => {
     const [first] = defaultRouteActions(routeInfo("/p/p1/findings"), vi.fn());
     expect(first).toMatchObject({ label: "New finding", disabled: true });
     expect(first.tooltip).toMatch(/created in the Images, Maps and Point clouds workspaces/);
+  });
+
+  it("disables Add data, with the reason, while the shell's project is not loaded", () => {
+    const [add] = defaultRouteActions(routeInfo("/p/p1/images"), null);
+    expect(add).toMatchObject({ label: "Add data", disabled: true, tooltip: "Project is still loading" });
+    useAddData.setState({ projectId: null });
+    const loading = renderHook(() => useRouteActions(), { wrapper: at("/p/p1/overview") });
+    expect(loading.result.current[0]).toMatchObject({ label: "Add data", disabled: true });
+    useAddData.setState({ projectId: "p-other" });
+    const stale = renderHook(() => useRouteActions(), { wrapper: at("/p/p1/overview") });
+    expect(stale.result.current[0]).toMatchObject({ label: "Add data", disabled: true });
   });
 
   it("gives app sections no default actions", () => {

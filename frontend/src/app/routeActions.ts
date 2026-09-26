@@ -19,7 +19,8 @@ export interface RouteAction {
   tooltip?: string;
 }
 
-export function defaultRouteActions(info: RouteInfo, openAddData: () => void): RouteAction[] {
+/** `openAddData` is null while the shell's project is not loaded: Add data then shows, disabled. */
+export function defaultRouteActions(info: RouteInfo, openAddData: (() => void) | null): RouteAction[] {
   if (!info.projectId) return [];
   const actions: RouteAction[] = [];
   if (info.tab === "findings") {
@@ -31,7 +32,18 @@ export function defaultRouteActions(info: RouteInfo, openAddData: () => void): R
       tooltip: "Findings are created in the Images, Maps and Point clouds workspaces",
     });
   }
-  actions.push({ id: "add-data", label: "Add data", icon: "plus", variant: "secondary", run: openAddData });
+  actions.push(
+    openAddData
+      ? { id: "add-data", label: "Add data", icon: "plus", variant: "secondary", run: openAddData }
+      : {
+          id: "add-data",
+          label: "Add data",
+          icon: "plus",
+          variant: "secondary",
+          disabled: true,
+          tooltip: "Project is still loading",
+        },
+  );
   actions.push({
     id: "generate-report",
     label: "Generate report",
@@ -68,11 +80,13 @@ export function useProvideRouteActions(actions: readonly RouteAction[]): void {
 export function useRouteActions(): RouteAction[] {
   const { pathname } = useLocation();
   const entries = useProvidedRouteActions((s) => s.entries);
-  return useMemo(
-    () => [
+  const loadedId = useAddData((s) => s.projectId);
+  return useMemo(() => {
+    const info = routeInfo(pathname);
+    const ready = !!info.projectId && info.projectId === loadedId;
+    return [
       ...entries.flatMap((e) => e.actions),
-      ...defaultRouteActions(routeInfo(pathname), () => useAddData.getState().show(null)),
-    ],
-    [entries, pathname],
-  );
+      ...defaultRouteActions(info, ready ? () => useAddData.getState().show(null) : null),
+    ];
+  }, [entries, pathname, loadedId]);
 }

@@ -73,7 +73,8 @@ export function actionCommands(o: {
       icon: a.icon,
       run: () => (a.to ? o.go(a.to) : a.run?.()),
     }));
-  if (o.info.projectId) {
+  // The importers need the loaded project, exactly when the route's Add data is enabled.
+  if (o.info.projectId && o.actions.some((a) => a.id === "add-data" && !a.disabled)) {
     for (const i of IMPORTERS)
       out.push({
         id: `action:add:${i.tile}`,

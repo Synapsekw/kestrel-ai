@@ -49,8 +49,10 @@ function Tile({
  * Orthomosaic open today's importers; Elevation and Point cloud open the screens that import them.
  */
 export function AddDataHost({ project }: { project: Project | null }) {
-  const { open, tile, show, close } = useAddData();
+  const { open, tile, show, close, setProject } = useAddData();
   const navigate = useNavigate();
+  const projectId = project?.id ?? null;
+  useEffect(() => setProject(projectId), [projectId, setProject]);
   // Elevation and Point cloud have no dialog of their own yet: their screens import them.
   useEffect(() => {
     if (!open || !project) return;

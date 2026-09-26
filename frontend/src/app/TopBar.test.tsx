@@ -22,7 +22,7 @@ describe("TopBar", () => {
   beforeEach(() => {
     useJobsStore.setState({ jobs: {}, panelOpen: false });
     useAgentPanel.setState({ open: false });
-    useAddData.setState({ open: false, tile: null });
+    useAddData.setState({ open: false, tile: null, projectId: PROJECT_ID });
     useProvidedRouteActions.setState({ entries: [] });
   });
 

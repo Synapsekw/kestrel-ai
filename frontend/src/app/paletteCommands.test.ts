@@ -80,6 +80,18 @@ describe("palette commands", () => {
     expect(toggleEffects).toHaveBeenCalled();
   });
 
+  it("offers no importers while the project is still loading (Add data is disabled)", () => {
+    const info = routeInfo(`/p/${PROJECT_ID}/images`);
+    const cmds = actionCommands({
+      info,
+      actions: defaultRouteActions(info, null),
+      go: vi.fn(),
+      addData: vi.fn(),
+      toggleEffects: vi.fn(),
+    });
+    expect(cmds.map((c) => c.title)).toEqual(["Generate report", "New project", "Toggle reduced effects"]);
+  });
+
   it("numbers findings F- plus at least four digits", () => {
     expect(formatFindingNumber(7)).toBe("F-0007");
     expect(formatFindingNumber(217)).toBe("F-0217");
