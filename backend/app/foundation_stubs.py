@@ -21,7 +21,9 @@ Stub = tuple[str, str, str]
 
 # BK: the data list (§6.3), search (§10.3) and the app-wide jobs list (§10.1).
 BK_PROJECT_STUBS: list[Stub] = []
-BK_APP_STUBS: list[Stub] = []
+BK_APP_STUBS: list[Stub] = [
+    ("GET", "/jobs", "listAppJobs"),
+]
 
 # BC: project types (§7.3), findings core (§8.3), the overview (§9.1) and the catalogue (§7).
 BC_PROJECT_STUBS: list[Stub] = [

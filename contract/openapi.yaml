@@ -4012,6 +4012,36 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ foundation: app jobs (F-C0)
+  /api/v1/jobs:
+    get:
+      tags: [jobs]
+      operationId: listAppJobs
+      summary: |
+        Every job in the app, newest first (`created_at desc, id desc`): the library runner's jobs
+        and the jobs of every recent project that is open (only an open project can have a live
+        job). A keyset merge that asks each source for `limit + 1` rows. Cancel and log use the
+        per-project routes, or `/library/jobs/...` when `project_id` is `library`.
+      parameters:
+        - name: state
+          in: query
+          required: false
+          schema: { type: array, items: { $ref: "#/components/schemas/JobState" } }
+        - name: type
+          in: query
+          required: false
+          schema: { type: array, items: { $ref: "#/components/schemas/JobType" } }
+        - { name: project_id, in: query, required: false, schema: { type: string }, description: "one project's jobs, or `library`" }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: jobs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AppJobPage" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -8102,3 +8132,66 @@ components:
       example:
         items:
           - { id: "h0000000-1414-4000-8000-000000000001", finding_id: "f0000000-1212-4000-8000-000000000217", path: "findings/f0000000-1212-4000-8000-000000000217/h0000000-1414-4000-8000-000000000001.jpg", original_name: "IMG_2041.JPG", width: 4000, height: 3000, bytes: 5242880, created_at: "2026-09-26T10:45:00Z" }
+    # ------------------------------------------------------------ foundation: app jobs (F-C0)
+    AppJob:
+      description: a job plus the name of its project; `project_name` is null for library jobs
+      allOf:
+        - $ref: "#/components/schemas/Job"
+        - type: object
+          required: [project_name]
+          properties:
+            project_name: { type: [string, "null"] }
+      example:
+        id: "j0000000-4444-4000-8000-000000000001"
+        project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+        type: import
+        state: running
+        progress: 0.42
+        message: "1386 / 3299 images"
+        log_path: "runs/j0000000-4444-4000-8000-000000000001/job.log"
+        params: { source_id: "50000000-3333-4000-8000-000000000001" }
+        result: null
+        error: null
+        created_at: "2026-09-17T10:05:00Z"
+        started_at: "2026-09-17T10:05:01Z"
+        finished_at: null
+        project_name: Ahmadia
+    AppJobPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/AppJob" }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - id: "j0000000-4444-4000-8000-000000000040"
+            project_id: library
+            type: project_migrate
+            state: running
+            progress: 0.5
+            message: "step 4 of 8: library_class_maps"
+            log_path: "runs/j0000000-4444-4000-8000-000000000040/job.log"
+            params: { folder: "E:\\Projects\\Ahmadia" }
+            result: null
+            error: null
+            created_at: "2026-09-26T09:00:00Z"
+            started_at: "2026-09-26T09:00:01Z"
+            finished_at: null
+            project_name: null
+          - id: "j0000000-4444-4000-8000-000000000001"
+            project_id: "7f1c2e3a-1111-4000-8000-000000000001"
+            type: import
+            state: running
+            progress: 0.42
+            message: "1386 / 3299 images"
+            log_path: "runs/j0000000-4444-4000-8000-000000000001/job.log"
+            params: { source_id: "50000000-3333-4000-8000-000000000001" }
+            result: null
+            error: null
+            created_at: "2026-09-17T10:05:00Z"
+            started_at: "2026-09-17T10:05:01Z"
+            finished_at: null
+            project_name: Ahmadia
+        next_cursor: null

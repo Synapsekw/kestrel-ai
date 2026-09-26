@@ -2911,6 +2911,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every job in the app, newest first (`created_at desc, id desc`): the library runner's jobs
+         *     and the jobs of every recent project that is open (only an open project can have a live
+         *     job). A keyset merge that asks each source for `limit + 1` rows. Cancel and log use the
+         *     per-project routes, or `/library/jobs/...` when `project_id` is `library`.
+         */
+        get: operations["listAppJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -7737,6 +7759,77 @@ export interface components {
          */
         FindingAttachmentList: {
             items: components["schemas"]["FindingAttachment"][];
+        };
+        /**
+         * @description a job plus the name of its project; `project_name` is null for library jobs
+         * @example {
+         *       "id": "j0000000-4444-4000-8000-000000000001",
+         *       "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *       "type": "import",
+         *       "state": "running",
+         *       "progress": 0.42,
+         *       "message": "1386 / 3299 images",
+         *       "log_path": "runs/j0000000-4444-4000-8000-000000000001/job.log",
+         *       "params": {
+         *         "source_id": "50000000-3333-4000-8000-000000000001"
+         *       },
+         *       "result": null,
+         *       "error": null,
+         *       "created_at": "2026-09-17T10:05:00Z",
+         *       "started_at": "2026-09-17T10:05:01Z",
+         *       "finished_at": null,
+         *       "project_name": "Ahmadia"
+         *     }
+         */
+        AppJob: components["schemas"]["Job"] & {
+            project_name: string | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "j0000000-4444-4000-8000-000000000040",
+         *           "project_id": "library",
+         *           "type": "project_migrate",
+         *           "state": "running",
+         *           "progress": 0.5,
+         *           "message": "step 4 of 8: library_class_maps",
+         *           "log_path": "runs/j0000000-4444-4000-8000-000000000040/job.log",
+         *           "params": {
+         *             "folder": "E:\\Projects\\Ahmadia"
+         *           },
+         *           "result": null,
+         *           "error": null,
+         *           "created_at": "2026-09-26T09:00:00Z",
+         *           "started_at": "2026-09-26T09:00:01Z",
+         *           "finished_at": null,
+         *           "project_name": null
+         *         },
+         *         {
+         *           "id": "j0000000-4444-4000-8000-000000000001",
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "type": "import",
+         *           "state": "running",
+         *           "progress": 0.42,
+         *           "message": "1386 / 3299 images",
+         *           "log_path": "runs/j0000000-4444-4000-8000-000000000001/job.log",
+         *           "params": {
+         *             "source_id": "50000000-3333-4000-8000-000000000001"
+         *           },
+         *           "result": null,
+         *           "error": null,
+         *           "created_at": "2026-09-17T10:05:00Z",
+         *           "started_at": "2026-09-17T10:05:01Z",
+         *           "finished_at": null,
+         *           "project_name": "Ahmadia"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        AppJobPage: {
+            items: components["schemas"]["AppJob"][];
+            next_cursor: string | null;
         };
     };
     responses: {
@@ -14040,6 +14133,35 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listAppJobs: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["JobState"][];
+                type?: components["schemas"]["JobType"][];
+                /** @description one project's jobs, or `library` */
+                project_id?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description jobs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppJobPage"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

@@ -87,6 +87,8 @@ export type FindingPatch = Schemas["FindingPatch"];
 export type FindingSummary = Schemas["FindingSummary"];
 export type FindingComment = Schemas["FindingComment"];
 export type FindingAttachment = Schemas["FindingAttachment"];
+export type AppJob = Schemas["AppJob"];
+export type AppJobPage = Schemas["AppJobPage"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */

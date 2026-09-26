@@ -51,6 +51,8 @@ FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
     "deleteFindingAttachment": ("delete", F + "/attachments/{attachmentId}"),
     "getFindingAttachmentFile": ("get", F + "/attachments/{attachmentId}/file"),
     "getFindingAttachmentThumbnail": ("get", F + "/attachments/{attachmentId}/thumbnail"),
+    # app jobs (Task 5)
+    "listAppJobs": ("get", "/api/v1/jobs"),
 }
 
 # Response schemas the Prism mock serves: each carries its own example (spec §18 "Prism examples").
@@ -72,6 +74,8 @@ EXAMPLED_SCHEMAS = [
     "FindingCommentPage",
     "FindingAttachment",
     "FindingAttachmentList",
+    "AppJob",
+    "AppJobPage",
 ]
 
 
