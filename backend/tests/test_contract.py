@@ -157,9 +157,12 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
 # backend refuses some schema-valid bodies with `422 validation_error` for a rule the contract does
 # not declare or express - runs: neither `model_id` nor `provider`; site areas: the
 # `polygon_wgs84`/`map_id`+`polygon_px` shape rules; surfaces: an empty `name` meets pydantic's
-# `min_length=1`. The fix is a contract change (declare `422` on `createRuns`/`createSiteArea`/
-# `updateSiteArea`, `minLength: 1` on `SurfaceBuildRequest.name`, or matching backend error codes),
-# not a backend one - BK does not edit `contract/openapi.yaml`. Each entry is deleted with its fix.
+# `min_length=1`. This allowance is broader than those four rules: for these four operations, ANY
+# positive-case 422 is tolerated, including FastAPI's own request-validation 422, so it also masks
+# any other future schema drift on them. It stays until the pending contract change lands (declare
+# `422` on `createRuns`/`createSiteArea`/`updateSiteArea`, `minLength: 1` on
+# `SurfaceBuildRequest.name`) - BK does not edit `contract/openapi.yaml`. Each entry is deleted with
+# its fix.
 CONTRACT_FOLLOWUP: dict[str, str] = {
     "createRuns": "refuses a body with neither model_id nor provider; undeclared in the contract",
     "createSiteArea": "refuses a body whose polygon shape breaks the polygon_wgs84/map_id rule",

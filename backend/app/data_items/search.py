@@ -6,6 +6,7 @@ providers. Findings come from the search the findings module registers (unit BC)
 group is empty. Neither group reads the image table.
 """
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -16,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.data_items.providers import PROVIDERS, merge
 from app.data_items.schemas import DataItem
 from app.projects.service import ProjectHandle, get_project
+
+log = logging.getLogger(__name__)
 
 MIN_QUERY = 2
 DEFAULT_LIMIT = 8
@@ -59,6 +62,11 @@ def search_project(
     pattern = like_pattern(text)
     with handle.session() as s:
         pages = [p.search(s, pattern, n) for p in PROVIDERS.values()]
-        findings = _finding_search(s, text, n)[:n] if _finding_search is not None else []
+        findings: list[dict[str, Any]] = []
+        if _finding_search is not None:
+            try:
+                findings = _finding_search(s, text, n)[:n]
+            except Exception:
+                log.exception("finding search failed; the findings group is left empty")
     data, _ = merge(pages, n)
     return SearchResult(findings=findings, data=data)

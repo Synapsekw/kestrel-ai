@@ -1,5 +1,6 @@
 """In-project search for the command palette (spec 2026-09-26-foundation sections 5.4 and 10.3)."""
 
+import logging
 import re
 
 from data_rows import add_cloud, add_image_set, add_map, at
@@ -82,3 +83,20 @@ def test_findings_come_from_the_registered_search(client, handle, project_id, mo
     got = _search(client, project_id, q="  crack ", limit=4)
     assert seen == [("crack", 4)]
     assert [f["id"] for f in got["findings"]] == ["f0", "f1", "f2", "f3"]
+
+
+def test_a_failing_findings_search_leaves_the_data_group_answering(
+    client, handle, project_id, monkeypatch, caplog
+):
+    monkeypatch.setattr(search, "_finding_search", None)
+
+    def boom(session, q, limit):
+        raise RuntimeError("kaboom")
+
+    search.register_finding_search(boom)
+    sid = add_image_set(handle, site="north", label="North pit flight", created_at=at(1))
+    with caplog.at_level(logging.ERROR):
+        got = _search(client, project_id, q="north")
+    assert got["findings"] == []
+    assert [d["id"] for d in got["data"]] == [sid]
+    assert "kaboom" in caplog.text
