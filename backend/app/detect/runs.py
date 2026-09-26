@@ -28,6 +28,7 @@ from app.inference.schemas import Tiling
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.library import service as library
+from app.library.catalogue_port import CataloguePort
 from app.library.handle import LibraryHandle, library_unavailable
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
@@ -94,12 +95,13 @@ def _cloud_model_name(config: ProviderConfigStore, keys: KeyStore, body: RunCrea
 def create_runs(
     handle: ProjectHandle,
     lib: LibraryHandle | None,
+    catalogue: CataloguePort,
     keys: KeyStore,
     config: ProviderConfigStore,
     body: RunCreate,
     submit: Callable[[str, dict], Job],
-) -> list[tuple[_Target, str, Job]]:
-    """One run per source, each with its job queued; `(target, run_id, job)` per source."""
+) -> tuple[list[tuple[_Target, str, Job]], list[str]]:
+    """One run per source, each with its job queued: `([(target, run_id, job)], added_type_ids)`."""
     if not body.model_id and not body.provider:
         raise AppError("validation_error", "a run needs a library model_id or a provider", 422)
     targets = _targets(handle, body.source_ids)  # unknown sources: 404 before anything else
@@ -107,20 +109,30 @@ def create_runs(
     model = None
     mapping: dict = {}
     snapshot: dict = {}
+    added: list[str] = []
     if body.model_id:
         if lib is None:
             raise library_unavailable()
         model = library.require_ready(lib, body.model_id)
-        # Seeding an empty project's classes commits first, on purpose: it maps every class, so it
-        # can never cause a refusal, and a project that later refuses keeps useful classes.
-        mapping, unmapped = class_maps.resolve(handle, model, seed=True)
+        if model.task == "segment":
+            raise AppError(
+                "task_not_supported",
+                f"{model.name} is a segmentation model; runs with segmentation models arrive with "
+                "the Images workspace.",
+                422,
+                {"model_id": model.id},
+            )
+        mapping, unmapped = class_maps.resolve_for_model(catalogue, model)
         if unmapped:
             raise AppError(
                 "unmapped_classes",
-                f"{len(unmapped)} of the model's classes are not mapped to project classes.",
+                f"{len(unmapped)} of the model's classes are not mapped to catalogue types.",
                 422,
                 {"model_id": model.id, "unmapped": unmapped},
             )
+        # A mapped type the project does not list yet joins its type list (F §7.4). This commits
+        # before any job is queued, on purpose: it can never cause a refusal.
+        added = catalogue.add_to_project(handle, [t for t in dict.fromkeys(mapping.values()) if t])
         snapshot = class_maps.model_snapshot(model)
         model_name = model.name
     else:
@@ -172,7 +184,7 @@ def create_runs(
         with handle.session() as s:
             (s.get(QueryRun, run_id) if t.kind == "images" else s.get(MapRun, run_id)).job_id = job.id
         out.append((t, run_id, job))
-    return out
+    return out, added
 
 
 def _drop_unsubmitted(handle: ProjectHandle, rows: list[tuple[_Target, str, str, str]]) -> None:

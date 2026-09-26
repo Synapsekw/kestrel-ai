@@ -4,11 +4,13 @@ mapping before any job, the union list, pinning, recount, and the timeline's pin
 from datetime import UTC, date, datetime
 
 import pytest
+from catalogue_fake import FakeCatalogue, project_catalogue  # noqa: F401 - fixture
 from geotiffs import make_squares_geotiff
+from library_datasets_helpers import make_project
 from library_helpers import add_library_model
-from project_factory import new_project
 
 from app.db.models import Box, GeoMap, Image, MapDetection, MapRun, QueryRun, Source
+from app.library.catalogue_port import catalogue_of
 from app.maps.timeline import Basis, build_timeline
 from app.providers.base import Detection, TileResult
 
@@ -93,29 +95,53 @@ def _jobs(client, project_id) -> list[dict]:
 # ----------------------------------------------------------------- creation and mapping
 
 
-def test_the_first_run_in_an_empty_project_seeds_its_classes(
+def test_mapped_types_join_the_project_list_when_the_run_starts(
     client, app, tmp_path, make_jpeg, wait_job, model_provider
 ):
-    project = new_project(client, tmp_path / "empty", name="Empty")
-    handle = app.state.projects.get(project["id"])
-    source_id = _add_images_source(handle, make_jpeg)
+    empty = make_project(app, tmp_path / "empty", "Empty")
+    fake = FakeCatalogue()
+    car, truck = fake.add("Car"), fake.add("Truck")
+    app.state.catalogue_port = fake
+    source_id = _add_images_source(empty, make_jpeg)
     m = add_library_model(app, tmp_path, class_names=["car", "truck"])
 
-    r = _post(client, project["id"], source_ids=[source_id], model_id=m.id)
+    r = _post(client, empty.id, source_ids=[source_id], model_id=m.id)
 
     assert r.status_code == 202, r.text
-    ids = _ids(client, project["id"])
-    assert list(ids) == ["car", "truck"]
+    assert r.json()["added_type_ids"] == [car.id, truck.id]
+    assert _ids(client, empty.id) == {"Car": car.id, "Truck": truck.id}
     run = r.json()["runs"][0]
     assert run["kind"] == "images" and run["source_id"] == source_id
-    assert wait_job(project["id"], run["job"]["id"])["state"] == "succeeded"
-    got = client.get(f"{BASE}/{project['id']}/query-runs/{run['run_id']}").json()
-    assert got["class_map"] == ids
-    assert got["source_id"] == source_id
-    assert got["counts"] == {ids["car"]: 2, ids["truck"]: 2}  # one of each per photo
+    assert wait_job(empty.id, run["job"]["id"])["state"] == "succeeded"
+    got = client.get(f"{BASE}/{empty.id}/query-runs/{run['run_id']}").json()
+    assert got["class_map"] == {"car": car.id, "truck": truck.id}
+    assert got["counts"] == {car.id: 2, truck.id: 2}  # one of each per photo
+    again = _post(client, empty.id, source_ids=[source_id], model_id=m.id)
+    assert again.json()["added_type_ids"] == []
 
 
-def test_unmapped_classes_are_refused_before_any_job(client, app, tmp_path, project_id, images_source):
+def test_a_segmentation_model_is_refused_before_any_job(
+    client,
+    app,
+    tmp_path,
+    project_id,
+    images_source,
+    project_catalogue,  # noqa: F811
+):
+    m = add_library_model(app, tmp_path, task="segment", class_names=["excavator"])
+    r = _post(client, project_id, source_ids=[images_source], model_id=m.id)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "task_not_supported"
+    assert _jobs(client, project_id) == []
+
+
+def test_unmapped_classes_are_refused_before_any_job(
+    client,
+    app,
+    tmp_path,
+    project_id,
+    images_source,
+    project_catalogue,  # noqa: F811
+):
     m = add_library_model(app, tmp_path, class_names=["excavator", "tower crane", "car"])
     r = _post(client, project_id, source_ids=[images_source], model_id=m.id)
     assert r.status_code == 422, r.text
@@ -127,7 +153,15 @@ def test_unmapped_classes_are_refused_before_any_job(client, app, tmp_path, proj
 
 
 def test_after_mapping_the_same_request_succeeds_and_stores_the_map(
-    client, app, tmp_path, project_id, images_source, map_source, wait_job, model_provider
+    client,
+    app,
+    tmp_path,
+    project_id,
+    images_source,
+    map_source,
+    wait_job,
+    model_provider,
+    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, class_names=["excavator", "tower crane"], train_gsd_cm=3.0)
     ids = _ids(client, project_id)
@@ -163,7 +197,16 @@ def test_after_mapping_the_same_request_succeeds_and_stores_the_map(
 
 
 def test_an_ignored_class_is_never_written(
-    client, app, handle, tmp_path, project_id, images_source, map_source, wait_job, model_provider
+    client,
+    app,
+    handle,
+    tmp_path,
+    project_id,
+    images_source,
+    map_source,
+    wait_job,
+    model_provider,
+    project_catalogue,  # noqa: F811
 ):
     m = add_library_model(app, tmp_path, class_names=["excavator", "tower crane"])
     client.put(f"{BASE}/{project_id}/model-class-maps/{m.id}", json={"mapping": {"tower crane": None}})
@@ -195,6 +238,19 @@ def test_a_cloud_run_skips_mapping(client, app, project_id, images_source, monke
     assert q["kind"] == "cloud_provider" and q["class_map"] == {} and q["model_snapshot"] == {}
 
 
+def test_a_cloud_run_never_resolves_the_catalogue(client, app, project_id, images_source, monkeypatch):
+    """A cloud-provider run has no model to map, so the catalogue is never touched (A11): an
+    unavailable catalogue must not be able to fail a cloud run."""
+
+    def boom(state):
+        raise AssertionError("the catalogue must not be resolved for a cloud-provider run")
+
+    monkeypatch.setattr("app.detect.router.catalogue_of", boom)
+    app.state.keys.set("anthropic", "sk-fake")
+    r = _post(client, project_id, source_ids=[images_source], provider="anthropic", query="dump trucks")
+    assert r.status_code == 202, r.text
+
+
 @pytest.mark.parametrize(
     "body",
     [
@@ -208,7 +264,14 @@ def test_a_run_needs_a_model_or_a_provider_with_a_query(client, project_id, imag
     assert _jobs(client, project_id) == []
 
 
-def test_an_unknown_source_is_404_and_nothing_is_queued(client, app, tmp_path, project_id, images_source):
+def test_an_unknown_source_is_404_and_nothing_is_queued(
+    client,
+    app,
+    tmp_path,
+    project_id,
+    images_source,
+    project_catalogue,  # noqa: F811
+):
     m = add_library_model(app, tmp_path, class_names=["excavator"])
     r = _post(client, project_id, source_ids=[images_source, "nope"], model_id=m.id)
     assert r.status_code == 404, r.text
@@ -501,7 +564,9 @@ def test_a_failed_submit_leaves_no_run_that_will_never_start(app, handle, make_j
 
     body = RunCreate(source_ids=[first, second, third], provider="anthropic", query="trucks")
     with pytest.raises(RuntimeError, match="queue is down"):
-        runs.create_runs(handle, None, app.state.keys, app.state.provider_config, body, submit)
+        runs.create_runs(
+            handle, None, catalogue_of(app.state), app.state.keys, app.state.provider_config, body, submit
+        )
 
     with handle.session() as s:
         left = s.query(QueryRun).all()

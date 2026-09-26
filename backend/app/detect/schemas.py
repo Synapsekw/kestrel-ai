@@ -60,6 +60,8 @@ class RunCreatedItem(BaseModel):
 
 class RunCreated(BaseModel):
     runs: list[RunCreatedItem]
+    #: Catalogue types this run added to the project's type list (F §7.4); empty when none.
+    added_type_ids: list[str] = Field(default_factory=list)
 
 
 class RunPatch(BaseModel):

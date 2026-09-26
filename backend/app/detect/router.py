@@ -16,9 +16,11 @@ from app.detect.schemas import (
     RunSummary,
     RunSummaryPage,
 )
+from app.errors import AppError
 from app.inference.jobs import run_infer  # noqa: F401 - registers `infer`
 from app.jobs.schemas import JobOut
 from app.library import service as library
+from app.library.catalogue_port import NO_CATALOGUE, catalogue_of
 from app.library.db import LibraryModel
 from app.library.handle import library_unavailable
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers `map_detect`
@@ -35,8 +37,8 @@ def _model(request: Request, model_id: str) -> LibraryModel:
     return library.get_model(lib, model_id)
 
 
-def _class_map_out(handle: ProjectHandle, model: LibraryModel) -> ModelClassMapOut:
-    mapping, unmapped = class_maps.resolve(handle, model)
+def _class_map_out(request: Request, model: LibraryModel) -> ModelClassMapOut:
+    mapping, unmapped = class_maps.resolve_for_model(catalogue_of(request.app.state), model)
     return ModelClassMapOut(
         model_id=model.id, model_classes=list(model.class_names or []), mapping=mapping, unmapped=unmapped
     )
@@ -48,7 +50,8 @@ def get_model_class_map(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> ModelClassMapOut:
-    return _class_map_out(handle, _model(request, modelId))
+    """The app-wide map (F10), read through a project; the project only proves it exists."""
+    return _class_map_out(request, _model(request, modelId))
 
 
 @router.put("/model-class-maps/{modelId}", response_model=ModelClassMapOut)
@@ -59,8 +62,17 @@ def put_model_class_map(
     handle: ProjectHandle = Depends(get_project),
 ) -> ModelClassMapOut:
     model = _model(request, modelId)
-    class_maps.put(handle, model, body.mapping, body.new_classes)
-    return _class_map_out(handle, model)
+    catalogue = catalogue_of(request.app.state)
+    try:
+        saved = class_maps.put_map(
+            request.app.state.library, catalogue, model.id, body.mapping, body.new_classes
+        )
+    except AppError as exc:
+        if exc.code == "unknown_type":
+            # This route's contract keeps 422 validation_error for a bad type id (A3).
+            raise AppError("validation_error", exc.message, exc.status, exc.details) from exc
+        raise
+    return _class_map_out(request, saved)
 
 
 @router.get("/runs", response_model=RunSummaryPage)
@@ -79,9 +91,13 @@ def create_runs(
     body: RunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> RunCreated:
     state = request.app.state
-    created = runs.create_runs(
+    # A cloud-provider run never touches the catalogue: resolve it only when a local library model
+    # needs mapping, so a cloud run never fails on an unavailable catalogue (foundation plan BM A11).
+    catalogue = catalogue_of(state) if body.model_id else NO_CATALOGUE
+    created, added = runs.create_runs(
         handle,
         getattr(state, "library", None),
+        catalogue,
         state.keys,
         state.provider_config,
         body,
@@ -93,7 +109,8 @@ def create_runs(
                 run_id=run_id, source_id=t.source_id, kind=t.kind, job=JobOut.from_row(job, handle.id)
             )
             for t, run_id, job in created
-        ]
+        ],
+        added_type_ids=added,
     )
 
 
