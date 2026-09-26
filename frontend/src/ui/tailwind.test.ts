@@ -35,7 +35,15 @@ describe("the Aero glass Tailwind theme", () => {
     const css = await generate("duration-emphasis ease-out animate-rise");
     expect(css).toContain("transition-duration: var(--dur-emphasis)");
     expect(css).toContain("transition-timing-function: var(--ease-out)");
-    expect(css).toContain("animation: rise var(--dur-slow) var(--ease-out) both");
+    expect(css).toContain("animation: rise var(--dur-slow) var(--ease-out) backwards");
+  });
+
+  it("lets entrances end without a lasting effect, so glass inside them keeps its blur", async () => {
+    // A finished `both` fill keeps the opacity animation applied, which makes the element a backdrop
+    // root: a Dialog or CommandPalette inside its fading overlay would lose its frosted blur.
+    const css = await generate("animate-reveal animate-rise animate-fade animate-pop animate-slide-in");
+    const fills = [...css.matchAll(/animation: [\w-]+ var\(--dur-\w+\) var\(--ease-[\w-]+\) (\w+)/g)];
+    expect(fills.map((m) => m[1])).toEqual(Array(5).fill("backwards"));
   });
 
   it("makes reduce-motion: honour the Settings override as well as the media query", async () => {

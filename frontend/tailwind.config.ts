@@ -114,11 +114,11 @@ export default {
         },
       },
       animation: {
-        reveal: "reveal var(--dur-base) var(--ease-out) both",
-        rise: "rise var(--dur-slow) var(--ease-out) both",
-        fade: "fade var(--dur-base) var(--ease-in-out) both",
-        pop: "pop var(--dur-slow) var(--ease-out) both",
-        "slide-in": "slide-in var(--dur-slow) var(--ease-out) both",
+        reveal: "reveal var(--dur-base) var(--ease-out) backwards",
+        rise: "rise var(--dur-slow) var(--ease-out) backwards",
+        fade: "fade var(--dur-base) var(--ease-in-out) backwards",
+        pop: "pop var(--dur-slow) var(--ease-out) backwards",
+        "slide-in": "slide-in var(--dur-slow) var(--ease-out) backwards",
         // A loop: only on something that is running (StatusDot live, Pill live).
         "pulse-dot": "pulse-dot 1.2s ease-in-out infinite",
       },
