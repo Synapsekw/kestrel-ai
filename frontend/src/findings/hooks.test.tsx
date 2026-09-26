@@ -16,7 +16,9 @@ const many = (from: number, n: number): Finding[] =>
 
 function setup(routes: FakeRoute[]) {
   const { api, requests } = fakeClient(routes);
-  const wrapper = ({ children }: { children: ReactNode }) => <TestApiProvider api={api}>{children}</TestApiProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <TestApiProvider api={api}>{children}</TestApiProvider>
+  );
   return { requests, wrapper };
 }
 
@@ -29,7 +31,9 @@ describe("useFindingsList", () => {
     const { requests, wrapper } = setup([
       { method: "GET", path: /\/findings$/, body: { items: many(1, 3), next_cursor: null } },
     ]);
-    const { result } = renderHook(() => useFindingsList(PROJECT_ID, { ...DEFAULT_FILTERS, status: "open" }), { wrapper });
+    const { result } = renderHook(() => useFindingsList(PROJECT_ID, { ...DEFAULT_FILTERS, status: "open" }), {
+      wrapper,
+    });
     expect(result.current.status).toBe("loading");
     await waitFor(() => expect(result.current.status).toBe("ready"));
     expect(result.current.items).toHaveLength(3);
@@ -63,10 +67,13 @@ describe("useFindingsList", () => {
     const { requests, wrapper } = setup([
       { method: "GET", path: /\/findings$/, body: { items: many(1, 1), next_cursor: null } },
     ]);
-    const { result, rerender } = renderHook(({ status }) => useFindingsList(PROJECT_ID, { ...DEFAULT_FILTERS, status }), {
-      wrapper,
-      initialProps: { status: "open" as "open" | "closed" },
-    });
+    const { result, rerender } = renderHook(
+      ({ status }) => useFindingsList(PROJECT_ID, { ...DEFAULT_FILTERS, status }),
+      {
+        wrapper,
+        initialProps: { status: "open" as "open" | "closed" },
+      },
+    );
     await waitFor(() => expect(result.current.status).toBe("ready"));
     rerender({ status: "closed" });
     expect(result.current.status).toBe("loading");
@@ -85,7 +92,9 @@ describe("useFindingsList", () => {
           const limit = Number(p.get("limit"));
           if (limit === FINDINGS_REFRESH_MAX) return { items: many(1, 500), next_cursor: "after-500" };
           pages += 1;
-          return pages === 1 ? { items: many(1, 200), next_cursor: "a" } : { items: many(200 * (pages - 1) + 1, 200), next_cursor: `p${pages}` };
+          return pages === 1
+            ? { items: many(1, 200), next_cursor: "a" }
+            : { items: many(200 * (pages - 1) + 1, 200), next_cursor: `p${pages}` };
         },
       },
     ]);

@@ -56,7 +56,8 @@ export function useFindingsList(projectId: string, filters: FindingFilters): Fin
         if (!cancelled) setLoaded({ key, items: page.items, cursor: page.next_cursor, error: null });
       })
       .catch((e: unknown) => {
-        if (!cancelled) setLoaded({ key, items: [], cursor: null, error: messageOf(e, "could not load the findings") });
+        if (!cancelled)
+          setLoaded({ key, items: [], cursor: null, error: messageOf(e, "could not load the findings") });
       });
     return () => {
       cancelled = true;
@@ -73,7 +74,9 @@ export function useFindingsList(projectId: string, filters: FindingFilters): Fin
       const limit = Math.min(FINDINGS_REFRESH_MAX, Math.max(FINDINGS_PAGE, shown));
       listFindings(api, projectId, { ...query, limit })
         .then((page) =>
-          setLoaded((s) => (s && s.key === key ? { key, items: page.items, cursor: page.next_cursor, error: null } : s)),
+          setLoaded((s) =>
+            s && s.key === key ? { key, items: page.items, cursor: page.next_cursor, error: null } : s,
+          ),
         )
         .catch((e: unknown) => pushLog(`findings refresh failed: ${messageOf(e, String(e))}`));
     }, REFRESH_DEBOUNCE_MS);

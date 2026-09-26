@@ -12,7 +12,9 @@ const EMPTY: ReadonlyMap<string, string> = new Map();
 export function useDataLabels(projectId: string): ReadonlyMap<string, string> {
   const api = useApi();
   const revision = useChangesStore((s) => s.dataRevision);
-  const [loaded, setLoaded] = useState<{ projectId: string; labels: ReadonlyMap<string, string> } | null>(null);
+  const [loaded, setLoaded] = useState<{ projectId: string; labels: ReadonlyMap<string, string> } | null>(
+    null,
+  );
   useEffect(() => {
     let cancelled = false;
     listDataItems(api, projectId, { limit: DATA_LABELS_LIMIT })
