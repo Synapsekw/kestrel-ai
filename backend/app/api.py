@@ -11,6 +11,7 @@ from app.data_items.router import router as data_router
 from app.data_items.search import router as search_router
 from app.datasets.router import router as datasets_router
 from app.exports.router import router as exports_router
+from app.findings.operator_router import router as operator_router
 from app.findings.router import router as findings_router
 from app.foundation_stubs import app_router as foundation_app_stubs
 from app.foundation_stubs import project_router as foundation_project_stubs
@@ -44,6 +45,7 @@ for r in (
     data_router,
     search_router,
     findings_router,
+    operator_router,
     library_router,
     datasets_router,
     starter_router,

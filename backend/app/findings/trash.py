@@ -5,6 +5,7 @@ a rolled-back delete never loses a photo."""
 import logging
 import os
 import shutil
+import uuid
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -27,14 +28,23 @@ def _stamp(now: datetime | None) -> str:
     return (now or datetime.now(UTC)).strftime(STAMP)
 
 
+def _free(dest: Path) -> Path:
+    """`dest`, or `dest.<random>` when an entry of that name exists (an attachment of the same
+    finding went to the trash in the same second); `purge` reads the stamp before the dot."""
+    while dest.exists():
+        dest = dest.with_name(f"{dest.name.split('.', 1)[0]}.{uuid.uuid4().hex[:6]}")
+    return dest
+
+
 def move(handle, finding_ids: Iterable[str], now: datetime | None = None) -> int:
-    """Each finding's folder -> `_trash/<finding_id>-<UTC stamp>`; returns how many moved."""
+    """Each finding's folder -> `_trash/<finding_id>-<UTC stamp>[.<random>]`; returns how many
+    moved."""
     moved = 0
     for fid in finding_ids:
         src = finding_dir(handle, fid)
         if not src.is_dir():
             continue
-        dest = findings_dir(handle) / TRASH / f"{fid}-{_stamp(now)}"
+        dest = _free(findings_dir(handle) / TRASH / f"{fid}-{_stamp(now)}")
         try:
             dest.parent.mkdir(parents=True, exist_ok=True)
             os.replace(src, dest)
@@ -67,7 +77,9 @@ def purge(handle, now: datetime | None = None, keep_days: int = KEEP_DAYS) -> in
     removed = 0
     for entry in root.iterdir():
         try:
-            when = datetime.strptime(entry.name.rsplit("-", 1)[-1], STAMP).replace(tzinfo=UTC)
+            when = datetime.strptime(entry.name.rsplit("-", 1)[-1].split(".", 1)[0], STAMP).replace(
+                tzinfo=UTC
+            )
         except ValueError:
             continue
         if when >= cutoff:

@@ -1,21 +1,28 @@
-"""The findings endpoints (spec 2026-09-26-foundation section 8.3). Comments, attachments and
-thumbnails join in plan BC Task 10."""
+"""The findings endpoints (spec 2026-09-26-foundation section 8.3), with their comment threads,
+photo attachments and thumbnails."""
 
 from datetime import datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import FileResponse
 
 from app.catalogue import service as catalogue_service
 from app.data_items import search
 from app.errors import AppError
-from app.findings import activity, jobs, query, service
+from app.findings import activity, attachments, comments, jobs, query, service, thumbnails
 from app.findings.anchors import AnchorIn
 from app.findings.schemas import (
     ActivityOut,
     ActivityPage,
+    FindingAttachmentIn,
+    FindingAttachmentList,
+    FindingAttachmentOut,
     FindingBulk,
     FindingBulkResult,
+    FindingCommentIn,
+    FindingCommentOut,
+    FindingCommentPage,
     FindingCreate,
     FindingDetail,
     FindingOut,
@@ -161,3 +168,130 @@ def list_activity(
         rows, nxt = activity.page(s, subject_id=subject_id, cursor=cursor, limit=limit)
         items = [ActivityOut.from_row(a) for a in rows]
     return ActivityPage(items=items, next_cursor=nxt)
+
+
+def _comment_out(c) -> FindingCommentOut:
+    return FindingCommentOut(
+        id=c.id,
+        finding_id=c.finding_id,
+        author=c.author,
+        text=c.text,
+        created_at=c.created_at,
+        edited_at=c.edited_at,
+    )
+
+
+def _attachment_out(a) -> FindingAttachmentOut:
+    return FindingAttachmentOut(
+        id=a.id,
+        finding_id=a.finding_id,
+        path=a.path,
+        original_name=a.original_name,
+        width=a.width,
+        height=a.height,
+        bytes=a.bytes,
+        created_at=a.created_at,
+    )
+
+
+@router.get("/findings/{findingId}/thumbnail", response_class=FileResponse)
+def get_finding_thumbnail(findingId: str, handle: ProjectHandle = Depends(get_project)) -> FileResponse:  # noqa: N803
+    return FileResponse(thumbnails.finding_thumbnail(handle, findingId), media_type="image/jpeg")
+
+
+@router.get("/findings/{findingId}/comments", response_model=FindingCommentPage)
+def list_finding_comments(
+    findingId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+    cursor: str | None = None,
+    limit: int | None = Query(None, ge=1),
+) -> FindingCommentPage:
+    with handle.session() as s:
+        rows, nxt = comments.page(s, findingId, cursor=cursor, limit=limit)
+        items = [_comment_out(c) for c in rows]
+    return FindingCommentPage(items=items, next_cursor=nxt)
+
+
+@router.post("/findings/{findingId}/comments", response_model=FindingCommentOut, status_code=201)
+def create_finding_comment(
+    findingId: str,  # noqa: N803
+    body: FindingCommentIn,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingCommentOut:
+    author = comments.author_name(request.app.state.settings.data_dir)
+    with handle.session() as s:
+        row = comments.add(s, project_id=handle.id, finding_id=findingId, text=body.text, author=author)
+        s.flush()
+        return _comment_out(row)
+
+
+@router.patch("/findings/{findingId}/comments/{commentId}", response_model=FindingCommentOut)
+def patch_finding_comment(
+    findingId: str,  # noqa: N803
+    commentId: str,  # noqa: N803
+    body: FindingCommentIn,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingCommentOut:
+    with handle.session() as s:
+        row = comments.edit(
+            s, project_id=handle.id, finding_id=findingId, comment_id=commentId, text=body.text
+        )
+        s.flush()
+        return _comment_out(row)
+
+
+@router.delete("/findings/{findingId}/comments/{commentId}", status_code=204)
+def delete_finding_comment(
+    findingId: str,  # noqa: N803
+    commentId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> Response:
+    with handle.session() as s:
+        comments.delete(s, project_id=handle.id, finding_id=findingId, comment_id=commentId)
+    return Response(status_code=204)
+
+
+@router.get("/findings/{findingId}/attachments", response_model=FindingAttachmentList)
+def list_finding_attachments(
+    findingId: str, handle: ProjectHandle = Depends(get_project)
+) -> FindingAttachmentList:  # noqa: N803
+    return FindingAttachmentList(items=[_attachment_out(a) for a in attachments.list_for(handle, findingId)])
+
+
+@router.post("/findings/{findingId}/attachments", response_model=FindingAttachmentOut, status_code=201)
+def add_finding_attachment(
+    findingId: str,  # noqa: N803
+    body: FindingAttachmentIn,
+    handle: ProjectHandle = Depends(get_project),
+) -> FindingAttachmentOut:
+    return _attachment_out(attachments.add(handle, findingId, body.path))
+
+
+@router.delete("/findings/{findingId}/attachments/{attachmentId}", status_code=204)
+def delete_finding_attachment(
+    findingId: str,  # noqa: N803
+    attachmentId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> Response:
+    attachments.delete(handle, findingId, attachmentId)
+    return Response(status_code=204)
+
+
+@router.get("/findings/{findingId}/attachments/{attachmentId}/file", response_class=FileResponse)
+def get_finding_attachment_file(
+    findingId: str,  # noqa: N803
+    attachmentId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> FileResponse:
+    path, media = attachments.file(handle, findingId, attachmentId)
+    return FileResponse(path, media_type=media)
+
+
+@router.get("/findings/{findingId}/attachments/{attachmentId}/thumbnail", response_class=FileResponse)
+def get_finding_attachment_thumbnail(
+    findingId: str,  # noqa: N803
+    attachmentId: str,  # noqa: N803
+    handle: ProjectHandle = Depends(get_project),
+) -> FileResponse:
+    return FileResponse(attachments.thumbnail(handle, findingId, attachmentId), media_type="image/jpeg")

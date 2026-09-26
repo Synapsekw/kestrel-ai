@@ -213,3 +213,40 @@ class ActivityOut(BaseModel):
 class ActivityPage(BaseModel):
     items: list[ActivityOut]
     next_cursor: str | None = None
+
+
+class FindingCommentIn(BaseModel):
+    text: str = Field(min_length=1, max_length=4000)
+
+
+class FindingCommentOut(BaseModel):
+    id: str
+    finding_id: str
+    author: str
+    text: str
+    created_at: datetime
+    edited_at: datetime | None
+
+
+class FindingCommentPage(BaseModel):
+    items: list[FindingCommentOut]
+    next_cursor: str | None = None
+
+
+class FindingAttachmentIn(BaseModel):
+    path: str = Field(min_length=1)
+
+
+class FindingAttachmentOut(BaseModel):
+    id: str
+    finding_id: str
+    path: str
+    original_name: str
+    width: int
+    height: int
+    bytes: int
+    created_at: datetime
+
+
+class FindingAttachmentList(BaseModel):
+    items: list[FindingAttachmentOut]

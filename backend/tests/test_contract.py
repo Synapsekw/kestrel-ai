@@ -168,6 +168,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # a patch of an image anchor (`anchor_immutable`).
     "createFinding": {422},
     "patchFinding": {422},
+    # BC: a generated path is never a readable photo (`attachment_invalid`, details {reason}).
+    "addFindingAttachment": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

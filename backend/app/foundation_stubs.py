@@ -21,22 +21,10 @@ Stub = tuple[str, str, str]
 
 # BC: project types (§7.3), findings core (§8.3), the overview (§9.1) and the catalogue (§7).
 BC_PROJECT_STUBS: list[Stub] = [
-    ("GET", "/findings/{findingId}/thumbnail", "getFindingThumbnail"),
-    ("GET", "/findings/{findingId}/comments", "listFindingComments"),
-    ("POST", "/findings/{findingId}/comments", "createFindingComment"),
-    ("PATCH", "/findings/{findingId}/comments/{commentId}", "patchFindingComment"),
-    ("DELETE", "/findings/{findingId}/comments/{commentId}", "deleteFindingComment"),
-    ("GET", "/findings/{findingId}/attachments", "listFindingAttachments"),
-    ("POST", "/findings/{findingId}/attachments", "addFindingAttachment"),
-    ("DELETE", "/findings/{findingId}/attachments/{attachmentId}", "deleteFindingAttachment"),
-    ("GET", "/findings/{findingId}/attachments/{attachmentId}/file", "getFindingAttachmentFile"),
-    ("GET", "/findings/{findingId}/attachments/{attachmentId}/thumbnail", "getFindingAttachmentThumbnail"),
     ("GET", "/overview", "getProjectOverview"),
 ]
 BC_APP_STUBS: list[Stub] = [
     ("POST", "/catalogue/types/{typeId}/backfill", "backfillCatalogueType"),
-    ("GET", "/settings/operator", "getOperatorSettings"),
-    ("PUT", "/settings/operator", "putOperatorSettings"),
 ]
 
 # BM: datasets across projects, training runs and the model class map (§12, §7.4).
