@@ -4,6 +4,7 @@ import csv
 from datetime import UTC, datetime
 
 import pytest
+from project_factory import new_project
 from sqlalchemy import select
 
 from app.db.models import Box, Image, Source
@@ -15,15 +16,8 @@ CLASSES = ["excavator", "dump_truck"]
 @pytest.fixture
 def project_id(client, project_dir) -> str:
     """Two classes only: the default `project` fixture's eight classes would leak into count tables."""
-    body = {
-        "name": "T",
-        "folder": str(project_dir),
-        "classes": [{"name": n, "colour": c} for n, c in zip(CLASSES, ["#ff0000", "#00ff00"], strict=True)],
-        "kind": "train",
-    }
-    r = client.post("/api/v1/projects", json=body)
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
+    classes = [{"name": n, "colour": c} for n, c in zip(CLASSES, ["#ff0000", "#00ff00"], strict=True)]
+    return new_project(client, project_dir, classes=classes)["id"]
 
 
 @pytest.fixture

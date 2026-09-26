@@ -15,11 +15,6 @@ GT = (500000.0, 0.03, 0.0, 4983000.0, 0.0, -0.03)
 GEO = Georef(GT, UTM33)
 
 
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
 def _wgs(pixels):
     return [list(GEO.pixel_to_wgs84(x, y)) for x, y in pixels]
 

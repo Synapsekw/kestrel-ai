@@ -4,6 +4,7 @@ no-ops the `launch` seam, so every test here restores the real `launch` and patc
 """
 
 import pytest
+from project_factory import new_project
 
 from app.exports.reveal import EXPLORER
 from app.exports.reveal import launch as REAL_LAUNCH
@@ -13,15 +14,7 @@ BASE = "/api/v1/projects"
 
 @pytest.fixture
 def project_id(client, project_dir) -> str:
-    body = {
-        "name": "T",
-        "folder": str(project_dir),
-        "classes": [{"name": "excavator", "colour": "#ff0000"}],
-        "kind": "train",
-    }
-    r = client.post("/api/v1/projects", json=body)
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
+    return new_project(client, project_dir, classes=[{"name": "excavator", "colour": "#ff0000"}])["id"]
 
 
 @pytest.fixture

@@ -30,11 +30,6 @@ NAMES = [
 ]
 
 
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
 @pytest.mark.parametrize("name", NAMES)
 def test_every_schema_has_exactly_the_contract_fields(name):
     contract = yaml.safe_load(SPEC.read_text("utf-8"))["components"]["schemas"][name]

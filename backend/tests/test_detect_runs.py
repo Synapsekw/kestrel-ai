@@ -6,17 +6,13 @@ from datetime import UTC, date, datetime
 import pytest
 from geotiffs import make_squares_geotiff
 from library_helpers import add_library_model
+from project_factory import new_project
 
 from app.db.models import Box, GeoMap, Image, MapDetection, MapRun, QueryRun, Source
 from app.maps.timeline import Basis, build_timeline
 from app.providers.base import Detection, TileResult
 
 BASE = "/api/v1/projects"
-
-
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
 
 
 def _ids(client, project_id) -> dict[str, str]:
@@ -100,8 +96,7 @@ def _jobs(client, project_id) -> list[dict]:
 def test_the_first_run_in_an_empty_project_seeds_its_classes(
     client, app, tmp_path, make_jpeg, wait_job, model_provider
 ):
-    body = {"name": "Empty", "folder": str(tmp_path / "empty"), "classes": [], "kind": "detect"}
-    project = client.post(BASE, json=body).json()
+    project = new_project(client, tmp_path / "empty", name="Empty")
     handle = app.state.projects.get(project["id"])
     source_id = _add_images_source(handle, make_jpeg)
     m = add_library_model(app, tmp_path, class_names=["car", "truck"])

@@ -14,12 +14,6 @@ from app.surfaces.design import dxf, store
 from app.surfaces.design.rasterise import SimpleLattice, rasterise_to_array
 
 
-@pytest.fixture
-def project_kind() -> str:
-    """Design surfaces are detection work: F0 guards the router with require_kind(("detect",), ANY_KIND)."""
-    return "detect"
-
-
 def read(path, tmp_path):
     idir = tmp_path / "insp"
     idir.mkdir(exist_ok=True)

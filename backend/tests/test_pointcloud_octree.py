@@ -12,11 +12,6 @@ MIB = 1024 * 1024
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
-@pytest.fixture
 def cloud(handle):
     cloud_id = insert_cloud(handle)
     folder = rows.octree_dir(handle, cloud_id)

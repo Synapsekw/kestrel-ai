@@ -7,12 +7,6 @@ BASE = "/api/v1/projects"
 
 
 @pytest.fixture
-def project_kind() -> str:
-    """Maps and query runs are detection work (spec 2026-09-23 section 5.2)."""
-    return "detect"
-
-
-@pytest.fixture
 def import_map(client, wait_job):
     def _import(project_id, path, **body):
         r = client.post(f"{BASE}/{project_id}/maps", json={"path": str(path), **body})

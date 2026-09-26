@@ -15,11 +15,6 @@ BASE = "/api/v1/projects"
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
-@pytest.fixture
 def import_map(client, wait_job):
     def _import(project_id, path, **body):
         r = client.post(f"{BASE}/{project_id}/maps", json={"path": str(path), **body})

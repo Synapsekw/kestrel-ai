@@ -27,7 +27,9 @@ class AppData:
             return []
         return [r for r in items if isinstance(r, dict) and {"id", "name", "folder"} <= set(r)]
 
-    def remember(self, project_id: str, name: str, folder: str, kind: str = "train") -> None:
+    def remember(self, project_id: str, name: str, folder: str) -> None:
+        """Move a project to the top of the recent list. Entries written before the project kind
+        was removed may still carry a `kind` key; `recent()` ignores it and this rewrite drops it."""
         items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
         items.insert(
             0,
@@ -35,7 +37,6 @@ class AppData:
                 "id": project_id,
                 "name": name,
                 "folder": folder,
-                "kind": kind,
                 "last_opened_at": datetime.now(UTC).isoformat(),
             },
         )

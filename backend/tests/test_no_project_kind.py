@@ -2,6 +2,7 @@
 work that used to belong to one kind of project runs in any project."""
 
 import importlib.util
+import json
 import re
 from pathlib import Path
 
@@ -17,14 +18,9 @@ BASE = "/api/v1/projects"
 RETIRED = re.compile(
     r"\b(require_kind|project_kind|wrong_project_kind|ProjectKind|ANY_KIND|TRAIN_ONLY|DETECT_ONLY"
     r"|DETECT_WRITE|BOTH_KINDS|QUERY_RUN_KINDS)\b"
+    r"|[\"']kind[\"']\s*:\s*[\"'](train|detect)[\"']|\bkind=[\"'](train|detect)[\"']"
 )
-SCANNED = ("app",)
-
-
-@pytest.fixture(params=["train", "detect"])
-def project_kind(request) -> str:
-    """Until Task 2 the create body still carries a kind: run each case as both old kinds."""
-    return request.param
+SCANNED = ("app", "tests")
 
 
 def _calls(dependant):
@@ -76,9 +72,12 @@ def test_no_route_carries_a_kind_guard(app):
 
 def test_no_source_file_names_the_retired_guard():
     hits = []
+    # test_foundation_contract.py (C0) asserts these words are absent from the *contract* text; it
+    # is the other test that lists them (global-constraints.md "Retired vocabulary").
+    exempt = {Path(__file__).name, "test_foundation_contract.py"}
     for folder in SCANNED:
         for path in sorted((BACKEND / folder).rglob("*.py")):
-            if path.name == Path(__file__).name:
+            if path.name in exempt:
                 continue
             for n, line in enumerate(path.read_text("utf-8").splitlines(), 1):
                 if RETIRED.search(line):
@@ -124,3 +123,41 @@ def test_an_old_map_move_job_row_still_lists(client, handle, project_id):
         s.add(Job(type="map_move", state="succeeded", params={"source_project_id": "p", "map_id": "m"}))
     items = client.get(f"{BASE}/{project_id}/jobs").json()["items"]
     assert [j["type"] for j in items] == ["map_move"]
+
+
+# The body the interim frontend still sends until SH lands: a kind and classes, no type_ids.
+OLD_CLIENT_BODY = {"name": "A", "kind": "detect", "classes": [{"name": "x", "colour": "#ff0000"}]}
+
+
+def test_a_project_has_no_kind(client, settings, tmp_path):
+    r = client.post(BASE, json={"name": "A", "folder": str(tmp_path / "a"), "type_ids": []})
+    assert r.status_code == 201, r.text
+    created = r.json()
+    assert "kind" not in created
+    assert "kind" not in client.get(f"{BASE}/{created['id']}").json()
+    assert all("kind" not in p for p in client.get(BASE).json()["items"])
+    recent = json.loads((settings.data_dir / "recent_projects.json").read_text("utf-8"))
+    assert recent[0]["id"] == created["id"] and "kind" not in recent[0]
+
+
+def test_create_takes_type_ids_and_starts_with_no_classes(client, tmp_path):
+    body = {"name": "A", "folder": str(tmp_path / "a"), "type_ids": ["t-1", "t-2"]}
+    r = client.post(BASE, json=body)
+    assert r.status_code == 201, r.text
+    assert r.json()["classes"] == []
+
+
+def test_an_old_client_create_body_is_not_refused(client, tmp_path):
+    r = client.post(BASE, json={**OLD_CLIENT_BODY, "folder": str(tmp_path / "old")})
+    assert r.status_code == 201, r.text
+    assert "kind" not in r.json() and r.json()["classes"] == []
+
+
+def test_recent_entries_written_with_a_kind_still_list(client, settings, tmp_path):
+    pid = client.post(BASE, json={"name": "A", "folder": str(tmp_path / "a"), "type_ids": []}).json()["id"]
+    path = settings.data_dir / "recent_projects.json"
+    entries = json.loads(path.read_text("utf-8"))
+    path.write_text(json.dumps([{**e, "kind": "detect"} for e in entries]), "utf-8")
+    assert [p["id"] for p in client.get(BASE).json()["items"]] == [pid]
+    client.post(f"{BASE}/open", json={"folder": str(tmp_path / "a")})
+    assert "kind" not in json.loads(path.read_text("utf-8"))[0]

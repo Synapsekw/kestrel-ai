@@ -11,11 +11,6 @@ P = lambda x, y, z, u=0.01: {"x": x, "y": y, "z": z, "uncertainty_m": u}  # noqa
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
-@pytest.fixture
 def cloud_id(handle):
     return insert_cloud(handle)
 

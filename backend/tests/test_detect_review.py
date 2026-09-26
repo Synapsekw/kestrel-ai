@@ -23,11 +23,6 @@ GT = (500000.0, 0.03, 0.0, 4983000.0, 0.0, -0.03)
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
-@pytest.fixture
 def cls(project) -> list[str]:
     """The project's class ids, in hotkey order."""
     return [c["id"] for c in project["classes"]]

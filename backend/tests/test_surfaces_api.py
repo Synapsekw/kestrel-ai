@@ -21,11 +21,6 @@ BASE = "/api/v1/projects"
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"  # surfaces and volumes are detection work (F0: require_kind(("detect",), ANY_KIND))
-
-
-@pytest.fixture
 def cloud(handle, tmp_path):
     xyz = cone_cloud(25, 0.02, 0.0, size=30.0)
     path = write_cloud(tmp_path / "site.las", xyz)

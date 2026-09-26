@@ -2,6 +2,7 @@ import threading
 import time
 
 import pytest
+from project_factory import new_project
 from starlette.websockets import WebSocketDisconnect
 
 from app.errors import AppError
@@ -50,9 +51,7 @@ def _fast_progress_job(ctx):
 
 
 def _project(client, project_dir):
-    return client.post(
-        "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": [], "kind": "train"}
-    ).json()["id"]
+    return new_project(client, project_dir, name="A")["id"]
 
 
 def _wait(client, pid, jid, states=("succeeded", "failed", "cancelled"), timeout=5):

@@ -9,6 +9,7 @@ from alembic import command
 from alembic.config import Config
 from conftest import COLOURS, EIGHT_CLASSES
 from library_helpers import stub_checkpoint
+from project_factory import new_project
 from sqlalchemy import func, select
 
 from app.db.models import (
@@ -38,13 +39,9 @@ def _library_count(app) -> int:
         return s.execute(select(func.count()).select_from(LibraryModel)).scalar_one()
 
 
-def _new_project(client, folder: Path, kind: str = "train") -> str:
+def _new_project(client, folder: Path) -> str:
     classes = [{"name": n, "colour": c} for n, c in zip(EIGHT_CLASSES[:2], COLOURS[:2], strict=True)]
-    r = client.post(
-        BASE, json={"name": f"P {folder.name}", "folder": str(folder), "classes": classes, "kind": kind}
-    )
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
+    return new_project(client, folder, name=f"P {folder.name}", classes=classes)["id"]
 
 
 def _old_model(handle, name: str, rel: str, content: bytes | None, **kw) -> str:
@@ -357,7 +354,7 @@ def test_real_project_copy(app, client, tmp_path, wait_job, monkeypatch):
     r = client.post(f"{BASE}/open", json={"folder": str(folder)})
     assert r.status_code == 200, r.text
     project = r.json()
-    assert project["id"] == ids["project"] and project["kind"] == "train"
+    assert project["id"] == ids["project"] and "kind" not in project
 
     jobs = client.get(f"{BASE}/{ids['project']}/jobs").json()["items"]
     adopt = [j for j in jobs if j["type"] == adoption.ADOPT_JOB]

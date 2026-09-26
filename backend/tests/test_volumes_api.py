@@ -31,11 +31,6 @@ MACHINE = affinity.rotate(box(CX + 4 - 1.5, CY + 2 - 1.0, CX + 4 + 1.5, CY + 2 +
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
-@pytest.fixture
 def top(handle):
     return add_surface(handle, fixture_spec(0.1), lambda x, y: plane(x, y) + cone(x, y), name="April")
 

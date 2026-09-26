@@ -6,6 +6,7 @@ import pytest
 import schemathesis
 import yaml
 from hypothesis import HealthCheck, settings
+from project_factory import new_project
 from schemathesis.generation.meta import GenerationMode
 from schemathesis.specs.openapi.checks import (
     allow_header_conformance,
@@ -169,13 +170,9 @@ CONTRACT_FOLLOWUP: dict[str, str] = {
 
 @pytest.fixture
 def project_id(client, project_dir) -> str:
-    body = {
-        "name": "A",
-        "folder": str(project_dir),
-        "classes": [{"name": "excavator", "colour": "#ff0000"}],
-        "kind": "train",
-    }
-    return client.post("/api/v1/projects", json=body).json()["id"]
+    return new_project(client, project_dir, name="A", classes=[{"name": "excavator", "colour": "#ff0000"}])[
+        "id"
+    ]
 
 
 @schema.parametrize()

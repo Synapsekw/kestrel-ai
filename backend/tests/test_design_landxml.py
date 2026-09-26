@@ -14,12 +14,6 @@ from app.surfaces.design import landxml, store
 from app.surfaces.design.units import unit_to_m
 
 
-@pytest.fixture
-def project_kind() -> str:
-    """Design surfaces are detection work: F0 guards the router with require_kind(("detect",), ANY_KIND)."""
-    return "detect"
-
-
 def read(path, tmp_path):
     idir = tmp_path / "insp"
     idir.mkdir(exist_ok=True)

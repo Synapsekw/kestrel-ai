@@ -46,10 +46,7 @@ def list_projects(request: Request) -> ProjectPage:
 
 @router.post("", response_model=ProjectOut, status_code=201)
 def create_project(body: ProjectCreate, request: Request) -> ProjectOut:
-    handle = _registry(request).create(
-        body.name, Path(body.folder), [c.model_dump() for c in body.classes], body.kind
-    )
-    return _out(handle)
+    return _out(_registry(request).create(body.name, Path(body.folder), body.type_ids))
 
 
 @router.post("/open", response_model=ProjectOut)

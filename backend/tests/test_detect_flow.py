@@ -13,11 +13,6 @@ from app.providers.base import Detection, TileResult
 BASE = "/api/v1/projects"
 
 
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
 class ModelLikeProvider:
     """One detection per mapped model class on every tile, translated through the run's class map
     the way `LocalYoloProvider` does: a class the map ignores is never emitted."""

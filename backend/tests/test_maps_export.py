@@ -164,12 +164,6 @@ def test_geopackage_structure_and_geometry(tmp_path):
 BASE = "/api/v1/projects"
 
 
-@pytest.fixture
-def project_kind() -> str:
-    """Maps and query runs are detection work (spec 2026-09-23 section 5.2)."""
-    return "detect"
-
-
 def test_export_job_writes_every_format(client, project_id, wait_job, tmp_path, handle, project):
     r = client.post(
         f"{BASE}/{project_id}/maps", json={"path": str(make_geotiff(tmp_path / "a.tif", 3000, 3000))}

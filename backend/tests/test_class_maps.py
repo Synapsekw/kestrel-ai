@@ -4,6 +4,7 @@ plan 2 unit R): the remembered mapping, exact names, aliases, seeding an empty p
 
 import pytest
 from library_helpers import add_library_model
+from project_factory import new_project
 
 from app.db.models import ModelClassMap
 from app.detect import class_maps
@@ -11,11 +12,8 @@ from app.detect import class_maps
 BASE = "/api/v1/projects"
 
 
-def _project(client, tmp_path, classes, kind="detect", name="Site") -> dict:
-    body = {"name": name, "folder": str(tmp_path / name), "classes": classes, "kind": kind}
-    r = client.post(BASE, json=body)
-    assert r.status_code == 201, r.text
-    return r.json()
+def _project(client, tmp_path, classes, name="Site") -> dict:
+    return new_project(client, tmp_path / name, name=name, classes=classes)
 
 
 @pytest.fixture

@@ -15,11 +15,6 @@ BASE = "/api/v1/projects"
 GB = 1_000_000_000
 
 
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
 @pytest.fixture(autouse=True)
 def plenty(monkeypatch):
     monkeypatch.setattr(admission, "available_ram", lambda: 64 * GB)

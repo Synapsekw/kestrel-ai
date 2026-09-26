@@ -12,6 +12,7 @@ import re
 
 import pytest
 import yaml
+from project_factory import new_project
 
 from app.jobs.registry import get_job_type
 
@@ -40,11 +41,8 @@ def _stubs() -> list[tuple[str, str, str]]:
     ]
 
 
-def _project(client, tmp_path, kind):
-    body = {"name": kind, "folder": str(tmp_path / kind), "classes": [], "kind": kind}
-    r = client.post("/api/v1/projects", json=body)
-    assert r.status_code == 201, r.text
-    return r.json()["id"]
+def _project(client, tmp_path, name="p") -> str:
+    return new_project(client, tmp_path / name, name=name)["id"]
 
 
 def test_expected_stubs_match_the_routers_stubs():
@@ -86,8 +84,8 @@ def test_each_stub_job_fails_readably_until_its_unit_lands(
     assert done["type"] == job_type
 
 
-def test_a_detection_project_reaches_the_501_stubs(client, tmp_path):
-    pid = _project(client, tmp_path, "detect")
+def test_a_project_reaches_the_501_stubs(client, tmp_path):
+    pid = _project(client, tmp_path)
     for method, path, op_id in _stubs():
         kwargs = {"json": {}} if method in ("post", "patch") else {}
         r = getattr(client, method)(f"/api/v1/projects/{pid}{path}", **kwargs)

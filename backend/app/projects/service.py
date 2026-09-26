@@ -114,7 +114,10 @@ class ProjectRegistry:
         self._handles: dict[str, ProjectHandle] = {}
         self._lock = threading.Lock()
 
-    def create(self, name: str, folder: Path, classes: list[dict], kind: str) -> ProjectHandle:
+    def create(self, name: str, folder: Path, type_ids: list[str]) -> ProjectHandle:
+        """Create a project folder. `type_ids` are catalogue type ids: the project type list that
+        stores them arrives with unit BC (migration 0010), and until then the project starts with
+        no classes."""
         folder = folder.resolve()
         with self._lock:
             if (folder / "project.db").exists():
@@ -122,17 +125,12 @@ class ProjectRegistry:
             for sub in SUBDIRS:
                 (folder / sub).mkdir(parents=True, exist_ok=True)
             engine = open_project_db(folder)
-            row = Project(
-                name=name,
-                kind=kind,
-                classes=normalise_classes(classes),
-                import_defaults=dict(DEFAULT_IMPORT_SETTINGS),
-            )
+            row = Project(name=name, classes=[], import_defaults=dict(DEFAULT_IMPORT_SETTINGS))
             with make_session_factory(engine)() as s:
                 s.add(row)
                 s.commit()
                 pid = row.id
-            return self._cache(pid, folder, engine, name, kind, remember=True)
+            return self._cache(pid, folder, engine, name, remember=True)
 
     def open(self, folder: Path, remember: bool = True) -> ProjectHandle:
         """Open a project folder. `remember` moves it to the top of the recent list (a user action)."""
@@ -143,26 +141,24 @@ class ProjectRegistry:
             for h in self._handles.values():
                 if h.folder == folder:
                     if remember:
-                        name, kind = self._name_and_kind(h)
-                        self.appdata.remember(h.id, name, str(folder), kind)
+                        self.appdata.remember(h.id, self._name(h), str(folder))
                     return h
             engine = open_project_db(folder)
             with make_session_factory(engine)() as s:
                 row = s.execute(select(Project)).scalar_one()
-                pid, name, kind = row.id, row.name, row.kind
-            return self._cache(pid, folder, engine, name, kind, remember)
+                pid, name = row.id, row.name
+            return self._cache(pid, folder, engine, name, remember)
 
     @staticmethod
-    def _name_and_kind(h: ProjectHandle) -> tuple[str, str]:
+    def _name(h: ProjectHandle) -> str:
         with h.session() as s:
-            row = h.row(s)
-            return row.name, row.kind
+            return h.row(s).name
 
-    def _cache(self, pid: str, folder: Path, engine, name: str, kind: str, remember: bool) -> ProjectHandle:
+    def _cache(self, pid: str, folder: Path, engine, name: str, remember: bool) -> ProjectHandle:
         h = ProjectHandle(pid, folder, engine)
         self._handles[pid] = h
         if remember:
-            self.appdata.remember(pid, name, str(folder), kind)
+            self.appdata.remember(pid, name, str(folder))
         if self.on_open is not None:
             try:
                 self.on_open(h)

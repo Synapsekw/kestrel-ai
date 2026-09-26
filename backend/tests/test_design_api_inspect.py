@@ -17,12 +17,6 @@ BASE = "/api/v1/projects"
 
 
 @pytest.fixture
-def project_kind() -> str:
-    """Design surfaces are detection work: F0 guards the router with require_kind(("detect",), ANY_KIND)."""
-    return "detect"
-
-
-@pytest.fixture
 def fake_reader(monkeypatch):
     monkeypatch.setitem(phase_inspect.READERS, "landxml", "fake_design_reader")
     monkeypatch.setitem(phase_inspect.READERS, "dxf", "fake_design_reader")

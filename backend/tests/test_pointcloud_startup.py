@@ -1,14 +1,8 @@
 """The startup sweep (spec §3): interrupted imports fail, .work and partial octrees go."""
 
-import pytest
 from pointclouds import insert_cloud
 
 from app.pointclouds import startup
-
-
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
 
 
 class Runner:

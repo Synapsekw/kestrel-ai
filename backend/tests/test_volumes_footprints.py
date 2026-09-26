@@ -13,11 +13,6 @@ TO_LL = Transformer.from_crs(EPSG, 4326, always_xy=True)
 BBOX = (CX - 12, CY - 12, CX + 12, CY + 12)
 
 
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"  # surfaces and volumes are detection work (F0: require_kind(("detect",), ANY_KIND))
-
-
 def _ll_map(handle, boxes_utm, **kw):
     """A map in EPSG:4326 around the fixture site (so the reprojection path is taken) with one
     detection per UTM box, converted to that map's pixels."""

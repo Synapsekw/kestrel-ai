@@ -10,6 +10,7 @@ import pytest
 from fakes import FakeTrainer
 from library_helpers import LIB, add_library_model, stub_checkpoint, wait_library_job
 from local_paths import MODELS_DIR
+from project_factory import new_project
 from test_training_jobs import make_dataset, wait_for
 
 from app.library import service
@@ -33,10 +34,7 @@ def fake_trainer(monkeypatch) -> FakeTrainer:
 
 @pytest.fixture
 def train_project(client, tmp_path) -> dict:
-    body = {"name": "Ahmadia", "folder": str(tmp_path / "train-proj"), "classes": [], "kind": "train"}
-    r = client.post(BASE, json=body)
-    assert r.status_code == 201, r.text
-    return r.json()
+    return new_project(client, tmp_path / "train-proj", name="Ahmadia")
 
 
 def train_body(dataset_id: str, base_model_id: str, **over) -> dict:
@@ -281,15 +279,9 @@ def test_the_provider_factory_builds_from_the_given_weights(client, app, tmp_pat
 
 @pytest.fixture
 def detect_project(client, tmp_path) -> dict:
-    body = {
-        "name": "Site",
-        "folder": str(tmp_path / "detect-proj"),
-        "classes": [{"name": "excavator", "colour": "#ff0000"}],
-        "kind": "detect",
-    }
-    r = client.post(BASE, json=body)
-    assert r.status_code == 201, r.text
-    return r.json()
+    return new_project(
+        client, tmp_path / "detect-proj", name="Site", classes=[{"name": "excavator", "colour": "#ff0000"}]
+    )
 
 
 @pytest.fixture

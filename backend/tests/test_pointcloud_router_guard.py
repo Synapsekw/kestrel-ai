@@ -9,6 +9,7 @@ import logging
 import sys
 
 from fastapi.testclient import TestClient
+from project_factory import new_project
 
 import app.api  # noqa: F401 - ensures "app.api" is in sys.modules before the reload below
 from app.main import create_app
@@ -27,13 +28,7 @@ def test_a_router_that_fails_to_import_costs_only_its_endpoints(monkeypatch, set
             # through the possibly-stale `app.api` name.
             importlib.reload(sys.modules["app.api"])
         with TestClient(create_app(settings), headers={"Authorization": "Bearer test-token"}) as client:
-            body = {
-                "name": "d",
-                "folder": str(settings.data_dir.parent / "d"),
-                "classes": [],
-                "kind": "detect",
-            }
-            pid = client.post("/api/v1/projects", json=body).json()["id"]
+            pid = new_project(client, settings.data_dir.parent / "d", name="d")["id"]
             assert client.get(f"/api/v1/projects/{pid}/pointclouds").status_code == 404
             assert client.get(f"/api/v1/projects/{pid}/surfaces").status_code in (200, 501)
             assert client.get("/api/v1/health").status_code == 200

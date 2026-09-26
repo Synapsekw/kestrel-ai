@@ -1,3 +1,5 @@
+from project_factory import new_project
+
 CLASSES = [
     {"name": "excavator", "colour": "#ff0000", "hotkey": "1"},
     {"name": "dump_truck", "colour": "#00ff00", "hotkey": "2"},
@@ -5,11 +7,7 @@ CLASSES = [
 
 
 def _create(client, folder, name="Ahmadia"):
-    r = client.post(
-        "/api/v1/projects", json={"name": name, "folder": str(folder), "classes": CLASSES, "kind": "train"}
-    )
-    assert r.status_code == 201, r.text
-    return r.json()
+    return new_project(client, folder, name=name, classes=CLASSES)
 
 
 def test_create_project_makes_folder_layout(client, project_dir):
@@ -31,9 +29,7 @@ def test_create_in_new_folder_creates_it(client, tmp_path):
 
 def test_create_in_folder_with_existing_project_is_409(client, project_dir):
     _create(client, project_dir)
-    r = client.post(
-        "/api/v1/projects", json={"name": "B", "folder": str(project_dir), "classes": [], "kind": "train"}
-    )
+    r = client.post("/api/v1/projects", json={"name": "B", "folder": str(project_dir), "type_ids": []})
     assert r.status_code == 409
     assert r.json()["error"]["code"] == "already_exists"
 
@@ -164,9 +160,7 @@ def test_project_stats_shape(client, project_dir):
 
 
 def test_relative_folder_is_422(client):
-    r = client.post(
-        "/api/v1/projects", json={"name": "A", "folder": "relative/dir", "classes": [], "kind": "train"}
-    )
+    r = client.post("/api/v1/projects", json={"name": "A", "folder": "relative/dir", "type_ids": []})
     assert r.status_code == 422
     r = client.post("/api/v1/projects/open", json={"folder": "."})
     assert r.status_code == 422

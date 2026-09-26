@@ -23,11 +23,6 @@ BASE = "/api/v1/projects"
 
 
 @pytest.fixture
-def project_kind() -> str:
-    return "detect"  # surfaces and volumes are detection work (F0: require_kind(("detect",), ANY_KIND))
-
-
-@pytest.fixture
 def surface(handle):
     return add_surface(handle, fixture_spec(0.1), lambda x, y: plane(x, y) + cone(x, y))
 

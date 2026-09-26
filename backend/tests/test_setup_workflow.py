@@ -6,6 +6,7 @@ Only the external planner and vision SDK calls are replaced; no paid calls or us
 import json
 from types import SimpleNamespace
 
+from project_factory import new_project
 from sqlalchemy import select
 
 from app.db.models import Box
@@ -58,17 +59,13 @@ def test_plan_to_import_to_first_labels(client, app, tmp_path, make_jpeg, wait_j
     )
     assert reply.status_code == 200, reply.text
     draft = reply.json()["plan"]
-    created = client.post(
-        "/api/v1/projects",
-        json={
-            "name": draft["name"],
-            "folder": str(tmp_path / "survey"),
-            "classes": [{"name": name, "colour": "#e5af64"} for name in draft["classes"]],
-            "kind": "train",
-        },
+    project = new_project(
+        client,
+        tmp_path / "survey",
+        name=draft["name"],
+        classes=[{"name": name, "colour": "#e5af64"} for name in draft["classes"]],
     )
-    assert created.status_code == 201, created.text
-    project_id = created.json()["id"]
+    project_id = project["id"]
     base = f"/api/v1/projects/{project_id}"
     for i in range(3):
         make_jpeg(tmp_path / "frames" / f"flight_{i}.jpg", 128, 96, seed=i)
@@ -100,7 +97,7 @@ def test_plan_to_import_to_first_labels(client, app, tmp_path, make_jpeg, wait_j
         assert {box.image_id for box in labels} == set(selected)
         assert len(labels) == 2
         assert all(box.review_state == "unreviewed" for box in labels)
-        assert all(box.class_id == created.json()["classes"][0]["id"] for box in labels)
+        assert all(box.class_id == project["classes"][0]["id"] for box in labels)
     pending = client.get(f"{base}/images", params={"has_pending": True, "limit": 24}).json()
     assert {image["id"] for image in pending["items"]} == set(selected)
     for log_path in handle.runs_dir.rglob("*.log"):

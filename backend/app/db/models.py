@@ -19,8 +19,8 @@ class Project(Base):
     preannotation_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     import_defaults: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
-    # "train" | "detect": set at creation, never changed (spec 2026-09-23 section 5.1).
-    kind: Mapped[str] = mapped_column(String, default="train", server_default="train")
+    # The `kind` column (migration 0007) is no longer mapped; its server default fills it until
+    # migration 0010 drops it (spec 2026-09-26-foundation section 6.1).
 
 
 class ModelAdoption(Base):

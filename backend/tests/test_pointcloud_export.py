@@ -19,11 +19,6 @@ from app.pointclouds.jobs_export import run_pointcloud_export
 BASE = "/api/v1/projects"
 
 
-@pytest.fixture
-def project_kind() -> str:
-    return "detect"
-
-
 def _cloud_from(handle, src, **overrides):
     with laspy.open(src) as r:
         las = r.read()

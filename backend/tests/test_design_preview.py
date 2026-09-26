@@ -18,12 +18,6 @@ from app.surfaces.paths import surface_path
 BASE = "/api/v1/projects"
 
 
-@pytest.fixture
-def project_kind() -> str:
-    """Design surfaces are detection work: F0 guards the router with require_kind(("detect",), ANY_KIND)."""
-    return "detect"
-
-
 def url(pid, iid, rest=""):
     return f"{BASE}/{pid}/design-inspections/{iid}{rest}"
 
