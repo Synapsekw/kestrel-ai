@@ -8843,6 +8843,24 @@ export interface components {
                 "application/json": components["schemas"]["UnmappedClassesError"];
             };
         };
+        /** @description the model library (`code` is `library_unavailable`) or the catalogue (`code` is `catalogue_unavailable`) could not be opened at startup */
+        LibraryOrCatalogueUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "catalogue_unavailable",
+                 *         "message": "The catalogue could not be opened.",
+                 *         "details": {}
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description the catalogue could not be opened at startup (`code` is `catalogue_unavailable`); projects still render from their type snapshots */
         CatalogueUnavailable: {
             headers: {
@@ -11775,7 +11793,7 @@ export interface operations {
                 };
             };
             422: components["responses"]["UnmappedClasses"];
-            503: components["responses"]["LibraryUnavailable"];
+            503: components["responses"]["LibraryOrCatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -11884,7 +11902,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            503: components["responses"]["LibraryUnavailable"];
+            503: components["responses"]["LibraryOrCatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -11923,6 +11941,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            503: components["responses"]["LibraryOrCatalogueUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -15285,7 +15304,7 @@ export interface operations {
                     "application/json": components["schemas"]["LibraryDatasetWithJob"];
                 };
             };
-            /** @description a dataset with that name exists (`code` is `already_exists`) */
+            /** @description a dataset with that name exists, compared without regard to case (`code` is `already_exists`), or the name is blank or whitespace only (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;

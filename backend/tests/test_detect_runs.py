@@ -564,3 +564,30 @@ def test_a_failed_submit_leaves_no_run_that_will_never_start(app, handle, make_j
     with handle.session() as s:
         left = s.query(QueryRun).all()
         assert [(r.source_id, r.job_id) for r in left] == [(first, "job-1")]
+
+
+@pytest.mark.parametrize(
+    ("request_kind", "status"),
+    [("put_class_map", 503), ("library_model_run", 503), ("cloud_provider_run", 202)],
+)
+def test_a_catalogue_that_did_not_open_is_a_503_except_for_a_cloud_run(
+    client, app, tmp_path, project_id, images_source, monkeypatch, request_kind, status
+):
+    """The declared 503s of putModelClassMap and createRuns (library_unavailable or
+    catalogue_unavailable); a cloud-provider run never needs the catalogue (A11)."""
+    monkeypatch.setattr(
+        "app.inference.jobs.get_provider", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("x"))
+    )
+    m = add_library_model(app, tmp_path, class_names=["excavator"])
+    app.state.keys.set("anthropic", "sk-fake")
+    app.state.catalogue = None
+    if request_kind == "put_class_map":
+        r = client.put(f"{BASE}/{project_id}/model-class-maps/{m.id}", json={"mapping": {"excavator": None}})
+    elif request_kind == "library_model_run":
+        r = _post(client, project_id, source_ids=[images_source], model_id=m.id)
+    else:
+        r = _post(client, project_id, source_ids=[images_source], provider="anthropic", query="dump trucks")
+    assert r.status_code == status, r.text
+    if status == 503:
+        assert r.json()["error"]["code"] == "catalogue_unavailable"
+        assert _jobs(client, project_id) == []

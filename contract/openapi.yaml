@@ -1934,7 +1934,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422": { $ref: "#/components/responses/UnmappedClasses" }
-        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        "503": { $ref: "#/components/responses/LibraryOrCatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/runs/{runId}:
     parameters:
@@ -2009,7 +2009,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ModelClassMapOut" }
         "404": { $ref: "#/components/responses/NotFound" }
-        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        "503": { $ref: "#/components/responses/LibraryOrCatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
     put:
       tags: [detect]
@@ -2034,6 +2034,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryOrCatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}/review:
     parameters:
@@ -4171,7 +4172,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/LibraryDatasetWithJob" }
         "409":
-          description: "a dataset with that name exists (`code` is `already_exists`)"
+          description: "a dataset with that name exists, compared without regard to case (`code` is `already_exists`), or the name is blank or whitespace only (`code` is `conflict`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4547,6 +4548,16 @@ components:
               code: unmapped_classes
               message: "2 of the model's classes are not mapped to project classes."
               details: { model_id: "m0000000-2222-4000-8000-000000000001", unmapped: [crane, "concrete mixer"] }
+    LibraryOrCatalogueUnavailable:
+      description: "the model library (`code` is `library_unavailable`) or the catalogue (`code` is `catalogue_unavailable`) could not be opened at startup"
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              code: catalogue_unavailable
+              message: "The catalogue could not be opened."
+              details: {}
     CatalogueUnavailable:
       description: "the catalogue could not be opened at startup (`code` is `catalogue_unavailable`); projects still render from their type snapshots"
       content:
