@@ -29,7 +29,7 @@ function Swatch({ colour }: { colour: string }) {
   return (
     <span
       aria-hidden="true"
-      className="h-2.5 w-2.5 shrink-0 rounded-sm bg-[color:var(--c)]"
+      className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-[color:var(--c)]"
       style={{ "--c": colour } as CSSProperties}
     />
   );

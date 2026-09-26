@@ -36,7 +36,7 @@ export function TypeChip({
     >
       <span
         aria-hidden="true"
-        className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-[color:var(--c)] shadow-[0_0_10px_var(--c)]"
+        className="h-2.5 w-2.5 shrink-0 rounded-[3px] bg-[color:var(--c)] shadow-[0_0_10px_var(--c)] reduce-effects:shadow-none"
       />
       <span className="min-w-0 truncate font-semibold text-ink">{name}</span>
       {archived && <span className="sr-only">(archived)</span>}

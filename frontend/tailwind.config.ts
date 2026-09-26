@@ -135,6 +135,9 @@ export default {
         "@media (prefers-reduced-motion: reduce)",
         ':root[data-motion="reduced"] &',
       ]);
+      // Reduced effects (<html data-effects="reduced">, app/effects.ts): glows and other
+      // decoration that the tokens cannot switch off drop with `reduce-effects:shadow-none`.
+      addVariant("reduce-effects", ':root[data-effects="reduced"] &');
     }),
   ],
 } satisfies Config;

@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import postcss from "postcss";
@@ -50,5 +51,23 @@ describe("the Aero glass Tailwind theme", () => {
     const css = await generate("reduce-motion:animate-none");
     expect(css).toContain("@media (prefers-reduced-motion: reduce)");
     expect(css).toContain(':root[data-motion="reduced"] .reduce-motion\\:animate-none');
+  });
+
+  it("gives reduced effects a reduce-effects: variant keyed on <html data-effects>", async () => {
+    const css = await generate("reduce-effects:shadow-none");
+    expect(css).toContain(':root[data-effects="reduced"] .reduce-effects\\:shadow-none');
+  });
+
+  it("drops every hand-made glow in the primitives under reduced effects (spec §4.3)", () => {
+    const dir = resolve("src/ui");
+    const offenders: string[] = [];
+    for (const file of readdirSync(dir).filter((f) => f.endsWith(".tsx") && !f.includes(".test."))) {
+      for (const [n, line] of readFileSync(resolve(dir, file), "utf8").split("\n").entries()) {
+        const glow = /(^|[\s"'`])shadow-\[/.test(line);
+        const dropped = /(^|[\s"'`])reduce-effects:shadow-none([\s"'`]|$)/.test(line);
+        if (glow && !dropped) offenders.push(`${file}:${n + 1}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

@@ -162,6 +162,33 @@ describe("CommandPalette", () => {
     expect(screen.getByRole("option", { name: "Catalogue" })).toBeInTheDocument();
   });
 
+  it("treats a source that throws synchronously as failed and still asks the others", async () => {
+    const user = fakeTimers();
+    const broken = vi.fn(() => {
+      throw new Error("bad index");
+    });
+    const images = vi.fn(async () => [cmd("img-1", "Castor yard 12")]);
+    render(
+      <CommandPalette
+        open
+        onClose={() => {}}
+        groups={[]}
+        sources={[
+          { id: "findings", label: "Findings", search: broken },
+          { id: "images", label: "Images", search: images },
+        ]}
+      />,
+    );
+    await user.type(screen.getByRole("combobox", { name: "Command" }), "ca");
+    await tick(SEARCH_DEBOUNCE_MS);
+    expect(images).toHaveBeenCalledTimes(1);
+    const note = screen.getByText("Couldn't search findings");
+    // An informative note needs 4.5:1: text-muted, not the 3:1 text-dim.
+    expect(note.className).toMatch(/(^| )text-muted( |$)/);
+    expect(note.className).not.toMatch(/(^| )text-dim( |$)/);
+    expect(screen.getByRole("option", { name: "Castor yard 12" })).toBeInTheDocument();
+  });
+
   it("returns focus to the opener", async () => {
     function Host() {
       const [open, setOpen] = useState(false);

@@ -79,18 +79,22 @@ function Palette({
     const timer = window.setTimeout(() => {
       for (const source of live) {
         setFound((f) => ({ ...f, [source.id]: { query: q, status: "loading", items: [] } }));
-        source.search(q, controller.signal).then(
-          (items) => {
-            if (!controller.signal.aborted) {
-              setFound((f) => ({ ...f, [source.id]: { query: q, status: "done", items } }));
-            }
-          },
-          () => {
-            if (!controller.signal.aborted) {
-              setFound((f) => ({ ...f, [source.id]: { query: q, status: "error", items: [] } }));
-            }
-          },
-        );
+        // Called inside a promise so a source that throws synchronously becomes its own error
+        // state instead of stopping the loop (and leaving later sections "Searching…" forever).
+        Promise.resolve()
+          .then(() => source.search(q, controller.signal))
+          .then(
+            (items) => {
+              if (!controller.signal.aborted) {
+                setFound((f) => ({ ...f, [source.id]: { query: q, status: "done", items } }));
+              }
+            },
+            () => {
+              if (!controller.signal.aborted) {
+                setFound((f) => ({ ...f, [source.id]: { query: q, status: "error", items: [] } }));
+              }
+            },
+          );
       }
     }, SEARCH_DEBOUNCE_MS);
     return () => {
@@ -189,7 +193,7 @@ function Palette({
               <p aria-hidden="true" className="px-2.5 pb-1 pt-2 text-2xs text-muted">
                 {section.label}
               </p>
-              {section.note && <p className="px-2.5 py-1.5 text-sm text-dim">{section.note}</p>}
+              {section.note && <p className="px-2.5 py-1.5 text-sm text-muted">{section.note}</p>}
               {section.items.map((command, k) => {
                 const i = starts[n] + k;
                 return (

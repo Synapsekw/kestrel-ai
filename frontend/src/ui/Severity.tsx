@@ -131,7 +131,7 @@ export function SeverityPicker({
             className={cx(
               "flex h-[42px] flex-col items-center justify-center gap-px rounded-[9px] border text-xs font-semibold",
               on
-                ? "-translate-y-px border-[color:var(--c)] bg-[color:var(--c)] text-bg shadow-[0_6px_18px_color-mix(in_srgb,var(--c)_45%,transparent)]"
+                ? "-translate-y-px border-[color:var(--c)] bg-[color:var(--c)] text-bg shadow-[0_6px_18px_color-mix(in_srgb,var(--c)_45%,transparent)] reduce-effects:shadow-none"
                 : "border-line bg-field text-muted hover:border-[color:var(--c)] hover:text-ink",
               transition,
               focusRing,

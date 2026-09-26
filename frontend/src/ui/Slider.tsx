@@ -181,7 +181,7 @@ export function Slider({
         <span className="pointer-events-none absolute inset-0" style={{ transform: `translateX(${pct}%)` }}>
           <span
             data-part="thumb"
-            className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink shadow-[0_0_0_3px_rgba(143,123,255,.45)] transition-transform duration-fast group-hover:scale-110 reduce-motion:transition-none"
+            className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink shadow-[0_0_0_3px_rgba(143,123,255,.45)] reduce-effects:shadow-none transition-transform duration-fast group-hover:scale-110 reduce-motion:transition-none"
           />
         </span>
       </div>

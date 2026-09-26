@@ -68,7 +68,7 @@ export function Segmented<T extends string>({
         ref={thumbRef}
         aria-hidden="true"
         data-part="thumb"
-        className="pointer-events-none absolute bottom-[3px] left-0 top-[3px] rounded-sm bg-grad-primary opacity-0 shadow-[0_4px_14px_rgba(143,123,255,.35)] data-[ready=true]:transition-transform data-[ready=true]:duration-emphasis data-[ready=true]:ease-out reduce-motion:transition-none"
+        className="pointer-events-none absolute bottom-[3px] left-0 top-[3px] rounded-sm bg-grad-primary opacity-0 shadow-[0_4px_14px_rgba(143,123,255,.35)] reduce-effects:shadow-none data-[ready=true]:transition-transform data-[ready=true]:duration-emphasis data-[ready=true]:ease-out reduce-motion:transition-none"
       />
       {options.map((o) => {
         const on = o.value === value;
