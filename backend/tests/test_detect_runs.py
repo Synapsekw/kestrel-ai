@@ -233,14 +233,6 @@ def test_an_unavailable_model_is_409_and_no_library_is_503(client, app, tmp_path
     assert _jobs(client, project_id) == []
 
 
-def test_a_training_project_is_refused(client, tmp_path):
-    body = {"name": "T2", "folder": str(tmp_path / "t2"), "classes": [], "kind": "train"}
-    train = client.post(BASE, json=body).json()
-    r = _post(client, train["id"], source_ids=["x"], model_id="m")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
-    assert client.get(f"{BASE}/{train['id']}/runs").status_code == 409
-
-
 # ------------------------------------------------------------------ list, pin, recount
 
 

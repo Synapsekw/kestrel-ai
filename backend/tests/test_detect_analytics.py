@@ -333,17 +333,6 @@ def test_source_analytics_reads_detections_only_as_one_grouped_count(client, pro
     assert "count(" in touching[0].lower() and "group by" in touching[0].lower()
 
 
-class TestTrainingProject:
-    @pytest.fixture
-    def project_kind(self) -> str:
-        return "train"
-
-    def test_analytics_is_detection_work(self, client, project_id):
-        for path in ("analytics/areas", "analytics/photo-batches", "analytics/sources/x"):
-            r = client.get(f"{BASE}/{project_id}/{path}")
-            assert r.status_code == 409, path
-
-
 @pytest.mark.parametrize(
     ("path", "template"),
     [

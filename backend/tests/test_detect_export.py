@@ -218,14 +218,6 @@ def test_export_of_an_unknown_source_is_404(client, project_id, site):
     assert r.status_code == 404
 
 
-def test_a_training_project_gets_409(client, project_dir, tmp_path):
-    body = {"name": "Tr", "folder": str(tmp_path / "tr"), "classes": [], "kind": "train"}
-    pid = client.post(f"{BASE}", json=body).json()["id"]
-    r = client.post(f"{BASE}/{pid}/detect-exports", json={"format": "csv"})
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "wrong_project_kind"
-
-
 # --- PDF ------------------------------------------------------------------------------------------
 
 

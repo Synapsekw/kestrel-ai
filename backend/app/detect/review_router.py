@@ -1,7 +1,6 @@
 """Review routes for detection runs (spec 2026-09-23 section 8, plan 2 unit V).
 
-Included in `app/api.py` with `require_kind(("detect",), ANY_KIND)`: every write is detection-only,
-and the one read (`next-unreviewed`) also works on a training project's past detections.
+Any project may review its runs (spec 2026-09-26-foundation section 6.1).
 """
 
 from __future__ import annotations

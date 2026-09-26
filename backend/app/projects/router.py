@@ -3,7 +3,6 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.datasets.stats import compute_stats
-from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.schemas import (
     ClassDefInput,
     ProjectCreate,
@@ -22,8 +21,6 @@ from app.projects.service import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
-# The project itself (settings, classes, stats) belongs to both kinds.
-BOTH_KINDS = [Depends(require_kind(ANY_KIND))]
 
 
 def _registry(request: Request) -> ProjectRegistry:
@@ -60,18 +57,18 @@ def open_project(body: ProjectOpen, request: Request) -> ProjectOut:
     return _out(_registry(request).open(Path(body.folder)))
 
 
-@router.get("/{projectId}", response_model=ProjectOut, dependencies=BOTH_KINDS)
+@router.get("/{projectId}", response_model=ProjectOut)
 def get_project_route(handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
     return _out(handle)
 
 
-@router.delete("/{projectId}", status_code=204, dependencies=BOTH_KINDS)
+@router.delete("/{projectId}", status_code=204)
 def forget_project(projectId: str, request: Request) -> Response:  # noqa: N803 - path param from the contract
     _registry(request).forget(projectId)
     return Response(status_code=204)
 
 
-@router.patch("/{projectId}", response_model=ProjectOut, dependencies=BOTH_KINDS)
+@router.patch("/{projectId}", response_model=ProjectOut)
 def update_project(body: ProjectUpdate, handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
     with handle.session() as s:
         row = handle.row(s)
@@ -87,7 +84,7 @@ def update_project(body: ProjectUpdate, handle: ProjectHandle = Depends(get_proj
     return out
 
 
-@router.put("/{projectId}/classes", response_model=ProjectOut, dependencies=BOTH_KINDS)
+@router.put("/{projectId}/classes", response_model=ProjectOut)
 def update_classes(body: list[ClassDefInput], handle: ProjectHandle = Depends(get_project)) -> ProjectOut:
     new = normalise_classes([c.model_dump() for c in body])
     with handle.session() as s:
@@ -98,6 +95,6 @@ def update_classes(body: list[ClassDefInput], handle: ProjectHandle = Depends(ge
     return out
 
 
-@router.get("/{projectId}/stats", response_model=Stats, dependencies=BOTH_KINDS)
+@router.get("/{projectId}/stats", response_model=Stats)
 def project_stats(handle: ProjectHandle = Depends(get_project)) -> Stats:
     return compute_stats(handle, source_id=None)

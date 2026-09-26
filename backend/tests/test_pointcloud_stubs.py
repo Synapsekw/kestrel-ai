@@ -1,11 +1,9 @@
-"""Foundation F0: the 37 operations of the point-cloud, volumes and design specs are routed as 501
-stubs behind the project-kind guard, and the six new job types are registered.
+"""Foundation F0: the operations of the point-cloud, volumes and design specs were routed as 501
+stubs, and the six new job types are registered.
 
 The 501 checks read each router's STUBS, and the stub-job check skips a job whose F0 body has been
 replaced, so S1, S2 and S3 never edit this file: a unit that lands an operation deletes its tuple
-from STUBS (and its EXPECTED_STUBS entry) and this test follows. GUARDED_WRITES stays fixed: the
-kind guard sits where `app/api.py` includes the routers, so it answers 409 before a stub or a real
-handler runs.
+from STUBS (and its EXPECTED_STUBS entry) and this test follows.
 """
 
 import importlib
@@ -30,16 +28,6 @@ NEW_JOB_TYPES = [
     "volume_calc",
     "volume_export",
     "design_import",
-]
-GUARDED_WRITES = [
-    ("post", "/pointclouds", {"path": "C:/x.las"}),
-    ("post", "/pointclouds/inspect", {"path": "C:/x.las"}),
-    ("patch", "/pointclouds/c1", {"name": "x"}),
-    ("post", "/pointclouds/c1/exports", {"format": "laz"}),
-    ("post", "/surfaces", {"point_cloud_id": "c1"}),
-    ("post", "/volume-exports", {"measurement_ids": ["v1"], "formats": ["pdf"]}),
-    ("post", "/design-inspections", {"path": "C:/x.dxf"}),
-    ("post", "/design-surfaces", {"inspection_id": "i1", "preview_id": "p1"}),
 ]
 
 
@@ -105,15 +93,6 @@ def test_a_detection_project_reaches_the_501_stubs(client, tmp_path):
         r = getattr(client, method)(f"/api/v1/projects/{pid}{path}", **kwargs)
         assert r.status_code == 501, (op_id, path, r.text)
         assert r.json()["error"]["code"] == "not_implemented"
-
-
-def test_a_training_project_may_read_but_not_write(client, tmp_path):
-    pid = _project(client, tmp_path, "train")
-    assert client.get(f"/api/v1/projects/{pid}/pointclouds").status_code in (200, 501)  # stub or built
-    for method, path, body in GUARDED_WRITES:
-        r = getattr(client, method)(f"/api/v1/projects/{pid}{path}", json=body)
-        assert r.status_code == 409, (path, r.text)
-        assert r.json()["error"]["code"] == "wrong_project_kind"
 
 
 def test_an_unknown_project_is_404(client):

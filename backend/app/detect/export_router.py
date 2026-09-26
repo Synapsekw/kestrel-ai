@@ -1,7 +1,6 @@
 """`POST /detect-exports` (plan 2 unit E): starts a `detect_export` job.
 
-Detection projects only: a training project answers `409 wrong_project_kind` (the guard is on the
-router, where `api.py` includes it).
+Any project may use these routes (spec 2026-09-26-foundation section 6.1).
 """
 
 from __future__ import annotations

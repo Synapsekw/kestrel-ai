@@ -95,16 +95,6 @@ def test_missing_and_unknown_files(client, project_id, tmp_path):
     assert r.status_code == 422 and r.json()["error"]["details"] == {"reason": "extension"}
 
 
-def test_a_training_project_may_read_but_not_inspect(client, tmp_path):
-    body = {"name": "t", "folder": str(tmp_path / "t"), "classes": [], "kind": "train"}
-    pid = client.post(BASE, json=body).json()["id"]
-    src = tmp_path / "s.xml"
-    src.write_text("<LandXML/>")
-    r = post(client, pid, src)
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
-    assert client.get(url(pid, store.new_id())).status_code == 404  # reads pass the guard
-
-
 def test_contract_positive_cases_never_meet_a_422(client, project_id, tmp_path):
     """Deviation 1: a schema-valid body whose file does not exist is 404, never 422."""
     assert post(client, project_id, tmp_path / "missing.landxml").status_code == 404
@@ -224,14 +214,6 @@ def test_thumbnail_of_a_failed_inspection_is_404(client, project_id, wait_job, f
     wait_job(project_id, body["job"]["id"])
     r = client.get(url(project_id, body["inspection"]["id"], "/candidates/c0/thumbnail"))
     assert r.status_code == 404
-
-
-def test_a_training_project_may_not_delete_a_design_inspection(client, tmp_path):
-    """Fix round 1, finding 5."""
-    body = {"name": "t2", "folder": str(tmp_path / "t2"), "classes": [], "kind": "train"}
-    pid = client.post(BASE, json=body).json()["id"]
-    r = client.delete(url(pid, store.new_id()))
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
 
 
 def test_a_relative_path_is_refused_as_missing(client, project_id, tmp_path, monkeypatch, fake_reader):

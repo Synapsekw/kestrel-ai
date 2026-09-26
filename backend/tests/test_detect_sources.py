@@ -139,45 +139,6 @@ def test_patch_rejects_unknown_fields(client, project_id, import_source, tmp_pat
     assert r.status_code == 422, r.text
 
 
-def test_patch_source_in_a_training_project_is_409(client, tmp_path, import_source, make_jpeg):
-    body = {"name": "Train", "folder": str(tmp_path / "t"), "classes": [], "kind": "train"}
-    pid = client.post(BASE, json=body).json()["id"]
-    make_jpeg(tmp_path / "f" / "a.jpg", 64, 48, seed=1)
-    source_id = import_source(pid, tmp_path / "f")
-    r = client.patch(f"{BASE}/{pid}/sources/{source_id}", json={"label": "x"})
-    assert r.status_code == 409, r.text
-    assert r.json()["error"]["code"] == "wrong_project_kind"
-
-
-def test_a_moved_map_gets_its_own_map_source(app, client, tmp_path, wait_job):
-    """A past map moved out of a training project becomes a source in the detection project."""
-    from app.maps import service as maps_service
-    from app.maps.schemas import GeoMapCreate
-
-    train = client.post(
-        BASE, json={"name": "Old", "folder": str(tmp_path / "old"), "classes": [], "kind": "train"}
-    ).json()
-    old = app.state.projects.get(train["id"])
-    row = maps_service.create_map(
-        old, GeoMapCreate(path=str(make_geotiff(tmp_path / "s.tif", 300, 200)), name="Site")
-    )
-    job = app.state.jobs.submit(old, "map_import", {"map_id": row.id, "name": row.name})
-    assert wait_job(old.id, job.id)["state"] == "succeeded"
-    maps_service.set_captured_on(old, row.id, date(2026, 4, 1))
-
-    target = client.post(
-        BASE, json={"name": "New", "folder": str(tmp_path / "new"), "classes": [], "kind": "detect"}
-    ).json()["id"]
-    r = client.post(f"{BASE}/{train['id']}/maps/{row.id}/move", json={"target_project_id": target})
-    assert r.status_code == 202, r.text
-    assert wait_job(target, r.json()["job"]["id"])["state"] == "succeeded"
-
-    items = client.get(f"{BASE}/{target}/sources").json()["items"]
-    assert [(i["kind"], i["label"], i["map_id"], i["captured_on"]) for i in items] == [
-        ("map", "Site", row.id, "2026-04-01")
-    ]
-
-
 def test_deleting_a_map_removes_its_map_source(client, project_id, import_map, tmp_path, handle):
     map_id = import_map(project_id, make_geotiff(tmp_path / "site.tif", 300, 200))
     src = _map_source(handle, map_id)

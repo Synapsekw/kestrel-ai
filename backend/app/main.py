@@ -21,7 +21,7 @@ from app.providers.keys import KeyringKeyStore
 def project_opened(handle, runner) -> None:
     """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
     their folders back, sweep partial exports a crash left behind, fail agent turns the last process
-    left running, and start moving a training project's old models into the library. Each step on
+    left running, and start moving the project's old models into the library. Each step on
     its own, so one failing never skips the others.
 
     The point-cloud, surface, volume and design-inspection sweeps (foundation F0) are imported
@@ -97,7 +97,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys
         app.state.jobs.provider_config = app.state.provider_config
-        # A `map_move` job runs in the target project and reads the map from the source project.
+        # Jobs that reach other projects find the registry on the runner.
         app.state.jobs.projects = app.state.projects
         open_model_library(app, settings)
         app.state.jobs.start()

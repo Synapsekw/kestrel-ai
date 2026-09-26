@@ -291,14 +291,6 @@ def test_deleting_the_inspection_cancels_a_running_preview(
     assert not store.inspection_dir(handle, iid).exists()
 
 
-def test_a_training_project_may_not_preview(client, tmp_path):
-    """Final review 3: the router's kind guard covers createDesignPreview too."""
-    body = {"name": "t", "folder": str(tmp_path / "t"), "classes": [], "kind": "train"}
-    pid = client.post(BASE, json=body).json()["id"]
-    r = client.post(url(pid, store.new_id(), "/previews"), json=options())
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
-
-
 def test_a_preview_image_whose_inspection_vanishes_mid_read_is_404(
     client, project_id, wait_job, tmp_path, target, monkeypatch
 ):

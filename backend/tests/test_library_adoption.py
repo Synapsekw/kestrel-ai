@@ -5,7 +5,6 @@ import sqlite3
 import time
 from pathlib import Path
 
-import pytest
 from alembic import command
 from alembic.config import Config
 from conftest import COLOURS, EIGHT_CLASSES
@@ -240,13 +239,6 @@ def test_submit_if_pending_submits_for_a_train_project_with_old_models(app, hand
     assert adoption.submit_if_pending(handle, app.state.jobs) is None  # all adopted
 
 
-def test_submit_if_pending_does_nothing_for_a_detect_project(app, client, tmp_path):
-    h = app.state.projects.get(_new_project(client, tmp_path / "d", kind="detect"))
-    _old_model(h, "M", "models/m.pt", b"m")
-    assert adoption.submit_if_pending(h, app.state.jobs) is None
-    assert _adopt_jobs(h) == []
-
-
 def test_submit_if_pending_does_nothing_without_a_library(app, handle):
     _old_model(handle, "M", "models/m.pt", b"m")
     app.state.jobs.library = None
@@ -299,13 +291,6 @@ def test_retry_while_an_adoption_job_runs_is_409(client, handle, project_id):
     assert client.get(url).json()["job_id"] is not None
     r = client.post(f"{url}/retry")
     assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
-
-
-@pytest.mark.parametrize("method, path", [("get", "/adoption"), ("post", "/adoption/retry")])
-def test_adoption_routes_are_training_only(client, tmp_path, method, path):
-    pid = _new_project(client, tmp_path / "d", kind="detect")
-    r = getattr(client, method)(f"{BASE}/{pid}{path}")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
 
 
 def test_retry_without_a_library_is_503(app, client, project_id):

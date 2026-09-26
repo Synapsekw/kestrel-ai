@@ -1,7 +1,7 @@
-"""Adopting a training project's old models into the app-wide library (spec 2026-09-23 section 6).
+"""Adopting a project's old models into the app-wide library (spec 2026-09-23 section 6).
 
 Before the library, each project kept its models in its own `model` table and `models/` folder.
-When a training project with such rows is opened, a `library_adopt` job copies each model's weights,
+When a project with such rows is opened, a `library_adopt` job copies each model's weights,
 artifacts and exports into the library (or reuses the library model with the same sha256), records
 the old id -> library id pair in `model_adoption`, and rewrites the project's references to library
 ids with one set-based UPDATE per table.
@@ -24,7 +24,6 @@ from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.registry import register_job_type
 from app.library import service
 from app.library.handle import LIBRARY_UNAVAILABLE
-from app.projects.kinds import TRAIN, project_kind
 
 ADOPT_JOB = "library_adopt"
 BUSY = ("queued", "running")
@@ -93,14 +92,12 @@ def adoption_status(handle) -> dict:
 
 
 def submit_if_pending(handle, runner):
-    """On open: queue the adoption job for a training project that still has unadopted models.
+    """On open: queue the adoption job for a project that still has unadopted models.
 
-    Nothing happens for a detection project, without a library, with nothing pending, or while an
-    adoption job is already queued or running. Returns the job, or None.
+    Nothing happens without a library, with nothing pending, or while an adoption job is
+    already queued or running. Returns the job, or None.
     """
     if runner is None or getattr(runner, "library", None) is None:
-        return None
-    if project_kind(handle) != TRAIN:
         return None
     if not pending_adoptions(handle) or active_job_id(handle) is not None:
         return None

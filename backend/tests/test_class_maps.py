@@ -143,10 +143,3 @@ def test_an_unknown_model_is_404_and_no_library_is_503(client, app, site):
     app.state.library = None
     r = client.get(f"{BASE}/{site['id']}/model-class-maps/nope")
     assert r.status_code == 503 and r.json()["error"]["code"] == "library_unavailable"
-
-
-def test_a_training_project_is_refused(client, app, tmp_path):
-    train = _project(client, tmp_path, [], kind="train", name="Train")
-    m = add_library_model(app, tmp_path)
-    r = client.get(f"{BASE}/{train['id']}/model-class-maps/{m.id}")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"

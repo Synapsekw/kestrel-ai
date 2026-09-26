@@ -31,7 +31,6 @@ log = logging.getLogger(__name__)
 class ProjectHandle:
     def __init__(self, id: str, folder: Path, engine):
         self.id, self.folder, self.engine = id, folder, engine
-        self._kind: str | None = None  # cached by app.projects.kinds.project_kind; never changes
         self._factory = make_session_factory(engine)
 
     images_dir = property(lambda s: s.folder / "images")
@@ -161,7 +160,6 @@ class ProjectRegistry:
 
     def _cache(self, pid: str, folder: Path, engine, name: str, kind: str, remember: bool) -> ProjectHandle:
         h = ProjectHandle(pid, folder, engine)
-        h._kind = kind
         self._handles[pid] = h
         if remember:
             self.appdata.remember(pid, name, str(folder), kind)

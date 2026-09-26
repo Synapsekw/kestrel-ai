@@ -1,6 +1,6 @@
 """Detection runs and class mapping (spec 2026-09-23 sections 7.2-7.4; plan 2 unit R).
 
-`api.py` includes this router with `require_kind(("detect",))`: runs belong to detection projects.
+Any project may create and read runs (spec 2026-09-26-foundation section 6.1).
 """
 
 from fastapi import APIRouter, Depends, Query, Request

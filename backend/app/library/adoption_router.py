@@ -1,5 +1,5 @@
-"""`/projects/{id}/adoption`: how far a training project's old models are into the library (spec
-2026-09-23 section 6). Mounted training-only in `app/api.py`."""
+"""`/projects/{id}/adoption`: how far a project's old models are into the library (spec 2026-09-23
+section 6)."""
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel

@@ -372,13 +372,6 @@ def test_a_build_that_cannot_be_queued_leaves_a_failed_row(
     assert len(changed(events, sid)) == 1
 
 
-def test_a_training_project_may_not_import_a_design(client, tmp_path):
-    body = {"name": "t", "folder": str(tmp_path / "t"), "classes": [], "kind": "train"}
-    pid = client.post(BASE, json=body).json()["id"]
-    r = commit(client, pid, "00000000-0000-4000-8000-000000000000", "00000000-0000-4000-8000-000000000001")
-    assert r.status_code == 409 and r.json()["error"]["code"] == "wrong_project_kind"
-
-
 def test_read_windows_tile_on_the_rasteriser_blocks():
     spec = target_spec((E0, N0, E0 + 500, N0 + 300), cell=0.1)
     wins = list(grid.read_windows(spec))

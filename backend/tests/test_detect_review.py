@@ -276,15 +276,6 @@ def test_accept_above_of_an_unknown_run_is_404(client, project_id):
     assert r.status_code == 404
 
 
-def test_review_is_refused_in_a_training_project(client, tmp_path):
-    body = {"name": "T2", "folder": str(tmp_path / "t2"), "classes": [], "kind": "train"}
-    (tmp_path / "t2").mkdir()
-    pid = client.post(BASE, json=body).json()["id"]
-    r = client.post(f"{BASE}/{pid}/map-runs/x/review", json={"detection_ids": ["a"], "action": "accept"})
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "wrong_project_kind"
-
-
 # --- photo runs ----------------------------------------------------------------------------------
 
 

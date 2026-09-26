@@ -211,19 +211,6 @@ def test_deleting_an_area_drops_it_from_the_counts(client, project_id, handle, t
         assert s.get(SiteArea, area_id) is None
 
 
-class TestTrainingProject:
-    @pytest.fixture
-    def project_kind(self) -> str:
-        return "train"
-
-    def test_site_areas_are_detection_work(self, client, project_id):
-        r = client.get(f"{BASE}/{project_id}/site-areas")
-        assert r.status_code == 409
-        assert r.json()["error"]["code"] == "wrong_project_kind"
-        body = {"name": "A", "polygon_wgs84": [[15.0, 45.0], [15.1, 45.0], [15.1, 45.1]]}
-        assert client.post(f"{BASE}/{project_id}/site-areas", json=body).status_code == 409
-
-
 def test_a_review_write_during_the_recount_is_not_lost(
     client, project_id, handle, two_maps, wait_job, monkeypatch
 ):
