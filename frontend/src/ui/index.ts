@@ -15,6 +15,14 @@ export { Field } from "./Field";
 export { GlassPanel, type GlassPanelProps, type GlassVariant } from "./GlassPanel";
 export { Icon, type IconName } from "./Icon";
 export { Input, Select, Textarea, fieldClass } from "./Input";
+export {
+  InspectorLayout,
+  InspectorPane,
+  InspectorSection,
+  type InspectorLayoutProps,
+  type InspectorPaneProps,
+  type InspectorSectionProps,
+} from "./Inspector";
 export { Kbd } from "./Kbd";
 export {
   GLOBAL_KEYS,
