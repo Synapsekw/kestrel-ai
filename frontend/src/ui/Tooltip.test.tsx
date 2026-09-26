@@ -88,4 +88,34 @@ describe("Tooltip floating explanations", () => {
     fireEvent.keyDown(button, { key: "Escape" });
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
+
+  it("shows a shortcut as key caps after the label", () => {
+    render(
+      <Tooltip label="Annotations" shortcut="Shift+H">
+        <button>Toggle</button>
+      </Tooltip>,
+    );
+    fireEvent.focus(screen.getByRole("button"));
+    const tip = screen.getByRole("tooltip");
+    expect(tip).toHaveTextContent("Annotations");
+    expect([...tip.querySelectorAll("kbd")].map((k) => k.textContent)).toEqual(["Shift", "H"]);
+  });
+
+  it("opens to the left and flips right at the viewport edge", () => {
+    render(
+      <Tooltip label="Help" side="left">
+        <button>Action</button>
+      </Tooltip>,
+    );
+    const button = screen.getByRole("button");
+    const rect = vi.spyOn(button.parentElement!, "getBoundingClientRect");
+    rect.mockReturnValue({ left: 300, right: 320, top: 100, bottom: 120, width: 20, height: 20 } as DOMRect);
+    vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockReturnValue(180);
+    vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(24);
+    fireEvent.focus(button);
+    expect(screen.getByRole("tooltip").style.left).toBe("114px");
+    rect.mockReturnValue({ left: 20, right: 40, top: 100, bottom: 120, width: 20, height: 20 } as DOMRect);
+    fireEvent.scroll(window);
+    expect(screen.getByRole("tooltip").style.left).toBe("46px");
+  });
 });

@@ -23,7 +23,7 @@ export {
   type InspectorPaneProps,
   type InspectorSectionProps,
 } from "./Inspector";
-export { Kbd } from "./Kbd";
+export { Kbd, KeyChord } from "./Kbd";
 export {
   GLOBAL_KEYS,
   KEYMAP,
@@ -74,9 +74,10 @@ export { Switch } from "./Switch";
 export { Tabs, type TabItem, type TabsProps } from "./Tabs";
 export { Toaster } from "./Toaster";
 export { toast, dismissToast, useToastStore } from "./toastStore";
-export { Tooltip } from "./Tooltip";
+export { Tooltip, type TooltipProps, type TooltipSide } from "./Tooltip";
 export { TypeChip, type TypeKind } from "./TypeChip";
 export { useCountUp } from "./useCountUp";
+export { FOCUSABLE, useFocusTrap } from "./useFocusTrap";
 export { claimJobOutcome, useJobToasts, jobToastText, reportedInline } from "./useJobToasts";
 export { INDICATOR_BASE, useSlidingIndicator } from "./useSlidingIndicator";
 export { cx, focusRing, lift, pressable, transition } from "./tokens";

@@ -50,3 +50,31 @@ describe("Dialog", () => {
     expect(close).toHaveFocus();
   });
 });
+
+function Vanishing() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      {!open && <Button onClick={() => setOpen(true)}>Open</Button>}
+      <Dialog open={open} title="Details" onClose={() => setOpen(false)}>
+        <p>Body</p>
+      </Dialog>
+    </>
+  );
+}
+
+describe("Dialog (Aero glass)", () => {
+  it("is a floating glass panel", async () => {
+    render(<Host />);
+    await userEvent.click(screen.getByRole("button", { name: "Open it" }));
+    expect(screen.getByRole("dialog", { name: "Import images" })).toHaveAttribute("data-glass", "float");
+  });
+
+  it("closes cleanly when its opener has left the page", async () => {
+    render(<Vanishing />);
+    await userEvent.click(screen.getByRole("button", { name: "Open" }));
+    expect(screen.getByRole("dialog", { name: "Details" })).toBeInTheDocument();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+});

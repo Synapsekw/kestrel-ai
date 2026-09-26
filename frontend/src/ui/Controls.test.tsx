@@ -6,7 +6,7 @@ import { Checkbox } from "./Checkbox";
 import { Disclosure } from "./Disclosure";
 import { Field } from "./Field";
 import { Input, Select } from "./Input";
-import { Kbd } from "./Kbd";
+import { Kbd, KeyChord } from "./Kbd";
 import { Pill } from "./Pill";
 import { Segmented } from "./Segmented";
 import { Switch } from "./Switch";
@@ -169,6 +169,12 @@ describe("Aero glass controls", () => {
     const cap = screen.getByText("K");
     expect(cap.tagName).toBe("KBD");
     expect(cap.className).toContain("font-mono");
+  });
+
+  it("KeyChord renders a chord as a row of key caps", () => {
+    const { container } = render(<KeyChord chord="Shift+H" />);
+    const caps = [...container.querySelectorAll("kbd")];
+    expect(caps.map((k) => k.textContent)).toEqual(["Shift", "H"]);
   });
 
   it("Pill keeps the inverse tone for old callers, adds info, and pulses only when live", () => {
