@@ -52,13 +52,13 @@ function EditorSkeleton() {
       className="flex h-full min-h-0 flex-col overflow-auto md:flex-row"
     >
       <div className="flex min-h-[360px] min-w-0 flex-1 flex-col md:min-h-0">
-        <div className="flex h-[100px] shrink-0 flex-col justify-center gap-3 border-b border-line bg-ground px-3">
+        <div className="flex h-[100px] shrink-0 flex-col justify-center gap-3 border-b border-line bg-bg px-3">
           <Skeleton className="h-5 w-20" />
           <Skeleton className="h-5 w-40" />
         </div>
-        <div className="min-h-0 flex-1 bg-canvas" />
+        <div className="min-h-0 flex-1 bg-bg" />
       </div>
-      <div className="flex w-full shrink-0 flex-col gap-2 border-t border-line bg-panel p-4 md:w-[310px] md:border-l md:border-t-0">
+      <div className="flex w-full shrink-0 flex-col gap-2 border-t border-line bg-surface p-4 md:w-[310px] md:border-l md:border-t-0">
         <Skeleton className="h-3 w-20" />
         <Skeleton className="h-7 w-full" />
         <Skeleton className="h-7 w-full" />
@@ -248,7 +248,7 @@ function EditorBody({
             {error}
           </Alert>
         )}
-        <div className="relative min-h-0 flex-1 bg-canvas">
+        <div className="relative min-h-0 flex-1 bg-bg">
           {/* Overlaid, so the image does not jump when a notice comes or goes. */}
           {notice && (
             <Alert

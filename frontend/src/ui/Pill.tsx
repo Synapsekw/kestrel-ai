@@ -14,12 +14,12 @@ export interface PillProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const TONE: Record<PillTone, string> = {
-  neutral: "bg-well text-muted",
+  neutral: "bg-surface-2 text-muted",
   ok: "bg-ok-soft text-ok",
   warn: "bg-warn-soft text-warn",
   danger: "bg-danger-soft text-danger",
   accent: "bg-accent-soft text-accent-ink",
-  inverse: "bg-inverse text-inverse-fg",
+  inverse: "bg-tip text-tip-fg",
 };
 
 export function Pill({ tone = "neutral", live, dot, size = "md", className, children, ...rest }: PillProps) {
@@ -38,7 +38,7 @@ export function Pill({ tone = "neutral", live, dot, size = "md", className, chil
           aria-hidden="true"
           className={cx(
             "h-1.5 w-1.5 rounded-full bg-current",
-            live && "animate-pulse-dot motion-reduce:animate-none",
+            live && "animate-pulse-dot reduce-motion:animate-none",
           )}
         />
       )}

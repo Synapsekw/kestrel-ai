@@ -32,7 +32,7 @@ export function EditorToolbar(p: ToolbarProps) {
     node?.focus({ preventScroll: true });
   }, []);
   return (
-    <div className="flex shrink-0 flex-col border-b border-line bg-ground text-[13px] text-ink">
+    <div className="flex shrink-0 flex-col border-b border-line bg-bg text-[13px] text-ink">
       <div className="flex min-h-14 items-center gap-1 border-b border-line px-3 py-2">
         {p.lead}
         <span className="min-w-0 flex-1 truncate px-2 font-mono text-xs text-ink" title={p.fileName}>
@@ -106,7 +106,7 @@ export function EditorToolbar(p: ToolbarProps) {
               ref={focusHelp}
               aria-label="Keyboard shortcuts"
               onKeyDown={(e) => e.key === "Escape" && setKeysOpen(false)}
-              className="absolute left-3 top-full z-20 mt-1.5 max-h-[calc(100vh-180px)] w-80 max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-line bg-panel p-3 text-[13px] shadow-float"
+              className="absolute left-3 top-full z-20 mt-1.5 max-h-[calc(100vh-180px)] w-80 max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-line bg-surface p-3 text-[13px] shadow-float"
             >
               <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
                 {HOTKEY_HELP.map((h) => (

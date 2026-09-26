@@ -76,7 +76,7 @@ export function LabelPanel(p: LabelPanelProps) {
                 aria-pressed={highlighted}
                 className={cx(
                   "flex w-full items-center gap-2 rounded px-2 py-1 text-left text-sm",
-                  highlighted ? "bg-accent-soft text-accent-ink" : "hover:bg-hover/5",
+                  highlighted ? "bg-accent-soft text-accent-ink" : "hover:bg-hover",
                 )}
               >
                 <span

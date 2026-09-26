@@ -18,7 +18,7 @@ export function EmptyState({ icon, title, children, action, className }: EmptySt
       className={cx("flex flex-1 flex-col items-center justify-center gap-3 py-12 text-center", className)}
     >
       {icon && (
-        <span className="grid h-11 w-11 place-items-center rounded-full bg-well text-muted">
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-surface-2 text-muted">
           <Icon name={icon} size={20} />
         </span>
       )}

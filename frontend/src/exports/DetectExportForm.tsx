@@ -82,7 +82,7 @@ export function DetectExportForm({ projectId, onStarted }: Props) {
   const empty = sources !== null && sources.length === 0;
 
   return (
-    <section aria-label="Counts" className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-5">
+    <section aria-label="Counts" className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold">Counts</h2>
         <p className="max-w-prose text-sm text-muted">

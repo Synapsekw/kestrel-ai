@@ -20,7 +20,7 @@ export interface AlertProps {
 }
 
 const TONE: Record<AlertTone, { box: string; icon: IconName; iconColor: string }> = {
-  info: { box: "border-line bg-panel text-ink", icon: "info", iconColor: "text-muted" },
+  info: { box: "border-line bg-surface text-ink", icon: "info", iconColor: "text-muted" },
   ok: { box: "border-ok/25 bg-ok-soft text-ink", icon: "check", iconColor: "text-ok" },
   warn: { box: "border-warn/30 bg-warn-soft text-ink", icon: "warning", iconColor: "text-warn" },
   danger: { box: "border-danger/30 bg-danger-soft text-ink", icon: "warning", iconColor: "text-danger" },
@@ -43,7 +43,7 @@ export function Alert({
       role={role ?? (tone === "danger" ? "alert" : "status")}
       data-testid={testId}
       className={cx(
-        "flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm animate-reveal motion-reduce:animate-none",
+        "flex items-start gap-2.5 rounded-md border px-3 py-2.5 text-sm animate-reveal reduce-motion:animate-none",
         t.box,
         className,
       )}

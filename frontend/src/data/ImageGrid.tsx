@@ -37,14 +37,14 @@ function StatusBadge({ img }: { img: ImageRow }) {
   if (img.pending_count > 0)
     return (
       <span
-        className={cx(base, "bg-warn-strong text-accent-fg")}
+        className={cx(base, "bg-warn text-accent-fg")}
         title={`${img.pending_count} ${img.pending_count === 1 ? "suggestion" : "suggestions"} to review`}
       >
         Review
       </span>
     );
-  if (img.marked_empty) return <span className={cx(base, "bg-panel text-muted")}>Empty</span>;
-  if (img.labeled) return <span className={cx(base, "bg-ok text-ground")}>Labeled</span>;
+  if (img.marked_empty) return <span className={cx(base, "bg-surface text-muted")}>Empty</span>;
+  if (img.labeled) return <span className={cx(base, "bg-ok text-bg")}>Labeled</span>;
   return null;
 }
 
@@ -109,7 +109,7 @@ export function ImageGrid(p: ImageGridProps) {
               >
                 <div
                   className={cx(
-                    "relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-panel",
+                    "relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-surface",
                     transition,
                     isSelected
                       ? "border-accent ring-2 ring-accent"
@@ -118,7 +118,7 @@ export function ImageGrid(p: ImageGridProps) {
                         : "border-line",
                   )}
                 >
-                  <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-canvas">
+                  <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-bg">
                     <Thumb key={src} src={src} alt={img.file_name} />
                   </div>
                   <span

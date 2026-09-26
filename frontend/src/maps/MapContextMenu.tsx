@@ -33,7 +33,7 @@ export function MapContextMenu({
     <div
       role="menu"
       aria-label="Map"
-      className="absolute z-20 flex min-w-48 flex-col gap-0.5 rounded-md border border-line bg-panel p-1 shadow-float"
+      className="absolute z-20 flex min-w-48 flex-col gap-0.5 rounded-md border border-line bg-surface p-1 shadow-float"
       style={{ left: menu.x, top: menu.y }}
     >
       {clouds.length === 0 ? (

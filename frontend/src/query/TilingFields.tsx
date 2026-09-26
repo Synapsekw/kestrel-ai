@@ -49,7 +49,7 @@ export function TilingFields({ form, onChange }: Props) {
         defaultOpen={openAtMount}
         summary={form.tilingEnabled ? `${form.tileSize} px tiles` : "off"}
       >
-        <div className="flex flex-col gap-3 rounded-lg border border-line bg-panel p-4">
+        <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
           <Checkbox
             label="Tile large images"
             checked={form.tilingEnabled}

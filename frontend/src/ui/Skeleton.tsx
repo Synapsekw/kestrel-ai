@@ -6,7 +6,7 @@ export function Skeleton({ className }: { className?: string }) {
     <div
       aria-hidden="true"
       className={cx(
-        "rounded-md bg-well bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.6),transparent)] bg-[length:200%_100%] animate-shimmer motion-reduce:animate-none",
+        "rounded-md bg-surface-2 bg-[linear-gradient(90deg,transparent,rgb(255_255_255/0.6),transparent)] bg-[length:200%_100%] animate-shimmer reduce-motion:animate-none",
         className,
       )}
     />

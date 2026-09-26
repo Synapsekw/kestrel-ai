@@ -107,7 +107,7 @@ export function ToolRow({ item }: { item: AgentItem }) {
       ))}
       {item.tool_input && (
         <Disclosure label="Details">
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-well px-2 py-1.5 font-mono text-[11px] leading-relaxed text-muted">
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-2 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-muted">
             {JSON.stringify(item.tool_input, null, 2)}
           </pre>
         </Disclosure>

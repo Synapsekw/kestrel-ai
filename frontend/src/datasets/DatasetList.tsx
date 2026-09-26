@@ -48,8 +48,8 @@ export function DatasetList({ datasets, selectedId, onSelect }: Props) {
             aria-current={selected ? "true" : undefined}
             onClick={() => onSelect(d.id)}
             className={cx(
-              "flex cursor-pointer flex-col gap-1 rounded-lg border bg-panel px-4 py-3 text-sm",
-              "transition-[border-color,box-shadow] duration-140 ease-out motion-reduce:transition-none",
+              "flex cursor-pointer flex-col gap-1 rounded-lg border bg-surface px-4 py-3 text-sm",
+              "transition-[border-color,box-shadow] duration-fast ease-out reduce-motion:transition-none",
               selected ? "border-accent" : "border-line hover:border-line-strong hover:shadow-sm",
             )}
           >

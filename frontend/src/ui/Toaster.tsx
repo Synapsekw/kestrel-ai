@@ -27,16 +27,16 @@ function ToastItem({ toast }: { toast: Toast }) {
       role={toast.tone === "danger" ? "alert" : "status"}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
-      className="pointer-events-auto flex min-w-[18rem] max-w-md items-center gap-2.5 rounded-md bg-inverse py-2 pl-3 pr-2 text-sm font-medium text-inverse-fg shadow-float animate-reveal motion-reduce:animate-none"
+      className="pointer-events-auto flex min-w-[18rem] max-w-md items-center gap-2.5 rounded-md bg-tip py-2 pl-3 pr-2 text-sm font-medium text-tip-fg shadow-float animate-reveal reduce-motion:animate-none"
     >
       <span
         className={cx(
           "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full",
           toast.tone === "ok"
-            ? "bg-ok text-ground"
+            ? "bg-ok text-bg"
             : toast.tone === "danger"
-              ? "bg-danger text-ground"
-              : "bg-inverse-fg/20",
+              ? "bg-danger text-bg"
+              : "bg-tip-fg/20",
         )}
       >
         <Icon
@@ -50,7 +50,7 @@ function ToastItem({ toast }: { toast: Toast }) {
         <Button
           size="sm"
           variant="ghost"
-          className="text-inverse-fg hover:bg-inverse-fg/10"
+          className="text-tip-fg hover:bg-tip-fg/10"
           onClick={() => {
             toast.action?.onClick();
             dismiss(toast.id);
@@ -63,7 +63,7 @@ function ToastItem({ toast }: { toast: Toast }) {
         icon="x"
         label="Dismiss"
         size="sm"
-        className="text-inverse-fg/70 hover:bg-inverse-fg/10 hover:text-inverse-fg"
+        className="text-tip-fg/70 hover:bg-tip-fg/10 hover:text-tip-fg"
         onClick={() => dismiss(toast.id)}
       />
     </div>

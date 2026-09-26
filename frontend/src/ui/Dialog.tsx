@@ -89,7 +89,7 @@ export function Dialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4 animate-[reveal_140ms_ease-out_both] motion-reduce:animate-none"
+      className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 p-4 animate-[reveal_140ms_ease-out_both] reduce-motion:animate-none"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -104,7 +104,7 @@ export function Dialog({
         tabIndex={-1}
         onKeyDown={onKeyDown}
         className={cx(
-          "flex max-h-[calc(100%-2rem)] w-full flex-col rounded-lg border border-line bg-panel text-ink shadow-float outline-none animate-pop motion-reduce:animate-none",
+          "flex max-h-[calc(100%-2rem)] w-full flex-col rounded-lg border border-line bg-surface text-ink shadow-float outline-none animate-pop reduce-motion:animate-none",
           width === "lg" ? "max-w-3xl" : "max-w-xl",
         )}
       >

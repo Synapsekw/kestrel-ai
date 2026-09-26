@@ -49,7 +49,7 @@ export function Disclosure({
           name="chevron-right"
           size={14}
           className={cx(
-            "transition-transform duration-140 ease-out motion-reduce:transition-none",
+            "transition-transform duration-fast ease-out reduce-motion:transition-none",
             isOpen && "rotate-90",
           )}
         />
@@ -57,7 +57,7 @@ export function Disclosure({
         {summary && <span className="font-normal text-dim">{summary}</span>}
       </button>
       {isOpen && (
-        <div id={id} className="animate-reveal motion-reduce:animate-none">
+        <div id={id} className="animate-reveal reduce-motion:animate-none">
           {children}
         </div>
       )}

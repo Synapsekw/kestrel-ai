@@ -264,7 +264,7 @@ export function ProjectsScreen() {
               {shown.map((p) => (
                 <li
                   key={p.id}
-                  className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-panel px-4 py-3 transition-[border-color,box-shadow] duration-140 ease-out hover:border-line-strong hover:shadow-sm motion-reduce:transition-none"
+                  className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3 transition-[border-color,box-shadow] duration-fast ease-out hover:border-line-strong hover:shadow-sm reduce-motion:transition-none"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-2">

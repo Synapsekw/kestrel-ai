@@ -31,7 +31,7 @@ export function Segmented<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
-      className={cx("inline-flex gap-0.5 rounded-[9px] bg-well p-[3px]", className)}
+      className={cx("inline-flex gap-0.5 rounded-[9px] bg-surface-2 p-[3px]", className)}
     >
       {options.map((o) => {
         const on = o.value === value;
@@ -46,7 +46,7 @@ export function Segmented<T extends string>({
             className={cx(
               "inline-flex items-center gap-1.5 rounded-md font-medium",
               size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-2.5 text-[13px]",
-              on ? "bg-panel text-ink shadow-sm" : "text-muted hover:text-ink",
+              on ? "bg-surface text-ink shadow-sm" : "text-muted hover:text-ink",
               "disabled:cursor-not-allowed disabled:opacity-40",
               transition,
               focusRing,

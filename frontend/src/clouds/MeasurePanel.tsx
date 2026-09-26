@@ -178,7 +178,7 @@ export function MeasurePanel({
       </p>
       {r && (
         <div
-          className="flex flex-col gap-0.5 rounded-md bg-well p-2.5 text-xs tabular-nums"
+          className="flex flex-col gap-0.5 rounded-md bg-surface-2 p-2.5 text-xs tabular-nums"
           data-testid="pick-readout"
         >
           <span className="text-ink">{r.native}</span>

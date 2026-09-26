@@ -17,7 +17,7 @@ function Preview({ image, src, hero = false }: { image?: Image; src?: string; he
   return (
     <div
       className={cx(
-        "relative flex items-center justify-center overflow-hidden bg-canvas",
+        "relative flex items-center justify-center overflow-hidden bg-bg",
         hero ? "min-h-[220px] lg:min-h-[320px]" : "h-28 rounded-md",
       )}
     >
@@ -35,7 +35,7 @@ function Preview({ image, src, hero = false }: { image?: Image; src?: string; he
         </div>
       )}
       {hero && image && !failed && (
-        <span className="absolute bottom-4 left-4 right-4 w-fit max-w-[calc(100%-2rem)] truncate rounded-md bg-canvas/90 px-3 py-2 font-mono text-xs text-inverse-fg">
+        <span className="absolute bottom-4 left-4 right-4 w-fit max-w-[calc(100%-2rem)] truncate rounded-md bg-bg/90 px-3 py-2 font-mono text-xs text-tip-fg">
           {image.file_name}
         </span>
       )}
@@ -132,7 +132,7 @@ export function HomeScreen() {
       ) : step ? (
         <div
           data-testid="home-next-step"
-          className="grid overflow-hidden rounded-lg border border-line bg-panel lg:grid-cols-[1.2fr_1fr]"
+          className="grid overflow-hidden rounded-lg border border-line bg-surface lg:grid-cols-[1.2fr_1fr]"
         >
           <Preview
             key={firstPreview?.id ?? "empty"}

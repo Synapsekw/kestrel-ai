@@ -18,7 +18,7 @@ const HEADERS: { label: string; className?: string }[] = [
 /** The library list: one 36px row per model; the name selects it (so does a click anywhere on the row). */
 export function ModelTable({ models, selectedId, onSelect }: Props) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
       <table data-testid="model-table" className="w-full border-collapse text-left text-[13px]">
         <thead>
           <tr className="text-xs text-muted">
@@ -38,8 +38,8 @@ export function ModelTable({ models, selectedId, onSelect }: Props) {
                 aria-current={selected ? "true" : undefined}
                 onClick={() => onSelect(m.id)}
                 className={cx(
-                  "h-9 cursor-pointer border-b border-line transition-colors duration-140 ease-out last:border-b-0 motion-reduce:transition-none",
-                  selected ? "bg-well" : "hover:bg-hover",
+                  "h-9 cursor-pointer border-b border-line transition-colors duration-fast ease-out last:border-b-0 reduce-motion:transition-none",
+                  selected ? "bg-surface-2" : "hover:bg-hover",
                 )}
               >
                 <td className="max-w-0 px-1.5">

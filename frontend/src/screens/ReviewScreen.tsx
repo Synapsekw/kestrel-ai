@@ -42,7 +42,7 @@ function SuggestionReview({ projectId, kind }: { projectId: string; kind: Projec
         {runIds && (
           <p
             data-testid="run-filter"
-            className="mt-1 text-sm text-ink animate-reveal motion-reduce:animate-none"
+            className="mt-1 text-sm text-ink animate-reveal reduce-motion:animate-none"
           >
             {list.loading
               ? "Loading the images of this detection run…"

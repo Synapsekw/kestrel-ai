@@ -16,7 +16,7 @@ export function JobLogView({ projectId, jobId, live }: Props) {
       <pre
         data-testid="jobcard-log"
         aria-label="Job log"
-        className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-well p-3 font-mono text-xs text-ink"
+        className="max-h-64 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-ink"
       >
         {lines.length > 0 ? lines.map(readableLogLine).join("\n") : "(log is empty)"}
       </pre>

@@ -45,7 +45,7 @@ export function AboutScreen() {
                     <span className="font-medium text-ink">{n.name}</span>
                     {n.note && <span className="text-xs text-muted">{n.note}</span>}
                     <Disclosure label={`Licence text: ${n.name}`}>
-                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-well p-3 font-mono text-xs text-ink">
+                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-ink">
                         {n.text}
                       </pre>
                     </Disclosure>

@@ -46,7 +46,7 @@ function StepMark({ state, n }: { state: StepState; n: number }) {
       className={cx(
         "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full border text-[10px] font-semibold tabular-nums",
         transition,
-        state === "done" && "border-ok bg-ok text-ground",
+        state === "done" && "border-ok bg-ok text-bg",
         state === "current" && "border-accent bg-accent-soft text-accent-ink",
         state === "upcoming" && "border-line-strong text-muted",
         state === "locked" && "border-line text-dim",
@@ -83,7 +83,7 @@ function StepEntry({ step, n, compact }: { step: Step; n: number; compact: boole
             className={step.state === "current" ? "text-accent" : undefined}
           />
           {step.state === "done" && (
-            <span className="absolute -right-2 -top-1 rounded-full bg-side text-ok">
+            <span className="absolute -right-2 -top-1 rounded-full bg-rail text-ok">
               <Icon name="check" size={9} />
             </span>
           )}
@@ -162,7 +162,7 @@ export function Sidebar({ projectId, projectName }: Props) {
     <nav
       aria-label="Main navigation"
       className={cx(
-        "flex shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-side py-3",
+        "flex shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-rail py-3",
         compact ? "w-[82px] px-2" : "w-56 px-3",
       )}
     >

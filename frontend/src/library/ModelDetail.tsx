@@ -282,7 +282,7 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
                 </div>
               ))}
             </dl>
-            <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+            <div className="overflow-x-auto rounded-lg border border-line bg-surface">
               <table data-testid="class-metrics" className="w-full border-collapse text-left text-[13px]">
                 <thead>
                   <tr className="text-xs text-muted">

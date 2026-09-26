@@ -39,7 +39,7 @@ export function SetupAgent({ open, onClose }: { open: boolean; onClose: () => vo
           </p>
         )}
         {a.messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "rounded-md bg-well px-3 py-2" : "py-1"}>
+          <div key={i} className={m.role === "user" ? "rounded-md bg-surface-2 px-3 py-2" : "py-1"}>
             <p className="mb-1 text-xs font-medium text-muted">{m.role === "user" ? "You" : "Setup agent"}</p>
             <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{m.content}</p>
           </div>
@@ -93,7 +93,7 @@ export function SetupAgent({ open, onClose }: { open: boolean; onClose: () => vo
           onClose();
         }
       }}
-      className="absolute inset-y-0 right-0 z-30 flex w-[34rem] max-w-full flex-col border-l border-line bg-panel text-ink shadow-float animate-slide-in focus:outline-none motion-reduce:animate-none"
+      className="absolute inset-y-0 right-0 z-30 flex w-[34rem] max-w-full flex-col border-l border-line bg-surface text-ink shadow-float animate-slide-in focus:outline-none reduce-motion:animate-none"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-4">
         <div className="min-w-0 flex-1">

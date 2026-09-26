@@ -39,7 +39,7 @@ export function SurfaceOverlay({
   const dz = readout && readout.top != null && readout.base != null ? readout.top - readout.base : null;
   return (
     <>
-      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-md border border-line bg-panel p-1 shadow-float">
+      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-md border border-line bg-surface p-1 shadow-float">
         <IconButton icon="plus" label="Zoom in" size="sm" onClick={() => zoom(1)} />
         <IconButton icon="minus" label="Zoom out" size="sm" onClick={() => zoom(-1)} />
         <IconButton
@@ -50,7 +50,7 @@ export function SurfaceOverlay({
         />
       </div>
       <div
-        className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-panel/90 px-3 py-1.5 text-xs tabular-nums text-muted"
+        className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-glass px-3 py-1.5 text-xs tabular-nums text-muted"
         data-testid="surface-readout"
       >
         {bar && (

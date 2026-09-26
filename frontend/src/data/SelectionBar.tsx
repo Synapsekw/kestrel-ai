@@ -32,7 +32,7 @@ interface Props {
 }
 
 /** A secondary button redrawn for the dark bar (important: it overrides the variant's colours). */
-const onInverse = "!border-inverse-fg/25 !bg-transparent !text-inverse-fg hover:!bg-inverse-fg/10";
+const onInverse = "!border-tip-fg/25 !bg-transparent !text-tip-fg hover:!bg-tip-fg/10";
 
 export function SelectionBar({
   projectId,
@@ -107,7 +107,7 @@ export function SelectionBar({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-col rounded-lg bg-inverse px-4 text-inverse-fg shadow-float animate-reveal motion-reduce:animate-none">
+      <div className="flex flex-col rounded-lg bg-tip px-4 text-tip-fg shadow-float animate-reveal reduce-motion:animate-none">
         <div className="flex min-h-11 flex-wrap items-center gap-2 py-1.5">
           <span className="mr-1 text-sm font-medium tabular-nums">{n} selected</span>
           {/* A detection project has no classes of its own to draw: its boxes come from a model. */}
@@ -164,14 +164,14 @@ export function SelectionBar({
           <Button
             variant="ghost"
             size="sm"
-            className="ml-auto !text-inverse-fg/75 hover:!bg-inverse-fg/10 hover:!text-inverse-fg"
+            className="ml-auto !text-tip-fg/75 hover:!bg-tip-fg/10 hover:!text-tip-fg"
             onClick={onClear}
           >
             Clear selection
           </Button>
         </div>
         {mode === "confirm-delete" && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-inverse-fg/15 py-2 text-sm animate-reveal motion-reduce:animate-none">
+          <div className="flex flex-wrap items-center gap-2 border-t border-tip-fg/15 py-2 text-sm animate-reveal reduce-motion:animate-none">
             <span className="mr-1">
               Remove {n} images and their boxes from the project? Original files are not touched.
             </span>
@@ -179,7 +179,7 @@ export function SelectionBar({
               variant="danger"
               size="sm"
               icon="trash"
-              className="!border-transparent !bg-danger !text-ground hover:!bg-danger/90"
+              className="!border-transparent !bg-danger !text-bg hover:!bg-danger/90"
               onClick={() => void confirmDelete()}
               loading={busy}
             >
@@ -191,7 +191,7 @@ export function SelectionBar({
           </div>
         )}
         {mode === "confirm-mark" && (
-          <div className="flex flex-wrap items-center gap-2 border-t border-inverse-fg/15 py-2 text-sm animate-reveal motion-reduce:animate-none">
+          <div className="flex flex-wrap items-center gap-2 border-t border-tip-fg/15 py-2 text-sm animate-reveal reduce-motion:animate-none">
             <span className="mr-1">
               Mark {n} {n === 1 ? "image" : "images"} as empty?
               {pendingCount > 0 &&

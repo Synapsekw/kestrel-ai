@@ -156,7 +156,7 @@ export function AddToDatasetDialog({
               />
             </Field>
             <Disclosure label="Split options">
-              <div className="grid grid-cols-1 gap-4 rounded-lg border border-line bg-ground p-4 sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-4 rounded-lg border border-line bg-bg p-4 sm:grid-cols-3">
                 <Field label="Split method" htmlFor={`${id}-split`}>
                   <Select
                     id={`${id}-split`}

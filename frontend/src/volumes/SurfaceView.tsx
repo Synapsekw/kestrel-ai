@@ -116,5 +116,5 @@ export function SurfaceView({
     l.hillshade.setOpacity(hillshadeOpacity);
   }, [orthoUrl, hillshadeOpacity, surface.id, hillshadeUrl]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <div ref={target} className="absolute inset-0 bg-canvas" data-testid="surface-view" />;
+  return <div ref={target} className="absolute inset-0 bg-bg" data-testid="surface-view" />;
 }

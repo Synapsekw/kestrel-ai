@@ -15,7 +15,7 @@ const td = "h-9 px-3";
 export function RunHistory({ runs, selectedId, onSelect }: Props) {
   if (runs.length === 0) return <p className="text-sm text-muted">No detection runs yet.</p>;
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-panel">
+    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
       <table data-testid="run-history" className="w-full border-collapse text-[13px]">
         <thead>
           <tr className="border-b border-line">

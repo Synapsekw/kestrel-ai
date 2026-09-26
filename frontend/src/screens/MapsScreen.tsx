@@ -859,7 +859,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
             )}
             {popover && (
               <div
-                className="absolute z-10 flex max-w-64 flex-col gap-1 rounded-md border border-line bg-panel p-2.5 text-xs shadow-float"
+                className="absolute z-10 flex max-w-64 flex-col gap-1 rounded-md border border-line bg-surface p-2.5 text-xs shadow-float"
                 style={{ left: popover.x, top: popover.y }}
               >
                 <p className="font-medium text-ink">{popover.facts.title}</p>

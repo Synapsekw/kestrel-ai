@@ -378,7 +378,7 @@ export function VolumesScreen() {
                 onDeleteSelected={deleteSelected}
               />
               {(top.map_id || diffUrl) && (
-                <div className="flex flex-col gap-1 rounded-md border border-line bg-panel p-2 shadow-float">
+                <div className="flex flex-col gap-1 rounded-md border border-line bg-surface p-2 shadow-float">
                   {top.map_id && <Switch label="Ortho" checked={orthoOn} onChange={setOrthoOn} />}
                   {diffUrl && <Switch label="Cut / fill" checked={diffOn} onChange={setDiffOn} />}
                 </div>

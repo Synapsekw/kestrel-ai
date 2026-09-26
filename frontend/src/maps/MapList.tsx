@@ -35,7 +35,7 @@ export function MapList({
                 m.id === activeId ? "bg-accent-soft" : "hover:bg-hover",
               )}
             >
-              <span className="h-12 w-16 shrink-0 overflow-hidden rounded bg-well">
+              <span className="h-12 w-16 shrink-0 overflow-hidden rounded bg-surface-2">
                 {m.status === "ready" && (
                   <img
                     src={mapPreviewUrl(baseUrl, token, projectId, m.id)}

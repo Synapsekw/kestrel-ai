@@ -68,7 +68,7 @@ export function NewDatasetForm({ projectId, onClose }: Props) {
       aria-label="New dataset"
       onSubmit={(e) => void submit(e)}
       noValidate
-      className="flex flex-col gap-4 rounded-lg border border-line bg-panel p-5 animate-reveal motion-reduce:animate-none"
+      className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5 animate-reveal reduce-motion:animate-none"
     >
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold">New dataset</h2>

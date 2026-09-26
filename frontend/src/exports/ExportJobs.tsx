@@ -28,7 +28,7 @@ function ExportJobRow({ projectId, job }: { projectId: string; job: Job }) {
   return (
     <li
       data-testid={`export-job-${job.id}`}
-      className="flex flex-col gap-1.5 rounded-lg border border-line bg-panel p-3.5 text-sm"
+      className="flex flex-col gap-1.5 rounded-lg border border-line bg-surface p-3.5 text-sm"
     >
       <div className="flex flex-wrap items-center gap-2">
         <Pill

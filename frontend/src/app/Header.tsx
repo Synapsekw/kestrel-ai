@@ -101,7 +101,7 @@ export function Header({
   const { pathname } = useLocation();
   const screen = screenName(pathname);
   return (
-    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-ground px-4 lg:px-6">
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-line bg-bg px-4 lg:px-6">
       <p className="min-w-0 flex-1 truncate text-sm">
         {projectId ? (
           <>

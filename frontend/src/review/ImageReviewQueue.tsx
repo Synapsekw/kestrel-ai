@@ -68,7 +68,7 @@ export function ImageReviewQueue({ projectId, list, empty: emptyState }: ImageRe
       {list.error && <Alert tone="danger">{list.error}</Alert>}
 
       {empty && (
-        <div data-testid="review-empty" className="animate-reveal motion-reduce:animate-none">
+        <div data-testid="review-empty" className="animate-reveal reduce-motion:animate-none">
           {emptyState}
         </div>
       )}

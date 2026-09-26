@@ -78,7 +78,11 @@ export function RegionList({
               className={cx(
                 "group flex cursor-pointer flex-col rounded-md border border-transparent pb-2 text-[13px] text-ink",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
-                selected ? "border-line-strong bg-well" : b.id === hoveredId ? "bg-hover" : "hover:bg-hover",
+                selected
+                  ? "border-line-strong bg-surface-2"
+                  : b.id === hoveredId
+                    ? "bg-hover"
+                    : "hover:bg-hover",
               )}
             >
               {/* First line is plain text in the middle, so a click on the row selects it and keeps
@@ -87,7 +91,7 @@ export function RegionList({
                 <span className="w-4 shrink-0 text-right text-xs tabular-nums text-muted">{n}</span>
                 <span
                   aria-hidden="true"
-                  className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+                  className="h-2.5 w-2.5 shrink-0 rounded-sm"
                   style={{ background: colourOf(classes, b.class_id) }}
                 />
                 <span

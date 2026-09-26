@@ -295,7 +295,7 @@ export function RunDialog({
               <p className="text-sm text-muted">Add photos or a map under Sources first.</p>
             )}
             {options.length > 0 && (
-              <ul className="max-h-56 overflow-y-auto rounded-[10px] border border-line">
+              <ul className="max-h-56 overflow-y-auto rounded-control border border-line">
                 {options.map((o) => (
                   <SourceRow key={o.id} source={o} checked={picked.has(o.id)} onToggle={() => toggle(o.id)} />
                 ))}

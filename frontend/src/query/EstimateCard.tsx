@@ -9,7 +9,7 @@ export function EstimateCard({ estimate, local }: { estimate: CostEstimate; loca
   return (
     <p
       data-testid="estimate"
-      className="flex items-center gap-2 rounded-md bg-well px-3 py-2 text-[13px] tabular-nums text-muted animate-reveal motion-reduce:animate-none"
+      className="flex items-center gap-2 rounded-md bg-surface-2 px-3 py-2 text-[13px] tabular-nums text-muted animate-reveal reduce-motion:animate-none"
     >
       <Icon name="info" size={14} className="shrink-0" />
       {local

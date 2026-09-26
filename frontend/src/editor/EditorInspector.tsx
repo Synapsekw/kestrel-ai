@@ -22,7 +22,7 @@ export function EditorInspector({
   return (
     <section
       aria-label="Image inspector"
-      className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-line bg-panel md:w-[310px] md:border-l md:border-t-0"
+      className="flex w-full shrink-0 flex-col overflow-y-auto border-t border-line bg-surface md:w-[310px] md:border-l md:border-t-0"
     >
       <div className="flex shrink-0 flex-col gap-3 border-b border-line p-4">
         <div>

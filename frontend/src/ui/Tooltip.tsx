@@ -75,7 +75,7 @@ function FloatingLabel({
       role="tooltip"
       id={id}
       style={{ position: "fixed", visibility: "hidden" }}
-      className="pointer-events-none z-50 w-max max-w-[calc(100vw-16px)] break-words rounded-md bg-inverse px-2 py-1 text-xs font-medium text-inverse-fg shadow-float"
+      className="pointer-events-none z-50 w-max max-w-[calc(100vw-16px)] break-words rounded-md bg-tip px-2 py-1 text-xs font-medium text-tip-fg shadow-float"
     >
       {label}
     </span>,

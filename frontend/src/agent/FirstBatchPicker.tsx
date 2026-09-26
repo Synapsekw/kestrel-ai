@@ -46,7 +46,7 @@ export function FirstBatchPicker({
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         {page.items.map((img) => (
           <div key={img.id} className="min-w-0">
-            <div className="mb-1.5 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-line bg-canvas">
+            <div className="mb-1.5 flex aspect-[4/3] items-center justify-center overflow-hidden rounded-lg border border-line bg-bg">
               <Preview key={img.id} src={thumbnailUrl(baseUrl, token, projectId, img.id)} />
             </div>
             <Checkbox

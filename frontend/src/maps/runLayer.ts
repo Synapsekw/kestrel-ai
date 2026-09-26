@@ -95,12 +95,12 @@ function boxStyle(spec: RunLayerSpec, f: FeatureLike, resolution: number): Style
       mark === "labelled"
         ? new Text({
             text: spec.nameOf?.(classId) ?? "",
-            // The registered family is 'Instrument Sans Variable' (tailwind.config.ts, from
+            // The registered family is 'Space Grotesk Variable' (tailwind.config.ts, from
             // @fontsource-variable/instrument-sans); the unquoted two-word name resolved to
             // nothing and fell through to the generic sans-serif.
-            font: '12px "Instrument Sans Variable", system-ui, sans-serif',
+            font: '12px "Space Grotesk Variable", system-ui, sans-serif',
             fill: new Fill({ color: tokenColour("ink") }),
-            stroke: new Stroke({ color: tokenColour("inverse", 0.8), width: 3 }),
+            stroke: new Stroke({ color: tokenColour("tip", 0.8), width: 3 }),
             offsetY: -LABEL_SCREEN_PX / 4,
             overflow: true,
           })
@@ -116,7 +116,7 @@ function dotStyle(spec: RunLayerSpec, f: FeatureLike): Style | undefined {
     image: new Circle({
       radius: 3 + Math.sqrt(n) * 2,
       fill: new Fill({ color: classFill(spec, classId, 0.55) }),
-      stroke: new Stroke({ color: tokenColour("inverse", 0.6), width: 1 }),
+      stroke: new Stroke({ color: tokenColour("tip", 0.6), width: 1 }),
     }),
   });
 }

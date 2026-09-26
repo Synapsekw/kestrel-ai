@@ -149,7 +149,7 @@ function LibraryContent() {
       {(running.length > 0 || failed.length > 0) && (
         <section aria-label="Library jobs" className="flex max-w-3xl flex-col gap-2">
           {running.length > 0 && (
-            <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-panel px-4">
+            <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
               {running.map((job) => (
                 <JobRow key={job.id} job={job} />
               ))}

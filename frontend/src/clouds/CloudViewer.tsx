@@ -248,7 +248,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       return;
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    const clear = tokenRgb("canvas");
+    const clear = tokenRgb("bg");
     renderer.setClearColor(tokenColor(clear));
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1e6);
@@ -581,7 +581,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         key={generation}
         ref={canvasRef}
         data-testid="cloud-canvas"
-        className="absolute inset-0 h-full w-full bg-canvas"
+        className="absolute inset-0 h-full w-full bg-bg"
         style={{ cursor: armed ? "crosshair" : "grab" }}
       />
       {noWebGlKey === sceneKey && (
@@ -613,7 +613,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           </Alert>
         </div>
       )}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-panel/90 px-3 py-1.5 text-xs tabular-nums text-muted">
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-glass px-3 py-1.5 text-xs tabular-nums text-muted">
         <span data-testid="cloud-points-shown">{points.format(bar.pts / 1e6)} M points shown</span>
         {bar.loading > 0 && <span>loading {bar.loading} nodes</span>}
         {bar.pick && (

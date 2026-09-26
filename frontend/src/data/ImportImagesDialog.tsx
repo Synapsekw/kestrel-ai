@@ -132,7 +132,7 @@ export function ImportImagesDialog({ project, onClose, onStarted }: Props) {
           <Input id={`${id}-site`} value={form.site} onChange={(e) => patch({ site: e.target.value })} />
         </Field>
         <Disclosure label="Advanced settings (the defaults suit most imports)">
-          <div className="grid grid-cols-1 gap-4 rounded-lg border border-line bg-ground p-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 rounded-lg border border-line bg-bg p-4 md:grid-cols-2">
             <Field
               label="Max side"
               htmlFor={`${id}-max`}

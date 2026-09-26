@@ -37,7 +37,7 @@ function ColourSwatch({
 }) {
   return (
     <span
-      className="relative inline-block h-6 w-6 shrink-0 overflow-hidden rounded-md border border-line focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-ground"
+      className="relative inline-block h-6 w-6 shrink-0 overflow-hidden rounded-md border border-line focus-within:ring-2 focus-within:ring-accent focus-within:ring-offset-2 focus-within:ring-offset-bg"
       style={{ backgroundColor: value }}
       title={label}
     >

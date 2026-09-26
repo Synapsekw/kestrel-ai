@@ -58,7 +58,7 @@ export function Shell() {
   const workSurface = editor || /\/maps(\/|$)/.test(pathname);
 
   return (
-    <div className="flex h-full w-full bg-ground text-ink">
+    <div className="flex h-full w-full bg-bg text-ink">
       <Sidebar projectId={projectId} projectName={projectName} />
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Header projectId={projectId} projectName={projectName} />

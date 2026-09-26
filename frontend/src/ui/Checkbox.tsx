@@ -36,21 +36,21 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
         <span
           aria-hidden="true"
           className={cx(
-            "grid h-4 w-4 place-items-center rounded-[4px] border",
-            onDark ? "border-white/70 bg-black/30" : "border-muted bg-panel",
+            "grid h-4 w-4 place-items-center rounded-sm border",
+            onDark ? "border-white/70 bg-black/30" : "border-muted bg-surface",
             "peer-hover:border-accent",
             "peer-checked:border-accent peer-checked:bg-accent peer-checked:[&>svg]:scale-100 peer-checked:[&>svg]:opacity-100",
             "peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2",
-            onDark ? "peer-focus-visible:ring-offset-black/40" : "peer-focus-visible:ring-offset-ground",
+            onDark ? "peer-focus-visible:ring-offset-black/40" : "peer-focus-visible:ring-offset-bg",
             "peer-disabled:opacity-45",
-            "peer-active:scale-90 motion-reduce:peer-active:scale-100",
+            "peer-active:scale-90 reduce-motion:peer-active:scale-100",
             transition,
           )}
         >
           <Icon
             name="check"
             size={11}
-            className="scale-50 text-accent-fg opacity-0 transition-[transform,opacity] duration-140 ease-out [stroke-width:3] motion-reduce:transition-none"
+            className="scale-50 text-accent-fg opacity-0 transition-[transform,opacity] duration-fast ease-out [stroke-width:3] reduce-motion:transition-none"
           />
         </span>
       </span>

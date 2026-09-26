@@ -186,7 +186,7 @@ export function RunCard({
         <div
           role="status"
           aria-label={`Loading run ${runId.slice(0, 8)}`}
-          className="flex max-w-3xl flex-col gap-3 rounded-lg border border-line bg-panel p-5"
+          className="flex max-w-3xl flex-col gap-3 rounded-lg border border-line bg-surface p-5"
         >
           <Skeleton className="h-5 w-64" />
           <Skeleton className="h-4 w-96 max-w-full" />
@@ -204,7 +204,7 @@ export function RunCard({
   return (
     <section
       data-testid="run-card"
-      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-panel p-5"
+      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-surface p-5"
     >
       {alert}
       <header className="flex flex-col gap-1">

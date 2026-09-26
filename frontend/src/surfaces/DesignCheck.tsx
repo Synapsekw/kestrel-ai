@@ -31,7 +31,7 @@ export function DesignCheck({
         <img
           src={imageUrl}
           alt="The design over the cloud surface"
-          className="max-h-80 w-full rounded bg-canvas object-contain"
+          className="max-h-80 w-full rounded bg-bg object-contain"
         />
       )}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm tabular-nums">

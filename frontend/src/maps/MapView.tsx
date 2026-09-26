@@ -93,5 +93,5 @@ export function MapView({ geoMap, tileUrl, onReady, onPointer, onViewChange }: M
     };
   }, [geoMap.id, geoMap.width, geoMap.height, geoMap.tile_grid.max_zoom, tileUrl]);
 
-  return <div ref={target} className="absolute inset-0 bg-canvas" data-testid="map-view" />;
+  return <div ref={target} className="absolute inset-0 bg-bg" data-testid="map-view" />;
 }

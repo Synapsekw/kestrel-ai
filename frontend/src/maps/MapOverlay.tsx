@@ -24,7 +24,7 @@ export function MapOverlay({
   const bar = scaleBar(resolution, geoMap.gsd_cm);
   return (
     <>
-      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-md border border-line bg-panel p-1 shadow-float">
+      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-md border border-line bg-surface p-1 shadow-float">
         <IconButton icon="plus" label="Zoom in" size="sm" onClick={() => zoom(1)} />
         <IconButton icon="minus" label="Zoom out" size="sm" onClick={() => zoom(-1)} />
         <IconButton
@@ -34,7 +34,7 @@ export function MapOverlay({
           onClick={() => map?.getView().fit(olExtent(geoMap), { duration: ZOOM_MS })}
         />
       </div>
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-panel/90 px-3 py-1.5 text-xs tabular-nums text-muted">
+      <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-glass px-3 py-1.5 text-xs tabular-nums text-muted">
         {bar && (
           <span className="flex items-center gap-2" data-testid="scale-bar">
             <span className="h-1.5 border-x border-b border-ink" style={{ width: bar.px }} />

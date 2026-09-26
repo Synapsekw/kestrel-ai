@@ -205,7 +205,7 @@ function DetectWorkspace() {
       {runId ? (
         <RunCard projectId={projectId} runId={runId} />
       ) : (
-        <div className="flex max-w-3xl flex-col gap-6 rounded-lg border border-line bg-panel p-5">
+        <div className="flex max-w-3xl flex-col gap-6 rounded-lg border border-line bg-surface p-5">
           <SourcePicker
             form={effectiveForm}
             onChange={patch}

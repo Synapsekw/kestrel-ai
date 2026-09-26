@@ -53,7 +53,7 @@ export function ImageTable(p: ImageTableProps) {
     <div
       role="grid"
       aria-rowcount={p.items.length}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-panel text-[13px]"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface text-[13px]"
     >
       <div
         role="row"
@@ -114,8 +114,8 @@ export function ImageTable(p: ImageTableProps) {
                   onDoubleClick={() => p.onOpen(img.id)}
                   style={{ gridTemplateColumns: template, height: ROW_HEIGHT }}
                   className={cx(
-                    "grid h-9 cursor-default items-center border-b border-line text-ink transition-colors duration-140 ease-out motion-reduce:transition-none",
-                    isSelected ? "bg-accent-soft/60" : "hover:bg-hover",
+                    "grid h-9 cursor-default items-center border-b border-line text-ink transition-colors duration-fast ease-out reduce-motion:transition-none",
+                    isSelected ? "bg-accent-soft" : "hover:bg-hover",
                     isFocused && "ring-2 ring-inset ring-accent/60",
                   )}
                 >

@@ -100,7 +100,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
   return (
     <section
       data-testid="dataset-detail"
-      className="flex flex-col gap-5 rounded-lg border border-line bg-panel p-5 animate-reveal motion-reduce:animate-none"
+      className="flex flex-col gap-5 rounded-lg border border-line bg-surface p-5 animate-reveal reduce-motion:animate-none"
     >
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{dataset.name}</h2>

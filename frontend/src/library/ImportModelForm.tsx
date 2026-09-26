@@ -66,7 +66,7 @@ export function ImportModelForm({ onStarted, onClose }: Props) {
     <form
       aria-label="Import a model file"
       onSubmit={(e) => void submit(e)}
-      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-panel p-4"
+      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-surface p-4"
     >
       <p className="max-w-prose text-sm leading-relaxed text-muted">
         The file is copied into the library and checked before it appears in the list. Aliases rename the

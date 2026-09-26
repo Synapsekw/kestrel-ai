@@ -97,7 +97,7 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
   return (
     <section
       data-testid="train-progress"
-      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-panel p-5"
+      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-surface p-5"
     >
       <header className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold">{title}</h2>

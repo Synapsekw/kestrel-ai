@@ -20,7 +20,7 @@ const KIND_LABEL: Record<string, string> = {
 function Thumb({ src }: { src: string }) {
   const [broken, setBroken] = useState(false);
   return (
-    <span className="h-12 w-12 shrink-0 overflow-hidden rounded bg-well">
+    <span className="h-12 w-12 shrink-0 overflow-hidden rounded bg-surface-2">
       {!broken && (
         <img src={src} alt="" className="h-full w-full object-contain" onError={() => setBroken(true)} />
       )}

@@ -157,7 +157,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
             name="chevron-right"
             size={14}
             className={
-              moreOpen ? "rotate-90 transition-transform duration-140" : "transition-transform duration-140"
+              moreOpen ? "rotate-90 transition-transform duration-fast" : "transition-transform duration-fast"
             }
           />
           More filters
@@ -182,7 +182,7 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
       {moreOpen && (
         <div
           id={`${id}-more`}
-          className="flex flex-wrap items-end gap-x-3 gap-y-2 animate-reveal motion-reduce:animate-none"
+          className="flex flex-wrap items-end gap-x-3 gap-y-2 animate-reveal reduce-motion:animate-none"
         >
           <Field label="Min boxes" htmlFor={`${id}-min`} className="w-20">
             <Input

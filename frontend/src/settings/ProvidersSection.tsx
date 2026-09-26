@@ -30,7 +30,7 @@ export function ProvidersSection() {
       )}
       {error && <Alert tone="danger">{error}</Alert>}
       {providers.length > 0 && (
-        <div className="divide-y divide-line rounded-lg border border-line bg-panel">
+        <div className="divide-y divide-line rounded-lg border border-line bg-surface">
           {providers.map((p) => (
             <ProviderCard key={p.name} provider={p} onChanged={replace} />
           ))}

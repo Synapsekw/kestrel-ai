@@ -198,7 +198,7 @@ export function SourcesSection({ projectId }: { projectId: string }) {
         <p className="text-sm text-muted">No sources yet.</p>
       )}
       {state.sources.length > 0 && (
-        <ul className="divide-y divide-line rounded-lg border border-line bg-panel">
+        <ul className="divide-y divide-line rounded-lg border border-line bg-surface">
           {state.sources.map((s) => (
             <SourceRow
               // Remounting on changed counts drops the row's cached statistics, which are now stale.

@@ -23,7 +23,7 @@ export function EmptyToggle({ image, hasGroundTruth, busy, onToggle }: Props) {
       title={hasGroundTruth ? GROUND_TRUTH_MESSAGE : undefined}
       onClick={onToggle}
       // N toggles this: the pressed look changes without a transition.
-      className={marked ? "!border-line-strong !bg-well !transition-none" : "!transition-none"}
+      className={marked ? "!border-line-strong !bg-surface-2 !transition-none" : "!transition-none"}
     >
       {marked ? "Marked empty - undo (N)" : "No machinery (N)"}
     </Button>

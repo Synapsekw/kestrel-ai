@@ -106,7 +106,7 @@ export function EditorCanvas({ src, children, onBackgroundMouseDown, onMouseMove
       data-view-x={view.x.toFixed(1)}
       data-view-y={view.y.toFixed(1)}
       onMouseDown={startPan}
-      className={`relative h-full w-full overflow-hidden bg-canvas ${cursor}`}
+      className={`relative h-full w-full overflow-hidden bg-bg ${cursor}`}
     >
       {image && viewport.width > 0 && viewport.height > 0 && (
         <Stage

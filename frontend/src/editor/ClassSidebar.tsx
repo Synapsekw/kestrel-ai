@@ -25,12 +25,12 @@ export function ClassSidebar({ classes, activeClassId, counts, onSelect }: Props
             // A class hotkey changes the active row: no transition, so nothing moves on a key press.
             className={cx(
               "!h-8 w-full !justify-start !gap-2 !px-2 text-left !text-[13px] !font-normal !transition-none",
-              active && "!border-accent !bg-panel",
+              active && "!border-accent !bg-surface",
             )}
           >
             <span
               aria-hidden="true"
-              className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+              className="h-2.5 w-2.5 shrink-0 rounded-sm"
               style={{ background: c.colour }}
             />
             <span className="min-w-0 flex-1 truncate">{c.name}</span>

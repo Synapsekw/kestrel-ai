@@ -27,7 +27,7 @@ export function Transcript({
       {items.map((item) => {
         if (item.kind === "user") {
           return (
-            <div key={item.id} className="rounded-md bg-well px-3 py-2">
+            <div key={item.id} className="rounded-md bg-surface-2 px-3 py-2">
               <p className="mb-1 text-xs font-medium text-muted">You</p>
               <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{item.text}</p>
             </div>

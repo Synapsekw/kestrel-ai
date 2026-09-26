@@ -16,10 +16,10 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT: Record<ButtonVariant, string> = {
-  primary: "border-transparent bg-accent text-accent-fg hover:bg-accent-hover",
-  secondary: "border-line bg-panel text-ink hover:border-line-strong hover:bg-hover",
+  primary: "border-transparent bg-accent text-accent-fg hover:bg-accent-ink",
+  secondary: "border-line bg-surface text-ink hover:border-line-strong hover:bg-hover",
   ghost: "border-transparent bg-transparent text-ink hover:bg-hover",
-  danger: "border-line bg-panel text-danger hover:border-danger/40 hover:bg-danger-soft",
+  danger: "border-line bg-surface text-danger hover:border-danger/40 hover:bg-danger-soft",
 };
 
 const SIZE: Record<ButtonSize, string> = {
@@ -64,7 +64,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       {...rest}
     >
       {loading ? (
-        <Icon name="spinner" size={iconSize} className="animate-spin motion-reduce:animate-none" />
+        <Icon name="spinner" size={iconSize} className="animate-spin reduce-motion:animate-none" />
       ) : icon ? (
         <Icon name={icon} size={iconSize} />
       ) : null}

@@ -71,9 +71,9 @@ export function useSiteAreaLayer(map: OlMap | null, geoMap: GeoMap | null, opts:
           fill: new Fill({ color: tokenColour("accent-ink", 0.05) }),
           text: new Text({
             text: String(f.get("name") ?? ""),
-            font: "600 12px 'Instrument Sans Variable', 'Segoe UI', sans-serif",
-            fill: new Fill({ color: tokenColour("inverse-fg") }),
-            stroke: new Stroke({ color: tokenColour("inverse", 0.85), width: 3 }),
+            font: "600 12px 'Space Grotesk Variable', 'Segoe UI', sans-serif",
+            fill: new Fill({ color: tokenColour("tip-fg") }),
+            stroke: new Stroke({ color: tokenColour("tip", 0.85), width: 3 }),
             overflow: true,
           }),
         }),
