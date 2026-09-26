@@ -60,8 +60,8 @@ describe("job labels", () => {
     expect(
       resultTarget({ ...runningJob, type: "dataset", state: "succeeded", result: { dataset_id: "d1" } }, "p"),
     ).toEqual({
-      label: "Train on it",
-      to: "/models/training",
+      label: "Open dataset",
+      to: "/models/datasets/d1",
     });
     expect(resultTarget({ ...runningJob, type: "train", state: "succeeded", result: null }, "p")).toBeNull();
     expect(

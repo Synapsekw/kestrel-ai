@@ -1,7 +1,6 @@
 import type { RouteObject } from "react-router-dom";
-import { InterimJobs } from "@/app/InterimJobs";
 import { SectionPlaceholder } from "@/app/InterimScreens";
-import { AboutScreen, Later } from "@/app/lazyScreens";
+import { AboutScreen, JobsScreen, Later } from "@/app/lazyScreens";
 import { LibraryScreen } from "@/library/LibraryScreen";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
 import { Redirect } from "./Redirect";
@@ -32,7 +31,14 @@ export const appRoutes: RouteObject[] = [
   { path: "models/training/:runId", element: training },
   { path: "catalogue", element: catalogue },
   { path: "catalogue/severity", element: catalogue },
-  { path: "jobs", element: <InterimJobs /> },
+  {
+    path: "jobs",
+    element: (
+      <Later>
+        <JobsScreen />
+      </Later>
+    ),
+  },
   { path: "settings", element: <AppSettingsScreen /> },
   {
     path: "about",

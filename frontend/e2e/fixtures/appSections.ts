@@ -54,3 +54,85 @@ export const CATALOGUE_PAGE = {
   next_cursor: null,
   needs_classification: true,
 };
+
+const RUNNING_IMPORT = {
+  id: JOB,
+  project_id: P,
+  project_name: "Ahmadia",
+  type: "import",
+  state: "running",
+  progress: 0.42,
+  message: "1386 / 3299 images",
+  log_path: `runs/${JOB}/job.log`,
+  params: {},
+  result: null,
+  error: null,
+  created_at: "2026-09-26T10:05:00Z",
+  started_at: "2026-09-26T10:05:01Z",
+  finished_at: null,
+};
+
+const DONE_BUILD = {
+  ...RUNNING_IMPORT,
+  id: "j-build",
+  project_id: "library",
+  project_name: null,
+  type: "dataset_build",
+  state: "succeeded",
+  progress: 1,
+  message: "30 images",
+  params: { name: "machines-v1", dataset_id: "d-lib-1" },
+  result: { dataset_id: "d-lib-1" },
+  created_at: "2026-09-26T09:00:00Z",
+  finished_at: "2026-09-26T09:00:09Z",
+};
+
+const FAILED_TRAIN = {
+  ...RUNNING_IMPORT,
+  id: "j-failed",
+  project_id: "library",
+  project_name: null,
+  type: "train",
+  state: "failed",
+  progress: 0.3,
+  message: "epoch 15/50 mAP50 0.410",
+  params: { name: "ahmadia-v1-n" },
+  error: "CUDA out of memory",
+  created_at: "2026-09-26T08:05:00Z",
+  started_at: "2026-09-26T08:05:01Z",
+  finished_at: "2026-09-26T08:35:01Z",
+};
+
+export const APP_JOBS = [RUNNING_IMPORT, DONE_BUILD, FAILED_TRAIN];
+
+export const SEVERITY = [
+  { level: 1, name: "Minor", colour: "#3fb68e" },
+  { level: 2, name: "Moderate", colour: "#e2bf2e" },
+  { level: 3, name: "Major", colour: "#ff9c3a" },
+  { level: 4, name: "Critical", colour: "#ff5a4f" },
+];
+
+export const BACKFILL_JOB = {
+  id: "j-backfill",
+  project_id: "library",
+  type: "findings_backfill",
+  state: "queued",
+  progress: 0,
+  message: "",
+  log_path: "library/runs/j-backfill/job.log",
+  params: {},
+  result: null,
+  error: null,
+  created_at: T0,
+  started_at: null,
+  finished_at: null,
+};
+
+/** `GET /jobs` filtered by the request's `state` params, as the backend does. */
+export function appJobsBody(url: string) {
+  const states = new URL(url).searchParams.getAll("state");
+  return {
+    items: APP_JOBS.filter((j) => states.length === 0 || states.includes(j.state)),
+    next_cursor: null,
+  };
+}

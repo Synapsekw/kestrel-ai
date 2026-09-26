@@ -201,7 +201,8 @@ export const exampleTrainingRun2: S["TrainingRun"] = {
 
 /** A running project import, a finished library dataset build, a failed library training. */
 export const exampleAppJobs: S["AppJob"][] = [
-  { ...runningJob, project_name: "Ahmadia" },
+  // Newest first, as `GET /jobs` orders them (the e2e twin in `e2e/fixtures/appSections.ts` agrees).
+  { ...runningJob, project_name: "Ahmadia", created_at: "2026-09-26T10:05:00Z" },
   {
     ...runningJob,
     id: LIB_JOB_ID,

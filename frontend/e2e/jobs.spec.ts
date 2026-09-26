@@ -1,66 +1,44 @@
-import { test, expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { JOB, P, appJobsBody, fulfilJson } from "./fixtures/appSections";
 
-const P = "7f1c2e3a-1111-4000-8000-000000000001";
-const JOB = "j0000000-4444-4000-8000-000000000001";
-
-test("lists the project's jobs with progress and log, and cancels", async ({ page }) => {
-  const listed = page.waitForRequest(
-    (r) => r.method() === "GET" && r.url().includes(`/projects/${P}/jobs?limit=100`),
+test("the Jobs section lists project and library jobs, opens one with its log, and cancels it", async ({
+  page,
+}) => {
+  await page.route(
+    (url) => url.pathname === "/api/v1/jobs",
+    (route) => fulfilJson(route, appJobsBody(route.request().url())),
   );
-  // First page of a run: a cold dev server can need more than the default 5 s (as in boot.spec).
-  await page.goto(`/jobs?project=${P}`);
-  await listed;
-  const card = page.getByRole("main").getByTestId(`job-${JOB}`);
-  await expect(card).toContainText("Import", { timeout: 15_000 });
-  await expect(card.getByTestId("jobcard-state")).toHaveText("Running");
-  await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
-  await expect(card).toContainText("1386 / 3299 images");
+  await page.goto("/jobs");
+  await expect(page.getByRole("heading", { name: "Jobs", exact: true })).toBeVisible({ timeout: 15_000 });
+  const row = page.getByRole("row", { name: /Import/ });
+  await expect(row).toContainText("Ahmadia");
+  await expect(page.getByRole("radio", { name: "Running · 1" })).toBeVisible();
 
-  const log = page.waitForRequest((r) => r.url().includes(`/jobs/${JOB}/log?tail=200`));
-  await card.getByRole("button", { name: "Show log" }).click();
+  const log = page.waitForRequest((r) => r.url().includes(`/projects/${P}/jobs/${JOB}/log`));
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`job=${JOB}`));
   await log;
-  await expect(card.getByTestId("jobcard-log")).toContainText("50 / 3299 images");
 
-  const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
-  await card.getByRole("button", { name: "Cancel job" }).click();
+  const cancel = page.waitForRequest(
+    (r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/jobs/${JOB}/cancel`),
+  );
+  await page.getByRole("button", { name: "Cancel job" }).click();
   await cancel;
 });
 
-test("a failed job shows its error and no cancel button", async ({ page }) => {
+test("the Failed segment shows the error, and the library filter reaches the request", async ({ page }) => {
+  const requested: string[] = [];
   await page.route(
-    (url) => url.pathname === `/api/v1/projects/${P}/jobs`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({
-          items: [
-            {
-              id: "j-failed",
-              project_id: P,
-              type: "train",
-              state: "failed",
-              progress: 0.3,
-              message: "epoch 15/50 mAP50 0.410",
-              log_path: "runs/j-failed/job.log",
-              params: { name: "ahmadia-v1-n" },
-              result: null,
-              error: "CUDA out of memory",
-              created_at: "2026-09-17T10:05:00Z",
-              started_at: "2026-09-17T10:05:01Z",
-              finished_at: "2026-09-17T10:35:01Z",
-            },
-          ],
-          next_cursor: null,
-        }),
-      }),
+    (url) => url.pathname === "/api/v1/jobs",
+    (route) => {
+      requested.push(route.request().url());
+      return fulfilJson(route, appJobsBody(route.request().url()));
+    },
   );
-  await page.goto(`/jobs?project=${P}`);
-  const card = page.getByRole("main").getByTestId("job-j-failed");
-  await expect(card).toContainText("Training: ahmadia-v1-n");
-  await expect(card.getByTestId("jobcard-state")).toHaveText("Failed");
-  await expect(card.getByRole("alert")).toHaveText("CUDA out of memory");
-  await expect(card).toContainText("30 min 00 s");
-  await expect(card.getByRole("button", { name: "Cancel job" })).toHaveCount(0);
+  await page.goto("/jobs?state=failed&project=library");
+  await expect(page.getByRole("row", { name: /Training: ahmadia-v1-n/ })).toContainText("CUDA out of memory");
+  expect(requested.some((u) => u.includes("project_id=library"))).toBe(true);
+  await page.getByRole("radio", { name: "Finished" }).click();
+  await expect(page).toHaveURL(/state=finished/);
+  await expect(page.getByRole("row", { name: /Dataset build: machines-v1/ })).toContainText("Model library");
 });

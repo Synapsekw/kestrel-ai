@@ -2,7 +2,7 @@ import type { Job, JobState } from "@contract/client";
 
 const TYPE_LABEL: Record<Job["type"], string> = {
   import: "Import",
-  dataset: "Dataset",
+  dataset: "Dataset export",
   train: "Training",
   infer: "Detection run",
   export: "Export",
@@ -100,7 +100,18 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "infer":
       return str(job.result, "query_run_id") ? { label: "Open runs", to: `${p}/runs` } : null;
     case "dataset":
-      return { label: "Train on it", to: "/models/training" };
+    case "dataset_build": {
+      const id = str(job.result, "dataset_id") ?? str(job.params, "dataset_id");
+      return id
+        ? { label: "Open dataset", to: `/models/datasets/${id}` }
+        : { label: "Open datasets", to: "/models/datasets" };
+    }
+    case "findings_backfill":
+      return { label: "Open catalogue", to: "/catalogue" };
+    case "project_migrate":
+      return { label: "Open projects", to: "/projects" };
+    case "findings_recount":
+      return { label: "Open findings", to: `${p}/findings` };
     case "import":
       if (job.params?.purpose === "starter_model") return model(str(job.result, "model_id"));
       return { label: "Open images", to: `${p}/images` };
@@ -129,13 +140,6 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "volume_export":
     case "design_import":
       return { label: "Open measurements", to: `${p}/measurements` };
-    // Library jobs of the foundation: the Models and Catalogue sections that show their results
-    // arrive with units S1 and S2, until then the job card has no link.
-    case "project_migrate":
-    case "findings_backfill":
-    case "findings_recount":
-    case "dataset_build":
-      return null;
   }
 }
 
