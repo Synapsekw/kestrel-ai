@@ -312,4 +312,49 @@ def legacy_datasets(ctx: StepContext) -> dict:
     return {"registered": len(names), "names": names, "already_registered": already, "warnings": warnings}
 
 
+FINDING_BATCH = 1000
+
+
+def findings_from_annotations(ctx: StepContext) -> dict:
+    """Step 6: findings from accepted boxes on the project's **defect** types, through BC's one
+    implementation (`app.findings.backfill.findings_from_annotations`, spec §7.2 and §11.4): batched,
+    one transaction per batch, idempotent on `annotation_id`, so a resumed step creates none twice.
+    With F4 every migrated type is an `object`, so this is normally empty; the Catalogue's backfill
+    runs the same function later for a type the operator marks as a defect.
+
+    BC's function opens and commits its own session per batch, so the step must not hold one across
+    the call: `ctx.session.commit()` releases the step's (otherwise unused) read snapshot first, a
+    no-op when nothing was read through it, before touching `ctx.session` again."""
+    from app.findings.backfill import findings_from_annotations as create_findings
+
+    ctx.session.commit()
+    if getattr(ctx.handle, "catalogue", None) is None:
+        ctx.handle.catalogue = ctx.env.catalogue  # BC's function reads the catalogue through the handle
+    created = create_findings(
+        ctx.handle,
+        None,
+        batch=FINDING_BATCH,
+        check_cancelled=ctx.env.check_cancelled,
+        progress=lambda done, total: ctx.env.progress(
+            0.8, f"Created {done} of {total} findings from accepted annotations"
+        ),
+    )
+    return {"findings_created": created}
+
+
+def counts_rebuild(ctx: StepContext) -> dict:
+    """Step 7: rebuild `finding_count` and `finding_daily` from `finding` (the counts module is
+    their only writer), and log "Project upgraded" once in the activity feed."""
+    s = ctx.session
+    result = ports.rebuild_counts(s)
+    ports.add_activity_once(
+        s,
+        kind="job.finished",
+        subject_id=ctx.handle.id,
+        summary="Project upgraded",
+        payload={"job_type": "project_migrate", "findings": result["findings"]},
+    )
+    return {"findings": result["findings"]}
+
+
 PIPELINE: tuple[Step, ...] = ()
