@@ -48,8 +48,10 @@ detect not query, suggestions not proposals, accept as labels not promote.
 
 ## Selected visual direction
 
-Contour was selected on September 21, 2026. Charcoal surfaces and warm amber actions keep aerial
-imagery at the centre of the workspace. Compact navigation gives the image more room; a single
-inspector brings drawing classes, review decisions and regions together. Home leads with the real
-next action and at most three recent image previews. Missing previews never interrupt the workflow.
-The design keeps the existing audience, plain language, project state and bounded-data promises.
+Aero glass (umbrella decision D9) replaced Contour, which was selected on September 21, 2026. A deep
+indigo backdrop and translucent panels keep aerial imagery the brightest thing on screen; frosted glass
+appears only where controls float over imagery, and a violet to indigo gradient marks the primary
+action. A 64px icon rail and project tabs give the image more room; a single inspector brings drawing
+classes, review decisions and regions together. Missing previews never interrupt the workflow. The
+design keeps the existing audience, plain language, project state and bounded-data promises. Tokens,
+primitives and rules are in `DESIGN.md`.
