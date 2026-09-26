@@ -39,4 +39,4 @@ frontend/src/settings/ClassesSection.tsx       -- present
 
 | Task | Commit | Notes |
 |---|---|---|
-| 1 | (filled in below by the commit that lands this ledger) | API wrappers, `normaliseName`, fixtures, `catalogueRevision` |
+| 1 | 38e31ba | API wrappers, `normaliseName`, fixtures, `catalogueRevision`. Also fixed `exampleTrainingRun`/`exampleTrainingRun2` metrics (the brief's literal was missing `ModelMetrics`' required `precision`, `recall`, `per_class`; `tsc` caught it) and exported `TRAIN_PARAMS: TrainRequest` per the controller's ruling P4 |
