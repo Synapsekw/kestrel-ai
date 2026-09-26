@@ -19,7 +19,14 @@ export default defineConfig({
   optimizeDeps: { include: ["three", "potree-core"] },
   envPrefix: ["VITE_", "APP_"],
   // VITE_DEV_PORT moves the dev server (e2e beside another checkout that holds 1420).
-  server: { port: Number(process.env.VITE_DEV_PORT ?? 1420), strictPort: true, host: "127.0.0.1" },
+  server: {
+    port: Number(process.env.VITE_DEV_PORT ?? 1420),
+    strictPort: true,
+    host: "127.0.0.1",
+    // src-tauri holds the Rust build (target/) and the frozen sidecar (binaries/_internal): ~50 000
+    // files the UI never imports, which the watcher would otherwise crawl at every start.
+    watch: { ignored: ["**/src-tauri/**"] },
+  },
   clearScreen: false,
   test: {
     environment: "jsdom",
