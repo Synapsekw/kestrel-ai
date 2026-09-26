@@ -2505,6 +2505,146 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/catalogue/types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The app-wide catalogue of defect and object types, ordered by group then name. Archived
+         *     types are left out unless `include_archived` is true. `needs_classification` is set after
+         *     the foundation migration merged project classes in, until the operator has reviewed them.
+         */
+        get: operations["listCatalogueTypes"];
+        put?: never;
+        /**
+         * Add a type. Names are unique among non-archived types after normalising (casefold, trim,
+         *     `_` and `-` as spaces, runs of spaces collapsed), so "dump_truck" and "Dump truck" are the
+         *     same type: a clash answers 409 `type_exists` with the existing id. A hotkey is a digit 1-9
+         *     or a letter, unique among non-archived types. A missing `colour` is picked by the server; a
+         *     missing `kind` is `object`.
+         */
+        post: operations["createCatalogueType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/types/{typeId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description a catalogue type id */
+                typeId: components["parameters"]["typeId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getCatalogueType"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Rename, recolour, regroup, change the kind, default severity or hotkey, or archive. Types
+         *     are never deleted: an archived type still renders everywhere but is not offered for new
+         *     annotations or findings. The answer is the type plus `backfill_candidates`, true when the
+         *     kind changed from `object` to `defect`, so the UI can offer `POST .../backfill`; from
+         *     `defect` to `object` existing findings are kept and no new ones are created.
+         */
+        patch: operations["patchCatalogueType"];
+        trace?: never;
+    };
+    "/api/v1/catalogue/types/{typeId}/backfill": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description a catalogue type id */
+                typeId: components["parameters"]["typeId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create findings from the accepted and person-drawn annotations of this defect type in every
+         *     recent project, one project at a time (a `findings_backfill` library job). Each becomes a
+         *     `reviewed` finding without a severity. Idempotent: an annotation that already has a finding
+         *     is skipped.
+         */
+        post: operations["backfillCatalogueType"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/severity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The app-wide severity scale, level 1 first. A fresh catalogue holds 1 Minor, 2 Moderate, 3 Major, 4 Critical. */
+        get: operations["getSeverityScale"];
+        /**
+         * Replace the scale. Levels must be exactly 1..n (422 `invalid_scale`). Names and colours may
+         *     change freely and levels may be appended. Removing levels takes them from the top only, and
+         *     only when no open project's findings use them (409 `severity_in_use`).
+         */
+        put: operations["putSeverityScale"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalogue/classification/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The operator has reviewed the types the migration merged in; clears `needs_classification` (the Catalogue banner's "Done"). */
+        post: operations["completeCatalogueClassification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/operator": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The operator's name, shown as the author of new finding comments (Settings, "Your name"). `operator_name` is null until it is set; comments then say "Operator". */
+        get: operations["getOperatorSettings"];
+        /**
+         * Set the operator's name. It is trimmed; an empty or null name clears it. Stored as
+         *     `operator_name` in the app-data `settings.json` (never a key); existing comments keep
+         *     their author.
+         */
+        put: operations["putOperatorSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -6569,6 +6709,183 @@ export interface components {
                 [key: string]: string | null;
             };
         };
+        /**
+         * @description an app-wide defect or object type in `catalogue.db`; never deleted, only archived
+         * @example {
+         *       "id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *       "name": "crack",
+         *       "colour": "#ff5a4f",
+         *       "kind": "defect",
+         *       "default_severity": 2,
+         *       "hotkey": "c",
+         *       "group": "Concrete defects",
+         *       "archived": false,
+         *       "origin": "user"
+         *     }
+         */
+        CatalogueType: {
+            id: string;
+            name: string;
+            colour: string;
+            kind: components["schemas"]["CatalogueKind"];
+            /** @description the severity a new finding of this type starts with */
+            default_severity: number | null;
+            /** @description live only inside a type picker, never at workspace level */
+            hotkey: string | null;
+            group: string | null;
+            archived: boolean;
+            /**
+             * @description `migrated` when the foundation migration created it from a project class
+             * @enum {string}
+             */
+            origin: "user" | "migrated";
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "name": "crack",
+         *           "colour": "#ff5a4f",
+         *           "kind": "defect",
+         *           "default_severity": 2,
+         *           "hotkey": "c",
+         *           "group": "Concrete defects",
+         *           "archived": false,
+         *           "origin": "user"
+         *         },
+         *         {
+         *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *           "name": "excavator",
+         *           "colour": "#f97316",
+         *           "kind": "object",
+         *           "default_severity": null,
+         *           "hotkey": "1",
+         *           "group": "Machinery",
+         *           "archived": false,
+         *           "origin": "migrated"
+         *         }
+         *       ],
+         *       "next_cursor": null,
+         *       "needs_classification": true
+         *     }
+         */
+        CatalogueTypePage: {
+            items: components["schemas"]["CatalogueType"][];
+            next_cursor: string | null;
+            /** @description true after migration merged project classes in as `object` types, until `POST /catalogue/classification/done`; absent means false */
+            needs_classification?: boolean;
+        };
+        /**
+         * @example {
+         *       "name": "crack",
+         *       "colour": "#ff5a4f",
+         *       "kind": "defect",
+         *       "default_severity": 2,
+         *       "hotkey": "c",
+         *       "group": "Concrete defects"
+         *     }
+         */
+        CatalogueTypeCreate: {
+            /** @description must contain a non-whitespace character */
+            name: string;
+            /** @description picked by the server when absent */
+            colour?: string | null;
+            kind?: components["schemas"]["CatalogueKind"];
+            /** @description null when absent */
+            default_severity?: number | null;
+            /** @description null when absent */
+            hotkey?: string | null;
+            /** @description null when absent */
+            group?: string | null;
+        };
+        /**
+         * @description every field is optional; a field that is sent replaces the stored one
+         * @example {
+         *       "kind": "defect",
+         *       "default_severity": 2
+         *     }
+         */
+        CatalogueTypePatch: {
+            name?: string;
+            colour?: string;
+            kind?: components["schemas"]["CatalogueKind"];
+            default_severity?: number | null;
+            hotkey?: string | null;
+            group?: string | null;
+            archived?: boolean;
+        };
+        /**
+         * @description the patched type, plus whether to offer the findings backfill
+         * @example {
+         *       "id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *       "name": "crack",
+         *       "colour": "#ff5a4f",
+         *       "kind": "defect",
+         *       "default_severity": 2,
+         *       "hotkey": "c",
+         *       "group": "Concrete defects",
+         *       "archived": false,
+         *       "origin": "migrated",
+         *       "backfill_candidates": true
+         *     }
+         */
+        CatalogueTypeUpdated: components["schemas"]["CatalogueType"] & {
+            /** @description true when the kind changed from `object` to `defect`: offer `POST /catalogue/types/{typeId}/backfill` */
+            backfill_candidates: boolean;
+        };
+        /**
+         * @example {
+         *       "level": 4,
+         *       "name": "Critical",
+         *       "colour": "#ff5a4f"
+         *     }
+         */
+        SeverityLevel: {
+            level: number;
+            name: string;
+            colour: string;
+        };
+        /**
+         * @description at most nine levels, because the keys 1-9 set a finding's severity
+         * @example {
+         *       "levels": [
+         *         {
+         *           "level": 1,
+         *           "name": "Minor",
+         *           "colour": "#3fb68e"
+         *         },
+         *         {
+         *           "level": 2,
+         *           "name": "Moderate",
+         *           "colour": "#e2bf2e"
+         *         },
+         *         {
+         *           "level": 3,
+         *           "name": "Major",
+         *           "colour": "#ff9c3a"
+         *         },
+         *         {
+         *           "level": 4,
+         *           "name": "Critical",
+         *           "colour": "#ff5a4f"
+         *         }
+         *       ]
+         *     }
+         */
+        SeverityScale: {
+            levels: components["schemas"]["SeverityLevel"][];
+        };
+        /**
+         * @description app-wide operator settings kept in the backend's `settings.json`
+         * @example {
+         *       "operator_name": "Danijel"
+         *     }
+         */
+        OperatorSettings: {
+            /** @description the author of new finding comments; null means unset (comments say Operator) */
+            operator_name: string | null;
+        };
     };
     responses: {
         /** @description error envelope */
@@ -6687,6 +7004,8 @@ export interface components {
         inspectionId: string;
         previewId: string;
         candidateId: string;
+        /** @description a catalogue type id */
+        typeId: string;
     };
     requestBodies: never;
     headers: never;
@@ -11945,6 +12264,343 @@ export interface operations {
                 };
             };
             503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listCatalogueTypes: {
+        parameters: {
+            query?: {
+                /** @description matches the normalised name or the group */
+                q?: string;
+                kind?: components["schemas"]["CatalogueKind"];
+                origin?: "user" | "migrated";
+                /** @description false when absent */
+                include_archived?: boolean;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description catalogue types */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogueTypePage"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createCatalogueType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogueTypeCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogueType"];
+                };
+            };
+            /** @description the name exists (`code` is `type_exists`, details `{type_id}`), or the hotkey is taken (`code` is `hotkey_conflict`, details `{type_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getCatalogueType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description a catalogue type id */
+                typeId: components["parameters"]["typeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogueType"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchCatalogueType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description a catalogue type id */
+                typeId: components["parameters"]["typeId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogueTypePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated type */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CatalogueTypeUpdated"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the new name exists (`code` is `type_exists`, details `{type_id}`), or the hotkey is taken (`code` is `hotkey_conflict`, details `{type_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    backfillCatalogueType: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description a catalogue type id */
+                typeId: components["parameters"]["typeId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description backfill job queued in the library runner */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "job": {
+                     *         "id": "j0000000-4444-4000-8000-000000000041",
+                     *         "project_id": "library",
+                     *         "type": "findings_backfill",
+                     *         "state": "queued",
+                     *         "progress": 0,
+                     *         "message": "",
+                     *         "log_path": "runs/j0000000-4444-4000-8000-000000000041/job.log",
+                     *         "params": {
+                     *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009"
+                     *         },
+                     *         "result": null,
+                     *         "error": null,
+                     *         "created_at": "2026-09-26T10:00:00Z",
+                     *         "started_at": null,
+                     *         "finished_at": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a backfill of this type is already queued or running (`code` is `job_running`, details `{job_id}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the type is not a defect type (`code` is `not_a_defect`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the catalogue (`code` is `catalogue_unavailable`) or the model library (`code` is `library_unavailable`) could not be opened */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSeverityScale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the scale */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityScale"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putSeverityScale: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SeverityScale"];
+            };
+        };
+        responses: {
+            /** @description the new scale */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SeverityScale"];
+                };
+            };
+            /** @description a level to remove is still used (`code` is `severity_in_use`, details `{level, projects}`, the names of the open projects that use it) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the levels are not 1..n (`code` is `invalid_scale`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    completeCatalogueClassification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description cleared */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            503: components["responses"]["CatalogueUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getOperatorSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the operator settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSettings"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putOperatorSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OperatorSettings"];
+            };
+        };
+        responses: {
+            /** @description the stored operator settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperatorSettings"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

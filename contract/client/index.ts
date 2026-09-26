@@ -65,6 +65,14 @@ export type PointCloud = Schemas["PointCloudOut"];
 export type CloudMeasurement = Schemas["CloudMeasurementOut"];
 export type Surface = Schemas["Surface"];
 export type VolumeMeasurement = Schemas["VolumeMeasurement"];
+export type CatalogueType = Schemas["CatalogueType"];
+export type CatalogueTypePage = Schemas["CatalogueTypePage"];
+export type CatalogueTypeCreate = Schemas["CatalogueTypeCreate"];
+export type CatalogueTypePatch = Schemas["CatalogueTypePatch"];
+export type CatalogueTypeUpdated = Schemas["CatalogueTypeUpdated"];
+export type SeverityLevel = Schemas["SeverityLevel"];
+export type SeverityScale = Schemas["SeverityScale"];
+export type OperatorSettings = Schemas["OperatorSettings"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */

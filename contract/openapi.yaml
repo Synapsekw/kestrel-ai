@@ -3395,6 +3395,234 @@ paths:
         "503": { $ref: "#/components/responses/CatalogueUnavailable" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ foundation: catalogue (F-C0)
+  /api/v1/catalogue/types:
+    get:
+      tags: [catalogue]
+      operationId: listCatalogueTypes
+      summary: |
+        The app-wide catalogue of defect and object types, ordered by group then name. Archived
+        types are left out unless `include_archived` is true. `needs_classification` is set after
+        the foundation migration merged project classes in, until the operator has reviewed them.
+      parameters:
+        - { name: q, in: query, required: false, schema: { type: string, maxLength: 64 }, description: matches the normalised name or the group }
+        - { name: kind, in: query, required: false, schema: { $ref: "#/components/schemas/CatalogueKind" } }
+        - { name: origin, in: query, required: false, schema: { type: string, enum: [user, migrated] } }
+        - { name: include_archived, in: query, required: false, schema: { type: boolean }, description: false when absent }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: catalogue types
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogueTypePage" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [catalogue]
+      operationId: createCatalogueType
+      summary: |
+        Add a type. Names are unique among non-archived types after normalising (casefold, trim,
+        `_` and `-` as spaces, runs of spaces collapsed), so "dump_truck" and "Dump truck" are the
+        same type: a clash answers 409 `type_exists` with the existing id. A hotkey is a digit 1-9
+        or a letter, unique among non-archived types. A missing `colour` is picked by the server; a
+        missing `kind` is `object`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogueTypeCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogueType" }
+        "409":
+          description: "the name exists (`code` is `type_exists`, details `{type_id}`), or the hotkey is taken (`code` is `hotkey_conflict`, details `{type_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalogue/types/{typeId}:
+    parameters:
+      - $ref: "#/components/parameters/typeId"
+    get:
+      tags: [catalogue]
+      operationId: getCatalogueType
+      responses:
+        "200":
+          description: the type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogueType" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [catalogue]
+      operationId: patchCatalogueType
+      summary: |
+        Rename, recolour, regroup, change the kind, default severity or hotkey, or archive. Types
+        are never deleted: an archived type still renders everywhere but is not offered for new
+        annotations or findings. The answer is the type plus `backfill_candidates`, true when the
+        kind changed from `object` to `defect`, so the UI can offer `POST .../backfill`; from
+        `defect` to `object` existing findings are kept and no new ones are created.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CatalogueTypePatch" }
+      responses:
+        "200":
+          description: the updated type
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CatalogueTypeUpdated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the new name exists (`code` is `type_exists`, details `{type_id}`), or the hotkey is taken (`code` is `hotkey_conflict`, details `{type_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalogue/types/{typeId}/backfill:
+    parameters:
+      - $ref: "#/components/parameters/typeId"
+    post:
+      tags: [catalogue]
+      operationId: backfillCatalogueType
+      summary: |
+        Create findings from the accepted and person-drawn annotations of this defect type in every
+        recent project, one project at a time (a `findings_backfill` library job). Each becomes a
+        `reviewed` finding without a severity. Idempotent: an annotation that already has a finding
+        is skipped.
+      responses:
+        "202":
+          description: backfill job queued in the library runner
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+              example:
+                job:
+                  id: "j0000000-4444-4000-8000-000000000041"
+                  project_id: library
+                  type: findings_backfill
+                  state: queued
+                  progress: 0
+                  message: ""
+                  log_path: "runs/j0000000-4444-4000-8000-000000000041/job.log"
+                  params: { type_id: "c1a2b3c4-0000-4000-8000-000000000009" }
+                  result: null
+                  error: null
+                  created_at: "2026-09-26T10:00:00Z"
+                  started_at: null
+                  finished_at: null
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a backfill of this type is already queued or running (`code` is `job_running`, details `{job_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the type is not a defect type (`code` is `not_a_defect`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: "the catalogue (`code` is `catalogue_unavailable`) or the model library (`code` is `library_unavailable`) could not be opened"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalogue/severity:
+    get:
+      tags: [catalogue]
+      operationId: getSeverityScale
+      summary: The app-wide severity scale, level 1 first. A fresh catalogue holds 1 Minor, 2 Moderate, 3 Major, 4 Critical.
+      responses:
+        "200":
+          description: the scale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeverityScale" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [catalogue]
+      operationId: putSeverityScale
+      summary: |
+        Replace the scale. Levels must be exactly 1..n (422 `invalid_scale`). Names and colours may
+        change freely and levels may be appended. Removing levels takes them from the top only, and
+        only when no open project's findings use them (409 `severity_in_use`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SeverityScale" }
+      responses:
+        "200":
+          description: the new scale
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SeverityScale" }
+        "409":
+          description: "a level to remove is still used (`code` is `severity_in_use`, details `{level, projects}`, the names of the open projects that use it)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the levels are not 1..n (`code` is `invalid_scale`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/catalogue/classification/done:
+    post:
+      tags: [catalogue]
+      operationId: completeCatalogueClassification
+      summary: The operator has reviewed the types the migration merged in; clears `needs_classification` (the Catalogue banner's "Done").
+      responses:
+        "204":
+          description: cleared
+        "503": { $ref: "#/components/responses/CatalogueUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/settings/operator:
+    get:
+      tags: [findings]
+      operationId: getOperatorSettings
+      summary: The operator's name, shown as the author of new finding comments (Settings, "Your name"). `operator_name` is null until it is set; comments then say "Operator".
+      responses:
+        "200":
+          description: the operator settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorSettings" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [findings]
+      operationId: putOperatorSettings
+      summary: |
+        Set the operator's name. It is trimmed; an empty or null name clears it. Stored as
+        `operator_name` in the app-data `settings.json` (never a key); existing comments keep
+        their author.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OperatorSettings" }
+      responses:
+        "200":
+          description: the stored operator settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OperatorSettings" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -3529,6 +3757,12 @@ components:
       in: path
       required: true
       schema: { type: string, pattern: "^c[0-9]{1,6}$" }
+    typeId:
+      name: typeId
+      in: path
+      required: true
+      description: a catalogue type id
+      schema: { type: string }
 
   responses:
     Error:
@@ -6965,3 +7199,97 @@ components:
           description: type id to the project's hotkey override (a digit 1-9 or a letter); null clears it; a type left out keeps its override
           additionalProperties: { type: [string, "null"], pattern: "^[1-9A-Za-z]$" }
       example: { type_ids: ["c1a2b3c4-0000-4000-8000-000000000001", "c1a2b3c4-0000-4000-8000-000000000009"], hotkeys: { "c1a2b3c4-0000-4000-8000-000000000009": "c" } }
+    # ------------------------------------------------------------ foundation: catalogue (F-C0)
+    CatalogueType:
+      type: object
+      description: an app-wide defect or object type in `catalogue.db`; never deleted, only archived
+      required: [id, name, colour, kind, default_severity, hotkey, group, archived, origin]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        kind: { $ref: "#/components/schemas/CatalogueKind" }
+        default_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: the severity a new finding of this type starts with }
+        hotkey: { type: [string, "null"], description: "live only inside a type picker, never at workspace level" }
+        group: { type: [string, "null"] }
+        archived: { type: boolean }
+        origin: { type: string, enum: [user, migrated], description: "`migrated` when the foundation migration created it from a project class" }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user }
+    CatalogueTypePage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/CatalogueType" }
+        next_cursor: { type: [string, "null"] }
+        needs_classification: { type: boolean, description: "true after migration merged project classes in as `object` types, until `POST /catalogue/classification/done`; absent means false" }
+      example:
+        items:
+          - { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: user }
+          - { id: "c1a2b3c4-0000-4000-8000-000000000001", name: excavator, colour: "#f97316", kind: object, default_severity: null, hotkey: "1", group: Machinery, archived: false, origin: migrated }
+        next_cursor: null
+        needs_classification: true
+    CatalogueTypeCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '\S', description: must contain a non-whitespace character }
+        colour: { type: [string, "null"], pattern: "^#[0-9a-fA-F]{6}$", description: picked by the server when absent }
+        kind: { $ref: "#/components/schemas/CatalogueKind" }
+        default_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: null when absent }
+        hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$", description: null when absent }
+        group: { type: [string, "null"], maxLength: 64, description: null when absent }
+      example: { name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects }
+    CatalogueTypePatch:
+      type: object
+      description: every field is optional; a field that is sent replaces the stored one
+      properties:
+        name: { type: string, minLength: 1, maxLength: 64, pattern: '\S' }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        kind: { $ref: "#/components/schemas/CatalogueKind" }
+        default_severity: { type: [integer, "null"], minimum: 1, maximum: 9 }
+        hotkey: { type: [string, "null"], pattern: "^[1-9A-Za-z]$" }
+        group: { type: [string, "null"], maxLength: 64 }
+        archived: { type: boolean }
+      example: { kind: defect, default_severity: 2 }
+    CatalogueTypeUpdated:
+      description: the patched type, plus whether to offer the findings backfill
+      allOf:
+        - $ref: "#/components/schemas/CatalogueType"
+        - type: object
+          required: [backfill_candidates]
+          properties:
+            backfill_candidates: { type: boolean, description: "true when the kind changed from `object` to `defect`: offer `POST /catalogue/types/{typeId}/backfill`" }
+      example: { id: "c1a2b3c4-0000-4000-8000-000000000009", name: crack, colour: "#ff5a4f", kind: defect, default_severity: 2, hotkey: "c", group: Concrete defects, archived: false, origin: migrated, backfill_candidates: true }
+    SeverityLevel:
+      type: object
+      required: [level, name, colour]
+      properties:
+        level: { type: integer, minimum: 1, maximum: 9 }
+        name: { type: string, minLength: 1, maxLength: 32, pattern: '\S' }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+      example: { level: 4, name: Critical, colour: "#ff5a4f" }
+    SeverityScale:
+      type: object
+      description: at most nine levels, because the keys 1-9 set a finding's severity
+      required: [levels]
+      properties:
+        levels:
+          type: array
+          minItems: 1
+          maxItems: 9
+          items: { $ref: "#/components/schemas/SeverityLevel" }
+      example:
+        levels:
+          - { level: 1, name: Minor, colour: "#3fb68e" }
+          - { level: 2, name: Moderate, colour: "#e2bf2e" }
+          - { level: 3, name: Major, colour: "#ff9c3a" }
+          - { level: 4, name: Critical, colour: "#ff5a4f" }
+    OperatorSettings:
+      type: object
+      description: app-wide operator settings kept in the backend's `settings.json`
+      required: [operator_name]
+      properties:
+        operator_name: { type: [string, "null"], maxLength: 80, description: "the author of new finding comments; null means unset (comments say Operator)" }
+      example: { operator_name: Danijel }

@@ -27,7 +27,18 @@ BK_APP_STUBS: list[Stub] = []
 BC_PROJECT_STUBS: list[Stub] = [
     ("PUT", "/types", "putProjectTypes"),
 ]
-BC_APP_STUBS: list[Stub] = []
+BC_APP_STUBS: list[Stub] = [
+    ("GET", "/catalogue/types", "listCatalogueTypes"),
+    ("POST", "/catalogue/types", "createCatalogueType"),
+    ("GET", "/catalogue/types/{typeId}", "getCatalogueType"),
+    ("PATCH", "/catalogue/types/{typeId}", "patchCatalogueType"),
+    ("POST", "/catalogue/types/{typeId}/backfill", "backfillCatalogueType"),
+    ("GET", "/catalogue/severity", "getSeverityScale"),
+    ("PUT", "/catalogue/severity", "putSeverityScale"),
+    ("POST", "/catalogue/classification/done", "completeCatalogueClassification"),
+    ("GET", "/settings/operator", "getOperatorSettings"),
+    ("PUT", "/settings/operator", "putOperatorSettings"),
+]
 
 # BM: datasets across projects, training runs and the model class map (§12, §7.4).
 BM_APP_STUBS: list[Stub] = []

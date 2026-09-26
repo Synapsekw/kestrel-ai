@@ -20,6 +20,17 @@ FOUNDATION_OPERATIONS: dict[str, tuple[str, str]] = {
     "retryProjectMigration": ("post", "/api/v1/projects/migrations/retry"),
     "revealProjectBackup": ("post", "/api/v1/projects/migrations/reveal-backup"),
     "putProjectTypes": ("put", P + "/types"),
+    # catalogue (Task 3)
+    "listCatalogueTypes": ("get", "/api/v1/catalogue/types"),
+    "createCatalogueType": ("post", "/api/v1/catalogue/types"),
+    "getCatalogueType": ("get", "/api/v1/catalogue/types/{typeId}"),
+    "patchCatalogueType": ("patch", "/api/v1/catalogue/types/{typeId}"),
+    "backfillCatalogueType": ("post", "/api/v1/catalogue/types/{typeId}/backfill"),
+    "getSeverityScale": ("get", "/api/v1/catalogue/severity"),
+    "putSeverityScale": ("put", "/api/v1/catalogue/severity"),
+    "completeCatalogueClassification": ("post", "/api/v1/catalogue/classification/done"),
+    "getOperatorSettings": ("get", "/api/v1/settings/operator"),
+    "putOperatorSettings": ("put", "/api/v1/settings/operator"),
 }
 
 # Response schemas the Prism mock serves: each carries its own example (spec §18 "Prism examples").
@@ -28,6 +39,11 @@ EXAMPLED_SCHEMAS = [
     "ProjectSummary",
     "MigrationState",
     "ClassDef",
+    "CatalogueType",
+    "CatalogueTypePage",
+    "CatalogueTypeUpdated",
+    "SeverityScale",
+    "OperatorSettings",
 ]
 
 
@@ -127,3 +143,17 @@ def test_the_mock_has_an_example(spec, name):
     if name.endswith("Page"):
         # A generated cursor would be the string "string": a client paging the mock never stops.
         assert example["next_cursor"] is None, name
+
+
+# ------------------------------------------------------------------------------ Task 3
+
+
+def test_the_severity_scale_has_at_most_nine_levels(spec):
+    scale = _schemas(spec)["SeverityScale"]["properties"]["levels"]
+    assert (scale["minItems"], scale["maxItems"]) == (1, 9)
+    assert [lvl["name"] for lvl in _schemas(spec)["SeverityScale"]["example"]["levels"]] == [
+        "Minor",
+        "Moderate",
+        "Major",
+        "Critical",
+    ]
