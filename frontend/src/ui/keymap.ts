@@ -4,8 +4,8 @@ import { useEffect, useRef } from "react";
  * The one app keymap (spec §5.6). Global and review keys mean the same everywhere; each workspace
  * owns only its tool keys, and none may equal a global or review key (keymap.test.tsx walks it).
  * I, M and C bind handlers to these entries through useToolShortcuts; the ? sheet and hint bars
- * render from them. The `findings` scope is reserved empty here: S1 fills J, K and Shift+O/R/C in
- * it; Enter stays global (it already means "commit") and DataTable handles it.
+ * render from them. The `findings` scope holds J, K and Shift+O/R/C; Enter stays global (it already
+ * means "commit") and DataTable handles it.
  */
 
 export type WorkspaceScope = "images" | "maps" | "clouds" | "clouds.fly" | "findings";
@@ -103,6 +103,7 @@ const i = entry("images");
 const m = entry("maps");
 const c = entry("clouds");
 const fly = entry("clouds.fly");
+const fd = entry("findings");
 
 export const GLOBAL_KEYS: KeyEntry[] = [
   g("Ctrl+K", "palette", "Command palette"),
@@ -201,8 +202,14 @@ export const WORKSPACE_KEYS: Record<WorkspaceScope, KeyEntry[]> = {
     fly("Q", "move-down", "Fly down"),
     fly("E", "move-up", "Fly up"),
   ],
-  // Reserved for S1: J, K and Shift+O/R/C on the Findings tab's DataTable.
-  findings: [],
+  // The Findings tab (F §8.6): 1-9 and T are the review keys, Enter and Esc the global ones.
+  findings: [
+    fd("J", "next-row", "Next finding"),
+    fd("K", "previous-row", "Previous finding"),
+    fd("Shift+O", "status-open", "Set status Open"),
+    fd("Shift+R", "status-reviewed", "Set status Reviewed"),
+    fd("Shift+C", "status-closed", "Set status Closed"),
+  ],
 };
 
 export const KEYMAP: KeyEntry[] = [...GLOBAL_KEYS, ...REVIEW_KEYS, ...Object.values(WORKSPACE_KEYS).flat()];

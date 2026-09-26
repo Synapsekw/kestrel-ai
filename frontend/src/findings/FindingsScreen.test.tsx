@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { fakeClient, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
+import { act } from "react";
+import { errorBody, fakeClient, PROJECT_ID, type RecordedRequest } from "@/test/fixtures";
 import { baseRoutes, exampleFinding, exampleFinding2 } from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { FindingsScreen } from "./FindingsScreen";
 
-function renderTab(search = "", items = [exampleFinding, exampleFinding2]) {
+function renderTab(search = "", items = [exampleFinding, exampleFinding2], listStatus = 200) {
   const { api, requests } = fakeClient(
-    baseRoutes([{ method: "GET", path: /\/findings$/, body: { items, next_cursor: null } }]),
+    baseRoutes([
+      {
+        method: "GET",
+        path: /\/findings$/,
+        status: listStatus,
+        body: listStatus === 200 ? { items, next_cursor: null } : errorBody("internal", "Database locked"),
+      },
+    ]),
   );
   renderWithProviders(
     <>
@@ -88,6 +96,25 @@ describe("FindingsScreen", () => {
       expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/findings`),
     );
     expect(screen.getByTestId("location").textContent).not.toContain("?");
+  });
+
+  it("Clear while the search is still debouncing drops the typed text too", async () => {
+    renderTab("?severity=4");
+    await screen.findByText("F-0217");
+    const box = screen.getByRole("searchbox", { name: "Search findings" });
+    fireEvent.change(box, { target: { value: "crack" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    await act(() => new Promise((r) => setTimeout(r, 400)));
+    expect(box).toHaveValue("");
+    expect(screen.getByTestId("location").textContent).toBe(`/p/${PROJECT_ID}/findings`);
+  });
+
+  it("shows only the error when the first load fails", async () => {
+    renderTab("", [], 500);
+    expect(await screen.findByText("Database locked")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText("Nothing here yet")).toBeNull();
+    expect(screen.queryByText("No findings yet")).toBeNull();
   });
 
   it("explains where findings come from when there are none", async () => {

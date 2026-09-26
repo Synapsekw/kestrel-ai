@@ -175,15 +175,17 @@ export function FindingFiltersBar({
         ))}
       </div>
       <div className="ml-auto flex items-center gap-2">
-        <Input
-          type="search"
-          dense
-          aria-label="Search findings"
-          placeholder="Note, type or F-0123"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          className="w-56"
-        />
+        {/* DS Input is always full width: size it with a wrapper. */}
+        <div className="w-56">
+          <Input
+            type="search"
+            dense
+            aria-label="Search findings"
+            placeholder="Note, type or F-0123"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
         <Select
           dense
           aria-label="Sort findings"
@@ -201,7 +203,11 @@ export function FindingFiltersBar({
           <Button
             size="sm"
             variant="ghost"
-            onClick={() => onChange({ ...DEFAULT_FILTERS, sort: filters.sort })}
+            onClick={() => {
+              // A search still debouncing would otherwise land again 250 ms after the Clear.
+              setQ("");
+              onChange({ ...DEFAULT_FILTERS, sort: filters.sort });
+            }}
           >
             Clear filters
           </Button>

@@ -39,15 +39,15 @@ describe("ShortcutSheet (F §5.6: rendered from DS's keymap table)", () => {
     expect(sheetScope(routeInfo("/catalogue"))).toBeNull();
   });
 
-  it("uses the findings scope on the Findings tab, even though it has no entries yet (controller ruling F6)", () => {
+  it("uses the findings scope on the Findings tab (controller ruling F6)", () => {
     expect(sheetScope(routeInfo("/p/p1/findings"))).toBe("findings");
     renderAt("/p/p1/findings");
     fireEvent.keyDown(window, { key: "?", shiftKey: true });
     const sheet = screen.getByRole("dialog", { name: "Keyboard shortcuts" });
-    // The findings scope has no tool keys yet: only the global and review rows show, and the
-    // sheet still renders without error.
+    // The global and review rows plus the tab's own J, K and Shift+O/R/C.
     const rows = within(sheet).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(keysFor("findings").length);
-    expect(rows).toHaveLength(keysFor(null).length);
+    expect(rows).toHaveLength(keysFor(null).length + 5);
+    expect(within(sheet).getByText("Set status Closed")).toBeInTheDocument();
   });
 });

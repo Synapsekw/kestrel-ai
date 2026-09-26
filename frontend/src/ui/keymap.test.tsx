@@ -136,9 +136,15 @@ describe("the app keymap (spec §5.6)", () => {
     expect(keys).not.toContain("W");
   });
 
-  it("reserves an empty findings scope for S1's J/K, Shift+O/R/C entries", () => {
-    expect(WORKSPACE_KEYS.findings).toEqual([]);
-    expect(keysFor("findings")).toEqual([...GLOBAL_KEYS, ...REVIEW_KEYS]);
+  it("gives the Findings tab J, K and Shift+O/R/C on top of the global and review keys", () => {
+    expect(WORKSPACE_KEYS.findings.flatMap((e) => e.keys)).toEqual([
+      "J",
+      "K",
+      "Shift+O",
+      "Shift+R",
+      "Shift+C",
+    ]);
+    expect(keysFor("findings")).toEqual([...GLOBAL_KEYS, ...REVIEW_KEYS, ...WORKSPACE_KEYS.findings]);
   });
 });
 
