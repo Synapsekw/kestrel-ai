@@ -159,6 +159,62 @@ describe("RunDialog", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Choose at least one source.");
     expect(requests.some((r) => r.method === "POST")).toBe(false);
   });
+
+  it("shows the server's message when a local-model run is refused as model_or_provider_required", async () => {
+    const { api } = fakeClient(
+      routes([
+        {
+          method: "POST",
+          path: /\/runs$/,
+          status: 422,
+          body: errorBody("model_or_provider_required", "a run needs a library model_id or a provider"),
+        },
+      ]),
+    );
+    renderWithProviders(
+      <RunDialog
+        projectId={PROJECT_ID}
+        initialSourceIds={[SOURCE_ID]}
+        onClose={() => {}}
+        onStarted={() => {}}
+      />,
+      { api },
+    );
+    await screen.findByText(/finds person, bicycle/);
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "a run needs a library model_id or a provider",
+    );
+  });
+
+  it("shows the server's message when a cloud-provider run is refused as query_required", async () => {
+    const { api } = fakeClient(
+      routes([
+        {
+          method: "POST",
+          path: /\/runs$/,
+          status: 422,
+          body: errorBody("query_required", "a cloud provider run needs a non-empty query"),
+        },
+      ]),
+    );
+    renderWithProviders(
+      <RunDialog
+        projectId={PROJECT_ID}
+        initialSourceIds={[SOURCE_ID]}
+        onClose={() => {}}
+        onStarted={() => {}}
+      />,
+      { api },
+    );
+    await screen.findByText(/finds person, bicycle/);
+    fireEvent.click(screen.getByRole("radio", { name: "Cloud provider" }));
+    fireEvent.change(screen.getByLabelText("What to find"), { target: { value: "excavators" } });
+    fireEvent.click(screen.getByRole("button", { name: "Start run" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "a cloud provider run needs a non-empty query",
+    );
+  });
 });
 
 /**

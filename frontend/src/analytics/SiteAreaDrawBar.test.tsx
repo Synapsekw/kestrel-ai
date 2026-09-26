@@ -61,7 +61,7 @@ describe("SiteAreaDrawBar", () => {
         method: "POST",
         path: /site-areas$/,
         status: 422,
-        body: { error: { code: "validation_error", message: "this map has no georeference", details: {} } },
+        body: { error: { code: "invalid_outline", message: "this map has no georeference", details: {} } },
       },
     ]);
     const onSaved = vi.fn();
