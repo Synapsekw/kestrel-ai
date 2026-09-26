@@ -5,11 +5,16 @@ schema, then runs the data steps (`app.migration.steps.PIPELINE`) and records th
 `migrations.json`. It is resumable: the step ledger lets a new job start where a failed or
 cancelled one stopped. While `PIPELINE` is empty the orchestration is disarmed (`armed()`), and
 the job only opens the project.
+
+A cancel is flagged `failed/cancelled` unless it is a graceful app shutdown (`begin_shutdown`,
+wired into the lifespan just before the library runner stops): a quit mid-upgrade must leave the
+entry `pending` so the next start resumes it, not flag it as if the operator cancelled it.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
 from pathlib import Path
 
 from app.errors import AppError
@@ -18,13 +23,35 @@ from app.jobs.registry import register_job_type
 from app.library.handle import LIBRARY_UNAVAILABLE
 from app.migration import steps
 from app.migration.backup import latest_backup
-from app.migration.pipeline import TARGET_SCHEMA_VERSION, MigrationEnv, StepFailed, run_pipeline
+from app.migration.pipeline import FINISH, TARGET_SCHEMA_VERSION, MigrationEnv, StepFailed, run_pipeline
 from app.migration.state import MigrationStates
 
 JOB_TYPE = "project_migrate"
 WAITING_FOR_LIBRARY = "Waiting for the model library: this project opens once the library is available."
 CANCELLED = "The upgrade was cancelled. Retry to finish it."
 log = logging.getLogger(__name__)
+
+_shutdown = threading.Event()
+
+
+def begin_shutdown() -> None:
+    """Call once from the lifespan's shutdown, before the library runner stops: a `JobCancelled`
+    raised inside `migrate_project` while this is set is a graceful quit, not an operator cancel,
+    so the entry is left `pending` for the next start to resume rather than flagged
+    `failed/cancelled` (controller ruling on the app-quit-mid-upgrade scenario). A job still queued
+    at shutdown never runs `migrate_project` or `_cancelled_before_start` at all (`JobRunner.stop`
+    marks it `cancelled` directly), so its entry is already left `pending` with nothing extra to do
+    here."""
+    _shutdown.set()
+
+
+def reset_shutdown() -> None:
+    """Test/startup hook: clear the signal so a new app, or the next test's app, starts clean."""
+    _shutdown.clear()
+
+
+def _shutting_down() -> bool:
+    return _shutdown.is_set()
 
 
 def armed() -> bool:
@@ -63,6 +90,12 @@ def _project_id_for(runner, folder: Path, entry: dict) -> str:
 
 
 def publish(runner, folder, entry: dict) -> None:
+    """`migration.changed` (C0): `state` is the `MigrationState` state, so a `pending` entry whose
+    job is already live is reported as `running` (F3) — the same derivation `GET`/Retry use, not
+    the raw stored value."""
+    state = entry.get("state")
+    if state == "pending" and live_job_id(runner, entry):
+        state = "running"
     runner.events.publish(
         {
             "type": "migration.changed",
@@ -72,7 +105,7 @@ def publish(runner, folder, entry: dict) -> None:
             "message": "",
             "payload": {
                 "folder": str(folder),
-                "state": entry.get("state"),
+                "state": state,
                 "job_id": entry.get("job_id"),
                 "code": entry.get("code"),
             },
@@ -105,7 +138,16 @@ def _fail(runner, states: MigrationStates, folder: Path, **fields) -> None:
     publish(runner, folder, states.set(folder, state="failed", **fields))
 
 
-@register_job_type(JOB_TYPE)
+def _cancelled_before_start(ctx) -> None:
+    """A queued `project_migrate` job cancelled before it ever ran (both workers were busy):
+    `migrate_project` never runs, so flag `failed/cancelled` here instead, or the entry stays
+    `pending` with a dead job id that startup would silently re-queue."""
+    runner = ctx.runner
+    folder = Path(ctx.params["folder"])
+    _fail(runner, states_for(runner.projects), folder, code="cancelled", step=None, error=CANCELLED)
+
+
+@register_job_type(JOB_TYPE, on_cancelled_before_start=_cancelled_before_start)
 def migrate_project(ctx) -> dict:
     runner = ctx.runner
     if getattr(runner, "library", None) is None:
@@ -141,7 +183,12 @@ def migrate_project(ctx) -> dict:
         try:
             report = run_pipeline(handle, env, steps.PIPELINE)
         except JobCancelled:
-            _fail(runner, states, folder, code="cancelled", step=None, error=CANCELLED)
+            if _shutting_down():
+                # A graceful quit, not an operator cancel: leave the entry `pending` so the next
+                # start resumes it (the ledger skips whatever steps already committed).
+                ctx.log.info("upgrade for %s left pending: the app is shutting down", folder)
+            else:
+                _fail(runner, states, folder, code="cancelled", step=None, error=CANCELLED)
             raise
         except StepFailed as e:
             _fail(
@@ -154,17 +201,47 @@ def migrate_project(ctx) -> dict:
                 backup_path=_backup(handle.folder),
             )
             raise JobFailure(f"The upgrade stopped at step {e.step}: {e.message}") from e
+        except Exception as e:
+            # `run_pipeline` also writes the report and commits `finish` (pipeline.py) outside any
+            # per-step try; that failure must still flag the project rather than leave it `pending`
+            # with a dead job id for startup to silently re-queue.
+            message = f"{type(e).__name__}: {e}"
+            _fail(
+                runner,
+                states,
+                folder,
+                code="step_failed",
+                step=FINISH,
+                error=message,
+                backup_path=_backup(handle.folder),
+            )
+            raise JobFailure(f"The upgrade could not finish: {message}") from e
         handle.schema_version = TARGET_SCHEMA_VERSION
-    entry = states.set(
-        folder,
-        state="ok",
-        code=None,
-        step=None,
-        error=None,
-        project_id=handle.id,
-        backup_path=_backup(handle.folder),
-        report_path=report.get("report_path"),
-    )
+    try:
+        entry = states.set(
+            folder,
+            state="ok",
+            code=None,
+            step=None,
+            error=None,
+            project_id=handle.id,
+            backup_path=_backup(handle.folder),
+            report_path=report.get("report_path"),
+        )
+    except Exception as e:
+        # Recording the outcome can itself fail (migrations.json write error); the same risk of a
+        # silently re-queued `pending` project applies, so flag it here too.
+        message = f"{type(e).__name__}: {e}"
+        _fail(
+            runner,
+            states,
+            folder,
+            code="step_failed",
+            step=None,
+            error=message,
+            backup_path=_backup(handle.folder),
+        )
+        raise JobFailure(f"The upgrade result could not be recorded: {message}") from e
     publish(runner, folder, entry)
     return {
         "project_id": handle.id,

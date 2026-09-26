@@ -84,8 +84,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         from app.jobs.events import EventBus
         from app.jobs.runner import JobRunner
+        from app.migration.job import begin_shutdown, reset_shutdown
         from app.projects.service import ProjectRegistry
 
+        reset_shutdown()  # a fresh app (or the next test's app) starts with no shutdown signalled
         app.state.events = EventBus()
         app.state.events.bind(asyncio.get_running_loop())
         app.state.jobs = JobRunner(app.state.events)
@@ -117,6 +119,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.agent_llm = agent_llm.complete
         yield
         await app.state.agent.stop()
+        try:
+            # Before the library runner stops, so `migrate_project` sees the signal on the
+            # `JobCancelled` `JobRunner.stop` raises for a running upgrade: a quit is left
+            # `pending`, not flagged as an operator cancel (app.migration.job.begin_shutdown).
+            begin_shutdown()
+        except Exception:
+            logging.getLogger(__name__).exception("could not signal the migration shutdown")
         app.state.jobs.stop()
         app.state.projects.close_all()
         if app.state.library is not None:

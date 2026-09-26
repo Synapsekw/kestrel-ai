@@ -49,10 +49,14 @@ def wait_library_job(client, job_id: str, timeout: float = 30.0) -> dict:
     """`library_helpers.wait_library_job`, then also wait until the runner no longer counts the
     job as live (F5): `JobRunner._finish` writes the job's terminal state before `_run`'s `finally`
     drops it from the runner's live contexts, so a caller that sees "succeeded"/"failed" and
-    immediately resubmits can still observe a stale `live_job_id` for a few milliseconds."""
+    immediately resubmits can still observe a stale `live_job_id` for a few milliseconds. Raises
+    (rather than returning with the job still live) if that never clears within `timeout`, so a
+    hang here fails with its own message instead of a confusing assertion further down the test."""
     result = _wait_library_job(client, job_id, timeout)
     deadline = time.time() + timeout
-    while client.app.state.jobs.is_live(job_id) and time.time() < deadline:
+    while client.app.state.jobs.is_live(job_id):
+        if time.time() >= deadline:
+            raise AssertionError(f"job {job_id} is still live {timeout}s after reaching its terminal state")
         time.sleep(0.02)
     return result
 
