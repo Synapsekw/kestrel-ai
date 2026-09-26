@@ -12,21 +12,10 @@ always read the file: the project list and `_out` (Task 7) need the full picture
 """
 
 from app.errors import AppError
-from app.migration.backup import latest_backup
+from app.migration.backup import backup_path
 from app.migration.job import armed, blocked_reason, live_job_id, states_for, submit
 from app.migration.pipeline import TARGET_SCHEMA_VERSION
 from app.migration.state import failed_error, upgrading_error
-
-
-def backup_path(entry: dict, folder) -> str | None:
-    """The project's pre-upgrade backup: the one `migrations.json` records, else the newest real
-    backup on disk (F6) — the window between the Alembic backup `open_project_db` takes and a
-    `project_migrate` job recording its own. Reveal backup (Task 7) shows the same path."""
-    recorded = entry.get("backup_path")
-    if recorded:
-        return recorded
-    found = latest_backup(folder)
-    return str(found) if found else None
 
 
 def _needs_upgrade(handle) -> bool:

@@ -57,10 +57,12 @@ def _list_item(reg, runner, r: dict, opened: datetime | None, states: dict) -> P
     return _out(handle, opened, runner)
 
 
-def _failed_item(reg, r: dict, opened: datetime | None, error: Exception) -> ProjectOut:
+def _failed_item(reg, r: dict, opened: datetime | None, error: Exception) -> ProjectOut | None:
     """A recent project that could not be listed: an open that failed, or a folder that cannot
     even be checked (a `PermissionError` from `exists()`), is `failed` with `open_failed` (or the
-    failure `migrations.json` records). Never raises: one project never fails the list."""
+    failure `migrations.json` records). Never raises: one project never fails the list. An entry
+    that cannot be listed even so (a hand-damaged `recent_projects.json` row, such as a non-string
+    `name`) is None: skipped with a log line."""
     try:
         state = MigrationStateOut(**unavailable_state(reg, Path(r["folder"]), error))
     except Exception:
@@ -68,7 +70,11 @@ def _failed_item(reg, r: dict, opened: datetime | None, error: Exception) -> Pro
         state = MigrationStateOut(
             state="failed", code="open_failed", error=f"{type(error).__name__}: {error}"
         )
-    return ProjectOut.unavailable(r, state, opened)
+    try:
+        return ProjectOut.unavailable(r, state, opened)
+    except Exception:
+        log.exception("recent project entry %r could not be listed; skipped", r)
+        return None
 
 
 @router.get("", response_model=ProjectPage)
@@ -90,7 +96,9 @@ def list_projects(request: Request) -> ProjectPage:
             items.append(_list_item(reg, runner, r, opened, states))
         except Exception as e:
             log.warning("project at %s could not be listed: %s", r["folder"], e)
-            items.append(_failed_item(reg, r, opened, e))
+            item = _failed_item(reg, r, opened, e)
+            if item is not None:
+                items.append(item)
     return ProjectPage(items=items, next_cursor=None)
 
 

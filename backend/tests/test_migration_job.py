@@ -303,3 +303,22 @@ def test_open_failed_flags_the_project_open_failed(app, client, tmp_path):
     assert done["state"] == "failed"
     entry = _states(app).get(folder)
     assert (entry["state"], entry["code"]) == ("failed", "open_failed")
+
+
+def test_a_queued_job_cancelled_by_a_graceful_shutdown_stays_pending(app, client, tmp_path):
+    """Final review Minor 1: `JobRunner.stop` cancels every context before draining the queue, so a
+    worker can still hand a queued upgrade to the cancelled-before-start hook during a quit. That
+    is not the operator's cancel: the entry stays `pending` for the next start to resume."""
+    from types import SimpleNamespace
+
+    folder = legacy_at_head(tmp_path / "legacy")
+    states = _states(app)
+    states.set(folder, state="pending", job_id="job-queued-at-quit", project_id="p-legacy")
+    ctx = SimpleNamespace(runner=app.state.jobs, params={"folder": str(folder), "project_id": "p-legacy"})
+    migration_job.begin_shutdown()
+    try:
+        migration_job._cancelled_before_start(ctx)
+    finally:
+        migration_job.reset_shutdown()
+    entry = states.get(folder)
+    assert (entry["state"], entry["job_id"], entry.get("code")) == ("pending", "job-queued-at-quit", None)

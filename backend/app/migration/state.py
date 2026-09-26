@@ -5,13 +5,17 @@ still has a state to show. Stored states are `pending`, `ok` and `failed`; `runn
 by the gate from a live job. Every write is atomic (temp file + replace) and serialised by one
 process-wide lock, reusing `AppData._write` (F11) so this file and `recent_projects.json` share one
 atomic-write implementation. A file that cannot be read is treated as empty and logged, never
-raised: the app must start even when this file is damaged (AGENTS.md).
+raised: the app must start even when this file is damaged (AGENTS.md). A write over such a file
+first copies it aside to `migrations.json.damaged-<UTC stamp>` (never deleted), so a transient
+read failure cannot silently drop every other project's entry; if even that copy fails, the write
+is refused.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import shutil
 import threading
 from contextlib import contextmanager
 from datetime import UTC, datetime
@@ -42,16 +46,30 @@ class MigrationStates:
         with self._lock:
             yield self
 
+    def _read(self) -> tuple[dict, bool]:
+        """The entries, and whether a file exists that could not be read or parsed as a dict."""
+        if not self.path.exists():
+            return {}, False
+        try:
+            data = json.loads(self.path.read_text("utf-8"))
+        except (OSError, ValueError):
+            log.exception("%s could not be read; treating it as empty", self.path)
+            return {}, True
+        return (data, False) if isinstance(data, dict) else ({}, True)
+
+    def _keep_aside(self) -> None:
+        """Copy the unreadable file to `migrations.json.damaged-<UTC stamp>` before it is replaced.
+        An `OSError` here propagates: the write is refused rather than losing the file."""
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+        target, n = self.path.with_name(f"{self.path.name}.damaged-{stamp}"), 2
+        while target.exists():
+            target, n = self.path.with_name(f"{self.path.name}.damaged-{stamp}-{n}"), n + 1
+        shutil.copy2(self.path, target)
+        log.error("%s could not be read; kept it as %s before writing a new one", self.path, target.name)
+
     def all(self) -> dict[str, dict]:
         with self._lock:
-            if not self.path.exists():
-                return {}
-            try:
-                data = json.loads(self.path.read_text("utf-8"))
-            except (OSError, ValueError):
-                log.exception("%s could not be read; treating it as empty", self.path)
-                return {}
-            return data if isinstance(data, dict) else {}
+            return self._read()[0]
 
     def get(self, folder) -> dict | None:
         entry = self.all().get(self.key(folder))
@@ -64,7 +82,9 @@ class MigrationStates:
         if "state" in fields and fields["state"] not in STATES:
             raise ValueError(f"unknown migration state {fields['state']!r}")
         with self._lock:
-            data = self.all()
+            data, damaged = self._read()
+            if damaged:
+                self._keep_aside()
             key = self.key(folder)
             entry = dict(data.get(key) or {})
             entry.update(fields)

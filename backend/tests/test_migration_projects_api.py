@@ -264,3 +264,111 @@ def test_reveal_backup_of_an_unreadable_backups_folder_is_404(client, tmp_path, 
     r = client.post(REVEAL, json={"folder": str(folder)})
     assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
     assert launched == []
+
+
+# --- final-review fixes -----------------------------------------------------------------------
+
+
+def test_a_retry_whose_submit_fails_leaves_the_entry_failed(app, client, blocked_old, monkeypatch):
+    """Minor 3: Retry does not pre-set `pending`; a submit that raises (the library DB is locked)
+    leaves the entry `failed`, so startup never re-queues it by itself."""
+    import sqlite3
+
+    from fastapi.testclient import TestClient
+
+    assert _items(client)["p-old"]["migration"]["state"] == "failed"
+
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(app.state.jobs, "submit", locked)
+    loose = TestClient(app, raise_server_exceptions=False, headers={"Authorization": "Bearer test-token"})
+    assert loose.post(RETRY, json={"folder": str(blocked_old)}).status_code == 500
+    entry = MigrationStates(app.state.settings.data_dir).get(blocked_old)
+    assert (entry["state"], entry["code"]) == ("failed", "backup_failed")
+
+
+def test_a_failed_backup_keeps_the_recorded_copy_and_reports_one_on_disk(app, client, tmp_path, monkeypatch):
+    """Minor 4: `_backup_failed` never erases a recorded `backup_path`, and its 409 falls back to the
+    newest backup on disk, like `Project.migration`."""
+    import shutil
+
+    from app.db import session
+    from app.migration.backup import BackupFailed
+
+    monkeypatch.setattr(backup, "BACKUP_BEFORE", "0009")
+    folder = at_revision(tmp_path / "old", "0008")
+    (folder / "backups").mkdir()
+    earlier = folder / "backups" / "project.db.v1-20260101T000000Z.bak"
+    shutil.copy2(folder / "project.db", earlier)
+
+    def fails(folder, now=None):
+        raise BackupFailed("The project database could not be backed up: disk full")
+
+    monkeypatch.setattr(session, "backup_project_db", fails)
+    r = client.post("/api/v1/projects/open", json={"folder": str(folder)})
+    assert r.status_code == 409 and r.json()["error"]["details"]["backup_path"] == str(earlier)
+    states = MigrationStates(app.state.settings.data_dir)
+    states.set(folder, backup_path="C:/recorded/project.db.v1-20251231T000000Z.bak")
+    r = client.post("/api/v1/projects/open", json={"folder": str(folder)})
+    assert r.status_code == 409
+    assert r.json()["error"]["details"]["backup_path"] == "C:/recorded/project.db.v1-20251231T000000Z.bak"
+    assert states.get(folder)["backup_path"] == "C:/recorded/project.db.v1-20251231T000000Z.bak"
+    assert revision_of(folder / "project.db") == "0008"
+
+
+def _deny_is_file(monkeypatch, target):
+    import pathlib
+
+    real_is_file = pathlib.Path.is_file
+
+    def is_file(self):
+        if self == target:
+            raise PermissionError(13, "Access is denied", str(self))
+        return real_is_file(self)
+
+    monkeypatch.setattr(pathlib.Path, "is_file", is_file)
+
+
+def test_retry_of_an_unreadable_folder_is_404(client, tmp_path, monkeypatch):
+    """Minor 5: Python 3.11's `Path.is_file` re-raises a `PermissionError`; that is not a 500."""
+    folder = legacy_at_head(tmp_path / "legacy")
+    _deny_is_file(monkeypatch, folder / "project.db")
+    r = client.post(RETRY, json={"folder": str(folder)})
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+
+
+def test_reveal_backup_of_an_unreadable_backup_is_404(app, client, tmp_path, monkeypatch, launched):
+    folder = legacy_at_head(tmp_path / "legacy")
+    (folder / "backups").mkdir()
+    copy = folder / "backups" / "project.db.v1-20260101T000000Z.bak"
+    copy.write_bytes(b"")
+    MigrationStates(app.state.settings.data_dir).set(folder, state="ok", backup_path=str(copy))
+    _deny_is_file(monkeypatch, copy)
+    r = client.post(REVEAL, json={"folder": str(folder)})
+    assert r.status_code == 404 and r.json()["error"]["code"] == "not_found"
+    assert launched == []
+
+
+def test_a_hand_damaged_recent_entry_is_skipped_not_a_500(app, client, project_id, tmp_path, caplog):
+    """Minor 6: a recent entry that fails validation twice (a non-string name) is skipped and logged."""
+    import json
+
+    appdata = app.state.projects.appdata
+    entries = json.loads(appdata._recent.read_text("utf-8"))
+    entries.append({"id": "p-bad", "name": 123, "folder": str(tmp_path / "gone")})
+    appdata._recent.write_text(json.dumps(entries), "utf-8")
+    items = _items(client)
+    assert project_id in items and "p-bad" not in items
+    assert "p-bad" in caplog.text or str(tmp_path / "gone") in caplog.text
+
+
+def test_disarmed_a_version_1_project_lists_as_ok_with_no_job(app, client, tmp_path, monkeypatch):
+    """Minor 8: Part A ships disarmed; a pre-foundation project lists as `ok` and no job is queued."""
+    arm(monkeypatch)
+    folder = legacy_at_head(tmp_path / "legacy")
+    app.state.projects.appdata.remember("p-legacy", "Legacy", str(folder))
+    item = _items(client)["p-legacy"]
+    assert item["migration"]["state"] == "ok" and item["migration"]["job_id"] is None
+    assert item["schema_version"] == 1
+    assert MigrationStates(app.state.settings.data_dir).get(folder) is None

@@ -3,10 +3,13 @@
 `open_project_db` asks `needs_backup` before Alembic runs. When the upgrade will apply
 `BACKUP_BEFORE`, it takes a backup with SQLite's own online backup API, which is consistent under
 WAL. A backup that cannot be written, or that does not pass `PRAGMA quick_check`, raises
-`BackupFailed`, and the upgrade does not run: the project's database is left exactly as it was.
-The app never deletes a backup and never restores one by itself.
+`BackupFailed`, and the upgrade does not run: the project's data is left logically unchanged (not
+byte-identical: the `wal_checkpoint(TRUNCATE)` taken before the copy may already have moved pages
+from `project.db-wal` into `project.db`). The app never deletes a backup and never restores one by
+itself.
 
-Only the standard library is imported here: `app.db.session` imports this module.
+Only the standard library and Alembic's exception types are imported here: `app.db.session`
+imports this module.
 """
 
 from __future__ import annotations
@@ -16,6 +19,10 @@ import re
 import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.request import pathname2url
+
+from alembic.script.revision import ResolutionError
+from alembic.util import CommandError
 
 BACKUP_BEFORE = "0010"  # the foundation revision (foundation spec §11.1)
 BACKUP_LABEL = "v1"  # the schema generation the copy holds
@@ -39,22 +46,34 @@ def needs_backup(current: str | None, script) -> bool:
 
     `current` None is a database with no revision yet (a new project): there is nothing to lose.
     A chain without `BACKUP_BEFORE`, or a revision this build does not know (a database written by
-    a newer build), never asks for one; Alembic then reports the real problem itself.
+    a newer build), never asks for one; Alembic then reports the real problem itself. Any other
+    error propagates: the open fails closed rather than upgrading without a copy.
     """
     if current is None or current == BACKUP_BEFORE:
         return False
     try:
         script.get_revision(BACKUP_BEFORE)
         pending = {rev.revision for rev in script.walk_revisions(base=current, head="heads")}
-    except Exception:  # alembic raises ResolutionError or CommandError for an unknown id
+    except (CommandError, ResolutionError):  # an id this chain does not know
         return False
     pending.discard(current)
     return BACKUP_BEFORE in pending
 
 
+def ro_uri(path) -> str:
+    """A read-only SQLite `file:` URI for `path`, for `sqlite3.connect(..., uri=True)`.
+
+    `Path.as_uri()` puts a UNC server in the URI authority (`file://server/share/...`), which
+    SQLite refuses; `pathname2url` keeps it in the path with an empty authority
+    (`file:////server/share/...`) and percent-encodes what a URI must not carry. The path is made
+    absolute without touching the file system, so a pure path works too."""
+    return f"file:{pathname2url(os.path.abspath(str(path)))}?mode=ro"
+
+
 def quick_check(path: Path) -> str:
-    """`PRAGMA quick_check` on a file opened read-only: "ok", or SQLite's first complaint."""
-    con = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)
+    """`PRAGMA quick_check`: "ok", or SQLite's first complaint. It runs on the backup's own fresh
+    partial, so a plain path is enough (no URI, which a UNC folder would trip over)."""
+    con = sqlite3.connect(str(path))
     try:
         return str(con.execute("PRAGMA quick_check").fetchone()[0])
     finally:
@@ -75,6 +94,18 @@ def latest_backup(folder: Path) -> Path | None:
     except OSError:
         return None
     return max(found)[1] if found else None
+
+
+def backup_path(entry: dict | None, folder) -> str | None:
+    """The project's pre-upgrade backup: the one `migrations.json` records, else the newest real
+    backup on disk (F6) — the window between the Alembic backup `open_project_db` takes and a
+    `project_migrate` job recording its own. `Project.migration`, the 409s and Reveal backup all
+    show this one path; `entry` None asks for the newest on disk only."""
+    recorded = (entry or {}).get("backup_path")
+    if recorded:
+        return recorded
+    found = latest_backup(folder)
+    return str(found) if found else None
 
 
 def _target(folder: Path, now: datetime) -> Path:

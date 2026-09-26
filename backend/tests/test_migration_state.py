@@ -79,3 +79,49 @@ def test_the_409s_carry_the_contract_details():
         {"job_id": "job-1"},
     )
     assert "model library" in upgrading_error(None, "Waiting for the model library.").message
+
+
+def test_a_write_over_an_unparseable_file_keeps_it_aside(tmp_path, caplog):
+    """Final review Minor 2: a file that cannot be parsed is copied aside, never silently lost."""
+    damaged = '{"other": {"state": "failed", "code": "step_failed"'
+    (tmp_path / FILE_NAME).write_text(damaged, "utf-8")
+    states = MigrationStates(tmp_path)
+    states.set(tmp_path / "p", state="ok")
+    kept = sorted(tmp_path.glob(f"{FILE_NAME}.damaged-*"))
+    assert len(kept) == 1 and kept[0].read_text("utf-8") == damaged
+    assert list(states.all()) == [MigrationStates.key(tmp_path / "p")]
+    assert kept[0].name in caplog.text
+
+
+def test_a_write_over_a_file_that_could_not_be_read_keeps_it_aside(tmp_path, monkeypatch):
+    """A transient read failure (an antivirus lock) must not drop every other project's entry."""
+    states = MigrationStates(tmp_path)
+    states.set(tmp_path / "other", state="failed", code="step_failed", error="x")
+    original = (tmp_path / FILE_NAME).read_text("utf-8")
+    real_read_text = Path.read_text
+
+    def read_text(self, *args, **kwargs):
+        if self.name == FILE_NAME:
+            raise PermissionError(13, "The process cannot access the file", str(self))
+        return real_read_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    assert states.get(tmp_path / "other") is None  # reads still treat it as empty
+    states.set(tmp_path / "p", state="ok")
+    monkeypatch.undo()
+    kept = sorted(tmp_path.glob(f"{FILE_NAME}.damaged-*"))
+    assert len(kept) == 1 and kept[0].read_text("utf-8") == original
+
+
+def test_a_write_that_cannot_keep_the_unreadable_file_aside_refuses(tmp_path, monkeypatch):
+    from app.migration import state as state_module
+
+    (tmp_path / FILE_NAME).write_text("{ not json", "utf-8")
+
+    def no_copy(*args, **kwargs):
+        raise PermissionError(13, "Access is denied")
+
+    monkeypatch.setattr(state_module.shutil, "copy2", no_copy)
+    with pytest.raises(OSError):
+        MigrationStates(tmp_path).set(tmp_path / "p", state="ok")
+    assert (tmp_path / FILE_NAME).read_text("utf-8") == "{ not json"

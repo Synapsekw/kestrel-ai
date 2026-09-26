@@ -22,7 +22,7 @@ from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.registry import register_job_type
 from app.library.handle import LIBRARY_UNAVAILABLE
 from app.migration import steps
-from app.migration.backup import latest_backup
+from app.migration.backup import backup_path
 from app.migration.pipeline import FINISH, TARGET_SCHEMA_VERSION, MigrationEnv, StepFailed, run_pipeline
 from app.migration.state import MigrationStates
 
@@ -39,9 +39,9 @@ def begin_shutdown() -> None:
     raised inside `migrate_project` while this is set is a graceful quit, not an operator cancel,
     so the entry is left `pending` for the next start to resume rather than flagged
     `failed/cancelled` (controller ruling on the app-quit-mid-upgrade scenario). A job still queued
-    at shutdown never runs `migrate_project` or `_cancelled_before_start` at all (`JobRunner.stop`
-    marks it `cancelled` directly), so its entry is already left `pending` with nothing extra to do
-    here."""
+    at shutdown is usually marked `cancelled` by `JobRunner.stop` directly, but `stop` cancels every
+    context before it drains the queue, so a worker freed in that window can still hand it to
+    `_cancelled_before_start`; that hook also checks this signal and leaves the entry `pending`."""
     _shutdown.set()
 
 
@@ -74,6 +74,20 @@ def live_job_id(runner, entry: dict | None) -> str | None:
     return job_id if job_id and runner.is_live(job_id) else None
 
 
+def recent_id(registry, folder) -> str | None:
+    """The id of `folder`'s recent-list entry, matched the way `migrations.json` keys folders
+    (`MigrationStates.key`: resolved, lower-cased); None when it is not in the list. A recent entry
+    whose folder cannot be resolved is skipped."""
+    key = MigrationStates.key(folder)
+    for r in registry.recent():
+        try:
+            if MigrationStates.key(r["folder"]) == key:
+                return r["id"]
+        except (OSError, ValueError, TypeError):
+            continue
+    return None
+
+
 def _project_id_for(runner, folder: Path, entry: dict) -> str:
     """The event's `project_id` (F1): the entry's, else the id of the folder's recent-list
     entry, else `"library"` when neither is known."""
@@ -81,12 +95,8 @@ def _project_id_for(runner, folder: Path, entry: dict) -> str:
     if project_id:
         return project_id
     registry = getattr(runner, "projects", None)
-    if registry is not None:
-        key = MigrationStates.key(folder)
-        for r in registry.recent():
-            if r["folder"].lower() == key:
-                return r["id"]
-    return "library"
+    found = recent_id(registry, folder) if registry is not None else None
+    return found or "library"
 
 
 def publish(runner, folder, entry: dict) -> None:
@@ -129,11 +139,6 @@ def submit(runner, registry, folder: Path, project_id: str | None = None):
     return job
 
 
-def _backup(folder: Path) -> str | None:
-    found = latest_backup(folder)
-    return str(found) if found else None
-
-
 def _fail(runner, states: MigrationStates, folder: Path, **fields) -> None:
     publish(runner, folder, states.set(folder, state="failed", **fields))
 
@@ -141,7 +146,10 @@ def _fail(runner, states: MigrationStates, folder: Path, **fields) -> None:
 def _cancelled_before_start(ctx) -> None:
     """A queued `project_migrate` job cancelled before it ever ran (both workers were busy):
     `migrate_project` never runs, so flag `failed/cancelled` here instead, or the entry stays
-    `pending` with a dead job id that startup would silently re-queue."""
+    `pending` with a dead job id that startup would silently re-queue. During a graceful shutdown
+    the cancel is the quit, not the operator's: the entry stays `pending` for the next start."""
+    if _shutting_down():
+        return
     runner = ctx.runner
     folder = Path(ctx.params["folder"])
     _fail(runner, states_for(runner.projects), folder, code="cancelled", step=None, error=CANCELLED)
@@ -198,7 +206,7 @@ def migrate_project(ctx) -> dict:
                 code="step_failed",
                 step=e.step,
                 error=e.message,
-                backup_path=_backup(handle.folder),
+                backup_path=backup_path(None, handle.folder),
             )
             raise JobFailure(f"The upgrade stopped at step {e.step}: {e.message}") from e
         except Exception as e:
@@ -213,7 +221,7 @@ def migrate_project(ctx) -> dict:
                 code="step_failed",
                 step=FINISH,
                 error=message,
-                backup_path=_backup(handle.folder),
+                backup_path=backup_path(None, handle.folder),
             )
             raise JobFailure(f"The upgrade could not finish: {message}") from e
         handle.schema_version = TARGET_SCHEMA_VERSION
@@ -225,7 +233,7 @@ def migrate_project(ctx) -> dict:
             step=None,
             error=None,
             project_id=handle.id,
-            backup_path=_backup(handle.folder),
+            backup_path=backup_path(None, handle.folder),
             report_path=report.get("report_path"),
         )
     except Exception as e:
@@ -239,7 +247,7 @@ def migrate_project(ctx) -> dict:
             code="step_failed",
             step=None,
             error=message,
-            backup_path=_backup(handle.folder),
+            backup_path=backup_path(None, handle.folder),
         )
         raise JobFailure(f"The upgrade result could not be recorded: {message}") from e
     publish(runner, folder, entry)

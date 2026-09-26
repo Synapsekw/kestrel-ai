@@ -8,6 +8,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from app.migration.backup import ro_uri
 from app.migration.job import armed, blocked_reason, states_for, submit
 from app.migration.pipeline import TARGET_SCHEMA_VERSION
 
@@ -19,7 +20,7 @@ def probe_schema_version(folder: Path) -> int | None:
     db = Path(folder) / "project.db"
     if not db.is_file():
         return None
-    con = sqlite3.connect(f"{db.resolve().as_uri()}?mode=ro", uri=True)
+    con = sqlite3.connect(ro_uri(db.resolve()), uri=True)
     try:
         row = con.execute("SELECT schema_version FROM project LIMIT 1").fetchone()
     finally:

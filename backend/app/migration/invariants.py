@@ -1,12 +1,14 @@
 """Numbers the migration must not change (foundation spec §16: row counts, and the counts and
-area-count totals equal before and after). Read read-only with plain sqlite3 (like
-`app.migration.backup.quick_check`), so they work on a database at any revision and are safe by
+area-count totals equal before and after). Read read-only with plain sqlite3 (through
+`app.migration.backup.ro_uri`), so they work on a database at any revision and are safe by
 construction even if ever pointed at an original; only tables present before are compared.
 """
 
 import json
 import sqlite3
 from pathlib import Path
+
+from app.migration.backup import ro_uri
 
 ROW_TABLES = (
     "source",
@@ -47,7 +49,7 @@ def _total(value) -> float:
 
 def snapshot(db: Path) -> dict:
     """Read-only, so this can never write to whatever `db` points at (safety, not just speed)."""
-    con = sqlite3.connect(f"{Path(db).resolve().as_uri()}?mode=ro", uri=True)
+    con = sqlite3.connect(ro_uri(Path(db).resolve()), uri=True)
     try:
         tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
         rows = {t: con.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0] for t in ROW_TABLES if t in tables}

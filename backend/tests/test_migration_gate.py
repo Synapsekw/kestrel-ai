@@ -209,3 +209,18 @@ def test_a_real_backup_is_reported_before_any_migration_job_records_one(client, 
         held.release.set()
     entry = MigrationStates(client.app.state.settings.data_dir).get(folder)
     assert wait_library_job(client, entry["job_id"])["state"] == "succeeded"
+
+
+def test_disarmed_startup_submits_nothing_and_opens_nothing(app, settings, tmp_path, monkeypatch):
+    """Final review Minor 8: with `PIPELINE` empty, startup queues no upgrade, opens no project
+    and never writes `migrations.json` (the central Part A claim)."""
+    from app.migration.startup import submit_pending
+    from app.migration.state import FILE_NAME
+
+    arm(monkeypatch)
+    legacy = legacy_at_head(tmp_path / "legacy")
+    AppData(settings.data_dir).remember("p-legacy", "Legacy", str(legacy))
+    with TestClient(app, headers=AUTH):
+        assert submit_pending(app) == []
+        assert app.state.projects.open_recent() == []
+        assert not (settings.data_dir / FILE_NAME).exists()

@@ -16,7 +16,7 @@ from app.db.base import new_id
 from app.db.models import Box, Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
-from app.migration.backup import BackupFailed
+from app.migration.backup import BackupFailed, backup_path
 from app.migration.state import MigrationStates, failed_error
 
 SUBDIRS = ("images", "labels", "datasets", "runs", "models", "cache/thumbs")
@@ -166,12 +166,14 @@ class ProjectRegistry:
     def _backup_failed(self, folder: Path, error: BackupFailed) -> AppError:
         """Flag `failed/backup_failed` (foundation spec §11.2): the database was not touched. The
         job_id already on the entry (a live `project_migrate` job's) is left alone: `set()` merges
-        fields, so only passing `job_id` here would overwrite it with `None`."""
+        fields, so only passing `job_id` here would overwrite it with `None`. For the same reason a
+        recorded `backup_path` (an earlier good copy) is kept, and the 409 reports the path
+        `Project.migration` shows: the recorded one, else the newest backup on disk."""
         entry = MigrationStates(self.appdata.data_dir).set(
-            folder, state="failed", code=BackupFailed.code, step=None, error=str(error), backup_path=None
+            folder, state="failed", code=BackupFailed.code, step=None, error=str(error)
         )
         log.error("project at %s was not upgraded: %s", folder, error)
-        return failed_error(entry)
+        return failed_error({**entry, "backup_path": backup_path(entry, folder)})
 
     def _cache(
         self, pid: str, folder: Path, engine, name: str, remember: bool, schema_version: int = 1
