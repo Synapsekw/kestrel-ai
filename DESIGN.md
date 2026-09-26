@@ -1,121 +1,161 @@
-# Design system: Contour
+# Design system: Aero glass
 
-Contour is the selected Kestrel direction: charcoal surfaces, warm amber for the next action, and
-quiet green for completed work. A site manager at a Windows laptop spends most of a session looking
-at sand-coloured aerial imagery; the dark chrome keeps that imagery foremost. Instrument Sans and
-plain task language carry the interface. CSS custom properties in `frontend/src/index.css` are exposed
-through `frontend/tailwind.config.ts` and the shared `frontend/src/ui/` primitives.
+Aero glass is Kestrel's direction (umbrella decision D9): a deep indigo backdrop, translucent panels,
+frosted glass only where controls float over imagery, a violet → indigo primary gradient, teal for
+success, Space Grotesk for the interface and JetBrains Mono for figures. The approved mockups are
+`.superpowers/brainstorm/1481982-1790403567/content/visual-directions.html` (tab D) and
+`ws-images.html`, `ws-maps.html`, `ws-clouds.html`. Tokens live in `frontend/src/index.css`, are exposed
+through `frontend/tailwind.config.ts`, and are used through the primitives in `frontend/src/ui/`.
+See every primitive live at `http://127.0.0.1:1420/gallery.html` under `pnpm -C frontend dev`
+(`?effects=reduced`, `?motion=reduced` preview the two modes). `pnpm -C frontend lint` runs
+`scripts/check-tokens.mjs`, which fails raw palette colours, arbitrary colours, radii, fonts and
+shadows, raw durations, blur outside the primitives, retired Contour names, and opacity modifiers on
+translucent tokens.
 
 ## Colour
 
-| Role | Hex | Use |
+Opaque colours are RGB triplets (`--ink: 242 241 251`), used as `text-ink`, `bg-accent/20`.
+Translucent surfaces are complete `rgba()` values and take **no** opacity modifier
+(`bg-surface/80` silently draws nothing; lint fails it).
+
+| Token | Value | Use |
 |---|---|---|
-| ground | #1d2322 | app background |
-| side | #191f1d | navigation rail |
-| panel | #262d2b | inspector, forms, floating surfaces |
-| well | #303936 | selected regions, tracks, neutral pills |
-| canvas | #151b19 | image work area |
-| ink | #edf0e9 | body and control text |
-| muted | #a3aea6 | secondary text and metadata |
-| dim | #738078 | disabled and nonessential decoration |
-| line | #38423e | quiet separators |
-| line-strong | #56645c | emphasized separators |
-| control-line | #839188 | essential input boundaries |
-| accent | #e5af64 | primary action and focus |
-| accent-hover | #efbf7b | primary action hover |
-| accent-fg | #29241b | text and checkmarks on amber |
-| accent-soft | #373226 | active navigation |
-| accent-ink | #edc991 | text on accent-soft and action links |
-| accent-line | #665236 | accent surface borders |
-| ok | #aed1b1 | success text and completed steps |
-| ok-soft | #283b2e | success surfaces |
-| warn | #eec779 | warning text |
-| warn-strong | #e5af64 | thumbnail review badge, with accent-fg text |
-| warn-soft | #3e3422 | warning surfaces |
-| danger | #f6a299 | error text and destructive emphasis |
-| danger-soft | #412a28 | error surfaces |
-| inverse | #151b19 | floating selection bars and tooltips |
-| inverse-fg | #edf0e9 | text on inverse and photography overlays |
+| `--backdrop` | indigo radial top right, teal radial bottom left, on `#0e0f1c` | `body`, painted once, fixed |
+| `bg` | #0e0f1c | solid base, canvas behind imagery, sticky table header, reduced-effects glass |
+| `surface` / `surface-2` / `field` | white 5.5% / 8% / 6% | cards and panes / wells, tracks, neutral chips / inputs |
+| `hover` / `rail` | white 5% / 3% | row hover / icon rail |
+| `glass`, `glass-line`, `glass-ink` | rgba(14,15,28,.55), white 14%, #f2f1fb | floating panels over imagery |
+| `line` / `line-strong` / `card-line` | white 8% / 20% / 9% | separators, borders |
+| `control-line` | #767496 | boundaries that are a control's only affordance (checkbox, switch track, slider track) |
+| `ink` / `muted` / `dim` | #f2f1fb / #a7a6c4 / #6e6d8e | text; dim is for disabled and decoration |
+| `accent`, `accent-ink`, `accent-fg`, `accent-soft` | #8f7bff, #c9bfff, #fff, violet 18% | focus, active, links, selected rows |
+| `ok` / `danger` / `warn` (+ `-soft`) | #5fe3c0 / #ff8aa0 / #ffc46b | success, errors and destructive actions and the Defect tag, warnings |
+| `info` | #8aa4ff | the reviewed status, the Object tag |
+| `tip` / `tip-fg` | #1b1a33 / #fff | tooltips, toasts, native option lists |
+| `grad-primary` / `grad-brand` / `grad-ink` / `grad-ai` | violet→indigo / violet→teal / violet→teal (90°) / violet→teal tint | primary buttons and active tools / logo tile / tab indicator / AI provenance |
 
-Body/control text targets 4.5:1 contrast; essential control boundaries and focus target 3:1.
-`ui/contrast.test.ts` reads the actual palette. Filled semantic success and danger elements use dark
-`text-ground`; filled amber uses `text-accent-fg`. Stored box class colours remain unchanged.
-Native controls use a dark colour scheme. Fine separators need not carry the brighter input border.
+Severity colours are data, not tokens (default 1 Minor #3fb68e, 2 Moderate #e2bf2e, 3 Major #ff9c3a,
+4 Critical #ff5a4f; the scale is editable in the Catalogue). Status: open `accent`, reviewed `info`,
+closed `ok`. Colours from data (severity, catalogue types) reach CSS only as `--c` on a `style` prop.
 
-## Typography and geometry
+Contrast is tested in `ui/contrast.test.ts`, compositing each translucent surface over `bg`: text 4.5:1,
+control boundaries and focus 3:1, with no exceptions. White labels on the primary button reach 4.5:1
+at both gradient stops (`--primary-from` #7258ff, `--primary-to` #3766ff).
 
-One bundled family: Instrument Sans, with Segoe UI and system sans fallbacks. Body and controls are
-13–14px; secondary metadata 11–12px; section headings 16–18px; principal page headings 24–28px.
-File names and paths use the monospace stack; counts use tabular numerals. Use weights 400, 500 and
-600, with tight tracking only for headings.
+Retired Contour names and their replacements: `ground`/`canvas` → `bg`, `side` → `rail`,
+`panel` → `surface`, `well` → `surface-2`, `inverse`/`inverse-fg` → `tip`/`tip-fg`,
+`warn-strong` → `warn`, `accent-hover` → `accent-ink`, `accent-line` → `line-strong`.
 
-Controls use 7px corners and panels/thumbnails 10px. Borders are 1px. Use spacing and fine separators
-instead of nested cards. Floating surfaces receive shadows; ordinary screen sections do not.
-The shared primitives remain Button, IconButton, Input, Textarea, Select, Checkbox, Switch, Field,
-Pill, Alert, Toast, Progress, Skeleton, EmptyState, Segmented, Kbd, Dialog, Icon and Disclosure.
+## Typography
 
-## App identity
+Space Grotesk (UI and display) and JetBrains Mono (ids, figures, key caps, coordinates, file names),
+bundled as `@fontsource-variable/*` files; nothing is fetched at runtime (the packaged CSP forbids it).
+The scale: `text-2xs` 10.5/14 500 (chip counts, meta), `text-xs` 11.5/16 500 (labels), `text-sm`
+12.5/18 (body, table rows), `text-base` 13.5/20 (forms), `text-lg` 16/22 600 (card and section
+titles), `text-xl` 20/26 600 (page titles), `text-kpi` 30/33 600 −0.02em (StatTile values). Figures
+always use `tabular-nums`. Sentence case everywhere; no all-caps labels. Key caps are rendered only by
+`KeyChord` (`ui/Kbd.tsx`), the one chord-to-key-cap renderer (Tooltip, Menu, CommandPalette).
 
-`frontend/src/assets/kestrel-mark.svg` is the single geometry master for the Kestrel bird. The app
-uses it as a decorative charcoal mark on the amber Brand tile, while the adjacent `Kestrel AI` text
-provides the accessible name (visually hidden in the compact rail).
+## Radii and elevation
 
-Run `pnpm -C frontend icons:generate` after changing the master. The command adds the same mark to
-an amber rounded square with native-safe padding, then uses the installed Tauri CLI to regenerate
-the tracked PNG, ICO and ICNS files without adding platform-specific assets. Run
-`pnpm -C frontend icons:check` to verify source freshness, exact filename coverage and output bytes.
-Tauri uses the generated ICO/ICNS/PNG set for the executable and native bundles. The Inno Setup
-compiler uses the same `icon.ico` for setup, the installed executable supplies the Start menu
-shortcut icon, and Windows uses that executable for the uninstaller display icon.
+`rounded-panel` 16px (cards, panes, dialogs), `rounded-control` 10px (buttons, fields, glass groups),
+`rounded-chip` full (pills, badges, tracks), `rounded-sm` 6px (thumbnails, key caps, menu rows).
+`shadow-elev-1` (cards: an inset top highlight and a soft drop), `shadow-elev-2` (hovered cards,
+popovers, dialogs, toasts), `shadow-glow` (primary button, active tool; dropped in reduced effects).
 
-## Shell and workspaces
+## Glass and blur rules
 
-An open project starts with an 82px navigation rail: icons and short labels, active amber state,
-completed-step checks, and an explicit expand control. Expansion shows full labels, counts and the
-project name at 224px. Locked links retain explanations on hover/focus. Projects, project settings
-and app settings stay reachable. The header identifies project and screen and retains Jobs.
-Long names truncate; the rail scrolls on short windows. Width changes are immediate.
-
-The editor has a single 310px right inspector. Drawing class stays visible above an All classes
-disclosure containing class counts and hotkeys. Review actions, confidence, no-machinery state and
-regions share the inspector's scroll area. The image toolbar groups filename/navigation separately
-from view/history controls. At small widths the inspector stacks below a usable canvas. Existing
-label, selected-region, pan, rotation and shortcut semantics are unchanged.
-
-Home makes the real next action its focal point, beside a recent image when available. One metadata
-request uses limit=3 with newest imports first; it never follows a cursor. The hero uses one bounded
-1024px display image, and the other two previews use thumbnails. Image or metadata
-failure leaves a quiet fallback and a working next action. Totals and running jobs remain real.
-Images retains virtualized/paginated reads and all filters, selection and bulk actions; each
-thumbnail has a separate filename caption and deliberate selection/focus treatment.
+- Blur exists only in `GlassPanel variant="float"` (`.glass-float`, 12px), which Dialog, Popover,
+  Menu, CommandPalette and FloatingToolbar use. It is for controls floating over imagery.
+- Cards, panes, list panes, dashboards and `DataTable` are translucent **without** blur: over a smooth
+  gradient the blur is invisible and costs GPU.
+- Never put blur on a scrolling container of a long list.
+- Tooltip, Popover and Menu are placed by `placeFloating` (`ui/floating.ts`), the one placement
+  algorithm (flip to the other side, then clamp into the viewport).
 
 ## Motion
 
-Use cubic-bezier(.23,1,.32,1): 140ms hover/press, 180ms reveals, 220ms drawers. Animate transform and
-opacity, never layout properties. Keyboard class/region selection and rail width changes are
-immediate. Reduced motion removes movement. Existing job progress animation conveys running state;
-no decorative loops are added. Loading chrome mirrors the final layout.
+Tokens: `--dur-instant` 0 (keyboard selection, the rail), `--dur-fast` 120ms (hover, press, colour),
+`--dur-base` 180ms (reveals, page transition, tooltip), `--dur-slow` 260ms (drawers, inspector,
+dialog), `--dur-emphasis` 350ms (tab indicator, segmented thumb, severity bars), `--dur-count` 600ms
+(count-up, sparkline draw); `--ease-out` (default), `--ease-spring` (pin and badge pop only),
+`--ease-in-out` (page cross-fade); stagger 40ms, items 9+ arrive with item 8 (`.stagger` +
+`style={stagger(i)}`). Tailwind: `duration-fast|base|slow|emphasis|count`, `ease-out|spring|in-out`.
+`ui/motion.ts` mirrors them for JavaScript (`dur`, `easing`, `useReducedMotion`).
 
-## Copy and budgets
+Rules: animate only `transform` and `opacity` (bars and fills move a full-width bar with translateX;
+sparklines grow a clip with scaleX). Nothing on an interaction path waits for motion or runs longer
+than 400ms. Loops (live dot, shimmer, indeterminate bar) run only while real work runs; a finite pulse
+(at most 3 cycles) on create or select is allowed; no indefinite pulse on static data; no decorative
+sweeps.
 
-Screen names remain Projects, Home, Images, Label, Datasets, Train, Detect, Review, Models, Export,
-Project settings and App settings. Use suggestions, accept as labels, and flight where appropriate.
-Buttons name the action. A/R continue to accept/reject visible suggestions using existing handlers.
-Training, inference, import and export remain background jobs with progress. No dataset traversal,
-whole-image-set read, runtime dependency, or fabricated aggregate is introduced.
+Reduced motion (the OS setting, or Settings → Reduce motion, `<html data-motion="reduced">`): every
+duration but `--dur-fast` is 0, the stagger is 0, count-up shows the final value, sparklines draw at
+once, indicators jump, loops stop. The Tailwind variant is `reduce-motion:`, which honours both
+triggers; Tailwind 3.4's built-in `motion-reduce:` cannot see `data-motion`, so lint fails a bare
+`motion-reduce:`.
 
-## Setup agent and starter models
+## Reduced effects
 
-Setup agent opens a 34rem right drawer from the header or Projects. It shares Contour typography,
-controls, surfaces and 220ms drawer motion. Focus enters on opening, Escape closes it, and focus
-returns to the opener when it remains on screen. It is a nonmodal companion; closing or navigating
-keeps its draft and active jobs for the current app session.
+`<html data-effects="full|reduced">`, set by `frontend/src/app/effects.ts` before the first paint.
+Reduced: glass is opaque `#16172a` with no blur, the backdrop is one static gradient, glows are gone,
+`--elev-1` stays; motion is untouched (a separate setting). Settings → Appearance → Visual effects:
+Auto (default), Full, Reduced, stored in `localStorage` `kestrel.effects`. Auto starts reduced on a
+software renderer (SwiftShader, Microsoft Basic Render), otherwise full; on the first Overview render a
+2-second frame probe (after a 300ms warm-up, only while the window is visible) switches to reduced when
+p95 > 24ms, remembers that, and offers Undo, which chooses Full for good.
 
-Progressively reveal chat, the editable project plan, image import, and a small first labeling batch.
-Use explicit action names, real job progress and recoverable errors. Review remains the next step
-after labeling. Metadata and thumbnail pages contain at most 24 images; first-batch selection is
-also capped at 24. Changing inputs or refreshing provider settings invalidates the price estimate.
+## Shell
 
-The Models screen groups supported YOLO detection starters by family and size instead of repeating
-dozens of cards. Cached availability is distinct from a first download. Weight acquisition runs as
-a background job, and unrelated task types are not offered as detection choices.
+A 64px icon rail (the logo tile, Projects, Models, Catalogue, Jobs, a spacer, Settings) with tooltips on
+the right; the active entry is `accent-soft` with a 3px gradient bar. A 56px top bar: the breadcrumb
+(`Projects / ● Name / Tab`, the dot a `StatusDot`, live while a job runs), the search field that opens
+the command palette (Ctrl K), the route's context actions, the agent button and the running-jobs pill.
+Project tabs (`Tabs asLinks`, counts in mono) sit under it: Overview, Images, Maps, Point clouds,
+Findings, Measurements, Reports; they hide on the full-bleed Maps and Point clouds workspaces. A tab
+change fades and rises 6px over `--dur-base`, with no exit animation.
+
+## Workspaces
+
+Maps and Point clouds are full-bleed; Images has a browser, a canvas and an inspector. The canvas sits
+on `bg`. Every control over imagery floats as glass: the tool palette (`FloatingToolbar`, top left,
+tooltips "Box · B"), the zoom group (top right), the info bar, the hint bar (bottom centre), layer and
+type popovers (`Popover`, `Combobox`). The inspector (`InspectorPane`) is 340px on the right and stacks
+below the content under 1100px. One keymap covers the app (`ui/keymap.ts`, spec §5.6): global keys,
+review keys (A accept, X reject, 1–9 severity, T type, Tab next), and per-workspace tool keys that never
+equal a global or review key; M always drops a finding marker, L always measures a length, D always runs
+AI detection. The keymap also has a `findings` scope, reserved empty, that S1 fills (J, K, Shift+O/R/C).
+Keys never fire while typing, and a focused primitive (slider, table, menu, picker) keeps the keys it
+handles.
+
+## Data visualisation
+
+`StatTile`: label, a 30px value that counts up once (on mount or change), a delta coloured by which
+direction is good, chips, and a `Sparkline` (≤ 60 points, a 2px accent line over a 12% fill, bottom
+right). Severity bars: an 8px `surface-2` track per level, the fill in the level's colour, growing with
+translateX over `--dur-emphasis` with the stagger; a click filters the Findings tab. Legends and map
+pins use the severity colours; critical pins get a thicker ring, never a pulse. Tables are `DataTable`.
+
+## App identity
+
+The Kestrel mark (`frontend/src/assets/kestrel-mark.svg`, the single geometry master) sits on a 36px
+`grad-brand` tile with a 12px radius at the top of the rail. The native icons (`icons:generate`) keep
+their current artwork until a follow-up regenerates them on the brand gradient.
+
+## Copy
+
+Screen names: Projects, Models (Library, Datasets, Training), Catalogue (Types, Severity), Jobs,
+Settings; project tabs as in Shell. Words: a **finding** is a defect with a type, a severity and a
+status (Open, Reviewed, Closed); a **suggestion** or **detection** is a model output awaiting review;
+**accept** and **reject**; **Add data**. Buttons name the action ("Close finding", not "OK"). Finding
+numbers are `F-0217` in mono. Errors say what happened and what to do next.
+
+## Budgets
+
+- Motion: ≤ 400ms on any interaction path; loops only while work runs; reduced motion honoured.
+- Blur: floating glass only; the Findings table, lists and dashboards are never blurred.
+- Frames: p95 ≤ 20ms at full effects on the dev machine (the e2e frame check); Auto reduces above 24ms.
+- Lists: `DataTable` renders only the visible window of 44px rows and pages by cursor; sparklines ≤ 60
+  points; the palette debounces search by 120ms and aborts superseded requests.
+- Long work (training, inference, import, export, dataset build, migration, report PDF) is a background
+  job with progress; no screen reads a full image set.

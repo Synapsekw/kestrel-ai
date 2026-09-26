@@ -47,8 +47,8 @@ traps as ADRs in `vault/decisions/`.
 2. **Superpowers skills for non-trivial work** — `brainstorming` before building,
    `test-driven-development`, `verification-before-completion`, `systematic-debugging`,
    `subagent-driven-development`. A one-line fix is just a one-line fix.
-3. **UI work loads the design skills first**, together with `DESIGN.md` (the "Site office"
-   system) and the primitives in `frontend/src/ui/`.
+3. **UI work loads the design skills first**, together with `DESIGN.md` (the "Aero glass" system)
+   and the primitives in `frontend/src/ui/` (see them live at `/gallery.html` under `pnpm -C frontend dev`).
 4. **Tests are mandatory** — written and executed. The gate:
    ```
    pnpm -C contract check

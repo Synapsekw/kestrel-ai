@@ -22,6 +22,10 @@ for (const effects of ["full", "reduced"]) {
   for (const id of ids) {
     if (only && id !== only) continue;
     const path = `${out}${id}-${effects}.png`;
+    // The page scrolls inside the full-height #gallery box, so a section taller than the viewport
+    // would be clipped; grow the viewport to fit it (the fixed backdrop still covers the section).
+    const height = await page.locator(`#${id}`).evaluate((el) => el.getBoundingClientRect().height);
+    await page.setViewportSize({ width: 1440, height: Math.max(900, Math.ceil(height) + 48) });
     await page.locator(`#${id}`).screenshot({ path, animations: "disabled" });
     console.log(`saved ${path}`);
   }
