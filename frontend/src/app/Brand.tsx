@@ -18,7 +18,7 @@ export function Brand({
       <span
         aria-hidden="true"
         className={cx(
-          "grid shrink-0 place-items-center rounded-md bg-accent text-accent-fg",
+          "grid shrink-0 place-items-center rounded-xl bg-grad-brand text-accent-fg",
           largeTile ? "h-9 w-9" : "h-7 w-7",
         )}
       >
