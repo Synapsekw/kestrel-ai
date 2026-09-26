@@ -4,6 +4,7 @@ import type { ClassDefInput, Project } from "@contract/client";
 import { useAgentPanel } from "@/agent/panelStore";
 import { useApi, useBackend } from "@/api/client";
 import { messageOf, unwrap } from "@/api/errors";
+import { legacyCreateBody, legacyKind } from "@/api/legacyKind";
 import { pushLog } from "@/app/diagnostics";
 import { useProjectKindStore, type ProjectKind } from "@/app/useProjectKind";
 import {
@@ -112,7 +113,7 @@ export function ProjectsScreen() {
   const [kind, setKind] = useState<ProjectKind>("train");
   const [filter, setFilter] = useState<KindFilter>("all");
   const shown = useMemo(
-    () => (projects ?? []).filter((p) => filter === "all" || p.kind === filter),
+    () => (projects ?? []).filter((p) => filter === "all" || legacyKind(p) === filter),
     [projects, filter],
   );
   const classNames = useMemo(() => parseClasses(classes).map((c) => c.name), [classes]);
@@ -144,7 +145,7 @@ export function ProjectsScreen() {
     (project: Project) => {
       pushLog(`open project ${project.id}`);
       // The kind never changes: the shell and the kind routes need not load it again.
-      useProjectKindStore.getState().set(project.id, project.kind);
+      useProjectKindStore.getState().set(project.id, legacyKind(project));
       void navigate(`/p/${project.id}`);
     },
     [navigate],
@@ -161,7 +162,7 @@ export function ProjectsScreen() {
     try {
       const { data, error: err } = await api.POST("/api/v1/projects", {
         // A detection project starts without classes: its first run fills them in.
-        body: { name, folder, kind, classes: kind === "train" ? parseClasses(classes) : [] },
+        body: legacyCreateBody(name, folder, kind, kind === "train" ? parseClasses(classes) : []),
       });
       if (data) openProject(data);
       else setError(messageOf(err, "could not create the project"));
@@ -268,8 +269,8 @@ export function ProjectsScreen() {
                   <span className="min-w-0 flex-1">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-medium">{p.name}</span>
-                      <Pill size="sm" tone={p.kind === "detect" ? "accent" : "neutral"}>
-                        {KIND_PILL[p.kind]}
+                      <Pill size="sm" tone={legacyKind(p) === "detect" ? "accent" : "neutral"}>
+                        {KIND_PILL[legacyKind(p)]}
                       </Pill>
                     </span>
                     <span className="block truncate font-mono text-xs text-muted">{p.folder}</span>

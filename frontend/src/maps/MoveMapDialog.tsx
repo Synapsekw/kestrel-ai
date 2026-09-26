@@ -6,6 +6,7 @@ import { createDetectionProject, fetchDetectionProjects, moveMap } from "@/api/a
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { fetchJob } from "@/api/jobs";
+import { legacyKind } from "@/api/legacyKind";
 import { pushLog } from "@/app/diagnostics";
 import { useProjectKindStore } from "@/app/useProjectKind";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
@@ -95,7 +96,7 @@ export function MoveMapDialog({
       if (!to) {
         if (creating) {
           const made = await createDetectionProject(api, name.trim(), folder.trim());
-          useProjectKindStore.getState().set(made.id, made.kind);
+          useProjectKindStore.getState().set(made.id, legacyKind(made));
           // Keep a project created here even if the move below fails: a retry must not create another.
           setCreated(made);
           to = made;

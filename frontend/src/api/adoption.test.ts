@@ -49,6 +49,7 @@ describe("adoption api", () => {
     expect(requests[1].body).toEqual({
       name: "North site",
       folder: "E:/Projects/North",
+      type_ids: [],
       kind: "detect",
       classes: [],
     });

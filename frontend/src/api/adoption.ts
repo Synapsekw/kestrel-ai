@@ -1,5 +1,6 @@
 import type { ApiClient, Job, Project, components } from "@contract/client";
 import { unwrap } from "./errors";
+import { legacyCreateBody, legacyKind } from "./legacyKind";
 import { collectPages } from "./paging";
 
 export type AdoptionStatus = components["schemas"]["AdoptionStatus"];
@@ -38,10 +39,10 @@ export async function fetchDetectionProjects(api: ApiClient): Promise<Project[]>
   const all = await collectPages((cursor) =>
     unwrap(api.GET("/api/v1/projects", { params: { query: cursor ? { cursor } : {} } })),
   );
-  return all.filter((p) => p.kind === "detect");
+  return all.filter((p) => legacyKind(p) === "detect");
 }
 
 /** A new detection project; it starts without classes, its first run fills them in. */
 export function createDetectionProject(api: ApiClient, name: string, folder: string): Promise<Project> {
-  return unwrap(api.POST("/api/v1/projects", { body: { name, folder, kind: "detect", classes: [] } }));
+  return unwrap(api.POST("/api/v1/projects", { body: legacyCreateBody(name, folder, "detect", []) }));
 }

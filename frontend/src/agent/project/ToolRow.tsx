@@ -35,6 +35,10 @@ const JOB_NAME: Record<Job["type"], string> = {
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
   design_import: "Design surface import",
+  project_migrate: "Project upgrade",
+  findings_backfill: "Findings from annotations",
+  findings_recount: "Findings recount",
+  dataset_build: "Dataset build",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

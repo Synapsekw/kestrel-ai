@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { imageFileUrl, thumbnailUrl, type Job, type Image } from "@contract/client";
 import { useBackend } from "@/api/client";
+import { legacyKind } from "@/api/legacyKind";
 import { useProject } from "@/api/project";
 import { projectNextStep } from "@/app/projectNextStep";
 import { AdoptionBanner } from "@/app/AdoptionBanner";
@@ -67,6 +68,10 @@ const TYPE_VERB: Record<Job["type"], string> = {
   volume_calc: "Calculating a volume",
   volume_export: "Exporting volumes",
   design_import: "Importing a design surface",
+  project_migrate: "Upgrading a project",
+  findings_backfill: "Creating findings",
+  findings_recount: "Recounting findings",
+  dataset_build: "Building a dataset",
 };
 
 const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -92,7 +97,7 @@ export function HomeScreen() {
   const running = Object.values(jobs)
     .filter((j) => j.project_id === projectId && isActiveJob(j))
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const kind = project?.kind ?? null;
+  const kind = project ? legacyKind(project) : null;
   const detect = kind === "detect";
   const step = progress && kind ? projectNextStep(projectId, kind, progress) : null;
 

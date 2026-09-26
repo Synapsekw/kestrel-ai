@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Outlet, useLocation, useParams } from "react-router-dom";
 import { useApi } from "@/api/client";
+import { legacyKind } from "@/api/legacyKind";
 import { pushLog } from "@/app/diagnostics";
 import { AgentDrawer } from "@/agent/AgentDrawer";
 import { useAgentPanel } from "@/agent/panelStore";
@@ -25,7 +26,7 @@ function useProjectName(projectId: string | undefined): string | null {
         if (cancelled || !data) return;
         setLoaded({ id: projectId, name: data.name });
         // The same answer carries the kind; the sidebar and the kind routes read it from the store.
-        useProjectKindStore.getState().set(projectId, data.kind);
+        useProjectKindStore.getState().set(projectId, legacyKind(data));
       })
       .catch((e: unknown) => {
         pushLog(`load project name failed: ${e}`);

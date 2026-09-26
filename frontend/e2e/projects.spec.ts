@@ -53,6 +53,7 @@ test("creating a detection project opens it with the detection steps", async ({ 
   expect((await created).postDataJSON()).toEqual({
     name: "Ahmadia survey",
     folder: "E:\\Projects\\Ahmadia-survey",
+    type_ids: [],
     kind: "detect",
     classes: [],
   });

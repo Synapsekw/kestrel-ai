@@ -13,6 +13,7 @@ import type {
 import { useApi } from "@/api/client";
 import { chatWithAgent, type AgentMessage, type AgentPlan } from "@/api/agent";
 import { messageOf, unwrap } from "@/api/errors";
+import { legacyCreateBody } from "@/api/legacyKind";
 import { fetchProviders } from "@/api/providers";
 import { acquireStarter, LIBRARY_JOBS } from "@/api/library";
 import { listStarterModels } from "@/api/starterModels";
@@ -203,16 +204,16 @@ export function useSetupAgent(open: boolean) {
       if (!p) {
         p = await unwrap(
           api.POST("/api/v1/projects", {
-            body: {
-              name: plan.name.trim(),
-              folder: folder.trim(),
-              kind: "train",
-              classes: plan.classes.map((name, i) => ({
+            body: legacyCreateBody(
+              plan.name.trim(),
+              folder.trim(),
+              "train",
+              plan.classes.map((name, i) => ({
                 name: name.trim(),
                 colour: COLOURS[i % COLOURS.length],
                 hotkey: i < 9 ? String(i + 1) : null,
               })),
-            },
+            ),
           }),
         );
         projectRef.current = p;

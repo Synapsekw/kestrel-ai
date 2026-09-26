@@ -63,6 +63,10 @@ const TYPE_VERB: Record<Job["type"], string> = {
   volume_calc: "Calculating a volume",
   volume_export: "Exporting volumes",
   design_import: "Importing a design surface",
+  project_migrate: "Upgrading a project",
+  findings_backfill: "Creating findings",
+  findings_recount: "Recounting findings",
+  dataset_build: "Building a dataset",
 };
 
 /** The newest active job as a live pill; nothing when the project is idle. */

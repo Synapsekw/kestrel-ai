@@ -25,6 +25,10 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
   design_import: "Design surface import",
+  project_migrate: "Project upgrade",
+  findings_backfill: "Findings from annotations",
+  findings_recount: "Findings recount",
+  dataset_build: "Dataset build",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -125,6 +129,13 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "volume_export":
     case "design_import":
       return { label: "Open volumes", to: `${p}/volumes` };
+    // Library jobs of the foundation: the Models and Catalogue sections that show their results
+    // arrive with units S1 and S2, until then the job card has no link.
+    case "project_migrate":
+    case "findings_backfill":
+    case "findings_recount":
+    case "dataset_build":
+      return null;
   }
 }
 

@@ -1,13 +1,14 @@
 import { useEffect } from "react";
 import { create } from "zustand";
-import type { ApiClient, Project } from "@contract/client";
+import type { ApiClient } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
+import { legacyKind, type ProjectKind } from "@/api/legacyKind";
 import { fetchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
 
-/** `train` or `detect`, fixed when the project is created. */
-export type ProjectKind = Project["kind"];
+/** `train` or `detect`, until unit SH removes the kind UI (see `@/api/legacyKind`). */
+export type { ProjectKind };
 
 /** A project's kind once known, or "failed" when it could not be loaded. */
 type KindEntry = ProjectKind | "failed";
@@ -42,7 +43,7 @@ function loadKind(api: ApiClient, projectId: string): Promise<void> {
   const promise = fetchProject(api, projectId)
     .then((p) => {
       failures.delete(projectId);
-      useProjectKindStore.getState().set(projectId, p.kind);
+      useProjectKindStore.getState().set(projectId, legacyKind(p));
     })
     .catch((e: unknown) => {
       failures.set(projectId, (failures.get(projectId) ?? 0) + 1);

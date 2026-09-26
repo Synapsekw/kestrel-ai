@@ -43,6 +43,10 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   volume_calc: "volume",
   volume_export: "volume",
   design_import: "volume",
+  project_migrate: "folder",
+  findings_backfill: "review",
+  findings_recount: "refresh",
+  dataset_build: "datasets",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

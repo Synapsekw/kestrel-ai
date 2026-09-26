@@ -49,13 +49,15 @@ export const exampleClasses: ClassDef[] = NAMES.map((name, i) => ({
   colour: COLOURS[i],
   hotkey: String(i + 1),
   order: i,
+  kind: "object",
+  default_severity: null,
+  group: null,
 }));
 
 export const exampleProject: Project = {
   id: PROJECT_ID,
   name: "Ahmadia",
   folder: "E:\\Projects\\Ahmadia",
-  kind: "train",
   classes: exampleClasses,
   preannotation_model_id: MODEL_ID,
   import_defaults: {
@@ -64,8 +66,28 @@ export const exampleProject: Project = {
     dedupe_threshold: 4,
     group_regex: "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)",
   },
-  schema_version: 1,
+  schema_version: 2,
   created_at: "2026-09-17T10:00:00Z",
+  last_opened_at: "2026-09-26T08:00:00Z",
+  summary: {
+    image_count: 3299,
+    maps: 0,
+    point_clouds: 0,
+    elevations: 0,
+    open_findings: 0,
+    open_top_severity: 0,
+    cover: null,
+  },
+  migration: {
+    state: "ok",
+    job_id: null,
+    error: null,
+    code: null,
+    step: null,
+    backup_path: null,
+    report_path: null,
+  },
+  availability: "ok",
 };
 
 export const exampleImage: ImageRow = {

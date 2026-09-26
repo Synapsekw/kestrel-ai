@@ -28,6 +28,10 @@ const TYPE_NAME: Record<Job["type"], string> = {
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
   design_import: "Design surface import",
+  project_migrate: "Project upgrade",
+  findings_backfill: "Findings from annotations",
+  findings_recount: "Findings recount",
+  dataset_build: "Dataset build",
 };
 
 function num(v: unknown): number | null {
@@ -108,6 +112,14 @@ export function jobToastText(job: Job): string {
       if (job.params?.phase === "build") return "Design surface imported";
       if (job.params?.phase === "preview") return "Design preview ready";
       return "Design file read";
+    case "project_migrate":
+      return "Project upgraded";
+    case "findings_backfill":
+      return "Findings created from annotations";
+    case "findings_recount":
+      return "Findings recounted";
+    case "dataset_build":
+      return "Dataset built";
   }
 }
 

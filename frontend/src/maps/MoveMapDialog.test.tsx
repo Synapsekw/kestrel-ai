@@ -1,25 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { Job, Project } from "@contract/client";
+import { withLegacyKind } from "@/api/legacyKind";
 import { exampleGeoMap, exampleProject, fakeClient, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { MoveMapDialog } from "./MoveMapDialog";
 
-const NORTH: Project = {
-  ...exampleProject,
-  id: "d0000000-1111-4000-8000-000000000002",
-  name: "North site",
-  kind: "detect",
-  classes: [],
-};
-const SOUTH: Project = {
-  ...exampleProject,
-  id: "d0000000-1111-4000-8000-000000000003",
-  name: "South yard",
-  kind: "detect",
-  classes: [],
-};
+const NORTH: Project = withLegacyKind(
+  { ...exampleProject, id: "d0000000-1111-4000-8000-000000000002", name: "North site", classes: [] },
+  "detect",
+);
+const SOUTH: Project = withLegacyKind(
+  { ...exampleProject, id: "d0000000-1111-4000-8000-000000000003", name: "South yard", classes: [] },
+  "detect",
+);
 const TRAIN_OTHER: Project = {
   ...exampleProject,
   id: "t0000000-1111-4000-8000-000000000004",
@@ -109,6 +104,7 @@ describe("MoveMapDialog", () => {
     expect(posts[0].body).toEqual({
       name: "North site",
       folder: "E:/Projects/North",
+      type_ids: [],
       kind: "detect",
       classes: [],
     });
