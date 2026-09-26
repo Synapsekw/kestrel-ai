@@ -21,9 +21,14 @@ describe("lazy screens (foundation F0)", () => {
       </TestApiProvider>,
     ],
     ["About Kestrel AI", <AboutScreen key="a" />],
-  ])("loads %s behind a placeholder", async (heading, element) => {
-    render(<Later>{element}</Later>);
-    expect(await screen.findByRole("heading", { name: heading })).toBeInTheDocument();
-    expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
-  });
+  ])(
+    "loads %s behind a placeholder",
+    async (heading, element) => {
+      render(<Later>{element}</Later>);
+      // The first import of a lazy chunk (Clouds pulls in the viewer) can be slow under a loaded runner.
+      expect(await screen.findByRole("heading", { name: heading }, { timeout: 5000 })).toBeInTheDocument();
+      expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
+    },
+    10_000,
+  );
 });

@@ -103,4 +103,23 @@ describe("resolveTypeIds", () => {
     const ids = await resolveTypeIds(api, ["crane", "truck"]);
     expect(ids).toEqual(["t-crane", "t-truck"]);
   });
+
+  it("resolves a repeated class once, by the same normalisation, keeping first-seen order", async () => {
+    const routes: FakeRoute[] = [
+      {
+        method: "GET",
+        path: /\/catalogue\/types$/,
+        body: (req) => {
+          const q = queryOf(req, "q");
+          return { items: /truck/i.test(q) ? [type("t-truck", "dump truck")] : [], next_cursor: null };
+        },
+      },
+      { method: "POST", path: /\/catalogue\/types$/, status: 201, body: type("t-crane", "crane") },
+    ];
+    const { api, requests } = fakeClient(routes);
+    const ids = await resolveTypeIds(api, ["crane", "Dump Truck", "Crane ", "dump_truck", "dump-truck"]);
+    expect(ids).toEqual(["t-crane", "t-truck"]);
+    expect(requests.filter((r) => r.method === "GET")).toHaveLength(2);
+    expect(requests.filter((r) => r.method === "POST")).toHaveLength(1);
+  });
 });
