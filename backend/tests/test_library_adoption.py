@@ -4,6 +4,7 @@ import json
 import sqlite3
 import time
 from pathlib import Path
+from uuid import uuid4
 
 from alembic import command
 from alembic.config import Config
@@ -27,7 +28,7 @@ from app.db.models import (
 from app.db.session import MIGRATIONS
 from app.library import adoption
 from app.library.db import LibraryModel
-from app.projects.service import DEFAULT_IMPORT_SETTINGS, SUBDIRS, normalise_classes
+from app.projects.service import DEFAULT_IMPORT_SETTINGS, SUBDIRS
 
 BASE = "/api/v1/projects"
 WEIGHTS = b"old project weights, identical bytes in every project"
@@ -314,7 +315,10 @@ def _project_at_0005(folder: Path, weights: bytes) -> dict[str, str]:
     (folder / rel).parent.mkdir(parents=True, exist_ok=True)
     (folder / rel).write_bytes(weights)
     pairs = zip(EIGHT_CLASSES[:2], COLOURS[:2], strict=True)
-    classes = normalise_classes([{"name": n, "colour": c} for n, c in pairs])
+    classes = [
+        {"id": str(uuid4()), "name": n, "colour": c, "hotkey": None, "order": i}
+        for i, (n, c) in enumerate(pairs)
+    ]
     ids = {"project": "p0000000-0005-4000-8000-000000000001", "model": "m0000000-0005-4000-8000-000000000001"}
     ids["run"] = "q0000000-0005-4000-8000-000000000001"
     now = "2026-09-01 10:00:00"

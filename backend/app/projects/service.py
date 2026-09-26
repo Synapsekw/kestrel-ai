@@ -12,7 +12,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.appdata import AppData
-from app.db.base import new_id
 from app.db.models import Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
@@ -26,7 +25,6 @@ DEFAULT_IMPORT_SETTINGS = {
     "dedupe_threshold": 4,
     "group_regex": r"^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\d+)_(?P<frame>\d+)",
 }
-DEFAULT_COLOUR = "#4f46e5"
 
 log = logging.getLogger(__name__)
 
@@ -71,34 +69,34 @@ class ProjectHandle:
         return s.execute(select(Project)).scalar_one()
 
 
-def normalise_classes(classes: list[dict]) -> list[dict]:
-    out: list[dict] = []
-    names: set[str] = set()
-    keys: set[str] = set()
-    for i, c in enumerate(classes):
-        # 409, not 422: duplicates and names that are blank only to Python's strip() match the
-        # schema, and a schema-valid body must not be answered 422 (see tests/test_contract.py).
-        name = (c.get("name") or "").strip()
-        if not name:
-            raise AppError("conflict", "A class name cannot be blank.", 409)
-        if name in names:
-            raise AppError("conflict", f"Two classes are called {name}. Class names must be unique.", 409)
-        hotkey = c.get("hotkey") or None
-        if hotkey and hotkey in keys:
-            raise AppError("conflict", f"Two classes use the hotkey {hotkey}.", 409)
-        names.add(name)
-        if hotkey:
-            keys.add(hotkey)
-        out.append(
-            {
-                "id": c.get("id") or new_id(),
-                "name": name,
-                "colour": c.get("colour") or DEFAULT_COLOUR,
-                "hotkey": hotkey,
-                "order": i,
-            }
-        )
+def _missing_dirs(folder: Path) -> list[Path]:
+    """The folders `create` is about to make (the project folder, SUBDIRS and their parents), in
+    creation order."""
+    out: list[Path] = []
+    for sub in SUBDIRS:
+        path = folder
+        for part in (None, *Path(sub).parts):
+            path = path if part is None else path / part
+            if path not in out and not path.exists():
+                out.append(path)
     return out
+
+
+def _undo_create(folder: Path, engine, made: list[Path]) -> None:
+    """A create that failed after touching the disk removes only what it made: its engine, the
+    database files and the folders it created, if they are still empty."""
+    if engine is not None:
+        engine.dispose()
+    for suffix in ("", "-wal", "-shm", "-journal"):
+        try:
+            (folder / f"project.db{suffix}").unlink(missing_ok=True)
+        except OSError:
+            log.exception("could not remove project.db%s of a failed create in %s", suffix, folder)
+    for path in reversed(made):
+        try:
+            path.rmdir()
+        except OSError:
+            pass  # not empty (something else wrote there) or already gone
 
 
 class ProjectRegistry:
@@ -125,17 +123,28 @@ class ProjectRegistry:
         with self._lock:
             if (folder / "project.db").exists():
                 raise AppError("already_exists", f"{folder} already contains a project", 409)
-            for sub in SUBDIRS:
-                (folder / sub).mkdir(parents=True, exist_ok=True)
-            engine = open_project_db(folder)
-            version = 2 if armed() else 1
-            row = Project(name=name, schema_version=version, import_defaults=dict(DEFAULT_IMPORT_SETTINGS))
-            with make_session_factory(engine)() as s:
-                s.add(row)
-                s.flush()
-                project_types.set_types(s, self.catalogue, wanted)
-                s.commit()
-                pid = row.id
+            made = _missing_dirs(folder)
+            engine = None
+            try:
+                for sub in SUBDIRS:
+                    (folder / sub).mkdir(parents=True, exist_ok=True)
+                engine = open_project_db(folder)
+                version = 2 if armed() else 1
+                row = Project(
+                    name=name, schema_version=version, import_defaults=dict(DEFAULT_IMPORT_SETTINGS)
+                )
+                with make_session_factory(engine)() as s:
+                    s.add(row)
+                    s.flush()
+                    # Appended in order to an empty list: a hotkey clash inside the initial list
+                    # (an archived type's key taken by a live one) clears the later key, as it does
+                    # for any appended type, instead of failing the create.
+                    project_types.add_types(s, self.catalogue, wanted)
+                    s.commit()
+                    pid = row.id
+            except BaseException:
+                _undo_create(folder, engine, made)
+                raise
             return self._cache(pid, folder, engine, name, remember=True, schema_version=version)
 
     def open(self, folder: Path, remember: bool = True) -> ProjectHandle:

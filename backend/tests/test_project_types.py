@@ -5,6 +5,7 @@ catalogue is down (decision F2)."""
 import pytest
 from conftest import EIGHT_CLASSES
 from findings_helpers import add_type, insert_box, use_types
+from migration_helpers import arm
 
 from app.catalogue import project_types
 from app.catalogue import service as catalogue
@@ -164,7 +165,6 @@ def test_creating_a_project_with_types_needs_the_catalogue(client, tmp_path):
 def test_a_new_project_is_born_at_version_2_once_the_migration_steps_are_armed(client, tmp_path, monkeypatch):
     """Disarmed (MG ships no steps yet) a new project starts at 1 like every other project, so the
     steps still run over it when they arm; armed, it is born at 2 (MG-steps Task 15)."""
-    from app.migration import steps
 
     def create(name):
         r = client.post(
@@ -173,9 +173,9 @@ def test_a_new_project_is_born_at_version_2_once_the_migration_steps_are_armed(c
         assert r.status_code == 201, r.text
         return r.json()["schema_version"]
 
-    monkeypatch.setattr(steps, "PIPELINE", [])
+    arm(monkeypatch)
     assert create("disarmed") == 1
-    monkeypatch.setattr(steps, "PIPELINE", [object()])
+    arm(monkeypatch, object())
     assert create("armed") == 2
 
 
@@ -227,3 +227,43 @@ def test_a_pre_foundation_project_keeps_its_legacy_classes_once_a_type_row_is_wr
         classes = handle.row(s).classes
     assert [(c["id"], c["order"]) for c in classes] == [("c1", 0), (crack["id"], 1)]
     assert boxes.update_box(handle, box_id, x=0.4).x == 0.4
+
+
+def test_a_new_project_clears_a_hotkey_clash_in_its_initial_list(client, tmp_path):
+    """An archived type may hold the hotkey a live one took since; picking both for a new project
+    clears the later one's key for this project, as `add_types` does, instead of a 409 that left a
+    half-made folder behind."""
+    old = add_type(client, "old crack", hotkey="q")
+    client.patch(f"{API}/catalogue/types/{old['id']}", json={"archived": True})
+    new = add_type(client, "crack", hotkey="q")
+    r = client.post(
+        f"{API}/projects",
+        json={"name": "P", "folder": str(tmp_path / "p"), "type_ids": [new["id"], old["id"]]},
+    )
+    assert r.status_code == 201, r.text
+    assert [(c["id"], c["hotkey"]) for c in r.json()["classes"]] == [(new["id"], "q"), (old["id"], None)]
+
+
+def test_a_failed_create_leaves_no_project_behind(client, tmp_path, monkeypatch):
+    registry = client.app.state.projects
+    folder = tmp_path / "p"
+
+    def boom(*a, **kw):
+        raise RuntimeError("disk trouble")
+
+    with monkeypatch.context() as m:
+        m.setattr(project_types, "add_types", boom)
+        m.setattr(project_types, "set_types", boom)
+        with pytest.raises(RuntimeError):
+            registry.create("P", folder, [])
+    assert not folder.exists()
+    kept = tmp_path / "kept"
+    (kept / "images").mkdir(parents=True)
+    (kept / "images" / "a.jpg").write_bytes(b"x")
+    with monkeypatch.context() as m:
+        m.setattr(project_types, "add_types", boom)
+        m.setattr(project_types, "set_types", boom)
+        with pytest.raises(RuntimeError):
+            registry.create("P", kept, [])
+    assert sorted(p.relative_to(kept).as_posix() for p in kept.rglob("*")) == ["images", "images/a.jpg"]
+    assert registry.create("P", folder, []).folder == folder.resolve()
