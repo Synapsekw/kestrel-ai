@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useApi } from "@/api/client";
 import { useProject, useSourceNames } from "@/api/project";
-import { useProjectKind } from "@/app/useProjectKind";
 import { useJobsStore } from "@/store/jobs";
 import { EmptyImages } from "@/data/EmptyImages";
 import { importNotice, type Notice } from "@/data/importNotice";
@@ -10,10 +10,12 @@ import { FilterBar } from "@/data/FilterBar";
 import { ImageGrid } from "@/data/ImageGrid";
 import { ImageTable } from "@/data/ImageTable";
 import { ImportImagesDialog } from "@/data/ImportImagesDialog";
+import { labelNext } from "@/data/labelNext";
 import { SelectionBar } from "@/data/SelectionBar";
 import {
   applyClientFilters,
   DATA_COLUMNS,
+  DEFAULT_FILTERS,
   DEFAULT_QUERY,
   keyboardAction,
   toggleSort,
@@ -130,7 +132,7 @@ function GridSkeleton() {
 
 export function DataManagerScreen() {
   const { projectId = "" } = useParams();
-  const kind = useProjectKind(projectId);
+  const api = useApi();
   const navigate = useNavigate();
   const { project } = useProject(projectId);
   const sourceNames = useSourceNames(projectId);
@@ -149,7 +151,11 @@ export function DataManagerScreen() {
       { replace: true },
     );
   }, [searchParams, setSearchParams]);
-  const [query, setQuery] = useState<ListQuery>(DEFAULT_QUERY);
+  const [query, setQuery] = useState<ListQuery>(() =>
+    searchParams.get("filter") === "unlabeled"
+      ? { ...DEFAULT_QUERY, filters: { ...DEFAULT_FILTERS, labeled: "no" } }
+      : DEFAULT_QUERY,
+  );
   const [view, setView] = useState<ViewMode>("grid");
   const params = useMemo(() => toImageParams(query, IMAGE_PAGE_SIZE), [query]);
   const list = useImageList(projectId, params);
@@ -171,8 +177,8 @@ export function DataManagerScreen() {
 
   const open = useCallback(
     (id: string) => {
-      useNavigationStore.getState().setContext(ids, "data", `/p/${projectId}/data`);
-      void navigate(`/p/${projectId}/edit/${id}`);
+      useNavigationStore.getState().setContext(ids, "data", `/p/${projectId}/images`);
+      void navigate(`/p/${projectId}/images/${id}`);
     },
     [ids, navigate, projectId],
   );
@@ -213,15 +219,19 @@ export function DataManagerScreen() {
   const selectedIds = useMemo(() => ids.filter((id) => pruned.selected.has(id)), [ids, pruned]);
   const selectedRows = useMemo(() => items.filter((i) => pruned.selected.has(i.id)), [items, pruned]);
   const selectedEmptyCount = useMemo(() => selectedRows.filter((i) => i.marked_empty).length, [selectedRows]);
-  const selectedLabeledCount = useMemo(
-    () => selectedRows.filter((i) => i.box_count > 0).length,
-    [selectedRows],
-  );
-  const selectedUnlabeledCount = useMemo(() => selectedRows.filter((i) => !i.labeled).length, [selectedRows]);
   const selectedPendingCount = useMemo(() => proposalsABulkMarkRejects(selectedRows), [selectedRows]);
   const labelSelected = () => {
     useNavigationStore.getState().setContext(selectedIds, "selection");
-    void navigate(`/p/${projectId}/edit/${selectedIds[0]}`);
+    void navigate(`/p/${projectId}/images/${selectedIds[0]}`);
+  };
+  const [nexting, setNexting] = useState(false);
+  const onLabelNext = () => {
+    setNexting(true);
+    void labelNext(api, projectId).then((next) => {
+      setNexting(false);
+      if (next === "all-labeled") setAllLabeled(true);
+      else if (next !== "no-images") void navigate(`/p/${projectId}/images/${next.imageId}`);
+    });
   };
 
   const empty = !list.loading && !list.error && items.length === 0 && project !== null && !importing;
@@ -232,23 +242,29 @@ export function DataManagerScreen() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight">Images</h1>
         <div className="flex items-center gap-2">
+          <Button icon="label" onClick={onLabelNext} loading={nexting}>
+            Label next
+          </Button>
           <ShortcutsButton />
           <Button variant="primary" icon="import" onClick={() => setImporting((v) => !v)} disabled={!project}>
             Import images
           </Button>
         </div>
       </div>
-      {allLabeled && kind !== "detect" && (
+      {allLabeled && (
         <Alert
           tone="ok"
           onDismiss={() => setAllLabeled(false)}
           actions={
-            <Link to={`/p/${projectId}/datasets`} className={buttonClass("secondary", "sm")}>
-              Open Datasets
+            <Link
+              to={`/models/datasets?new=1&project=${projectId}`}
+              className={buttonClass("secondary", "sm")}
+            >
+              Build a dataset
             </Link>
           }
         >
-          Every image is labeled. Create a dataset next.
+          Every image is labeled. Build a dataset from them in Models.
         </Alert>
       )}
       {importing && project && (
@@ -280,12 +296,9 @@ export function DataManagerScreen() {
           <SelectionBar
             projectId={projectId}
             selectedIds={selectedIds}
-            labeledCount={selectedLabeledCount}
             emptyCount={selectedEmptyCount}
-            unlabeledCount={selectedUnlabeledCount}
             pendingCount={selectedPendingCount}
             onLabel={labelSelected}
-            kind={kind}
             onRunModel={() => {
               useNavigationStore.getState().setContext(selectedIds, "query");
               void navigate(`/p/${projectId}/query`);

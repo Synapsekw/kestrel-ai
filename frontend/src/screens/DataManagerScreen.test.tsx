@@ -4,7 +4,6 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { exampleImagePage, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
-import { useProjectKindStore } from "@/app/useProjectKind";
 import { DataManagerScreen } from "./DataManagerScreen";
 
 function Search() {
@@ -12,7 +11,7 @@ function Search() {
 }
 
 function renderScreen(route: string) {
-  const { api } = fakeClient([
+  const { api, requests } = fakeClient([
     { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
     { method: "GET", path: /\/images$/, body: exampleImagePage },
     { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
@@ -20,7 +19,7 @@ function renderScreen(route: string) {
   renderWithProviders(
     <Routes>
       <Route
-        path="/p/:projectId/data"
+        path="/p/:projectId/images"
         element={
           <>
             <DataManagerScreen />
@@ -28,19 +27,20 @@ function renderScreen(route: string) {
           </>
         }
       />
+      <Route path="/p/:projectId/images/:imageId" element={<p data-testid="editor-route" />} />
     </Routes>,
     { api, route },
   );
+  return requests;
 }
 
 describe("DataManagerScreen", () => {
   beforeEach(() => {
     useChangesStore.setState({ imagesRevision: 0, boxesRevision: {} });
-    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
   });
 
   it("is titled Images and lists the shortcuts behind the keyboard button", async () => {
-    renderScreen(`/p/${PROJECT_ID}/data`);
+    renderScreen(`/p/${PROJECT_ID}/images`);
     expect(screen.getByRole("heading", { name: "Images" })).toBeInTheDocument();
     await screen.findByRole("list", { name: "Images" });
     expect(screen.queryByText(/Every image is labeled/)).toBeNull();
@@ -57,24 +57,33 @@ describe("DataManagerScreen", () => {
   });
 
   it("says every image is labeled when sent with ?notice=all-labeled, then drops the parameter", async () => {
-    renderScreen(`/p/${PROJECT_ID}/data?notice=all-labeled`);
-    expect(screen.getByText("Every image is labeled. Create a dataset next.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Open Datasets" })).toHaveAttribute(
+    renderScreen(`/p/${PROJECT_ID}/images?notice=all-labeled`);
+    expect(
+      screen.getByText("Every image is labeled. Build a dataset from them in Models."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Build a dataset" })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/datasets`,
+      `/models/datasets?new=1&project=${PROJECT_ID}`,
     );
     await waitFor(() => expect(screen.getByTestId("search")).toHaveTextContent(/^$/));
     // Read once: dropping the parameter does not take the notice away.
-    expect(screen.getByText("Every image is labeled. Create a dataset next.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Every image is labeled. Build a dataset from them in Models."),
+    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText(/Every image is labeled/)).toBeNull();
   });
 
-  it("does not point a detection project at Datasets", async () => {
-    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "detect" } });
-    renderScreen(`/p/${PROJECT_ID}/data?notice=all-labeled`);
+  it("lists only unlabeled images when opened with ?filter=unlabeled", async () => {
+    const requests = renderScreen(`/p/${PROJECT_ID}/images?filter=unlabeled`);
     await screen.findByRole("list", { name: "Images" });
-    expect(screen.queryByText(/Every image is labeled/)).toBeNull();
-    expect(screen.queryByRole("link", { name: "Open Datasets" })).toBeNull();
+    const url = new URL(`http://x${requests.find((r) => r.url.includes("/images?"))!.url}`);
+    expect(url.searchParams.get("labeled")).toBe("false");
+  });
+
+  it("Label next opens the first unlabeled image", async () => {
+    renderScreen(`/p/${PROJECT_ID}/images`);
+    fireEvent.click(await screen.findByRole("button", { name: "Label next" }));
+    expect(await screen.findByTestId("editor-route")).toBeInTheDocument();
   });
 });

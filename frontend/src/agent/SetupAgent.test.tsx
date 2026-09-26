@@ -140,9 +140,11 @@ describe("Setup agent", () => {
     expect(screen.getByLabelText("Message")).toHaveValue("");
     expect(screen.queryByRole("link", { name: "Review suggestions" })).toBeNull();
     expect(requests.filter((r) => r.method === "POST" && r.url === "/api/v1/projects")).toHaveLength(1);
-    // The setup agent creates training projects; the starter lands in the app-wide library.
-    expect(requests.find((r) => r.method === "POST" && r.url === "/api/v1/projects")?.body).toMatchObject({
-      kind: "train",
+    // A project has no kind and no class list of its own; the starter lands in the app-wide library.
+    expect(requests.find((r) => r.method === "POST" && r.url === "/api/v1/projects")?.body).toEqual({
+      name: "Site detector",
+      folder: "E:\\projects\\detector",
+      type_ids: [],
     });
     expect(requests.some((r) => r.url === "/api/v1/library/starters/yolo26n/acquire")).toBe(true);
     expect(requests.find((r) => r.method === "POST" && r.url.endsWith("/query-runs"))?.body).toMatchObject({

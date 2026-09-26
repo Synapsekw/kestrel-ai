@@ -1436,42 +1436,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
-  /api/v1/projects/{projectId}/maps/{mapId}/move:
-    parameters:
-      - $ref: "#/components/parameters/projectId"
-      - $ref: "#/components/parameters/mapId"
-    post:
-      tags: [maps]
-      operationId: moveMapToProject
-      deprecated: true
-      x-retire-with: F-SH
-      summary: |
-        Copy a map out of this project into another project (a `map_move` job
-        that lives in the **target** project, params `{source_project_id, map_id}`). The map row,
-        its derived overview and tiles, its capture date, zones and labels are copied; its runs
-        are not. The source file is only referenced, never copied or modified.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MapMoveRequest" }
-      responses:
-        "202":
-          description: move job queued in the target project
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/JobRef" }
-        "404":
-          description: the project, the map or the target project does not exist (`code` is `not_found`)
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        "409":
-          description: "the map has not finished importing (`code` is `conflict`)"
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/Error" }
-        default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/maps/{mapId}/preview:
     parameters:
       - $ref: "#/components/parameters/projectId"
@@ -6536,12 +6500,6 @@ components:
           items: { $ref: "#/components/schemas/MapExportFormat" }
           minItems: 1
           uniqueItems: true
-    MapMoveRequest:
-      type: object
-      required: [target_project_id]
-      properties:
-        target_project_id: { type: string, description: an open or recently opened project }
-      example: { target_project_id: "7f1c2e3a-1111-4000-8000-000000000002" }
     # ------------------------------------------------------------ detection workspace
     CountPair:
       type: object

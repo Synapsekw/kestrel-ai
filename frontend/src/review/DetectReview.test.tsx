@@ -1,10 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { Route, Routes } from "react-router-dom";
 import type { Source } from "@contract/client";
 import { exampleImagePage, exampleSource, fakeClient, MAP_ID, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
-import { useProjectKindStore } from "@/app/useProjectKind";
 import type { RunSummary } from "@/api/review";
 import { ReviewScreen } from "@/screens/ReviewScreen";
 
@@ -41,7 +40,7 @@ const summary = (over: Partial<RunSummary>): RunSummary => ({
   ...over,
 });
 
-function renderScreen(routes: Parameters<typeof fakeClient>[0], route = `/p/${PROJECT_ID}/review`) {
+function renderScreen(routes: Parameters<typeof fakeClient>[0], route = `/p/${PROJECT_ID}/review?view=runs`) {
   const { api, requests } = fakeClient(routes);
   renderWithProviders(
     <Routes>
@@ -54,11 +53,6 @@ function renderScreen(routes: Parameters<typeof fakeClient>[0], route = `/p/${PR
 }
 
 describe("Detection review", () => {
-  beforeEach(() => {
-    useProjectKindStore.setState({ byProject: {} });
-    useProjectKindStore.getState().set(PROJECT_ID, "detect");
-  });
-
   it("picks the newest survey first and reviews its pinned run on the map", async () => {
     renderScreen([
       { method: "GET", path: /\/sources$/, body: { items: [photos, map], next_cursor: null } },
@@ -129,9 +123,6 @@ describe("Detection review", () => {
   it("explains an empty project", async () => {
     renderScreen([{ method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } }]);
     expect(await screen.findByText("Nothing to review yet")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Add photos or a map" })).toHaveAttribute(
-      "href",
-      `/p/${PROJECT_ID}/sources`,
-    );
+    expect(screen.getByRole("button", { name: "Add data" })).toBeInTheDocument();
   });
 });

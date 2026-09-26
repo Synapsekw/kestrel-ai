@@ -38,7 +38,7 @@ export function createSource(api: ApiClient, projectId: string, body: SourceCrea
 
 /**
  * Rename a source or correct its survey date (null clears it). On a map source the server writes the
- * map's date too, so the two stay equal. Detection projects only.
+ * map's date too, so the two stay equal.
  */
 export function updateSource(
   api: ApiClient,

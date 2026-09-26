@@ -13,7 +13,6 @@ import type {
 import { useApi } from "@/api/client";
 import { chatWithAgent, type AgentMessage, type AgentPlan } from "@/api/agent";
 import { messageOf, unwrap } from "@/api/errors";
-import { legacyCreateBody } from "@/api/legacyKind";
 import { fetchProviders } from "@/api/providers";
 import { acquireStarter, LIBRARY_JOBS } from "@/api/library";
 import { listStarterModels } from "@/api/starterModels";
@@ -30,7 +29,6 @@ import {
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 
 type Stage = "starter" | "import" | "label";
-const COLOURS = ["#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7"];
 export function useSetupAgent(open: boolean) {
   const api = useApi();
   const navigate = useNavigate();
@@ -204,16 +202,7 @@ export function useSetupAgent(open: boolean) {
       if (!p) {
         p = await unwrap(
           api.POST("/api/v1/projects", {
-            body: legacyCreateBody(
-              plan.name.trim(),
-              folder.trim(),
-              "train",
-              plan.classes.map((name, i) => ({
-                name: name.trim(),
-                colour: COLOURS[i % COLOURS.length],
-                hotkey: i < 9 ? String(i + 1) : null,
-              })),
-            ),
+            body: { name: plan.name.trim(), folder: folder.trim(), type_ids: [] },
           }),
         );
         projectRef.current = p;

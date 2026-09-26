@@ -180,7 +180,6 @@ def test_the_replaced_operations_are_deprecated_with_the_unit_that_removes_them(
         "deleteDataset": "F-S2",
         "getDatasetStats": "F-S2",
         "trainModel": "F-S2",
-        "moveMapToProject": "F-SH",
     }
 
 

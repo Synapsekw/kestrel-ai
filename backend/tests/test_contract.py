@@ -125,7 +125,6 @@ RETIRING: dict[str, str] = {
     "deleteDataset": "F-S2",
     "getDatasetStats": "F-S2",
     "trainModel": "F-S2",
-    "moveMapToProject": "F-SH",
 }
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express

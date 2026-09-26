@@ -1,28 +1,39 @@
 import { useMemo } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
-import { useProjectKind, type ProjectKind } from "@/app/useProjectKind";
 import { useImageList } from "@/data/useImageList";
 import { DetectReview } from "@/review/DetectReview";
 import { ImageReviewQueue } from "@/review/ImageReviewQueue";
-import { EmptyState } from "@/ui";
+import { reviewView, type ReviewView } from "@/review/reviewView";
+import { EmptyState, Segmented } from "@/ui";
 
 const linkClass = "font-medium text-accent hover:underline";
 
-/**
- * Review: a detection project reviews one source's run at a time; otherwise the image queue. A
- * `?ids=` link (a detection run's "Review results") narrows the image queue in either kind.
- */
+/** Review: image suggestions or detection runs, for any project; a run's `?ids=` link narrows the image queue. */
 export function ReviewScreen() {
   const { projectId = "" } = useParams();
-  const [params] = useSearchParams();
-  const kind = useProjectKind(projectId);
-  if (kind === "detect" && !params.get("ids")) return <DetectReview projectId={projectId} />;
-  return <SuggestionReview projectId={projectId} kind={kind} />;
+  const [params, setParams] = useSearchParams();
+  const view = reviewView(params);
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <Segmented
+        label="What to review"
+        size="sm"
+        className="self-end"
+        value={view}
+        onChange={(next: ReviewView) => setParams(new URLSearchParams({ view: next }))}
+        options={[
+          { value: "suggestions", label: "Image suggestions" },
+          { value: "runs", label: "Detection runs" },
+        ]}
+      />
+      {view === "runs" ? <DetectReview projectId={projectId} /> : <SuggestionReview projectId={projectId} />}
+    </div>
+  );
 }
 
 /** Spec section 6 screen 4: images with unreviewed suggestions sorted by suggestion confidence, same editor. */
-function SuggestionReview({ projectId, kind }: { projectId: string; kind: ProjectKind | null }) {
+function SuggestionReview({ projectId }: { projectId: string }) {
   const [params] = useSearchParams();
   // `?ids=` narrows the queue to one query run's images (contract gap 2: `ids` overrides the filters).
   const runIds = params.get("ids");
@@ -59,28 +70,17 @@ function SuggestionReview({ projectId, kind }: { projectId: string; kind: Projec
         list={list}
         empty={
           <EmptyState icon="review" title="Nothing to review">
-            {kind === "train" ? (
-              <>
-                Suggestions appear here when the editor opens an image while a pre-annotation model is set in
-                the{" "}
-                <Link to={`/p/${projectId}/settings`} className={linkClass}>
-                  Project settings
-                </Link>
-                .
-              </>
-            ) : (
-              <>
-                Suggestions appear here after a detection run on the{" "}
-                <Link to={`/p/${projectId}/query`} className={linkClass}>
-                  Detect screen
-                </Link>
-                , or when the editor opens an image while a pre-annotation model is set in the{" "}
-                <Link to={`/p/${projectId}/settings`} className={linkClass}>
-                  Project settings
-                </Link>
-                .
-              </>
-            )}
+            <>
+              Suggestions appear here after a detection run on the{" "}
+              <Link to={`/p/${projectId}/query`} className={linkClass}>
+                Detect screen
+              </Link>
+              , or when the editor opens an image while a pre-annotation model is set in the{" "}
+              <Link to={`/p/${projectId}/settings`} className={linkClass}>
+                Project settings
+              </Link>
+              .
+            </>
           </EmptyState>
         }
       />

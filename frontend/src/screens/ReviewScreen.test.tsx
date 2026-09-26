@@ -4,17 +4,14 @@ import { Route, Routes } from "react-router-dom";
 import { exampleImagePage, fakeClient, PROJECT_ID, IMAGE_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useNavigationStore } from "@/store/navigation";
-import { useProjectKindStore } from "@/app/useProjectKind";
 import { ReviewScreen } from "./ReviewScreen";
 
 describe("ReviewScreen", () => {
   beforeEach(() => {
     useNavigationStore.getState().setContext([], null);
-    useProjectKindStore.setState({ byProject: {} });
   });
 
-  it("in a training project, suggestions come from pre-annotation, not from a Detect screen", async () => {
-    useProjectKindStore.getState().set(PROJECT_ID, "train");
+  it("with nothing to review, says where suggestions come from", async () => {
     const { api } = fakeClient([
       { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
       { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
@@ -26,8 +23,23 @@ describe("ReviewScreen", () => {
       { api, route: `/p/${PROJECT_ID}/review` },
     );
     const empty = await screen.findByTestId("review-empty");
-    expect(empty).toHaveTextContent("Suggestions appear here when the editor opens an image");
-    expect(screen.queryByRole("link", { name: "Detect screen" })).toBeNull();
+    expect(empty).toHaveTextContent("Suggestions appear here after a detection run");
+    expect(screen.getByRole("link", { name: "Detect screen" })).toBeInTheDocument();
+  });
+
+  it("switches between image suggestions and detection runs", async () => {
+    const { api } = fakeClient([
+      { method: "GET", path: /\/images$/, body: { items: [], next_cursor: null, total: 0 } },
+      { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
+    ]);
+    renderWithProviders(
+      <Routes>
+        <Route path="/p/:projectId/review" element={<ReviewScreen />} />
+      </Routes>,
+      { api, route: `/p/${PROJECT_ID}/review` },
+    );
+    fireEvent.click(await screen.findByRole("radio", { name: "Detection runs" }));
+    expect(await screen.findByText("Nothing to review yet")).toBeInTheDocument();
   });
 
   it("requests the review queue query, shows confidence and opens the editor with a review context", async () => {

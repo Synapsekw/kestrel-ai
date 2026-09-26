@@ -1054,32 +1054,6 @@ export interface paths {
         patch: operations["patchMap"];
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/maps/{mapId}/move": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                mapId: components["parameters"]["mapId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Copy a map out of this project into another project (a `map_move` job
-         *     that lives in the **target** project, params `{source_project_id, map_id}`). The map row,
-         *     its derived overview and tiles, its capture date, zones and labels are copied; its runs
-         *     are not. The source file is only referenced, never copied or modified.
-         * @deprecated
-         */
-        post: operations["moveMapToProject"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/projects/{projectId}/maps/{mapId}/preview": {
         parameters: {
             query?: never;
@@ -5714,15 +5688,6 @@ export interface components {
             run_id?: string;
             /** @description gpkg (GeoPackage) includes review_state, the mapped class and a site_areas layer */
             formats: components["schemas"]["MapExportFormat"][];
-        };
-        /**
-         * @example {
-         *       "target_project_id": "7f1c2e3a-1111-4000-8000-000000000002"
-         *     }
-         */
-        MapMoveRequest: {
-            /** @description an open or recently opened project */
-            target_project_id: string;
         };
         /**
          * @description a count shown as total (verified): total is every state except rejected; verified is accepted, edited or drawn by a person
@@ -10977,52 +10942,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeoMap"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    moveMapToProject: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                mapId: components["parameters"]["mapId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MapMoveRequest"];
-            };
-        };
-        responses: {
-            /** @description move job queued in the target project */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRef"];
-                };
-            };
-            /** @description the project, the map or the target project does not exist (`code` is `not_found`) */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description the map has not finished importing (`code` is `conflict`) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

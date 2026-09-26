@@ -6,6 +6,7 @@ import { messageOf } from "@/api/errors";
 import { REVIEW_QUEUE_QUERY } from "@/api/images";
 import { chosenRun, listSourceRuns, reviewProgressText, type RunSummary } from "@/api/review";
 import { fetchAllSources } from "@/api/sources";
+import { useAddData } from "@/app/addDataStore";
 import { pushLog } from "@/app/diagnostics";
 import { useImageList } from "@/data/useImageList";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
@@ -87,10 +88,9 @@ export function DetectReview({ projectId }: { projectId: string }) {
       ) : sources.length === 0 || !source ? (
         <EmptyState icon="review" title="Nothing to review yet">
           Detections to check appear here after a model runs on your photos or a map.{" "}
-          <Link to={`/p/${projectId}/sources`} className={linkClass}>
-            Add photos or a map
-          </Link>
-          .
+          <Button size="sm" icon="plus" onClick={() => useAddData.getState().show(null)}>
+            Add data
+          </Button>
         </EmptyState>
       ) : (
         <>

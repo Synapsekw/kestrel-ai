@@ -1,8 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent, waitFor } from "@testing-library/react";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { SelectionBar } from "./SelectionBar";
+
+function Where() {
+  return <p data-testid="where">{useLocation().pathname + useLocation().search}</p>;
+}
 
 function renderBar(
   api: ReturnType<typeof fakeClient>["api"],
@@ -16,38 +21,44 @@ function renderBar(
     onClear: vi.fn(),
   };
   renderWithProviders(
-    <SelectionBar
-      projectId={PROJECT_ID}
-      selectedIds={["a", "b"]}
-      labeledCount={0}
-      emptyCount={0}
-      unlabeledCount={2}
-      pendingCount={0}
-      {...handlers}
-      {...props}
-    />,
+    <Routes>
+      <Route
+        path="*"
+        element={
+          <>
+            <SelectionBar
+              projectId={PROJECT_ID}
+              selectedIds={["a", "b"]}
+              emptyCount={0}
+              pendingCount={0}
+              {...handlers}
+              {...props}
+            />
+            <Where />
+          </>
+        }
+      />
+    </Routes>,
     { api },
   );
   return handlers;
 }
 
 describe("SelectionBar", () => {
-  it("offers only its own kind's actions: no Run model in training, no datasets in detection", () => {
-    const { api } = fakeClient([]);
-    renderBar(api, { kind: "train" });
-    expect(screen.queryByRole("button", { name: "Run model" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Add to dataset" })).toBeInTheDocument();
-  });
-
-  it("a detection project's selection runs a model and never builds a dataset or labels by hand", () => {
-    const { api } = fakeClient([]);
-    renderBar(api, { kind: "detect" });
+  it("offers every action on any project: label, run a model and use in a dataset", () => {
+    renderBar(fakeClient([]).api);
+    expect(screen.getByRole("button", { name: "Label selected" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Run model" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Add to dataset" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Label selected" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Use in dataset…" })).toBeInTheDocument();
   });
 
-  it("hands label and run-model to the screen, opens the dataset dialog and deletes after confirmation", async () => {
+  it("takes the selection's project to the Models dataset builder", () => {
+    renderBar(fakeClient([]).api);
+    fireEvent.click(screen.getByRole("button", { name: "Use in dataset…" }));
+    expect(screen.getByTestId("where")).toHaveTextContent(`/models/datasets?new=1&project=${PROJECT_ID}`);
+  });
+
+  it("hands label and run-model to the screen and deletes after confirmation", async () => {
     const { api, requests } = fakeClient([
       { method: "POST", path: /\/images\/bulk-delete$/, body: { deleted: 2 } },
     ]);
@@ -57,10 +68,6 @@ describe("SelectionBar", () => {
     fireEvent.click(screen.getByRole("button", { name: "Run model" }));
     expect(h.onRunModel).toHaveBeenCalled();
     expect(requests).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Add to dataset" }));
-    expect(screen.getByRole("dialog", { name: "Add to dataset" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     fireEvent.click(screen.getByRole("button", { name: "Delete 2 images" }));
     await waitFor(() => expect(h.onDeleted).toHaveBeenCalledWith("2 images deleted"));
