@@ -234,7 +234,7 @@ function LibraryContent() {
 
 type StatusState = { kind: "loading" } | { kind: "ready"; status: LibraryStatus | null };
 
-/** App-level `/library`: every model on this computer, usable by every project (spec section 4.4). */
+/** App-level `/models/library`: every model on this computer, usable by every project (spec section 4.4). */
 export function LibraryScreen() {
   const api = useApi();
   const [state, setState] = useState<StatusState>({ kind: "loading" });

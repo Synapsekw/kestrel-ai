@@ -9,7 +9,7 @@ export function BackLink({ projectId }: { projectId: string }) {
   const review = source === "review";
   return (
     <Link
-      to={returnTo ?? `/p/${projectId}/${review ? "review" : "data"}`}
+      to={returnTo ?? `/p/${projectId}/${review ? "review" : "images"}`}
       aria-label={review ? "Back to the review queue" : "Back to Images"}
       className={buttonClass("ghost", "sm", "-ml-1.5 !px-1.5")}
     >

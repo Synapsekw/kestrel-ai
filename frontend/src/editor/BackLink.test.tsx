@@ -24,13 +24,13 @@ describe("BackLink", () => {
   });
 
   it("returns to Images otherwise, also when the editor was opened directly", () => {
-    useNavigationStore.getState().setContext(["a"], "data", "/p/p1/data");
+    useNavigationStore.getState().setContext(["a"], "data", "/p/p1/images");
     show();
-    expect(screen.getByRole("link", { name: "Back to Images" })).toHaveAttribute("href", "/p/p1/data");
+    expect(screen.getByRole("link", { name: "Back to Images" })).toHaveAttribute("href", "/p/p1/images");
   });
 
   it("falls back to Images with no context", () => {
     show();
-    expect(screen.getByRole("link", { name: "Back to Images" })).toHaveAttribute("href", "/p/p1/data");
+    expect(screen.getByRole("link", { name: "Back to Images" })).toHaveAttribute("href", "/p/p1/images");
   });
 });
