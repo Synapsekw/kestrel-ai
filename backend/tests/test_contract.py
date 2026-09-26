@@ -43,8 +43,6 @@ def test_stub_list_matches_routers(app):
 def test_refusal_allowances_name_real_operations_and_declared_statuses():
     """Every REFUSES_VALID_DATA entry is a real operationId; each status is also declared for its
     operation."""
-    # REFUSES_VALID_DATA is empty at F0, so this loop checks nothing; it becomes live as S1-S3 add
-    # entries.
     ops = {
         op["operationId"]: op
         for ops in yaml.safe_load(SPEC.read_text("utf-8"))["paths"].values()
@@ -124,10 +122,9 @@ RETIRING: dict[str, str] = {
 # admission refusal, a self-crossing polygon): operationId -> the statuses such a request may get.
 # For exactly those responses only schemathesis's positive-data-acceptance check is skipped; every
 # conformance check still runs, and the answer must carry its own error code, never
-# `validation_error` (FastAPI's malformed-request answer), except for REUSES_VALIDATION_ERROR below.
-# This is the only allowance mechanism: S1, S2 and S3 add entries here and never loosen the test
-# another way. Empty until a unit builds a refusing operation; each status must be declared for its
-# operation in openapi.yaml (guarded below).
+# `validation_error` (FastAPI's malformed-request answer). This is the only allowance mechanism:
+# S1, S2 and S3 add entries here and never loosen the test another way; each status must be
+# declared for its operation in openapi.yaml (guarded below).
 REFUSES_VALID_DATA: dict[str, set[int]] = {
     # S2 (plan deviation 14): a schema-valid build whose ids resolve can still be refused - a full
     # disk (`insufficient_disk`), a grid over the cell ceiling (`grid_too_large`), a feet-based or
@@ -148,13 +145,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
     # Foundation unit BM (task 10b, contract follow-up I2): a cross-field either/or the schema does
     # not express (unlike `SurfaceBuildRequest.name`'s `minLength`, this is not a single-field
-    # constraint) - runs: neither `model_id` nor `provider`, or a provider run's blank `query`; site
-    # areas: `polygon_wgs84` and `map_id`+`polygon_px` given together, neither given, or only one of
-    # `map_id`/`polygon_px`. These answer `validation_error` like a malformed body, so they are also
-    # listed in REUSES_VALIDATION_ERROR.
-    "createRuns": {422},
-    "createSiteArea": {422},
-    "updateSiteArea": {422},
+    # constraint).
+    "createRuns": {422},  # model_or_provider_required / query_required
+    "createSiteArea": {422},  # invalid_outline: the polygon_wgs84 / map_id+polygon_px shape rule
+    "updateSiteArea": {422},  # invalid_outline: the polygon_wgs84 / map_id+polygon_px shape rule
     # BC: a schema-valid but non-contiguous or too-long severity scale (`invalid_scale`), or a
     # schema-valid `default_severity` that names a level above the live scale (`severity_unknown`,
     # spec section 15). createCatalogueType/patchCatalogueType are also in UNDECLARED_REFUSALS below:
@@ -189,10 +183,6 @@ UNDECLARED_REFUSALS: dict[str, set[int]] = {
     "patchCatalogueType": {422},
     "createProject": {422},
 }
-
-# The narrow exception to REFUSES_VALID_DATA's "never validation_error" rule (see above): these
-# operations' business refusal is coded `validation_error` on purpose, not a stray FastAPI answer.
-REUSES_VALIDATION_ERROR: set[str] = {"createRuns", "createSiteArea", "updateSiteArea"}
 
 
 @pytest.fixture
@@ -246,7 +236,6 @@ def test_responses_conform(case, app, project_id, tmp_path):
     if is_positive and response.status_code in REFUSES_VALID_DATA.get(op_id, set()):
         # A deliberate refusal of a schema-valid request: skip only positive-data acceptance.
         code = response.json()["error"]["code"]
-        assert code, response.text
-        assert code != "validation_error" or op_id in REUSES_VALIDATION_ERROR, response.text
+        assert code and code != "validation_error", response.text
         excluded.append(positive_data_acceptance)
     case.validate_response(response, excluded_checks=excluded)

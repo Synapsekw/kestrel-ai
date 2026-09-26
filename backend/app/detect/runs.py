@@ -86,7 +86,7 @@ def _targets(handle: ProjectHandle, source_ids: list[str]) -> list[_Target]:
 
 def _cloud_model_name(config: ProviderConfigStore, keys: KeyStore, body: RunCreate) -> str:
     if not (body.query or "").strip():
-        raise AppError("validation_error", "a cloud provider run needs a non-empty query", 422)
+        raise AppError("query_required", "a cloud provider run needs a non-empty query", 422)
     if keys.get(body.provider) is None:
         raise AppError("conflict", f"no API key stored for {body.provider}", 409)
     return config.get(body.provider).model_name
@@ -103,7 +103,7 @@ def create_runs(
 ) -> tuple[list[tuple[_Target, str, Job]], list[str]]:
     """One run per source, each with its job queued: `([(target, run_id, job)], added_type_ids)`."""
     if not body.model_id and not body.provider:
-        raise AppError("validation_error", "a run needs a library model_id or a provider", 422)
+        raise AppError("model_or_provider_required", "a run needs a library model_id or a provider", 422)
     targets = _targets(handle, body.source_ids)  # unknown sources: 404 before anything else
 
     model = None

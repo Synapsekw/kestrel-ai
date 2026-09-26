@@ -27,7 +27,7 @@ MAX_VERTICES = 1000
 
 
 def _invalid(message: str) -> AppError:
-    return AppError("validation_error", message, 422)
+    return AppError("invalid_outline", message, 422)
 
 
 def validate_wgs84(points: Sequence[Sequence[float]]) -> list[list[float]]:

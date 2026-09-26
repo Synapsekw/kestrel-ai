@@ -3211,10 +3211,13 @@ export interface components {
                  *     is not allowed), finding_would_be_deleted (409: reclassing the box to an object
                  *     type deletes its finding; retry with `confirm_finding_delete=true`),
                  *     attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
-                 *     `{reason}`), task_not_supported (422: a segment dataset cannot be exported yet),
-                 *     task_mismatch (422: the base model's task differs from the dataset's),
-                 *     class_in_use (409: also counts findings; details `{type_id, box_count,
-                 *     finding_count}`)
+                 *     `{reason}`), task_not_supported (422: a segment dataset cannot be exported yet, or
+                 *     a run's library model classifies segmentation), task_mismatch (422: the base
+                 *     model's task differs from the dataset's), class_in_use (409: also counts findings;
+                 *     details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
+                 *     run has neither a library `model_id` nor a cloud `provider`), query_required (422:
+                 *     a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
+                 *     outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule)
                  */
                 code: string;
                 message: string;
@@ -5852,6 +5855,36 @@ export interface components {
         RunPatch: {
             /** @description true pins this run and unpins the other runs of its source */
             pinned: boolean;
+        };
+        /**
+         * @description the `Error` envelope for `createRuns`'s 422s
+         * @example {
+         *       "error": {
+         *         "code": "unmapped_classes",
+         *         "message": "2 of the model's classes are not mapped to project classes.",
+         *         "details": {
+         *           "model_id": "m0000000-2222-4000-8000-000000000001",
+         *           "unmapped": [
+         *             "crane",
+         *             "concrete mixer"
+         *           ]
+         *         }
+         *       }
+         *     }
+         */
+        UnmappedClassesError: {
+            error: {
+                /** @description `unmapped_classes`, `task_not_supported`, `model_or_provider_required`, `query_required`, or `validation_error` for a malformed body */
+                code: string;
+                message: string;
+                details: {
+                    model_id?: string;
+                    /** @description model class names with no project class */
+                    unmapped?: string[];
+                } & {
+                    [key: string]: unknown;
+                };
+            };
         };
         /**
          * @example {
@@ -8786,6 +8819,30 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a malformed body (`validation_error`). */
+        UnmappedClasses: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "unmapped_classes",
+                 *         "message": "2 of the model's classes are not mapped to project classes.",
+                 *         "details": {
+                 *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                 *           "unmapped": [
+                 *             "crane",
+                 *             "concrete mixer"
+                 *           ]
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["UnmappedClassesError"];
+            };
+        };
         /** @description the catalogue could not be opened at startup (`code` is `catalogue_unavailable`); projects still render from their type snapshots */
         CatalogueUnavailable: {
             headers: {
@@ -11717,15 +11774,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description neither `model_id` nor `provider` is given, or a cloud provider run's `query` is blank (`code` is `validation_error`); a library model that classifies segmentation (`task_not_supported`); a library model whose classes do not all map onto a project catalogue type (`unmapped_classes`); a malformed body is `validation_error` */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
+            422: components["responses"]["UnmappedClasses"];
             503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
@@ -12030,7 +12079,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule (both or neither given, or only one of `map_id`/`polygon_px`), has fewer than three or more than 1000 points, a point that is not a finite `[longitude, latitude]` or pixel `[x, y]`, or `map_id` names a map with no georeference (`code` is `validation_error`); a malformed body is also `validation_error` */
+            /** @description the outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule (both or neither given, or only one of `map_id`/`polygon_px`), has fewer than three or more than 1000 points, a point that is not a finite `[longitude, latitude]` or pixel `[x, y]`, or `map_id` names a map with no georeference (`code` is `invalid_outline`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12091,7 +12140,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description a new outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule (both or neither given, or only one of `map_id`/`polygon_px`), has fewer than three or more than 1000 points, a point that is not a finite `[longitude, latitude]` or pixel `[x, y]`, or `map_id` names a map with no georeference (`code` is `validation_error`); a malformed body is also `validation_error` */
+            /** @description a new outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule (both given together, or only one of `map_id`/`polygon_px`), has fewer than three or more than 1000 points, a point that is not a finite `[longitude, latitude]` or pixel `[x, y]`, or `map_id` names a map with no georeference (`code` is `invalid_outline`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;

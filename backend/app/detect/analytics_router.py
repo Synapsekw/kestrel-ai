@@ -182,7 +182,7 @@ def create_site_area(
     outline = site_areas.outline_wgs84(handle, body.polygon_wgs84, body.map_id, body.polygon_px)
     if outline is None:
         raise AppError(
-            "validation_error", "a site area needs an outline: polygon_wgs84, or map_id and polygon_px", 422
+            "invalid_outline", "a site area needs an outline: polygon_wgs84, or map_id and polygon_px", 422
         )
     row = site_areas.create_area(handle, body.name, outline)
     _recount(request, handle)
