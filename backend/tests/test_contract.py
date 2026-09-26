@@ -224,6 +224,15 @@ def test_responses_conform(case, app, project_id, tmp_path):
         # The contract is ahead of the backend until BACKEND_PENDING[op_id] lands.
         assert response.status_code < 500, response.text
         return
+    if case.method.upper() != case.operation.method.upper():
+        # unsupported_method's own negative case: a literal path (e.g. /library/datasets/preview)
+        # shares a prefix with a sibling parameter path (/library/datasets/{datasetId}), so a
+        # mismatched method can land on that sibling's own operation - a real route, or still one
+        # of *its* stubs - rather than a 405. Same aliasing the checks below already exclude for;
+        # only the request's own method is checked against EXPECTED_STUBS.
+        is_stub = response.status_code == 501 and response.json()["error"]["code"] == "not_implemented"
+        assert is_stub or response.status_code < 500, response.text
+        return
     if response.status_code == 501 and response.json()["error"]["code"] == "not_implemented":
         # A stub: the operation is routed but not built yet; it must still answer in the error envelope.
         assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"

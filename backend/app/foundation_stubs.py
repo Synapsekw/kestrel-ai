@@ -23,7 +23,6 @@ Stub = tuple[str, str, str]
 BM_APP_STUBS: list[Stub] = [
     ("GET", "/library/datasets", "listLibraryDatasets"),
     ("POST", "/library/datasets", "createLibraryDataset"),
-    ("POST", "/library/datasets/preview", "previewLibraryDataset"),
     ("GET", "/library/datasets/{datasetId}", "getLibraryDataset"),
     ("DELETE", "/library/datasets/{datasetId}", "deleteLibraryDataset"),
     ("POST", "/library/datasets/{datasetId}/export", "exportLibraryDataset"),

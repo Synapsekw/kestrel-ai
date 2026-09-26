@@ -242,3 +242,10 @@ def train_model(
     check_materialised(handle, get_dataset(handle, body.dataset_id))
     job = request.app.state.jobs.submit(handle, "train", body.model_dump())
     return JobRef(job=JobOut.from_row(job, handle.id))
+
+
+# ------------------------------------------------------------ datasets across projects (F §12)
+
+from app.library.datasets.router import router as datasets_router  # noqa: E402
+
+router.include_router(datasets_router)
