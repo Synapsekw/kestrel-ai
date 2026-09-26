@@ -285,3 +285,118 @@ def load_script(name: str):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def add_many_boxes(
+    folder: Path, class_id: str, n: int, *, review_state: str = "accepted", image_id: str = "i1"
+) -> None:
+    """`n` boxes of `class_id` on one image (needs `add_images_and_boxes` first), inserted with
+    `executemany` so a >1000-box project builds quickly (Task 14's batch test). Ids are zero-padded
+    and `created_at` is the same for every row, so `(created_at, id)` ordering is deterministic
+    without needing distinct timestamps."""
+    with db(folder) as con:
+        rows = [
+            (
+                f"b-bulk-{class_id}-{i:06d}",
+                image_id,
+                class_id,
+                1,
+                1,
+                5,
+                5,
+                0.9,
+                "local_model",
+                "m-old",
+                review_state,
+                T0,
+            )
+            for i in range(n)
+        ]
+        con.executemany(
+            "INSERT INTO box (id, image_id, class_id, x, y, w, h, confidence, provenance_kind, model_id,"
+            " review_state, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            rows,
+        )
+
+
+# ---- Part B: the app-wide stores the steps write -------------------------------------------------
+
+
+class Stores:
+    def __init__(self, library, catalogue):
+        self.library, self.catalogue = library, catalogue
+
+    def close(self) -> None:
+        self.library.engine.dispose()
+        self.catalogue.engine.dispose()
+
+
+def open_stores(data_dir: Path) -> Stores:
+    from app.library.handle import open_library
+    from app.migration import ports
+
+    return Stores(open_library(data_dir), ports.open_catalogue_db(data_dir))
+
+
+def env_for(stores: Stores, origin_folder: Path):
+    import logging
+
+    from app.migration.pipeline import MigrationEnv
+
+    return MigrationEnv(
+        library=stores.library,
+        catalogue=stores.catalogue,
+        origin_folder=origin_folder,
+        log=logging.getLogger("test.migration"),
+    )
+
+
+def run_step(handle, env, fn) -> dict:
+    from app.migration.pipeline import StepContext
+
+    with handle.session() as s:
+        return fn(StepContext(handle, s, env)) or {}
+
+
+def catalogue_types(catalogue) -> dict[str, dict]:
+    from sqlalchemy import text
+
+    store = getattr(catalogue, "catalogue", catalogue)
+    with store.session() as cs:
+        rows = cs.execute(text("SELECT id, name, colour, kind, origin, hotkey, archived FROM catalogue_type"))
+        return {r["name"]: dict(r) for r in rows.mappings()}
+
+
+def needs_classification(catalogue) -> bool:
+    from sqlalchemy import text
+
+    store = getattr(catalogue, "catalogue", catalogue)
+    with store.session() as cs:
+        return (
+            cs.execute(
+                text("SELECT value FROM catalogue_meta WHERE key = 'needs_classification'")
+            ).scalar_one_or_none()
+            is not None
+        )
+
+
+def class_id_map(handle) -> dict[str, str]:
+    from sqlalchemy import text
+
+    with handle.session() as s:
+        return dict(s.execute(text("SELECT old_class_id, type_id FROM class_id_map")).all())
+
+
+def add_library_model(library, model_id: str, class_map: dict | None = None) -> None:
+    from sqlalchemy import text
+
+    with library.session() as ls:
+        ls.execute(
+            text(
+                "INSERT INTO library_model (id, name, notes, task, format, origin, weights_path,"
+                " class_names, class_aliases, provenance, hyperparameters, exports, artifacts, sha256,"
+                " created_at, class_map) VALUES (:id, 'M', '', 'detect', 'pt', 'imported',"
+                " 'models/m/weights.pt', '[]', '{}', '{}', '{}', '{}', '{}', :sha, :t, :cm)"
+            ),
+            {"id": model_id, "sha": model_id.ljust(64, "0"), "t": T0, "cm": json.dumps(class_map or {})},
+        )
