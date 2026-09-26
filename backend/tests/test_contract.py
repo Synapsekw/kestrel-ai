@@ -54,6 +54,7 @@ def test_refusal_allowances_name_real_operations_and_declared_statuses():
     for op_id, statuses in REFUSES_VALID_DATA.items():
         assert op_id in ops, op_id
         declared = {int(code) for code in ops[op_id]["responses"] if str(code).isdigit()}
+        declared |= UNDECLARED_REFUSALS.get(op_id, set())
         assert statuses <= declared, (op_id, sorted(statuses - declared))
     for op_id in CONTRACT_FOLLOWUP:
         assert op_id in ops, op_id
@@ -149,6 +150,23 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createPointCloud": {422},  # a readable path that is not LAS/LAZ, or refused by admission
     "inspectPointCloudFile": {422},  # a readable path that is not LAS/LAZ
     "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
+    # BC: a schema-valid but non-contiguous or too-long severity scale (`invalid_scale`), or a
+    # schema-valid `default_severity` that names a level above the live scale (`severity_unknown`,
+    # spec section 15). createCatalogueType/patchCatalogueType are also in UNDECLARED_REFUSALS below:
+    # the contract does not declare a 422 response for either (only 201/409/503 and
+    # 200/404/409/503), a gap BC records rather than fixes (global constraints: "BC does not edit
+    # contract/") - see the task-4 report.
+    "createCatalogueType": {422},
+    "patchCatalogueType": {422},
+    "putSeverityScale": {422},
+}
+
+# A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
+# openapi.yaml, not a typo here): operationId -> the undeclared statuses, checked against the live
+# HTTP behaviour by test_responses_conform regardless. Empty until BC's task 4; see its report.
+UNDECLARED_REFUSALS: dict[str, set[int]] = {
+    "createCatalogueType": {422},
+    "patchCatalogueType": {422},
 }
 
 # Transitional (foundation unit BK, 2026-09-26): these routes were hidden behind the kind guard's

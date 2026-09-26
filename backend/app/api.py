@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.agent.router import router as agent_router
 from app.auth import require_token
+from app.catalogue.router import router as catalogue_router
 from app.data_items.router import router as data_router
 from app.data_items.search import router as search_router
 from app.datasets.router import router as datasets_router
@@ -31,6 +32,7 @@ api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
 # so every router is included plainly.
 for r in (
     agent_router,
+    catalogue_router,
     health_router,
     # Before projects_router: `/projects/migrations/...` must not reach `/projects/{projectId}`.
     # This import also registers the `project_migrate` job type in the running app.

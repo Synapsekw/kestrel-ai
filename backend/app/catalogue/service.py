@@ -400,9 +400,13 @@ def get_meta(cat: CatalogueHandle, key: str, default: Any = None) -> Any:
 
 
 def set_meta(cat: CatalogueHandle, key: str, value: Any) -> None:
+    """`value=None` clears the key (deletes the row) rather than storing a null."""
     with cat.session() as s:
         row = s.get(CatalogueMeta, key)
-        if row is None:
+        if value is None:
+            if row is not None:
+                s.delete(row)
+        elif row is None:
             s.add(CatalogueMeta(key=key, value=value))
         else:
             row.value = value

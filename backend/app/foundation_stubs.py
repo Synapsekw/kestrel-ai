@@ -44,14 +44,7 @@ BC_PROJECT_STUBS: list[Stub] = [
     ("GET", "/activity", "listActivity"),
 ]
 BC_APP_STUBS: list[Stub] = [
-    ("GET", "/catalogue/types", "listCatalogueTypes"),
-    ("POST", "/catalogue/types", "createCatalogueType"),
-    ("GET", "/catalogue/types/{typeId}", "getCatalogueType"),
-    ("PATCH", "/catalogue/types/{typeId}", "patchCatalogueType"),
     ("POST", "/catalogue/types/{typeId}/backfill", "backfillCatalogueType"),
-    ("GET", "/catalogue/severity", "getSeverityScale"),
-    ("PUT", "/catalogue/severity", "putSeverityScale"),
-    ("POST", "/catalogue/classification/done", "completeCatalogueClassification"),
     ("GET", "/settings/operator", "getOperatorSettings"),
     ("PUT", "/settings/operator", "putOperatorSettings"),
 ]
