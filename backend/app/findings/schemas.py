@@ -86,6 +86,12 @@ class FindingBulkSet(BaseModel):
     severity: int | None = Field(None, ge=1, le=9)
     type_id: str = Field(default=None)
 
+    @model_validator(mode="after")
+    def _something_to_set(self):
+        if not self.model_fields_set:  # the contract's minProperties: 1
+            raise ValueError("set names at least one of status, severity and type_id")
+        return self
+
 
 class FindingBulk(BaseModel):
     ids: list[str] = Field(min_length=1, max_length=1000)

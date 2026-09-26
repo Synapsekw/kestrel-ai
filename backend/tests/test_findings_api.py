@@ -131,6 +131,13 @@ def test_bulk(client, base, crack, cloud):
     assert r.json() == {"updated": 2, "skipped": [{"id": "nope", "code": "not_found"}]}
 
 
+def test_a_bulk_with_nothing_to_set_is_refused_and_changes_nothing(client, base, crack, cloud):
+    f = _create(client, base, crack["id"], cloud)
+    r = client.post(f"{base}/findings/bulk", json={"ids": [f["id"]], "set": {}})
+    assert _error(r) == (422, "validation_error")
+    assert client.get(f"{base}/findings/{f['id']}").json()["updated_at"] == f["updated_at"]
+
+
 def test_summary(client, base, crack, cloud):
     _create(client, base, crack["id"], cloud, severity=4)
     _create(client, base, crack["id"], cloud, severity=None)
