@@ -39,7 +39,7 @@ export function RunList({
         const state = job?.state ?? r.state ?? "queued";
         const done = state === "succeeded";
         return (
-          <li key={r.id} className="flex flex-col gap-1 rounded-md border border-line p-2">
+          <li key={r.id} className="flex flex-col gap-1 rounded-control border border-line p-2">
             <div className="flex items-center gap-2">
               <Checkbox
                 checked={selected.includes(r.id)}

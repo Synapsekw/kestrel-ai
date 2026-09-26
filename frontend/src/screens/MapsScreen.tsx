@@ -787,7 +787,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
     <div className="flex h-full min-h-0 w-full">
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
         <div className="flex items-center justify-between">
-          <Heading className="text-xl font-semibold tracking-tight">Maps</Heading>
+          <Heading className="text-xl font-semibold">Maps</Heading>
           {!readOnly && (
             <Button size="sm" icon="import" onClick={() => setImporting(true)}>
               Import map
@@ -859,7 +859,7 @@ export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
             )}
             {popover && (
               <div
-                className="absolute z-10 flex max-w-64 flex-col gap-1 rounded-md border border-line bg-glass-solid p-2.5 text-xs shadow-float"
+                className="absolute z-10 flex max-w-64 flex-col gap-1 rounded-control border border-line bg-glass-solid p-2.5 text-xs shadow-elev-2"
                 style={{ left: popover.x, top: popover.y }}
               >
                 <p className="font-medium text-ink">{popover.facts.title}</p>

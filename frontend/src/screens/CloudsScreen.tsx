@@ -225,7 +225,7 @@ export function CloudsScreen() {
     return (
       <div className="flex h-full flex-col p-6">
         {watchers}
-        <h1 className="text-xl font-semibold tracking-tight">Point clouds</h1>
+        <h1 className="text-xl font-semibold">Point clouds</h1>
         <EmptyState
           className="m-auto"
           icon="cloud"
@@ -246,7 +246,7 @@ export function CloudsScreen() {
     <div className="flex h-full min-h-0 w-full">
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">Point clouds</h1>
+          <h1 className="text-xl font-semibold">Point clouds</h1>
           <Button size="sm" icon="import" onClick={() => setImporting(true)}>
             Import
           </Button>

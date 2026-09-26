@@ -46,7 +46,7 @@ function SuggestionReview({ projectId }: { projectId: string }) {
   return (
     <section className="flex h-full min-h-0 flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Review</h1>
+        <h1 className="text-xl font-semibold">Review</h1>
         <p className="text-sm text-muted">
           Suggestions from detection runs and pre-annotation wait here until you accept or reject them.
         </p>

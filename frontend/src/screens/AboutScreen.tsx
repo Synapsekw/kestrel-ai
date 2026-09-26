@@ -22,7 +22,7 @@ export function AboutScreen() {
     <div className="h-full overflow-y-auto">
       <div className="mx-auto flex max-w-4xl flex-col gap-6 p-6">
         <header className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">About Kestrel AI</h1>
+          <h1 className="text-xl font-semibold">About Kestrel AI</h1>
           <p className="text-sm text-muted">Version {version}</p>
         </header>
         <table aria-label="Open-source components" className="w-full border-collapse text-sm">
@@ -45,7 +45,7 @@ export function AboutScreen() {
                     <span className="font-medium text-ink">{n.name}</span>
                     {n.note && <span className="text-xs text-muted">{n.note}</span>}
                     <Disclosure label={`Licence text: ${n.name}`}>
-                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-surface-2 p-3 font-mono text-xs text-ink">
+                      <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-control bg-surface-2 p-3 font-mono text-xs text-ink">
                         {n.text}
                       </pre>
                     </Disclosure>

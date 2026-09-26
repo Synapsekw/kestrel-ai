@@ -170,7 +170,7 @@ export function SiteAreasScreen() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Site areas</h1>
+      <h1 className="text-xl font-semibold text-ink">Site areas</h1>
       <p className="mt-1 max-w-prose text-sm text-muted">
         Outline a part of the site once, such as a laydown yard, and Analytics counts the objects inside it on
         every map that covers it.

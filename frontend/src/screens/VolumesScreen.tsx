@@ -282,7 +282,7 @@ export function VolumesScreen() {
   return (
     <div className="flex h-full min-h-0 w-full">
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
-        <h1 className="text-xl font-semibold tracking-tight">Volumes</h1>
+        <h1 className="text-xl font-semibold">Volumes</h1>
         {loadError && (
           <Alert
             tone="danger"
@@ -310,7 +310,7 @@ export function VolumesScreen() {
                 .then(reload)
                 .catch((err: unknown) => report("delete the surface", err))
             }
-            actions={<ImportDesignButton projectId={projectId} onChanged={reload} />}
+            actions={<ImportDesignButton size="sm" projectId={projectId} onChanged={reload} />}
           />
         )}
         <div className="flex flex-col gap-2 border-t border-line pt-3">
@@ -378,7 +378,7 @@ export function VolumesScreen() {
                 onDeleteSelected={deleteSelected}
               />
               {(top.map_id || diffUrl) && (
-                <div className="flex flex-col gap-1 rounded-md border border-line bg-glass-solid p-2 shadow-float">
+                <div className="flex flex-col gap-1 rounded-control border border-line bg-glass-solid p-2 shadow-elev-2">
                   {top.map_id && <Switch label="Ortho" checked={orthoOn} onChange={setOrthoOn} />}
                   {diffUrl && <Switch label="Cut / fill" checked={diffOn} onChange={setDiffOn} />}
                 </div>

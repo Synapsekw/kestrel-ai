@@ -89,10 +89,10 @@ function ShortcutsButton() {
         <div
           role="dialog"
           aria-label="Keyboard shortcuts"
-          className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-line bg-glass-solid p-3 shadow-float animate-reveal reduce-motion:animate-none"
+          className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-panel border border-line bg-glass-solid p-3 shadow-elev-2 animate-reveal reduce-motion:animate-none"
         >
           <p className="mb-2 text-xs font-medium text-muted">In the image grid and list</p>
-          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-[13px]">
+          <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
             {SHORTCUTS.map((s) => (
               <div key={s.does} className="contents">
                 <dt className="flex items-center gap-1 text-xs text-muted">
@@ -124,7 +124,7 @@ function GridSkeleton() {
     <div className="flex flex-wrap gap-3">
       <span className="sr-only">Loading images</span>
       {Array.from({ length: 10 }, (_, i) => (
-        <Skeleton key={i} className="h-[206px] w-[220px] rounded-lg" />
+        <Skeleton key={i} className="h-[206px] w-[220px] rounded-panel" />
       ))}
     </div>
   );
@@ -235,7 +235,7 @@ export function DataManagerScreen() {
   return (
     <section className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Images</h1>
+        <h1 className="text-xl font-semibold">Images</h1>
         <div className="flex items-center gap-2">
           <Button icon="label" onClick={onLabelNext} loading={nexting}>
             Label next
@@ -319,7 +319,7 @@ export function DataManagerScreen() {
           </Alert>
         ) : (
           items.length > 0 && (
-            <p className="text-[13px] text-muted">
+            <p className="text-sm text-muted">
               Select images (checkbox, Space or Ctrl+A) to label them in a row, run a model on them, add them
               to a dataset or delete them.
             </p>

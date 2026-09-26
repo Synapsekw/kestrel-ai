@@ -121,7 +121,7 @@ export function ExportMapDialog({
           </Field>
         )}
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[13px] font-medium">Formats</legend>
+          <legend className="mb-1 text-sm font-medium">Formats</legend>
           {FORMATS.map((f) => (
             <label key={f.value} className="flex items-start gap-2 text-sm">
               <Checkbox

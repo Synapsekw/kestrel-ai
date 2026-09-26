@@ -25,7 +25,7 @@ interface Props {
 }
 
 /** A secondary button redrawn for the dark bar (important: it overrides the variant's colours). */
-const onInverse = "!border-tip-fg/25 !bg-transparent !text-tip-fg hover:!bg-tip-fg/10";
+const onInverse = "!border-line-strong !bg-transparent !text-tip-fg hover:!bg-hover";
 
 export function SelectionBar({
   projectId,
@@ -98,7 +98,7 @@ export function SelectionBar({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-col rounded-lg bg-tip px-4 text-tip-fg shadow-float animate-reveal reduce-motion:animate-none">
+      <div className="flex flex-col rounded-panel bg-tip px-4 text-tip-fg shadow-elev-2 animate-reveal reduce-motion:animate-none">
         <div className="flex min-h-11 flex-wrap items-center gap-2 py-1.5">
           <span className="mr-1 text-sm font-medium tabular-nums">{n} selected</span>
           <Button variant="primary" size="sm" icon="label" onClick={onLabel} disabled={busy}>

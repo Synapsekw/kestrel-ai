@@ -53,7 +53,7 @@ export function ImageTable(p: ImageTableProps) {
     <div
       role="grid"
       aria-rowcount={p.items.length}
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-line bg-surface text-[13px]"
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-panel border border-line bg-surface text-sm"
     >
       <div
         role="row"
@@ -132,7 +132,7 @@ export function ImageTable(p: ImageTableProps) {
                       role="gridcell"
                       className={cx(
                         "truncate px-2",
-                        c.key === "file" && "font-mono text-[13px]",
+                        c.key === "file" && "font-mono text-sm",
                         NUMERIC.has(c.key) && "tabular-nums",
                       )}
                     >

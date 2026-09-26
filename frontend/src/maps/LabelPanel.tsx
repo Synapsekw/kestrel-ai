@@ -122,7 +122,7 @@ export function LabelPanel(p: LabelPanelProps) {
         </ul>
       )}
       {finished.length > 0 && p.zones.length > 0 && (
-        <div className="flex flex-col gap-2 rounded-md border border-line p-3">
+        <div className="flex flex-col gap-2 rounded-control border border-line p-3">
           <p className="text-sm font-medium">Start from a run</p>
           <Field label="Run" htmlFor="seed-run">
             <Select id="seed-run" value={seedRun} onChange={(e) => setRunId(e.target.value)}>

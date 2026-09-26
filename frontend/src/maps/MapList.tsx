@@ -29,7 +29,7 @@ export function MapList({
               to={`${base}/${m.id}`}
               aria-current={m.id === activeId ? "page" : undefined}
               className={cx(
-                "flex gap-2.5 rounded-md p-2",
+                "flex gap-2.5 rounded-control p-2",
                 transition,
                 focusRing,
                 m.id === activeId ? "bg-accent-soft" : "hover:bg-hover",

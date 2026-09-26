@@ -31,9 +31,9 @@ export function SurfaceList({
   const [confirming, setConfirming] = useState<Surface | null>(null);
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-ink">Surfaces</h2>
-        <div className="flex gap-1">
+        <div className="flex flex-wrap gap-1">
           <Button size="sm" variant="primary" icon="plus" onClick={onBuild}>
             Build surface
           </Button>
@@ -50,7 +50,7 @@ export function SurfaceList({
                 onClick={() => onSelect(s.id)}
                 aria-current={s.id === activeId ? "true" : undefined}
                 className={cx(
-                  "flex w-full flex-col gap-1 rounded-md p-2 text-left",
+                  "flex w-full flex-col gap-1 rounded-control p-2 text-left",
                   transition,
                   focusRing,
                   s.id === activeId ? "bg-accent-soft" : "hover:bg-hover",

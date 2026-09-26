@@ -13,7 +13,7 @@ export function SettingsScreen() {
   return (
     <section className="mx-auto flex max-w-4xl flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Project settings</h1>
+        <h1 className="text-xl font-semibold">Project settings</h1>
         <p className="text-sm text-muted">
           Classes, pre-annotation, import defaults and the imported folders of this project.
         </p>

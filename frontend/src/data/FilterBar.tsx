@@ -162,13 +162,13 @@ export function FilterBar({ query, onChange, view, onView, sourceNames, total, l
           />
           More filters
           {extraCount > 0 && (
-            <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent-soft px-1 text-[11px] font-semibold text-accent-ink">
+            <span className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-accent-soft px-1 text-2xs font-semibold text-accent-ink">
               {extraCount}
             </span>
           )}
         </Button>
         <div className="ml-auto flex items-center gap-2">
-          <span className="text-[13px] tabular-nums text-muted">
+          <span className="text-sm tabular-nums text-muted">
             {loaded} of {total} images
           </span>
           {onSelectAll && loaded > 0 && (

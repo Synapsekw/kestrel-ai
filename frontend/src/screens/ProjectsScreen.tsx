@@ -154,7 +154,7 @@ export function ProjectsScreen() {
   return (
     <section className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
+        <h1 className="text-xl font-semibold">Projects</h1>
         <p className="text-sm text-muted">
           A project is a folder on disk. It holds a site&apos;s photos, maps, elevation models and point
           clouds, and the findings made on them.
@@ -183,7 +183,7 @@ export function ProjectsScreen() {
               {projects.map((p) => (
                 <li
                   key={p.id}
-                  className="flex flex-wrap items-center gap-3 rounded-lg border border-line bg-surface px-4 py-3 transition-[border-color,box-shadow] duration-fast ease-out hover:border-line-strong hover:shadow-sm reduce-motion:transition-none"
+                  className="flex flex-wrap items-center gap-3 rounded-panel border border-line bg-surface px-4 py-3 transition-[border-color,box-shadow] duration-fast ease-out hover:border-line-strong hover:shadow-sm reduce-motion:transition-none"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-medium">{p.name}</span>

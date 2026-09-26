@@ -210,7 +210,7 @@ function EditorBody({
         checked={showRejected}
         onChange={toggleShowRejected}
         label="Show rejected"
-        className="px-1 !text-[13px]"
+        className="px-1 !text-sm"
       />
       {(proposalIds.length > 0 || hiddenByFloor > 0 || minConfidence > 0) && (
         <ConfidenceFloor value={minConfidence} hidden={hiddenByFloor} onChange={setMinConfidence} />
@@ -244,7 +244,7 @@ function EditorBody({
         />
         {/* Errors and notices often follow a hotkey: they appear without the reveal animation. */}
         {error && (
-          <Alert tone="danger" className="rounded-none border-x-0 border-t-0 py-2 !text-[13px] !animate-none">
+          <Alert tone="danger" className="rounded-none border-x-0 border-t-0 py-2 !text-sm !animate-none">
             {error}
           </Alert>
         )}
@@ -254,7 +254,7 @@ function EditorBody({
             <Alert
               tone="info"
               role="status"
-              className="absolute inset-x-3 top-3 z-10 py-2 !text-[13px] !bg-glass-solid shadow-float !animate-none"
+              className="absolute inset-x-3 top-3 z-10 py-2 !text-sm !bg-glass-solid shadow-elev-2 !animate-none"
             >
               {notice}
             </Alert>

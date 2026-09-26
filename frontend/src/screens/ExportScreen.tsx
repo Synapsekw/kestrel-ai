@@ -38,7 +38,7 @@ export function ExportScreen() {
   return (
     <section className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Export</h1>
+        <h1 className="text-xl font-semibold">Export</h1>
         <p className="text-sm text-muted">
           Take the counts and the labels out of the app. Everything is written into the project folder.
         </p>

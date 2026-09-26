@@ -26,7 +26,7 @@ import { useImageSelection } from "@/query/useImageSelection";
 import { useQueryRuns } from "@/query/useQueryRuns";
 import { useJobsStore } from "@/store/jobs";
 import { useNavigationStore } from "@/store/navigation";
-import { Alert, Button, SkeletonRows, cx, focusRing } from "@/ui";
+import { Alert, Button, GlassPanel, SkeletonRows, cx, focusRing } from "@/ui";
 
 const EMPTY: string[] = [];
 const link = cx("rounded-sm font-medium text-accent hover:underline", focusRing);
@@ -187,7 +187,7 @@ function DetectWorkspace() {
     <section className="flex max-w-5xl flex-col gap-6">
       <div className="flex flex-wrap items-start gap-4">
         <div className="flex min-w-0 flex-col gap-1">
-          <h1 className="text-xl font-semibold tracking-tight">Detect</h1>
+          <h1 className="text-xl font-semibold">Detect</h1>
           <p data-testid="query-intro" className="text-sm text-muted">
             Run a model over images; it suggests boxes for you to{" "}
             <Link to={`/p/${projectId}/review`} className={link}>
@@ -205,7 +205,7 @@ function DetectWorkspace() {
       {runId ? (
         <RunCard projectId={projectId} runId={runId} />
       ) : (
-        <div className="flex max-w-3xl flex-col gap-6 rounded-lg border border-line bg-surface p-5">
+        <GlassPanel className="flex max-w-3xl flex-col gap-6 p-5">
           <SourcePicker
             form={effectiveForm}
             onChange={patch}
@@ -240,14 +240,14 @@ function DetectWorkspace() {
               >
                 Start
               </Button>
-              <span className="text-[13px] text-muted">
+              <span className="text-sm text-muted">
                 {local
                   ? "Runs on this computer at no cost; Estimate shows how many tiles it takes."
                   : "Estimate the cost first; Start then runs exactly that request."}
               </span>
             </div>
           </div>
-        </div>
+        </GlassPanel>
       )}
       {unavailable && (
         <div role="note" className="max-w-3xl">

@@ -82,7 +82,7 @@ export function ImageGrid(p: ImageGridProps) {
       role="list"
       aria-label="Images"
       data-testid="image-grid"
-      className="-mx-1.5 min-h-0 flex-1 overflow-auto rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
+      className="-mx-1.5 min-h-0 flex-1 overflow-auto rounded-panel outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
     >
       <div style={{ height: win.totalHeight, position: "relative" }}>
         <div
@@ -109,7 +109,7 @@ export function ImageGrid(p: ImageGridProps) {
               >
                 <div
                   className={cx(
-                    "relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-lg border bg-surface",
+                    "relative flex min-w-0 flex-1 flex-col overflow-hidden rounded-panel border bg-surface",
                     transition,
                     isSelected
                       ? "border-accent ring-2 ring-accent"

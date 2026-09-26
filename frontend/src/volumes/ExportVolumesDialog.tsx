@@ -91,7 +91,7 @@ export function ExportVolumesDialog({
     >
       <div className="flex flex-col gap-4">
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[13px] font-medium">Measurements</legend>
+          <legend className="mb-1 text-sm font-medium">Measurements</legend>
           {measurements.map((m) => {
             const state = exportState(m);
             return (
@@ -111,7 +111,7 @@ export function ExportVolumesDialog({
           })}
         </fieldset>
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-[13px] font-medium">Formats</legend>
+          <legend className="mb-1 text-sm font-medium">Formats</legend>
           {FORMATS.map((f) => (
             <Checkbox
               key={f.value}

@@ -42,7 +42,7 @@ export function AnalyticsScreen() {
     <div className="mx-auto w-full max-w-5xl px-6 py-8">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Analytics</h1>
+          <h1 className="text-xl font-semibold text-ink">Analytics</h1>
           <p className="mt-1 max-w-prose text-sm text-muted">
             Counts are shown as total (verified). Verified means a person accepted the detection or drew it.
           </p>
