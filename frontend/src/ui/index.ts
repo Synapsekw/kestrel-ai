@@ -48,7 +48,7 @@ export {
 } from "./motion";
 export { Pill, type PillTone } from "./Pill";
 export { Progress } from "./Progress";
-export { Segmented } from "./Segmented";
+export { Segmented, type SegmentedOption, type SegmentedProps } from "./Segmented";
 export { SeverityPicker, SeverityPill, type SeverityPickerProps, type SeverityPillProps } from "./Severity";
 export {
   DEFAULT_SEVERITY_SCALE,
@@ -62,10 +62,12 @@ export { SPARK_MAX, Sparkline, sparkPaths } from "./Sparkline";
 export { StatTile, type StatDelta, type StatTileProps } from "./StatTile";
 export { StatusDot, type DotStatus } from "./StatusDot";
 export { Switch } from "./Switch";
+export { Tabs, type TabItem, type TabsProps } from "./Tabs";
 export { Toaster } from "./Toaster";
 export { toast, dismissToast, useToastStore } from "./toastStore";
 export { Tooltip } from "./Tooltip";
 export { TypeChip, type TypeKind } from "./TypeChip";
 export { useCountUp } from "./useCountUp";
 export { claimJobOutcome, useJobToasts, jobToastText, reportedInline } from "./useJobToasts";
+export { INDICATOR_BASE, useSlidingIndicator } from "./useSlidingIndicator";
 export { cx, focusRing, lift, pressable, transition } from "./tokens";
