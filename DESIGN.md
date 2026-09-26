@@ -59,9 +59,11 @@ always use `tabular-nums`. Sentence case everywhere; no all-caps labels. Key cap
 ## Radii and elevation
 
 `rounded-panel` 16px (cards, panes, dialogs), `rounded-control` 10px (buttons, fields, glass groups),
-`rounded-chip` full (pills, badges, tracks), `rounded-sm` 6px (thumbnails, key caps, menu rows).
+`rounded-chip` full (pills, badges, tracks), `rounded-sm` 6px (thumbnails, menu rows). Key caps
+(`Kbd`, 4px) and type swatches (`TypeChip`, `Combobox`, 3px) keep the mockup's 3–4px, not `rounded-sm`.
 `shadow-elev-1` (cards: an inset top highlight and a soft drop), `shadow-elev-2` (hovered cards,
 popovers, dialogs, toasts), `shadow-glow` (primary button, active tool; dropped in reduced effects).
+Any hand-made glow in a primitive carries `reduce-effects:shadow-none` so it drops too.
 
 ## Glass and blur rules
 
@@ -70,6 +72,11 @@ popovers, dialogs, toasts), `shadow-glow` (primary button, active tool; dropped 
 - Cards, panes, list panes, dashboards and `DataTable` are translucent **without** blur: over a smooth
   gradient the blur is invisible and costs GPU.
 - Never put blur on a scrolling container of a long list.
+- Nothing around glass may keep a lasting opacity or transform effect: an animation that ends with
+  fill-mode `both`/`forwards` makes its element a backdrop root, and glass inside it blurs nothing.
+  Entrances fill `backwards`; page transitions must not hold an opacity/transform effect either.
+- A floating panel that is not `GlassPanel` (a drawer, dropdown, context menu or map overlay) uses the
+  opaque `bg-glass-solid`, never the 5.5% `bg-surface`.
 - Tooltip, Popover and Menu are placed by `placeFloating` (`ui/floating.ts`), the one placement
   algorithm (flip to the other side, then clamp into the viewport).
 
@@ -102,7 +109,8 @@ Reduced: glass is opaque `#16172a` with no blur, the backdrop is one static grad
 `--elev-1` stays; motion is untouched (a separate setting). Settings → Appearance → Visual effects:
 Auto (default), Full, Reduced, stored in `localStorage` `kestrel.effects`. Auto starts reduced on a
 software renderer (SwiftShader, Microsoft Basic Render), otherwise full; on the first Overview render a
-2-second frame probe (after a 300ms warm-up, only while the window is visible) switches to reduced when
+2-second frame probe (after a 300ms warm-up, only while the window is visible; a window hidden
+mid-probe gives no decision, and gaps over 500ms are dropped) switches to reduced when
 p95 > 24ms, remembers that, and offers Undo, which chooses Full for good.
 
 ## Shell
