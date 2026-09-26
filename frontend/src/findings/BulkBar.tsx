@@ -28,12 +28,13 @@ export function BulkBar({
     setBusy(true);
     try {
       const r = await applyBulk(api, projectId, ids, set);
-      useChangesStore.getState().bumpFindings();
       toast(r.skipped.length ? "info" : "ok", bulkMessage(r.updated, r.skipped, what));
       onDone();
     } catch (e) {
       toast("danger", messageOf(e, "could not update the findings"));
     } finally {
+      // Earlier 1000-id chunks may have been applied even when a later one failed.
+      useChangesStore.getState().bumpFindings();
       setBusy(false);
     }
   }

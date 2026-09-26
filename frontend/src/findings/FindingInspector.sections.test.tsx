@@ -72,15 +72,16 @@ describe("inspector note", () => {
   it("saves once, 600 ms after the last keystroke, then says Saved", async () => {
     const requests = renderInspector();
     const note = await screen.findByRole("textbox", { name: "Note" });
+    // Strict fake timers from here: only the test moves the clock, so a stalled runner cannot fire
+    // the 600 ms autosave before the "not yet at 599 ms" check.
+    vi.useRealTimers();
+    vi.useFakeTimers();
     fireEvent.change(note, { target: { value: "crack 3" } });
     fireEvent.change(note, { target: { value: "crack 3 mm" } });
-    await act(async () => {
-      vi.advanceTimersByTime(599);
-    });
+    await act(() => vi.advanceTimersByTimeAsync(599));
     expect(bodies(requests, "PATCH", /\/findings\/[^/]+$/)).toEqual([]);
-    await act(async () => {
-      vi.advanceTimersByTime(1);
-    });
+    await act(() => vi.advanceTimersByTimeAsync(1));
+    vi.useRealTimers();
     await waitFor(() =>
       expect(bodies(requests, "PATCH", /\/findings\/[^/]+$/)).toEqual([{ note: "crack 3 mm" }]),
     );
@@ -216,6 +217,18 @@ describe("inspector photos, comments and history", () => {
     fireEvent.keyDown(reply, { key: "Enter" });
     await waitFor(() => expect(bodies(requests, "POST", /\/comments$/)).toEqual([{ text: "Patched" }]));
     expect(await screen.findByText("Patched")).toBeInTheDocument();
+  });
+
+  it("posts a reply once when Enter is pressed twice before the first send returns", async () => {
+    const requests = renderInspector();
+    expect(await screen.findByText(exampleComment.text)).toBeInTheDocument();
+    const reply = screen.getByRole("textbox", { name: "Reply" });
+    fireEvent.change(reply, { target: { value: "Patched" } });
+    fireEvent.keyDown(reply, { key: "Enter" });
+    fireEvent.keyDown(reply, { key: "Enter" });
+    expect(await screen.findByText("Patched")).toBeInTheDocument();
+    await act(() => new Promise((r) => setTimeout(r, 50)));
+    expect(bodies(requests, "POST", /\/comments$/)).toEqual([{ text: "Patched" }]);
   });
 
   it("edits and deletes a comment", async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { addComment, deleteComment, editComment, listComments, type FindingComment } from "@/api/findings";
@@ -46,6 +46,8 @@ export function Comments({ projectId, findingId }: { projectId: string; findingI
   const [editing, setEditing] = useState<{ id: string; text: string } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A second Enter before the first post returns must not post the reply twice.
+  const sending = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -84,7 +86,8 @@ export function Comments({ projectId, findingId }: { projectId: string; findingI
 
   async function send() {
     const text = reply.trim();
-    if (!text) return;
+    if (!text || sending.current) return;
+    sending.current = true;
     try {
       const c = await addComment(api, projectId, findingId, text);
       setItems((xs) => [...xs, c]);
@@ -92,6 +95,8 @@ export function Comments({ projectId, findingId }: { projectId: string; findingI
       useChangesStore.getState().bumpFindings();
     } catch (e) {
       setError(messageOf(e, "could not post the comment"));
+    } finally {
+      sending.current = false;
     }
   }
 

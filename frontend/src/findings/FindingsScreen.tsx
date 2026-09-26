@@ -34,6 +34,15 @@ export function FindingsScreen() {
   const labels = useDataLabels(projectId);
   const nowMs = useNow(60_000);
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  // A refresh can drop checked rows (Shift+C under "Open"): prune them so the bar's count and the
+  // next key act only on rows still shown. Pruned, not cleared, so "Shift+R then 3" still works.
+  const [prunedFor, setPrunedFor] = useState(list.items);
+  if (prunedFor !== list.items) {
+    setPrunedFor(list.items);
+    const shown = new Set(list.items.map((f) => f.id));
+    if ([...selected].some((id) => !shown.has(id)))
+      setSelected(new Set([...selected].filter((id) => shown.has(id))));
+  }
   const query = search.toString();
   const suffix = query ? `?${query}` : "";
 
@@ -67,11 +76,13 @@ export function FindingsScreen() {
       if (targets.length === 0) return;
       try {
         const r = await applyBulk(api, projectId, targets, set);
-        useChangesStore.getState().bumpFindings();
         if (r.skipped.length || targets.length > 1)
           toast(r.skipped.length ? "info" : "ok", bulkMessage(r.updated, r.skipped, what));
       } catch (e) {
         toast("danger", messageOf(e, "could not update the finding"));
+      } finally {
+        // Earlier 1000-id chunks may have been applied even when a later one failed.
+        useChangesStore.getState().bumpFindings();
       }
     },
     [api, projectId, selected, findingId],

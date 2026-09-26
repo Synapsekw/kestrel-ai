@@ -6,6 +6,7 @@ import { baseRoutes, exampleFinding, exampleFinding2, exampleFindingDetail } fro
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
 import { applyBulk, bulkMessage } from "./bulk";
+import { BulkBar } from "./BulkBar";
 import { FindingsScreen } from "./FindingsScreen";
 import { useInspectorCommands } from "./inspectorStore";
 
@@ -196,6 +197,45 @@ describe("Findings tab keys and bulk", () => {
     await waitFor(() => expect(screen.queryByText("2 selected")).toBeNull());
   });
 
+  it("drops checked rows that a key action filtered out of the list, keeping the visible ones", async () => {
+    // Filter Open: after Shift+C closes the first finding the refresh returns only the second.
+    let closed = false;
+    const { api, requests } = fakeClient(
+      baseRoutes([
+        {
+          method: "POST",
+          path: /\/findings\/bulk$/,
+          body: (r) => {
+            closed = true;
+            return { updated: (r.body as { ids: string[] }).ids.length, skipped: [] };
+          },
+        },
+        {
+          method: "GET",
+          path: /\/findings$/,
+          body: () => ({
+            items: closed ? [exampleFinding2] : [exampleFinding, exampleFinding2],
+            next_cursor: null,
+          }),
+        },
+      ]),
+    );
+    renderWithProviders(<FindingsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/findings?status=open`,
+      path: "/p/:projectId/findings/:findingId?",
+    });
+    await screen.findByText("F-0217");
+    for (const box of screen.getAllByRole("checkbox", { name: /^Select row/ })) fireEvent.click(box);
+    expect(screen.getByText("2 selected")).toBeInTheDocument();
+    key("C", { shiftKey: true });
+    await waitFor(() => expect(screen.queryByText("F-0217")).toBeNull(), { timeout: 2000 });
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
+    key("2");
+    await waitFor(() => expect(bulkBodies(requests)).toHaveLength(2));
+    expect(bulkBodies(requests)[1]).toEqual({ ids: [exampleFinding2.id], set: { severity: 2 } });
+  });
+
   it("Esc clears the checked rows when no inspector is open", async () => {
     renderTab();
     await screen.findByText("F-0217");
@@ -205,6 +245,57 @@ describe("Findings tab keys and bulk", () => {
     expect(screen.getByText("1 selected")).toBeInTheDocument();
     fireEvent.keyDown(box, { key: "Escape" });
     await waitFor(() => expect(screen.queryByText("1 selected")).toBeNull());
+  });
+});
+
+describe("a bulk write that fails part-way", () => {
+  // From request `failFrom` on the bulk write fails (2: the second 1000-id chunk, after the first was
+  // applied); the list must still re-read.
+  const failingBulk = (failFrom: number) => {
+    let calls = 0;
+    return fakeClient(
+      baseRoutes([
+        {
+          method: "POST",
+          path: /\/findings\/bulk$/,
+          status: () => (++calls < failFrom ? 200 : 500),
+          body: (r) =>
+            calls < failFrom
+              ? { updated: (r.body as { ids: string[] }).ids.length, skipped: [] }
+              : { error: { code: "internal", message: "boom", details: {} } },
+        },
+        { method: "GET", path: /\/findings$/, body: { items: [exampleFinding], next_cursor: null } },
+      ]),
+    );
+  };
+  const ids = Array.from({ length: 1500 }, (_, i) => `f-${i}`);
+
+  beforeEach(() => useChangesStore.setState({ findingsRevision: 0 }));
+
+  it("the bulk bar still bumps the findings revision", async () => {
+    const { api, requests } = failingBulk(2);
+    renderWithProviders(
+      <BulkBar projectId={PROJECT_ID} ids={ids} scale={[]} onDone={() => {}} onClear={() => {}} />,
+      { api },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Set status" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Closed" }));
+    await waitFor(() => expect(bulkBodies(requests)).toHaveLength(2));
+    await waitFor(() => expect(useChangesStore.getState().findingsRevision).toBe(1));
+  });
+
+  it("a review key still bumps the findings revision", async () => {
+    const { api, requests } = failingBulk(1);
+    renderWithProviders(<FindingsScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/findings`,
+      path: "/p/:projectId/findings/:findingId?",
+    });
+    await screen.findByText("F-0217");
+    fireEvent.click(screen.getAllByRole("checkbox", { name: /^Select row/ })[0]);
+    key("C", { shiftKey: true });
+    await waitFor(() => expect(bulkBodies(requests)).toHaveLength(1));
+    await waitFor(() => expect(useChangesStore.getState().findingsRevision).toBe(1));
   });
 });
 
