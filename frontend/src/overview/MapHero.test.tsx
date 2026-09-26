@@ -9,11 +9,17 @@ import { exampleFinding, severityRoute } from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { MapHero } from "./MapHero";
 
-// OpenLayers needs a canvas; the stub hands MapHero a map whose pixels equal OL coordinates flipped.
+// OpenLayers needs a canvas; the stub hands MapHero a map whose pixels equal OL coordinates flipped,
+// shifted by `stub.dx` (what a resize does to the screen pixels while the resolution stays put).
+const stub = vi.hoisted(() => ({
+  dx: 0,
+  viewChange: null as MapViewProps["onViewChange"] | null,
+}));
 vi.mock("@/maps/MapView", () => ({
   MapView: (props: MapViewProps) => {
+    stub.viewChange = props.onViewChange ?? null;
     useEffect(() => {
-      props.onReady?.({ getPixelFromCoordinate: (c: number[]) => [c[0], -c[1]] } as never);
+      props.onReady?.({ getPixelFromCoordinate: (c: number[]) => [c[0] + stub.dx, -c[1]] } as never);
       props.onViewChange?.({ extent: [0, -1000, 1000, 0], resolution: 2 });
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
     return <div data-testid="map-view" />;
@@ -52,6 +58,8 @@ describe("MapHero", () => {
   beforeEach(() => {
     useAddData.setState({ open: false, tile: null, projectId: null });
     useChangesStore.setState({ findingsRevision: 0 });
+    stub.dx = 0;
+    stub.viewChange = null;
   });
 
   it("asks for at most 300 open located findings, most severe first", async () => {
@@ -76,6 +84,20 @@ describe("MapHero", () => {
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/maps?map=${MAP_ID}`),
     );
+  });
+
+  it("moves the pins when a resize shifts the view at the same resolution", async () => {
+    renderHero(MAP_ID, [pins, { method: "GET", path: /\/maps\/[^/]+$/, body: geo }]);
+    const pin = await screen.findByRole("link", { name: "F-0217 · Critical" });
+    expect(pin).toHaveStyle({ left: "500px", top: "500px" });
+    act(() => {
+      stub.dx = 100;
+      stub.viewChange?.({ extent: [-100, -1000, 1100, 0], resolution: 2 });
+    });
+    expect(screen.getByRole("link", { name: "F-0217 · Critical" })).toHaveStyle({
+      left: "600px",
+      top: "500px",
+    });
   });
 
   it("puts pins on the plain backdrop when there is no map", async () => {

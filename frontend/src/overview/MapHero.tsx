@@ -111,7 +111,9 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
   const [pins, setPins] = useState<{ projectId: string; items: PinInput[] } | null>(null);
   const [geo, setGeo] = useState<{ id: string; map: GeoMap | null } | null>(null);
   const [ol, setOl] = useState<OlMap | null>(null);
-  const [resolution, setResolution] = useState<number | null>(null);
+  // The whole view, a new object on every `moveend`: a resize keeps the resolution but moves the
+  // extent, and the pins must follow it.
+  const [view, setView] = useState<{ extent: number[]; resolution: number } | null>(null);
 
   // `findings.changed` arrives in bursts; settle for 400 ms before re-reading.
   useEffect(() => {
@@ -161,13 +163,13 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
   const mapPending = Boolean(heroMapId) && geo?.id !== heroMapId;
 
   const placedOnMap = useMemo<Placed[]>(() => {
-    if (!map || !ol || resolution === null || !items) return [];
+    if (!map || !ol || !view || !items) return [];
     return items.flatMap((pin) => {
       const px = lonLatToMapPixel(map, pin.lon, pin.lat);
       const screen = px ? ol.getPixelFromCoordinate(toOl(px[0], px[1])) : null;
       return screen ? [{ pin, left: `${screen[0]}px`, top: `${screen[1]}px` }] : [];
     });
-  }, [map, ol, resolution, items]);
+  }, [map, ol, view, items]);
 
   const backdrop = useMemo(() => (items && !map ? backdropLayout(items) : null), [items, map]);
 
@@ -200,7 +202,7 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
   const placed: Placed[] = map
     ? placedOnMap
     : (backdrop?.points ?? []).map((p, i) => ({ pin: items[i], left: `${p.xPct}%`, top: `${p.yPct}%` }));
-  const mapBar = map && resolution !== null ? scaleBar(resolution, map.gsd_cm, 120) : null;
+  const mapBar = map && view ? scaleBar(view.resolution, map.gsd_cm, 120) : null;
   const bar = map
     ? mapBar && { width: `${mapBar.px}px`, label: mapBar.label }
     : backdrop?.scale && { width: `${backdrop.scale.widthPct}%`, label: backdrop.scale.label };
@@ -214,7 +216,7 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
             geoMap={map}
             tileUrl={mapTileUrl(baseUrl, token, projectId, map.id)}
             onReady={setOl}
-            onViewChange={(v) => setResolution(v.resolution)}
+            onViewChange={(v) => setView({ extent: [...v.extent], resolution: v.resolution })}
           />
         </div>
       ) : (
