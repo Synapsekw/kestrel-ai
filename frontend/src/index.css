@@ -1,5 +1,6 @@
 @import "@fontsource-variable/space-grotesk";
 @import "@fontsource-variable/jetbrains-mono";
+@import "./ui/ui.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -65,6 +66,44 @@
     --elev-1: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 10px 30px rgba(0, 0, 0, 0.25);
     --elev-2: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 20px 50px rgba(20, 10, 60, 0.5);
     --glow-primary: 0 8px 26px rgba(143, 123, 255, 0.45);
+
+    /* Motion (spec §4.2); ui/motion.ts mirrors these for JavaScript. */
+    --dur-instant: 0ms;
+    --dur-fast: 120ms;
+    --dur-base: 180ms;
+    --dur-slow: 260ms;
+    --dur-emphasis: 350ms;
+    --dur-count: 600ms;
+    --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --ease-spring: cubic-bezier(0.3, 1.6, 0.5, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    --stagger-step: 40ms;
+    --stagger-max: 8;
+  }
+
+  /* Reduced motion: the OS setting or Settings → Reduce motion. Hover and colour (--dur-fast) stay. */
+  @media (prefers-reduced-motion: reduce) {
+    :root {
+      --dur-base: 0ms;
+      --dur-slow: 0ms;
+      --dur-emphasis: 0ms;
+      --dur-count: 0ms;
+      --stagger-step: 0ms;
+    }
+  }
+
+  :root[data-motion="reduced"] {
+    --dur-base: 0ms;
+    --dur-slow: 0ms;
+    --dur-emphasis: 0ms;
+    --dur-count: 0ms;
+    --stagger-step: 0ms;
+  }
+
+  /* Reduced effects (spec §4.3): one static gradient, no glows. Glass is handled in ui/ui.css. */
+  :root[data-effects="reduced"] {
+    --backdrop: radial-gradient(1200px 600px at 80% -10%, #3b2a7a 0%, transparent 60%), #0e0f1c;
+    --glow-primary: 0 0 0 transparent;
   }
 
   html,

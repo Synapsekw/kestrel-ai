@@ -12,6 +12,7 @@ export { Dialog } from "./Dialog";
 export { Disclosure } from "./Disclosure";
 export { EmptyState } from "./EmptyState";
 export { Field } from "./Field";
+export { GlassPanel, type GlassPanelProps, type GlassVariant } from "./GlassPanel";
 export { Icon, type IconName } from "./Icon";
 export { Input, Select, Textarea, fieldClass } from "./Input";
 export { Kbd } from "./Kbd";
@@ -32,6 +33,19 @@ export {
   type ToolShortcut,
   type WorkspaceScope,
 } from "./keymap";
+export {
+  applyMotion,
+  cubicBezier,
+  dur,
+  easing,
+  isReducedMotion,
+  readMotionChoice,
+  setMotionChoice,
+  stagger,
+  staggerTokens,
+  useReducedMotion,
+  type MotionChoice,
+} from "./motion";
 export { Pill, type PillTone } from "./Pill";
 export { Progress } from "./Progress";
 export { Segmented } from "./Segmented";

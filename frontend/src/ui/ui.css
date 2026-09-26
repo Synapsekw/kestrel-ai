@@ -1,0 +1,101 @@
+/* Component CSS the Tailwind utilities cannot express. src/ui/** is the one place check-tokens allows
+   backdrop-filter (spec F7: blur lives in GlassPanel and Dialog). Plain rules, no @layer: Vite inlines
+   this file before Tailwind runs, and utilities (emitted later) still win ties. */
+
+/* Glass: floating panels over imagery. */
+.glass-float {
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  color: rgb(var(--glass-ink));
+  box-shadow: var(--elev-1);
+  -webkit-backdrop-filter: blur(var(--blur-md));
+  backdrop-filter: blur(var(--blur-md));
+}
+
+:root[data-effects="reduced"] .glass-float {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: rgb(var(--glass-solid));
+}
+
+/* Stagger: list and card entrances, with style={stagger(i)}. Item 9 onward appears with item 8.
+   The doubled class outranks the `animation` shorthand of the animate-* utilities. */
+.stagger.stagger {
+  animation-delay: calc(min(var(--i, 0), var(--stagger-max) - 1) * var(--stagger-step));
+}
+
+/* Shimmer: only on something whose work is running (Progress running, Skeleton while loading). */
+.animate-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.35), transparent);
+  transform: translateX(-100%);
+  animation: kestrel-shimmer 1.6s linear infinite;
+}
+
+/* Indeterminate progress: a 40% bar sliding across. */
+.animate-indeterminate {
+  animation: kestrel-indeterminate 1.2s var(--ease-in-out) infinite;
+}
+
+/* Sparkline draw-in: the clip rectangle grows from the left (transform only). */
+.spark-draw {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: kestrel-draw var(--dur-count) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer::after,
+  .animate-indeterminate {
+    animation: none;
+  }
+  .animate-shimmer::after {
+    opacity: 0;
+  }
+}
+
+:root[data-motion="reduced"] .animate-shimmer::after,
+:root[data-motion="reduced"] .animate-indeterminate {
+  animation: none;
+}
+
+:root[data-motion="reduced"] .animate-shimmer::after {
+  opacity: 0;
+}
+
+/* Native <option> lists follow the dark theme. */
+select option {
+  background: rgb(var(--tip));
+  color: rgb(var(--ink));
+}
+
+@keyframes kestrel-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@keyframes kestrel-indeterminate {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@keyframes kestrel-draw {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
