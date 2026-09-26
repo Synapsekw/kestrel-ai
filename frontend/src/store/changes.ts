@@ -10,6 +10,8 @@ interface ChangesState {
   surfacesRevision: number;
   /** Bumped on `volumes.changed`. */
   volumesRevision: number;
+  /** Bumped on `catalogue.changed` (F §13): a type or the severity scale changed. */
+  catalogueRevision: number;
   /** Bumped on `data.changed` (spec 2026-09-26-foundation section 13): the tab counts and the Data list. */
   dataRevision: number;
   /** Bumped on `findings.changed` and after this client's own finding writes (F §8.3). */
@@ -32,6 +34,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   boxesRevision: {},
   surfacesRevision: 0,
   volumesRevision: 0,
+  catalogueRevision: 0,
   dataRevision: 0,
   findingsRevision: 0,
   projectsRevision: 0,
@@ -57,6 +60,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
       if (ev.type === "data.changed") return { dataRevision: s.dataRevision + 1 };
       if (ev.type === "findings.changed") return { findingsRevision: s.findingsRevision + 1 };
       if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
+      if (ev.type === "catalogue.changed") return { catalogueRevision: s.catalogueRevision + 1 };
       return s;
     }),
 }));
