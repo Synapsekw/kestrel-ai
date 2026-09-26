@@ -66,9 +66,7 @@ export async function importLibraryModel(api: ApiClient, body: LibraryModelImpor
  * longer opens, or imagery with no usable camera EXIF.
  */
 export function fetchModelGsdEstimate(api: ApiClient, modelId: string): Promise<ModelGsdEstimate> {
-  return unwrap(
-    api.GET("/api/v1/library/models/{modelId}/gsd-estimate", { params: { path: { modelId } } }),
-  );
+  return unwrap(api.GET("/api/v1/library/models/{modelId}/gsd-estimate", { params: { path: { modelId } } }));
 }
 
 export function updateLibraryModel(

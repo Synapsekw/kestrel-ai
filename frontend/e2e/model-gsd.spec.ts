@@ -5,6 +5,7 @@ import { asDetectionProject, fromMock, jsonReply } from "./kinds";
 // The contract's examples: the detection project and its map source.
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MAP_SOURCE = "50000000-3333-4000-8000-000000000002";
+const MODEL = "m0000000-2222-4000-8000-000000000001";
 
 // The scale a model trained on senseFly Aeria X imagery flown at ~191 m is actually derived at:
 // the real numbers from the backend's gsd-estimate test, not invented ones (spec section 3).
@@ -33,12 +34,9 @@ test.beforeEach(({ page }) => asDetectionProject(page, P));
 test("a model with no training scale offers its derived one, with the evidence for it", async ({
   page,
 }) => {
-  const example = await fromMock<Record<string, unknown>>(
-    page,
-    "/api/v1/library/models/m0000000-2222-4000-8000-000000000001",
-  );
+  const example = await fromMock(page, `/api/v1/library/models/${MODEL}`);
   // ICVD_V4 as it really was: trained, with a dataset in its provenance, and no scale recorded.
-  const model = { ...example, name: "ICVD_V4", train_gsd_cm: null };
+  const model: Record<string, unknown> = { ...example, name: "ICVD_V4", train_gsd_cm: null };
   await page.route(
     (u) => u.pathname === "/api/v1/library/models",
     (route) =>
@@ -47,14 +45,14 @@ test("a model with no training scale offers its derived one, with the evidence f
         : route.fallback(),
   );
   await page.route(
-    (u) => u.pathname.endsWith(`/library/models/${model.id as string}/gsd-estimate`),
+    (u) => u.pathname.endsWith(`/library/models/${MODEL}/gsd-estimate`),
     (route) => route.fulfill(jsonReply(gsdEstimate)),
   );
   const patched = page.waitForRequest(
-    (r) => r.method() === "PATCH" && r.url().endsWith(`/library/models/${model.id as string}`),
+    (r) => r.method() === "PATCH" && r.url().endsWith(`/library/models/${MODEL}`),
   );
   await page.route(
-    (u) => u.pathname === `/api/v1/library/models/${model.id as string}`,
+    (u) => u.pathname === `/api/v1/library/models/${MODEL}`,
     (route) =>
       route.request().method() === "PATCH"
         ? route.fulfill(jsonReply({ ...model, train_gsd_cm: gsdEstimate.train_gsd_cm }))

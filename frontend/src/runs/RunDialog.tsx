@@ -405,10 +405,7 @@ export function RunDialog({
                 />
               </Field>
               {offer && (
-                <div
-                  className="flex items-center gap-3 rounded-md border border-line p-3"
-                  aria-live="polite"
-                >
+                <div className="flex items-center gap-3 rounded-md border border-line p-3" aria-live="polite">
                   <p className="flex-1 text-sm text-muted">
                     {`This model was trained at about ${offer.train_gsd_cm} cm / px — its imagery was flown at about ${offer.median_alt_m} m, which makes its labelled machines about ${offer.median_object_m} m across.`}
                   </p>
