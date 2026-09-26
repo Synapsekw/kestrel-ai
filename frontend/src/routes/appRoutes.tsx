@@ -1,6 +1,6 @@
 import type { RouteObject } from "react-router-dom";
 import { SectionPlaceholder } from "@/app/InterimScreens";
-import { AboutScreen, JobsScreen, Later } from "@/app/lazyScreens";
+import { AboutScreen, CatalogueScreen, JobsScreen, Later } from "@/app/lazyScreens";
 import { LibraryScreen } from "@/library/LibraryScreen";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
 import { Redirect } from "./Redirect";
@@ -29,7 +29,14 @@ export const appRoutes: RouteObject[] = [
   { path: "models/datasets/:datasetId", element: datasets },
   { path: "models/training", element: training },
   { path: "models/training/:runId", element: training },
-  { path: "catalogue", element: catalogue },
+  {
+    path: "catalogue",
+    element: (
+      <Later>
+        <CatalogueScreen tab="types" />
+      </Later>
+    ),
+  },
   { path: "catalogue/severity", element: catalogue },
   {
     path: "jobs",
