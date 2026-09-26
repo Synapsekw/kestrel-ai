@@ -146,4 +146,91 @@ def rewrite_class_ids(ctx: StepContext) -> dict:
     }
 
 
+def project_types(ctx: StepContext) -> dict:
+    """Step 3: fill `project_type` from `class_id_map` in the old class order, with snapshots of the
+    catalogue types (spec §7.3, F2). Rows already present (written by `create` since BC) are kept.
+
+    A project keeps its old hotkey as `hotkey_override` when that key clashes with no catalogue
+    hotkey of another type in the project and no override already given. Otherwise the catalogue's
+    own hotkey applies, unless that hotkey is itself already in use by another row's override in
+    this project (BC's `add_types` convention: a `hotkey_override` is a project-only string, never
+    checked against the catalogue's own uniqueness) — then the row gets `hotkey_override = ""`
+    ("no hotkey in this project") and a warning, rather than a silent clash with an existing row."""
+    s = ctx.session
+    catalogue = ports.require_catalogue(ctx.env.catalogue)
+    id_map = dict(s.execute(text("SELECT old_class_id, type_id FROM class_id_map")).all())
+    existing = dict(s.execute(text("SELECT type_id, position FROM project_type")).all())
+    used = {k for (k,) in s.execute(text("SELECT COALESCE(hotkey_override, hotkey) FROM project_type")) if k}
+    ordered, wanted = [], {}
+    for c in old_classes(ctx):
+        type_id = id_map.get(c["id"])
+        if type_id is None or type_id in ordered:
+            continue
+        ordered.append(type_id)
+        wanted[type_id] = c.get("hotkey") or None
+    with catalogue.session() as cs:
+        snaps = ports.type_rows(cs, ordered)
+    missing = [t for t in ordered if t not in snaps]
+    if missing:
+        raise RuntimeError(f"class_id_map points at types the catalogue does not have: {missing}")
+    catalogue_keys = {snaps[t]["hotkey"] for t in ordered if snaps[t]["hotkey"]}
+    position = max(existing.values(), default=-1) + 1
+    added = overrides = 0
+    warnings = []
+    for type_id in ordered:
+        if type_id in existing:
+            continue
+        snap, key = snaps[type_id], wanted[type_id]
+        override = None
+        if key and key != snap["hotkey"]:
+            if key in catalogue_keys or key in used:
+                warnings.append(
+                    f"hotkey {key} of {snap['name']} is taken in this project; it uses "
+                    f"{snap['hotkey'] or 'no hotkey'}"
+                )
+            else:
+                override = key
+                overrides += 1
+        effective = override or snap["hotkey"]
+        if override is None and effective and effective in used:
+            warnings.append(
+                f"the catalogue hotkey {effective} of {snap['name']} is already used by"
+                " another type in this project; it uses no hotkey"
+            )
+            override, effective = "", None
+        if effective:
+            used.add(effective)
+        ports.insert_project_type(
+            s, type_id=type_id, position=position, hotkey_override=override, snapshot=snap
+        )
+        position += 1
+        added += 1
+    return {"types": added, "hotkey_overrides": overrides, "warnings": warnings}
+
+
+def library_class_maps(ctx: StepContext) -> dict:
+    """Step 4: merge the project's `model_class_map` (values already type ids, step 2) into
+    `library_model.class_map`. The first mapping wins; a conflict is reported (spec §11.4, F10)."""
+    library = ports.require_library(ctx.env.library)
+    rows = ctx.session.execute(text("SELECT library_model_id, mapping FROM model_class_map")).all()
+    names_added = conflicts = 0
+    warnings = []
+    with STORE_LOCK, library.session() as ls:
+        for model_id, raw in rows:
+            outcome = ports.merge_class_map(ls, model_id, json.loads(raw) if raw else {})
+            if outcome is None:
+                warnings.append(
+                    f"model {model_id} is not in the library; its class mapping was not carried over"
+                )
+                continue
+            added, clashes = outcome
+            names_added += added
+            for name, kept, ours in clashes:
+                conflicts += 1
+                warnings.append(
+                    f"model {model_id}: {name!r} stays mapped to {kept}; this project mapped it to {ours}"
+                )
+    return {"models": len(rows), "names_added": names_added, "conflicts": conflicts, "warnings": warnings}
+
+
 PIPELINE: tuple[Step, ...] = ()
