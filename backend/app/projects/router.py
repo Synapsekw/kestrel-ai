@@ -4,11 +4,13 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Response
 
+from app.catalogue import service as catalogue_service
 from app.datasets.stats import compute_stats
 from app.errors import AppError
 from app.migration.gate import migration_state, unavailable_state
 from app.migration.job import live_job_id, states_for
 from app.migration.state import MigrationStates
+from app.overview.service import project_summary
 from app.projects.schemas import (
     MigrationStateOut,
     ProjectCreate,
@@ -29,10 +31,14 @@ def _registry(request: Request) -> ProjectRegistry:
 
 
 def _out(handle: ProjectHandle, last_opened_at: datetime | None, runner=None) -> ProjectOut:
-    """With `runner`, the project's migration state is filled in; without it (a gated route, so
-    the project is `ok`) it keeps the default."""
+    """Every opened project's `ProjectOut`, with its summary (pre-aggregated reads, spec
+    2026-09-26-foundation section 9.2). With `runner`, the project's migration state is filled in;
+    without it (a gated route, so the project is `ok`) it keeps the default."""
+    top = max(catalogue_service.scale_levels(handle.catalogue))
     with handle.session() as s:
-        out = ProjectOut.from_row(handle.row(s), handle.folder, last_opened_at)
+        out = ProjectOut.from_row(
+            handle.row(s), handle.folder, last_opened_at, summary=project_summary(s, top)
+        )
     if runner is not None:
         out.migration = MigrationStateOut(**migration_state(handle, runner))
     return out

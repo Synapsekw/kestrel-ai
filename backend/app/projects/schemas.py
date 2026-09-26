@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.db.models import Project
+from app.overview.schemas import ProjectSummary
 
 
 class ImportSettings(BaseModel):
@@ -89,11 +90,15 @@ class ProjectOut(BaseModel):
     schema_version: int
     created_at: datetime
     last_opened_at: datetime | None
+    # Null while the project cannot be opened (`unavailable`); every opened project fills it.
+    summary: ProjectSummary | None = None
     migration: MigrationStateOut = Field(default_factory=MigrationStateOut)
     availability: Literal["ok", "missing"] = "ok"
 
     @classmethod
-    def from_row(cls, row: Project, folder: Path, last_opened_at: datetime | None) -> "ProjectOut":
+    def from_row(
+        cls, row: Project, folder: Path, last_opened_at: datetime | None, *, summary: dict | None = None
+    ) -> "ProjectOut":
         """`last_opened_at` comes from the recent-projects list (`AppData`), not the project's own
         row: it is per-user app data, not part of the project file (see `app/appdata.py`)."""
         return cls(
@@ -106,6 +111,7 @@ class ProjectOut(BaseModel):
             schema_version=row.schema_version,
             created_at=row.created_at,
             last_opened_at=last_opened_at,
+            summary=ProjectSummary(**summary) if summary else None,
         )
 
     @classmethod
@@ -130,6 +136,7 @@ class ProjectOut(BaseModel):
             schema_version=0,
             created_at=last_opened_at or datetime(1970, 1, 1, tzinfo=UTC),
             last_opened_at=last_opened_at,
+            summary=None,
             migration=migration,
             availability=availability,
         )

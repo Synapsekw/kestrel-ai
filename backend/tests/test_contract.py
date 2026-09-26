@@ -106,14 +106,7 @@ EXPECTED_STUBS: set[str] = stub_operation_ids()
 # For these the request must still not crash (< 500); conformance is checked again once the entry
 # is gone. The unit that lands last for an entry deletes it.
 BACKEND_PENDING: dict[str, str] = {
-    "listProjects": "BK, BC, MG",
-    "createProject": "BK, BC",
-    "getProject": "BK, BC",
-    "updateProject": "BK, BC",
-    "updateClasses": "BK, BC",
     "listLibraryModels": "BM",
-    # PUT /types answers a Project, whose `summary`/`migration` fields are not served yet.
-    "putProjectTypes": "BC, MG",
 }
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
@@ -163,6 +156,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "putSeverityScale": {422},
     # BC: a generated type id the catalogue does not know (`unknown_type`).
     "putProjectTypes": {422},
+    # BK/BC: a project created with generated `type_ids` the catalogue does not know
+    # (`unknown_type`). Masked by BACKEND_PENDING until BC task 13; the contract declares no 422
+    # for createProject (UNDECLARED_REFUSALS below) - recorded in BC's task-13 report.
+    "createProject": {422},
     # BC: generated type ids are unknown (`unknown_type`), a level above the scale
     # (`severity_unknown`), a generated geometry that is not a closed ring (`invalid_geometry`),
     # a patch of an image anchor (`anchor_immutable`).
@@ -180,6 +177,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
 UNDECLARED_REFUSALS: dict[str, set[int]] = {
     "createCatalogueType": {422},
     "patchCatalogueType": {422},
+    "createProject": {422},
 }
 
 # Transitional (foundation unit BK, 2026-09-26): these routes were hidden behind the kind guard's

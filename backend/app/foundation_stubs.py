@@ -19,11 +19,6 @@ from app.stubs import add_stubs
 # (method, path, operationId)
 Stub = tuple[str, str, str]
 
-# BC: project types (§7.3), findings core (§8.3), the overview (§9.1) and the catalogue (§7).
-BC_PROJECT_STUBS: list[Stub] = [
-    ("GET", "/overview", "getProjectOverview"),
-]
-
 # BM: datasets across projects, training runs and the model class map (§12, §7.4).
 BM_APP_STUBS: list[Stub] = [
     ("PUT", "/library/models/{modelId}/class-map", "putLibraryModelClassMap"),
@@ -39,7 +34,8 @@ BM_APP_STUBS: list[Stub] = [
     ("GET", "/library/training-runs/{runId}", "getTrainingRun"),
 ]
 
-PROJECT_STUBS: list[Stub] = [*BC_PROJECT_STUBS]
+# Every project-scoped foundation operation is built; the router stays for the machinery.
+PROJECT_STUBS: list[Stub] = []
 APP_STUBS: list[Stub] = [*BM_APP_STUBS]
 
 project_router = APIRouter(prefix="/projects/{projectId}", tags=["foundation-stubs"])

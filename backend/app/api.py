@@ -23,6 +23,7 @@ from app.library.adoption_router import router as adoption_router
 from app.library.router import project_router as train_router
 from app.library.router import router as library_router
 from app.migration.router import router as migration_router
+from app.overview.router import router as overview_router
 from app.project_agent.router import router as project_agent_router
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
@@ -46,6 +47,7 @@ for r in (
     search_router,
     findings_router,
     operator_router,
+    overview_router,
     library_router,
     datasets_router,
     starter_router,
