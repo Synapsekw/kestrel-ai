@@ -9,10 +9,11 @@ import {
   type ReactNode,
 } from "react";
 import { createPortal } from "react-dom";
+import { placeFloating, type Side } from "./floating";
 import { KeyChord } from "./Kbd";
 import { cx } from "./tokens";
 
-export type TooltipSide = "top" | "bottom" | "left" | "right";
+export type TooltipSide = Side;
 
 export interface TooltipProps {
   label: ReactNode;
@@ -50,24 +51,16 @@ function FloatingLabel({
       const height = element.offsetHeight;
       const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
       const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
-      const beside = side === "left" || side === "right";
-      let left =
-        side === "right"
-          ? rect.right + 6
-          : side === "left"
-            ? rect.left - width - 6
-            : rect.left + (rect.width - width) / 2;
-      let top = beside
-        ? rect.top + (rect.height - height) / 2
-        : side === "top"
-          ? rect.top - height - 6
-          : rect.bottom + 6;
-      if (side === "right" && left + width > viewportWidth - 8) left = rect.left - width - 6;
-      if (side === "left" && left < 8) left = rect.right + 6;
-      if (side === "top" && top < 8) top = rect.bottom + 6;
-      if (side === "bottom" && top + height > viewportHeight - 8) top = rect.top - height - 6;
-      element.style.left = `${Math.max(8, Math.min(left, viewportWidth - width - 8))}px`;
-      element.style.top = `${Math.max(8, Math.min(top, viewportHeight - height - 8))}px`;
+      const at = placeFloating(
+        rect,
+        { width, height },
+        side,
+        "center",
+        { width: viewportWidth, height: viewportHeight },
+        6,
+      );
+      element.style.left = `${at.left}px`;
+      element.style.top = `${at.top}px`;
       element.style.visibility = "visible";
     };
     position();

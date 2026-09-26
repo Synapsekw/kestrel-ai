@@ -13,6 +13,7 @@ export { Dialog } from "./Dialog";
 export { Disclosure } from "./Disclosure";
 export { EmptyState } from "./EmptyState";
 export { Field } from "./Field";
+export { placeFloating, type Align, type AnchorRect, type Side } from "./floating";
 export { FloatingToolbar, ToolButton, ToolSeparator, type ToolDef } from "./FloatingToolbar";
 export { GlassPanel, type GlassPanelProps, type GlassVariant } from "./GlassPanel";
 export { Icon, type IconName } from "./Icon";
@@ -43,6 +44,7 @@ export {
   type ToolShortcut,
   type WorkspaceScope,
 } from "./keymap";
+export { Menu, MenuButton, type MenuButtonProps, type MenuItem, type MenuProps } from "./Menu";
 export {
   applyMotion,
   cubicBezier,
@@ -57,6 +59,7 @@ export {
   type MotionChoice,
 } from "./motion";
 export { Pill, type PillTone } from "./Pill";
+export { Popover, type PopoverProps } from "./Popover";
 export { Progress } from "./Progress";
 export { Segmented, type SegmentedOption, type SegmentedProps } from "./Segmented";
 export { SeverityPicker, SeverityPill, type SeverityPickerProps, type SeverityPillProps } from "./Severity";
