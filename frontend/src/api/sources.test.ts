@@ -11,7 +11,6 @@ import {
 import {
   createSource,
   fetchAllSources,
-  fetchRunsBySource,
   fetchSourceStats,
   updateMapDate,
   updateSource,
@@ -63,32 +62,6 @@ describe("sources api", () => {
       url: `/api/v1/projects/${PROJECT_ID}/maps/m1`,
       body: { captured_on: null },
     });
-  });
-
-  it("picks each source's pinned run, else its newest, from one bounded page", async () => {
-    const run = (id: string, source_id: string | null, pinned = false) => ({ id, source_id, pinned });
-    const { api, requests } = fakeClient([
-      {
-        method: "GET",
-        path: /\/runs$/,
-        body: {
-          items: [
-            run("new-a", "a"),
-            run("old-a", "a", true),
-            run("new-b", "b"),
-            run("old-b", "b"),
-            run("x", null),
-          ],
-          next_cursor: "more",
-        },
-      },
-    ]);
-    const bySource = await fetchRunsBySource(api, PROJECT_ID);
-    expect(requests).toHaveLength(1);
-    expect(requests[0].url).toBe(`/api/v1/projects/${PROJECT_ID}/runs?limit=200`);
-    expect(bySource.get("a")?.id).toBe("old-a");
-    expect(bySource.get("b")?.id).toBe("new-b");
-    expect(bySource.size).toBe(2);
   });
 
   it("surfaces 501 until S1 lands", async () => {

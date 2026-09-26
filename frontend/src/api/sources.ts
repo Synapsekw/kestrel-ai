@@ -2,10 +2,9 @@ import type { ApiClient, GeoMap, Source, Stats, components } from "@contract/cli
 import { unwrap } from "./errors";
 import { collectPages } from "./paging";
 
-export type SourceCreate = components["schemas"]["SourceCreate"];
+type SourceCreate = components["schemas"]["SourceCreate"];
 export type SourceWithJob = components["schemas"]["SourceWithJob"];
-export type SourcePatch = components["schemas"]["SourcePatch"];
-export type RunSummary = components["schemas"]["RunSummary"];
+type SourcePatch = components["schemas"]["SourcePatch"];
 
 const LIST_LIMIT = 1000;
 
@@ -67,26 +66,4 @@ export function updateMapDate(
       body: { captured_on: capturedOn },
     }),
   );
-}
-
-/** Enough runs to cover the sources of one site; one page, never a walk over every run. */
-const RUN_PAGE = 200;
-
-/**
- * The run each source shows: its pinned run, else its newest (`GET /runs` is newest first). Reads
- * one page only, so a source whose runs are all older than that page shows none.
- */
-export async function fetchRunsBySource(api: ApiClient, projectId: string): Promise<Map<string, RunSummary>> {
-  const page = await unwrap(
-    api.GET("/api/v1/projects/{projectId}/runs", {
-      params: { path: { projectId }, query: { limit: RUN_PAGE } },
-    }),
-  );
-  const chosen = new Map<string, RunSummary>();
-  for (const run of page.items) {
-    if (!run.source_id) continue;
-    const had = chosen.get(run.source_id);
-    if (!had || (run.pinned && !had.pinned)) chosen.set(run.source_id, run);
-  }
-  return chosen;
 }
