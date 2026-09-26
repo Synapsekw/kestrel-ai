@@ -93,17 +93,39 @@ const browserRaf: Raf = (callback) => {
   requestAnimationFrame(callback);
 };
 
-/** Frame-to-frame times over `durationMs`, after `warmupMs` whose frames are not counted. */
-export function measureFrames(durationMs = 2000, raf: Raf = browserRaf, warmupMs = 300): Promise<number[]> {
+/** A frame gap this long is a paused window (minimised, covered), not a slow frame. */
+export const MAX_FRAME_GAP_MS = 500;
+
+/**
+ * Frame-to-frame times over `durationMs`, after `warmupMs` whose frames are not counted. Gaps above
+ * MAX_FRAME_GAP_MS are dropped. Resolves `null` (no evidence, no decision) if the window is hidden
+ * while measuring, or if no frame gap was usable.
+ */
+export function measureFrames(
+  durationMs = 2000,
+  raf: Raf = browserRaf,
+  warmupMs = 300,
+): Promise<number[] | null> {
   return new Promise((resolve) => {
     const deltas: number[] = [];
     let first: number | null = null;
     let last = 0;
+    let done = false;
+    const finish = (result: number[] | null) => {
+      done = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      resolve(result);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") finish(null);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     const tick = (time: number) => {
+      if (done) return;
       if (first === null) first = time;
-      else if (time - first > warmupMs) deltas.push(time - last);
+      else if (time - first > warmupMs && time - last <= MAX_FRAME_GAP_MS) deltas.push(time - last);
       last = time;
-      if (time - first >= warmupMs + durationMs) resolve(deltas);
+      if (time - first >= warmupMs + durationMs) finish(deltas.length > 0 ? deltas : null);
       else raf(tick);
     };
     raf(tick);
@@ -119,14 +141,15 @@ let probed = false;
  * Full for good (spec §15: the Settings override is final).
  */
 export async function runAutoProbe(
-  measure: () => Promise<number[]> = () => measureFrames(),
+  measure: () => Promise<number[] | null> = () => measureFrames(),
 ): Promise<Effects | null> {
   if (probed || readEffectsChoice() !== "auto" || readAutoOutcome() !== null) return null;
   if (document.documentElement.dataset.effects === "reduced") return null;
   if (document.visibilityState !== "visible") return null;
   probed = true;
   const samples = await measure();
-  if (document.visibilityState !== "visible") {
+  if (samples === null || document.visibilityState !== "visible") {
+    // Hidden mid-probe (or nothing usable measured): no decision, and a later call may probe again.
     probed = false;
     return null;
   }

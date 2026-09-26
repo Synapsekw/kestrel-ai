@@ -125,6 +125,41 @@ describe("the frame probe", () => {
     expect(await runAutoProbe(async () => frames(16))).toBe("full");
   });
 
+  it("makes no decision when the window is hidden and restored mid-probe, and may probe again later", async () => {
+    applyEffects();
+    const visibility = vi.spyOn(Document.prototype, "visibilityState", "get").mockReturnValue("visible");
+    let now = 0;
+    let count = 0;
+    const raf = (cb: (t: number) => void) => {
+      count += 1;
+      if (count === 5) {
+        // Minimised: rAF pauses, then the window comes back 10 s later.
+        visibility.mockReturnValue("hidden");
+        document.dispatchEvent(new Event("visibilitychange"));
+        visibility.mockReturnValue("visible");
+        document.dispatchEvent(new Event("visibilitychange"));
+        now += 10_000;
+      } else now += 16;
+      queueMicrotask(() => cb(now));
+    };
+    expect(await runAutoProbe(() => measureFrames(200, raf, 0))).toBeNull();
+    expect(document.documentElement.dataset.effects).toBe("full");
+    expect(localStorage.getItem("kestrel.effects.auto")).toBeNull();
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+    expect(await runAutoProbe(async () => frames(16))).toBe("full");
+  });
+
+  it("drops frame gaps long enough to be a paused window, not a slow frame", async () => {
+    let now = 0;
+    let count = 0;
+    const raf = (cb: (t: number) => void) => {
+      count += 1;
+      now += count === 3 ? 5_000 : 20;
+      queueMicrotask(() => cb(now));
+    };
+    expect(await measureFrames(5_100, raf, 0)).toEqual([20, 20, 20, 20, 20]);
+  });
+
   it("never probes when the operator chose a mode", async () => {
     setEffectsChoice("full");
     const measure = vi.fn(async () => frames(40));
