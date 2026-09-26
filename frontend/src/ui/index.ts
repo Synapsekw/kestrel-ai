@@ -8,6 +8,14 @@ export {
   type ButtonSize,
 } from "./Button";
 export { Checkbox } from "./Checkbox";
+export {
+  Combobox,
+  ComboboxList,
+  filterItems,
+  type ComboItem,
+  type ComboboxListProps,
+  type ComboboxProps,
+} from "./Combobox";
 export { DataTable, ROW_HEIGHT, type Column, type DataTableProps, type Sort } from "./DataTable";
 export { Dialog } from "./Dialog";
 export { Disclosure } from "./Disclosure";
@@ -44,6 +52,7 @@ export {
   type ToolShortcut,
   type WorkspaceScope,
 } from "./keymap";
+export { useListNavigation } from "./listbox";
 export { Menu, MenuButton, type MenuButtonProps, type MenuItem, type MenuProps } from "./Menu";
 export {
   applyMotion,
