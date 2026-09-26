@@ -1,4 +1,5 @@
 import type { IconName } from "@/ui";
+import type { WorkspaceScope } from "@/ui/keymap";
 
 /** The seven project tabs, in order (spec 2026-09-26-foundation section 5.2). */
 export type ProjectTabId =
@@ -125,4 +126,15 @@ export function routeInfo(pathname: string): RouteInfo {
   if (head === "settings") return app("settings", "Settings");
   if (head === "about") return app("settings", "About");
   return app(null, null);
+}
+
+// `findings` is reserved empty in DS's keymap (S1 fills it later); the sheet still shows the
+// scope on the Findings tab so the global and review rows render there too (controller ruling F6).
+const WORKSPACE_TABS: readonly WorkspaceScope[] = ["images", "maps", "clouds", "findings"];
+
+/** The `?` sheet's keymap scope for a route: the workspace tab's own, else none (global only). */
+export function sheetScope(info: RouteInfo): WorkspaceScope | null {
+  return info.tab && (WORKSPACE_TABS as readonly string[]).includes(info.tab)
+    ? (info.tab as WorkspaceScope)
+    : null;
 }

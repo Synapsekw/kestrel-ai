@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { keysFor } from "@/ui/keymap";
-import { routeInfo } from "./routeModel";
-import { ShortcutSheet, sheetScope } from "./ShortcutSheet";
+import { routeInfo, sheetScope } from "./routeModel";
+import { ShortcutSheet } from "./ShortcutSheet";
 
 function renderAt(path: string) {
   return render(

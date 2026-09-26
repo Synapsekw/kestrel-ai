@@ -8,13 +8,7 @@ import {
   runningJob,
   SOURCE_ID,
 } from "@/test/fixtures";
-import {
-  createSource,
-  fetchAllSources,
-  fetchSourceStats,
-  updateMapDate,
-  updateSource,
-} from "./sources";
+import { createSource, fetchAllSources, fetchSourceStats, updateMapDate, updateSource } from "./sources";
 
 describe("sources api", () => {
   it("lists every page, reads stats and starts an import", async () => {

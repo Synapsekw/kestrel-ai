@@ -1,18 +1,8 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { Dialog, Kbd } from "@/ui";
-import { formatChord, isTypingTarget, keysFor, type WorkspaceScope } from "@/ui/keymap";
-import { routeInfo, type RouteInfo } from "./routeModel";
-
-// `findings` is reserved empty in DS's keymap (S1 fills it later); the sheet still shows the
-// scope on the Findings tab so the global and review rows render there too (controller ruling F6).
-const WORKSPACE_TABS: readonly WorkspaceScope[] = ["images", "maps", "clouds", "findings"];
-
-export function sheetScope(info: RouteInfo): WorkspaceScope | null {
-  return info.tab && (WORKSPACE_TABS as readonly string[]).includes(info.tab)
-    ? (info.tab as WorkspaceScope)
-    : null;
-}
+import { formatChord, isTypingTarget, keysFor } from "@/ui/keymap";
+import { routeInfo, sheetScope } from "./routeModel";
 
 /** The `?` sheet (spec 2026-09-26-foundation section 5.6): DS's keymap table for this screen. */
 export function ShortcutSheet() {
