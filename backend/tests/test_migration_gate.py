@@ -5,7 +5,6 @@ from fastapi.testclient import TestClient
 from migration_helpers import (
     AUTH,
     HeldStep,
-    add_ledger_table,
     arm,
     at_revision,
     legacy_at_head,
@@ -30,7 +29,6 @@ def _boom(ctx):
 
 def _make_legacy(handle):
     set_schema_version(handle.folder, 1)
-    add_ledger_table(handle.folder)
     handle.schema_version = 1
 
 
@@ -191,7 +189,6 @@ def test_a_real_backup_is_reported_before_any_migration_job_records_one(client, 
     revision this build actually has, and the project built at the revision just before it."""
     monkeypatch.setattr(backup, "BACKUP_BEFORE", "0009")
     folder = at_revision(tmp_path / "old", "0008")
-    add_ledger_table(folder)
     held = HeldStep()
     arm(monkeypatch, held.step())
     try:

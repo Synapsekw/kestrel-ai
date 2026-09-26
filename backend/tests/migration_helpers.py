@@ -28,12 +28,6 @@ CLASSES = [
     {"id": "c-exc", "name": "excavator", "colour": "#f97316", "hotkey": "1", "order": 0},
     {"id": "c-dump", "name": "dump_truck", "colour": "#06b6d4", "hotkey": "2", "order": 1},
 ]
-# The ledger before unit BC's revision 0010 creates it. Only ever run on a database at head:
-# on an older one, 0010 would then fail to create the table.
-LEDGER_DDL = (
-    "CREATE TABLE IF NOT EXISTS migration_step "
-    "(name VARCHAR NOT NULL PRIMARY KEY, done_at DATETIME NOT NULL, detail JSON NOT NULL)"
-)
 SCRIPTS = Path(__file__).resolve().parents[1] / "scripts"
 # Box outcomes written for each class, in creation order (seconds 0..4).
 OUTCOMES = [
@@ -87,15 +81,9 @@ def at_revision(
 
 
 def legacy_at_head(folder: Path, *, pid: str = PID, name: str = "Legacy") -> Path:
-    """A version-1 project already at the newest revision, with the step ledger in place."""
+    """A version-1 project already at the newest revision; revision 0010 owns the step ledger."""
     at_revision(folder, "head", pid=pid, name=name)
-    add_ledger_table(folder)
     return folder
-
-
-def add_ledger_table(folder: Path) -> None:
-    with db(folder) as con:
-        con.execute(LEDGER_DDL)
 
 
 def set_schema_version(folder: Path, version: int) -> None:
@@ -262,7 +250,6 @@ def open_handle(folder: Path) -> ProjectHandle:
     """Open a folder the way the registry does (backup, upgrade) without the registry, ledger ready."""
     engine = open_project_db(folder)
     with engine.begin() as c:
-        c.exec_driver_sql(LEDGER_DDL)
         pid, version = c.exec_driver_sql("SELECT id, schema_version FROM project").one()
     handle = ProjectHandle(pid, folder, engine)
     handle.schema_version = version
