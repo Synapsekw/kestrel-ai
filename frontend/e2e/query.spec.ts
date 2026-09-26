@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { asDetectionProject } from "./kinds";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MODEL = "m0000000-2222-4000-8000-000000000001";
@@ -12,8 +11,6 @@ const JOB = "j0000000-4444-4000-8000-000000000001";
  * The mock's run points at job `…0003`, but `GET /jobs/{id}` always answers with job `…0001`, so the
  * tracked job would never resolve. This route hands the run the job id the mock actually serves.
  */
-test.beforeEach(({ page }) => asDetectionProject(page, P));
-
 const runWithMockJob = {
   id: RUN,
   kind: "cloud_provider",
@@ -94,7 +91,8 @@ test("estimates and starts a cloud detection, then reviews results, accepts as l
   await expect(card).toContainText('Anthropic: "dump trucks"');
   await expect(card.getByTestId("box-count")).toHaveText("7 boxes written so far");
   await expect(card.getByTestId(`job-${JOB}`)).toBeVisible();
-  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
+  // The top bar's running pill reports the job (the mock serves its import example for every job id).
+  await expect(page.getByRole("banner").getByRole("link", { name: /^Importing/ })).toBeVisible();
   await expect(page.getByRole("link", { name: "Review results" })).toHaveAttribute(
     "href",
     `/p/${P}/review?ids=${IMG},${IMG2}`,

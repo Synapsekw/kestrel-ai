@@ -61,9 +61,9 @@ export function Shell() {
   const bare = info.layout !== "page";
 
   return (
-    <div className="grid h-full w-full grid-cols-[64px_minmax(0,1fr)] text-ink">
+    <div className="grid h-full w-full grid-cols-[64px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] text-ink">
       <Rail projectId={projectId} />
-      <div className="relative flex min-w-0 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-col">
         <TopBar
           projectId={projectId}
           projectName={project?.name ?? null}

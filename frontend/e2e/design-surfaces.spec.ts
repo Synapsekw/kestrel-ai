@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { asDetectionProject, jsonReply } from "./kinds";
+import { jsonReply } from "./mock";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const INSP = "d0000000-1111-4000-8000-000000000001";
@@ -205,12 +205,10 @@ async function stubDesignApi(page: Page, posts: Record<string, unknown[]>) {
   );
 }
 
-test.beforeEach(({ page }) => asDetectionProject(page, P));
-
 test("imports a LandXML design with no target and lists it", async ({ page }) => {
   const posts: Record<string, unknown[]> = { inspections: [], previews: [], surfaces: [], deletes: [] };
   await stubDesignApi(page, posts);
-  await page.goto(`/p/${P}/volumes`);
+  await page.goto(`/p/${P}/measurements`);
   await page.getByRole("button", { name: "Import design surface" }).click();
   const dialog = page.getByRole("dialog", { name: "Import design surface" });
   await dialog.getByLabel("Design file").fill("C:\\temp\\site-tin.xml");
@@ -256,7 +254,7 @@ test("a DWG shows the fix inline", async ({ page }) => {
         ),
       ),
   );
-  await page.goto(`/p/${P}/volumes`);
+  await page.goto(`/p/${P}/measurements`);
   await page.getByRole("button", { name: "Import design surface" }).click();
   const dialog = page.getByRole("dialog", { name: "Import design surface" });
   await dialog.getByLabel("Design file").fill("C:\\temp\\site.dwg");

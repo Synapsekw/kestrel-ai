@@ -1,21 +1,16 @@
 import { test, expect } from "@playwright/test";
-import { asDetectionProject } from "./kinds";
 import { evidencePath } from "./evidence";
 
 // The contract's examples: two surveys (April 12 excavators, 9 verified; May 15, all verified), two
 // site areas and one photo batch ("Flight 15 Apr": 31 excavators, 12 verified).
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 
-test.beforeEach(({ page }) => asDetectionProject(page, P));
-
 test("Analytics shows totals with verified counts, and Verified only switches to verified", async ({
   page,
 }) => {
   await page.goto(`/p/${P}`);
-  await page
-    .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: /^Analytics/ })
-    .click();
+  await page.getByRole("button", { name: "More", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Analytics" }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/analytics$`));
   await expect(page.getByRole("heading", { name: "Analytics", exact: true })).toBeVisible();
 

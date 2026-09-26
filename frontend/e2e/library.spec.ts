@@ -1,6 +1,6 @@
 import { test, expect, type Route } from "@playwright/test";
 import { evidencePath } from "./evidence";
-import { fromMock } from "./kinds";
+import { fromMock } from "./mock";
 
 // Ids from the contract's LibraryModelPage example, which the Prism mock serves.
 const TRAINED = "m0000000-2222-4000-8000-000000000001";

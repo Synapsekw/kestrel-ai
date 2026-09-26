@@ -1,11 +1,8 @@
 import { test, expect } from "@playwright/test";
-import { asDetectionProject } from "./kinds";
 import { evidencePath } from "./evidence";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MAP_SOURCE = "50000000-3333-4000-8000-000000000002";
-
-test.beforeEach(({ page }) => asDetectionProject(page, P));
 
 test("the counts export as a CSV of every source, or a PDF report of one", async ({ page }) => {
   await page.goto(`/p/${P}/export`);

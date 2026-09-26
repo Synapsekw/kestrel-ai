@@ -9,7 +9,7 @@ const REGEX = "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)";
 test("Import images posts the folder with the project's defaults and shows the job in the panel", async ({
   page,
 }) => {
-  await page.goto(`/p/${P}/data`);
+  await page.goto(`/p/${P}/images`);
   await page.getByRole("button", { name: "Import images" }).click();
   const dialog = page.getByRole("dialog", { name: "Import images" });
   await dialog.getByText("Advanced settings (the defaults suit most imports)").click();
@@ -34,12 +34,15 @@ test("Import images posts the folder with the project's defaults and shows the j
   await expect(page.getByTestId("import-notice")).toContainText("Importing");
   const panel = page.getByRole("dialog", { name: "Jobs" });
   await expect(panel).toBeHidden();
-  await page.getByRole("button", { name: "1 active job" }).click();
-  await expect(panel.getByTestId(`job-${JOB}`).getByRole("progressbar")).toHaveAttribute(
+  await page
+    .getByRole("banner")
+    .getByRole("link", { name: /^Importing/ })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/jobs\\?project=${P}$`));
+  await expect(page.getByTestId(`job-${JOB}`).getByRole("progressbar")).toHaveAttribute(
     "aria-valuenow",
     "42",
   );
-  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
 });
 
 test("Sources in settings list counts, load stats and re-import the same folder", async ({ page }) => {

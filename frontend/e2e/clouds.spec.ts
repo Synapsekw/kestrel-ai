@@ -1,5 +1,4 @@
 import { test, expect, type Page } from "@playwright/test";
-import { asDetectionProject } from "./kinds";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 
@@ -35,7 +34,6 @@ async function routeCloud(page: Page) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await asDetectionProject(page, P);
   await page.addInitScript(() => localStorage.setItem("kestrel.diagnostics", "1"));
 });
 

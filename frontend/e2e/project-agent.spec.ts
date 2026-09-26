@@ -8,7 +8,7 @@ test("opens the project agent from the project header, sends a message, and star
   page,
 }) => {
   await page.goto(`/p/${P}`);
-  await expect(page.getByRole("banner")).toContainText("Home");
+  await expect(page.getByRole("banner")).toContainText("Overview");
   await page.getByRole("button", { name: "Project agent", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "Project agent" });
   await expect(drawer).toBeVisible();

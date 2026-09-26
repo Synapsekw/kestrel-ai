@@ -4,7 +4,7 @@ export const P = "7f1c2e3a-1111-4000-8000-000000000001";
 export const IMG = "10000000-5555-4000-8000-000000000001";
 
 export async function openEditor(page: Page) {
-  await page.goto(`/p/${P}/edit/${IMG}`);
+  await page.goto(`/p/${P}/images/${IMG}`);
   const canvas = page.getByTestId("editor-canvas");
   await expect(canvas).toHaveAttribute("data-image", "4000x2667", { timeout: 15_000 });
   return canvas;
@@ -184,10 +184,12 @@ test("R rejects, Show rejected reveals the row, and the region list accepts one 
   const rejected = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
   await page.keyboard.press("r");
   expect((await rejected).postDataJSON()).toEqual({ box_ids: [PROPOSAL], action: "reject" });
-  await expect(page.getByRole("listitem")).toHaveCount(1);
+  // The breadcrumb in the top bar is a list too: count the region list's rows only.
+  const rows = page.getByRole("list", { name: "Regions", exact: true }).getByRole("listitem");
+  await expect(rows).toHaveCount(1);
   await page.getByRole("switch", { name: "Show rejected" }).click();
-  await expect(page.getByRole("listitem")).toHaveCount(2);
-  await expect(page.getByRole("listitem").nth(1)).toContainText("Rejected");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(1)).toContainText("Rejected");
 
   await openEditor(page);
   const one = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
@@ -360,7 +362,7 @@ test("Ctrl+Right moves to the next image after in-flight saves finish; Ctrl+Left
   await expect(page.getByRole("status").filter({ hasText: "Saving…" })).toBeVisible();
   const secondLoaded = page.waitForResponse((r) => r.url().endsWith(`/images/${IMG2}/boxes`));
   await page.keyboard.press("Control+ArrowRight");
-  await page.waitForURL(`**/p/${P}/edit/${IMG2}`);
+  await page.waitForURL(`**/p/${P}/images/${IMG2}`);
   const navigated = Date.now();
   await posted;
   expect(postDone).toBeLessThanOrEqual(navigated);
@@ -369,7 +371,7 @@ test("Ctrl+Right moves to the next image after in-flight saves finish; Ctrl+Left
   await secondLoaded;
   await expect(page.getByText("Loading…")).toHaveCount(0);
   await page.keyboard.press("Control+ArrowLeft");
-  await page.waitForURL(`**/p/${P}/edit/${IMG}`);
+  await page.waitForURL(`**/p/${P}/images/${IMG}`);
 });
 
 test("Ctrl+Z undoes a draw with DELETE and Ctrl+Y redoes with POST", async ({ page }) => {

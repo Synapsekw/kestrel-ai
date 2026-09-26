@@ -8,13 +8,14 @@ test("boots against the mock server and lists projects", async ({ page }) => {
   await expect(page.getByText("Ahmadia", { exact: true })).toBeVisible();
 });
 
-test("with no project open the sidebar explains itself and App settings holds the provider keys", async ({
+test("with no project open the rail reaches App settings, which holds the provider keys", async ({
   page,
 }) => {
   await page.goto("/");
-  const nav = page.getByRole("navigation");
-  await expect(nav.getByText("Open or create a project to use these.")).toBeVisible();
-  await nav.getByRole("link", { name: "App settings" }).click();
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Settings", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole("heading", { name: "App settings" })).toBeVisible();
   await expect(page.getByTestId("key-state-anthropic")).toHaveText("Key stored");
@@ -23,24 +24,16 @@ test("with no project open the sidebar explains itself and App settings holds th
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const IMG = "10000000-5555-4000-8000-000000000001";
 
-test("inside a project the sidebar shows the pipeline with counts and the header names the screen", async ({
-  page,
-}) => {
+test("a project opens on Overview with counts in the tabs", async ({ page }) => {
   await page.goto(`/p/${P}`);
-  const nav = page.getByRole("navigation");
-  await expect(nav.getByRole("link", { name: /^Images/ })).toContainText("3299");
-  await expect(nav.getByRole("link", { name: /^Label/ })).toHaveAttribute("href", `/p/${P}/label`);
-  await expect(nav.getByRole("link", { name: /^Review/ })).toBeVisible();
-  await expect(page.getByRole("banner")).toContainText("Home");
-  await expect(page.getByTestId("home-next-step")).toBeVisible();
+  await expect(page).toHaveURL(/overview$/);
+  await expect(page.getByRole("tablist").getByRole("tab", { name: /^Images/ })).toContainText(/\d/);
+  await expect(page.getByRole("banner")).toContainText("Overview");
 });
 
-test("the Label step opens the first unlabeled image with the list as its walk", async ({ page }) => {
-  await page.goto(`/p/${P}`);
-  await page
-    .getByRole("navigation")
-    .getByRole("link", { name: /^Label/ })
-    .click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/edit/${IMG}$`));
+test("Label next opens the first unlabeled image with the list as its walk", async ({ page }) => {
+  await page.goto(`/p/${P}/images`);
+  await page.getByRole("button", { name: "Label next" }).click();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
   await expect(page.getByTestId("position")).toHaveText("1 / 2");
 });

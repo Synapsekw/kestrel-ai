@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { asDetectionProject } from "./kinds";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -8,7 +7,6 @@ const P = "7f1c2e3a-1111-4000-8000-000000000001";
 test.use({ launchOptions: { args: ["--disable-gpu", "--disable-software-rasterizer"] } });
 
 test("without WebGL the 3D view says it cannot start and the screen stays usable", async ({ page }) => {
-  await asDetectionProject(page, P);
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
   await page.goto(`/p/${P}/clouds/${CLOUD}`);

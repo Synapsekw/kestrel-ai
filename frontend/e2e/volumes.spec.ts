@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { asDetectionProject, jsonReply } from "./kinds";
+import { jsonReply } from "./mock";
 import { evidencePath } from "./evidence";
 
 // The Volumes screen against the Prism mock (plan deviation 6): the backend's real pipeline is
@@ -204,13 +204,11 @@ async function fakeVolumes(page: Page) {
   return state;
 }
 
-test.beforeEach(({ page }) => asDetectionProject(page, P));
-
 test("builds a surface, measures a pile, goes stale on a base change, recalculates and exports", async ({
   page,
 }) => {
   const state = await fakeVolumes(page);
-  await page.goto(`/p/${P}/volumes`);
+  await page.goto(`/p/${P}/measurements`);
   await expect(page.getByText("Build a surface from a point cloud")).toBeVisible();
 
   // 1. Build a surface; the hillshade renders.
@@ -229,7 +227,7 @@ test("builds a surface, measures a pile, goes stale on a base change, recalculat
     .getByRole("list", { name: "Measurements" })
     .getByRole("button", { name: /Pile 1/ })
     .click();
-  await expect(page).toHaveURL(new RegExp(`/volumes/${M}$`));
+  await expect(page).toHaveURL(new RegExp(`/measurements/${M}$`));
   await expect(page.getByTestId("results-panel")).toContainText("1 234.5 m³");
   await expect(page.getByTestId("results-panel")).toContainText("± 14.2 m³ (indicative)");
   await page.screenshot({ path: evidencePath("volumes", "results.png"), fullPage: true });

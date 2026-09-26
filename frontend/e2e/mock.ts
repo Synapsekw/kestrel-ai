@@ -20,15 +20,3 @@ export const jsonReply = (body: unknown, status = 200) => ({
   headers: { "Access-Control-Allow-Origin": "*" },
   body: JSON.stringify(body),
 });
-
-/**
- * Serves the mock's example project as a detection project. The mock answers `kind: train`, and
- * the Detect and Maps screens only open in detection projects.
- */
-export async function asDetectionProject(page: Page, projectId: string): Promise<void> {
-  const project = { ...(await fromMock(page, `/api/v1/projects/${projectId}`)), kind: "detect" };
-  await page.route(
-    (u) => u.pathname === `/api/v1/projects/${projectId}`,
-    (route) => (route.request().method() === "GET" ? route.fulfill(jsonReply(project)) : route.fallback()),
-  );
-}

@@ -1,13 +1,11 @@
 import { test, expect } from "@playwright/test";
-import { asDetectionProject, jsonReply } from "./kinds";
+import { jsonReply } from "./mock";
 import { evidencePath } from "./evidence";
 
 // The contract's examples: two runs (a map and a photo batch), the library model `ahmadia-v1-n`.
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MODEL = "m0000000-2222-4000-8000-000000000001";
 const MAP_SOURCE = "50000000-3333-4000-8000-000000000002";
-
-test.beforeEach(({ page }) => asDetectionProject(page, P));
 
 test("Runs lists what each run found and how far its review has got", async ({ page }) => {
   await page.goto(`/p/${P}/runs`);

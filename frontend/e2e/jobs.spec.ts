@@ -3,27 +3,18 @@ import { test, expect } from "@playwright/test";
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const JOB = "j0000000-4444-4000-8000-000000000001";
 
-test("opens the jobs panel from the top bar, shows progress and log, cancels and closes", async ({
-  page,
-}) => {
-  await page.goto(`/p/${P}/data`);
-  // First page of a run: a cold dev server can need more than the default 5 s (as in boot.spec).
-  await expect(page.getByRole("heading", { name: "Images", exact: true })).toBeVisible({
-    timeout: 15_000,
-  });
+test("lists the project's jobs with progress and log, and cancels", async ({ page }) => {
   const listed = page.waitForRequest(
     (r) => r.method() === "GET" && r.url().includes(`/projects/${P}/jobs?limit=100`),
   );
-  await page.getByRole("button", { name: /active jobs?$/ }).click();
+  // First page of a run: a cold dev server can need more than the default 5 s (as in boot.spec).
+  await page.goto(`/jobs?project=${P}`);
   await listed;
-  const panel = page.getByRole("dialog", { name: "Jobs" });
-  await expect(panel).toBeVisible();
-  const card = panel.getByTestId(`job-${JOB}`);
-  await expect(card).toContainText("Import");
+  const card = page.getByRole("main").getByTestId(`job-${JOB}`);
+  await expect(card).toContainText("Import", { timeout: 15_000 });
   await expect(card.getByTestId("jobcard-state")).toHaveText("Running");
   await expect(card.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "42");
   await expect(card).toContainText("1386 / 3299 images");
-  await expect(page.getByRole("button", { name: "1 active job" })).toBeVisible();
 
   const log = page.waitForRequest((r) => r.url().includes(`/jobs/${JOB}/log?tail=200`));
   await card.getByRole("button", { name: "Show log" }).click();
@@ -33,9 +24,6 @@ test("opens the jobs panel from the top bar, shows progress and log, cancels and
   const cancel = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/jobs/${JOB}/cancel`));
   await card.getByRole("button", { name: "Cancel job" }).click();
   await cancel;
-
-  await page.getByRole("button", { name: "Close jobs" }).click();
-  await expect(panel).toHaveCount(0);
 });
 
 test("a failed job shows its error and no cancel button", async ({ page }) => {
@@ -68,9 +56,8 @@ test("a failed job shows its error and no cancel button", async ({ page }) => {
         }),
       }),
   );
-  await page.goto(`/p/${P}/data`);
-  await page.getByRole("button", { name: /active jobs?$/ }).click();
-  const card = page.getByRole("dialog", { name: "Jobs" }).getByTestId("job-j-failed");
+  await page.goto(`/jobs?project=${P}`);
+  const card = page.getByRole("main").getByTestId("job-j-failed");
   await expect(card).toContainText("Training: ahmadia-v1-n");
   await expect(card.getByTestId("jobcard-state")).toHaveText("Failed");
   await expect(card.getByRole("alert")).toHaveText("CUDA out of memory");

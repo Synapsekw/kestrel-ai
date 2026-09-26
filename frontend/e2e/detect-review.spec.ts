@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { asDetectionProject, jsonReply } from "./kinds";
+import { jsonReply } from "./mock";
 import { evidencePath } from "./evidence";
 
 // The contract's examples: the map source "May survey" (the newest survey, so Review opens on it)
@@ -23,8 +23,6 @@ const detection = (n: number) => ({
   provenance_kind: "local_model",
 });
 
-test.beforeEach(({ page }) => asDetectionProject(page, P));
-
 test("a map is reviewed one detection at a time from the keyboard", async ({ page }) => {
   // The mock always answers the same detection; this walk hands out the one after `after_id`.
   await page.route(
@@ -41,7 +39,7 @@ test("a map is reviewed one detection at a time from the keyboard", async ({ pag
       decisions.push(r.postDataJSON());
   });
 
-  await page.goto(`/p/${P}/review`);
+  await page.goto(`/p/${P}/review?view=runs`);
   await expect(page.getByRole("heading", { name: "Review", exact: true })).toBeVisible();
   await expect(page.getByLabel("Source")).toHaveValue("50000000-3333-4000-8000-000000000002");
   await expect(page.getByTestId("review-run")).toContainText("machinery-v3");

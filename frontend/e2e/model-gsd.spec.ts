@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { evidencePath } from "./evidence";
-import { asDetectionProject, fromMock, jsonReply } from "./kinds";
+import { fromMock, jsonReply } from "./mock";
 
 // The contract's examples: the detection project and its map source.
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
@@ -22,8 +22,6 @@ const gsdEstimate = {
   per_class_m: { excavator: 8.39, dump_truck: 8.9, roller: 5.07 },
   plausible: true,
 };
-
-test.beforeEach(({ page }) => asDetectionProject(page, P));
 
 /**
  * The reported failure, end to end: `ICVD_V4` had no stored training scale, and the dialog let the

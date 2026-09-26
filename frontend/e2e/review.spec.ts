@@ -24,7 +24,7 @@ test("review queue asks for pending images by confidence, shows the confidence c
 
   await page.getByTestId("image-table").focus();
   await page.keyboard.press("Enter");
-  await page.waitForURL(`**/p/${P}/edit/${IMG}`);
+  await page.waitForURL(`**/p/${P}/images/${IMG}`);
   await expect(page.getByTestId("position")).toHaveText("1 / 2");
   await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
   const accepted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
