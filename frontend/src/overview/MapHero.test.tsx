@@ -7,6 +7,7 @@ import { useChangesStore } from "@/store/changes";
 import { errorBody, exampleGeoMap, fakeClient, MAP_ID, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { exampleFinding, severityRoute } from "@/test/findingFixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
+import { pushLog } from "@/app/diagnostics";
 import { MapHero } from "./MapHero";
 
 // OpenLayers needs a canvas; the stub hands MapHero a map whose pixels equal OL coordinates flipped,
@@ -15,6 +16,7 @@ const stub = vi.hoisted(() => ({
   dx: 0,
   viewChange: null as MapViewProps["onViewChange"] | null,
 }));
+vi.mock("@/app/diagnostics", async (orig) => ({ ...(await orig<object>()), pushLog: vi.fn() }));
 vi.mock("@/maps/MapView", () => ({
   MapView: (props: MapViewProps) => {
     stub.viewChange = props.onViewChange ?? null;
@@ -35,11 +37,11 @@ const geo = {
   gsd_cm: 1,
 };
 
-function renderHero(heroMapId: string | null, routes: FakeRoute[]) {
+function renderHero(heroMapId: string | null, routes: FakeRoute[], hasData = false) {
   const { api, requests } = fakeClient([severityRoute, ...routes]);
   renderWithProviders(
     <>
-      <MapHero projectId={PROJECT_ID} heroMapId={heroMapId} />
+      <MapHero projectId={PROJECT_ID} heroMapId={heroMapId} hasData={hasData} />
       <LocationProbe />
     </>,
     { api, route: `/p/${PROJECT_ID}/overview` },
@@ -53,6 +55,12 @@ const pins: FakeRoute = {
   body: { items: [exampleFinding], next_cursor: null },
 };
 const noPins: FakeRoute = { method: "GET", path: /\/findings$/, body: { items: [], next_cursor: null } };
+const failedPins: FakeRoute = {
+  method: "GET",
+  path: /\/findings$/,
+  status: 500,
+  body: errorBody("internal", "database is locked"),
+};
 
 describe("MapHero", () => {
   beforeEach(() => {
@@ -60,6 +68,7 @@ describe("MapHero", () => {
     useChangesStore.setState({ findingsRevision: 0 });
     stub.dx = 0;
     stub.viewChange = null;
+    vi.mocked(pushLog).mockClear();
   });
 
   it("asks for at most 300 open located findings, most severe first", async () => {
@@ -104,6 +113,8 @@ describe("MapHero", () => {
     renderHero(null, [pins]);
     const pin = await screen.findByRole("link", { name: "F-0217 · Critical" });
     expect(pin).toHaveStyle({ left: "50%", top: "50%" });
+    // The most severe level gets the thicker ring (DESIGN.md), from the scale's top level.
+    expect(pin).toHaveClass("border-[3px]");
     expect(screen.queryByTestId("map-view")).toBeNull();
     expect(screen.getByTestId("hero-scale")).toHaveTextContent(/\d+ (m|km)$/);
   });
@@ -124,6 +135,43 @@ describe("MapHero", () => {
     expect(useAddData.getState().open).toBe(true);
   });
 
+  it("says quietly that no open finding has a location when the project has data", async () => {
+    renderHero(null, [noPins], true);
+    expect(await screen.findByText("No open findings with a location")).toBeInTheDocument();
+    expect(screen.queryByText("Start by adding data")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add data" })).toBeNull();
+  });
+
+  it("says the pins could not be loaded instead of asking for data", async () => {
+    renderHero(null, [failedPins], true);
+    expect(await screen.findByText("The finding pins could not be loaded")).toBeInTheDocument();
+    expect(screen.queryByText("No open findings with a location")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Add data" })).toBeNull();
+  });
+
+  it("keeps the pins on screen when a refresh fails", async () => {
+    let fail = false;
+    renderHero(null, [
+      {
+        method: "GET",
+        path: /\/findings$/,
+        status: () => (fail ? 500 : 200),
+        body: () =>
+          fail ? errorBody("internal", "database is locked") : { items: [exampleFinding], next_cursor: null },
+      },
+    ]);
+    await screen.findByRole("link", { name: "F-0217 · Critical" });
+    fail = true;
+    act(() => useChangesStore.getState().bumpFindings());
+    await waitFor(
+      () => expect(pushLog).toHaveBeenCalledWith(expect.stringMatching(/hero pins unavailable/)),
+      {
+        timeout: 2000,
+      },
+    );
+    expect(screen.getByRole("link", { name: "F-0217 · Critical" })).toBeInTheDocument();
+  });
+
   it("keeps Add data disabled while the project is still loading", async () => {
     renderHero(null, [noPins]);
     const button = await screen.findByRole("button", { name: "Add data" });
@@ -137,15 +185,20 @@ describe("MapHero", () => {
     await screen.findByRole("link", { name: /F-0217/ });
     const reads = () => requests.filter((r) => r.url.includes("/findings")).length;
     expect(reads()).toBe(1);
-    act(() => {
-      useChangesStore.getState().bumpFindings();
-      useChangesStore.getState().bumpFindings();
-      useChangesStore.getState().bumpFindings();
-    });
-    await new Promise((r) => setTimeout(r, 200));
-    expect(reads()).toBe(1);
-    await waitFor(() => expect(reads()).toBe(2), { timeout: 1500 });
-    await new Promise((r) => setTimeout(r, 500));
-    expect(reads()).toBe(2);
+    // Fake timers: only the test moves the clock, so a stalled runner cannot split the burst.
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        useChangesStore.getState().bumpFindings();
+        useChangesStore.getState().bumpFindings();
+        useChangesStore.getState().bumpFindings();
+      });
+      await act(() => vi.advanceTimersByTimeAsync(399));
+      expect(reads()).toBe(1);
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      expect(reads()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -33,8 +33,18 @@ function OverviewSkeleton() {
 /** The project's front page (F §9.1): pre-aggregated counts only, never a scan per render. */
 export function OverviewScreen() {
   const { projectId = "" } = useParams();
-  const { overview, recent, activity, recentFailed, activityFailed, error, code, loading, reload } =
-    useOverview(projectId);
+  const {
+    overview,
+    recent,
+    activity,
+    recentFailed,
+    activityFailed,
+    error,
+    refreshError,
+    code,
+    loading,
+    reload,
+  } = useOverview(projectId);
   const scale = useSeverityScale();
   const { types } = useProjectTypes(projectId);
   const labels = useDataLabels(projectId);
@@ -78,12 +88,27 @@ export function OverviewScreen() {
 
   const s = overview.findings;
   const total = s.by_status.open + s.by_status.reviewed + s.by_status.closed;
+  const hasData = Object.values(overview.data).some((n) => n > 0);
   return (
     <section aria-label="Overview" className={GRID}>
       <h1 className="sr-only">Overview</h1>
+      {refreshError && (
+        <Alert
+          tone="warn"
+          className="col-span-12"
+          title="Couldn't refresh the overview"
+          actions={
+            <Button size="sm" icon="refresh" onClick={reload}>
+              Retry
+            </Button>
+          }
+        >
+          Showing the last numbers read. {refreshError}
+        </Alert>
+      )}
       <Banners projectId={projectId} banners={overview.banners} />
       <KpiRow kpis={buildKpis(overview, scale, projectId, today)} />
-      <MapHero projectId={projectId} heroMapId={overview.hero_map_id} />
+      <MapHero projectId={projectId} heroMapId={overview.hero_map_id} hasData={hasData} />
       <div className="col-span-12 flex flex-col gap-3.5 lg:col-span-4">
         <SeverityBars rows={severityRows(s, scale, projectId)} />
         <RunningJobs projectId={projectId} />

@@ -10,6 +10,7 @@ import { pushLog } from "@/app/diagnostics";
 import { AddDataButton } from "@/data/AddDataButton";
 import { formatFindingNumber } from "@/findings/format";
 import { findingPath } from "@/findings/links";
+import { topLevel } from "@/findings/severity";
 import { scaleBar, toOl } from "@/maps/grid";
 import { MapView } from "@/maps/MapView";
 import { useChangesStore } from "@/store/changes";
@@ -46,14 +47,17 @@ function Pin({
   placed,
   index,
   scale,
+  topLevelNo,
 }: {
   projectId: string;
   placed: Placed;
   index: number;
   scale: readonly SeverityLevel[];
+  /** The scale's highest level, worked out once for all pins; null for an empty scale. */
+  topLevelNo: number | null;
 }) {
   const level = scale.find((l) => l.level === placed.pin.severity);
-  const top = scale.length > 0 && level?.level === Math.max(...scale.map((l) => l.level));
+  const top = level !== undefined && level.level === topLevelNo;
   const label = `${formatFindingNumber(placed.pin.number)} · ${level?.name ?? "No severity"}`;
   return (
     <Link
@@ -100,15 +104,28 @@ function Legend({ scale }: { scale: readonly SeverityLevel[] }) {
   );
 }
 
-/** F §9.1 map hero: the newest ready map as tiles, locked until clicked, with open-finding pins. */
-export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId: string | null }) {
+/**
+ * F §9.1 map hero: the newest ready map as tiles, locked until clicked, with open-finding pins.
+ * `hasData`: the project holds any data (from the Overview payload), so an empty hero says there is
+ * nothing located to show rather than asking for data.
+ */
+export function MapHero({
+  projectId,
+  heroMapId,
+  hasData,
+}: {
+  projectId: string;
+  heroMapId: string | null;
+  hasData: boolean;
+}) {
   const api = useApi();
   const { baseUrl, token } = useBackend();
   const navigate = useNavigate();
   const scale = useSeverityScale();
   const revision = useChangesStore((s) => s.findingsRevision);
   const [readRevision, setReadRevision] = useState(revision);
-  const [pins, setPins] = useState<{ projectId: string; items: PinInput[] } | null>(null);
+  // `failed`: the last read failed. A failed refresh keeps the pins already on screen.
+  const [pins, setPins] = useState<{ projectId: string; items: PinInput[]; failed: boolean } | null>(null);
   const [geo, setGeo] = useState<{ id: string; map: GeoMap | null } | null>(null);
   const [ol, setOl] = useState<OlMap | null>(null);
   // The whole view, a new object on every `moveend`: a resize keeps the resolution but moves the
@@ -131,11 +148,16 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
       limit: HERO_PIN_LIMIT,
     })
       .then((page) => {
-        if (!cancelled) setPins({ projectId, items: pinsFromFindings(page.items) });
+        if (!cancelled) setPins({ projectId, items: pinsFromFindings(page.items), failed: false });
       })
       .catch((e: unknown) => {
         pushLog(`hero pins unavailable: ${messageOf(e, String(e))}`);
-        if (!cancelled) setPins({ projectId, items: [] });
+        if (!cancelled)
+          setPins((prev) =>
+            prev?.projectId === projectId
+              ? { ...prev, failed: true }
+              : { projectId, items: [], failed: true },
+          );
       });
     return () => {
       cancelled = true;
@@ -159,6 +181,8 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
   }, [api, projectId, heroMapId]);
 
   const items = pins?.projectId === projectId ? pins.items : null;
+  const pinsFailed = pins?.projectId === projectId && pins.failed && pins.items.length === 0;
+  const topLevelNo = topLevel(scale)?.level ?? null;
   const map = heroMapId && geo?.id === heroMapId ? geo.map : null;
   const mapPending = Boolean(heroMapId) && geo?.id !== heroMapId;
 
@@ -178,6 +202,21 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
     return (
       <GlassPanel variant="pane" className={frame}>
         <Skeleton className="absolute inset-0" />
+      </GlassPanel>
+    );
+
+  if (!map && items.length === 0 && (hasData || pinsFailed))
+    return (
+      <GlassPanel variant="pane" className={cx(frame, "grid place-items-center")}>
+        {pinsFailed ? (
+          <EmptyState icon="map" title="The finding pins could not be loaded">
+            They are read again when findings change. The rest of the Overview is unaffected.
+          </EmptyState>
+        ) : (
+          <EmptyState icon="map" title="No open findings with a location">
+            Open findings from geotagged photos, maps and point clouds appear here as pins.
+          </EmptyState>
+        )}
       </GlassPanel>
     );
 
@@ -230,10 +269,20 @@ export function MapHero({ projectId, heroMapId }: { projectId: string; heroMapId
       />
       {/* Most severe first from the server: pop in that order, but paint them last so they sit on top. */}
       {placed
-        .map((p, i) => <Pin key={p.pin.id} projectId={projectId} placed={p} index={i} scale={scale} />)
+        .map((p, i) => (
+          <Pin
+            key={p.pin.id}
+            projectId={projectId}
+            placed={p}
+            index={i}
+            scale={scale}
+            topLevelNo={topLevelNo}
+          />
+        ))
         .reverse()}
       <GlassPanel variant="float" className="absolute left-3 top-3 z-[2] px-2.5 py-1.5 text-xs">
         {map ? `${map.name}${map.captured_on ? ` · ${map.captured_on}` : ""}` : "Open findings by location"}
+        {pinsFailed && " · pins could not be loaded"}
       </GlassPanel>
       <Legend scale={scale} />
       {bar && (

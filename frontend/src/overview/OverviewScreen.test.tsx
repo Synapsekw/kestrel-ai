@@ -13,7 +13,11 @@ import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
 import { OverviewScreen } from "./OverviewScreen";
 
-vi.mock("./MapHero", () => ({ MapHero: () => <div data-testid="map-hero" /> }));
+vi.mock("./MapHero", () => ({
+  MapHero: ({ hasData }: { hasData: boolean }) => (
+    <div data-testid="map-hero" data-has-data={String(hasData)} />
+  ),
+}));
 vi.mock("@/app/effects", async (orig) => ({
   ...(await orig<object>()),
   runAutoProbe: vi.fn(async () => null),
@@ -81,6 +85,34 @@ describe("OverviewScreen", () => {
     expect(jobsQ.get("limit")).toBe("10");
   });
 
+  it("tells the map hero whether the project holds any data", async () => {
+    renderOverview(fullOverview);
+    expect(await screen.findByTestId("map-hero")).toHaveAttribute("data-has-data", "true");
+  });
+
+  it("keeps the last dashboard with a Retry notice when a refresh fails", async () => {
+    let fail = false;
+    const requests = renderOverview({
+      method: "GET",
+      path: /\/overview$/,
+      status: () => (fail ? 500 : 200),
+      body: () => (fail ? errorBody("internal", "database is locked") : fullOverview),
+    });
+    expect(await screen.findByText("Open findings")).toBeInTheDocument();
+    fail = true;
+    act(() => useChangesStore.getState().bumpFindings());
+    expect(
+      await screen.findByText("Couldn't refresh the overview", {}, { timeout: 2000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Open findings")).toBeInTheDocument();
+    expect(screen.getByTestId("map-hero")).toBeInTheDocument();
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.queryByText("Couldn't refresh the overview")).toBeNull());
+    expect(overviewReads(requests)).toHaveLength(3);
+    expect(screen.getByText("Open findings")).toBeInTheDocument();
+  });
+
   it("says what to do on an empty project", async () => {
     renderOverview(emptyOverview, [
       { method: "GET", path: /\/findings$/, body: { items: [], next_cursor: null } },
@@ -92,6 +124,7 @@ describe("OverviewScreen", () => {
       ),
     ).toBeInTheDocument();
     expect(screen.getByText("Nothing is running.")).toBeInTheDocument();
+    expect(screen.getByTestId("map-hero")).toHaveAttribute("data-has-data", "false");
   });
 
   it("lists this project's running job with its progress", async () => {
@@ -166,13 +199,20 @@ describe("OverviewScreen", () => {
   it("re-reads once after a burst of finding changes", async () => {
     const requests = renderOverview(fullOverview);
     await screen.findByText("Open findings");
-    act(() => {
-      useChangesStore.getState().bumpFindings();
-      useChangesStore.getState().bumpFindings();
-      useChangesStore.getState().bumpFindings();
-    });
-    await waitFor(() => expect(overviewReads(requests)).toHaveLength(2), { timeout: 2000 });
-    await new Promise((r) => setTimeout(r, 600));
-    expect(overviewReads(requests)).toHaveLength(2);
+    // Fake timers: only the test moves the clock, so a stalled runner cannot split the burst.
+    vi.useFakeTimers();
+    try {
+      act(() => {
+        useChangesStore.getState().bumpFindings();
+        useChangesStore.getState().bumpFindings();
+        useChangesStore.getState().bumpFindings();
+      });
+      await act(() => vi.advanceTimersByTimeAsync(399));
+      expect(overviewReads(requests)).toHaveLength(1);
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      expect(overviewReads(requests)).toHaveLength(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

@@ -53,16 +53,19 @@ export function useOverview(projectId: string) {
           pushLog(`recent findings unavailable: ${messageOf(r.reason, String(r.reason))}`);
         if (a.status === "rejected")
           pushLog(`activity unavailable: ${messageOf(a.reason, String(a.reason))}`);
-        setLoaded({
+        if (o.status === "rejected")
+          pushLog(`overview unavailable: ${messageOf(o.reason, String(o.reason))}`);
+        setLoaded((prev) => ({
           projectId,
-          overview: o.status === "fulfilled" ? o.value : null,
+          // A failed background re-read keeps the last good payload on screen (with a notice).
+          overview: o.status === "fulfilled" ? o.value : prev?.projectId === projectId ? prev.overview : null,
           recent: r.status === "fulfilled" ? r.value.items : [],
           activity: a.status === "fulfilled" ? a.value.items : [],
           recentFailed: r.status === "rejected",
           activityFailed: a.status === "rejected",
           error: o.status === "rejected" ? messageOf(o.reason, "could not load the overview") : null,
           code: o.status === "rejected" ? codeOf(o.reason) : null,
-        });
+        }));
       });
     }, delay);
     return () => {
@@ -80,13 +83,17 @@ export function useOverview(projectId: string) {
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
   const current = loaded?.projectId === projectId ? loaded : null;
+  const kept = Boolean(current?.overview);
   return {
     overview: current?.overview ?? null,
     recent: current?.recent ?? [],
     activity: current?.activity ?? [],
     recentFailed: current?.recentFailed ?? false,
     activityFailed: current?.activityFailed ?? false,
-    error: current?.error ?? null,
+    /** The overview read failed and nothing is on screen: the whole page is an Alert. */
+    error: kept ? null : (current?.error ?? null),
+    /** A re-read failed while an earlier payload is still shown. */
+    refreshError: kept ? (current?.error ?? null) : null,
     code: current?.code ?? null,
     loading: current === null,
     reload,
