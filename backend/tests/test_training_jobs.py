@@ -329,3 +329,68 @@ def test_a_run_whose_weights_are_already_in_the_library_returns_that_model(
     assert results[1]["model_id"] == results[0]["model_id"]
     trained = [m for m in client.get(f"{LIB}/models").json()["items"] if m["origin"] == "trained"]
     assert [m["name"] for m in trained] == ["first"]
+
+
+# ------------------------------------------------ one export at a time (review fix round 1)
+
+
+def test_an_export_is_refused_while_a_train_job_names_the_dataset(client, app, built):
+    """A new export would replace the folder the training reads: 409 `job_running`, no job queued."""
+    with app.state.library.session() as s:
+        job = Job(type="train", state="queued", params={"dataset_id": built["id"]}, log_path="")
+        s.add(job)
+        s.flush()
+        job_id = job.id
+    for state in ("queued", "running"):
+        with app.state.library.session() as s:
+            s.get(Job, job_id).state = state
+        r = client.post(f"{LIB}/datasets/{built['id']}/export")
+        assert r.status_code == 409 and r.json()["error"]["code"] == "job_running", r.text
+    assert client.get(f"{LIB}/jobs", params={"type": "dataset"}).json()["items"] == []
+
+
+def test_a_train_does_not_start_a_second_export_while_another_job_writes_it(
+    client, app, built, base_model, monkeypatch
+):
+    """The export began after the run was accepted: the job fails clearly instead of racing it."""
+    from app.library.datasets import service as datasets
+
+    lib = app.state.library
+    with lib.session() as s:
+        other = Job(type="dataset", state="running", params={"dataset_id": built["id"]}, log_path="")
+        s.add(other)
+        s.flush()
+        other_id = other.id
+        run = TrainingRun(
+            name="late", dataset_id=built["id"], base_model_id=base_model.id, params={}, state="queued"
+        )
+        s.add(run)
+        s.flush()
+        run_id = run.id
+    datasets.mark_export_queued(lib, built["id"], other_id)
+    exports: list[str] = []
+    monkeypatch.setattr("app.training.jobs.export_dataset", lambda ctx, d, p: exports.append(d))
+    params = {**train_body(built["id"], base_model.id, name="late"), "training_run_id": run_id}
+    job = app.state.jobs.submit(lib, "train", params)
+    done = wait_library_job(client, job.id)
+    assert done["state"] == "failed" and "being exported by another job" in done["error"]
+    assert exports == []
+    with lib.session() as s:
+        assert s.get(LibraryDataset, built["id"]).export_job_id == other_id
+    assert client.get(f"{RUNS}/{run_id}").json()["state"] == "failed"
+
+
+def test_a_failing_chained_export_fails_the_run_and_leaves_no_export_building(
+    client, built, base_model, use_fake_trainer, monkeypatch
+):
+    use_fake_trainer()
+
+    def boom(*a, **k):
+        raise RuntimeError("disk gone")
+
+    monkeypatch.setattr("app.library.datasets.export._place", boom)
+    started = start(client, built["id"], base_model.id)
+    done = wait_library_job(client, started["job"]["id"])
+    assert done["state"] == "failed" and "disk gone" in done["error"]
+    assert client.get(f"{RUNS}/{started['training_run']['id']}").json()["state"] == "failed"
+    assert client.get(f"{LIB}/datasets/{built['id']}").json()["export_state"] == "failed"

@@ -36,10 +36,10 @@ def _dataset(lib, dataset_id: str) -> LibraryDataset:
         return row
 
 
-def _export_ready(lib, dataset: LibraryDataset) -> bool:
+def _export_state(lib, dataset: LibraryDataset) -> str:
     with lib.session() as s:
         jobs = job_states(s, [dataset.export_job_id])
-    return effective_export_state(lib, dataset, jobs) == "ready"
+    return effective_export_state(lib, dataset, jobs)
 
 
 def _single_project(lib, dataset: LibraryDataset) -> dict:
@@ -92,6 +92,15 @@ def _cancelled_before_start(ctx: JobContext) -> None:
     runs.finish(ctx.project, ctx.params["training_run_id"], "cancelled")
 
 
+def _settle(ctx: JobContext, run_id: str, state: str) -> None:
+    """Record how the run ended without masking the error that ended it: a failing write is
+    logged, and the run then reads its state through the job row (decision 5)."""
+    try:
+        runs.finish(ctx.project, run_id, state)
+    except Exception:
+        ctx.log.exception("could not record training run %s as %s", run_id, state)
+
+
 @register_job_type("train", on_cancelled_before_start=_cancelled_before_start)
 def run_train(ctx: JobContext) -> dict:
     lib, run_id = ctx.project, ctx.params["training_run_id"]
@@ -99,10 +108,10 @@ def run_train(ctx: JobContext) -> dict:
     try:
         result = _train(ctx)
     except JobCancelled:
-        runs.finish(lib, run_id, "cancelled")
+        _settle(ctx, run_id, "cancelled")
         raise
     except BaseException:
-        runs.finish(lib, run_id, "failed")
+        _settle(ctx, run_id, "failed")
         raise
     runs.finish(lib, run_id, "succeeded", model_id=result["model_id"], metrics=result["metrics"])
     return result
@@ -117,7 +126,15 @@ def _train(ctx: JobContext) -> dict:
     dataset = _dataset(lib, p["dataset_id"])
 
     progress = ctx.progress
-    if dataset.origin == "built" and not _export_ready(lib, dataset):
+    export_state = _export_state(lib, dataset) if dataset.origin == "built" else "ready"
+    if export_state == "building":
+        # Another live job is writing this export. A second export would replace the folder under
+        # it (and it under us), so this run stops rather than race it.
+        raise JobFailure(
+            f"Dataset {dataset.name} is being exported by another job; start this run again when it "
+            "has finished."
+        )
+    if export_state != "ready":
         ctx.log.info("exporting dataset %s before training", dataset.name)
         export_dataset(ctx, dataset.id, lambda f, m: ctx.progress(EXPORT_SHARE * f, m))
         dataset = _dataset(lib, dataset.id)

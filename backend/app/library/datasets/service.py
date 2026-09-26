@@ -253,20 +253,27 @@ def list_datasets(
         return _outs(lib, s, rows), next_cursor
 
 
+def live_job_naming(s, dataset_id: str) -> Job | None:
+    """A queued or running library job whose params name the dataset (`dataset_build`, `dataset` or
+    `train`), or None. Job rows in that state are few; they are read, not the dataset's items."""
+    for job in s.execute(select(Job).where(Job.state.in_(LIVE))).scalars():
+        if (job.params or {}).get("dataset_id") == dataset_id:
+            return job
+    return None
+
+
 def delete_dataset(lib: LibraryHandle, dataset_id: str) -> None:
     """Drop the rows and the export folder; never a project image, never a legacy folder.
 
     Refused with 409 `job_running` while a queued or running `dataset_build`, `dataset` or `train`
-    job names the dataset (decision 16, amendment A3). Job rows in that state are few; they are
-    read, not the dataset's items.
+    job names the dataset (decision 16, amendment A3).
     """
     with lib.session() as s:
         row = s.get(LibraryDataset, dataset_id)
         if row is None:
             raise not_found("dataset", dataset_id)
-        for job in s.execute(select(Job).where(Job.state.in_(LIVE))).scalars():
-            if (job.params or {}).get("dataset_id") == dataset_id:
-                raise AppError("job_running", f"Dataset {row.name} is in use by a running job.", 409)
+        if live_job_naming(s, dataset_id) is not None:
+            raise AppError("job_running", f"Dataset {row.name} is in use by a running job.", 409)
         folder = own_export_folder(lib, row)
         s.execute(delete(LibraryDatasetItem).where(LibraryDatasetItem.dataset_id == dataset_id))
         s.execute(delete(LibraryDatasetSource).where(LibraryDatasetSource.dataset_id == dataset_id))
@@ -316,7 +323,9 @@ def list_items(
 
 def check_exportable(lib: LibraryHandle, dataset_id: str) -> None:
     """404 unknown; 422 `task_not_supported` for segment; 409 `conflict` for a legacy dataset,
-    `not_ready` for one not built, `job_running` while its export is being written (amendment A3)."""
+    `not_ready` for one not built, `job_running` while its export is being written or while a
+    queued or running job (a `train`) names it: a new export would replace the folder that job
+    reads (amendment A3)."""
     with lib.session() as s:
         row = s.get(LibraryDataset, dataset_id)
         if row is None:
@@ -324,6 +333,8 @@ def check_exportable(lib: LibraryHandle, dataset_id: str) -> None:
         jobs = job_states(s, [row.job_id, row.export_job_id])
         state, export_state = effective_state(row, jobs), effective_export_state(lib, row, jobs)
         task, origin, name = row.task, row.origin, row.name
+        in_use = live_job_naming(s, dataset_id)
+        in_use_type = in_use.type if in_use is not None else None
     if task == "segment":
         raise AppError("task_not_supported", SEGMENT_NOT_SUPPORTED, 422)
     if origin == "legacy":
@@ -332,6 +343,8 @@ def check_exportable(lib: LibraryHandle, dataset_id: str) -> None:
         raise AppError("not_ready", f"Dataset {name} is {state}; export it once it is built.", 409)
     if export_state == "building":
         raise AppError("job_running", f"The export of {name} is already being written.", 409)
+    if in_use_type is not None:
+        raise AppError("job_running", f"Dataset {name} is in use by a running {in_use_type} job.", 409)
 
 
 def mark_export_queued(lib: LibraryHandle, dataset_id: str, job_id: str) -> None:
