@@ -3206,7 +3206,7 @@ export interface components {
             error: {
                 /**
                  * @description machine-readable: unauthorized, not_found, validation_error, already_exists,
-                 *     class_in_use, conflict, not_implemented, provider_error, internal_error,
+                 *     conflict, not_implemented, provider_error, internal_error,
                  *     library_unavailable (503: the model library could not
                  *     be opened), model_unavailable (409: the library model's weights file is missing),
                  *     unmapped_classes (422: the run's model has classes with no project class and no

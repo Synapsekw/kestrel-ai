@@ -43,6 +43,11 @@ every unit that merges before SH, for a reason none of them owns.
 - Negative: three transitional allowances live in `test_contract.py` until the last backend unit
   lands, and a real backend after BK sends no `kind`, so the pre-SH screens treat every project as
   a training project until SH merges.
+- Operations that also return the widened `Project`, `ClassDef` or `LibraryModel` schemas
+  (`openProject`, `getLibraryModel`, `updateLibraryModel`, and the deprecated
+  `listDatasets`/`getDataset`/`createDataset`) pass today only because the contract test never gets
+  a populated 200 from them; a unit whose fixtures make one of them answer 200 before BK, BC and BM
+  have landed adds it to `BACKEND_PENDING`.
 - Follow-ups: the hand-off table in `docs/superpowers/plans/2026-09-26-foundation-c0-contract.md`.
 
 ## Related
