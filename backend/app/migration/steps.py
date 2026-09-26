@@ -17,6 +17,8 @@ import threading
 
 from sqlalchemy import text
 
+from app.library.datasets.legacy import register_legacy_dataset
+from app.library.db import LibraryDataset
 from app.migration import ports
 from app.migration.pipeline import Step, StepContext
 from app.migration.rekey import rekey_area_counts, rekey_counts, remap_classes, remap_values
@@ -231,6 +233,83 @@ def library_class_maps(ctx: StepContext) -> dict:
                     f"model {model_id}: {name!r} stays mapped to {kept}; this project mapped it to {ours}"
                 )
     return {"models": len(rows), "names_added": names_added, "conflicts": conflicts, "warnings": warnings}
+
+
+class _OriginHandle:
+    """A stand-in for BM's `register_legacy_dataset`, which resolves a dataset's folder from
+    `handle.folder`. In a dry run the real handle is the copied database, which has no
+    `datasets/`; this proxy reports the ORIGINAL project folder instead, and delegates everything
+    else BM uses (`id`, `session`, `row`) to the real handle."""
+
+    def __init__(self, handle, folder):
+        self.folder, self._handle = folder, handle
+
+    @property
+    def id(self):
+        return self._handle.id
+
+    def session(self):
+        return self._handle.session()
+
+    def row(self, s):
+        return self._handle.row(s)
+
+
+def _never_built(name: str, path: str) -> str:
+    return f"dataset {name} was never built on disk ({path}); it is not carried into Models"
+
+
+def _dataset_per_class(s, dataset_id: str, id_map: dict[str, str]) -> dict[str, int]:
+    """Boxes per catalogue type for one dataset, counted in SQL (`json_each`): no row is loaded."""
+    per_class: dict[str, int] = {}
+    for old, n in s.execute(
+        text(
+            "SELECT json_extract(b.value, '$.class_id'), COUNT(*) FROM dataset_image di,"
+            " json_each(di.boxes) b WHERE di.dataset_id = :d GROUP BY 1"
+        ),
+        {"d": dataset_id},
+    ).all():
+        key = id_map.get(old, old)
+        per_class[key] = per_class.get(key, 0) + n
+    return per_class
+
+
+def legacy_datasets(ctx: StepContext) -> dict:
+    """Step 5: register each materialised project dataset in the library as a legacy dataset,
+    through BM's `register_legacy_dataset`, so it stays trainable from Models (spec §6.1, §11.4,
+    §12.1). The folder is found under the original project folder (`ctx.env.origin_folder`), never
+    a dry run's copy, through the `_OriginHandle` proxy above. BM is idempotent on `legacy_path`,
+    but the check-then-register-then-fill sequence for one dataset still runs under `STORE_LOCK`:
+    two workers racing here would both pass the pre-check and collide on the unique dataset name.
+    BM leaves `counts.per_class` empty; this step fills it (bounded `json_each` SQL) in the same
+    library session it reads the new row's name back from."""
+    library = ports.require_library(ctx.env.library)
+    s = ctx.session
+    origin = _OriginHandle(ctx.handle, ctx.env.origin_folder)
+    id_map = dict(s.execute(text("SELECT old_class_id, type_id FROM class_id_map")).all())
+    rows = s.execute(text("SELECT id, name, path FROM dataset ORDER BY created_at, id")).mappings().all()
+    names, already, warnings = [], 0, []
+    for d in rows:
+        root = (ctx.env.origin_folder / d["path"]).resolve()
+        if not (root / "data.yaml").is_file():
+            warnings.append(_never_built(d["name"], d["path"]))
+            continue
+        with STORE_LOCK:
+            with library.session() as ls:
+                existing = ports.legacy_dataset_by_path(ls, str(root))
+            if existing is not None:
+                already += 1
+                continue
+            dataset_id = register_legacy_dataset(library, origin, d["id"])
+            if dataset_id is None:
+                warnings.append(_never_built(d["name"], d["path"]))
+                continue
+            with library.session() as ls:
+                row = ls.get(LibraryDataset, dataset_id)
+                if not row.counts.get("per_class"):
+                    row.counts = {**row.counts, "per_class": _dataset_per_class(s, d["id"], id_map)}
+                names.append(row.name)
+    return {"registered": len(names), "names": names, "already_registered": already, "warnings": warnings}
 
 
 PIPELINE: tuple[Step, ...] = ()
