@@ -1,0 +1,25 @@
+import type { RouteObject } from "react-router-dom";
+import { Redirect } from "./Redirect";
+
+/** Old project addresses (spec 2026-09-26-foundation section 5.3), relative to `p/:projectId`. */
+export const legacyProjectRedirects: RouteObject[] = [
+  { path: "data", element: <Redirect to={(p) => `/p/${p.projectId}/images`} /> },
+  { path: "edit/:imageId", element: <Redirect to={(p) => `/p/${p.projectId}/images/${p.imageId}`} /> },
+  { path: "label", element: <Redirect to={(p) => `/p/${p.projectId}/images?filter=unlabeled`} /> },
+  { path: "past", element: <Redirect to={(p) => `/p/${p.projectId}/overview`} /> },
+  { path: "past/maps/:mapId", element: <Redirect to={(p) => `/p/${p.projectId}/maps/${p.mapId}`} /> },
+  { path: "sources", element: <Redirect to={(p) => `/p/${p.projectId}/maps`} /> },
+  { path: "surveys", element: <Redirect to={(p) => `/p/${p.projectId}/analytics`} /> },
+  { path: "volumes", element: <Redirect to={(p) => `/p/${p.projectId}/measurements`} /> },
+  {
+    path: "volumes/:measurementId",
+    element: <Redirect to={(p) => `/p/${p.projectId}/measurements/${p.measurementId}`} />,
+  },
+  { path: "datasets", element: <Redirect to={(p) => `/models/datasets?project=${p.projectId}`} /> },
+  { path: "train", element: <Redirect to={() => "/models/training"} /> },
+];
+
+/** Old app addresses. */
+export const legacyAppRedirects: RouteObject[] = [
+  { path: "library", element: <Redirect to={() => "/models/library"} /> },
+];

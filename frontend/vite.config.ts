@@ -36,5 +36,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/test-setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
+    // Vitest's SSR-style module resolution picks konva's "main" (a Node build that requires the
+    // native `canvas` package, not installed here) instead of its "browser" build; importing a
+    // route table that reaches the editor screen pulls konva in even when nothing renders it. Only
+    // the bare specifier is redirected — subpaths like "konva/lib/Core.js" already resolve to
+    // files that never touch `canvas`.
+    alias: [{ find: /^konva$/, replacement: path.resolve(__dirname, "node_modules/konva/lib/index.js") }],
   },
 });
