@@ -1,9 +1,10 @@
-import { Navigate, type RouteObject } from "react-router-dom";
+import type { RouteObject } from "react-router-dom";
 import { InterimJobs } from "@/app/InterimJobs";
 import { SectionPlaceholder } from "@/app/InterimScreens";
 import { AboutScreen, Later } from "@/app/lazyScreens";
 import { LibraryScreen } from "@/library/LibraryScreen";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
+import { Redirect } from "./Redirect";
 
 const datasets = (
   <SectionPlaceholder title="Datasets" icon="datasets">
@@ -23,7 +24,7 @@ const catalogue = (
 
 /** The app-level routes (spec 2026-09-26-foundation section 5.3). S2 adds or swaps entries here only. */
 export const appRoutes: RouteObject[] = [
-  { path: "models", element: <Navigate to="/models/library" replace /> },
+  { path: "models", element: <Redirect to={() => "/models/library"} /> },
   { path: "models/library", element: <LibraryScreen /> },
   { path: "models/datasets", element: datasets },
   { path: "models/datasets/:datasetId", element: datasets },

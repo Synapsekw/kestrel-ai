@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { Navigate, RouterProvider, createMemoryRouter, matchRoutes } from "react-router-dom";
+import { RouterProvider, createMemoryRouter, matchRoutes, type RouteObject } from "react-router-dom";
+import { PROJECT_TABS, SECONDARY_PAGES } from "@/app/routeModel";
 import { appRoutes } from "./appRoutes";
 import { legacyAppRedirects, legacyProjectRedirects } from "./legacyRedirects";
 import { routeTree } from "./tree";
@@ -27,8 +28,11 @@ const I = "10000000-5555-4000-8000-000000000001";
 /** Every old path of spec section 5.3 and where it must land, query strings included. */
 const CASES: [string, string][] = [
   ["/", "/projects"],
+  ["/?from=toast", "/projects?from=toast"],
   [`/p/${P}`, `/p/${P}/overview`],
+  [`/p/${P}?finding=f1#note`, `/p/${P}/overview?finding=f1#note`],
   ["/models", "/models/library"],
+  ["/models?model=m1", "/models/library?model=m1"],
   [`/p/${P}/data`, `/p/${P}/images`],
   [`/p/${P}/edit/${I}`, `/p/${P}/images/${I}`],
   [`/p/${P}/edit/${I}?finding=f1`, `/p/${P}/images/${I}?finding=f1`],
@@ -47,6 +51,11 @@ const CASES: [string, string][] = [
   ["/library?model=m1", "/models/library?model=m1"],
 ];
 
+// The index redirects come from the real tree, so a change to tree.tsx shows up here.
+const shellChildren = routeTree[0].children!;
+const rootIndex = shellChildren.find((r) => r.index)!;
+const projectIndex = shellChildren.find((r) => r.path === "p/:projectId")!.children!.find((r) => r.index)!;
+
 function land(start: string) {
   const models = appRoutes.find((r) => r.path === "models");
   const router = createMemoryRouter(
@@ -54,15 +63,12 @@ function land(start: string) {
       {
         path: "/",
         children: [
-          { index: true, element: <Navigate to="/projects" replace /> },
+          rootIndex as RouteObject,
           ...(models ? [models] : []),
           ...legacyAppRedirects,
           {
             path: "p/:projectId",
-            children: [
-              { index: true, element: <Navigate to="overview" replace /> },
-              ...legacyProjectRedirects,
-            ],
+            children: [projectIndex as RouteObject, ...legacyProjectRedirects],
           },
           { path: "*", element: <p>landed</p> },
         ],
@@ -83,11 +89,11 @@ describe("routes", () => {
   it.each(CASES)("%s lands on %s", async (from, to) => {
     const router = land(from);
     await screen.findByText("landed");
-    const { pathname, search } = router.state.location;
-    expect(`${pathname}${search}`).toBe(to);
+    const { pathname, search, hash } = router.state.location;
+    expect(`${pathname}${search}${hash}`).toBe(to);
   });
 
-  it.each(CASES.map(([, to]) => to.split("?")[0]))("%s is a real screen in the tree", (path) => {
+  it.each(CASES.map(([, to]) => to.split(/[?#]/)[0]))("%s is a real screen in the tree", (path) => {
     const matches = matchRoutes(routeTree, path);
     expect(matches).not.toBeNull();
     const last = matches!.at(-1)!.route;
@@ -96,20 +102,12 @@ describe("routes", () => {
   });
 
   it.each([
-    `/p/${P}/overview`,
+    ...[...PROJECT_TABS, ...SECONDARY_PAGES].map((e) => `/p/${P}/${e.id}`),
     `/p/${P}/images/${I}`,
     `/p/${P}/maps/m1`,
     `/p/${P}/clouds/c1`,
     `/p/${P}/findings/f1`,
     `/p/${P}/measurements/v1`,
-    `/p/${P}/reports`,
-    `/p/${P}/settings`,
-    `/p/${P}/runs`,
-    `/p/${P}/review`,
-    `/p/${P}/analytics`,
-    `/p/${P}/site-areas`,
-    `/p/${P}/query`,
-    `/p/${P}/export`,
     "/models/datasets/d1",
     "/models/training/r1",
     "/catalogue",
