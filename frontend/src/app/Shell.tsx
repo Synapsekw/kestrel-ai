@@ -16,6 +16,7 @@ import { Palette } from "./Palette";
 import { ProjectTabs } from "./ProjectTabs";
 import { Rail } from "./Rail";
 import { routeInfo } from "./routeModel";
+import { ShortcutSheet } from "./ShortcutSheet";
 import { TopBar } from "./TopBar";
 import { usePaletteShortcut } from "./usePaletteShortcut";
 
@@ -91,6 +92,7 @@ export function Shell() {
         <AddDataHost project={project} />
       </div>
       <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} project={project} />
+      <ShortcutSheet />
       <Toaster />
     </div>
   );
