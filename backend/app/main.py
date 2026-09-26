@@ -34,6 +34,7 @@ def project_opened(handle, runner) -> None:
     from app.jobs import startup
     from app.library import adoption
     from app.maps import startup as maps_startup
+    from app.migration import gate as migration_gate
     from app.project_agent import store as agent_store
 
     log = logging.getLogger(__name__)
@@ -42,6 +43,8 @@ def project_opened(handle, runner) -> None:
         return lambda: importlib.import_module(module).sweep_interrupted(handle, runner)
 
     for step, run in (
+        # A project below the foundation schema queues its upgrade (foundation spec §11.3).
+        ("project upgrade", lambda: migration_gate.ensure_submitted(handle, runner)),
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
@@ -110,6 +113,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 sweep_orphans(app.state.library, app.state.jobs)
             except Exception:
                 logging.getLogger(__name__).exception("orphan job sweep failed for the model library")
+        # Upgrade recent projects that predate the foundation schema in the background (spec §11.3).
+        # After the library (and, once unit BC has landed, the catalogue) opened.
+        try:
+            from app.migration import startup as migration_startup
+
+            migration_startup.submit_pending(app)
+        except Exception:
+            logging.getLogger(__name__).exception("queuing project upgrades failed")
         # The project agent's turn loops run as tasks on this event loop; the model call is a seam
         # (`agent_llm`) so tests can script the model without reaching a provider.
         from app.project_agent import llm as agent_llm

@@ -233,4 +233,9 @@ class ProjectRegistry:
 
 
 def get_project(projectId: str, request: Request) -> ProjectHandle:  # noqa: N803 - path param from the contract
-    return request.app.state.projects.get(projectId)
+    handle = request.app.state.projects.get(projectId)
+    # Imported here: the migration job module imports the job runner, which imports this module.
+    from app.migration.gate import require_ready
+
+    require_ready(handle, request.app.state.jobs)
+    return handle
