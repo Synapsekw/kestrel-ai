@@ -286,9 +286,17 @@ def create_box(
 def update_box(
     boxId: str,  # noqa: N803
     body: BoxUpdate,
+    confirm_finding_delete: bool = Query(False),
     handle: ProjectHandle = Depends(get_project),
 ) -> BoxOut:
-    return BoxOut.from_row(boxes.update_box(handle, boxId, **body.model_dump(exclude_unset=True)))
+    return BoxOut.from_row(
+        boxes.update_box(
+            handle,
+            boxId,
+            confirm_finding_delete=confirm_finding_delete,
+            **body.model_dump(exclude_unset=True),
+        )
+    )
 
 
 @router.delete("/boxes/{boxId}", status_code=204)

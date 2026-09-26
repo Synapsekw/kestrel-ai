@@ -9,6 +9,7 @@ Everything a write checks is checked before anything changes, so `bulk` can skip
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import replace
 from datetime import datetime
 from typing import Any
 
@@ -18,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.catalogue import project_types
 from app.catalogue import service as catalogue_service
 from app.db.base import utcnow
-from app.db.models import Finding, FindingAttachment, FindingComment, ProjectType
+from app.db.models import Box, Finding, FindingAttachment, FindingComment, ProjectType
 from app.errors import AppError, not_found
 from app.findings import activity, anchors, counts, events, numbers, trash
 from app.findings.anchors import AnchorIn
@@ -192,6 +193,10 @@ def patch_in_session(
         row.severity = fields["severity"]
     if pt is not None:
         row.type_id = pt.type_id
+        if row.anchor_kind == "image" and row.annotation_id:
+            from app.datasets import boxes
+
+            boxes.reclass_in_session(s, row.annotation_id, pt.type_id)
     if "note" in fields and fields["note"] is not None:
         row.note = fields["note"]
     for key, value in moved.items():
@@ -205,12 +210,20 @@ def patch_in_session(
 
 def delete_in_session(s: Session, *, project_id: str, finding_id: str, delete_annotation: bool = True) -> str:
     """Delete one finding; its attachment and comment rows go by ON DELETE CASCADE. The caller moves
-    its files to the trash after commit (`trash.move`). `delete_annotation` is final in the
-    signature now; Task 11 makes it delete the box of an image anchor."""
+    its files to the trash after commit (`trash.move`). With `delete_annotation` an image finding's
+    box goes too (an annotation on a defect type IS the finding's geometry, section 8.5); the box
+    hooks pass False, since they are deleting or changing that box themselves."""
     row = get_or_404(s, finding_id)
+    annotation_id = row.annotation_id
     counts.change(s, counts.key_of(row), None)
     s.delete(row)
     s.flush()  # the finding goes before the box it references
+    if delete_annotation and annotation_id:
+        from app.datasets import boxes  # boxes imports this package's hooks
+
+        box = s.get(Box, annotation_id)
+        if box is not None:
+            boxes.delete_box_in_session(s, box)
     events.mark_changed(s, project_id, [finding_id])
     return finding_id
 
@@ -227,9 +240,35 @@ def delete_for_anchor(s: Session, *, project_id: str, anchor_kind: str, target_i
     return ids
 
 
+def _image_annotation(s: Session, handle, anchor: AnchorIn, type_id: str) -> AnchorIn:
+    """`POST /findings` on an image: draw its box (`box`), or adopt a ground-truth box
+    (`annotation_id`), whose type becomes the finding's type."""
+    from app.datasets import boxes
+    from app.findings.annotations import GROUND_TRUTH  # annotations imports this module
+
+    defect_type(s, handle.catalogue, type_id)  # refuse an object type before a box is drawn
+    if anchor.box is not None:
+        box = boxes.create_box_in_session(s, handle, anchor.image_id, type_id, **anchor.box)
+        return replace(anchor, annotation_id=box.id, box=None)
+    box = s.get(Box, anchor.annotation_id) if anchor.annotation_id else None
+    if box is not None and box.review_state not in GROUND_TRUTH:
+        raise AppError(
+            "annotation_not_reviewed",
+            "Accept or edit that detection first; a pending one is not a finding yet.",
+            409,
+            {"annotation_id": box.id},
+        )
+    if box is not None and box.class_id != type_id:
+        boxes.reclass_in_session(s, box.id, type_id)
+    return anchor
+
+
 def create_finding(handle, **kw) -> Finding:
-    """`create_in_session` in its own transaction (the HTTP route)."""
+    """`create_in_session` in its own transaction (the HTTP route); an image anchor may draw or adopt
+    its box first (spec section 8.3)."""
     with handle.session() as s:
+        if kw["anchor"].kind == "image":
+            kw["anchor"] = _image_annotation(s, handle, kw["anchor"], kw["type_id"])
         row = create_in_session(s, project_id=handle.id, catalogue=handle.catalogue, **kw)
         s.flush()
         s.expunge(row)

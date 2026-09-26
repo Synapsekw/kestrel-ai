@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.db.models import Box, DatasetImage, Image, QueryRun, Source
 from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
+from app.findings import annotations, trash
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
 
@@ -234,6 +235,8 @@ def bulk_delete(handle: ProjectHandle, image_ids: list[str]) -> int:
                 .distinct()
             ).scalars()
         )
+        # The findings go first: a finding's annotation_id foreign key refuses an orphaning DELETE.
+        trashed = annotations.on_images_deleting(s, handle.id, [r.id for r in rows])
         s.execute(delete(Box).where(Box.image_id.in_([r.id for r in rows])))
         s.execute(delete(Image).where(Image.id.in_([r.id for r in rows])))
         s.flush()
@@ -246,6 +249,7 @@ def bulk_delete(handle: ProjectHandle, image_ids: list[str]) -> int:
             source.image_count = s.execute(
                 select(func.count()).select_from(Image).where(Image.source_id == source.id)
             ).scalar_one()
+    trash.move(handle, trashed)
     for p in paths + derived:
         p.unlink(missing_ok=True)
     return len(rows)

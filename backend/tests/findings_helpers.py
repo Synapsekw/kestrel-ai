@@ -55,7 +55,17 @@ def insert_box(handle, class_id: str) -> tuple[str, str]:
         image = Image(path="images/a.jpg", width=100, height=100, source_id=src.id)
         s.add(image)
         s.flush()
-        box = Box(image_id=image.id, class_id=class_id, x=0.5, y=0.5, w=0.1, h=0.1, provenance_kind="person")
+        # A person-drawn box is ground truth (`accepted`), as boxes.create_box makes it.
+        box = Box(
+            image_id=image.id,
+            class_id=class_id,
+            x=0.5,
+            y=0.5,
+            w=0.1,
+            h=0.1,
+            provenance_kind="person",
+            review_state="accepted",
+        )
         s.add(box)
         s.flush()
         return image.id, box.id

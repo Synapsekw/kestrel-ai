@@ -1,7 +1,10 @@
-"""Box create, update, delete and bulk review (spec sections 4 and 6).
+"""Box create, update, delete and bulk review (spec sections 4 and 6), and the annotation <-> finding
+invariant (spec 2026-09-26-foundation section 8.5).
 
 Accepted and edited boxes are ground truth; unreviewed proposals are not. Editing a proposal is
-itself a review decision, so it becomes `edited` rather than staying pending.
+itself a review decision, so it becomes `edited` rather than staying pending. A ground-truth box on
+a defect type is a finding's geometry: every write below calls `app.findings.annotations` inside its
+own transaction, then moves the photos of findings it deleted to the trash after the commit.
 """
 
 from __future__ import annotations
@@ -14,10 +17,10 @@ from app.datasets.empties import clear_mark_for_ground_truth
 from app.db.models import Box, Image, QueryRun
 from app.detect.counts import Entry, apply_transition
 from app.errors import AppError, not_found
+from app.findings import annotations, trash
+from app.findings.annotations import GROUND_TRUTH
 from app.geometry import centre_of, normalise_angle
 from app.projects.service import ProjectHandle
-
-GROUND_TRUTH = ("accepted", "edited")
 
 
 def _entry(row: Box) -> Entry:
@@ -92,6 +95,44 @@ def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:
     return rows
 
 
+def create_box_in_session(
+    s,
+    handle: ProjectHandle,
+    image_id: str,
+    class_id: str,
+    x: float,
+    y: float,
+    w: float,
+    h: float,
+    angle: float = 0.0,
+    query_run_id: str | None = None,
+) -> Box:
+    """A person-drawn box in the caller's transaction, without the finding hook: `POST /findings`
+    draws its box through here and creates the finding itself."""
+    image = _image(s, image_id)
+    _check_class(handle, s, class_id)
+    angle = normalise_angle(angle)
+    _check_bounds(image, x, y, w, h, angle)
+    row = Box(
+        image_id=image_id,
+        class_id=class_id,
+        x=x,
+        y=y,
+        w=w,
+        h=h,
+        angle=angle,
+        provenance_kind="person",
+        review_state="accepted",
+        reviewed_at=datetime.now(UTC),
+        query_run_id=query_run_id,
+    )
+    s.add(row)
+    _count_transition(s, {}, query_run_id, None, _entry(row))
+    clear_mark_for_ground_truth(s, [image_id])
+    s.flush()
+    return row
+
+
 def create_box(
     handle: ProjectHandle,
     image_id: str,
@@ -104,34 +145,16 @@ def create_box(
     query_run_id: str | None = None,
 ) -> Box:
     """A person-drawn box; with `query_run_id` it is a missed object added to that photo run and
-    counts in it as verified."""
+    counts in it as verified. On a defect type it is also an open finding."""
     with handle.session() as s:
-        image = _image(s, image_id)
-        _check_class(handle, s, class_id)
-        angle = normalise_angle(angle)
-        _check_bounds(image, x, y, w, h, angle)
-        row = Box(
-            image_id=image_id,
-            class_id=class_id,
-            x=x,
-            y=y,
-            w=w,
-            h=h,
-            angle=angle,
-            provenance_kind="person",
-            review_state="accepted",
-            reviewed_at=datetime.now(UTC),
-            query_run_id=query_run_id,
-        )
-        s.add(row)
-        _count_transition(s, {}, query_run_id, None, _entry(row))
-        clear_mark_for_ground_truth(s, [image_id])
+        row = create_box_in_session(s, handle, image_id, class_id, x, y, w, h, angle, query_run_id)
+        annotations.on_box_created(s, handle.id, handle.catalogue, row)
         s.flush()
         s.expunge(row)
     return row
 
 
-def update_box(handle: ProjectHandle, box_id: str, **fields) -> Box:
+def update_box(handle: ProjectHandle, box_id: str, *, confirm_finding_delete: bool = False, **fields) -> Box:
     with handle.session() as s:
         row = s.get(Box, box_id)
         if row is None:
@@ -150,9 +173,31 @@ def update_box(handle: ProjectHandle, box_id: str, **fields) -> Box:
             row.reviewed_at = datetime.now(UTC)
             clear_mark_for_ground_truth(s, [row.image_id])
         _count_transition(s, {}, row.query_run_id, old, _entry(row))
+        trashed = annotations.on_box_changed(
+            s, handle.id, handle.catalogue, row, confirm_finding_delete=confirm_finding_delete
+        )
         s.flush()
         s.expunge(row)
+    trash.move(handle, trashed)
     return row
+
+
+def reclass_in_session(s, box_id: str, class_id: str) -> None:
+    """A finding's type change moves its box (an annotation's type is its finding's type), with the
+    photo run's counts. No finding hook runs: the finding already follows."""
+    row = s.get(Box, box_id)
+    if row is None or row.class_id == class_id:
+        return
+    old = _entry(row)
+    row.class_id = class_id
+    _count_transition(s, {}, row.query_run_id, old, _entry(row))
+
+
+def delete_box_in_session(s, row: Box) -> None:
+    """The box and its run count, without the finding hook: a finding delete calls this after it has
+    removed itself."""
+    _count_transition(s, {}, row.query_run_id, _entry(row), None)
+    s.delete(row)
 
 
 def delete_box(handle: ProjectHandle, box_id: str) -> None:
@@ -160,8 +205,9 @@ def delete_box(handle: ProjectHandle, box_id: str) -> None:
         row = s.get(Box, box_id)
         if row is None:
             raise not_found("box", box_id)
-        _count_transition(s, {}, row.query_run_id, _entry(row), None)
-        s.delete(row)
+        trashed = annotations.on_box_deleting(s, handle.id, row)
+        delete_box_in_session(s, row)
+    trash.move(handle, trashed)
 
 
 def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
@@ -169,14 +215,19 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
 
     Unknown ids and person-drawn boxes are ignored: only a model proposal has a decision to make
     or undo. Accepting an already edited box leaves it `edited` — it is ground truth either way,
-    and the state records that a person changed its geometry.
+    and the state records that a person changed its geometry. An accepted defect proposal becomes
+    a `reviewed` finding; rejecting or unreviewing it removes that finding again.
     """
     now = datetime.now(UTC)
     changed = 0
     accepted_image_ids: set[str] = set()
     runs: dict[str, QueryRun | None] = {}
+    new_findings: list[str] = []
+    trashed: list[str] = []
     with handle.session() as s:
-        for row in s.execute(select(Box).where(Box.id.in_(box_ids))).scalars():
+        # Materialised first: the hooks below query and flush on this session mid-loop.
+        rows = s.execute(select(Box).where(Box.id.in_(box_ids))).scalars().all()
+        for row in rows:
             if row.provenance_kind == "person":
                 continue
             old = _entry(row)
@@ -192,6 +243,9 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
                 if action == "accept":
                     accepted_image_ids.add(row.image_id)
             _count_transition(s, runs, row.query_run_id, old, _entry(row))
+            trashed += annotations.on_box_changed(s, handle.id, handle.catalogue, row, accepted=new_findings)
             changed += 1
         clear_mark_for_ground_truth(s, accepted_image_ids)
+        annotations.record_accepted(s, new_findings)
+    trash.move(handle, trashed)
     return changed
