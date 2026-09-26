@@ -106,7 +106,7 @@ export function EditorToolbar(p: ToolbarProps) {
               ref={focusHelp}
               aria-label="Keyboard shortcuts"
               onKeyDown={(e) => e.key === "Escape" && setKeysOpen(false)}
-              className="absolute left-3 top-full z-20 mt-1.5 max-h-[calc(100vh-180px)] w-80 max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-line bg-surface p-3 text-[13px] shadow-float"
+              className="absolute left-3 top-full z-20 mt-1.5 max-h-[calc(100vh-180px)] w-80 max-w-[calc(100%-24px)] overflow-y-auto rounded-lg border border-line bg-glass-solid p-3 text-[13px] shadow-float"
             >
               <dl className="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5">
                 {HOTKEY_HELP.map((h) => (

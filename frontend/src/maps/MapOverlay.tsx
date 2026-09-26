@@ -24,7 +24,7 @@ export function MapOverlay({
   const bar = scaleBar(resolution, geoMap.gsd_cm);
   return (
     <>
-      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-md border border-line bg-surface p-1 shadow-float">
+      <div className="absolute right-3 top-3 flex flex-col gap-1 rounded-md border border-line bg-glass-solid p-1 shadow-float">
         <IconButton icon="plus" label="Zoom in" size="sm" onClick={() => zoom(1)} />
         <IconButton icon="minus" label="Zoom out" size="sm" onClick={() => zoom(-1)} />
         <IconButton

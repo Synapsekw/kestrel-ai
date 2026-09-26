@@ -40,7 +40,7 @@ export function SiteAreaDrawBar({
   return (
     <div
       data-testid="site-area-draw"
-      className="absolute left-1/2 top-3 z-10 flex w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 flex-col gap-2 rounded-control border border-line bg-surface p-3 shadow-float"
+      className="absolute left-1/2 top-3 z-10 flex w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 flex-col gap-2 rounded-control border border-line bg-glass-solid p-3 shadow-float"
     >
       {polygon ? (
         <form

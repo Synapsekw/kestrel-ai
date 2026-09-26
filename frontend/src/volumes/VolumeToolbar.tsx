@@ -44,7 +44,7 @@ export function VolumeToolbar({
     <div
       role="toolbar"
       aria-label="Drawing tools"
-      className="flex flex-wrap gap-1 rounded-md border border-line bg-surface p-1 shadow-float"
+      className="flex flex-wrap gap-1 rounded-md border border-line bg-glass-solid p-1 shadow-float"
     >
       {TOOLS.map((t) => (
         <Button

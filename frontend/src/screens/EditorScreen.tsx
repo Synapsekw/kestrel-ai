@@ -254,7 +254,7 @@ function EditorBody({
             <Alert
               tone="info"
               role="status"
-              className="absolute inset-x-3 top-3 z-10 py-2 !text-[13px] shadow-float !animate-none"
+              className="absolute inset-x-3 top-3 z-10 py-2 !text-[13px] !bg-glass-solid shadow-float !animate-none"
             >
               {notice}
             </Alert>

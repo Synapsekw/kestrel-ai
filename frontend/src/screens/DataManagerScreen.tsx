@@ -87,7 +87,7 @@ function ShortcutsButton() {
         <div
           role="dialog"
           aria-label="Keyboard shortcuts"
-          className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-line bg-surface p-3 shadow-float animate-reveal reduce-motion:animate-none"
+          className="absolute right-0 top-full z-20 mt-1.5 w-80 rounded-lg border border-line bg-glass-solid p-3 shadow-float animate-reveal reduce-motion:animate-none"
         >
           <p className="mb-2 text-xs font-medium text-muted">In the image grid and list</p>
           <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-[13px]">
