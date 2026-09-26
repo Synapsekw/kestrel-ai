@@ -69,7 +69,7 @@ def test_forgetting_a_project_drops_it_from_the_recent_list_and_keeps_the_folder
     assert client.delete("/api/v1/projects/nope").status_code == 404
 
 
-def test_recent_skips_deleted_folders(client, project_dir, tmp_path):
+def test_recent_lists_deleted_folders_as_missing(client, project_dir, tmp_path):
     import shutil
 
     gone = tmp_path / "gone"
@@ -79,7 +79,7 @@ def test_recent_skips_deleted_folders(client, project_dir, tmp_path):
     client.app.state.projects.close_all()  # release the SQLite handles before deleting the folder
     shutil.rmtree(gone)
     r = client.get("/api/v1/projects")
-    assert [p["name"] for p in r.json()["items"]] == ["A"]
+    assert [(p["name"], p["availability"]) for p in r.json()["items"]] == [("A", "ok"), ("Gone", "missing")]
 
 
 def test_get_project_survives_registry_restart(settings, project_dir):

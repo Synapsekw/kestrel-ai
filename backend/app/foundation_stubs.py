@@ -71,14 +71,8 @@ BM_APP_STUBS: list[Stub] = [
     ("GET", "/library/training-runs/{runId}", "getTrainingRun"),
 ]
 
-# MG: the migration's retry (§11.3) and the backup reveal on the Projects card (§9.2).
-MG_APP_STUBS: list[Stub] = [
-    ("POST", "/projects/migrations/retry", "retryProjectMigration"),
-    ("POST", "/projects/migrations/reveal-backup", "revealProjectBackup"),
-]
-
 PROJECT_STUBS: list[Stub] = [*BC_PROJECT_STUBS]
-APP_STUBS: list[Stub] = [*BC_APP_STUBS, *BM_APP_STUBS, *MG_APP_STUBS]
+APP_STUBS: list[Stub] = [*BC_APP_STUBS, *BM_APP_STUBS]
 
 project_router = APIRouter(prefix="/projects/{projectId}", tags=["foundation-stubs"])
 add_stubs(project_router, PROJECT_STUBS)

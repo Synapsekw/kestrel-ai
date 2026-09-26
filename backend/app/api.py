@@ -18,6 +18,7 @@ from app.jobs.router import router as jobs_router
 from app.library.adoption_router import router as adoption_router
 from app.library.router import project_router as train_router
 from app.library.router import router as library_router
+from app.migration.router import router as migration_router
 from app.project_agent.router import router as project_agent_router
 from app.projects.router import router as projects_router
 from app.providers.router import router as providers_router
@@ -31,6 +32,9 @@ api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
 for r in (
     agent_router,
     health_router,
+    # Before projects_router: `/projects/migrations/...` must not reach `/projects/{projectId}`.
+    # This import also registers the `project_migrate` job type in the running app.
+    migration_router,
     projects_router,
     data_router,
     search_router,

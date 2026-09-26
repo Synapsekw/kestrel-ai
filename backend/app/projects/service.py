@@ -195,8 +195,25 @@ class ProjectRegistry:
                 return self.open(Path(r["folder"]), remember=False)
         raise not_found("project", project_id)
 
+    def cached(self, folder: Path) -> ProjectHandle | None:
+        """The open handle for `folder`, without taking the registry lock (F12): a job holds that
+        lock while it backs a project up, and the project list must not wait on it. `dict.copy()`
+        is one C call under the GIL, so it never sees the dict mid-change."""
+        folder = folder.resolve()
+        return next((h for h in self._handles.copy().values() if h.folder == folder), None)
+
     def forget(self, project_id: str) -> None:
-        """Drop the project from the recent list and close it. Nothing in its folder is touched."""
+        """Drop the project from the recent list and close it. Nothing in its folder is touched.
+
+        A recent project that is not open in this process is only dropped from the list, without
+        opening it: there is nothing to close and, since only an open project can have a live job,
+        nothing to wait for. So a folder that is gone, or a database that cannot be opened (a
+        failed upgrade, a damaged file), can always be removed (operator decision 2026-09-26), and
+        removing one never backs up or upgrades it."""
+        entry = next((r for r in self.appdata.recent() if r["id"] == project_id), None)
+        if entry is not None and project_id not in self._handles:
+            self.appdata.forget(entry["folder"])
+            return
         h = self.get(project_id)
         with h.session() as s:
             active = s.execute(

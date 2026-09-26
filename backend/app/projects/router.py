@@ -1,11 +1,17 @@
+import logging
 from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.datasets.stats import compute_stats
+from app.errors import AppError
+from app.migration.gate import migration_state, unavailable_state
+from app.migration.job import live_job_id, states_for
+from app.migration.state import MigrationStates
 from app.projects.schemas import (
     ClassDefInput,
+    MigrationStateOut,
     ProjectCreate,
     ProjectOpen,
     ProjectOut,
@@ -22,29 +28,51 @@ from app.projects.service import (
 )
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+log = logging.getLogger(__name__)
 
 
 def _registry(request: Request) -> ProjectRegistry:
     return request.app.state.projects
 
 
-def _out(handle: ProjectHandle, last_opened_at: datetime | None) -> ProjectOut:
+def _out(handle: ProjectHandle, last_opened_at: datetime | None, runner=None) -> ProjectOut:
+    """With `runner`, the project's migration state is filled in; without it (a gated route, so
+    the project is `ok`) it keeps the default."""
     with handle.session() as s:
-        return ProjectOut.from_row(handle.row(s), handle.folder, last_opened_at)
+        out = ProjectOut.from_row(handle.row(s), handle.folder, last_opened_at)
+    if runner is not None:
+        out.migration = MigrationStateOut(**migration_state(handle, runner))
+    return out
 
 
 @router.get("", response_model=ProjectPage)
 def list_projects(request: Request) -> ProjectPage:
-    reg = _registry(request)
+    """Every recent project, each on its own: one that fails to open or upgrade is listed as
+    `failed`, never failing the list, and one whose upgrade job is live is listed as `running`
+    without opening it. An open project is read from the registry cache without its lock, so the
+    list never waits on a job's backup (foundation spec §9.2, F12)."""
+    reg, runner = _registry(request), request.app.state.jobs
     entries = reg.recent()  # one read of the recent list for the whole page
     last_opened = reg.last_opened_map(entries)
+    states = states_for(reg).all()  # one read of migrations.json for the whole page
     items: list[ProjectOut] = []
     for r in entries:
-        folder = Path(r["folder"])
+        folder, opened = Path(r["folder"]), last_opened.get(r["id"])
         if not (folder / "project.db").exists():
+            # Listed, not hidden (operator decision 2026-09-26): the card offers Remove and Locate.
+            items.append(ProjectOut.unavailable(r, MigrationStateOut(), opened, availability="missing"))
             continue
-        handle = reg.open(folder, remember=False)
-        items.append(_out(handle, last_opened.get(handle.id)))
+        live = live_job_id(runner, states.get(MigrationStates.key(folder)))
+        if live is not None:
+            items.append(ProjectOut.unavailable(r, MigrationStateOut(state="running", job_id=live), opened))
+            continue
+        try:
+            handle = reg.cached(folder) or reg.open(folder, remember=False)
+            items.append(_out(handle, opened, runner))
+        except Exception as e:
+            log.warning("project at %s could not be listed: %s", folder, e)
+            state = MigrationStateOut(**unavailable_state(reg, folder, e))
+            items.append(ProjectOut.unavailable(r, state, opened))
     return ProjectPage(items=items, next_cursor=None)
 
 
@@ -52,14 +80,14 @@ def list_projects(request: Request) -> ProjectPage:
 def create_project(body: ProjectCreate, request: Request) -> ProjectOut:
     reg = _registry(request)
     handle = reg.create(body.name, Path(body.folder), body.type_ids)
-    return _out(handle, reg.last_opened_at(handle.id))
+    return _out(handle, reg.last_opened_at(handle.id), request.app.state.jobs)
 
 
 @router.post("/open", response_model=ProjectOut)
 def open_project(body: ProjectOpen, request: Request) -> ProjectOut:
     reg = _registry(request)
     handle = reg.open(Path(body.folder))
-    return _out(handle, reg.last_opened_at(handle.id))
+    return _out(handle, reg.last_opened_at(handle.id), request.app.state.jobs)
 
 
 @router.get("/{projectId}", response_model=ProjectOut)
@@ -69,7 +97,21 @@ def get_project_route(request: Request, handle: ProjectHandle = Depends(get_proj
 
 @router.delete("/{projectId}", status_code=204)
 def forget_project(projectId: str, request: Request) -> Response:  # noqa: N803 - path param from the contract
-    _registry(request).forget(projectId)
+    reg = _registry(request)
+    # A live `project_migrate` job holds the project (and, during its backup, the registry lock):
+    # refuse before `forget` would open the project and wait on it. It is a library job, so the
+    # project's own job table, which `forget` checks, never sees it.
+    entry = next((r for r in reg.recent() if r["id"] == projectId), None)
+    if entry is not None:
+        live = live_job_id(request.app.state.jobs, states_for(reg).get(Path(entry["folder"])))
+        if live is not None:
+            raise AppError(
+                "job_running",
+                "This project is being upgraded; wait for the upgrade to finish.",
+                409,
+                {"job_id": live},
+            )
+    reg.forget(projectId)
     return Response(status_code=204)
 
 

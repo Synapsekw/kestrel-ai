@@ -43,8 +43,10 @@ class AppData:
 
     def remember(self, project_id: str, name: str, folder: str) -> None:
         """Move a project to the top of the recent list. Entries written before the project kind
-        was removed may still carry a `kind` key; `recent()` ignores it and this rewrite drops it."""
-        items = [r for r in self.recent() if r["folder"].lower() != folder.lower()]
+        was removed may still carry a `kind` key; `recent()` ignores it and this rewrite drops it.
+        An entry of the same project id at another folder goes too: opening a moved project from
+        its new folder ("Locate folder…") replaces the stale entry (operator decision 2026-09-26)."""
+        items = [r for r in self.recent() if r["folder"].lower() != folder.lower() and r["id"] != project_id]
         items.insert(
             0,
             {

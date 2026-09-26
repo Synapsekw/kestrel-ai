@@ -1,7 +1,8 @@
 """Pydantic models for the projects resource, matching contract/openapi.yaml exactly."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -66,6 +67,21 @@ class ProjectUpdate(BaseModel):
     import_defaults: ImportSettingsPatch | None = None
 
 
+MigrationStateName = Literal["ok", "pending", "running", "failed"]
+
+
+class MigrationStateOut(BaseModel):
+    """`MigrationState` (foundation spec §9.2, §11.3): where a project's upgrade stands."""
+
+    state: MigrationStateName = "ok"
+    job_id: str | None = None
+    error: str | None = None
+    code: str | None = None
+    step: str | None = None
+    backup_path: str | None = None
+    report_path: str | None = None
+
+
 class ProjectOut(BaseModel):
     id: str
     name: str
@@ -76,6 +92,8 @@ class ProjectOut(BaseModel):
     schema_version: int
     created_at: datetime
     last_opened_at: datetime | None
+    migration: MigrationStateOut = Field(default_factory=MigrationStateOut)
+    availability: Literal["ok", "missing"] = "ok"
 
     @classmethod
     def from_row(cls, row: Project, folder: Path, last_opened_at: datetime | None) -> "ProjectOut":
@@ -91,6 +109,32 @@ class ProjectOut(BaseModel):
             schema_version=row.schema_version,
             created_at=row.created_at,
             last_opened_at=last_opened_at,
+        )
+
+    @classmethod
+    def unavailable(
+        cls,
+        recent: dict,
+        migration: MigrationStateOut,
+        last_opened_at: datetime | None,
+        availability: Literal["ok", "missing"] = "ok",
+    ) -> "ProjectOut":
+        """A recent project that could not be opened, is upgrading, or whose folder is gone
+        (`availability="missing"`): listed with what the recent list knows, so one folder never
+        fails the whole list (foundation spec §9.2; operator decision 2026-09-26). `created_at` is
+        its `last_opened_at`, as the contract's `Project` says."""
+        return cls(
+            id=recent["id"],
+            name=recent["name"],
+            folder=recent["folder"],
+            classes=[],
+            preannotation_model_id=None,
+            import_defaults=ImportSettings(),
+            schema_version=0,
+            created_at=last_opened_at or datetime(1970, 1, 1, tzinfo=UTC),
+            last_opened_at=last_opened_at,
+            migration=migration,
+            availability=availability,
         )
 
 

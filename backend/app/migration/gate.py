@@ -18,20 +18,30 @@ from app.migration.pipeline import TARGET_SCHEMA_VERSION
 from app.migration.state import failed_error, upgrading_error
 
 
+def backup_path(entry: dict, folder) -> str | None:
+    """The project's pre-upgrade backup: the one `migrations.json` records, else the newest real
+    backup on disk (F6) — the window between the Alembic backup `open_project_db` takes and a
+    `project_migrate` job recording its own. Reveal backup (Task 7) shows the same path."""
+    recorded = entry.get("backup_path")
+    if recorded:
+        return recorded
+    found = latest_backup(folder)
+    return str(found) if found else None
+
+
+def _needs_upgrade(handle) -> bool:
+    """True when the project must pass the gate: armed, and below the target schema version."""
+    return armed() and handle.schema_version < TARGET_SCHEMA_VERSION
+
+
 def _base(entry: dict, folder) -> dict:
-    """Fields every `MigrationState` carries. `backup_path` falls back to the newest real backup
-    on disk (F6) when `migrations.json` has none recorded yet — the window between the Alembic
-    backup `open_project_db` takes and a `project_migrate` job recording its own backup_path."""
-    backup_path = entry.get("backup_path")
-    if not backup_path:
-        found = latest_backup(folder)
-        backup_path = str(found) if found else None
+    """Fields every `MigrationState` carries."""
     return {
         "job_id": None,
         "error": None,
         "code": None,
         "step": None,
-        "backup_path": backup_path,
+        "backup_path": backup_path(entry, folder),
         "report_path": entry.get("report_path"),
     }
 
@@ -50,7 +60,7 @@ def _failed(entry: dict, folder) -> dict:
 
 def migration_state(handle, runner) -> dict:
     entry = states_for(runner.projects).get(handle.folder) or {}
-    if not armed() or handle.schema_version >= TARGET_SCHEMA_VERSION:
+    if not _needs_upgrade(handle):
         return {**_base(entry, handle.folder), "state": "ok"}
     if entry.get("state") == "failed":
         return _failed(entry, handle.folder)
@@ -66,7 +76,7 @@ def migration_state(handle, runner) -> dict:
 def ensure_submitted(handle, runner):
     """On open: queue the upgrade of a project below the target schema, unless one is live or it
     failed. A failed upgrade waits for the operator's Retry; it is not re-run on every open."""
-    if not armed() or handle.schema_version >= TARGET_SCHEMA_VERSION:
+    if not _needs_upgrade(handle):
         return None
     entry = states_for(runner.projects).get(handle.folder) or {}
     if entry.get("state") == "failed":
@@ -81,7 +91,7 @@ def require_ready(handle, runner) -> None:
     all (F9): disarmed, or already at the target schema version (the common case on every
     project-scoped request). Only a project still below the target schema reads the state file.
     """
-    if not armed() or handle.schema_version >= TARGET_SCHEMA_VERSION:
+    if not _needs_upgrade(handle):
         return
     state = migration_state(handle, runner)
     if state["state"] == "failed":
