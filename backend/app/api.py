@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.agent.router import router as agent_router
 from app.auth import require_token
+from app.data_items.router import router as data_router
 from app.datasets.router import router as datasets_router
 from app.exports.router import router as exports_router
 from app.foundation_stubs import app_router as foundation_app_stubs
@@ -29,6 +30,7 @@ for r in (
     agent_router,
     health_router,
     projects_router,
+    data_router,
     library_router,
     datasets_router,
     starter_router,
