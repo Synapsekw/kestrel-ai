@@ -15,16 +15,16 @@ export function ApprovalCard({
     <div
       role="group"
       aria-label="Approval needed"
-      className="flex flex-col gap-3 rounded-md border border-warn/30 bg-warn-soft px-3 py-3"
+      className="flex flex-col gap-3 rounded-control border border-warn/30 bg-warn-soft px-3 py-3"
     >
       <div className="flex flex-col gap-1">
         <p className="text-xs font-medium text-warn">Approval needed</p>
         <p className="text-sm font-semibold text-ink">{approval.title}</p>
-        <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-muted">
+        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-muted">
           {approval.detail}
         </p>
         {approval.estimated_cost !== null && (
-          <p className="text-[13px] tabular-nums text-ink">
+          <p className="text-sm tabular-nums text-ink">
             Estimated cost <span className="font-medium">≈ ${approval.estimated_cost.toFixed(2)}</span>
           </p>
         )}

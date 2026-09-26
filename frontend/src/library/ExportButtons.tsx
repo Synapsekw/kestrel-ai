@@ -36,7 +36,7 @@ export function ExportButtons({ model, onStarted }: Props) {
     <div className="flex flex-col gap-2">
       <h3 className="text-sm font-semibold">Copies for other applications</h3>
       {exports.length > 0 ? (
-        <ul className="flex flex-col text-[13px]">
+        <ul className="flex flex-col text-sm">
           {exports.map(([format, path]) => (
             <li key={format} className="flex h-8 items-center gap-3 border-b border-line last:border-b-0">
               <span className="w-16 text-xs font-medium uppercase text-muted">{format}</span>

@@ -58,7 +58,7 @@ export function SurveyDateCell({
         onClick={start}
         aria-label={`${value ? "Change" : "Set"} the survey date of ${label}`}
         className={cx(
-          "-mx-1.5 rounded-md px-1.5 py-0.5 text-left tabular-nums hover:bg-hover",
+          "-mx-1.5 rounded-control px-1.5 py-0.5 text-left tabular-nums hover:bg-hover",
           value ? "text-ink" : "text-muted",
           transition,
           focusRing,

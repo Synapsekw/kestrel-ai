@@ -18,8 +18,8 @@ const HEADERS: { label: string; className?: string }[] = [
 /** The library list: one 36px row per model; the name selects it (so does a click anywhere on the row). */
 export function ModelTable({ models, selectedId, onSelect }: Props) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-      <table data-testid="model-table" className="w-full border-collapse text-left text-[13px]">
+    <div className="overflow-x-auto rounded-panel border border-line bg-surface">
+      <table data-testid="model-table" className="w-full border-collapse text-left text-sm">
         <thead>
           <tr className="text-xs text-muted">
             {HEADERS.map((h) => (

@@ -103,7 +103,7 @@ export function ExportForm({
   return (
     <section
       aria-label="Results"
-      className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5"
+      className="flex flex-col gap-4 rounded-panel border border-line bg-surface p-5"
     >
       <h2 className="text-base font-semibold">Results</h2>
       {labeledCount !== null && boxCount !== null && imageCount !== null && (

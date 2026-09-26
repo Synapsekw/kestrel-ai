@@ -584,8 +584,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         className="absolute inset-0 h-full w-full bg-bg"
         style={{ cursor: armed ? "crosshair" : "grab" }}
       />
+      {/* The notices sit on the opaque glass-solid backing: the tones alone are 15% tints, unreadable over the points. */}
       {noWebGlKey === sceneKey && (
-        <div className="absolute inset-x-4 top-4">
+        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
           <Alert tone="danger" title="The 3D view could not start">
             This computer&apos;s graphics could not start WebGL, which the 3D view draws with. Updating the
             graphics driver usually fixes this; the cloud&apos;s details and export still work.
@@ -593,14 +594,14 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         </div>
       )}
       {loadError?.key === sceneKey && (
-        <div className="absolute inset-x-4 top-4">
+        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
           <Alert tone="danger" title="The 3D view could not be shown">
             {loadError.message}
           </Alert>
         </div>
       )}
       {lostKey === sceneKey && (
-        <div className="absolute inset-x-4 top-4">
+        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
           <Alert
             tone="warn"
             actions={

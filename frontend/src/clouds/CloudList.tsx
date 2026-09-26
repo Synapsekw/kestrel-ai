@@ -36,7 +36,7 @@ export function CloudList({
             to={`/p/${projectId}/clouds/${c.id}`}
             aria-current={c.id === activeId ? "page" : undefined}
             className={cx(
-              "flex flex-col gap-0.5 rounded-md p-2 text-xs",
+              "flex flex-col gap-0.5 rounded-control p-2 text-xs",
               transition,
               focusRing,
               c.id === activeId ? "bg-accent-soft" : "hover:bg-hover",

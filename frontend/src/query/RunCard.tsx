@@ -49,7 +49,7 @@ function RunJob({ projectId, job, readOnly }: { projectId: string; job: Job; rea
 
   return (
     <div data-testid={`job-${job.id}`} className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px]">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
         <Pill data-testid="jobcard-state" tone={STATE_TONE[job.state]} live={job.state === "running"}>
           {stateLabel(job.state)}
         </Pill>
@@ -186,7 +186,7 @@ export function RunCard({
         <div
           role="status"
           aria-label={`Loading run ${runId.slice(0, 8)}`}
-          className="flex max-w-3xl flex-col gap-3 rounded-lg border border-line bg-surface p-5"
+          className="flex max-w-3xl flex-col gap-3 rounded-panel border border-line bg-surface p-5"
         >
           <Skeleton className="h-5 w-64" />
           <Skeleton className="h-4 w-96 max-w-full" />
@@ -204,7 +204,7 @@ export function RunCard({
   return (
     <section
       data-testid="run-card"
-      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-surface p-5"
+      className="flex max-w-3xl flex-col gap-4 rounded-panel border border-line bg-surface p-5"
     >
       {alert}
       <header className="flex flex-col gap-1">
@@ -217,7 +217,7 @@ export function RunCard({
           )}
           <span className="ml-auto text-xs text-muted">started {formatLocalDate(run.created_at)}</span>
         </div>
-        <p className="text-[13px] tabular-nums text-muted">
+        <p className="text-sm tabular-nums text-muted">
           {run.image_ids.length} {run.image_ids.length === 1 ? "image" : "images"}, {tiling}, confidence{" "}
           {run.conf}
           {run.model_name ? `, model ${run.model_name}` : ""}
@@ -229,7 +229,7 @@ export function RunCard({
           <Button icon="play" onClick={() => void resume()} disabled={busy}>
             Resume run
           </Button>
-          <span className="text-[13px] text-muted">
+          <span className="text-sm text-muted">
             Finished tiles are reused, so the run continues where it stopped.
           </span>
         </div>

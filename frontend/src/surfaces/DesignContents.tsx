@@ -42,7 +42,7 @@ function CandidateRow({
     .map(([k, n]) => `${n.toLocaleString()} ${KIND_LABEL[k] ?? k}`);
   const block = blockedNote(c);
   return (
-    <div className={cx("flex gap-3 rounded-md p-2", block ? "opacity-60" : "")}>
+    <div className={cx("flex gap-3 rounded-control p-2", block ? "opacity-60" : "")}>
       <Thumb src={thumb} />
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         {control ?? <span className="text-sm font-medium text-ink">{c.name}</span>}

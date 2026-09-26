@@ -100,7 +100,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
   return (
     <section
       data-testid="dataset-detail"
-      className="flex flex-col gap-5 rounded-lg border border-line bg-surface p-5 animate-reveal reduce-motion:animate-none"
+      className="flex flex-col gap-5 rounded-panel border border-line bg-surface p-5 animate-reveal reduce-motion:animate-none"
     >
       <header className="flex flex-wrap items-center gap-3">
         <h2 className="min-w-0 flex-1 truncate text-base font-semibold">{dataset.name}</h2>
@@ -151,7 +151,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
         )}
         {!stats && !statsError && <Skeleton className="h-4 w-56" />}
         {stats && (
-          <table data-testid="dataset-class-stats" className="w-full text-left text-[13px]">
+          <table data-testid="dataset-class-stats" className="w-full text-left text-sm">
             <thead>
               <tr>
                 <th className={th}>Class</th>
@@ -175,7 +175,7 @@ export function DatasetDetail({ projectId, dataset, onDeleted }: DatasetDetailPr
       {stats && stats.groups.length > 0 && (
         <div className="flex flex-col gap-2">
           <h3 className="text-sm font-semibold">Flights and tiles</h3>
-          <table data-testid="dataset-group-stats" className="w-full text-left text-[13px]">
+          <table data-testid="dataset-group-stats" className="w-full text-left text-sm">
             <thead>
               <tr>
                 <th className={th}>Flight or tile</th>

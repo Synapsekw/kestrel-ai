@@ -77,7 +77,7 @@ export function ProjectAgent({
           onClose();
         }
       }}
-      className="absolute inset-y-0 right-0 z-30 flex w-[34rem] max-w-full flex-col border-l border-line bg-glass-solid text-ink shadow-float animate-slide-in focus:outline-none reduce-motion:animate-none"
+      className="absolute inset-y-0 right-0 z-30 flex w-[34rem] max-w-full flex-col border-l border-line bg-glass-solid text-ink shadow-elev-2 animate-slide-in focus:outline-none reduce-motion:animate-none"
     >
       <header className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-4">
         <div className="min-w-0 flex-1">
@@ -134,7 +134,7 @@ export function ProjectAgent({
                     type="button"
                     onClick={() => a.setMessage(text)}
                     className={cx(
-                      "w-full rounded-md border border-line px-3 py-2 text-left text-[13px] leading-relaxed text-ink hover:border-line-strong hover:bg-hover",
+                      "w-full rounded-control border border-line px-3 py-2 text-left text-sm leading-relaxed text-ink hover:border-line-strong hover:bg-hover",
                       transition,
                       focusRing,
                     )}

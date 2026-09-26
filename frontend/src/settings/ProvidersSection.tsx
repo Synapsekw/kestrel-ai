@@ -1,5 +1,5 @@
 import { useProviders } from "@/api/providers";
-import { Alert, Skeleton } from "@/ui";
+import { Alert, GlassPanel, Skeleton } from "@/ui";
 import { ProviderCard } from "./ProviderCard";
 
 /** Spec section 6 screen 5: provider keys. Keys live in Windows Credential Manager, never in the project folder. */
@@ -30,11 +30,11 @@ export function ProvidersSection() {
       )}
       {error && <Alert tone="danger">{error}</Alert>}
       {providers.length > 0 && (
-        <div className="divide-y divide-line rounded-lg border border-line bg-surface">
+        <GlassPanel className="divide-y divide-line">
           {providers.map((p) => (
             <ProviderCard key={p.name} provider={p} onChanged={replace} />
           ))}
-        </div>
+        </GlassPanel>
       )}
     </section>
   );

@@ -48,7 +48,7 @@ export function RegionList({
 }: Props) {
   return (
     <div className="flex shrink-0 flex-col">
-      <h2 className="flex h-11 shrink-0 items-center border-b border-line px-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+      <h2 className="flex h-11 shrink-0 items-center border-b border-line px-3 text-xs font-semibold text-muted">
         Regions ({boxes.length})
       </h2>
       <ul role="list" aria-label="Regions" className="flex flex-col gap-1 p-2">
@@ -76,7 +76,7 @@ export function RegionList({
               onMouseLeave={() => onHover(null)}
               // No transition: selection follows hotkeys and the canvas, and nothing animates on a key.
               className={cx(
-                "group flex cursor-pointer flex-col rounded-md border border-transparent pb-2 text-[13px] text-ink",
+                "group flex cursor-pointer flex-col rounded-control border border-transparent pb-2 text-sm text-ink",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent",
                 selected
                   ? "border-line-strong bg-surface-2"
@@ -170,7 +170,7 @@ export function RegionList({
         })}
       </ul>
       {boxes.length === 0 && (
-        <p className="px-3 py-4 text-[13px] leading-relaxed text-muted">
+        <p className="px-3 py-4 text-sm leading-relaxed text-muted">
           {markedEmpty
             ? "Marked empty: no machinery on this image."
             : hiddenByFloor > 0

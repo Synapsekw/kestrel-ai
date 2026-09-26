@@ -77,7 +77,7 @@ export function DetectReview({ projectId }: { projectId: string }) {
   return (
     <section className="flex h-full min-h-0 flex-col gap-5">
       <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-semibold tracking-tight">Review</h1>
+        <h1 className="text-xl font-semibold">Review</h1>
         <p className="text-sm text-muted">
           Accept, reject or correct what a model found. Verified numbers come from what you check here.
         </p>

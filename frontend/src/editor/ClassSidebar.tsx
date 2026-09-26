@@ -11,9 +11,7 @@ interface Props {
 export function ClassSidebar({ classes, activeClassId, counts, onSelect }: Props) {
   return (
     <div className="flex flex-col gap-0.5">
-      <h2 className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
-        Classes
-      </h2>
+      <h2 className="px-2 pb-1.5 pt-1 text-xs font-semibold text-muted">Classes</h2>
       {classes.map((c) => {
         const active = c.id === activeClassId;
         return (
@@ -24,7 +22,7 @@ export function ClassSidebar({ classes, activeClassId, counts, onSelect }: Props
             onClick={() => onSelect(c.id)}
             // A class hotkey changes the active row: no transition, so nothing moves on a key press.
             className={cx(
-              "!h-8 w-full !justify-start !gap-2 !px-2 text-left !text-[13px] !font-normal !transition-none",
+              "!h-8 w-full !justify-start !gap-2 !px-2 text-left !text-sm !font-normal !transition-none",
               active && "!border-accent !bg-surface",
             )}
           >

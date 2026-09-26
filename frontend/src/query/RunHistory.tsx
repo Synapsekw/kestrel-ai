@@ -1,6 +1,6 @@
 import type { QueryRun } from "@contract/client";
 import { formatLocalDate } from "@/library/modelLabels";
-import { Button, Pill, cx } from "@/ui";
+import { Button, GlassPanel, Pill, cx } from "@/ui";
 import { runTitle } from "./queryModel";
 
 interface Props {
@@ -15,8 +15,8 @@ const td = "h-9 px-3";
 export function RunHistory({ runs, selectedId, onSelect }: Props) {
   if (runs.length === 0) return <p className="text-sm text-muted">No detection runs yet.</p>;
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-      <table data-testid="run-history" className="w-full border-collapse text-[13px]">
+    <GlassPanel className="overflow-x-auto">
+      <table data-testid="run-history" className="w-full border-collapse text-sm">
         <thead>
           <tr className="border-b border-line">
             <th scope="col" className={th}>
@@ -79,6 +79,6 @@ export function RunHistory({ runs, selectedId, onSelect }: Props) {
           })}
         </tbody>
       </table>
-    </div>
+    </GlassPanel>
   );
 }

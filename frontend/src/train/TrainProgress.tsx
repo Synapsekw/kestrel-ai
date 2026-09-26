@@ -97,7 +97,7 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
   return (
     <section
       data-testid="train-progress"
-      className="flex max-w-3xl flex-col gap-4 rounded-lg border border-line bg-surface p-5"
+      className="flex max-w-3xl flex-col gap-4 rounded-panel border border-line bg-surface p-5"
     >
       <header className="flex flex-wrap items-center gap-2">
         <h2 className="text-base font-semibold">{title}</h2>
@@ -121,7 +121,7 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
         </Stat>
       </dl>
 
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-[13px] text-muted">
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted">
         <div className="flex gap-1.5">
           <dt>Loss</dt>
           <dd data-testid="loss" className="tabular-nums text-ink">

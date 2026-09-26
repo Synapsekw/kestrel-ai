@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button } from "@/ui";
+import { Button, type ButtonSize } from "@/ui";
 import { ImportDesignDialog } from "./ImportDesignDialog";
 
 /**
@@ -12,11 +12,20 @@ import { ImportDesignDialog } from "./ImportDesignDialog";
  * share that same job type, so a type-wide "finished" listener here would reload the list on every
  * step of the wizard, not just on a completed import (Task 6 review, ruling (d)).
  */
-export function ImportDesignButton({ projectId, onChanged }: { projectId: string; onChanged: () => void }) {
+export function ImportDesignButton({
+  projectId,
+  onChanged,
+  size = "md",
+}: {
+  projectId: string;
+  onChanged: () => void;
+  /** "sm" where it sits in the narrow Surfaces header next to "Build surface". */
+  size?: ButtonSize;
+}) {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <Button icon="import" onClick={() => setOpen(true)}>
+      <Button size={size} icon="import" onClick={() => setOpen(true)}>
         Import design surface
       </Button>
       {open && (

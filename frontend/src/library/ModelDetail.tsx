@@ -23,7 +23,7 @@ function Row({ term, children, mono }: { term: string; children: ReactNode; mono
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-line py-2 text-sm last:border-b-0">
       <dt className="shrink-0 text-muted">{term}</dt>
-      <dd className={mono ? "min-w-0 truncate text-right font-mono text-[13px]" : "min-w-0 text-right"}>
+      <dd className={mono ? "min-w-0 truncate text-right font-mono text-sm" : "min-w-0 text-right"}>
         {children}
       </dd>
     </div>
@@ -52,7 +52,7 @@ function Provenance({ model }: { model: LibraryModel }) {
   } else if (model.origin === "imported") {
     line = p.source_file ? (
       <>
-        Imported from <span className="font-mono text-[13px] text-ink">{p.source_file}</span>.
+        Imported from <span className="font-mono text-sm text-ink">{p.source_file}</span>.
       </>
     ) : (
       "Imported from a file."
@@ -162,7 +162,7 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
     <section data-testid="model-detail" aria-label={model.name} className="flex min-w-0 flex-col gap-6">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="min-w-0 truncate text-lg font-semibold tracking-tight">{model.name}</h2>
+          <h2 className="min-w-0 truncate text-lg font-semibold">{model.name}</h2>
           <Pill tone={model.origin === "trained" ? "ok" : "neutral"} size="sm">
             {originLabel(model.origin)}
           </Pill>
@@ -282,8 +282,8 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
                 </div>
               ))}
             </dl>
-            <div className="overflow-x-auto rounded-lg border border-line bg-surface">
-              <table data-testid="class-metrics" className="w-full border-collapse text-left text-[13px]">
+            <div className="overflow-x-auto rounded-panel border border-line bg-surface">
+              <table data-testid="class-metrics" className="w-full border-collapse text-left text-sm">
                 <thead>
                   <tr className="text-xs text-muted">
                     <th className={th}>Class</th>

@@ -122,7 +122,7 @@ function LibraryContent() {
     <>
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline gap-3">
-          <h1 className="text-xl font-semibold tracking-tight">Library</h1>
+          <h1 className="text-xl font-semibold">Library</h1>
           {library.loading ? (
             <Skeleton className="h-4 w-20 self-center" />
           ) : (
@@ -149,7 +149,7 @@ function LibraryContent() {
       {(running.length > 0 || failed.length > 0) && (
         <section aria-label="Library jobs" className="flex max-w-3xl flex-col gap-2">
           {running.length > 0 && (
-            <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface px-4">
+            <ul className="flex flex-col divide-y divide-line rounded-panel border border-line bg-surface px-4">
               {running.map((job) => (
                 <JobRow key={job.id} job={job} />
               ))}
@@ -264,14 +264,14 @@ export function LibraryScreen() {
         </>
       ) : state.status && !state.status.available ? (
         <>
-          <h1 className="text-xl font-semibold tracking-tight">Library</h1>
+          <h1 className="text-xl font-semibold">Library</h1>
           <Alert tone="danger" title="The model library could not be opened">
             <p>{state.status.error ?? "The library folder cannot be read."}</p>
             <p className="mt-2 text-muted">
               Projects still open, but runs and training need the library. Check the folder, then restart the
               app:
             </p>
-            <p className="mt-1 break-all font-mono text-[13px]">{state.status.root}</p>
+            <p className="mt-1 break-all font-mono text-sm">{state.status.root}</p>
           </Alert>
         </>
       ) : (

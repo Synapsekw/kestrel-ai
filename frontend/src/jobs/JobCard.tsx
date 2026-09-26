@@ -86,7 +86,7 @@ export function JobCard({ projectId, job, showLog = false }: Props) {
   return (
     <article data-testid={`job-${job.id}`} className="flex flex-col gap-2 py-3 text-sm">
       <header className="flex items-center gap-2">
-        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-surface-2 text-muted">
+        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-control bg-surface-2 text-muted">
           <Icon name={TYPE_ICON[job.type]} size={15} />
         </span>
         <span className="min-w-0 flex-1 truncate font-medium" title={title}>
@@ -120,7 +120,7 @@ export function JobCard({ projectId, job, showLog = false }: Props) {
           <Link
             to={target.to}
             className={cx(
-              "ml-auto inline-flex items-center gap-1 rounded-md text-xs font-medium text-accent hover:underline",
+              "ml-auto inline-flex items-center gap-1 rounded-control text-xs font-medium text-accent hover:underline",
               focusRing,
             )}
           >

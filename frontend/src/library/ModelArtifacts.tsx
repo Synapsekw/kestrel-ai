@@ -20,7 +20,7 @@ function ArtifactImage({ src, alt }: { src: string; alt: string }) {
   return (
     <figure className="flex flex-col gap-1">
       {failed ? (
-        <span className="rounded-md bg-surface-2 px-2 py-6 text-center text-xs text-muted">
+        <span className="rounded-control bg-surface-2 px-2 py-6 text-center text-xs text-muted">
           {alt} not available
         </span>
       ) : (
@@ -28,7 +28,7 @@ function ArtifactImage({ src, alt }: { src: string; alt: string }) {
           src={src}
           alt={alt}
           onError={() => setFailed(true)}
-          className="w-full rounded-md border border-line bg-surface"
+          className="w-full rounded-control border border-line bg-surface"
         />
       )}
       <figcaption className="text-xs text-muted">{alt}</figcaption>
@@ -73,13 +73,13 @@ export function ModelArtifacts({ model }: { model: LibraryModel }) {
           curve.error ? (
             <Alert tone="danger">{curve.error}</Alert>
           ) : (
-            <div className="max-w-xl rounded-lg border border-line bg-surface p-3">
+            <div className="max-w-xl rounded-panel border border-line bg-surface p-3">
               <TrainingCurve points={curve.points} />
             </div>
           )
         ) : (
           <div role="status" aria-label="Loading results.csv" className="max-w-xl">
-            <Skeleton className="h-[200px] w-full rounded-lg" />
+            <Skeleton className="h-[200px] w-full rounded-panel" />
           </div>
         ))}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">

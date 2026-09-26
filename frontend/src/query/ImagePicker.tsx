@@ -72,7 +72,7 @@ export function ImagePicker({ form, onChange, preloadedCount, count, loading, gr
           </Field>
         )}
       </div>
-      <p data-testid="image-count" className="text-[13px] tabular-nums text-muted">
+      <p data-testid="image-count" className="text-sm tabular-nums text-muted">
         {loading ? "Counting images…" : `${count} ${count === 1 ? "image" : "images"} selected`}
       </p>
     </div>

@@ -14,7 +14,7 @@ export function ConfidenceFloor({ value, hidden, onChange }: Props) {
   return (
     <label
       data-testid="confidence-floor"
-      className="flex flex-wrap items-center justify-between gap-2 text-[13px] text-muted"
+      className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted"
     >
       Hide suggestions
       {/* No ui component draws a range; the native slider takes the accent colour. */}

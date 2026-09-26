@@ -178,7 +178,7 @@ export function MeasurePanel({
       </p>
       {r && (
         <div
-          className="flex flex-col gap-0.5 rounded-md bg-surface-2 p-2.5 text-xs tabular-nums"
+          className="flex flex-col gap-0.5 rounded-control bg-surface-2 p-2.5 text-xs tabular-nums"
           data-testid="pick-readout"
         >
           <span className="text-ink">{r.native}</span>
@@ -221,7 +221,7 @@ export function MeasurePanel({
                   ? formatLength(Math.abs(res.height_difference ?? 0))
                   : formatLength(res.distance_3d ?? 0);
           return (
-            <li key={m.id} className="flex flex-col gap-1 rounded-md border border-line p-2">
+            <li key={m.id} className="flex flex-col gap-1 rounded-control border border-line p-2">
               <div className="flex items-center gap-1">
                 <Input
                   dense

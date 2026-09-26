@@ -92,10 +92,10 @@ export function ToolRow({ item }: { item: AgentItem }) {
   const status = item.tool_status ? STATUS[item.tool_status] : null;
   const label = item.tool_summary || humanTool(item.tool_name);
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-line px-3 py-2">
+    <div className="flex flex-col gap-2 rounded-control border border-line px-3 py-2">
       <div className="flex items-start gap-2">
         <Icon name={toolIcon(item.tool_name ?? "")} size={14} className="mt-0.5 text-muted" />
-        <p className="min-w-0 flex-1 break-words text-[13px] leading-relaxed">{label}</p>
+        <p className="min-w-0 flex-1 break-words text-sm leading-relaxed">{label}</p>
         {status && (
           <Pill size="sm" tone={status.tone} live={status.live}>
             {status.text}
@@ -107,7 +107,7 @@ export function ToolRow({ item }: { item: AgentItem }) {
       ))}
       {item.tool_input && (
         <Disclosure label="Details">
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-md bg-surface-2 px-2 py-1.5 font-mono text-[11px] leading-relaxed text-muted">
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-control bg-surface-2 px-2 py-1.5 font-mono text-2xs leading-relaxed text-muted">
             {JSON.stringify(item.tool_input, null, 2)}
           </pre>
         </Disclosure>
