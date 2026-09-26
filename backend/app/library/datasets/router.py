@@ -48,6 +48,9 @@ def create_dataset(
 ) -> LibraryDatasetWithJob:
     """Queue a `dataset_build` job; no image is copied (F §12.2 step 2)."""
     dataset_id = service.create_dataset(lib, request.app.state.projects, catalogue, body)
+    # The answer is the dataset as queued (`resolving`, per the contract), read before the job can
+    # run: read after, a quick build has already written `ready` and the answer races it.
+    queued = service.get_dataset(lib, dataset_id)
     try:
         job = request.app.state.jobs.submit(lib, "dataset_build", {"dataset_id": dataset_id})
     except Exception:
@@ -55,7 +58,7 @@ def create_dataset(
         raise
     service.set_job(lib, dataset_id, job.id)
     return LibraryDatasetWithJob(
-        dataset=service.get_dataset(lib, dataset_id), job=JobOut.from_row(job, lib.id)
+        dataset=queued.model_copy(update={"job_id": job.id}), job=JobOut.from_row(job, lib.id)
     )
 
 

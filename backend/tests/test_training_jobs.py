@@ -15,7 +15,7 @@ from library_datasets_helpers import (
     make_project,
     two_projects,
 )
-from library_helpers import add_library_model, wait_library_job
+from library_helpers import add_library_model, jobs_finish_before_submit_returns, wait_library_job
 
 from app.db.models import Job
 from app.jobs.startup import sweep_orphans
@@ -78,7 +78,7 @@ def test_training_a_built_dataset_exports_it_first_and_registers_the_model(
 ):
     use_fake_trainer(map50=0.61)
     started = start(client, built["id"], base_model.id)
-    assert started["training_run"]["state"] in ("queued", "running")
+    assert started["training_run"]["state"] == "queued"
     done = wait_library_job(client, started["job"]["id"])
     assert done["state"] == "succeeded", done["error"]
 
@@ -95,6 +95,21 @@ def test_training_a_built_dataset_exports_it_first_and_registers_the_model(
     assert p["dataset_id"] == built["id"] and p["run_id"] == started["job"]["id"]
     assert p["base_model_id"] == base_model.id and "project_id" not in p  # two projects: none named
     assert (app.state.library.runs_dir / started["job"]["id"] / "train" / "results.csv").is_file()
+
+
+def test_the_start_answer_is_the_run_as_queued_even_when_training_is_quicker(
+    client, app, built, base_model, use_fake_trainer, monkeypatch
+):
+    """The 202 says `queued` (the contract's "run created, training job queued"), never a race with
+    the job: here training has finished before the route answers."""
+    use_fake_trainer()
+    jobs_finish_before_submit_returns(app, monkeypatch)
+    started = start(client, built["id"], base_model.id)
+    assert started["job"]["state"] == "queued"
+    assert started["training_run"]["state"] == "queued"
+    assert started["training_run"]["job_id"] == started["job"]["id"]
+    assert started["training_run"]["model_id"] is None and started["training_run"]["finished_at"] is None
+    assert client.get(f"{RUNS}/{started['training_run']['id']}").json()["state"] == "succeeded"
 
 
 def test_training_a_legacy_dataset_reads_its_own_folder(client, app, legacy, base_model, use_fake_trainer):

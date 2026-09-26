@@ -44,3 +44,21 @@ def wait_library_job(client, job_id: str, timeout: float = 30.0) -> dict:
             return j
         time.sleep(0.05)
     raise AssertionError(f"library job {job_id} did not finish within {timeout}s")
+
+
+def jobs_finish_before_submit_returns(app, monkeypatch, timeout: float = 30.0) -> None:
+    """Force the fastest interleaving: `submit` returns only once the job it queued has settled, so
+    a route that reads its row back after submitting reads what the job wrote, every time."""
+    runner = app.state.jobs
+    real_submit = runner.submit
+
+    def submit_and_settle(project, type, params):
+        job = real_submit(project, type, params)
+        deadline = time.time() + timeout
+        while runner.is_live(job.id):
+            if time.time() > deadline:
+                raise AssertionError(f"job {job.id} did not settle within {timeout}s")
+            time.sleep(0.01)
+        return job
+
+    monkeypatch.setattr(runner, "submit", submit_and_settle)

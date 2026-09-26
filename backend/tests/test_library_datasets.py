@@ -15,7 +15,7 @@ from library_datasets_helpers import (
     create_body,
     make_project,
 )
-from library_helpers import wait_library_job
+from library_helpers import jobs_finish_before_submit_returns, wait_library_job
 from sqlalchemy import func, select
 
 from app.db.models import Job
@@ -87,6 +87,22 @@ def test_a_dataset_is_built_across_two_projects_without_copying_an_image(client,
     }
     assert {s["project_folder"] for s in d["sources"]} == {str(a.folder), str(b.folder)}
     assert list(app.state.library.datasets_dir.iterdir()) == []  # referenced, not copied (D1, §12.2)
+
+
+def test_the_create_answer_is_the_dataset_as_queued_even_when_the_build_is_quicker(
+    client, app, two_sites, monkeypatch
+):
+    """The 202 says `resolving` (the contract's "dataset created in `resolving`, build job queued"),
+    never a race with the build: here the build has finished before the route answers."""
+    a, b, exc, truck, _ = two_sites
+    jobs_finish_before_submit_returns(app, monkeypatch)
+    r = client.post(f"{LIB}/datasets", json=create_body("quick", [a.id, b.id], [exc.id, truck.id]))
+    assert r.status_code == 202, r.text
+    assert r.json()["job"]["state"] == "queued"
+    assert r.json()["dataset"]["state"] == "resolving"
+    assert r.json()["dataset"]["job_id"] == r.json()["job"]["id"]
+    assert r.json()["dataset"]["counts"]["images"] == 0
+    assert client.get(f"{LIB}/datasets/{r.json()['dataset']['id']}").json()["state"] == "ready"
 
 
 def test_splits_keep_each_flight_whole_and_items_page_with_a_cursor(client, two_sites):

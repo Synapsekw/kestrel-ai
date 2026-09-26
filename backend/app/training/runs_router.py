@@ -33,13 +33,18 @@ def start_training_run(
 ) -> TrainingRunWithJob:
     """Train a library dataset; the finished weights are registered in the library (F §12.2)."""
     run_id = runs.create_run(lib, body)
+    # The answer is the run as queued (per the contract), read before the job can run: read after,
+    # a quick job has already moved it on and the answer races it.
+    queued = runs.get_run(lib, run_id)
     try:
         job = request.app.state.jobs.submit(lib, "train", {**body.model_dump(), "training_run_id": run_id})
     except Exception:
         runs.discard(lib, run_id)
         raise
     runs.set_job(lib, run_id, job.id)
-    return TrainingRunWithJob(training_run=runs.get_run(lib, run_id), job=JobOut.from_row(job, lib.id))
+    return TrainingRunWithJob(
+        training_run=queued.model_copy(update={"job_id": job.id}), job=JobOut.from_row(job, lib.id)
+    )
 
 
 @router.get("/{runId}", response_model=TrainingRunOut)
