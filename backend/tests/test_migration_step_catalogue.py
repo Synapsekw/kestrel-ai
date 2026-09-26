@@ -10,6 +10,7 @@ from migration_helpers import (
     class_id_map,
     env_for,
     needs_classification,
+    needs_classification_count,
     open_handle,
     open_stores,
     run_step,
@@ -40,9 +41,11 @@ def test_classes_merge_by_name_across_projects(tmp_path, stores):
     b_classes = [_class("b-dump", "Dump truck", "#ff0000"), _class("b-crane", "crane", "#3b82f6", "2", 1)]
     b = _project(tmp_path, "b", b_classes)
     da = run_step(a, env_for(stores, a.folder), steps.catalogue_merge)
+    assert needs_classification_count(stores) == 1
     db_ = run_step(b, env_for(stores, b.folder), steps.catalogue_merge)
     assert (da["types_created"], da["types_merged"]) == (1, 0)
     assert (db_["types_created"], db_["types_merged"]) == (1, 1)
+    assert needs_classification_count(stores) == 2
     types = catalogue_types(stores)
     assert set(types) == {"dump_truck", "crane"}
     assert types["dump_truck"]["colour"] == "#06b6d4"  # the first project's colour wins

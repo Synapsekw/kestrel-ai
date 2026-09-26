@@ -380,6 +380,20 @@ def needs_classification(catalogue) -> bool:
         )
 
 
+def needs_classification_count(catalogue) -> int | None:
+    """The flag's `{"count": N}` value, parsed; `None` when the flag is not set."""
+    import json
+
+    from sqlalchemy import text
+
+    store = getattr(catalogue, "catalogue", catalogue)
+    with store.session() as cs:
+        value = cs.execute(
+            text("SELECT value FROM catalogue_meta WHERE key = 'needs_classification'")
+        ).scalar_one_or_none()
+    return json.loads(value)["count"] if value is not None else None
+
+
 def class_id_map(handle) -> dict[str, str]:
     from sqlalchemy import text
 
