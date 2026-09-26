@@ -177,7 +177,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Rename a source or correct its survey date. For a map source the survey date is the map's
+         *     `captured_on`; patching it here writes the map too, so both stay equal.
+         */
+        patch: operations["updateSource"];
         trace?: never;
     };
     "/api/v1/projects/{projectId}/sources/{sourceId}/stats": {
@@ -462,25 +466,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get: operations["listModels"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/import": {
+    "/api/v1/projects/{projectId}/train": {
         parameters: {
             query?: never;
             header?: never;
@@ -491,45 +477,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register existing weights (for example COCO yolo11m.pt). The file is copied under `models/`. */
-        post: operations["importModel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/import-starter": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Register one of the starter weights that ship with the app (COCO YOLO11). The file is copied under `models/`; `truck` is aliased to `dump_truck` when the project has that class. */
-        post: operations["importStarterModel"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/train": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Start a training job. The Model row is registered when the job succeeds; `job.result.model_id` points at it. */
+        /**
+         * Start a training job in a training project. `base_model_id` is a library model id. When
+         *     the job succeeds the trained weights are registered in the library (`origin: trained`)
+         *     and `job.result.model_id` is the new library model id.
+         */
         post: operations["trainModel"];
         delete?: never;
         options?: never;
@@ -537,40 +489,21 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models/{modelId}": {
+    "/api/v1/projects/{projectId}/adoption": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
         };
-        get: operations["getModel"];
-        put?: never;
-        post?: never;
-        /** Remove the registry entry and its weights. Boxes keep their `model_id` provenance. */
-        delete: operations["deleteModel"];
-        options?: never;
-        head?: never;
-        /** Set what is editable on a model (today, the scale it was trained at). */
-        patch: operations["patchModel"];
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/{modelId}/artifacts/{artifact}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
-                artifact: "results_csv" | "confusion_matrix" | "pr_curve";
-            };
-            cookie?: never;
-        };
-        /** A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) for the registry and training screens. */
-        get: operations["getModelArtifact"];
+        /**
+         * Progress of moving this training project's old models into the library. Models whose
+         *     weights file is missing are listed in `missing`; `job_id` is the adoption job that is
+         *     queued or running, if any.
+         */
+        get: operations["getModelAdoption"];
         put?: never;
         post?: never;
         delete?: never;
@@ -579,43 +512,272 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models/{modelId}/export": {
+    "/api/v1/projects/{projectId}/adoption/retry": {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Forget the missing and failed adoptions and start the adoption job again (a `library_adopt` job in this project). */
+        post: operations["retryModelAdoption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether the app-wide model library opened at startup, and where it lives. Never answers 503. */
+        get: operations["getLibraryStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Every model in the library, newest first. */
+        get: operations["listLibraryModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a `.pt` weights file into the library through a `library_import` job: hash, copy,
+         *     load-check, read the task and class names, register. A file already in the library (same
+         *     sha256) fails the job with a message naming the existing model. The source file is only read.
+         */
+        post: operations["importLibraryModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryModel"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove the model and its folder from the library. Past runs keep their own copy of the
+         *     model's name and classes and stay readable; check `/usage` first to warn the operator.
+         */
+        delete: operations["deleteLibraryModel"];
+        options?: never;
+        head?: never;
+        /** Rename the model or change its notes, supplier, class aliases or training scale. */
+        patch: operations["updateLibraryModel"];
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/gsd-estimate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The scale the model was trained at, derived from the dataset it was trained on, with the
+         *     evidence for it. A bounded read: the median of an altitude column already in the project
+         *     database plus at most eight EXIF headers, so it is a plain request and not a job.
+         */
+        get: operations["getLibraryModelGsdEstimate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        /** Recently opened projects that use the model (pre-annotation, detection runs, map runs). Projects not on the recent list are not scanned. */
+        get: operations["getLibraryModelUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/artifacts/{artifact}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+                artifact: "results_csv" | "confusion_matrix" | "pr_curve";
+            };
+            cookie?: never;
+        };
+        /** A training artifact file (results.csv, confusion matrix PNG, PR curve PNG) kept with the library model. */
+        get: operations["getLibraryModelArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/models/{modelId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
         };
         get?: never;
         put?: never;
-        /** Export to ONNX or TensorRT through a job; the path lands in `model.exports[format]`. */
-        post: operations["exportModel"];
+        /** Export to ONNX or TensorRT through a `library_export` job; the path lands in `exports[format]` of the library model. */
+        post: operations["exportLibraryModel"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/models/{modelId}/gsd-estimate": {
+    "/api/v1/library/starters/{key}/acquire": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
+                key: components["schemas"]["StarterModelKey"];
             };
             cookie?: never;
         };
+        get?: never;
+        put?: never;
         /**
-         * Derive the scale this model was trained at from its dataset.
-         * @description Reads the median GPS altitude already stored on the dataset's images and the camera intrinsics from at most 8 EXIF headers. 404 when the model has no dataset or no usable EXIF.
+         * Add one supported YOLO starter to the library through a `library_starter` job.
+         * @description Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the library jobs resource. The successful `job.result.model_id` identifies the library model.
          */
-        get: operations["getModelGsdEstimate"];
+        post: operations["acquireStarterModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Library jobs (import, export, starter), newest first. Their `project_id` is `library`. */
+        get: operations["listLibraryJobs"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs/{jobId}/log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getLibraryJobLog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/jobs/{jobId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request cancellation. The state becomes `cancelled` once the worker notices; finished jobs are returned unchanged. */
+        post: operations["cancelLibraryJob"];
         delete?: never;
         options?: never;
         head?: never;
@@ -633,28 +795,6 @@ export interface paths {
         get: operations["listStarterModels"];
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/projects/{projectId}/models/acquire-starter": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Acquire one supported YOLO starter and register it through a background import job.
-         * @description Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the jobs resource. The successful job.result.model_id identifies the registered model.
-         */
-        post: operations["acquireStarterModel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -899,6 +1039,31 @@ export interface paths {
         patch: operations["patchMap"];
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/maps/{mapId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy a past map out of this training project into a detection project (a `map_move` job
+         *     that lives in the **target** project, params `{source_project_id, map_id}`). The map row,
+         *     its derived overview and tiles, its capture date, zones and labels are copied; its runs
+         *     are not. The source file is only referenced, never copied or modified.
+         */
+        post: operations["moveMapToProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/maps/{mapId}/preview": {
         parameters: {
             query?: never;
@@ -1051,7 +1216,8 @@ export interface paths {
         /** Boxes intersecting `bbox` (map pixels), at most 5000. */
         get: operations["listMapDetections"];
         put?: never;
-        post?: never;
+        /** Draw a missed object. It is stored with `provenance_kind` `person` and `review_state` `accepted`, and counts as verified. */
+        post: operations["addMapDetection"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1230,6 +1396,833 @@ export interface paths {
         put?: never;
         /** Write GeoJSON (WGS84), GeoPackage (map CRS) and/or CSV (both) to `exports/<stamp>/` (a `map_export` job). */
         post: operations["createMapExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Photo runs (query runs) and map runs of a detection project in one list, newest first
+         *     (`created_at desc, id desc`). Review progress comes from grouped counts.
+         */
+        get: operations["listRuns"];
+        put?: never;
+        /**
+         * Start one run per source: a photo source gets a query run (an `infer` job), a map source a
+         *     map run (a `map_detect` job). The model's classes must all map onto project classes (or be
+         *     ignored); otherwise nothing is queued and the answer is `422 unmapped_classes`. The first
+         *     run in a project with no classes seeds the class list from the model. Cloud-provider runs
+         *     (`provider` and `query`) skip the mapping.
+         */
+        post: operations["createRuns"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Pin or unpin a run. Pinning a run unpins the other runs of its source; a pinned run represents its source in analytics and the survey timeline. */
+        patch: operations["updateRun"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs/{runId}/accept-above": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept every unreviewed detection of the run at or above `min_confidence` (an `accept_above` job, in batches; the counts follow). */
+        post: operations["acceptRunAbove"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs/{runId}/recount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rebuild the run's `counts`, `verified_counts` and (map runs) `area_counts` from its detections (a `recount` job). */
+        post: operations["recountRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/model-class-maps/{modelId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        /** How a library model's classes map onto this project's classes (the remembered mapping, else by name and aliases), and which are still unmapped. */
+        get: operations["getModelClassMap"];
+        /**
+         * Remember the mapping for this model. Every mapped id must be a project class. Each name
+         *     in `new_classes` is added as a project class and mapped to itself.
+         */
+        put: operations["putModelClassMap"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
+         *     state `edited`. The run's counts change in the same transaction.
+         */
+        post: operations["reviewMapDetections"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-runs/{runId}/next-unreviewed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        /** The next unreviewed detection in reading order (`y`, then `x`) after `after_id`, and how many remain. */
+        get: operations["nextUnreviewedMapDetection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get: operations["listSiteAreas"];
+        put?: never;
+        /**
+         * Add a site area, given in WGS84 or as a polygon drawn in one map's pixels (converted with
+         *     that map's georeference). Starts an `area_recount` job over every map run.
+         */
+        post: operations["createSiteArea"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-areas/{areaId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                areaId: components["parameters"]["areaId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a site area. Starts an `area_recount` job. */
+        delete: operations["deleteSiteArea"];
+        options?: never;
+        head?: never;
+        /** Rename or redraw a site area. A new polygon starts an `area_recount` job. */
+        patch: operations["updateSiteArea"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/analytics/sources/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        /** Counts per class for one source from its chosen run (pinned, else the comparison rule for maps and the newest run for photos). Reads run rows only. */
+        get: operations["getSourceAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/analytics/areas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Counts per site area and class for every survey, in survey-timeline order and on the same comparison basis. Reads run rows only. */
+        get: operations["getAreaAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/analytics/photo-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Detections per class for every photo source. These are detections, not objects - the same object appears in several photos - and never enter a trend. */
+        get: operations["getPhotoBatchAnalytics"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/detect-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write the detection numbers to `exports/` (a `detect_export` job): a CSV with one row per
+         *     source, class and site area, or a PDF report per source (`source_id` picks one; omitted
+         *     means every source).
+         */
+        post: operations["createDetectExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every point cloud in the project, newest first. */
+        get: operations["listPointClouds"];
+        put?: never;
+        /**
+         * Import a LAS or LAZ file (a `pointcloud_import` job). The source file is only read and is
+         *     never kept in the project. Validation and the RAM and disk admission run again here; a
+         *     refusal creates no row.
+         */
+        post: operations["createPointCloud"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read a LAS/LAZ file's header and VLRs (at most 1 MiB) and judge admission, without importing it. */
+        post: operations["inspectPointCloudFile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getPointCloud"];
+        put?: never;
+        post?: never;
+        /** Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched. */
+        delete: operations["deletePointCloud"];
+        options?: never;
+        head?: never;
+        /** Rename, correct the survey date, link or unlink a map, or assign an EPSG to a cloud that has no CRS. */
+        patch: operations["patchPointCloud"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/octree/{octreeFile}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                octreeFile: components["parameters"]["octreeFile"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One file of the cloud's Potree 2.0 display copy, for the 3D viewer. Exactly one byte range
+         *     (`bytes=a-b`, `bytes=a-` or `bytes=-n`) of at most 64 MiB is answered 206; no `Range`
+         *     answers the whole file with 200 only when it is at most 64 MiB. Multiple ranges, malformed
+         *     syntax, a start at or past the end, a range over 64 MiB, or no `Range` on a bigger file
+         *     answer 416 with `Content-Range: bytes *\/<size>`. The body streams in 1 MiB chunks.
+         *     `Cache-Control: private, max-age=31536000, immutable`. The token goes in the `token`
+         *     query parameter. The loader's CORS preflight (`Range` and `Content-Type` request headers)
+         *     is answered by the CORS middleware before routing, so there is no OPTIONS operation.
+         *     An unknown cloud answers 404 `not_found`; a `ready` cloud whose display-copy file is
+         *     missing on disk answers 404 `octree_missing` (both through the `default` response).
+         */
+        get: operations["getPointCloudOctreeFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        /** The cloud's saved measurements, oldest first (at most 1 000). */
+        get: operations["listCloudMeasurements"];
+        put?: never;
+        /** Save a measurement. The server recomputes `results` from the points; a client never sends them. */
+        post: operations["createCloudMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteCloudMeasurement"];
+        options?: never;
+        head?: never;
+        /** Rename a measurement or change its note. */
+        patch: operations["updateCloudMeasurement"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Write a LAZ copy of the source file (a `pointcloud_export` job) into
+         *     `exports/<stamp>[_n]/`, as `cloud-<slug>.laz` with `cloud-<slug>.json` and, when asked and
+         *     any exist, `cloud-<slug>-measurements.csv`. The source must still be reachable, with its
+         *     size and mtime unchanged.
+         */
+        post: operations["createPointCloudExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every surface in the project, cloud DSMs and designs. */
+        get: operations["listSurfaces"];
+        put?: never;
+        /** Build a surface from a ready point cloud (a `surface_build` job). */
+        post: operations["createSurface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getSurface"];
+        put?: never;
+        post?: never;
+        /** Delete the surface and its folder under `surfaces/`. */
+        delete: operations["deleteSurface"];
+        options?: never;
+        head?: never;
+        /** Rename a surface. */
+        patch: operations["patchSurface"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}/tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One 256 px hillshade tile in the surface's grid; one bounded read. NaN cells are transparent.
+         *     A surface that is not `ready` answers 409 `not_ready` (through the `default` response).
+         */
+        get: operations["getSurfaceTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}/ortho-tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /**
+         * One 256 px tile of a map's display raster warped into this surface's grid, for the ortho
+         *     underlay. A surface that is not `ready`, or a map that is not `ready`, answers 409
+         *     `not_ready` (through the `default` response).
+         */
+        get: operations["getSurfaceOrthoTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/surfaces/{surfaceId}/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The surface height at one native point (bilinear over 2 x 2 cells); `z` is null over nodata.
+         *     A surface that is not `ready` answers 409 `not_ready` (through the `default` response).
+         */
+        get: operations["getSurfaceSample"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read a design file (a `design_import` job, phase `inspect`) - hash it, detect units and CRS, and list its candidate surfaces. */
+        post: operations["createDesignInspection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDesignInspection"];
+        put?: never;
+        post?: never;
+        /** Cancel a running inspect or preview and delete the inspection folder. */
+        delete: operations["deleteDesignInspection"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/candidates/{candidateId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                candidateId: components["parameters"]["candidateId"];
+            };
+            cookie?: never;
+        };
+        /** A 160 px plan view of one candidate. */
+        get: operations["getDesignCandidateThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Place, triangulate and rasterise the chosen candidates onto a coarse preview grid and validate them (a `design_import` job, phase `preview`). It cancels the inspection's running preview first. */
+        post: operations["createDesignPreview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews/{previewId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDesignPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-inspections/{inspectionId}/previews/{previewId}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        /** The preview's plan image. */
+        get: operations["getDesignPreviewImage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/design-surfaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Build the design surface from a ready preview (a `design_import` job, phase `build`); the new `Surface` has `kind` `design`. */
+        post: operations["createDesignSurface"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every volume measurement. Recomputes each fingerprint; a changed ready one becomes `stale`. */
+        get: operations["listVolumeMeasurements"];
+        put?: never;
+        /** Create a measurement and queue its `volume_calc` job. */
+        post: operations["createVolumeMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getVolumeMeasurement"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteVolumeMeasurement"];
+        options?: never;
+        head?: never;
+        /** Change a measurement's inputs; any change other than `name` makes it `stale`. */
+        patch: operations["patchVolumeMeasurement"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}/calculate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Recalculate a measurement (a `volume_calc` job). */
+        post: operations["calculateVolumeMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}/diff-tiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        /** One 256 px cut/fill tile in the top surface's grid (red below the base, blue above). */
+        get: operations["getVolumeDiffTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volumes/{measurementId}/footprints": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        /** The buffered detection footprints the measurement masks, in the surface CRS; at most 5 000. */
+        get: operations["getVolumeFootprints"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/volume-exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Write PDF, GeoPackage with cut/fill GeoTIFF, CSV and/or XLSX to `exports/<stamp>/` (a `volume_export` job; its `result` is `{folder, files}`). */
+        post: operations["createVolumeExport"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1450,7 +2443,24 @@ export interface components {
             error: {
                 /**
                  * @description machine-readable: unauthorized, not_found, validation_error, already_exists,
-                 *     class_in_use, conflict, not_implemented, provider_error, internal_error
+                 *     class_in_use, conflict, not_implemented, provider_error, internal_error,
+                 *     wrong_project_kind (409: the operation does not belong to this kind of project;
+                 *     details `{kind, allowed}`), library_unavailable (503: the model library could not
+                 *     be opened), model_unavailable (409: the library model's weights file is missing),
+                 *     unmapped_classes (422: the run's model has classes with no project class and no
+                 *     remembered mapping; details `{model_id, unmapped}`), unsupported_point_cloud,
+                 *     insufficient_memory and insufficient_disk (422: a point cloud cannot be read or
+                 *     admitted), link_needs_coordinates, no_overlap and crs_already_set (422: a point
+                 *     cloud patch), invalid_epsg (422: an EPSG code pyproj does not know),
+                 *     wrong_point_count, needs_projected_crs, vertical_span_too_small and
+                 *     measurement_limit (422: a point-cloud measurement), octree_missing (404: a ready
+                 *     cloud's display-copy file is missing on disk), grid_too_large (422: a surface
+                 *     grid over the cell ceiling), unsupported_crs, source_missing and
+                 *     invalid_build_request (422: a surface build), no_coordinates (422: an ortho
+                 *     underlay without a CRS), invalid_geometry and invalid_base (422: a volume
+                 *     measurement's polygon or base), job_running (409: the resource's job is queued
+                 *     or running), not_ready (409: the resource has not finished importing),
+                 *     range_not_satisfiable (416)
                  */
                 code: string;
                 message: string;
@@ -1542,10 +2552,17 @@ export interface components {
             group_regex: string;
         };
         /**
+         * @description `train` labels images, builds datasets and trains models; `detect` runs library models over sources. Set at creation, never changed.
+         * @example train
+         * @enum {string}
+         */
+        ProjectKind: "train" | "detect";
+        /**
          * @example {
          *       "id": "7f1c2e3a-1111-4000-8000-000000000001",
          *       "name": "Ahmadia",
          *       "folder": "E:\\Projects\\Ahmadia",
+         *       "kind": "train",
          *       "classes": [
          *         {
          *           "id": "c1a2b3c4-0000-4000-8000-000000000001",
@@ -1620,7 +2637,9 @@ export interface components {
             name: string;
             /** @description absolute path of the project folder */
             folder: string;
+            kind: components["schemas"]["ProjectKind"];
             classes: components["schemas"]["ClassDef"][];
+            /** @description a library model id */
             preannotation_model_id: string | null;
             import_defaults: components["schemas"]["ImportSettings"];
             schema_version: number;
@@ -1631,6 +2650,7 @@ export interface components {
          * @example {
          *       "name": "Ahmadia",
          *       "folder": "E:\\Projects\\Ahmadia",
+         *       "kind": "train",
          *       "classes": [
          *         {
          *           "name": "excavator",
@@ -1649,6 +2669,8 @@ export interface components {
             name: string;
             /** @description absolute path; created when missing */
             folder: string;
+            kind: components["schemas"]["ProjectKind"];
+            /** @description a detection project may start with an empty list */
             classes: components["schemas"]["ClassDefInput"][];
         };
         /**
@@ -1667,6 +2689,7 @@ export interface components {
          */
         ProjectUpdate: {
             name?: string;
+            /** @description a library model id */
             preannotation_model_id?: string | null;
             import_defaults?: components["schemas"]["ImportSettings"];
         };
@@ -1777,6 +2800,10 @@ export interface components {
         /**
          * @example {
          *       "id": "50000000-3333-4000-8000-000000000001",
+         *       "kind": "images",
+         *       "label": "Flight 15 Apr",
+         *       "captured_on": "2019-04-15",
+         *       "map_id": null,
          *       "folder": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
          *       "site": "ahmadia",
          *       "settings": {
@@ -1794,6 +2821,16 @@ export interface components {
          */
         Source: {
             id: string;
+            kind: components["schemas"]["SourceKind"];
+            /** @description the operator's name for the source, e.g. Flight 14 Sep; a map source starts with the map's name */
+            label: string | null;
+            /**
+             * Format: date
+             * @description the survey date. Photos: the earliest capture time in the import, editable. Maps: the map's `captured_on`, kept equal to it. Null means date not set, and it is never guessed.
+             */
+            captured_on: string | null;
+            /** @description the map a `map` source owns; null for photos */
+            map_id: string | null;
             /** @description the imported folder; originals there are never modified */
             folder: string;
             site: string;
@@ -1806,6 +2843,26 @@ export interface components {
             imported_at: string | null;
             /** Format: date-time */
             created_at: string;
+        };
+        /**
+         * @description `images` owns the photos of one import; `map` owns one map (`video` is reserved)
+         * @enum {string}
+         */
+        SourceKind: "images" | "map";
+        /**
+         * @example {
+         *       "label": "Flight 14 Sep",
+         *       "captured_on": "2026-09-14"
+         *     }
+         */
+        SourcePatch: {
+            /** @description null clears it */
+            label?: string | null;
+            /**
+             * Format: date
+             * @description the survey date; on a map source it is written to the map too; null clears it
+             */
+            captured_on?: string | null;
         };
         /**
          * @example {
@@ -1988,7 +3045,7 @@ export interface components {
          *     }
          */
         PreannotateRequest: {
-            /** @description defaults to the project's pre-annotation model */
+            /** @description a library model id; defaults to the project's pre-annotation model */
             model_id?: string;
             /** @default 2560 */
             imgsz: number;
@@ -2318,8 +3375,6 @@ export interface components {
                 image_count: number;
             }[];
         };
-        /** @enum {string} */
-        ModelKind: "imported" | "trained";
         ClassMetrics: {
             class_name: string;
             map50: number;
@@ -2352,69 +3407,297 @@ export interface components {
             per_class: components["schemas"]["ClassMetrics"][];
         };
         /**
+         * @description A snapshot taken when the model was registered, never a live link: the project, dataset or base model it names may have been renamed, moved or deleted since. Every field is optional and nullable.
          * @example {
-         *       "id": "m0000000-2222-4000-8000-000000000001",
-         *       "name": "yolo11m-coco",
-         *       "kind": "imported",
-         *       "weights_path": "models/yolo11m.pt",
-         *       "base_weights": null,
-         *       "dataset_id": null,
-         *       "hyperparameters": {},
-         *       "metrics": null,
-         *       "class_names": [
-         *         "person",
-         *         "bicycle",
-         *         "car",
-         *         "motorcycle",
-         *         "airplane",
-         *         "bus",
-         *         "train",
-         *         "truck"
-         *       ],
-         *       "class_aliases": {
-         *         "truck": "dump_truck"
-         *       },
-         *       "exports": {},
-         *       "artifacts": {},
-         *       "run_id": null,
-         *       "created_at": "2026-09-17T10:10:00Z",
-         *       "train_gsd_cm": null
+         *       "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *       "project_name": "Ahmadia",
+         *       "project_folder": "E:\\Projects\\Ahmadia",
+         *       "dataset_id": "d0000000-7777-4000-8000-000000000001",
+         *       "dataset_name": "v1",
+         *       "run_id": "j0000000-4444-4000-8000-000000000005",
+         *       "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *       "base_model_name": "yolo11n-coco",
+         *       "source_file": null
          *     }
          */
-        Model: {
+        ModelProvenance: {
+            project_id?: string | null;
+            project_name?: string | null;
+            project_folder?: string | null;
+            dataset_id?: string | null;
+            dataset_name?: string | null;
+            /** @description the training job id */
+            run_id?: string | null;
+            /** @description the library model training started from */
+            base_model_id?: string | null;
+            base_model_name?: string | null;
+            /** @description the file an imported model was copied from */
+            source_file?: string | null;
+        };
+        /**
+         * @description a model in the app-wide library (`%APPDATA%\kestrel-ai\library`), usable by every project
+         * @example {
+         *       "id": "m0000000-2222-4000-8000-000000000001",
+         *       "name": "ahmadia-v1-n",
+         *       "notes": "First model trained on the April flights.",
+         *       "supplier": null,
+         *       "task": "detect",
+         *       "format": "pt",
+         *       "origin": "trained",
+         *       "state": "ready",
+         *       "class_names": [
+         *         "excavator",
+         *         "dump_truck"
+         *       ],
+         *       "class_aliases": {},
+         *       "provenance": {
+         *         "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *         "project_name": "Ahmadia",
+         *         "project_folder": "E:\\Projects\\Ahmadia",
+         *         "dataset_id": "d0000000-7777-4000-8000-000000000001",
+         *         "dataset_name": "v1",
+         *         "run_id": "j0000000-4444-4000-8000-000000000005",
+         *         "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *         "base_model_name": "yolo11n-coco",
+         *         "source_file": null
+         *       },
+         *       "hyperparameters": {
+         *         "epochs": 50,
+         *         "imgsz": 1280,
+         *         "batch": 8,
+         *         "patience": 50,
+         *         "augmentation": "aerial"
+         *       },
+         *       "metrics": {
+         *         "map50": 0.71,
+         *         "map50_95": 0.44,
+         *         "precision": 0.78,
+         *         "recall": 0.66,
+         *         "per_class": [
+         *           {
+         *             "class_name": "excavator",
+         *             "map50": 0.8,
+         *             "map50_95": 0.5,
+         *             "precision": 0.82,
+         *             "recall": 0.7
+         *           },
+         *           {
+         *             "class_name": "dump_truck",
+         *             "map50": 0.62,
+         *             "map50_95": 0.38,
+         *             "precision": 0.74,
+         *             "recall": 0.62
+         *           }
+         *         ]
+         *       },
+         *       "exports": {
+         *         "onnx": "exports/weights.onnx"
+         *       },
+         *       "artifacts": {
+         *         "results_csv": "artifacts/results.csv",
+         *         "confusion_matrix": "artifacts/confusion_matrix.png",
+         *         "pr_curve": "artifacts/PR_curve.png"
+         *       },
+         *       "train_gsd_cm": 2,
+         *       "sha256": "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a",
+         *       "created_at": "2026-09-18T09:00:00Z"
+         *     }
+         */
+        LibraryModel: {
             id: string;
             name: string;
-            kind: components["schemas"]["ModelKind"];
-            /** @description relative to the project folder */
-            weights_path: string;
-            base_weights: string | null;
-            dataset_id: string | null;
-            hyperparameters: {
-                [key: string]: unknown;
-            };
-            metrics: components["schemas"]["ModelMetrics"] | null;
+            notes: string;
+            /** @description free text for imported models, e.g. the client or partner who supplied it */
+            supplier: string | null;
+            /**
+             * @description `detect` for boxes, `obb` for rotated boxes
+             * @enum {string}
+             */
+            task: "detect" | "obb";
+            /** @enum {string} */
+            format: "pt" | "onnx";
+            /** @enum {string} */
+            origin: "trained" | "imported" | "starter";
+            /**
+             * @description `unavailable` when the weights file is missing from the library folder
+             * @enum {string}
+             */
+            state: "ready" | "unavailable";
             /** @description class names the weights predict, in index order */
             class_names: string[];
             /** @description model class name to project class name (for COCO weights, `truck` to `dump_truck`) */
             class_aliases: {
                 [key: string]: string;
             };
-            /** @description format to relative path */
+            provenance: components["schemas"]["ModelProvenance"];
+            hyperparameters: {
+                [key: string]: unknown;
+            };
+            metrics: components["schemas"]["ModelMetrics"] | null;
+            /** @description format to path relative to the model's library folder, e.g. `{onnx: exports/weights.onnx}` */
             exports: {
                 [key: string]: string;
             };
-            /** @description relative paths of run artifacts when present */
+            /** @description training artifacts present, keyed `results_csv`, `confusion_matrix`, `pr_curve`; paths relative to the model's library folder */
             artifacts: {
-                results_csv?: string;
-                confusion_matrix?: string;
-                pr_curve?: string;
+                [key: string]: string;
             };
-            /** @description training job id */
-            run_id: string | null;
+            /** @description ground size of one pixel in the training images */
+            train_gsd_cm: number | null;
+            /** @description of the weights file; the same file cannot be added twice */
+            sha256: string;
             /** Format: date-time */
             created_at: string;
-            /** @description Ground distance in cm that one model-input pixel covered during training. A map run resamples the map to this scale. Null when it has never been established. */
-            train_gsd_cm: number | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "m0000000-2222-4000-8000-000000000001",
+         *           "name": "ahmadia-v1-n",
+         *           "notes": "First model trained on the April flights.",
+         *           "supplier": null,
+         *           "task": "detect",
+         *           "format": "pt",
+         *           "origin": "trained",
+         *           "state": "ready",
+         *           "class_names": [
+         *             "excavator",
+         *             "dump_truck"
+         *           ],
+         *           "class_aliases": {},
+         *           "provenance": {
+         *             "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *             "project_name": "Ahmadia",
+         *             "project_folder": "E:\\Projects\\Ahmadia",
+         *             "dataset_id": "d0000000-7777-4000-8000-000000000001",
+         *             "dataset_name": "v1",
+         *             "run_id": "j0000000-4444-4000-8000-000000000005",
+         *             "base_model_id": "m0000000-2222-4000-8000-000000000002",
+         *             "base_model_name": "yolo11n-coco",
+         *             "source_file": null
+         *           },
+         *           "hyperparameters": {
+         *             "epochs": 50,
+         *             "imgsz": 1280,
+         *             "batch": 8,
+         *             "patience": 50,
+         *             "augmentation": "aerial"
+         *           },
+         *           "metrics": {
+         *             "map50": 0.71,
+         *             "map50_95": 0.44,
+         *             "precision": 0.78,
+         *             "recall": 0.66,
+         *             "per_class": [
+         *               {
+         *                 "class_name": "excavator",
+         *                 "map50": 0.8,
+         *                 "map50_95": 0.5,
+         *                 "precision": 0.82,
+         *                 "recall": 0.7
+         *               },
+         *               {
+         *                 "class_name": "dump_truck",
+         *                 "map50": 0.62,
+         *                 "map50_95": 0.38,
+         *                 "precision": 0.74,
+         *                 "recall": 0.62
+         *               }
+         *             ]
+         *           },
+         *           "exports": {
+         *             "onnx": "exports/weights.onnx"
+         *           },
+         *           "artifacts": {
+         *             "results_csv": "artifacts/results.csv",
+         *             "confusion_matrix": "artifacts/confusion_matrix.png",
+         *             "pr_curve": "artifacts/PR_curve.png"
+         *           },
+         *           "train_gsd_cm": 2,
+         *           "sha256": "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a",
+         *           "created_at": "2026-09-18T09:00:00Z"
+         *         },
+         *         {
+         *           "id": "m0000000-2222-4000-8000-000000000002",
+         *           "name": "yolo11n-coco",
+         *           "notes": "",
+         *           "supplier": null,
+         *           "task": "detect",
+         *           "format": "pt",
+         *           "origin": "starter",
+         *           "state": "ready",
+         *           "class_names": [
+         *             "person",
+         *             "bicycle",
+         *             "car",
+         *             "motorcycle",
+         *             "airplane",
+         *             "bus",
+         *             "train",
+         *             "truck"
+         *           ],
+         *           "class_aliases": {
+         *             "truck": "dump_truck"
+         *           },
+         *           "provenance": {},
+         *           "hyperparameters": {},
+         *           "metrics": null,
+         *           "exports": {},
+         *           "artifacts": {},
+         *           "train_gsd_cm": null,
+         *           "sha256": "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
+         *           "created_at": "2026-09-17T10:10:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        LibraryModelPage: {
+            items: components["schemas"]["LibraryModel"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "name": "client-x-machinery",
+         *       "weights_path": "E:\\Models\\client-x\\best.pt",
+         *       "class_aliases": {
+         *         "truck": "dump_truck"
+         *       },
+         *       "supplier": "Client X"
+         *     }
+         */
+        LibraryModelImport: {
+            name: string;
+            /** @description absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into the library */
+            weights_path: string;
+            /** @default {} */
+            class_aliases: {
+                [key: string]: string;
+            };
+            /** @description who supplied the model */
+            supplier?: string | null;
+        };
+        /**
+         * @description every field is optional
+         * @example {
+         *       "name": "ahmadia-v1-n",
+         *       "notes": "Good on excavators, weak on small trucks.",
+         *       "supplier": null
+         *     }
+         */
+        LibraryModelPatch: {
+            name?: string;
+            notes?: string;
+            supplier?: string | null;
+            class_aliases?: {
+                [key: string]: string;
+            };
+            /**
+             * @description cm of ground per model-input pixel at training. Null puts it back to unknown, which is
+             *     what stops a run starting at a scale nobody established.
+             */
+            train_gsd_cm?: number | null;
         };
         /**
          * @description A training scale derived from the model's dataset, with the evidence for it.
@@ -2460,20 +3743,76 @@ export interface components {
         };
         /**
          * @example {
-         *       "name": "yolo11m-coco",
-         *       "weights_path": "E:\\Dev\\Yolo\\models\\yolo11m.pt",
-         *       "class_aliases": {
-         *         "truck": "dump_truck"
-         *       }
+         *       "projects": [
+         *         {
+         *           "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+         *           "name": "Ahmadia",
+         *           "folder": "E:\\Projects\\Ahmadia",
+         *           "preannotation": true,
+         *           "query_runs": 2,
+         *           "map_runs": 1
+         *         }
+         *       ]
          *     }
          */
-        ModelImport: {
-            name: string;
-            /** @description absolute path to an existing .pt file (404 not_found when missing or not absolute); copied into models/ */
-            weights_path: string;
-            class_aliases?: {
-                [key: string]: string;
-            };
+        ModelUsage: {
+            /** @description recently opened projects that use the model; projects that are not on the recent list are not scanned */
+            projects: {
+                project_id: string;
+                name: string;
+                folder: string;
+                /** @description the project's pre-annotation model is this model */
+                preannotation: boolean;
+                /** @description detection runs on images that used the model */
+                query_runs: number;
+                /** @description map runs that used the model */
+                map_runs: number;
+            }[];
+        };
+        /**
+         * @example {
+         *       "available": true,
+         *       "root": "C:\\Users\\operator\\AppData\\Roaming\\kestrel-ai\\library",
+         *       "error": null
+         *     }
+         */
+        LibraryStatus: {
+            available: boolean;
+            /** @description absolute path of the library folder */
+            root: string;
+            /** @description why the library could not be opened; null when it is available */
+            error: string | null;
+        };
+        /**
+         * @example {
+         *       "name": "yolo11n-coco"
+         *     }
+         */
+        StarterAcquire: {
+            /** @description library name; defaults to `<key>-coco` */
+            name?: string | null;
+        };
+        /**
+         * @example {
+         *       "pending": 0,
+         *       "adopted": 3,
+         *       "missing": [],
+         *       "job_id": null
+         *     }
+         */
+        AdoptionStatus: {
+            /** @description old project models not yet in the library */
+            pending: number;
+            /** @description old project models now in the library */
+            adopted: number;
+            /** @description old project models that could not be adopted */
+            missing: {
+                old_model_id: string;
+                name: string;
+                error: string;
+            }[];
+            /** @description the adoption job that is queued or running */
+            job_id: string | null;
         };
         /** @enum {string} */
         StarterModelKey: "yolo26n" | "yolo26s" | "yolo26m" | "yolo26l" | "yolo26x" | "yolo12n" | "yolo12s" | "yolo12m" | "yolo12l" | "yolo12x" | "yolo11n" | "yolo11s" | "yolo11m" | "yolo11l" | "yolo11x" | "yolov10n" | "yolov10s" | "yolov10m" | "yolov10b" | "yolov10l" | "yolov10x" | "yolov9t" | "yolov9s" | "yolov9m" | "yolov9c" | "yolov9e" | "yolov8n" | "yolov8s" | "yolov8m" | "yolov8l" | "yolov8x" | "yolov5nu" | "yolov5su" | "yolov5mu" | "yolov5lu" | "yolov5xu" | "yolov5n6u" | "yolov5s6u" | "yolov5m6u" | "yolov5l6u" | "yolov5x6u" | "yolov3u" | "yolov3-tinyu" | "yolov3-sppu";
@@ -2509,20 +3848,6 @@ export interface components {
         };
         /**
          * @example {
-         *       "key": "yolo11n"
-         *     }
-         */
-        StarterModelImport: {
-            key: components["schemas"]["StarterModelKey"];
-            /** @description registry name; defaults to `<key>-coco` */
-            name?: string;
-        };
-        ModelPage: {
-            items: components["schemas"]["Model"][];
-            next_cursor: string | null;
-        };
-        /**
-         * @example {
          *       "name": "ahmadia-v1-n",
          *       "dataset_id": "d0000000-7777-4000-8000-000000000001",
          *       "base_model_id": "m0000000-2222-4000-8000-000000000002",
@@ -2537,7 +3862,7 @@ export interface components {
         TrainRequest: {
             name: string;
             dataset_id: string;
-            /** @description any registry model */
+            /** @description a library model id (any library model, including starter COCO weights) */
             base_model_id: string;
             /** @default 50 */
             epochs: number;
@@ -2861,6 +4186,14 @@ export interface components {
          *       "conf": 0.25,
          *       "job_id": "j0000000-4444-4000-8000-000000000003",
          *       "box_count": 7,
+         *       "source_id": "50000000-3333-4000-8000-000000000001",
+         *       "model_snapshot": {},
+         *       "class_map": {},
+         *       "pinned": false,
+         *       "counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 7
+         *       },
+         *       "verified_counts": {},
          *       "promoted_at": null,
          *       "created_at": "2026-09-17T13:00:00Z"
          *     }
@@ -2868,6 +4201,20 @@ export interface components {
         QueryRun: {
             id: string;
             kind: components["schemas"]["QueryRunKind"];
+            /** @description the photo source the run covers; null for runs started before runs belonged to sources */
+            source_id: string | null;
+            model_snapshot: components["schemas"]["ModelSnapshot"];
+            class_map: components["schemas"]["RunClassMap"];
+            /** @description the operator's choice of this run to represent its source */
+            pinned: boolean;
+            /** @description detections per project class id, every review state except rejected */
+            counts: {
+                [key: string]: number;
+            };
+            /** @description detections per project class id that are accepted, edited or drawn by a person */
+            verified_counts: {
+                [key: string]: number;
+            };
             model_id: string | null;
             provider: string | null;
             model_name: string | null;
@@ -2904,7 +4251,7 @@ export interface components {
          */
         QueryRunCreate: {
             kind: components["schemas"]["QueryRunKind"];
-            /** @description required for local_model */
+            /** @description a library model id; required for local_model */
             model_id?: string;
             provider?: components["schemas"]["ProviderName"];
             /** @description required for cloud_provider */
@@ -2975,7 +4322,14 @@ export interface components {
             run_id: string | null;
             model_name: string | null;
             conf: number | null;
+            /** @description the run was pinned by the operator rather than picked by the comparison rule */
+            pinned: boolean;
+            /** @description per class id: the total, or the verified count when `verified_only` was asked for */
             counts: {
+                [key: string]: number;
+            };
+            /** @description per class id: accepted, edited or drawn by a person */
+            verified_counts: {
                 [key: string]: number;
             };
             /** @description change since the previous comparable survey; absent for a class that survey did not have */
@@ -3102,7 +4456,7 @@ export interface components {
         MapRunCreate: {
             map_id: string;
             kind: components["schemas"]["QueryRunKind"];
-            /** @description required for local_model */
+            /** @description a library model id; required for local_model */
             model_id?: string;
             provider?: components["schemas"]["ProviderName"];
             /** @description required for cloud_provider */
@@ -3138,6 +4492,34 @@ export interface components {
          *         "c1a2b3c4-0000-4000-8000-000000000001": 42,
          *         "c1a2b3c4-0000-4000-8000-000000000004": 17
          *       },
+         *       "source_id": "50000000-3333-4000-8000-000000000002",
+         *       "model_snapshot": {
+         *         "id": "m0000000-2222-4000-8000-000000000001",
+         *         "name": "machinery-v3",
+         *         "task": "detect",
+         *         "format": "pt",
+         *         "class_names": [
+         *           "excavator",
+         *           "dump truck"
+         *         ],
+         *         "origin": "trained"
+         *       },
+         *       "class_map": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump truck": "c1a2b3c4-0000-4000-8000-000000000004"
+         *       },
+         *       "pinned": false,
+         *       "verified_counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 30
+         *       },
+         *       "area_counts": {
+         *         "5a000000-aaaa-4000-8000-000000000001": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": {
+         *             "total": 12,
+         *             "verified": 9
+         *           }
+         *         }
+         *       },
          *       "detection_count": 59,
          *       "created_at": "2026-09-22T11:00:00Z"
          *     }
@@ -3145,6 +4527,22 @@ export interface components {
         MapRun: {
             id: string;
             map_id: string;
+            /** @description the map source; null for runs on maps imported before maps had sources */
+            source_id: string | null;
+            model_snapshot: components["schemas"]["ModelSnapshot"];
+            class_map: components["schemas"]["RunClassMap"];
+            /** @description the operator's choice of this run to represent its map in analytics and the survey timeline */
+            pinned: boolean;
+            /** @description objects per project class id that are accepted, edited or drawn by a person */
+            verified_counts: {
+                [key: string]: number;
+            };
+            /** @description per site area id, per class id: `{total, verified}`; an area that does not overlap the map has no key */
+            area_counts: {
+                [key: string]: {
+                    [key: string]: components["schemas"]["CountPair"];
+                };
+            };
             kind: components["schemas"]["QueryRunKind"];
             model_id: string | null;
             provider: string | null;
@@ -3158,7 +4556,7 @@ export interface components {
             job_id: string | null;
             /** @description the state of the run's latest job; null before one exists */
             state: components["schemas"]["JobState"] | null;
-            /** @description detections per class id, filled when the run finishes */
+            /** @description detections per class id in every review state except rejected (the total); filled when the run finishes and kept current by review */
             counts: {
                 [key: string]: number;
             };
@@ -3195,6 +4593,8 @@ export interface components {
         };
         MapDetection: {
             id: string;
+            review_state: components["schemas"]["ReviewState"];
+            provenance_kind: components["schemas"]["ProvenanceKind"];
             class_id: string;
             confidence: number;
             /** @description full-resolution map pixels */
@@ -3215,7 +4615,9 @@ export interface components {
          *           "y": 800,
          *           "w": 180,
          *           "h": 120,
-         *           "angle": null
+         *           "angle": null,
+         *           "review_state": "unreviewed",
+         *           "provenance_kind": "local_model"
          *         }
          *       ],
          *       "truncated": false
@@ -3460,7 +4862,499 @@ export interface components {
             content: components["schemas"]["MapExportContent"];
             /** @description required for run and run_score */
             run_id?: string;
+            /** @description gpkg (GeoPackage) includes review_state, the mapped class and a site_areas layer */
             formats: components["schemas"]["MapExportFormat"][];
+        };
+        /**
+         * @example {
+         *       "target_project_id": "7f1c2e3a-1111-4000-8000-000000000002"
+         *     }
+         */
+        MapMoveRequest: {
+            /** @description an open or recently opened detection project */
+            target_project_id: string;
+        };
+        /**
+         * @description a count shown as total (verified): total is every state except rejected; verified is accepted, edited or drawn by a person
+         * @example {
+         *       "total": 6,
+         *       "verified": 4
+         *     }
+         */
+        CountPair: {
+            total: number;
+            verified: number;
+        };
+        /**
+         * @description the library model as it was when the run started, so the run still reads after the model is deleted; empty for cloud-provider runs and runs made before snapshots
+         * @example {
+         *       "id": "m0000000-2222-4000-8000-000000000001",
+         *       "name": "yolo11m-coco",
+         *       "task": "detect",
+         *       "format": "pt",
+         *       "class_names": [
+         *         "truck",
+         *         "car"
+         *       ],
+         *       "origin": "starter"
+         *     }
+         */
+        ModelSnapshot: {
+            id?: string;
+            name?: string;
+            /** @enum {string} */
+            task?: "detect" | "obb";
+            /** @enum {string} */
+            format?: "pt" | "onnx";
+            class_names?: string[];
+            /** @enum {string} */
+            origin?: "trained" | "imported" | "starter";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * @description model class name to project class id; null ignores that class (its detections are not written); empty when the run used no mapping
+         * @example {
+         *       "truck": "c1a2b3c4-0000-4000-8000-000000000004",
+         *       "car": null
+         *     }
+         */
+        RunClassMap: {
+            [key: string]: string | null;
+        };
+        /**
+         * @description `images` is a photo run (a query run over one photo source); `map` is a map run
+         * @enum {string}
+         */
+        RunKind: "images" | "map";
+        /**
+         * @example {
+         *       "total": 530,
+         *       "reviewed": 412
+         *     }
+         */
+        ReviewProgress: {
+            /** @description detections of the run */
+            total: number;
+            /** @description detections no longer unreviewed */
+            reviewed: number;
+        };
+        /**
+         * @example {
+         *       "id": "r0000000-7777-4000-8000-000000000001",
+         *       "kind": "map",
+         *       "source_id": "50000000-3333-4000-8000-000000000002",
+         *       "source_label": "May survey",
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "model_name": "machinery-v3",
+         *       "conf": 0.25,
+         *       "job_state": "succeeded",
+         *       "pinned": false,
+         *       "counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 42,
+         *         "c1a2b3c4-0000-4000-8000-000000000004": 17
+         *       },
+         *       "verified_counts": {
+         *         "c1a2b3c4-0000-4000-8000-000000000001": 30
+         *       },
+         *       "review": {
+         *         "total": 59,
+         *         "reviewed": 34
+         *       },
+         *       "created_at": "2026-09-22T11:00:00Z"
+         *     }
+         */
+        RunSummary: {
+            /** @description the query run or map run id */
+            id: string;
+            kind: components["schemas"]["RunKind"];
+            source_id: string | null;
+            /** @description the source's label, else its folder or map name */
+            source_label: string | null;
+            model_id: string | null;
+            /** @description from the run's model snapshot, or the cloud provider's model */
+            model_name: string | null;
+            conf: number;
+            /** @description the state of the run's latest job; null before one exists */
+            job_state: components["schemas"]["JobState"] | null;
+            pinned: boolean;
+            /** @description per project class id; every state except rejected */
+            counts: {
+                [key: string]: number;
+            };
+            /** @description per project class id; accepted */
+            verified_counts: {
+                [key: string]: number;
+            };
+            review: components["schemas"]["ReviewProgress"];
+            /** Format: date-time */
+            created_at: string;
+        };
+        RunSummaryPage: {
+            items: components["schemas"]["RunSummary"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @description one run per source. A library model (`model_id`), or a cloud provider (`provider` and `query`).
+         * @example {
+         *       "source_ids": [
+         *         "50000000-3333-4000-8000-000000000001",
+         *         "50000000-3333-4000-8000-000000000002"
+         *       ],
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "conf": 0.25
+         *     }
+         */
+        RunCreate: {
+            source_ids: string[];
+            /** @description a library model id */
+            model_id?: string;
+            provider?: components["schemas"]["ProviderName"];
+            /** @description free text for a cloud provider, e.g. dump trucks */
+            query?: string;
+            /** @default 0.25 */
+            conf: number;
+            tiling?: components["schemas"]["Tiling"];
+            /** @description map runs: resample windows to this GSD; defaults to the model's training GSD */
+            target_gsd_cm?: number | null;
+        };
+        RunCreatedItem: {
+            run_id: string;
+            source_id: string;
+            kind: components["schemas"]["RunKind"];
+            job: components["schemas"]["Job"];
+        };
+        RunCreated: {
+            runs: components["schemas"]["RunCreatedItem"][];
+        };
+        /**
+         * @example {
+         *       "pinned": true
+         *     }
+         */
+        RunPatch: {
+            /** @description true pins this run and unpins the other runs of its source */
+            pinned: boolean;
+        };
+        /**
+         * @description the `Error` envelope for `unmapped_classes`
+         * @example {
+         *       "error": {
+         *         "code": "unmapped_classes",
+         *         "message": "2 of the model's classes are not mapped to project classes.",
+         *         "details": {
+         *           "model_id": "m0000000-2222-4000-8000-000000000001",
+         *           "unmapped": [
+         *             "crane",
+         *             "concrete mixer"
+         *           ]
+         *         }
+         *       }
+         *     }
+         */
+        UnmappedClassesError: {
+            error: {
+                /** @description `unmapped_classes`, or `validation_error` for a malformed body */
+                code: string;
+                message: string;
+                details: {
+                    model_id?: string;
+                    /** @description model class names with no project class */
+                    unmapped?: string[];
+                } & {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        /**
+         * @example {
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "model_classes": [
+         *         "excavator",
+         *         "dump truck",
+         *         "crane"
+         *       ],
+         *       "mapping": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump truck": "c1a2b3c4-0000-4000-8000-000000000004"
+         *       },
+         *       "unmapped": [
+         *         "crane"
+         *       ]
+         *     }
+         */
+        ModelClassMapOut: {
+            model_id: string;
+            /** @description the model's class names, in index order */
+            model_classes: string[];
+            /** @description model class name to project class id, or null to ignore it */
+            mapping: {
+                [key: string]: string | null;
+            };
+            /** @description model class names that have no entry in `mapping` yet */
+            unmapped: string[];
+        };
+        /**
+         * @example {
+         *       "mapping": {
+         *         "excavator": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "dump truck": null
+         *       },
+         *       "new_classes": [
+         *         "crane"
+         *       ]
+         *     }
+         */
+        ModelClassMapPut: {
+            /** @description model class name to project class id, or null to ignore it */
+            mapping: {
+                [key: string]: string | null;
+            };
+            /**
+             * @description model class names to add as project classes, each mapped to itself
+             * @default []
+             */
+            new_classes: string[];
+        };
+        /**
+         * @example {
+         *       "detection_ids": [
+         *         "d0000000-1111-4000-8000-000000000001"
+         *       ],
+         *       "action": "accept"
+         *     }
+         */
+        MapDetectionReview: {
+            detection_ids: string[];
+            /**
+             * @description `unreview` puts a detection back to unreviewed; `reclass` needs `class_id` and sets the state `edited`
+             * @enum {string}
+             */
+            action: "accept" | "reject" | "unreview" | "reclass";
+            /** @description required for reclass */
+            class_id?: string;
+        };
+        /**
+         * @example {
+         *       "updated": 1
+         *     }
+         */
+        MapDetectionReviewResult: {
+            updated: number;
+        };
+        /**
+         * @example {
+         *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *       "x": 2400,
+         *       "y": 1300,
+         *       "w": 170,
+         *       "h": 110
+         *     }
+         */
+        MapDetectionCreate: {
+            class_id: string;
+            /** @description full-resolution map pixels */
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+            angle?: number | null;
+        };
+        /**
+         * @example {
+         *       "detection": {
+         *         "id": "d0000000-1111-4000-8000-000000000002",
+         *         "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *         "confidence": 0.64,
+         *         "x": 3000,
+         *         "y": 2400,
+         *         "w": 170,
+         *         "h": 110,
+         *         "angle": null,
+         *         "review_state": "unreviewed",
+         *         "provenance_kind": "local_model"
+         *       },
+         *       "remaining": 118
+         *     }
+         */
+        NextUnreviewed: {
+            detection: components["schemas"]["MapDetection"] | null;
+            /** @description unreviewed detections left in the run */
+            remaining: number;
+        };
+        /**
+         * @example {
+         *       "min_confidence": 0.8
+         *     }
+         */
+        AcceptAbove: {
+            min_confidence: number;
+        };
+        /** @description [longitude, latitude] in WGS84 degrees */
+        LonLat: number[];
+        /** @description [x, y] in full-resolution map pixels */
+        PixelPoint: number[];
+        /**
+         * @example {
+         *       "id": "5a000000-aaaa-4000-8000-000000000001",
+         *       "name": "North laydown yard",
+         *       "polygon_wgs84": [
+         *         [
+         *           47.761,
+         *           29.496
+         *         ],
+         *         [
+         *           47.764,
+         *           29.496
+         *         ],
+         *         [
+         *           47.764,
+         *           29.498
+         *         ],
+         *         [
+         *           47.761,
+         *           29.498
+         *         ]
+         *       ],
+         *       "created_at": "2026-09-23T09:00:00Z"
+         *     }
+         */
+        SiteArea: {
+            id: string;
+            name: string;
+            /** @description the outline, not closed (the first point is not repeated) */
+            polygon_wgs84: components["schemas"]["LonLat"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        /**
+         * @description either `polygon_wgs84`, or `map_id` with `polygon_px` drawn on that map (the server converts it with the map's georeference)
+         * @example {
+         *       "name": "North laydown yard",
+         *       "map_id": "a0000000-6666-4000-8000-000000000001",
+         *       "polygon_px": [
+         *         [
+         *           1000,
+         *           800
+         *         ],
+         *         [
+         *           4000,
+         *           800
+         *         ],
+         *         [
+         *           4000,
+         *           3000
+         *         ],
+         *         [
+         *           1000,
+         *           3000
+         *         ]
+         *       ]
+         *     }
+         */
+        SiteAreaCreate: {
+            name: string;
+            polygon_wgs84?: components["schemas"]["LonLat"][];
+            map_id?: string;
+            polygon_px?: components["schemas"]["PixelPoint"][];
+        };
+        /**
+         * @description a new outline is either `polygon_wgs84`, or `map_id` with `polygon_px`
+         * @example {
+         *       "name": "North yard"
+         *     }
+         */
+        SiteAreaPatch: {
+            name?: string;
+            polygon_wgs84?: components["schemas"]["LonLat"][];
+            map_id?: string;
+            polygon_px?: components["schemas"]["PixelPoint"][];
+        };
+        SiteAreaList: {
+            items: components["schemas"]["SiteArea"][];
+        };
+        /**
+         * @example {
+         *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *       "name": "excavator",
+         *       "colour": "#f97316",
+         *       "total": 6,
+         *       "verified": 4
+         *     }
+         */
+        ClassCountRow: {
+            class_id: string;
+            name: string;
+            colour: string;
+            total: number;
+            verified: number;
+        };
+        SourceAnalytics: {
+            source: components["schemas"]["Source"];
+            /**
+             * @description `objects` for a map source; `detections` for photos, where one object can appear in several photos
+             * @enum {string}
+             */
+            unit: "objects" | "detections";
+            /** @description photos in a photo source; null for a map */
+            image_count: number | null;
+            /** @description the run that represents the source; null before any run */
+            run: components["schemas"]["RunSummary"] | null;
+            classes: components["schemas"]["ClassCountRow"][];
+            review: components["schemas"]["ReviewProgress"];
+        };
+        AreaRef: {
+            id: string;
+            name: string;
+        };
+        AreaSurveyCell: {
+            /** @description part of the area lies outside this map */
+            partial: boolean;
+            /** @description per class id */
+            counts: {
+                [key: string]: components["schemas"]["CountPair"];
+            };
+        };
+        AreaSurvey: {
+            map_id: string;
+            map_name: string;
+            /** Format: date */
+            captured_on: string | null;
+            /**
+             * @description as in the survey timeline
+             * @enum {string}
+             */
+            state: "ok" | "not_comparable" | "not_counted";
+            /** @description per site area id; an area that does not overlap this map has no key */
+            per_area: {
+                [key: string]: components["schemas"]["AreaSurveyCell"];
+            };
+        };
+        AreaAnalytics: {
+            areas: components["schemas"]["AreaRef"][];
+            /** @description oldest first, as in the survey timeline */
+            surveys: components["schemas"]["AreaSurvey"][];
+        };
+        PhotoBatch: {
+            source: components["schemas"]["Source"];
+            run: components["schemas"]["RunSummary"] | null;
+            /** @description detections, not objects */
+            classes: components["schemas"]["ClassCountRow"][];
+        };
+        PhotoBatchAnalytics: {
+            batches: components["schemas"]["PhotoBatch"][];
+        };
+        /**
+         * @example {
+         *       "format": "pdf",
+         *       "source_id": "50000000-3333-4000-8000-000000000002"
+         *     }
+         */
+        DetectExportRequest: {
+            /** @enum {string} */
+            format: "csv" | "pdf";
+            /** @description PDF: report this source only; omitted or null reports every source. CSV: this source only, else every source. */
+            source_id?: string | null;
         };
         /**
          * @example {
@@ -3497,6 +5391,16 @@ export interface components {
          *         "conf": 0.25,
          *         "job_id": "j0000000-4444-4000-8000-000000000003",
          *         "box_count": 7,
+         *         "source_id": "50000000-3333-4000-8000-000000000001",
+         *         "model_snapshot": {},
+         *         "class_map": {},
+         *         "pinned": false,
+         *         "counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 7
+         *         },
+         *         "verified_counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 6
+         *         },
          *         "promoted_at": "2026-09-17T13:30:00Z",
          *         "created_at": "2026-09-17T13:00:00Z"
          *       },
@@ -3528,6 +5432,16 @@ export interface components {
          *         "conf": 0.25,
          *         "job_id": "j0000000-4444-4000-8000-000000000003",
          *         "box_count": 7,
+         *         "source_id": "50000000-3333-4000-8000-000000000001",
+         *         "model_snapshot": {},
+         *         "class_map": {},
+         *         "pinned": false,
+         *         "counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 7
+         *         },
+         *         "verified_counts": {
+         *           "c1a2b3c4-0000-4000-8000-000000000001": 6
+         *         },
          *         "promoted_at": null,
          *         "created_at": "2026-09-17T13:00:00Z"
          *       },
@@ -3568,8 +5482,754 @@ export interface components {
             /** @description relative to the project folder */
             path: string;
         };
+        /** @description min, max and mean are exact; the percentiles come from a stride sample of at most 2 M points */
+        PointCloudZStats: {
+            min: number;
+            max: number;
+            mean: number;
+            p01: number;
+            p1: number;
+            p5: number;
+            p50: number;
+            p95: number;
+            p99: number;
+            p999: number;
+            sample_count: number;
+        };
+        /**
+         * @example {
+         *       "id": "c0000000-8888-4000-8000-000000000001",
+         *       "name": "Chimney stack 3D",
+         *       "status": "ready",
+         *       "error": null,
+         *       "source_path": "\\\\DanNas\\surveys\\chimney.las",
+         *       "source_size": 773872531,
+         *       "source_sha256": "9f2c0d8e7a1b3c4d5e6f708192a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5",
+         *       "las_version": "1.2",
+         *       "point_format": 3,
+         *       "point_count": 21697184,
+         *       "has_rgb": true,
+         *       "scale": [
+         *         0.001,
+         *         0.001,
+         *         0.001
+         *       ],
+         *       "crs_wkt": "PROJCS[\"WGS 84 / UTM zone 39N\"]",
+         *       "epsg": 32639,
+         *       "proj4": "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs",
+         *       "vertical_crs": null,
+         *       "crs_source": "file",
+         *       "bounds_native": [
+         *         553012.4,
+         *         2847210.9,
+         *         -52.3,
+         *         553198.7,
+         *         2847402.1,
+         *         31.8
+         *       ],
+         *       "bounds_repaired": true,
+         *       "bounds_wgs84": [
+         *         51.5301,
+         *         25.7331,
+         *         51.532,
+         *         25.7349
+         *       ],
+         *       "octree_spacing_m": 1.52,
+         *       "z_stats": {
+         *         "min": -52.3,
+         *         "max": 31.8,
+         *         "mean": -41.2,
+         *         "p01": -46.1,
+         *         "p1": -45.9,
+         *         "p5": -45.6,
+         *         "p50": -44.8,
+         *         "p95": -30.2,
+         *         "p99": -5.1,
+         *         "p999": 20.4,
+         *         "sample_count": 1972472
+         *       },
+         *       "class_counts": {
+         *         "0": 21697184
+         *       },
+         *       "octree_bytes": 137390210,
+         *       "captured_on": "2026-09-10",
+         *       "map_id": null,
+         *       "job_id": "j0000000-4444-4000-8000-000000000001",
+         *       "created_at": "2026-09-23T10:00:00Z"
+         *     }
+         */
+        PointCloudOut: {
+            id: string;
+            name: string;
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            /** @description readable text when `failed` */
+            error: string | null;
+            /** @description the original file; only ever read */
+            source_path: string;
+            /** Format: int64 */
+            source_size: number;
+            /** @description streamed while the work copy is made */
+            source_sha256: string | null;
+            /** @description e.g. `1.2` */
+            las_version: string | null;
+            point_format: number | null;
+            /**
+             * Format: int64
+             * @description the scanned count
+             */
+            point_count: number | null;
+            has_rgb: boolean | null;
+            /** @description the header scales sx, sy, sz; the coordinate precision shown with every pick */
+            scale: number[] | null;
+            /** @description the horizontal CRS; null means no coordinates */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description for client-side conversions */
+            proj4: string | null;
+            /** @description the vertical CRS name; null means heights as stored */
+            vertical_crs: string | null;
+            /** @enum {string|null} */
+            crs_source: "file" | "assigned" | null;
+            /** @description minx, miny, minz, maxx, maxy, maxz; the true bounds from the scan */
+            bounds_native: number[] | null;
+            /** @description true when the header bounds did not contain every point */
+            bounds_repaired: boolean | null;
+            /** @description minlon, minlat, maxlon, maxlat */
+            bounds_wgs84: number[] | null;
+            /** @description the octree root node's spacing */
+            octree_spacing_m: number | null;
+            z_stats: components["schemas"]["PointCloudZStats"] | null;
+            /** @description the ASPRS classification histogram, keyed by class code */
+            class_counts: {
+                [key: string]: number;
+            } | null;
+            /** Format: int64 */
+            octree_bytes: number | null;
+            /**
+             * Format: date
+             * @description when the survey was flown
+             */
+            captured_on: string | null;
+            /** @description the linked orthomosaic */
+            map_id: string | null;
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        PointCloudList: {
+            items: components["schemas"]["PointCloudOut"][];
+        };
+        PointCloudCreate: {
+            /** @description absolute path of a .las or .laz file */
+            path: string;
+            /** @description the file stem when absent */
+            name?: string;
+            /** @description link this map on import; subject to the same checks as a PATCH */
+            map_id?: string;
+        };
+        PointCloudWithJob: {
+            cloud: components["schemas"]["PointCloudOut"];
+            job: components["schemas"]["Job"];
+        };
+        PointCloudPatch: {
+            name?: string;
+            /**
+             * Format: date
+             * @description when the survey was flown; null clears it
+             */
+            captured_on?: string | null;
+            /** @description link a map; null unlinks */
+            map_id?: string | null;
+            /** @description only when the cloud has no CRS (`crs_wkt` is null); the cloud is never reprojected */
+            assign_epsg?: number;
+        };
+        PointCloudInspectRequest: {
+            /** @description absolute path of a .las or .laz file */
+            path: string;
+        };
+        PointCloudAdmission: {
+            ok: boolean;
+            /** Format: int64 */
+            ram_needed_bytes: number;
+            /** Format: int64 */
+            ram_available_bytes: number;
+            /** Format: int64 */
+            disk_needed_bytes: number;
+            /** Format: int64 */
+            disk_available_bytes: number;
+            /** @description when `ok` is false */
+            reason: string | null;
+        };
+        PointCloudFileInfo: {
+            path: string;
+            /** Format: int64 */
+            size: number;
+            /** @description true for LAZ */
+            compressed: boolean;
+            las_version: string;
+            point_format: number;
+            /**
+             * Format: int64
+             * @description the header's count
+             */
+            point_count: number;
+            has_rgb: boolean;
+            /** @description minx, miny, minz, maxx, maxy, maxz as the header states them */
+            header_bounds: number[];
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** Format: date */
+            captured_on: string | null;
+            admission: components["schemas"]["PointCloudAdmission"];
+        };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export";
+        CloudMeasurementKind: "point" | "distance" | "height" | "vertical";
+        CloudMeasurementPoint: {
+            /** @description native CRS */
+            x: number;
+            y: number;
+            z: number;
+            /** @description the display spacing of the deepest loaded node that contains the pick */
+            uncertainty_m: number;
+        };
+        CloudMeasurementCreate: {
+            kind: components["schemas"]["CloudMeasurementKind"];
+            /** @description one point for `point`, two for the other kinds */
+            points: components["schemas"]["CloudMeasurementPoint"][];
+            /** @description "Distance 3"-style numbering when absent */
+            name?: string;
+            note?: string;
+        };
+        CloudMeasurementUpdate: {
+            name?: string;
+            /** @description null clears it */
+            note?: string | null;
+        };
+        /** @description computed by the server from the stored points; a quantity that does not apply to the kind is null */
+        CloudMeasurementResults: {
+            lon: number | null;
+            lat: number | null;
+            dx: number | null;
+            dy: number | null;
+            dz: number | null;
+            distance_3d: number | null;
+            distance_horizontal: number | null;
+            distance_vertical: number | null;
+            /** @description second pick minus first */
+            height_difference: number | null;
+            lean_offset_m: number | null;
+            /** @description degrees from vertical */
+            lean_angle_deg: number | null;
+            /** @description the top relative to the base */
+            lean_azimuth_deg: number | null;
+            lean_mm_per_m: number | null;
+            uncertainty_m: number | null;
+            angle_uncertainty_deg: number | null;
+        };
+        CloudMeasurementOut: {
+            id: string;
+            point_cloud_id: string;
+            kind: components["schemas"]["CloudMeasurementKind"];
+            name: string;
+            note: string | null;
+            points: components["schemas"]["CloudMeasurementPoint"][];
+            results: components["schemas"]["CloudMeasurementResults"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CloudMeasurementList: {
+            items: components["schemas"]["CloudMeasurementOut"][];
+        };
+        PointCloudExportRequest: {
+            /** @enum {string} */
+            format: "laz";
+            /** @description true when absent: write measurements.csv when the cloud has measurements */
+            include_measurements?: boolean;
+        };
+        /** @enum {string} */
+        SurfaceKind: "cloud_dsm" | "design";
+        /** @enum {string} */
+        SurfaceStatus: "building" | "ready" | "failed";
+        /**
+         * @description median, mean, max and min are cloud statistics (S2); tin, delaunay, dem_resample and dem_copy are design methods (S3)
+         * @enum {string}
+         */
+        SurfaceMethod: "median" | "mean" | "max" | "min" | "tin" | "delaunay" | "dem_resample" | "dem_copy";
+        /** @enum {string} */
+        SurfaceBuildMethod: "median" | "mean" | "max" | "min";
+        /** @description the build request with the defaults resolved */
+        SurfaceBuildParams: {
+            point_cloud_id: string;
+            name: string;
+            method: components["schemas"]["SurfaceBuildMethod"];
+            /** @description the cell size actually used; null while an auto cell is being chosen */
+            cell_size_m: number | null;
+            auto_cell: boolean;
+            hole_fill_max_gap_m: number;
+            despike_m: number | null;
+            z_clip: number[] | null;
+            drop_noise_classes: boolean;
+            assume_metres: boolean;
+        };
+        SurfaceBuildStats: {
+            points_read: number;
+            points_used: number;
+            points_dropped: {
+                noise_class: number;
+                withheld: number;
+                z_clip: number;
+            };
+            density_per_m2: number | null;
+            spacing_m: number | null;
+            auto_cell: boolean;
+            cells_valid: number;
+            cells_despiked: number;
+            cells_filled: number;
+            z_p02: number | null;
+            z_p98: number | null;
+            reprojected_from_epsg: number | null;
+            build_s: number;
+        };
+        Surface: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["SurfaceKind"];
+            status: components["schemas"]["SurfaceStatus"];
+            error: string | null;
+            point_cloud_id: string | null;
+            /** @description null for cloud_dsm */
+            design_source: components["schemas"]["DesignSource"] | null;
+            /** @description null means local metres */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description derived from crs_wkt at response time */
+            proj4: string | null;
+            /** @description null while building */
+            cell_size_m: number | null;
+            width: number | null;
+            height: number | null;
+            /** @description GDAL order, north-up */
+            geotransform: number[] | null;
+            /** @description minx, miny, maxx, maxy of the grid */
+            bounds_native: number[] | null;
+            z_min: number | null;
+            z_max: number | null;
+            coverage_fraction: number | null;
+            /** @description null while building */
+            method: components["schemas"]["SurfaceMethod"] | null;
+            /** @description null for design */
+            build_params: components["schemas"]["SurfaceBuildParams"] | null;
+            /** @description null for design */
+            stats: components["schemas"]["SurfaceBuildStats"] | null;
+            /**
+             * Format: date
+             * @description read through from the cloud
+             */
+            captured_on: string | null;
+            /** @description read through from the cloud; the ortho of the same flight */
+            map_id: string | null;
+            tile_grid: components["schemas"]["TileGrid"] | null;
+            measurement_count: number;
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        SurfaceList: {
+            items: components["schemas"]["Surface"][];
+        };
+        SurfaceBuildRequest: {
+            point_cloud_id: string;
+            name?: string;
+            method?: components["schemas"]["SurfaceBuildMethod"];
+            /** @description auto when absent or null */
+            cell_size_m?: number | null;
+            /** @description 1.0 when absent; 0 = off */
+            hole_fill_max_gap_m?: number;
+            /** @description 1.0 when absent; null = off */
+            despike_m?: number | null;
+            z_clip?: number[] | null;
+            /** @description true when absent */
+            drop_noise_classes?: boolean;
+            /** @description false when absent */
+            assume_metres?: boolean;
+        };
+        SurfacePatch: {
+            name?: string;
+        };
+        SurfaceWithJob: {
+            surface: components["schemas"]["Surface"];
+            job: components["schemas"]["Job"];
+        };
+        SurfaceSample: {
+            x: number;
+            y: number;
+            /** @description null over nodata */
+            z: number | null;
+        };
+        /** @enum {string} */
+        VolumeStatus: "calculating" | "ready" | "failed" | "stale";
+        /** @enum {string} */
+        VolumeBaseKind: "toe_plane" | "toe_surface" | "flat" | "surface";
+        /** @description z is required for flat and surface_id for surface; the server answers 422 otherwise */
+        VolumeBase: {
+            kind: components["schemas"]["VolumeBaseKind"];
+            z?: number | null;
+            surface_id?: string | null;
+        };
+        /** @description [x, y] vertices in the top surface's CRS */
+        VolumeRing: number[][];
+        /** @enum {string} */
+        ExclusionMode: "patch" | "exclude";
+        ExclusionPolygon: {
+            /** @description client-generated (a UUID) so edits can target it */
+            id: string;
+            ring: components["schemas"]["VolumeRing"];
+            mode: components["schemas"]["ExclusionMode"];
+        };
+        VolumeMasks: {
+            detection_run_ids: string[];
+            /** @description null means every class */
+            class_ids: string[] | null;
+            buffer_m: number;
+            exclusion_polygons: components["schemas"]["ExclusionPolygon"][];
+        };
+        /** @description fields that are sent replace the stored ones */
+        VolumeMasksInput: {
+            /** @description [] when absent */
+            detection_run_ids?: string[];
+            /** @description null when absent */
+            class_ids?: string[] | null;
+            /** @description 1.0 when absent */
+            buffer_m?: number;
+            /** @description [] when absent */
+            exclusion_polygons?: components["schemas"]["ExclusionPolygon"][];
+        };
+        AlignmentMeasured: {
+            n_cells: number;
+            median_dz: number;
+            mad: number;
+            sigma: number;
+            tilt_mm_per_m: number;
+            span_m: number;
+        };
+        VolumeAlignment: {
+            stable_polygon: components["schemas"]["VolumeRing"] | null;
+            apply_shift: boolean;
+            measured: components["schemas"]["AlignmentMeasured"] | null;
+        };
+        VolumeAlignmentInput: {
+            /** @description null when absent */
+            stable_polygon?: components["schemas"]["VolumeRing"] | null;
+            /** @description false when absent */
+            apply_shift?: boolean;
+        };
+        /** @enum {string} */
+        VolumeWarningCode: "nodata_high" | "patch_too_large" | "patch_failed" | "edge_coverage_low" | "base_fit_poor" | "stable_area_small" | "no_stable_area" | "alignment_offset" | "alignment_datum" | "alignment_noisy" | "alignment_tilt" | "mask_other_flight";
+        VolumeWarning: {
+            code: components["schemas"]["VolumeWarningCode"];
+            /** @enum {string} */
+            severity: "warn" | "danger";
+            message: string;
+        };
+        VolumeTotals: {
+            fill_m3: number;
+            cut_m3: number;
+            net_m3: number;
+        };
+        BaseFit: {
+            kind: components["schemas"]["VolumeBaseKind"];
+            samples: number;
+            rejected: number;
+            usable_edge_fraction: number;
+            rms_m: number;
+            plane: number[] | null;
+        };
+        VolumeUncertainty: {
+            total_m3: number | null;
+            base_m3: number | null;
+            alignment_m3: number | null;
+            cell_size_m3: number | null;
+            nodata_m3: number | null;
+            patch_m3: number | null;
+            complete: boolean;
+        };
+        /** @description a provenance snapshot of a surface at calculation time */
+        SurfaceRef: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["SurfaceKind"];
+            method: components["schemas"]["SurfaceMethod"] | null;
+            cell_size_m: number;
+            /** Format: date */
+            captured_on: string | null;
+            cloud_file: string | null;
+            cloud_sha256: string | null;
+        };
+        VolumeResults: {
+            fill_m3: number;
+            cut_m3: number;
+            net_m3: number;
+            area_m2: number;
+            polygon_area_m2: number;
+            measured_area_m2: number;
+            masked_area_m2: number;
+            excluded_area_m2: number;
+            nodata_area_m2: number;
+            cell_size_m: number;
+            areal_scale_factor: number;
+            shift_applied_m: number;
+            diff_scale_m: number;
+            duration_s: number;
+            footprints_used: number;
+            patch_regions: number;
+            unshifted: components["schemas"]["VolumeTotals"] | null;
+            alignment: components["schemas"]["AlignmentMeasured"] | null;
+            base_fit: components["schemas"]["BaseFit"] | null;
+            uncertainty: components["schemas"]["VolumeUncertainty"];
+            warnings: components["schemas"]["VolumeWarning"][];
+            top_surface: components["schemas"]["SurfaceRef"];
+            base_surface: components["schemas"]["SurfaceRef"] | null;
+            /** @description a canonical snapshot of the inputs */
+            inputs: {
+                [key: string]: unknown;
+            };
+            /** @description sha256 of the canonical JSON of `inputs` */
+            inputs_fingerprint: string;
+            engine_version: number;
+            /** Format: date-time */
+            computed_at: string;
+        };
+        VolumeMeasurement: {
+            id: string;
+            name: string;
+            status: components["schemas"]["VolumeStatus"];
+            error: string | null;
+            polygon_native: components["schemas"]["VolumeRing"];
+            top_surface_id: string;
+            base: components["schemas"]["VolumeBase"];
+            masks: components["schemas"]["VolumeMasks"];
+            alignment: components["schemas"]["VolumeAlignment"];
+            results: components["schemas"]["VolumeResults"] | null;
+            /** @description response only: the inputs that changed, e.g. "masks: detection run deleted" */
+            stale_reasons: string[];
+            job_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        VolumeMeasurementList: {
+            items: components["schemas"]["VolumeMeasurement"][];
+        };
+        VolumeMeasurementCreate: {
+            name: string;
+            polygon_native: components["schemas"]["VolumeRing"];
+            top_surface_id: string;
+            base: components["schemas"]["VolumeBase"];
+            masks?: components["schemas"]["VolumeMasksInput"];
+            alignment?: components["schemas"]["VolumeAlignmentInput"];
+        };
+        VolumeMeasurementPatch: {
+            name?: string;
+            polygon_native?: components["schemas"]["VolumeRing"];
+            top_surface_id?: string;
+            base?: components["schemas"]["VolumeBase"];
+            masks?: components["schemas"]["VolumeMasksInput"];
+            alignment?: components["schemas"]["VolumeAlignmentInput"];
+        };
+        VolumeMeasurementWithJob: {
+            measurement: components["schemas"]["VolumeMeasurement"];
+            job: components["schemas"]["Job"];
+        };
+        VolumeFootprint: {
+            run_id: string;
+            detection_id: string;
+            class_id: string;
+            ring: components["schemas"]["VolumeRing"];
+        };
+        VolumeFootprints: {
+            items: components["schemas"]["VolumeFootprint"][];
+            /** @description true past 5 000 footprints */
+            truncated: boolean;
+        };
+        /** @enum {string} */
+        VolumeExportFormat: "pdf" | "gpkg" | "csv" | "xlsx";
+        VolumeExportRequest: {
+            measurement_ids: string[];
+            formats: components["schemas"]["VolumeExportFormat"][];
+            /** @description the project name when absent */
+            title?: string;
+        };
+        /** @enum {string} */
+        DesignFormat: "geotiff" | "landxml" | "dxf";
+        /** @enum {string} */
+        LinearUnit: "millimetre" | "centimetre" | "metre" | "international_foot" | "us_survey_foot";
+        /** @enum {string} */
+        DesignGeometry: "faces" | "points" | "raster" | "none";
+        /** @enum {string} */
+        DesignCandidateKind: "dem" | "tin_surface" | "dxf_layer";
+        /** @enum {string} */
+        DesignWarningLevel: "info" | "warn" | "block";
+        DesignInspectionCreate: {
+            /** @description absolute path of a .tif/.tiff */
+            path: string;
+        };
+        DesignRasterInfo: {
+            width: number;
+            height: number;
+            cell_x: number;
+            cell_y: number;
+            dtype: string;
+            nodata: number | null;
+            band_count: number;
+        };
+        DesignCandidate: {
+            id: string;
+            kind: components["schemas"]["DesignCandidateKind"];
+            name: string;
+            geometry: components["schemas"]["DesignGeometry"];
+            /** @description [minx, miny, maxx, maxy] in file units, x = easting (LandXML N/E already applied) */
+            bounds_file: number[];
+            z_min: number | null;
+            z_max: number | null;
+            point_count: number;
+            face_count: number;
+            /** @description DXF: 3dface, mesh, polyface, polymesh, polyline_3d, polyline_2d, lwpolyline, line, point, unsupported; LandXML: invisible_faces */
+            entity_counts: {
+                [key: string]: number;
+            };
+            default_selected: boolean;
+            notes: components["schemas"]["DesignWarning"][];
+            raster: components["schemas"]["DesignRasterInfo"] | null;
+        };
+        DesignDetected: {
+            horizontal_unit: components["schemas"]["LinearUnit"] | null;
+            vertical_unit: components["schemas"]["LinearUnit"] | null;
+            /** @description e.g. 'LandXML <Imperial linearUnit=USSurveyFoot>', 'DXF $INSUNITS=6', 'CRS axis unit', 'none' */
+            unit_source: string;
+            crs_wkt: string | null;
+            epsg: number | null;
+            crs_source: string | null;
+            /** @description an unverified CRS name (DXF GEODATA */
+            crs_hint: string | null;
+        };
+        DesignInspection: {
+            id: string;
+            /** @enum {string} */
+            state: "inspecting" | "ready" | "failed";
+            error: string | null;
+            job_id: string;
+            path: string;
+            format: components["schemas"]["DesignFormat"];
+            file_size: number;
+            sha256: string | null;
+            detected: components["schemas"]["DesignDetected"] | null;
+            candidates: components["schemas"]["DesignCandidate"][];
+            default_target_surface_id: string | null;
+            /** Format: date-time */
+            created_at: string;
+        };
+        DesignInspectionWithJob: {
+            inspection: components["schemas"]["DesignInspection"];
+            job: components["schemas"]["Job"];
+        };
+        DesignImportOptions: {
+            candidate_ids: string[];
+            /** @description 'EPSG:<code>' or WKT; parsed with pyproj.CRS.from_user_input */
+            source_crs: string;
+            horizontal_unit: components["schemas"]["LinearUnit"];
+            vertical_unit: components["schemas"]["LinearUnit"];
+            /** @description false when absent */
+            swap_xy?: boolean;
+            /** @description null when absent. A ready cloud_dsm surface; the output adopts its CRS and cell size on the aligned lattice (same_lattice with it) */
+            target_surface_id?: string | null;
+            /** @description null when absent; required when target_surface_id is null; ignored otherwise; default in the UI 0.25 */
+            cell_size_m?: number | null;
+            /** @description null when absent. Points geometry only; null = automatic, 0 = off */
+            max_edge_m?: number | null;
+        };
+        DesignWarning: {
+            /** @description no_overlap, low_overlap, no_target, looks_geographic, looks_local, foot_ambiguity, units_mismatch_crs, units_assumed, z_offset, z_units, crs_assumed, crs_from_file, overlapping_triangles, long_edges_removed, duplicate_points, degenerate_triangles, sentinel_nodata, nodata_unknown, no_heights, unsupported_entities, chorded_arcs, mixed_geometry, nothing_to_triangulate, empty_result, geographic_output, non_metric_output, unsupported_crs_unit, grid_too_large, large_grid, not_tin */
+            code: string;
+            level: components["schemas"]["DesignWarningLevel"];
+            message: string;
+        };
+        DesignSuggestion: {
+            /** @enum {string} */
+            code: "swap_xy" | "horizontal_unit";
+            message: string;
+            overlap_fraction: number;
+            /** @description keys of DesignImportOptions to overwrite */
+            options_patch: {
+                [key: string]: unknown;
+            };
+        };
+        DesignPreviewOutput: {
+            crs_wkt: string;
+            epsg: number | null;
+            cell_size_m: number;
+            width: number;
+            height: number;
+            bounds_native: number[];
+            preview_cell_size_m: number;
+        };
+        DesignZCheck: {
+            median_dz_m: number;
+            p05_dz_m: number;
+            p95_dz_m: number;
+            n_samples: number;
+            design_z_min_m: number;
+            design_z_max_m: number;
+        };
+        DesignPreview: {
+            id: string;
+            inspection_id: string;
+            /** @enum {string} */
+            state: "running" | "ready" | "failed";
+            error: string | null;
+            job_id: string;
+            options: components["schemas"]["DesignImportOptions"];
+            output: components["schemas"]["DesignPreviewOutput"] | null;
+            triangle_count: number | null;
+            overlap_fraction: number | null;
+            target_covered_fraction: number | null;
+            design_area_m2: number | null;
+            z_check: components["schemas"]["DesignZCheck"] | null;
+            warnings: components["schemas"]["DesignWarning"][];
+            suggestions: components["schemas"]["DesignSuggestion"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        DesignPreviewWithJob: {
+            preview: components["schemas"]["DesignPreview"];
+            job: components["schemas"]["Job"];
+        };
+        DesignSurfaceCreate: {
+            inspection_id: string;
+            preview_id: string;
+            name?: string;
+            /** @description false when absent */
+            accept_warnings?: boolean;
+        };
+        DesignSource: {
+            path: string;
+            format: components["schemas"]["DesignFormat"];
+            units: components["schemas"]["LinearUnit"] | null;
+            vertical_units: components["schemas"]["LinearUnit"];
+            sha256: string;
+            candidates: string[];
+            source_crs_wkt: string;
+            source_epsg: number | null;
+            swap_xy: boolean;
+            max_edge_m: number | null;
+            aligned_to_surface_id: string | null;
+            accepted_warnings: string[];
+        };
+        /** @enum {string} */
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -3593,6 +6253,7 @@ export interface components {
          */
         Job: {
             id: string;
+            /** @description the project id, or `library` for library jobs */
             project_id: string;
             type: components["schemas"]["JobType"];
             state: components["schemas"]["JobState"];
@@ -3603,7 +6264,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id}; infer {query_run_id, boxes}; export {format, path} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths} */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -3645,7 +6306,8 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed";
+            /** @description the project id, or `library` for library jobs */
             project_id: string;
             job_id: string | null;
             progress: number | null;
@@ -3663,6 +6325,89 @@ export interface components {
             };
             content: {
                 "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the operation does not belong to this kind of project (`code` is `wrong_project_kind`, details `{kind, allowed}`) */
+        WrongProjectKind: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "wrong_project_kind",
+                 *         "message": "This is a detection project. Datasets belong in a training project.",
+                 *         "details": {
+                 *           "kind": "detect",
+                 *           "allowed": [
+                 *             "train"
+                 *           ]
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the model library could not be opened at startup (`code` is `library_unavailable`); `GET /library/status` has the reason */
+        LibraryUnavailable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "library_unavailable",
+                 *         "message": "The model library could not be opened.",
+                 *         "details": {}
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the project or the named resource does not exist (`code` is `not_found`) */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "not_found",
+                 *         "message": "run r0000000… not found",
+                 *         "details": {}
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued. Map them with `PUT /model-class-maps/{modelId}` and retry. A malformed body answers `validation_error`. */
+        UnmappedClasses: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                /**
+                 * @example {
+                 *       "error": {
+                 *         "code": "unmapped_classes",
+                 *         "message": "2 of the model's classes are not mapped to project classes.",
+                 *         "details": {
+                 *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                 *           "unmapped": [
+                 *             "crane",
+                 *             "concrete mixer"
+                 *           ]
+                 *         }
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["UnmappedClassesError"];
             };
         };
     };
@@ -3683,6 +6428,17 @@ export interface components {
         mapId: string;
         zoneId: string;
         labelId: string;
+        areaId: string;
+        cloudId: string;
+        /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+        cloudMeasurementId: string;
+        octreeFile: "metadata.json" | "hierarchy.bin" | "octree.bin";
+        surfaceId: string;
+        /** @description a volume measurement */
+        measurementId: string;
+        inspectionId: string;
+        previewId: string;
+        candidateId: string;
     };
     requestBodies: never;
     headers: never;
@@ -3980,6 +6736,52 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "50000000-3333-4000-8000-000000000001",
+                     *           "kind": "images",
+                     *           "label": "Flight 15 Apr",
+                     *           "captured_on": "2019-04-15",
+                     *           "map_id": null,
+                     *           "folder": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+                     *           "site": "ahmadia",
+                     *           "settings": {
+                     *             "max_side": 4000,
+                     *             "quality": 95,
+                     *             "dedupe_threshold": 4,
+                     *             "group_regex": "^(?P<camera>[A-Za-z0-9-]+)_(?P<flight>\\d+)_(?P<frame>\\d+)"
+                     *           },
+                     *           "image_count": 3299,
+                     *           "duplicate_count": 0,
+                     *           "job_id": "j0000000-4444-4000-8000-000000000001",
+                     *           "imported_at": "2026-09-17T10:30:00Z",
+                     *           "created_at": "2026-09-17T10:05:00Z"
+                     *         },
+                     *         {
+                     *           "id": "50000000-3333-4000-8000-000000000002",
+                     *           "kind": "map",
+                     *           "label": "May survey",
+                     *           "captured_on": "2026-05-20",
+                     *           "map_id": "a0000000-6666-4000-8000-000000000001",
+                     *           "folder": "D:\\Surveys\\may-ortho.tif",
+                     *           "site": "may-ortho",
+                     *           "settings": {
+                     *             "max_side": 4000,
+                     *             "quality": 95,
+                     *             "dedupe_threshold": 4
+                     *           },
+                     *           "image_count": 0,
+                     *           "duplicate_count": 0,
+                     *           "job_id": "j0000000-4444-4000-8000-000000000002",
+                     *           "imported_at": "2026-05-21T10:00:00Z",
+                     *           "created_at": "2026-05-21T09:55:00Z"
+                     *         }
+                     *       ],
+                     *       "next_cursor": null
+                     *     }
+                     */
                     "application/json": components["schemas"]["SourcePage"];
                 };
             };
@@ -4034,6 +6836,42 @@ export interface operations {
                     "application/json": components["schemas"]["Source"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "label": "Flight 14 Sep",
+                 *       "captured_on": "2026-09-14"
+                 *     }
+                 */
+                "application/json": components["schemas"]["SourcePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Source"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4281,6 +7119,16 @@ export interface operations {
                     "application/json": components["schemas"]["PreannotateResult"];
                 };
             };
+            /** @description the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -4437,6 +7285,7 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetPage"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4464,6 +7313,7 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetWithJob"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4488,6 +7338,7 @@ export interface operations {
                     "application/json": components["schemas"]["Dataset"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4510,6 +7361,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4534,87 +7386,7 @@ export interface operations {
                     "application/json": components["schemas"]["DatasetStats"];
                 };
             };
-            default: components["responses"]["Error"];
-        };
-    };
-    listModels: {
-        parameters: {
-            query?: {
-                limit?: components["parameters"]["limit"];
-                /** @description opaque cursor from the previous page's `next_cursor` */
-                cursor?: components["parameters"]["cursor"];
-            };
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description registry */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelPage"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    importModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ModelImport"];
-            };
-        };
-        responses: {
-            /** @description registered */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Model"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    importStarterModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StarterModelImport"];
-            };
-        };
-        responses: {
-            /** @description registered */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Model"];
-                };
-            };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -4642,39 +7414,232 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            /** @description the project, the dataset or the base library model does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the project is not a training project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the base model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the request body is invalid (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    getModel: {
+    getModelAdoption: {
         parameters: {
             query?: never;
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description adoption status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdoptionStatus"];
+                };
+            };
+            /** @description no such project (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    retryModelAdoption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description adoption job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description no such project (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description an adoption job is already queued or running (`code` is `conflict`), or the project is not a training project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description library status */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryStatus"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryModels: {
+        parameters: {
+            query?: {
+                task?: "detect" | "obb";
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description library models */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryModelPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    importLibraryModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryModelImport"];
+            };
+        };
+        responses: {
+            /** @description import job queued; when it succeeds its `result` is `{model_id}` */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description `weights_path` is not absolute, not a .pt file, or does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description the model */
+            /** @description the library model */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Model"];
+                    "application/json": components["schemas"]["LibraryModel"];
                 };
             };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    deleteModel: {
+    deleteLibraryModel: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
@@ -4688,37 +7653,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            default: components["responses"]["Error"];
-        };
-    };
-    patchModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    train_gsd_cm?: number | null;
-                };
-            };
-        };
-        responses: {
-            /** @description the updated model */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Model"];
-                };
-            };
-            /** @description no model with that id */
+            /** @description no such model (`code` is `not_found`) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4727,15 +7662,122 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    getModelArtifact: {
+    updateLibraryModel: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LibraryModelPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated library model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LibraryModel"];
+                };
+            };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModelGsdEstimate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the derived training scale and its evidence */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelGsdEstimate"];
+                };
+            };
+            /**
+             * @description no such model, or nothing can be measured - the model names no dataset, its originating
+             *     project folder no longer opens, or its imagery carries no usable camera EXIF
+             *     (`code` is `not_found`)
+             */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModelUsage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the projects that use the model */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelUsage"];
+                };
+            };
+            /** @description no such model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryModelArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
                 modelId: components["parameters"]["modelId"];
                 artifact: "results_csv" | "confusion_matrix" | "pr_curve";
             };
@@ -4753,7 +7795,7 @@ export interface operations {
                     "text/csv": string;
                 };
             };
-            /** @description the model has no such artifact */
+            /** @description no such model, or the model has no such artifact (`code` is `not_found`) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4762,15 +7804,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
-    exportModel: {
+    exportLibraryModel: {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: components["parameters"]["projectId"];
                 modelId: components["parameters"]["modelId"];
             };
             cookie?: never;
@@ -4781,7 +7823,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description export job queued */
+            /** @description export job queued; when it succeeds its `result` is `{format, path}` */
             202: {
                 headers: {
                     [name: string]: unknown;
@@ -4790,31 +7832,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            default: components["responses"]["Error"];
-        };
-    };
-    getModelGsdEstimate: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                modelId: components["parameters"]["modelId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description the estimate and its evidence */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ModelGsdEstimate"];
-                };
-            };
-            /** @description the model has no dataset, or no usable EXIF */
+            /** @description no such model (`code` is `not_found`) */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4823,6 +7841,173 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    acquireStarterModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["schemas"]["StarterModelKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StarterAcquire"];
+            };
+        };
+        responses: {
+            /** @description starter acquisition queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description no such starter model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listLibraryJobs: {
+        parameters: {
+            query?: {
+                state?: components["schemas"]["JobState"];
+                type?: components["schemas"]["JobType"];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description library jobs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description no such job (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getLibraryJobLog: {
+        parameters: {
+            query?: {
+                tail?: number;
+            };
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description last lines of the job log */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobLog"];
+                };
+            };
+            /** @description no such job (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    cancelLibraryJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: components["parameters"]["jobId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job after the request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description no such job (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -4842,33 +8027,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StarterModelPage"];
-                };
-            };
-            default: components["responses"]["Error"];
-        };
-    };
-    acquireStarterModel: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StarterModelImport"];
-            };
-        };
-        responses: {
-            /** @description model acquisition queued */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["JobRef"];
                 };
             };
             default: components["responses"]["Error"];
@@ -5015,6 +8173,7 @@ export interface operations {
                     "application/json": components["schemas"]["CostEstimate"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5069,6 +8228,16 @@ export interface operations {
                     "application/json": components["schemas"]["QueryRunWithJob"];
                 };
             };
+            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -5117,7 +8286,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description the run's job is still queued or running (`code` is `conflict`) */
+            /** @description the run's job is still queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5154,6 +8323,7 @@ export interface operations {
                     "application/json": components["schemas"]["PromoteResult"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5178,6 +8348,7 @@ export interface operations {
                     "application/json": components["schemas"]["UnpromoteResult"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5228,6 +8399,7 @@ export interface operations {
                     "application/json": components["schemas"]["GeoMapWithJob"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5274,6 +8446,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description one of the map's jobs is queued or running (`code` is `conflict`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -5305,6 +8486,53 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GeoMap"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    moveMapToProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                mapId: components["parameters"]["mapId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapMoveRequest"];
+            };
+        };
+        responses: {
+            /** @description move job queued in the target project */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the project, the map or the target project does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description this project is not a training project, or the target is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`); or the map has not finished importing (`code` is `conflict`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
@@ -5417,6 +8645,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapRunEstimate"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5444,6 +8673,16 @@ export interface operations {
                     "application/json": components["schemas"]["MapRunWithJob"];
                 };
             };
+            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
     };
@@ -5490,6 +8729,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5514,6 +8754,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5543,6 +8784,36 @@ export interface operations {
                     "application/json": components["schemas"]["MapDetectionPage"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    addMapDetection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapDetectionCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapDetection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5606,6 +8877,8 @@ export interface operations {
                 model_id?: string;
                 /** @description compare at this confidence instead of the newest run's */
                 conf?: number;
+                /** @description count only verified detections (accepted, edited or drawn by a person): `counts` and `deltas` are built from each run's `verified_counts` */
+                verified_only?: boolean;
             };
             header?: never;
             path: {
@@ -5647,6 +8920,10 @@ export interface operations {
                      *           "counts": {
                      *             "c1a2b3c4-0000-4000-8000-000000000001": 12
                      *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 9
+                     *           },
+                     *           "pinned": false,
                      *           "deltas": {},
                      *           "state": "ok",
                      *           "reason": null
@@ -5662,6 +8939,10 @@ export interface operations {
                      *           "counts": {
                      *             "c1a2b3c4-0000-4000-8000-000000000001": 15
                      *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 15
+                     *           },
+                     *           "pinned": true,
                      *           "deltas": {
                      *             "c1a2b3c4-0000-4000-8000-000000000001": 3
                      *           },
@@ -5726,6 +9007,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapZone"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5749,6 +9031,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5778,6 +9061,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapZone"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5830,6 +9114,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabel"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5853,6 +9138,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5882,6 +9168,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabel"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5910,6 +9197,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapLabelSeedResult"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -5935,6 +9223,2118 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: {
+                /** @description only this source's runs */
+                source_id?: string;
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description runs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "r0000000-7777-4000-8000-000000000001",
+                     *           "kind": "map",
+                     *           "source_id": "50000000-3333-4000-8000-000000000002",
+                     *           "source_label": "May survey",
+                     *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *           "model_name": "machinery-v3",
+                     *           "conf": 0.25,
+                     *           "job_state": "succeeded",
+                     *           "pinned": false,
+                     *           "counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 42,
+                     *             "c1a2b3c4-0000-4000-8000-000000000004": 17
+                     *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 30
+                     *           },
+                     *           "review": {
+                     *             "total": 59,
+                     *             "reviewed": 34
+                     *           },
+                     *           "created_at": "2026-09-22T11:00:00Z"
+                     *         },
+                     *         {
+                     *           "id": "q0000000-8888-4000-8000-000000000001",
+                     *           "kind": "images",
+                     *           "source_id": "50000000-3333-4000-8000-000000000001",
+                     *           "source_label": "Flight 15 Apr",
+                     *           "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *           "model_name": "machinery-v3",
+                     *           "conf": 0.25,
+                     *           "job_state": "succeeded",
+                     *           "pinned": false,
+                     *           "counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 31,
+                     *             "c1a2b3c4-0000-4000-8000-000000000004": 9
+                     *           },
+                     *           "verified_counts": {
+                     *             "c1a2b3c4-0000-4000-8000-000000000001": 12
+                     *           },
+                     *           "review": {
+                     *             "total": 40,
+                     *             "reviewed": 12
+                     *           },
+                     *           "created_at": "2026-09-21T15:00:00Z"
+                     *         }
+                     *       ],
+                     *       "next_cursor": null
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RunSummaryPage"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunCreate"];
+            };
+        };
+        responses: {
+            /** @description runs created, one job per run queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "runs": [
+                     *         {
+                     *           "run_id": "q0000000-8888-4000-8000-000000000002",
+                     *           "source_id": "50000000-3333-4000-8000-000000000001",
+                     *           "kind": "images",
+                     *           "job": {
+                     *             "id": "j0000000-4444-4000-8000-000000000010",
+                     *             "project_id": "7f1c2e3a-1111-4000-8000-000000000001",
+                     *             "type": "infer",
+                     *             "state": "queued",
+                     *             "progress": 0,
+                     *             "message": "",
+                     *             "log_path": "runs/j0000000-4444-4000-8000-000000000010/job.log",
+                     *             "params": {
+                     *               "query_run_id": "q0000000-8888-4000-8000-000000000002"
+                     *             },
+                     *             "result": null,
+                     *             "error": null,
+                     *             "created_at": "2026-09-23T10:00:00Z",
+                     *             "started_at": null,
+                     *             "finished_at": null
+                     *           }
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["RunCreated"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the project is not a detection project (`code` is `wrong_project_kind`, details `{kind, allowed}`), or the chosen library model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            422: components["responses"]["UnmappedClasses"];
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    acceptRunAbove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptAbove"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    recountRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getModelClassMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelClassMapOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putModelClassMap: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                modelId: components["parameters"]["modelId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModelClassMapPut"];
+            };
+        };
+        responses: {
+            /** @description the stored mapping */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelClassMapOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            /** @description a mapped id is not a project class, or a name is not one of the model's classes (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    reviewMapDetections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapDetectionReview"];
+            };
+        };
+        responses: {
+            /** @description detections updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapDetectionReviewResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    nextUnreviewedMapDetection: {
+        parameters: {
+            query?: {
+                /** @description the detection the viewer is on; omitted starts from the top */
+                after_id?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                runId: components["parameters"]["runId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the next detection, or null when none is left */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextUnreviewed"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listSiteAreas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description site areas, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "items": [
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000001",
+                     *           "name": "North laydown yard",
+                     *           "polygon_wgs84": [
+                     *             [
+                     *               47.761,
+                     *               29.496
+                     *             ],
+                     *             [
+                     *               47.764,
+                     *               29.496
+                     *             ],
+                     *             [
+                     *               47.764,
+                     *               29.498
+                     *             ],
+                     *             [
+                     *               47.761,
+                     *               29.498
+                     *             ]
+                     *           ],
+                     *           "created_at": "2026-09-23T09:00:00Z"
+                     *         },
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000002",
+                     *           "name": "Batching plant",
+                     *           "polygon_wgs84": [
+                     *             [
+                     *               47.765,
+                     *               29.493
+                     *             ],
+                     *             [
+                     *               47.768,
+                     *               29.493
+                     *             ],
+                     *             [
+                     *               47.768,
+                     *               29.495
+                     *             ]
+                     *           ],
+                     *           "created_at": "2026-09-23T09:05:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SiteAreaList"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createSiteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteAreaCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteArea"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSiteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                areaId: components["parameters"]["areaId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateSiteArea: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                areaId: components["parameters"]["areaId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteAreaPatch"];
+            };
+        };
+        responses: {
+            /** @description updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SiteArea"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSourceAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the source's counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "source": {
+                     *         "id": "50000000-3333-4000-8000-000000000002",
+                     *         "kind": "map",
+                     *         "label": "May survey",
+                     *         "captured_on": "2026-05-20",
+                     *         "map_id": "a0000000-6666-4000-8000-000000000001",
+                     *         "folder": "D:\\Surveys\\may-ortho.tif",
+                     *         "site": "may-ortho",
+                     *         "settings": {
+                     *           "max_side": 4000,
+                     *           "quality": 95,
+                     *           "dedupe_threshold": 4
+                     *         },
+                     *         "image_count": 0,
+                     *         "duplicate_count": 0,
+                     *         "job_id": "j0000000-4444-4000-8000-000000000002",
+                     *         "imported_at": "2026-05-21T10:00:00Z",
+                     *         "created_at": "2026-05-21T09:55:00Z"
+                     *       },
+                     *       "unit": "objects",
+                     *       "image_count": null,
+                     *       "run": {
+                     *         "id": "r0000000-7777-4000-8000-000000000001",
+                     *         "kind": "map",
+                     *         "source_id": "50000000-3333-4000-8000-000000000002",
+                     *         "source_label": "May survey",
+                     *         "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *         "model_name": "machinery-v3",
+                     *         "conf": 0.25,
+                     *         "job_state": "succeeded",
+                     *         "pinned": false,
+                     *         "counts": {
+                     *           "c1a2b3c4-0000-4000-8000-000000000001": 42,
+                     *           "c1a2b3c4-0000-4000-8000-000000000004": 17
+                     *         },
+                     *         "verified_counts": {
+                     *           "c1a2b3c4-0000-4000-8000-000000000001": 30
+                     *         },
+                     *         "review": {
+                     *           "total": 59,
+                     *           "reviewed": 34
+                     *         },
+                     *         "created_at": "2026-09-22T11:00:00Z"
+                     *       },
+                     *       "classes": [
+                     *         {
+                     *           "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+                     *           "name": "excavator",
+                     *           "colour": "#f97316",
+                     *           "total": 42,
+                     *           "verified": 30
+                     *         },
+                     *         {
+                     *           "class_id": "c1a2b3c4-0000-4000-8000-000000000004",
+                     *           "name": "dump truck",
+                     *           "colour": "#0ea5e9",
+                     *           "total": 17,
+                     *           "verified": 0
+                     *         }
+                     *       ],
+                     *       "review": {
+                     *         "total": 59,
+                     *         "reviewed": 34
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["SourceAnalytics"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getAreaAnalytics: {
+        parameters: {
+            query?: {
+                /** @description compare on this model instead of the newest run's */
+                model_id?: string;
+                /** @description compare at this confidence instead of the newest run's */
+                conf?: number;
+                /** @description pick surveys as the verified-only timeline does */
+                verified_only?: boolean;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description per-area counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "areas": [
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000001",
+                     *           "name": "North laydown yard"
+                     *         },
+                     *         {
+                     *           "id": "5a000000-aaaa-4000-8000-000000000002",
+                     *           "name": "Batching plant"
+                     *         }
+                     *       ],
+                     *       "surveys": [
+                     *         {
+                     *           "map_id": "7c9e1b2a-5555-4000-8000-000000000001",
+                     *           "map_name": "April survey",
+                     *           "captured_on": "2026-04-15",
+                     *           "state": "ok",
+                     *           "per_area": {
+                     *             "5a000000-aaaa-4000-8000-000000000001": {
+                     *               "partial": false,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 5,
+                     *                   "verified": 5
+                     *                 },
+                     *                 "c1a2b3c4-0000-4000-8000-000000000004": {
+                     *                   "total": 2,
+                     *                   "verified": 1
+                     *                 }
+                     *               }
+                     *             },
+                     *             "5a000000-aaaa-4000-8000-000000000002": {
+                     *               "partial": true,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 1,
+                     *                   "verified": 0
+                     *                 }
+                     *               }
+                     *             }
+                     *           }
+                     *         },
+                     *         {
+                     *           "map_id": "7c9e1b2a-5555-4000-8000-000000000002",
+                     *           "map_name": "May survey",
+                     *           "captured_on": "2026-05-20",
+                     *           "state": "ok",
+                     *           "per_area": {
+                     *             "5a000000-aaaa-4000-8000-000000000001": {
+                     *               "partial": false,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 7,
+                     *                   "verified": 6
+                     *                 },
+                     *                 "c1a2b3c4-0000-4000-8000-000000000004": {
+                     *                   "total": 3,
+                     *                   "verified": 3
+                     *                 }
+                     *               }
+                     *             },
+                     *             "5a000000-aaaa-4000-8000-000000000002": {
+                     *               "partial": false,
+                     *               "counts": {
+                     *                 "c1a2b3c4-0000-4000-8000-000000000001": {
+                     *                   "total": 2,
+                     *                   "verified": 2
+                     *                 }
+                     *               }
+                     *             }
+                     *           }
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["AreaAnalytics"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getPhotoBatchAnalytics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description one row per photo source */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "batches": [
+                     *         {
+                     *           "source": {
+                     *             "id": "50000000-3333-4000-8000-000000000001",
+                     *             "kind": "images",
+                     *             "label": "Flight 15 Apr",
+                     *             "captured_on": "2019-04-15",
+                     *             "map_id": null,
+                     *             "folder": "E:\\Dev\\Yolo\\Ahmadia Construction Data",
+                     *             "site": "ahmadia",
+                     *             "settings": {
+                     *               "max_side": 4000,
+                     *               "quality": 95,
+                     *               "dedupe_threshold": 4
+                     *             },
+                     *             "image_count": 3299,
+                     *             "duplicate_count": 0,
+                     *             "job_id": "j0000000-4444-4000-8000-000000000001",
+                     *             "imported_at": "2026-09-17T10:30:00Z",
+                     *             "created_at": "2026-09-17T10:05:00Z"
+                     *           },
+                     *           "run": {
+                     *             "id": "q0000000-8888-4000-8000-000000000001",
+                     *             "kind": "images",
+                     *             "source_id": "50000000-3333-4000-8000-000000000001",
+                     *             "source_label": "Flight 15 Apr",
+                     *             "model_id": "m0000000-2222-4000-8000-000000000001",
+                     *             "model_name": "machinery-v3",
+                     *             "conf": 0.25,
+                     *             "job_state": "succeeded",
+                     *             "pinned": false,
+                     *             "counts": {
+                     *               "c1a2b3c4-0000-4000-8000-000000000001": 31,
+                     *               "c1a2b3c4-0000-4000-8000-000000000004": 9
+                     *             },
+                     *             "verified_counts": {
+                     *               "c1a2b3c4-0000-4000-8000-000000000001": 12
+                     *             },
+                     *             "review": {
+                     *               "total": 40,
+                     *               "reviewed": 12
+                     *             },
+                     *             "created_at": "2026-09-21T15:00:00Z"
+                     *           },
+                     *           "classes": [
+                     *             {
+                     *               "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+                     *               "name": "excavator",
+                     *               "colour": "#f97316",
+                     *               "total": 31,
+                     *               "verified": 12
+                     *             },
+                     *             {
+                     *               "class_id": "c1a2b3c4-0000-4000-8000-000000000004",
+                     *               "name": "dump truck",
+                     *               "colour": "#0ea5e9",
+                     *               "total": 9,
+                     *               "verified": 0
+                     *             }
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    "application/json": components["schemas"]["PhotoBatchAnalytics"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDetectExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetectExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listPointClouds: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description point clouds */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createPointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudCreate"];
+            };
+        };
+        responses: {
+            /** @description cloud created in `importing`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudWithJob"];
+                };
+            };
+            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the file is not a readable LAS/LAZ (`unsupported_point_cloud`), or the import needs more memory (`insufficient_memory`) or disk (`insufficient_disk`) than is free; `message` is the text the UI shows */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    inspectPointCloudFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudInspectRequest"];
+            };
+        };
+        responses: {
+            /** @description the header facts and the admission verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudFileInfo"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description the file is not a readable LAS/LAZ (`unsupported_point_cloud`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the point cloud */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudOut"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deletePointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description its import or export job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchPointCloud: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated point cloud */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PointCloudOut"];
+                };
+            };
+            /** @description `map_id` names a map that is not `ready` (still importing or failed; `code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a map link needs both entities to have a CRS (`link_needs_coordinates`) and overlapping WGS84 bounds (`no_overlap`); `assign_epsg` is refused when the file has a CRS (`crs_already_set`) or names an EPSG code pyproj does not know (`invalid_epsg`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getPointCloudOctreeFile: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description one byte range, e.g. `bytes=0-21` */
+                Range?: string;
+            };
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                octreeFile: components["parameters"]["octreeFile"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the whole file (at most 64 MiB) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description the requested byte range */
+            206: {
+                headers: {
+                    /** @description bytes a-b/size */
+                    "Content-Range"?: string;
+                    "Accept-Ranges"?: "bytes";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/octet-stream": string;
+                    "application/json": string;
+                };
+            };
+            /** @description the cloud is not `ready` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the range cannot be served (`code` is `range_not_satisfiable`); `Content-Range: bytes *\/<size>` */
+            416: {
+                headers: {
+                    /** @description bytes *\/size */
+                    "Content-Range"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCloudMeasurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createCloudMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description the saved measurement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementOut"];
+                };
+            };
+            /** @description the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the wrong number of points for the kind (`wrong_point_count`), a distance, height difference or vertical check on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteCloudMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    updateCloudMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudMeasurementUpdate"];
+            };
+        };
+        responses: {
+            /** @description the updated measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementOut"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createPointCloudExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PointCloudExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listSurfaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description surfaces */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfaceBuildRequest"];
+            };
+        };
+        responses: {
+            /** @description surface created in `building`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceWithJob"];
+                };
+            };
+            /** @description the point cloud is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a cloud CRS the build cannot use, i.e. none without `assume_metres` or one in feet (`unsupported_crs`); the source file gone or changed in size (`source_missing`), build parameters that contradict each other such as a Z clip upside down (`invalid_build_request`), a grid over the cell ceiling (`grid_too_large`), or not enough free disk (`insufficient_disk`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the surface */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Surface"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description a volume measurement uses the surface (`code` is `conflict`; the message names them), its build job is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurfacePatch"];
+            };
+        };
+        responses: {
+            /** @description the updated surface */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Surface"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurfaceTile: {
+        parameters: {
+            query?: {
+                /** @description multiply by a hypsometric ramp; false when absent */
+                tint?: boolean;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the tile is outside the grid or all nodata */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurfaceOrthoTile: {
+        parameters: {
+            query: {
+                map_id: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image; PNG when it holds nodata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            /** @description the map does not overlap this tile */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the map or the surface has no CRS (`code` is `no_coordinates`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSurfaceSample: {
+        parameters: {
+            query: {
+                x: number;
+                y: number;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                surfaceId: components["parameters"]["surfaceId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the sample */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceSample"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesignInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignInspectionCreate"];
+            };
+        };
+        responses: {
+            /** @description inspection created in `inspecting`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignInspectionWithJob"];
+                };
+            };
+            409: components["responses"]["WrongProjectKind"];
+            /** @description the file is a DWG (`code` is `validation_error`, `details.reason` is `"dwg"`) or an existing file has an unknown extension (`details.reason` is `"extension"`); a missing file is `404 not_found`, never a 422 */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the inspection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignInspection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDesignInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description a build of this inspection is queued or running (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignCandidateThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                candidateId: components["parameters"]["candidateId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the candidate has no thumbnail */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesignPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignImportOptions"];
+            };
+        };
+        responses: {
+            /** @description preview created in `running`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignPreviewWithJob"];
+                };
+            };
+            /** @description the inspection has not been read yet or reading it failed, or the target cloud surface is building, failed or missing its grid (`code` is `not_ready`); a design surface is being imported from this inspection (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description an unknown or repeated candidate, an unparseable CRS, a LandXML or DEM selection of other than one candidate, a `target_surface_id` that is not a cloud surface (unknown, or not a `cloud_dsm`), or neither a target nor `cell_size_m` (`code` is `validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignPreview"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDesignPreviewImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                previewId: components["parameters"]["previewId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description preview image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the preview is not ready or failed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createDesignSurface: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DesignSurfaceCreate"];
+            };
+        };
+        responses: {
+            /** @description surface created in `building`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceWithJob"];
+                };
+            };
+            /** @description the preview is not ready, or the target cloud surface is no longer ready (`code` is `not_ready`); the preview is not the newest, has `block` warnings, or has `warn` warnings without `accept_warnings` (`code` is `conflict`); the design is already being imported (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listVolumeMeasurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurementList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description measurement created in `calculating`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurementWithJob"];
+                };
+            };
+            /** @description the top or base surface is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurement"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the measurement is calculating (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeMeasurementPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurement"];
+                };
+            };
+            /** @description the measurement is calculating (`code` is `job_running`), or a surface its changed inputs name is not `ready` (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description changed inputs the rules refuse (`invalid_geometry`, `invalid_base`: as on create, and a new top in another CRS than the polygon); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    calculateVolumeMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeMeasurementWithJob"];
+                };
+            };
+            /** @description the measurement is already calculating (`code` is `job_running`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVolumeDiffTile: {
+        parameters: {
+            query?: {
+                /** @description the results' `computed_at`, for cache busting */
+                v?: string;
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+                z: number;
+                x: number;
+                y: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the tile is outside the measured cells */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description the measurement has no results (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getVolumeFootprints: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a volume measurement */
+                measurementId: components["parameters"]["measurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description footprints */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VolumeFootprints"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createVolumeExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VolumeExportRequest"];
+            };
+        };
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`); a measurement is being calculated (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
@@ -6115,6 +11515,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentConversation"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6136,6 +11537,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6163,6 +11565,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6187,6 +11590,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };
@@ -6215,6 +11619,7 @@ export interface operations {
                     "application/json": components["schemas"]["AgentTurn"];
                 };
             };
+            409: components["responses"]["WrongProjectKind"];
             default: components["responses"]["Error"];
         };
     };

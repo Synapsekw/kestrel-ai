@@ -4,10 +4,19 @@ export interface ProjectProgress {
   /** Suggestions (boxes, not images) nobody has reviewed yet: `Stats.pending_review_count`. */
   pendingReview: number;
   datasets: number;
+  /** Models in the app-wide library, from any project. */
   models: number;
+  /** Library models trained in this project. */
   trainedModels: number;
   /** Detection runs of the project, any state. */
   queryRuns: number;
+  /** GeoTIFF maps of the project, any state (a count only). */
+  maps: number;
+  /**
+   * Detection projects: whether any run exists, photo or map (`GET /runs`, one row). Undefined when
+   * that list is not known; `queryRuns` then stands in.
+   */
+  hasRuns?: boolean;
 }
 
 export interface NextStep {
@@ -62,9 +71,10 @@ export function nextStep(projectId: string, p: ProjectProgress): NextStep | null
         };
   if (p.models === 0)
     return {
-      text: "Add a starter model",
-      detail: "Training needs a base model. Starter models are bundled with the app.",
-      to: at("models"),
+      text: "Add a model to the library",
+      detail:
+        "Training starts from a model in the library. Add a starter model there; they come with the app.",
+      to: "/library",
     };
   if (p.trainedModels === 0)
     return {

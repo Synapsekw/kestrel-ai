@@ -1,0 +1,23 @@
+geo ok 32633 15.000325 45.000216
+volumes ok pdf 2038 xlsx 523.6 delaunay 2
+pointcloud ok 50000 32639 BROTLI laz 50000
+startup ok port 57621 pid 53960
+health ok
+cuda True NVIDIA GeForce RTX 5070 Ti
+starter ok 3
+library ok C:\Users\D\AppData\Local\Temp\kestrel-smoke-a51141ab\appdata\library
+import ok 3 images
+cloud ok 50000 206
+model ok yolo11n-coco 80 classes
+alias ok
+predict ok 0 boxes
+dataset ok train 2 val 1
+worker ok mAP50 0.0
+font ok C:\Users\D\AppData\Local\Temp\kestrel-smoke-a51141ab\appdata\ultralytics\Arial.ttf
+export ok C:\Users\D\AppData\Local\Temp\kestrel-smoke-a51141ab\appdata\library\models\smoke-bf6754af\exports\weights.onnx 10.1 MB
+keyring skip (a key is already stored for anthropic; not touching it)
+
+bundle: 3,618.8 MB at E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\backend\dist\kestrel-backend
+timings (s): geo=2.24 volumes=1.7 pointcloud=2.25 startup_line=0.88 health=1.6 cuda=5.67 starter_models=0.05 library=0.01 create_project=0.12 import=1.19 pointcloud_api=2.2 import_model=0.56 predict=2.24 dataset=0.6 worker_train=12.4 export_onnx=5.2 keyring=0.03 total=38.95
+smoke ok
+work dir removed: C:\Users\D\AppData\Local\Temp\kestrel-smoke-a51141ab (pass -Keep to inspect it)

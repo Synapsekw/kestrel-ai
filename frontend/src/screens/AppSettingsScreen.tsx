@@ -1,4 +1,6 @@
+import { Link } from "react-router-dom";
 import { ProvidersSection } from "@/settings/ProvidersSection";
+import { buttonClass } from "@/ui";
 
 /** Settings that belong to the app rather than to one project; reachable with no project open. */
 export function AppSettingsScreen() {
@@ -10,6 +12,11 @@ export function AppSettingsScreen() {
       </div>
       <div className="divide-y divide-line">
         <ProvidersSection />
+      </div>
+      <div className="border-t border-line pt-4">
+        <Link to="/about" className={buttonClass("secondary", "sm")}>
+          About Kestrel AI
+        </Link>
       </div>
     </section>
   );

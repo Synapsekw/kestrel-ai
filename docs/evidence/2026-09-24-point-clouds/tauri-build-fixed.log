@@ -1,0 +1,8 @@
+- Use build.rollupOptions.output.manualChunks to improve chunking: 
+https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.30s
+   Compiling kestrel-ai v0.1.0 (E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend\src-tauri)
+    Finished `release` profile [optimized] target(s) in 22.63s
+       Built application at: 
+E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend\src-tauri\target\release\kestrel-ai.exe

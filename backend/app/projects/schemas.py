@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -43,10 +44,14 @@ def _absolute(v: str) -> str:
     return v
 
 
+ProjectKind = Literal["train", "detect"]
+
+
 class ProjectCreate(BaseModel):
     name: str = Field(min_length=1)
     folder: str
     classes: list[ClassDefInput]
+    kind: ProjectKind
 
     _folder_abs = field_validator("folder")(_absolute)
 
@@ -67,6 +72,7 @@ class ProjectOut(BaseModel):
     id: str
     name: str
     folder: str
+    kind: ProjectKind
     classes: list[ClassDef]
     preannotation_model_id: str | None
     import_defaults: ImportSettings
@@ -79,6 +85,7 @@ class ProjectOut(BaseModel):
             id=row.id,
             name=row.name,
             folder=str(folder),
+            kind=row.kind,
             classes=[ClassDef(**c) for c in row.classes],
             preannotation_model_id=row.preannotation_model_id,
             import_defaults=ImportSettings(**(row.import_defaults or {})),

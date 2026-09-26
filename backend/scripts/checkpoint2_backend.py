@@ -11,6 +11,7 @@ Copies `--frames` files from --source into a temp folder first; the source is on
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import shutil
 import sys
@@ -41,11 +42,13 @@ def check(r: httpx.Response, *codes: int) -> dict:
     return r.json() if r.content else {}
 
 
-def wait_job(api: httpx.Client, pid: str, jid: str, timeout: float = 900) -> dict:
+def wait_job(api: httpx.Client, pid: str | None, jid: str, timeout: float = 900) -> dict:
+    """Poll a project job, or a library job (import, export) when `pid` is None."""
+    jobs = "/api/v1/library/jobs" if pid is None else f"/api/v1/projects/{pid}/jobs"
     t0 = time.time()
     last = ""
     while time.time() - t0 < timeout:
-        j = check(api.get(f"/api/v1/projects/{pid}/jobs/{jid}"))
+        j = check(api.get(f"{jobs}/{jid}"))
         msg = f"{j['state']} {j['progress']:.2f} {j['message']}"
         if msg != last:
             print("  job", j["type"], msg, flush=True)
@@ -54,6 +57,33 @@ def wait_job(api: httpx.Client, pid: str, jid: str, timeout: float = 900) -> dic
             return j
         time.sleep(0.5)
     raise SystemExit(f"job {jid} timed out")
+
+
+def sha256_file(path: Path) -> str:
+    """Streamed in chunks, like the library's own hash: weights files run to hundreds of megabytes."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        while chunk := fh.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def base_model_id(api: httpx.Client, job: dict, weights: Path) -> str:
+    """The library model a finished import job stands for.
+
+    The library is app-wide, so an earlier run may have imported these weights already: that
+    duplicate refusal reuses the existing model. Any other failure stops the script with its error.
+    """
+    if job["state"] == "succeeded":
+        return job["result"]["model_id"]
+    if "already in the library" not in (job.get("error") or ""):
+        raise SystemExit(f"model import {job['state']}: {job.get('error')}")
+    digest = sha256_file(weights)
+    library = check(api.get("/api/v1/library/models", params={"limit": 1000}))["items"]
+    base_id = next((m["id"] for m in library if m["sha256"] == digest), None)
+    if base_id is None:
+        raise SystemExit(f"import refused as a duplicate, but no library model has sha256 {digest}")
+    return base_id
 
 
 def main() -> int:
@@ -101,7 +131,10 @@ def main() -> int:
         for i, (n, c) in enumerate(zip(CLASSES, COLOURS, strict=True))
     ]
     project = check(
-        api.post("/api/v1/projects", json={"name": "Checkpoint 2", "folder": str(folder), "classes": classes})
+        api.post(
+            "/api/v1/projects",
+            json={"name": "Checkpoint 2", "folder": str(folder), "classes": classes, "kind": "train"},
+        )
     )
     pid = project["id"]
     step("create project", {"id": pid, "classes": len(project["classes"])})
@@ -158,10 +191,10 @@ def main() -> int:
     )
     assert data_yaml.exists() and dataset["train_count"] + dataset["val_count"] == 10
 
-    # 5. import base weights and train
-    base = check(
+    # 5. import base weights into the model library and train
+    imp = check(
         api.post(
-            f"/api/v1/projects/{pid}/models/import",
+            "/api/v1/library/models/import",
             json={
                 "name": "yolo11n-coco",
                 "weights_path": a.weights,
@@ -169,10 +202,13 @@ def main() -> int:
             },
         )
     )
+    job = wait_job(api, None, imp["job"]["id"])
+    base_id = base_model_id(api, job, Path(a.weights))
+    base = check(api.get(f"/api/v1/library/models/{base_id}"))
     step("import model", {"id": base["id"], "class_names": len(base["class_names"])})
     tr = check(
         api.post(
-            f"/api/v1/projects/{pid}/models/train",
+            f"/api/v1/projects/{pid}/train",
             json={
                 "name": "cp2",
                 "dataset_id": dataset["id"],
@@ -189,7 +225,7 @@ def main() -> int:
     t0 = time.time()
     job = wait_job(api, pid, tr["job"]["id"])
     assert job["state"] == "succeeded", job
-    model = check(api.get(f"/api/v1/projects/{pid}/models/{job['result']['model_id']}"))
+    model = check(api.get(f"/api/v1/library/models/{job['result']['model_id']}"))
     progress_events = [
         e for e in events if e.get("job_id") == tr["job"]["id"] and e["type"] == "job.progress"
     ]
@@ -203,18 +239,19 @@ def main() -> int:
             "sample_messages": [e["message"] for e in progress_events[:3]],
         },
     )
-    assert model["kind"] == "trained" and model["metrics"] and progress_events
+    assert model["origin"] == "trained" and model["metrics"] and progress_events
 
     # 6. export onnx
     ex = check(
-        api.post(
-            f"/api/v1/projects/{pid}/models/{model['id']}/export", json={"format": "onnx", "imgsz": a.imgsz}
-        )
+        api.post(f"/api/v1/library/models/{model['id']}/export", json={"format": "onnx", "imgsz": a.imgsz})
     )
-    job = wait_job(api, pid, ex["job"]["id"])
+    job = wait_job(api, None, ex["job"]["id"])
     assert job["state"] == "succeeded", job
-    model = check(api.get(f"/api/v1/projects/{pid}/models/{model['id']}"))
-    onnx_path = folder / model["exports"]["onnx"]
+    model = check(api.get(f"/api/v1/library/models/{model['id']}"))
+    # exports are relative to the model's own folder, `<library>/models/<slug>-<id8>/`
+    library_root = Path(check(api.get("/api/v1/library/status"))["root"])
+    model_dir = next((library_root / "models").glob(f"*-{model['id'][:8]}"))
+    onnx_path = model_dir / model["exports"]["onnx"]
     step("export onnx", {"path": str(onnx_path), "bytes": onnx_path.stat().st_size})
 
     stop.set()

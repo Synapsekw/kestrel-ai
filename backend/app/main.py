@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 import os
 import socket
 from contextlib import asynccontextmanager
@@ -20,28 +21,58 @@ from app.providers.keys import KeyringKeyStore
 def project_opened(handle, runner) -> None:
     """Runs once when a project becomes live: close out orphan jobs, give interrupted dataset deletes
     their folders back, sweep partial exports a crash left behind, fail agent turns the last process
-    left running. Each step on its own, so one
-    failing never skips the others."""
+    left running, and start moving a training project's old models into the library. Each step on
+    its own, so one failing never skips the others.
+
+    The point-cloud, surface, volume and design-inspection sweeps (foundation F0) are imported
+    inside their own step: a module that fails to import costs only that step."""
+    import importlib
     import logging
 
     from app.datasets import materialise
     from app.exports import job as exports_job
     from app.jobs import startup
+    from app.library import adoption
     from app.maps import startup as maps_startup
     from app.project_agent import store as agent_store
 
     log = logging.getLogger(__name__)
+
+    def sweep(module: str):
+        return lambda: importlib.import_module(module).sweep_interrupted(handle, runner)
+
     for step, run in (
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         ("dataset tombstone sweep", lambda: materialise.reconcile_tombstones(handle)),
         ("partial export sweep", lambda: exports_job.sweep_partial_exports(handle)),
         ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),
         ("interrupted map import sweep", lambda: maps_startup.sweep_interrupted_imports(handle, runner)),
+        ("interrupted point cloud import sweep", sweep("app.pointclouds.startup")),
+        ("interrupted surface build sweep", sweep("app.surfaces.startup")),
+        ("interrupted volume calculation sweep", sweep("app.volumes.startup")),
+        ("stale design inspection sweep", sweep("app.surfaces.design.startup")),
+        # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
+        ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),
     ):
         try:
             run()
         except Exception:
             log.exception("%s failed for project %s", step, handle.id)
+
+
+def open_model_library(app: FastAPI, settings: Settings) -> None:
+    """Open the app-wide library. A failure is logged and the app starts without it: every
+    library-dependent endpoint then answers 503 `library_unavailable` (AGENTS.md: the app must start
+    even when startup work fails)."""
+    from app.library import handle as library_handle
+
+    app.state.library, app.state.library_error = None, None
+    try:
+        app.state.library = library_handle.open_library(settings.data_dir)
+    except Exception as e:
+        logging.getLogger(__name__).exception("the model library could not be opened")
+        app.state.library_error = f"{type(e).__name__}: {e}"
+    app.state.jobs.library = app.state.library
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -66,7 +97,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         # persisted in the project DB, so a key must never travel that way.
         app.state.jobs.keys = app.state.keys
         app.state.jobs.provider_config = app.state.provider_config
+        # A `map_move` job runs in the target project and reads the map from the source project.
+        app.state.jobs.projects = app.state.projects
+        open_model_library(app, settings)
         app.state.jobs.start()
+        if app.state.library is not None:
+            try:
+                from app.jobs.startup import sweep_orphans
+
+                sweep_orphans(app.state.library, app.state.jobs)
+            except Exception:
+                logging.getLogger(__name__).exception("orphan job sweep failed for the model library")
         # The project agent's turn loops run as tasks on this event loop; the model call is a seam
         # (`agent_llm`) so tests can script the model without reaching a provider.
         from app.project_agent import llm as agent_llm
@@ -78,6 +119,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         await app.state.agent.stop()
         app.state.jobs.stop()
         app.state.projects.close_all()
+        if app.state.library is not None:
+            app.state.library.engine.dispose()
 
     app = FastAPI(
         title="kestrel-backend",
@@ -96,7 +139,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
-        allow_headers=["Authorization", "Content-Type"],
+        # Range: the point-cloud octree loader reads byte ranges, and its `Range` header triggers a
+        # preflight that must pass here, before routing (spec 2026-09-23-point-clouds section 2).
+        allow_headers=["Authorization", "Content-Type", "Range"],
+        expose_headers=["Content-Range", "Accept-Ranges", "Content-Length"],
         allow_credentials=False,
         max_age=600,
     )

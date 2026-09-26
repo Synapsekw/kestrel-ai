@@ -1,0 +1,5 @@
+E:\Dev\Yolo\app\backend\.venv\Lib\site-packages\PyInstaller\building\build_main.py:227: PendingDeprecationWarning: Please use `import python_multipart` instead.
+  __import__(package)
+potreeconverter payload ok: 10 files, version 2.1.5
+sidecar copied to E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\backend\..\frontend\src-tauri\binaries
+dist/kestrel-backend: 3,618.8 MB in 14,508 files; build took 204 s

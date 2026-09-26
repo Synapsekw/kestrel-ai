@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
 import { Icon } from "@/ui";
-import { nextStep } from "./nextStep";
 import { stepStates } from "./pipeline";
+import { projectNextStep } from "./projectNextStep";
+import { useProjectKind } from "./useProjectKind";
 import { useProgress } from "./useProjectProgress";
 
-/** Six short bars, one per pipeline step: green done, orange current, grey otherwise. */
+/** One short bar per step of the project's kind: green done, orange current, grey otherwise. */
 export function StepTicks({ projectId }: { projectId: string }) {
   const progress = useProgress(projectId);
-  if (!progress) return null;
-  const steps = stepStates(projectId, progress);
+  const kind = useProjectKind(projectId);
+  if (!progress || !kind) return null;
+  const steps = stepStates(projectId, kind, progress);
   return (
     <span className="flex items-center gap-1" aria-hidden="true">
       {steps.map((s) => (
@@ -26,11 +28,12 @@ export function StepTicks({ projectId }: { projectId: string }) {
 
 /**
  * The banner under the header on project screens: "Next: ..." with one line of why, and the step
- * ticks. Silent until the shell has loaded the project's counts, and when nothing is pending.
+ * ticks. Silent until the shell has loaded the project's counts and kind, and when nothing is pending.
  */
 export function NextStepBar({ projectId }: { projectId: string }) {
   const progress = useProgress(projectId);
-  const step = progress ? nextStep(projectId, progress) : null;
+  const kind = useProjectKind(projectId);
+  const step = progress && kind ? projectNextStep(projectId, kind, progress) : null;
   if (!step) return null;
   return (
     <div

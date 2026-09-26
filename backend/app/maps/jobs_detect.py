@@ -14,17 +14,27 @@ from pathlib import Path
 
 import rasterio
 from PIL import Image as PILImage
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete
 
 from app.db.models import GeoMap, MapDetection, MapRun
+from app.detect.areas import areas_for_map
+from app.detect.counts import recount_map_run
 from app.errors import not_found
 
 # Reused rather than duplicated: these helpers are duck-typed on `kind`, `model_id`, `provider`,
 # `query` and `conf`, which `MapRun` carries under the same names as `QueryRun`.
-from app.inference.jobs import _call_with_retries, _rate_limiter, _wiring, _write_atomic
+from app.inference.jobs import (
+    _call_with_retries,
+    _rate_limiter,
+    _wiring,
+    _write_atomic,
+    fill_snapshot,
+    run_label_map,
+)
 from app.inference.service import class_ids_by_name, class_names
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.library import service as library
 from app.maps import raster
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.windows import (
@@ -40,7 +50,7 @@ from app.maps.windows import (
 )
 from app.providers.base import Detection, Tile
 from app.providers.factory import get_provider
-from app.training import registry
+from app.volumes.service import refresh_mask_users
 
 
 def windows_dir(handle, run: MapRun) -> Path:
@@ -64,22 +74,23 @@ def _provider(ctx: JobContext, run: MapRun, names: list[str]):
     if run.kind == "cloud_provider":
         return get_provider(
             "cloud_provider",
-            handle=ctx.project,
             keys=_wiring(ctx, "keys"),
             config=_wiring(ctx, "provider_config").get(run.provider),
             provider_name=run.provider,
             project_class_names=names,
             imgsz=run.tile_size,
         )
+    lib, model = library.model_for_job(ctx.runner.library, run.model_id)
     return get_provider(
         "local_model",
-        handle=ctx.project,
+        weights=library.weights_file(lib, model),
         keys=None,
         config=None,
-        model_row=registry.get_model(ctx.project, run.model_id),
+        model_row=model,
         project_class_names=names,
         imgsz=run.tile_size,
         cancelled=ctx.cancelled,
+        class_map=run_label_map(ctx, run),
     )
 
 
@@ -164,14 +175,24 @@ def _insert(ctx: JobContext, run_id: str, dets: list[Detection], by_name: dict[s
     return len(rows)
 
 
+def _masks_changed(ctx: JobContext, run_id: str) -> None:
+    """The run's boxes were rewritten: a volume measurement masking with it turns stale now and the
+    Volumes screen is told (volumes spec section 6.10)."""
+    ids = refresh_mask_users(ctx.project, [run_id])
+    if ids:
+        ctx.publish("volumes.changed", {"measurement_ids": ids})
+
+
 @register_job_type("map_detect")
 def run_map_detect(ctx: JobContext) -> dict:
     run, gmap, names, by_name = _load(ctx)
     provider = _provider(ctx, run, names)
+    fill_snapshot(ctx, MapRun, run)
     scale = gsd_scale(gmap.gsd_cm, run.target_gsd_cm)
     wins = plan_windows(gmap.width, gmap.height, run.tile_size, run.overlap, scale)
     with ctx.project.session() as s:
         s.execute(delete(MapDetection).where(MapDetection.run_id == run.id))
+    _masks_changed(ctx, run.id)
     totals = {
         "windows": len(wins),
         "skipped_windows": 0,
@@ -215,15 +236,10 @@ def run_map_detect(ctx: JobContext) -> dict:
             totals["detections"] += _insert(ctx, run.id, merger.add_strip(strip[0].y, strip_dets), by_name)
         totals["detections"] += _insert(ctx, run.id, merger.finish(), by_name)
     with ctx.project.session() as s:
-        counts = dict(
-            s.execute(
-                select(MapDetection.class_id, func.count())
-                .where(MapDetection.run_id == run.id)
-                .group_by(MapDetection.class_id)
-            ).all()
-        )
-        s.get(MapRun, run.id).counts = counts
+        # counts, verified_counts and area_counts from the rows just written (app/detect/counts.py)
+        recount_map_run(s, s.get(MapRun, run.id), areas_for_map(s, s.get(GeoMap, gmap.id)))
     ctx.publish("map_runs.changed", {"map_id": gmap.id, "run_ids": [run.id]})
+    _masks_changed(ctx, run.id)
     if run.kind == "local_model" and not totals["failed_windows"]:
         shutil.rmtree(windows_dir(ctx.project, run).parent, ignore_errors=True)  # repeatable for free
     ctx.log.info("map run %s finished: %s", run.id, totals)

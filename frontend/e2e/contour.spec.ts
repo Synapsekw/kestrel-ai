@@ -76,15 +76,20 @@ test("Home's imagery is bounded and a failed preview does not hide the next acti
 });
 
 test("locked-step explanations stay visible outside both rail widths", async ({ page }) => {
-  await page.route(
-    (url) => url.pathname === `/api/v1/projects/${PROJECT}/datasets`,
-    (route) =>
-      route.fulfill({
-        contentType: "application/json",
-        headers: { "Access-Control-Allow-Origin": "*" },
-        body: JSON.stringify({ items: [] }),
-      }),
-  );
+  // No dataset and no model trained here: the mock's library holds a model trained in this project,
+  // which would mark Train done instead of locked.
+  const empty = { items: [], next_cursor: null };
+  for (const path of [`/api/v1/projects/${PROJECT}/datasets`, "/api/v1/library/models"]) {
+    await page.route(
+      (url) => url.pathname === path,
+      (route) =>
+        route.fulfill({
+          contentType: "application/json",
+          headers: { "Access-Control-Allow-Origin": "*" },
+          body: JSON.stringify(empty),
+        }),
+    );
+  }
   await page.goto(`/p/${PROJECT}`);
   await expect(page.getByTestId("home-next-step")).toBeVisible();
   const train = page.getByRole("navigation").getByRole("link", { name: /^Train/ });

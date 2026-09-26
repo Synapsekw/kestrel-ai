@@ -19,7 +19,13 @@ export type Provenance = Schemas["Provenance"];
 export type ReviewState = Schemas["ReviewState"];
 export type Dataset = Schemas["Dataset"];
 export type DatasetStats = Schemas["DatasetStats"];
-export type Model = Schemas["Model"];
+export type LibraryModel = Schemas["LibraryModel"];
+export type LibraryModelImport = Schemas["LibraryModelImport"];
+export type LibraryModelPatch = Schemas["LibraryModelPatch"];
+export type ModelProvenance = Schemas["ModelProvenance"];
+export type ModelUsage = Schemas["ModelUsage"];
+export type LibraryStatus = Schemas["LibraryStatus"];
+export type ProjectKind = Schemas["ProjectKind"];
 export type ModelMetrics = Schemas["ModelMetrics"];
 export type StarterModel = Schemas["StarterModel"];
 export type StarterModelKey = Schemas["StarterModelKey"];
@@ -50,6 +56,10 @@ export type MapDetection = Schemas["MapDetection"];
 export type MapZone = Schemas["MapZone"];
 export type MapLabel = Schemas["MapLabel"];
 export type MapScore = Schemas["MapScore"];
+export type PointCloud = Schemas["PointCloudOut"];
+export type CloudMeasurement = Schemas["CloudMeasurementOut"];
+export type Surface = Schemas["Surface"];
+export type VolumeMeasurement = Schemas["VolumeMeasurement"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */
@@ -106,4 +116,55 @@ export function mapPreviewUrl(baseUrl: string, token: string, projectId: string,
   const base = baseUrl.replace(/\/$/, "");
   const q = new URLSearchParams({ token });
   return `${base}/api/v1/projects/${projectId}/maps/${mapId}/preview?${q}`;
+}
+
+/**
+ * The point cloud's Potree `metadata.json` URL, WITHOUT the token: the viewer's potree-core
+ * RequestManager appends `?token=` to every URL it fetches, and the loader derives the
+ * `hierarchy.bin` and `octree.bin` URLs with `.replace("/metadata.json", ...)`, which keeps it.
+ */
+export function cloudOctreeUrl(baseUrl: string, projectId: string, cloudId: string): string {
+  const base = baseUrl.replace(/\/$/, "");
+  return `${base}/api/v1/projects/${projectId}/pointclouds/${cloudId}/octree/metadata.json`;
+}
+
+/** OpenLayers tile URL template for a surface's hillshade; `tint` adds the hypsometric ramp. */
+export function surfaceTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  surfaceId: string,
+  tint = false,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  if (tint) q.set("tint", "true");
+  return `${base}/api/v1/projects/${projectId}/surfaces/${surfaceId}/tiles/{z}/{x}/{y}?${q}`;
+}
+
+/** OpenLayers tile URL template for a map's orthomosaic warped into a surface's grid. */
+export function surfaceOrthoTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  surfaceId: string,
+  mapId: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token, map_id: mapId });
+  return `${base}/api/v1/projects/${projectId}/surfaces/${surfaceId}/ortho-tiles/{z}/{x}/{y}?${q}`;
+}
+
+/** OpenLayers tile URL template for a volume's cut/fill overlay; `v` busts the cache per calculation. */
+export function volumeDiffTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  measurementId: string,
+  v?: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  if (v) q.set("v", v);
+  return `${base}/api/v1/projects/${projectId}/volumes/${measurementId}/diff-tiles/{z}/{x}/{y}?${q}`;
 }

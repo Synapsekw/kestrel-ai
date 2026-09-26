@@ -1,0 +1,95 @@
+
+ RUN  v3.2.7 E:/Dev/Yolo/app/.claude/worktrees/point-clouds-t18/frontend
+
+ ✓ src/clouds/viewer/requestManager.test.ts > octree request manager > appends the token once 3ms
+ ✓ src/clouds/viewer/requestManager.test.ts > octree request manager > keeps the token through potree-core's /metadata.json replace 1ms
+ ✓ src/clouds/viewer/requestManager.test.ts > octree request manager > passes requests through and turns an error envelope into its message 6ms
+ ✓ src/clouds/viewer/requestManager.test.ts > octree request manager > names the status when the error body is not an envelope 1ms
+ ✓ src/clouds/viewer/requestManager.test.ts > octree request manager > hands potree-core a URL that ends in metadata.json 1ms
+ ✓ src/clouds/viewer/materialOptions.test.ts > material options > pins colour encoding 1/1 (the white-colour trap) and adaptive points 1ms
+ ✓ src/clouds/viewer/materialOptions.test.ts > material options > uses the HEIGHT colour type for elevation and clamps the point size 1ms
+ ✓ src/clouds/viewer/materialOptions.test.ts > material options > defaults to elevation without RGB, and to the p1-p99 range 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > lists the fields in contract order 1ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > a single pick 1ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > 3-4-12 box diagonal 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > UTM coordinates, going down 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > second pick lower: negative 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > second pick higher: positive 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > pole leaning exactly 1 degree to grid east 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > top picked first: sorted by Z 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > lean to the north-west 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > perfectly plumb 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > lean to the south, chimney scale 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > previews the server's refusals 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > knows a cloud in degrees 0ms
+ ✓ src/clouds/measure.test.ts > measurement formulas (the same vectors the backend reads) > draws the picks, the segment and the plumb line 1ms
+ ✓ src/clouds/jump.test.ts > 3D jump URLs > parses and writes at and fp 3ms
+ ✓ src/clouds/jump.test.ts > 3D jump URLs > inverts an affine with rotation terms 0ms
+ ✓ src/clouds/jump.test.ts > 3D jump URLs > is the identity between entities in the same EPSG 0ms
+ ✓ src/clouds/jump.test.ts > 3D jump URLs > round-trips 32639 <-> 32638 within a millimetre 2ms
+ ✓ src/clouds/jump.test.ts > 3D jump URLs > finds the ready clouds linked to a map, newest first, and tests bounds 10ms
+stderr | src/clouds/ImportCloudDialog.test.tsx > import dialog > shows the refusal verbatim and disables Import
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/clouds/viewer/diagnostics.test.ts > diagnostics hook ownership > installs a frozen hook and removes only its own 2ms
+ ✓ src/clouds/viewer/diagnostics.test.ts > viewer error list > records a failure once, and never more than the cap 1ms
+ ✓ src/clouds/viewer/diagnostics.test.ts > diagnostics > is off unless the flag is exactly 1 0ms
+ ✓ src/clouds/viewer/diagnostics.test.ts > diagnostics > counts background, red, green and pure-white pixels 0ms
+stderr | src/clouds/MeasurePanel.test.tsx > Measure panel > measures a distance live and saves it
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/clouds/viewer/idle.test.ts > idle render loop > renders while nodes load or within a second of activity 1ms
+ ✓ src/clouds/viewer/idle.test.ts > idle render loop > stops when idle and whenever the document is hidden 0ms
+ ✓ src/clouds/format.test.ts > cloud formatting > formats point counts and sizes the way the list shows them 16ms
+ ✓ src/clouds/format.test.ts > cloud formatting > labels the CRS and the heights 0ms
+ ✓ src/clouds/readout.test.ts > pick readout > shows native coordinates to the millimetre and WGS84 to 8 decimals 3ms
+ ✓ src/clouds/readout.test.ts > pick readout > hides WGS84 without coordinates, names a vertical datum, warns above 10 cm 1ms
+ ✓ src/clouds/readout.test.ts > pick readout > formats lengths 0ms
+stderr | src/screens/AboutScreen.test.tsx > About screen > shows every component and opens a licence text
+⚠️ React Router Future Flag Warning: React Router will begin wrapping state updates in `React.startTransition` in v7. You can use the `v7_startTransition` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_starttransition.
+⚠️ React Router Future Flag Warning: Relative route resolution within Splat routes is changing in v7. You can use the `v7_relativeSplatPath` future flag to opt-in early. For more information, see https://reactrouter.com/v6/upgrading/future#v7_relativesplatpath.
+
+ ✓ src/clouds/viewer/dispose.test.ts > GPU resource release > removes the matching children and disposes their geometry and material 3ms
+ ✓ src/clouds/viewer/dispose.test.ts > GPU resource release > disposes everything when no filter is given 1ms
+ ✓ src/clouds/viewer/dispose.test.ts > GPU resource release > disposes every Points geometry under a tree, the root node's included 1ms
+ ✓ src/screens/AboutScreen.test.tsx > About screen > shows every component and opens a licence text 184ms
+ ✓ src/clouds/measureCsv.test.ts > measurements CSV > writes the export's columns and quotes text 2ms
+ ✓ src/clouds/measureCsv.test.ts > measurements CSV > pads a single-point measurement's second point with empty cells 1ms
+ ✓ src/clouds/viewer/uncertainty.test.ts > pick uncertainty > halves the root spacing per level 1ms
+ ✓ src/clouds/viewer/uncertainty.test.ts > pick uncertainty > takes the deepest visible node that contains the pick 0ms
+ ✓ src/clouds/viewer/overlay.test.ts > overlay geometry > stores UTM points relative to a local origin so float32 keeps millimetres 1ms
+ ✓ src/clouds/viewer/overlay.test.ts > overlay geometry > closes a ring by repeating the first point 0ms
+ ✓ src/clouds/viewer/camera.test.ts > camera maths > near and far follow the target distance and the site 1ms
+ ✓ src/clouds/viewer/camera.test.ts > camera maths > puts the camera 45 degrees up from the south 0ms
+ ✓ src/clouds/viewer/camera.test.ts > camera maths > frames the whole site from the south and the top 0ms
+ ✓ src/clouds/viewer/camera.test.ts > camera maths > jumps to at least 40 m, else three footprint diagonals 0ms
+ ✓ src/clouds/viewer/budget.test.ts > point budget > reads a stored budget and writes one back 1ms
+ ✓ src/clouds/viewer/budget.test.ts > point budget > falls back to 3 M on anything else 1ms
+ ✓ src/clouds/link.test.ts > map link ranking > ranks by overlap and flags the likely same flight 2ms
+ ✓ src/clouds/link.test.ts > map link ranking > leaves out maps that cannot be linked 0ms
+ ✓ src/clouds/MeasurePanel.test.tsx > Measure panel > measures a distance live and saves it 201ms
+ ✓ src/clouds/MeasurePanel.test.tsx > Measure panel > saves a measurement once: Save waits for the answer, then for a new pick 80ms
+ ✓ src/clouds/MeasurePanel.test.tsx > Measure panel > says why distances are off on a cloud in degrees 15ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > a hit within 2 m retargets Z and draws the footprint there 19ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > a hit further than 2 m draws no footprint 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > no hit anywhere draws no footprint, after a bounded number of picks 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > a spot outside the cloud says so and does not move the camera 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > runs once per navigation: a re-render with the same search does nothing more 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > searches along the pin: a surface far above p50 is still found 1ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > keeps the nearest hit of all the samples 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > waits for two settled ticks: a stale idle tick right after lookAt does not pick 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > picks straight down first: the topmost surface far above p50, without sampling the pin 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > the pin fallback never picks where the pin is off the canvas 2ms
+ ✓ src/clouds/useJumpArrival.test.tsx > useJumpArrival > retries a pick that finds nothing before giving up 1ms
+ ✓ src/clouds/MeasurePanel.test.tsx > Measure panel > says a failed rename and puts the saved name back 179ms
+ ✓ src/clouds/MeasurePanel.test.tsx > Measure panel > shows the vertical-check refusal instead of results 24ms
+ ✓ src/clouds/ImportCloudDialog.test.tsx > import dialog > shows the refusal verbatim and disables Import 747ms
+ ✓ src/clouds/ImportCloudDialog.test.tsx > import dialog > imports an admissible file with its name 754ms
+
+ Test Files  19 passed (19)
+      Tests  74 passed (74)
+   Start at  00:35:02
+   Duration  7.55s (transform 583ms, setup 15.61s, collect 3.20s, tests 2.31s, environment 80.86s, prepare 10.29s)
+

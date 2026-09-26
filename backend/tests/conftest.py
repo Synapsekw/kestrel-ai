@@ -8,6 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 from local_paths import FRAMES_DIR
 from PIL import Image
+from pointclouds import fake_run_converter
 
 from app.config import Settings
 from app.health import GpuProbe
@@ -52,7 +53,7 @@ def app(settings, monkeypatch):
     `subprocess.Popen` itself): the contract conformance test calls every route (including reveal)
     with generated bodies, and no test may start the real Explorer; `tests/test_reveal.py` restores
     the real `launch` and monkeypatches `subprocess.Popen` itself where it needs to assert on the
-    exact command.
+    exact command. PotreeConverter is replaced by `tests/pointclouds.py::fake_run_converter`.
     """
 
     def no_model_download(*args, **kwargs):
@@ -65,6 +66,10 @@ def app(settings, monkeypatch):
     created.state.keys = MemoryKeyStore()
     created.state.gpu_probe = GpuProbe(probe=lambda: {"available": False, "name": "test-gpu"})
     monkeypatch.setattr("app.exports.reveal.launch", lambda command: None)
+    # PotreeConverter is an external exe: tests use a real, tiny Potree octree written in Python
+    # (ADR 2026-09-21-gotcha-contract-jobs-need-offline-seams). The fake imports laspy only when
+    # a job actually converts.
+    monkeypatch.setattr("app.pointclouds.converter.run_converter", fake_run_converter)
     return created
 
 
@@ -188,13 +193,20 @@ def import_source(client, wait_job):
 
 
 @pytest.fixture
-def project(client, project_dir) -> dict:
-    """A project with the eight machinery classes (hotkeys 1-8)."""
+def project_kind() -> str:
+    """The kind of project the `project` fixture creates; a module overrides it for detection work."""
+    return "train"
+
+
+@pytest.fixture
+def project(client, project_dir, project_kind) -> dict:
+    """A project with the eight machinery classes (hotkeys 1-8), a training project by default."""
     classes = [
         {"name": n, "colour": c, "hotkey": str(i + 1)}
         for i, (n, c) in enumerate(zip(EIGHT_CLASSES, COLOURS, strict=True))
     ]
-    r = client.post("/api/v1/projects", json={"name": "T", "folder": str(project_dir), "classes": classes})
+    body = {"name": "T", "folder": str(project_dir), "classes": classes, "kind": project_kind}
+    r = client.post("/api/v1/projects", json=body)
     assert r.status_code == 201, r.text
     return r.json()
 

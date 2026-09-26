@@ -20,15 +20,17 @@ from PIL import Image as PILImage
 from sqlalchemy import delete, func, select
 
 from app.db.models import Box, Image, QueryRun
+from app.detect.class_maps import label_map, model_snapshot
+from app.detect.counts import recount_query_run
 from app.errors import not_found
 from app.inference.ratelimit import bucket_for
 from app.inference.service import class_ids_by_name, class_names, tiles_dir
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.library import service as library
 from app.providers.base import Detection, ProviderError, Tile, TileResult, TilingSpec
 from app.providers.factory import get_provider
 from app.providers.tiling import make_tiles, nms_per_class, not_covered_by
-from app.training import registry
 
 RETRY_DELAYS_S = (1, 2, 4, 8, 16)
 MAX_ATTEMPTS = len(RETRY_DELAYS_S)
@@ -177,23 +179,51 @@ def _build_provider(ctx: JobContext, run: QueryRun, names: list[str]):
         config = _wiring(ctx, "provider_config").get(run.provider)
         return get_provider(
             "cloud_provider",
-            handle=ctx.project,
             keys=_wiring(ctx, "keys"),
             config=config,
             provider_name=run.provider,
             project_class_names=names,
             imgsz=tile_size,
         )
+    lib, model = library.model_for_job(ctx.runner.library, run.model_id)
     return get_provider(
         "local_model",
-        handle=ctx.project,
+        weights=library.weights_file(lib, model),
         keys=None,
         config=None,
-        model_row=registry.get_model(ctx.project, run.model_id),
+        model_row=model,
         project_class_names=names,
         imgsz=tile_size,
         cancelled=ctx.cancelled,  # a cancelled run stops waiting for a training run to free the GPU
+        class_map=run_label_map(ctx, run),
     )
+
+
+def run_label_map(ctx: JobContext, run) -> dict[str, str] | None:
+    """The run's own class map (plan 2 unit R) for the provider; None falls back to names."""
+    class_map = getattr(run, "class_map", None)
+    if not class_map:
+        return None
+    with ctx.project.session() as s:
+        return label_map(class_map, list(ctx.project.row(s).classes or []))
+
+
+def fill_snapshot(ctx: JobContext, table, run) -> None:
+    """A local run started without a model snapshot (the older run endpoints) gets one now."""
+    if run.kind != "local_model" or run.model_snapshot:
+        return
+    _, model = library.model_for_job(ctx.runner.library, run.model_id)
+    with ctx.project.session() as s:
+        row = s.get(table, run.id)
+        if row is not None:
+            row.model_snapshot = model_snapshot(model)
+
+
+def _recount(ctx: JobContext, run: QueryRun) -> None:
+    with ctx.project.session() as s:
+        row = s.get(QueryRun, run.id)
+        if row is not None:
+            recount_query_run(s, row)
 
 
 @register_job_type("infer")
@@ -201,9 +231,21 @@ def run_infer(ctx: JobContext) -> dict:
     run, names = _load_run(ctx)
     spec = TilingSpec(**(run.tiling or {}))
     provider = _build_provider(ctx, run, names)
+    fill_snapshot(ctx, QueryRun, run)
 
     totals = {"tiles": 0, "boxes": 0, "cached_images": 0, "failed_tiles": 0, "refusals": 0}
     image_ids = list(run.image_ids or [])
+    try:
+        _run_images(ctx, run, provider, spec, names, image_ids, totals)
+    finally:
+        # counts follow the boxes that were written, even when the run was cancelled half way
+        _recount(ctx, run)
+    ctx.log.info("run %s finished: %s", run.id, totals)
+    _drop_local_tile_cache(ctx, run, totals)
+    return {"query_run_id": run.id, "images": len(image_ids), **totals}
+
+
+def _run_images(ctx, run, provider, spec, names, image_ids, totals) -> None:
     for done, image_id in enumerate(image_ids, start=1):
         dets, all_cached = _run_image(ctx, run, provider, spec, names, image_id, totals)
         # A complete tile cache only means the boxes are right if they are actually there: tiles are
@@ -216,9 +258,6 @@ def run_infer(ctx: JobContext) -> dict:
             totals["boxes"] += _write_boxes(ctx, run, image_id, dets, spec.nms_iou)
             ctx.publish("boxes.changed", {"image_ids": [image_id]})
         ctx.progress(done / len(image_ids), f"{done} / {len(image_ids)} images, {totals['boxes']} boxes")
-    ctx.log.info("run %s finished: %s", run.id, totals)
-    _drop_local_tile_cache(ctx, run, totals)
-    return {"query_run_id": run.id, "images": len(image_ids), **totals}
 
 
 def _drop_local_tile_cache(ctx: JobContext, run: QueryRun, totals: dict) -> None:

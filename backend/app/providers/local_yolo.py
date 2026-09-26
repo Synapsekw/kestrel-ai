@@ -1,4 +1,4 @@
-"""Any registry model as a provider, through the shared tiling path (spec section 8).
+"""Any library model as a provider, through the shared tiling path (spec section 8).
 
 Model class names are mapped onto project classes by exact name first and then through the model's
 alias table; whatever is left over is dropped, so COCO weights only propose what the project asked

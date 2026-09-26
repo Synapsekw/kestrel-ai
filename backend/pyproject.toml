@@ -16,7 +16,11 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Body"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-markers = ["gpu: needs an NVIDIA GPU", "live: calls a cloud provider, needs an API key in the environment"]
+markers = [
+    "gpu: needs an NVIDIA GPU",
+    "live: calls a cloud provider, needs an API key in the environment",
+    "potreeconverter: runs the real PotreeConverter from backend/third_party (skipped when fetch_potreeconverter.ps1 has not run)",
+]
 addopts = "-m 'not gpu and not live'"
 filterwarnings = [
     "error::DeprecationWarning:app.*",

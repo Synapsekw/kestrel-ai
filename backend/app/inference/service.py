@@ -12,10 +12,14 @@ from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.datasets.empties import clear_mark_for_ground_truth, count_marked_empty
-from app.db.models import Box, Image, Job, Model, QueryRun
+from app.db.models import Box, Image, Job, QueryRun
+from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
 from app.inference.schemas import PreannotateRequest, QueryRunCreate
 from app.jobs.gpu import GpuBusy
+from app.library import service as library
+from app.library.db import LibraryModel
+from app.library.handle import LibraryHandle, library_unavailable
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
 from app.providers.base import Detection, TilingSpec
@@ -23,7 +27,6 @@ from app.providers.config import ProviderConfigStore
 from app.providers.factory import get_provider
 from app.providers.keys import KeyStore
 from app.providers.tiling import make_tiles
-from app.training import registry
 
 log = logging.getLogger(__name__)
 
@@ -69,10 +72,12 @@ def _tile_count(s: Session, body: QueryRunCreate) -> tuple[int, int]:
     return len(images), sum(len(make_tiles(i.width, i.height, spec)) for i in images)
 
 
-def estimate(handle: ProjectHandle, config: ProviderConfigStore, body: QueryRunCreate):
+def estimate(
+    handle: ProjectHandle, config: ProviderConfigStore, body: QueryRunCreate, lib: LibraryHandle | None
+):
     with handle.session() as s:
         images, tiles = _tile_count(s, body)  # unknown images are a 404 before anything else
-    _validate(handle, config, body, check_key=False, keys=None)
+    _validate(handle, config, body, check_key=False, keys=None, lib=lib)
     per_request = _cost_per_request(config, body)
     return {
         "images": images,
@@ -90,17 +95,24 @@ def _validate(
     *,
     check_key: bool,
     keys: KeyStore | None,
+    lib: LibraryHandle | None,
 ) -> str | None:
     """The model name the run records, or the contract's error for each missing precondition.
 
     `QueryRunCreate` cannot express "model_id is required for local_model" or a non-empty query, so
     those are checked here. The images are resolved first, because a body that names no real image
-    is answered 404 whatever else is wrong with it.
+    is answered 404 whatever else is wrong with it. A local model comes from the library: 503 when
+    the library could not be opened, 404 when the model is unknown, and, when a run is being
+    created (`check_key`), 409 `model_unavailable` when its weights file is gone.
     """
     if body.kind == "local_model":
         if not body.model_id:
             raise AppError("validation_error", "a local model run needs model_id", 422)
-        return registry.get_model(handle, body.model_id).name
+        if lib is None:
+            raise library_unavailable()
+        if check_key:
+            return library.require_ready(lib, body.model_id).name
+        return library.get_model(lib, body.model_id).name
     if not body.provider:
         raise AppError("validation_error", "a cloud provider run needs provider", 422)
     if not (body.query or "").strip():
@@ -111,11 +123,15 @@ def _validate(
 
 
 def create_query_run(
-    handle: ProjectHandle, keys: KeyStore, config: ProviderConfigStore, body: QueryRunCreate
+    handle: ProjectHandle,
+    keys: KeyStore,
+    config: ProviderConfigStore,
+    body: QueryRunCreate,
+    lib: LibraryHandle | None,
 ) -> QueryRun:
     with handle.session() as s:
         _images(s, body.image_ids)  # unknown images are a 404 before anything else
-    model_name = _validate(handle, config, body, check_key=True, keys=keys)
+    model_name = _validate(handle, config, body, check_key=True, keys=keys, lib=lib)
     with handle.session() as s:
         row = QueryRun(
             kind=body.kind,
@@ -236,6 +252,8 @@ def promote(
         for box in pending:
             box.review_state, box.reviewed_at = "accepted", now
         row.promoted_at = now
+        s.flush()
+        recount_query_run(s, row)  # the run's counts follow in the same transaction
         image_ids = sorted({b.image_id for b in pending})
         cleared = count_marked_empty(s, image_ids)
         clear_mark_for_ground_truth(s, image_ids)
@@ -267,6 +285,8 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
         for box in promoted:
             box.review_state, box.reviewed_at = "unreviewed", None
         row.promoted_at = None
+        s.flush()
+        recount_query_run(s, row)
         image_ids = sorted({b.image_id for b in promoted})
         s.flush()
         count = box_count(s, run_id)
@@ -275,7 +295,7 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
 
 
 def preannotate(
-    handle: ProjectHandle, image_id: str, body: PreannotateRequest
+    handle: ProjectHandle, image_id: str, body: PreannotateRequest, lib: LibraryHandle | None
 ) -> tuple[bool, str, list[Box]]:
     """Run the project's pre-annotation model on one image, synchronously (spec section 7).
 
@@ -296,14 +316,16 @@ def preannotate(
         names = class_names(handle, s)
         path = handle.folder / image.path
 
-    model = registry.get_model(handle, model_id)
+    if lib is None:
+        raise library_unavailable()
+    model = library.require_ready(lib, model_id)
     existing = _boxes_from_model(handle, image_id, model_id)
     if existing:
         return True, model_id, existing
 
     provider = get_provider(
         "local_model",
-        handle=handle,
+        weights=library.weights_file(lib, model),
         keys=None,
         config=None,
         model_row=model,
@@ -340,7 +362,9 @@ def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> li
     return rows
 
 
-def _write_proposals(handle: ProjectHandle, image_id: str, model: Model, dets: list[Detection]) -> list[Box]:
+def _write_proposals(
+    handle: ProjectHandle, image_id: str, model: LibraryModel, dets: list[Detection]
+) -> list[Box]:
     """Replace this model's unreviewed proposals on the image, in one transaction.
 
     Two editor tabs can ask at the same moment: both see no boxes, both run the model, and an

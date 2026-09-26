@@ -9,7 +9,7 @@ import { elapsedSeconds, formatDuration, jobTitle, resultTarget, stateLabel } fr
 import { JobLogView } from "@/jobs/JobLogView";
 import { useNow } from "@/jobs/useNow";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { formatMetric } from "@/models/modelLabels";
+import { formatMetric } from "@/library/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Disclosure, Pill, Progress, Skeleton, buttonClass, type PillTone } from "@/ui";
 import { parseEpochMessage, resultAdvice } from "./trainModel";
@@ -137,10 +137,10 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
       </dl>
 
       {job.state === "succeeded" && !weak && (
-        <Alert tone="ok" title="Training finished: the model is registered." />
+        <Alert tone="ok" title="Training finished: the model is in the library." />
       )}
       {weak && (
-        <Alert tone="warn" testId="result-advice" title="Training finished: the model is registered.">
+        <Alert tone="warn" testId="result-advice" title="Training finished: the model is in the library.">
           {weak}
         </Alert>
       )}

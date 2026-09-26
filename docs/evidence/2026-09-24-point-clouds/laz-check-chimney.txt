@@ -1,0 +1,3 @@
+header_count 21697184 read 21697184 epsg 32639 header_mins [243194.297, 3177915.059, -141.186] header_maxs [243880.845, 3178616.529, 189.555]
+points_min [243194.298, 3177915.06, -141.185] points_max [243880.844, 3178616.528, 189.554] header_contains_all True
+laz ok

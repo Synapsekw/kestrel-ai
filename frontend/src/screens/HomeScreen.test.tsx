@@ -14,6 +14,7 @@ const base = {
   models: 0,
   trainedModels: 0,
   queryRuns: 0,
+  maps: 0,
 };
 
 function renderHome() {
@@ -75,11 +76,53 @@ describe("HomeScreen", () => {
     expect(screen.getByText(exampleProject.folder)).toBeInTheDocument();
     expect(screen.getByText("14 of 40")).toBeInTheDocument();
     expect(screen.getByText("2 (1 trained)")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Run detection on 26 unlabeled images/ })).toHaveAttribute(
+    expect(screen.getByText("Training project")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Label 26 more images/ })).toHaveAttribute(
       "href",
-      `/p/${PROJECT_ID}/query`,
+      `/p/${PROJECT_ID}/label`,
     );
+    expect(screen.queryByText("Detection runs")).toBeNull();
     expect(screen.getByText("Nothing is running.")).toBeInTheDocument();
+  });
+
+  it("speaks of sources, runs and maps in a detection project", async () => {
+    useProgressStore.getState().set(PROJECT_ID, { ...base, images: 12, maps: 2, queryRuns: 3 });
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: { ...exampleProject, kind: "detect", classes: [] } },
+    ]);
+    renderWithProviders(<HomeScreen />, { api, route: `/p/${PROJECT_ID}`, path: "/p/:projectId" });
+    expect(await screen.findByText("Detection project")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Add a model to the library/ })).toHaveAttribute(
+      "href",
+      "/library",
+    );
+    expect(screen.getByText("Maps")).toBeInTheDocument();
+    expect(screen.getByText("Detection runs")).toBeInTheDocument();
+    expect(screen.queryByText("Labeled")).toBeNull();
+    expect(screen.queryByText("Datasets")).toBeNull();
+    expect(screen.getByText("12 images and 2 maps")).toBeInTheDocument();
+  });
+
+  it("shows the models that could not move into the library, above the next step", async () => {
+    useProgressStore.getState().set(PROJECT_ID, base);
+    const { api } = fakeClient([
+      { method: "GET", path: /\/projects\/[^/]+$/, body: exampleProject },
+      {
+        method: "GET",
+        path: /\/adoption$/,
+        body: {
+          pending: 1,
+          adopted: 0,
+          missing: [
+            { old_model_id: "old-1", name: "yard-v1", error: "weights file not found: models/yard-v1.pt" },
+          ],
+          job_id: null,
+        },
+      },
+    ]);
+    renderWithProviders(<HomeScreen />, { api, route: `/p/${PROJECT_ID}`, path: "/p/:projectId" });
+    expect(await screen.findByText("One model could not be moved into your library")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
 
   it("lists running jobs with their progress", async () => {

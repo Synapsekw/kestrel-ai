@@ -5,7 +5,7 @@ import { isNotImplemented, messageOf } from "@/api/errors";
 import { createSource, fetchAllSources, fetchSourceStats } from "@/api/sources";
 import { pushLog } from "@/app/diagnostics";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { formatDate, formatLocalDate } from "@/models/modelLabels";
+import { formatDate, formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Skeleton } from "@/ui";
 
@@ -152,7 +152,9 @@ export function SourcesSection({ projectId }: { projectId: string }) {
     let cancelled = false;
     fetchAllSources(api, projectId)
       .then((sources) => {
-        if (!cancelled) setState({ key, sources, unavailable: false, error: null });
+        // Imported folders only: a map source is re-imported through its map, not as a folder.
+        const folders = sources.filter((s) => s.kind !== "map");
+        if (!cancelled) setState({ key, sources: folders, unavailable: false, error: null });
       })
       .catch((e: unknown) => {
         if (cancelled) return;

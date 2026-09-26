@@ -8,7 +8,8 @@ import shutil
 from pyproj import CRS
 from sqlalchemy import select
 
-from app.db.models import MapDetection, MapRun
+from app.db.models import MapDetection, MapRun, SiteArea
+from app.detect.areas import areas_for_map
 from app.exports.job import _now_local, _promote, _reserve_partial_folder
 from app.inference.service import class_ids_by_name
 from app.jobs.registry import register_job_type
@@ -47,6 +48,8 @@ def _boxes(ctx: JobContext, gmap, content: str, run_id: str | None) -> tuple[lis
                         d.w,
                         d.h,
                         d.angle,
+                        review_state=d.review_state,
+                        class_id=d.class_id,
                     )
                 )
     if content in ("labels", "run_score"):
@@ -64,6 +67,7 @@ def _boxes(ctx: JobContext, gmap, content: str, run_id: str | None) -> tuple[lis
                     lab.w,
                     lab.h,
                     lab.angle,
+                    class_id=lab.class_id,
                 )
             )
     return out, score
@@ -76,6 +80,7 @@ def run_map_export(ctx: JobContext) -> dict:
     boxes, score = _boxes(ctx, gmap, p["content"], p.get("run_id"))
     georef = Georef(gmap.geotransform, gmap.crs_wkt) if gmap.crs_wkt else None
     zones = [(z.id, z.name, z.polygon) for z in service.list_zones(ctx.project, gmap.id)]
+    site_areas = _site_areas(ctx, gmap) if georef is not None else []
     stem = f"map-{_slug(gmap.name)}"
     part = {"run": "detections", "labels": "labels", "run_score": "scored"}[p["content"]]
     base = ctx.project.exports_dir
@@ -94,7 +99,7 @@ def run_map_export(ctx: JobContext) -> dict:
                 geo_out.write_geojson(partial / name, boxes, zones, georef)
             else:
                 name = f"{stem}-{part}.gpkg"
-                _write_gpkg(partial / name, boxes, zones, georef, gmap)
+                _write_gpkg(partial / name, boxes, zones, georef, gmap, site_areas)
             files.append(name)
             ctx.progress((i + 1) / (len(p["formats"]) + 1), f"{name} written")
         counts: dict[str, int] = {}
@@ -135,7 +140,16 @@ def run_map_export(ctx: JobContext) -> dict:
     return {"folder": folder, "files": files, "box_count": len(boxes)}
 
 
-def _write_gpkg(path, boxes, zones, georef: Georef, gmap) -> None:
+def _site_areas(ctx: JobContext, gmap) -> list[tuple[str, str, bool, list[tuple[float, float]]]]:
+    """The project's site areas that lie on this map: (id, name, partly on the map, pixel ring)."""
+    with ctx.project.session() as s:
+        names = dict(s.execute(select(SiteArea.id, SiteArea.name)).all())
+        return [
+            (a.area_id, names.get(a.area_id, ""), a.partial, a.polygon_px) for a in areas_for_map(s, gmap)
+        ]
+
+
+def _write_gpkg(path, boxes, zones, georef: Georef, gmap, site_areas=()) -> None:
     def ring(b: ExportBox):
         return [georef.pixel_to_native(px, py) for px, py in box_corners(b.x, b.y, b.w, b.h, b.angle)]
 
@@ -146,6 +160,8 @@ def _write_gpkg(path, boxes, zones, georef: Georef, gmap) -> None:
             "confidence": b.confidence,
             "match": b.match,
             "source": b.source,
+            "class_id": b.class_id,
+            "review_state": b.review_state,
         }
 
     cols = [
@@ -154,6 +170,8 @@ def _write_gpkg(path, boxes, zones, georef: Georef, gmap) -> None:
         ("confidence", "REAL"),
         ("match", "TEXT"),
         ("source", "TEXT"),
+        ("class_id", "TEXT"),
+        ("review_state", "TEXT"),
     ]
     layers = [
         gpkg.Layer("detections", cols, [(ring(b), props(b)) for b in boxes if b.kind == "detection"]),
@@ -164,6 +182,19 @@ def _write_gpkg(path, boxes, zones, georef: Georef, gmap) -> None:
             [
                 ([georef.pixel_to_native(x, y) for x, y in poly], {"zone_id": zid, "name": name})
                 for zid, name, poly in zones
+            ],
+        ),
+        # Project-wide site areas (plan 2 unit E), never clipped: the whole polygon, in
+        # the map's CRS, with `partial` = 1 when part of it lies off this map.
+        gpkg.Layer(
+            "site_areas",
+            [("area_id", "TEXT"), ("name", "TEXT"), ("partial", "INTEGER")],
+            [
+                (
+                    [georef.pixel_to_native(x, y) for x, y in ring],
+                    {"area_id": aid, "name": name, "partial": int(partial)},
+                )
+                for aid, name, partial, ring in site_areas
             ],
         ),
     ]

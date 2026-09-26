@@ -3,11 +3,11 @@ import { useParams, useSearchParams } from "react-router-dom";
 import type { Job, TrainRequest } from "@contract/client";
 import { useApi } from "@/api/client";
 import { isNotImplemented, messageOf } from "@/api/errors";
-import { trainModel } from "@/api/models";
+import { trainModel } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
 import { jobTitle, stateLabel } from "@/jobs/jobLabels";
-import { formatLocalDate } from "@/models/modelLabels";
-import { useModels } from "@/models/useModels";
+import { formatLocalDate } from "@/library/modelLabels";
+import { useLibraryModels } from "@/library/useLibraryModels";
 import { useJobsStore } from "@/store/jobs";
 import { TrainForm } from "@/train/TrainForm";
 import { TrainProgress } from "@/train/TrainProgress";
@@ -28,7 +28,8 @@ export function TrainScreen() {
   const [params, setParams] = useSearchParams();
   const jobId = params.get("job");
   const datasets = useDatasets(projectId);
-  const registry = useModels(projectId);
+  // Training starts from box models only: rotated-box weights would train a different task.
+  const registry = useLibraryModels("detect");
   const jobs = useJobsStore((s) => s.jobs);
   const trainJobs = useMemo(
     () =>

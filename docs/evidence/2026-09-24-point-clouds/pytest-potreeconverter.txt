@@ -1,0 +1,15 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- E:\Dev\Yolo\app\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\backend
+configfile: pyproject.toml
+testpaths: tests
+plugins: anyio-4.15.1, hypothesis-6.168.0, asyncio-1.4.0, schemathesis-4.27.3
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1775 items / 1773 deselected / 2 selected
+
+tests/test_pointcloud_importer.py::test_the_real_converter_on_a_pix4d_style_laz PASSED [ 50%]
+tests/test_pointcloud_selftest.py::test_the_whole_real_path PASSED       [100%]
+
+===================== 2 passed, 1773 deselected in 8.84s ======================

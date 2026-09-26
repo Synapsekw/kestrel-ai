@@ -12,7 +12,7 @@ test("starts training with the chosen parameters and shows the live card with lo
   await expect(page.getByRole("heading", { name: "Train", exact: true })).toBeVisible();
   await expect(page.getByLabel("Dataset")).toHaveValue(DATASET);
   await expect(page.getByLabel("Base model")).toHaveValue(MODEL);
-  await expect(page.getByLabel("Model name")).toHaveValue("v1-yolo11m-coco");
+  await expect(page.getByLabel("Model name")).toHaveValue("v1-ahmadia-v1-n");
   await expect(page.getByRole("link", { name: "Create dataset" })).toHaveAttribute(
     "href",
     `/p/${P}/datasets`,
@@ -23,9 +23,7 @@ test("starts training with the chosen parameters and shows the live card with lo
   await page.getByLabel("Augmentation").selectOption("aerial");
   await page.getByLabel("Automatic batch size").uncheck();
   await page.getByLabel("Batch size", { exact: true }).fill("8");
-  const post = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/models/train`),
-  );
+  const post = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith(`/projects/${P}/train`));
   await page.getByRole("button", { name: "Start training" }).click();
   expect((await post).postDataJSON()).toEqual({
     name: "ahmadia-v1-n",
@@ -57,7 +55,7 @@ test("starts training with the chosen parameters and shows the live card with lo
 
 test("validation blocks an empty name and a 501 trainer shows the note", async ({ page }) => {
   await page.route(
-    (url) => url.pathname.endsWith(`/projects/${P}/models/train`),
+    (url) => url.pathname.endsWith(`/projects/${P}/train`),
     (route) =>
       route.fulfill({
         status: 501,

@@ -1,0 +1,3 @@
+top3m_points 781 centre [243513.597, 3178242.25] radius p10/p50/p90 [0.49, 1.55, 2.72]
+rim point [243511.446, 3178243.292, 188.771] neighbours<0.5m 97 dist_from_centre 2.39
+KESTREL_RIM=243511.446,3178243.292

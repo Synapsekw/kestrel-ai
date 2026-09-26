@@ -1,0 +1,25 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- E:\Dev\Yolo\app\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\backend
+configfile: pyproject.toml
+plugins: anyio-4.15.1, hypothesis-6.168.0, asyncio-1.4.0, schemathesis-4.27.3
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 13 items
+
+tests/test_pointcloud_converter_path.py::test_frozen_uses_only_the_bundle PASSED [  7%]
+tests/test_pointcloud_converter_path.py::test_dev_prefers_the_environment PASSED [ 15%]
+tests/test_pointcloud_converter_path.py::test_dev_default_is_third_party PASSED [ 23%]
+tests/test_pointcloud_converter_path.py::test_missing_converter_fails_readably PASSED [ 30%]
+tests/test_pointcloud_converter_path.py::test_payload_check_passes_on_a_complete_payload PASSED [ 38%]
+tests/test_pointcloud_converter_path.py::test_payload_check_fails_when_a_manifest_file_is_missing PASSED [ 46%]
+tests/test_pointcloud_converter_path.py::test_payload_check_fails_without_a_manifest PASSED [ 53%]
+tests/test_pointcloud_scripts.py::test_ortho_keeps_the_highest_point_per_cell PASSED [ 61%]
+tests/test_pointcloud_scripts.py::test_check_picks_finds_real_points PASSED [ 69%]
+tests/test_pointcloud_scripts.py::test_check_picks_reads_point_rows_from_the_export_csv PASSED [ 76%]
+tests/test_pointcloud_scripts.py::test_tiling_makes_nine_offset_copies PASSED [ 84%]
+tests/test_pointcloud_scripts.py::test_tree_rss_and_peak_sampler PASSED  [ 92%]
+tests/test_pointcloud_scripts.py::test_converter_rss_is_zero_without_a_converter PASSED [100%]
+
+============================= 13 passed in 1.81s ==============================

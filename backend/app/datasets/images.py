@@ -15,7 +15,8 @@ from PIL import Image as PILImage
 from sqlalchemy import case, delete, func, or_, select, tuple_
 from sqlalchemy.orm import Session
 
-from app.db.models import Box, DatasetImage, Image, Source
+from app.db.models import Box, DatasetImage, Image, QueryRun, Source
+from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
@@ -226,9 +227,21 @@ def bulk_delete(handle: ProjectHandle, image_ids: list[str]) -> int:
         paths = [handle.folder / r.path for r in rows]
         derived = [p for r in rows for p in _derived_files(handle, r.id)]
         source_ids = {r.source_id for r in rows}
+        run_ids = set(
+            s.execute(
+                select(Box.query_run_id)
+                .where(Box.image_id.in_([r.id for r in rows]), Box.query_run_id.is_not(None))
+                .distinct()
+            ).scalars()
+        )
         s.execute(delete(Box).where(Box.image_id.in_([r.id for r in rows])))
         s.execute(delete(Image).where(Image.id.in_([r.id for r in rows])))
         s.flush()
+        # The photo runs that lost boxes keep their counts true in the same transaction.
+        for run_id in sorted(run_ids):
+            run = s.get(QueryRun, run_id)
+            if run is not None:
+                recount_query_run(s, run)
         for source in s.execute(select(Source).where(Source.id.in_(source_ids))).scalars():
             source.image_count = s.execute(
                 select(func.count()).select_from(Image).where(Image.source_id == source.id)

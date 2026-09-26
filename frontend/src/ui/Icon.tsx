@@ -39,7 +39,9 @@ export type IconName =
   | "download"
   | "map"
   | "trend"
-  | "minus";
+  | "minus"
+  | "cloud"
+  | "volume";
 
 /** 24-unit line icons, one path each, drawn with the current colour. */
 const PATHS: Record<IconName, string> = {
@@ -88,6 +90,10 @@ const PATHS: Record<IconName, string> = {
   map: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
   trend: "M4 17l5-5 4 3 6-7M15 8h4v4",
   minus: "M5 12h14",
+  // A point cloud: a mound of survey points over the ground line.
+  cloud: "M3 20h18M6 17h.01M9 14h.01M12 11h.01M15 14h.01M18 17h.01M9 18h.01M12 15h.01M15 18h.01M12 7h.01",
+  // A stockpile with its height dimension: the volume icon of every surface and volume job.
+  volume: "M3 20h18M5 20c2-6 4-9 7-9s5 3 7 9M12 3v5M10 6l2 2 2-2",
 };
 
 export interface IconProps {

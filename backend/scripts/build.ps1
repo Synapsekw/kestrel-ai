@@ -18,6 +18,10 @@ foreach ($key in @("yolo11n", "yolo11s", "yolo11m")) {
   }
 }
 
+# PotreeConverter payload (spec §14): every MANIFEST.json file must be there before freezing.
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check_potree_payload.ps1") -Dir (Join-Path $backend "third_party\potreeconverter")
+if ($LASTEXITCODE -ne 0) { throw "PotreeConverter payload incomplete; run scripts\fetch_potreeconverter.ps1" }
+
 # PyInstaller logs to stderr; PowerShell 5.1 would turn every line into an error under "Stop".
 $ErrorActionPreference = "Continue"
 & $pyinstaller kestrel_backend.spec --noconfirm --log-level WARN 2>&1 | ForEach-Object { "$_" }
@@ -29,6 +33,9 @@ foreach ($key in @("yolo11n", "yolo11s", "yolo11m")) {
   $bundledStarter = "dist\kestrel-backend\_internal\starter_weights\$key.pt"
   if (-not (Test-Path $bundledStarter)) { throw "starter weights did not make it into the bundle: $bundledStarter" }
 }
+
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "check_potree_payload.ps1") -Dir "dist\kestrel-backend\_internal\potreeconverter"
+if ($LASTEXITCODE -ne 0) { throw "the PotreeConverter payload did not make it into the bundle intact" }
 
 $bin = Join-Path $backend "..\frontend\src-tauri\binaries"
 New-Item -ItemType Directory -Force $bin | Out-Null

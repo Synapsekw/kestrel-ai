@@ -9,6 +9,434 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Design surfaces (S3) — 2026-09-24
+
+Import a design as a `Surface` (`kind = design`) on the cloud DSM's own grid: a DEM GeoTIFF (copied
+when it already conforms, else re-gridded window by window with an exact warp), a LandXML TIN (a
+streamed parse that honours the northing-first rule), or a DXF with 3D faces, meshes or contours
+(ezdxf; contours through densified Delaunay with boundary peeling). One `design_import` job runs in
+three phases — inspect, preview, build — and nothing is imported until the operator imports a clean
+preview or accepts its warnings; the preview catches swapped axes, the wrong foot, feet heights, a
+wrong CRS and far-apart placements, and offers one-click fixes. Design
+`docs/superpowers/specs/2026-09-23-design-surfaces-design.md`, plan
+`docs/superpowers/plans/2026-09-24-design-surfaces.md`, evidence `docs/evidence/design-surfaces/README.md`,
+walkthrough `docs/usability/2026-09-24-design-surfaces-walkthrough.md`.
+
+Acceptance on the chimney site (headless, real backend, scratch app data): all five §15.4 steps pass —
+LandXML N E Z 98.4 % overlap, median dz +0.005 m; E N Z 0 % → Apply swap → 98.4 %; 3D-face DXF 98.4 %,
++0.005 m; contour DXF (Delaunay, 3 559 long triangles trimmed at 6.1 m) 88.2 %, +0.067 m; EPSG:32638
+DEM re-gridded, 100 %, −0.012 m; an S2 volume against each of the five designs runs. §16.11 timing:
+a 1 M-point / 2 M-face LandXML inspects in 7.90 s and builds onto 4996 × 4996 at 0.2 m in 8.38 s
+(targets < 60 s each).
+
+Verified (on `task/design-surfaces` @ `d581a10` + this docs commit, the worktree's overlay interpreter):
+- `pnpm -C contract check`: spectral no errors, `schema.d.ts` regenerated with no diff.
+- `ruff check .`: all checks passed; `ruff format --check .`: 403 files already formatted.
+- `pytest`: 1969 passed, 9 skipped, 9 deselected (763.74 s).
+- `pnpm -C frontend lint`: ok (eslint 0 errors, 1 existing warning in `MapView.tsx`; prettier; tokens ok).
+- `pnpm -C frontend test`: 982 passed (200 files).
+- `pnpm -C frontend build`: ok.
+- `pnpm -C frontend e2e`: 91 passed (free ports 14731/14732).
+- `cargo test`: not run — no frozen sidecar in `frontend/src-tauri/binaries/` (git-ignored).
+
+Follow-ups:
+- a queued design build cancelled from the Jobs panel publishes no `surfaces.changed` (S2's settle
+  corrects the row on the next list);
+- S2's restart sweep tells a design row "build it again" (a design needs a re-import) — S2 copy;
+- after a 409 on import the dialog can keep a vanished target id selected until re-picked;
+- `get_design_preview` can answer 500 if a delete races a poll;
+- a failed design build keeps its inspection but the dialog can't reopen it (the 24 h sweep removes it);
+- the Volumes screen mounts the dialog in two places (list and empty state) as separate instances;
+- the next packaging run must pass `smoke_frozen.ps1`'s new `design` step;
+- `QHULL_BYTES_PER_POINT` = 700 measured at ~684 B/pt (2.3 % headroom); rasterise `BATCH` 16 384 /
+  `RANGE_CHUNK` 65 536;
+- the preview's suggestions score hypotheses on the file's vertices, orphans included, not on the
+  footprint (spec §10): on the chimney TIN they say 67 % where applying gives 98.4 % (evidence, Findings);
+- a ready surface has no Delete on the Volumes screen (S2 offers it on failed rows only);
+- no timing follow-up: both §16.11 timings are well inside 60 s.
+
+## Point clouds (S1) — 2026-09-24/2026-09-26 (merged)
+
+The spec is `docs/superpowers/specs/2026-09-23-point-clouds-design.md` and the plan is
+`docs/superpowers/plans/2026-09-24-point-clouds.md`. The SDD ledger is
+`.superpowers/sdd/2026-09-24-point-clouds/`. S1 merged to `main` at **`0af7084`**. Task 19 (this
+entry) came afterwards: acceptance on the real chimney file and the 195 M cloud, with evidence in
+`docs/evidence/2026-09-24-point-clouds/` (see its `README.md`) and the walkthrough in
+`docs/usability/2026-09-24-point-clouds-walkthrough.md`. A fix round on the same branch then fixed
+the two first-run failures (§9 picks 1 mm low, §10 Z refine on the flue floor) and re-measured;
+the rows below give the new figures and say what failed first.
+
+What changed:
+
+- **Import pipeline.** Admission (a RAM estimate from the header count; a 422 `insufficient_memory`
+  refusal) is followed by a background `pointcloud_import` job: copy, chunked scan with header-bounds
+  repair, then the PotreeConverter display copy under a Job Object. Cancel kills the converter, and a
+  startup sweep marks an interrupted import `failed`.
+- **Display copy.** A BROTLI octree is served by an octree endpoint that allows only the enumerated
+  file names.
+- **Viewer.** potree-core: true RGB, elevation, a point budget, orbit/pan/zoom, **F** fit, **T**
+  top, and a diagnostics hook (`window.__kestrelCloudViewer`).
+- **Measurements.** Point, distance and vertical-check, each with a per-pick uncertainty *u* and the
+  warn tone above 0.10 m. Lean angle and azimuth are measured from grid north. Copy as CSV.
+- **Jumps.** Map → 3D (`?at=`, `&fp=`, Z refine, pin) and 3D → map (a marker), and a map linked on
+  Details.
+- **LAZ export** with measurements (a `pointcloud_export` job).
+- **Packaged check.** `check:webview` runs on the release exe, and `build:installer` stops if it
+  fails. See ADR `2026-09-23-gotcha-packaged-webview-needs-worker-src-blob`.
+- **About Kestrel AI** lists nine components with their licence texts.
+
+Evidence (spec §17). Measured 2026-09-26 on the operator's machine, which other sessions were loading
+at the time: about 21.6 GB of 63.8 GB RAM free at the start. The data was on local NVMe; generated
+files were on `D:\kestrel-acceptance`.
+
+| § | Criterion | Measured | Result | Evidence |
+| --- | --- | --- | --- | --- |
+| 1 | Chimney import | succeeded; 21 697 184 pts; EPSG 32639; `bounds_repaired` true; `bounds_native` = the independent scan exactly (0.001); octree `metadata.json` 21 697 184 pts; octree 0.186 × source; **9.5 s** (≤ 60) | PASS | `import-chimney-local.json`, `independent-scan.txt`, `octree-metadata.txt` |
+| 1 | NAS time | the same file straight from `\\DanNas`: **20.3 s** | recorded | `import-chimney-nas.json` |
+| 2 | 195 M import | admitted; succeeded in **58.9 s** (≤ 300); converter peak RSS **8.98 GB** (≤ 10); backend RSS growth **0.20 GB** (≤ 1) | PASS | `import-195m.json` |
+| 3 | Refusal at 4 GB free | 422 `insufficient_memory`, "about 9.9 GB … 4.0 GB is free", no row (the spec says "about 9.8") | PASS | `refusal.txt` |
+| 4 | Cancel | converter gone in **1.08 s**; `failed` "import cancelled"; folder gone | PASS | `cancel.json` |
+| 5 | Crash | converter gone **0.13 s** after the sidecar was killed; after the restart `failed` "import interrupted by application restart; import the file again"; `.work` gone | PASS | `crash.txt` |
+| 6 | Chimney at 3 M | first points **87 ms**; settled **688 ms**; orbit p50 **17.8 ms** (p95 18.1); webview peak **0.68 GB** | PASS | `viewer-chimney-3M.json` |
+| 6 | Chimney at 8 M | webview peak **0.67 GB** (≤ 3). Only 0.46 M points were visible in the whole-site view, so the budget never bound | PASS | `viewer-chimney-8M.json` |
+| 6 | 195 M at 3 M | settled **656 ms** (≤ 8000); orbit p50 **17.8 ms** | PASS | `viewer-195m-3M.json` |
+| 7 | Colours | white **0.004 %** of sampled pixels (< 5 %); the fixture's red 0.108 / green 0.109. After the colour fix (note 3): background 438 462 of 527 440 pixels, white **0.02 %** of the point pixels; `check:webview` ok | PASS | `viewer-*.json`, `viewer-chimney-3M-fixed.json`, `check-webview-fixed.log` |
+| 8 | Packaged check | `check:webview` ok on the release build; `build:installer` ran it before Inno Setup. The negative proof (no `worker-src blob:` → CSP FAIL, no installer) is in the ADR (2026-09-25) and was not re-run | PASS | `check-webview.log`, `installer.log` |
+| 9 | Picks are real points | after the fix: 10 picks, nearest source point **0.001–0.002 mm** each (`picks ok 10`). First run: 1.000 mm ×7, 1.414 ×2, 1.732 ×1, every pick one 1 mm step low (note 1) | PASS (fixed) | `picks.txt`, `viewer-picks.json`, `picks-octree-offset.txt` |
+| 10 | Uncertainty on the rim | after the fix both picks are on the rim (z 189.1 site-wide, 189.4 close): close range **29.4 m** (≤ 30); ratio **4** (≥ 4); close *u* **0.171 m** (≤ 0.05 fails). The octree ends at level 5 at the rim (5.48 m / 2⁵), and the source itself is 0.074 m apart there (median nearest neighbour), so ≤ 0.05 m is out of reach on this rim. First run: *u* 0.086 m, both picks on the flue floor (z ≈ −41) because the Z refine chose it (note 2) | **FAIL** (data-limited; the refine bug is fixed) | `uncertainty-rim-fixed.json`, `rim-octree-depth.txt`, `pickdown-diag.json`; first run `uncertainty-attempt2-rim.json` |
+| 10 | Uncertainty on the "open ground" spot (supplementary) | after the fix the refine lands on airborne sky-coloured points above that spot (2 117 source points at z 130–160 m within 2 m; seen from above they hide the ground within 0.6 m): close *u* 0.086 m, ratio 8. First run (ground): *u* 0.043 m, ratio 16 | recorded | `uncertainty-open-ground-fixed.json`, `open-ground-column.txt`; first run `uncertainty-open-ground.json` |
+| 10 | Warn tone above 0.10 m | unit test (`readout.test.ts`); screenshot is an operator step | PASS (unit) | `vitest-criteria.txt` |
+| 11 | Formulas | shared vectors, the 1.000° pole and the vertical refusal pass in pytest and vitest | PASS | `pytest-criteria.txt`, `vitest-criteria.txt` |
+| 12 | Map ↔ 3D | not run: it needs the installed app (operator walkthrough step 7). The different-CRS unit test passes | operator | `vitest-criteria.txt` |
+| 13 | Chimney LAZ export | **0.209** × source (≤ 0.25); **1.77 s** (≤ 30); count 21 697 184; EPSG 32639; header bounds contain every point. QGIS is an operator step | PASS | `export-chimney.json`, `laz-check-chimney.txt` |
+| 13 | 195 M LAZ export | **8.51 s** (≤ 180) | PASS | `export-195m.json` |
+| 14 | Octree endpoint | `test_pointcloud_octree.py` passes | PASS | `pytest-criteria.txt` |
+| 15 | Frozen bundle | `pointcloud ok 50000 32639 BROTLI laz 50000`, `cloud ok 50000 206`, `smoke ok`; the payload check fails on a missing manifest file | PASS | `smoke-frozen.log`, `pytest-payload-scripts.txt` |
+| 16 | About | `AboutScreen.test.tsx` and `test_about_versions.py` pass | PASS | the test logs |
+| 17 | Gate | see *Gate* below | PASS | — |
+
+Notes:
+
+1. **Picks sat one quantum off (§9) — fixed.** First run: every pick exactly 1 mm low in X, and
+   sometimes in Y or Z. PotreeConverter 2.1.5 takes the work copy's header minimum as its offset and
+   truncates `(x − offset) / scale`; the repaired minimum (source min widened one step) was
+   `243194.29700000002`, a hair above the 1 mm grid, so grid values landed at k − ε and truncated to
+   k − 1. Fix (`cbbb884`): the header minimum is now written a thousandth of a step further down
+   (`widen_for_converter`), so the octree offset is `243194.296999` and every grid value truncates
+   to exactly k. The converter has no offset/scale option, so the header is the lever. The bounds
+   still contain every point; `bounds_native` and the export (which reads the source) are
+   unchanged. A real-converter test round-trips 20 000 grid points within 0.5 mm per axis.
+2. **Rim uncertainty (§10) — refine fixed, criterion data-limited.** First run: at a dense rim
+   point (z 188.8, `rim2.txt`) the jump arrival's straight-down Z refine returned the flue bottom
+   (z −41.6): potree-core's picker returns the drawn point nearest the window centre, and the ground
+   seen past the rim's coarse points was nearer. Fix (`9e9eb7b`, `3d2b588`):
+   `pickDown` reads back every point the pick window drew and takes the top surface at the spot
+   (`topmostWithin`: the smallest ring of 0.25/0.5/1/2 m holding a hit, a coarse point counting
+   within its own uncertainty, then the highest ± 0.5 m, nearest first). Both picks now land on the
+   rim, but the close-up *u* is 0.171 m: the octree ends at level 5 at the rim, and the source
+   points are 0.074 m apart there, so the spec's ≤ 0.05 m cannot be met on this rim with
+   *u* = spacing / 2^level. That needs a decision (another rim definition, or a *u* for leaf
+   nodes); it was not changed here. The same fix round found potree's pick answering null with 18
+   valid points in the window (a pixel whose node index names no rendered node); `pickAtClient`
+   now takes the nearest valid drawn point, which gave the §9 run all 10 picks.
+3. **Colour sample — fixed.** `new THREE.Color(r/255, …)` took the canvas token as linear, and the
+   sRGB output drew (21, 27, 25) as (81, 92, 88), the grey in the screenshots, so `sampleColours()`
+   never matched the background. `tokenColor` sets the token as sRGB for the clear colour and the
+   overlay tones: the canvas now shows the DESIGN.md token, and the background count is right.
+
+Timing caveat: an orbit p50 of 17.8 ms is the 60 Hz vsync interval, so it is a floor, not the
+viewer's cost.
+
+Bundle: the frozen sidecar is 3 618.8 MB in 14 496 files. The converter ADR
+(`2026-09-23-potreeconverter-in-the-frozen-sidecar`) records a growth of +7.5 MiB and +63 files over
+the pre-S1 bundle. The Inno setup is 1 877.8 MB, without a WebView2 bootstrapper.
+
+Gate on the merge worktree before `0af7084` (controller run): pytest 1761 passed, 5 skipped,
+9 deselected; vitest 196 files, 949 tests; e2e 89 passed; frontend lint 0 errors; build ok; contract
+check ok; ruff ok. `cargo test` was skipped there (no frozen sidecar). In this acceptance worktree, with the
+sidecar freshly frozen from `main`: `cargo test --manifest-path frontend/src-tauri/Cargo.toml` gave
+8 passed, and `pytest -m potreeconverter` gave 2 passed. New in this entry:
+`frontend/scripts/measure-cloud-viewer.mjs` (eslint and prettier clean).
+
+Fix round (same branch): sidecar re-frozen (3 618.8 MB, 204 s), `smoke_frozen.ps1` → `pointcloud ok
+50000 32639 BROTLI laz 50000`, `cloud ok 50000 206`, `smoke ok`; `pnpm tauri build --no-bundle` ok;
+`check:webview` → `webview ok points=49724 red=0.108 green=0.109`; chimney re-import 9.16 s,
+21 697 184 pts, same `bounds_native`, octree 0.186 × source (`import-chimney-local-fixed.json`).
+Tests: pytest `tests/test_pointcloud*.py tests/test_contract.py` 399 passed, 5 skipped;
+`-m potreeconverter` 3 passed; ruff clean; vitest 197 files, 961 tests; frontend lint 0 errors, build ok;
+`e2e/clouds.spec.ts` 9 passed.
+
+## Volumes S2 — 2026-09-25 (`task/volumes`, gated at `94c4e8b`, not yet on `main`)
+
+Spec `docs/superpowers/specs/2026-09-23-volumes-design.md` (with F0 §5), plan
+`docs/superpowers/plans/2026-09-24-volumes.md`, SDD ledger
+`.superpowers/sdd/2026-09-24-volumes/progress.md`. Built as 17 tasks (a solo Task 1 on the critical
+path, then batch B1 of Tasks 2–7 and 14 in parallel sub-worktrees, then Tasks 8–13, 15, 16 in
+further batches, each cherry-picked into the `task/volumes` integration worktree after review), plus
+Task 17 (this entry).
+
+What shipped:
+
+- **Surfaces.** `GridSpec`/`grid.py` (F0's surface-grid convention: GeoTIFF writer/reader, resample,
+  stats, hillshade) plus the build pipeline (`app/surfaces/build.py`): median/mean/max/min per-cell
+  statistics with their measured bias, auto cell size (~4 points/cell), despike, hole-fill up to a
+  configurable gap, Z clip, noise-class drop, a `.build` work dir cleaned up in a `finally`, and
+  progress messages ("reading points …", "gridding block …", "filling gaps …", "building zoom
+  levels"). Surfaces get hillshade + zoom-level tiles and an ortho-overlay tile endpoint.
+- **The volume engine** (`app/volumes/engine.py`): fill/cut/net against a `toe_plane`, `toe_surface`,
+  `flat` or `surface` (another survey or a design surface) base; clutter masks from detection-run
+  footprints (patch or exclude, with a buffer and a class filter) and hand-drawn exclusion polygons;
+  a two-surface alignment check (median dZ / σ / tilt on a stable-area polygon) with a suggested and
+  optional vertical-shift correction; a full uncertainty budget (base, alignment, cell size, no
+  data, patches → total, "indicative"); `patch_failed` warnings when a mask patch can't be applied.
+- **Jobs.** `volume_calc` (the measurement itself) and `volume_export` (PDF report, GeoPackage +
+  cut/fill GeoTIFF + `.qml`, CSV, XLSX, `summary.json`, written to the project's `exports/<stamp>/`
+  folder, grouped by EPSG, with unique cut/fill file stems so duplicate/slug-equal/non-ASCII
+  measurement names never collide).
+- **Cut/fill diff tiles** on the results' `top_surface` lattice, and the **Volumes screen**
+  (`frontend/src/screens/VolumesScreen.tsx` + `frontend/src/volumes/*`): a surfaces list with a
+  **Build surface** dialog, a measurements list with a **New** button, a drawing toolbar (**Pan V,
+  Measure P, Stable S, Exclude X, Edit E**), Measure/Results tabs, an **Export…** dialog, and **View
+  in 3D** into S1's point-cloud viewer.
+
+Acceptance numbers (module level — see "Deviations" below for why): chimney.las (21.7 M pts) builds
+in 8.92 s, 625 MiB peak (target ≤ 60 s / ≤ 2 GB, PASS); a 3×3 tiling to 195.3 M pts builds in 83.82 s,
+1 818 MiB peak, `.build` cleaned up (target ≤ 600 s / ≤ 2 GB, PASS — over the 1.5 GB memory *target*,
+see below); a 40×40 m mound measures end to end on all three non-surface base kinds (toe_plane net
+63 781.3 m³ ± 5 012.0 with `base_fit_poor` correctly firing, toe_surface net 59 621.3 m³ ± 327.8, flat
+net 67 205.4 m³ ± 15.0); the +0.100 m copy's stable-area median dZ is +0.0999985 m (target ± 0.005 m,
+PASS), `alignment_offset` fires without the shift (PASS), and with the shift applied net is
+0.00246 m³ against an indicative ± of 0.00048 m³ — fails the letter of "net within ± U" but is ruled
+a pass in substance (see below). Full detail, environment and commands:
+`docs/evidence/volumes-acceptance.md`. Cross-check template against CloudCompare 2.5D Volume:
+`docs/evidence/volumes-crosscheck.md` (rows open — see below). Walkthrough:
+`docs/usability/2026-09-24-volumes-walkthrough.md`.
+
+Gate on `task/volumes` @ `94c4e8b` (controller run, integration worktree, shared interpreter):
+contract check ok; ruff check ok; ruff format ok; pytest 1543 passed, 3 skipped, 9 deselected;
+frontend lint ok; unit 848/848 (174 files); build ok; e2e 80/80; `cargo test` not run (no frozen
+sidecar in this worktree). **A final-review fix wave follows** (Important findings 1–4 from the
+whole-branch review below, plus cheap minors), dispatched in `volumes-tfx`; `finish-task.ps1`
+re-runs the full gate before the eventual merge to `main`.
+
+Deviations, by task:
+
+| Task | What it built | Deviation from the plan |
+| --- | --- | --- |
+| 1 | `grid.py`, `paths.py`, the grid convention | 3 review minors fixed before the early merge (rasterio `from_origin` warnings; `crs_problem` leaked a raw pyproj `CRSError`; `.partial` left behind on a failed rename) — grid.py is S3's frozen interface, so a later fix would have moved under S3. Deferred: `resample_onto`'s R2/R3 memory scales with the caller's window; some callbacks/paths/write_cloud paths untested. |
+| 2 | Build-time grid errors, `plan_crs` | Fix round: `plan_crs` gives a readable rejection for a malformed CRS or feet units instead of an opaque error; stale spill bins are cleared on a rebuild into a crashed folder (both landed before merge — a rebuild into a stale folder would otherwise silently corrupt a grid). Deferred: `cell<=0` `GridError` unreachable via the contract; a weak cancel test. |
+| 3 | (paired with Task 2's tests) | Clean review, no findings. |
+| 4 | `densify_ring`, toe fitting | Fix: `np.allclose`'s default relative tolerance dropped a real last vertex at large projected coordinates — switched to an absolute tolerance. Deferred: `fit_toe_surface` rejects `\|r\| ≈ 0` slightly differently from the ADR's median-centred wording; no toe-surface outlier test; empty/1-point ring guard left to Task 11's geometry validation. |
+| 5 | Patch/lattice windows | Clean review. Deferred: the `MAX_READ` branch of patch-too-large is untested; `lattice_window` duplicates `GridSpec.window_for_bounds`. |
+| 6 | Sampling | Clean review. Deferred: the `SAMPLE_MAX` stride path (k>1) is untested. |
+| 7 | Map-run helpers | Clean review; `Affine *` changed to `@` to avoid a future deprecation warning. Deferred: the map-without-coordinates and multi-run-truncation branches of `usable_runs` are untested. |
+| 8 | Volume engine core | `patch_failed` warnings added (spec/contract require them). Fix round: a failed patch on the **base** surface wasn't reported (the first pass only half-applied the rule). Deferred: the `patch_failed` message says "masked area(s)" even for an exclusion patch; `areal_scale_factor` is reported but not yet printed anywhere (caught again at final review, in the fix wave now). |
+| 9 | Surfaces API + `surface_build` job | Extras: a build fails fast if its cloud disappears; a lossy `to_proj4` warning is silenced; extra assertions. Fix round: a build cancelled while still queued used to leave the row stuck `building` — fixed in the surfaces service's read path (a `building` row with a terminal job settles to a readable `failed`, deletable) rather than a runner hook, since the runner is shared by every job type; a create/cancel race was also fixed. A separate flake investigation (not one of the 17 tasks) found `set_job`/`_settle` racing a build job thread on read-then-flush (`StaleDataError` on cancel, or `_settle` overwriting a failure message) — fixed with single `UPDATE` statements and compare-and-set; 70 consecutive passes after, versus 15/30 failing before. |
+| 10 | Contract fuzz coverage | Added a `GenerationMode.POSITIVE` guard so a schemathesis rule judges positive cases only. Deferred: the ortho 409/422 paths are fuzz-covered only, not asserted directly. |
+| 11 | Volumes API + `volume_calc`/measurements | Extras: `_settle` for a `calculating` row whose job already ended; diff tiles read the `results.top_surface` lattice; explicit `null` in a PATCH is treated as "not sent". Fix round: `start_calculation` left the *old* job id on a `calculating` row, so `_settle` could flip a running recalculation back to stale — fixed with compare-and-set; PATCH used to silently accept `null`/`{}` (the contract forbids it) — now 422; the diff-tile and footprints hot paths used to run a full `get_measurement` per tile — lightened; a create-submission failure used to leave a row `calculating` with no job id — restored; results are now committed before the diff `os.replace` (a Windows file-lock ordering fix). |
+| 12 | PDF report | Added a `patch_failed` sentence to the PDF's Method page (judged in scope by review). Deferred: no dedicated test for that sentence; `row_for` builds a fresh pyproj `Transformer` per row. |
+| 13 | Export formats, `volumes-selftest` | The frozen PyInstaller build and `smoke_frozen.ps1` for `volumes-selftest` were **not run** — the overlay venv has no starter weights/PyInstaller, and the shared sidecar binary build is deferred to the operator's packaging run (an ADR records an open hidden-import question). The OpenAPI export-folder summary text was corrected to `exports/<stamp>/`. Fix round: cut/fill file stems used to collide on duplicate, slug-equal or non-ASCII measurement names, and the GeoPackage was grouped by WKT but *named* by EPSG (a collision) — both fixed; cancel checks added inside the plan-image render loop; export formats de-duplicated; a stale-PATCH assertion added. |
+| 14 | (paired with the B1 batch) | Clean review, no findings. |
+| 15 | Frontend surfaces-screen scaffold, e2e | Deviation: a `toast("warn", …)` call became `toast("info", …)` — no "warn" toast tone exists in the design system. Fix round: a leftover `vi.mock` for `diffLayer` (against an earlier ruling) removed; the Draw tool used to stay active after creating a measurement, so the next click overwrote it — fixed; the empty state now counts only *ready* clouds, and the create dialog clears its error on retry. Deferred: `selectedExclusion` isn't reset when the measurement changes; a cursor-sample ordering/trailing-timer edge case; Modify mode covers footprints; clicking a building/failed surface in the list is a no-op. |
+| 16 | Volumes screen, toolbar, panels | Fixed 3 "set state in an effect" lint errors during implementation; Alert actions moved to their own row (a no-wrap slot was squeezing the alert text to zero width). Fix round: the toolbar used to overflow the map at 1280 px over the aside, and "New measurement" spilled the left column — both fixed (this is the walkthrough's toolbar/New-button behaviour above); the buffer-around-machines field went stale after a Revert; the Base surface list was CRS-filtered to reject a cross-CRS base with 422 `invalid_base` — **this ruling was reversed at final review**: spec §6.2/§6.4 allow a base in any CRS (R3 reprojects it), so the UI now offers any CRS and only the local-vs-georeferenced mix is refused. Deferred: `calculate` is invoked from two places (MeasurePanel and VolumesScreen); footprints re-fetch on every masks-object change, not just a real change; Revert / cut-fill / View-in-3D are UI-untested; `editor.spec.ts:169` flakes under machine load. |
+| 17 | Acceptance, evidence, docs, merge (this task) | Acceptance ran at **module level** (`build_surface` and the volumes engine called directly — no app, no job runner, no database), by controller ruling, because S1's point-cloud import UI is not on `main` yet; merging S2 is not blocked on S1. The in-app walkthrough, the CloudCompare cross-check and the QGIS/PDF/XLSX review are recorded as pending operator steps. |
+
+Controller rulings worth keeping (from the SDD ledger, summarised): duplicated helpers
+(`alignment._cells`, `grid._same_crs`, `ring_polygon(...).bounds`) were kept rather than merged, to
+keep tasks parallel; 409 vs `conflict`/`not_ready` response codes were standardised per the
+coordinator's pre-flight rulings (P1–P19); implementers ran only their focused tests plus ruff, with
+the controller running the full suite after each batch merged, to avoid starving the machine with
+concurrent full suites; the **base-CRS filter Task 16 added was reversed** at final review (spec
+allows any CRS for a base; only a local/georeferenced mix is refused server-side); and the
+**shifted-net check on the synthetic +0.100 m copy is ruled a pass in substance** — the residual
+0.0025 m³ over 1 600 m² is float32 height quantisation (about 1.5 µm/cell) on a *perfect* synthetic
+shift with zero stable-area spread, not a volume-engine defect; no sigma floor was added to the
+engine to force a literal pass, since that would change the uncertainty maths and require bumping
+`ENGINE_VERSION` for a demo-only artefact. The **final whole-branch review** (`754c741..94c4e8b`)
+found five Important issues — (1) the Volumes screen rejects its whole reload when `GET /pointclouds`
+answers F0's 501 stub (S1 not merged yet); (2) the cut/fill layer used the current top surface's
+grid while the backend renders on `results.top_surface`'s lattice; (3) a detection review
+(reject/reclass) doesn't change a measurement's inputs fingerprint, so stale numbers stay exportable;
+(4) the Task 16 base-CRS filter contradicted spec §6.2/§6.4 (reversed, above); (5) these Task 17 docs
+were missing (this entry closes it) — plus minors (`areal_scale_factor` not printed though the PDF
+claims it is; the volumes service's `_settle` still reads then flushes; a row-less folder can leak
+on a Windows rename lock; a surface-create submit failure isn't restored; a calc-vs-export race; a
+stale `validate_export` transition not persisted). The fix wave for Important 1–4 plus the cheap
+minors is running in `volumes-tfx`; the full gate re-runs before the eventual merge.
+
+What missed its target: big9's peak memory (1 818 MiB) passes the ≤ 2 GB acceptance bound but misses
+the tighter 1.5 GB target by about 18 % — parked as a follow-up to profile `build.py`'s bin/spill
+buffers, since memory should be set by one block regardless of overall site size; the +0.100 m
+shifted-net check fails "net within ± U" literally on the synthetic perfect-shift case (ruled a pass
+in substance, above); the CloudCompare cross-check, the QGIS/PDF/XLSX export review and the in-app
+walkthrough are all pending — CloudCompare isn't installed on the build machine and S1's import UI
+isn't on `main` yet; and the frozen PyInstaller smoke test for `volumes-selftest` is pending the
+operator's packaging run (no starter weights/PyInstaller in the overlay venv used for S2's own
+gates).
+
+Follow-ups: (1) profile the build pipeline's memory growth with site size before accepting larger
+sites; (2) once S1's import UI lands on `main`, repeat the task-17 brief's Steps 1–7 end to end and
+fill in `docs/evidence/volumes-crosscheck.md`'s open rows and the walkthrough's in-app screenshots;
+(3) the operator installs CloudCompare 2.13 and runs the §7.3 cross-check by hand; (4) run the
+frozen-build packaging smoke test for `volumes-selftest` and close the ADR's hidden-import question;
+(5) land the final-review fix wave (`volumes-tfx`) and re-run the full gate via `finish-task.ps1`
+before merging `task/volumes` to `main`.
+
+## Point-cloud foundation F0 — 2026-09-24 (`task/pointcloud-foundation`, merged to `main`)
+
+Spec `docs/superpowers/specs/2026-09-23-point-clouds-design.md` §5 (with S2 §11 and S3 §12), plan
+`docs/superpowers/plans/2026-09-24-pointcloud-foundation.md`. The shared ground S1 (point clouds),
+S2 (volumes) and S3 (design surfaces) build on in parallel worktrees.
+
+What changed:
+
+- **Contract:** every S1–S3 path and schema (37 operations; tags `pointclouds`, `surfaces`,
+  `volumes`), the job types `pointcloud_import`, `pointcloud_export`, `surface_build`,
+  `volume_calc`, `volume_export`, `design_import`, and the events `pointclouds.changed`,
+  `surfaces.changed`, `volumes.changed`. Every operation answers 501 until its unit lands
+  (`EXPECTED_STUBS`); writes are detection-project only.
+- **Migration `0009_pointclouds_surfaces_volumes`** (add-only): `point_cloud`, `cloud_measurement`,
+  `surface`, `volume_measurement`. The only migration of S1–S3.
+- **Backend scaffolding:** four packages with stub routers and stub jobs, four no-op startup sweeps
+  in `project_opened`, the PotreeConverter seam with an offline fake in the `app` fixture,
+  `pointcloud-selftest` / `design-selftest` / `volumes-selftest` placeholders, CORS `Range` for the octree loader.
+- **Dependencies:** laspy 2.7.0, lazrs 0.8.2, openpyxl 3.1.5, ezdxf 1.4.4 new; scipy, shapely,
+  psutil now direct; potree-core 2.0.15, three 0.180.0, @types/three 0.180.0 exact.
+- **UI:** Point clouds and Volumes below Site areas in a detection project (empty, lazy-loaded
+  screens), "About Kestrel AI" on App settings.
+- **Venv** (`vault/decisions/2026-09-24-worktree-overlay-venv-for-new-dependencies.md`): built
+  with an overlay venv; laspy, lazrs, ezdxf, openpyxl and et-xmlfile were then installed into the
+  shared `backend/.venv` additively (`--no-deps`, nothing else changed), so the landing gate ran
+  normally.
+
+Verified on the branch (2026-09-25) with the AGENTS.md gate on the shared interpreter:
+`pnpm -C contract check` clean; ruff clean; pytest 1362 passed; frontend lint clean, vitest 824
+passed, build ok; e2e 79 passed; cargo test skipped (no frozen sidecar in the worktree). Alembic
+heads on the merge result: `['0009']`.
+
+Operator walkthrough: not user-observable beyond two empty screens and two nav entries — open a
+detection project and click Point clouds, then Volumes; App settings → About Kestrel AI.
+
+## Detection workspace — 2026-09-23/24 (gated on `task/dw-integration`, not yet on `main`)
+
+Plan 2 of the train/detect split (spec
+`docs/superpowers/specs/2026-09-23-train-detect-split-and-model-library-design.md` §7–§10, plan
+`docs/superpowers/plans/2026-09-23-detection-workspace.md`). Built as parallel units C, S, D, R, V,
+A, E and X in `.claude/worktrees/dw-*`, merged into `.claude/worktrees/dw-integration`.
+
+What changed:
+
+- **A detection project is a site workspace.** Its sidebar is Sources, Runs, Review, Analytics,
+  Export, then Site areas. The old Detect, Maps and Surveys steps are gone; their addresses still
+  open (`/surveys` redirects to Analytics).
+- **Sources** lists photo batches and maps in one table, newest survey first; the survey date is
+  edited in place (a map source's date writes the map too).
+- **Runs** apply one library model to one source each. A model class the project lacks is asked
+  once (`422 unmapped_classes`, then `PUT /model-class-maps/{model}`) and remembered. Pinning a
+  run makes it the one its source counts with.
+- **Review** picks a source: photos use the image queue and editor, a map opens the viewer in
+  review mode (A / R / 1–9 / N, draw a missed object, accept above a confidence as a job).
+- **Counts live on run rows** (`counts` = total, `verified_counts`, `area_counts`, migration
+  `0008_detect_workspace`, add-only). Every review write increments them in the same transaction;
+  `recount` / `area_recount` rebuild them
+  (`vault/decisions/2026-09-23-counts-live-on-run-rows.md`).
+- **Site areas and Analytics.** Areas are drawn on a map; Analytics shows surveys, one source,
+  per-area counts (partly covered marked) and photo batches (detections, never objects), with a
+  Verified-only switch. Analytics reads run rows only.
+- **Export**: a `detect_export` job writes a CSV (source × class × area) or a PDF report per source
+  (new dependency `reportlab==5.0.1`, see `CONTRIBUTING.md`); the GeoPackage gains `review_state`,
+  the mapped class name and a `site_areas` layer.
+
+Unit X added:
+
+- e2e specs `sources.spec.ts`, `runs.spec.ts` (422 mapping step, then the retry), `detect-review.spec.ts`
+  (map review keys), `analytics.spec.ts` (verified toggle, photo caption), `detect-export.spec.ts`;
+  `projects.spec.ts` and `surveys.spec.ts` rewritten for the new steps and the `/surveys` redirect
+- the backend flow test `tests/test_detect_flow.py`: photos and a map, a class-mapped run per
+  source, review on both, a site area; analytics equal a recount, and the CSV carries the same
+  numbers
+- the operator walkthrough `docs/usability/2026-09-23-detection-workspace-walkthrough.md`
+- the ADR above and the reportlab note in `CONTRIBUTING.md`
+
+X also fixed one regression the full e2e suite found: the old Detect screen's **Review results**
+link (`/review?ids=`) landed on the per-source Review picker in a detection project, which ignores
+the ids. With `ids` in the address, Review now keeps the narrowed image queue
+(`frontend/src/screens/ReviewScreen.tsx`, owned by unit V; test in `ReviewScreenIds.test.tsx`).
+
+Verified in the integration worktree (2026-09-24, on the tree of this entry's commit minus the
+entry itself), with the gate lines from `AGENTS.md`:
+
+- contract check: clean
+- Ruff check and format: clean
+- pytest: 1269 passed, 9 deselected
+- frontend lint: 0 errors (1 existing hook warning in `MapView.tsx`)
+- unit tests: 796 in 164 files
+- build: passed
+- e2e: 76 browser tests in 25 files, on free ports as `scriptsinish-task.ps1` runs them
+- `cargo test`: skipped, because this worktree has no frozen sidecar
+
+Not yet done: landing (`scriptsinish-task.ps1` from `dw-integration`, then removing the `dw-*`
+worktrees by the junction rule), and a frozen build that proves the PDF export with reportlab.
+
+## Model library and project kinds — 2026-09-23 (gated on `task/tds-integration`, not yet on `main`)
+
+Plan 1 of the train/detect split (spec
+`docs/superpowers/specs/2026-09-23-train-detect-split-and-model-library-design.md` §4–§6, plan
+`docs/superpowers/plans/2026-09-23-model-library-and-project-kinds.md`). It was built as parallel
+units C, BL, BK, FL, FK, BM, FM and X in `.claude/worktrees/tds-*`, and merged into the
+integration worktree `.claude/worktrees/train-detect-spec`.
+
+What changed:
+
+- **App-wide model library.** Every model now lives in `%APPDATA%\kestrel-ai\library`, which has
+  its own `library.db` and migrations. Import, export and starter download run as library jobs on
+  the project `JobRunner`, through a project-shaped `LibraryHandle`
+  (`vault/decisions/2026-09-23-library-jobs-reuse-the-project-jobrunner.md`). If the library
+  cannot open, the app still starts and every library route answers `503 library_unavailable`.
+- **Two kinds of project.** Projects are `train` or `detect` (migration `0007_project_kind`). A
+  server-side `require_kind` guards every project route, and a route-walk test fails when a route
+  declares no kind. Each kind gets its own sidebar steps. Training projects show their old runs
+  and maps under a read-only **Past detections**.
+- **Adoption of old models.** Opening a training project copies its old models into the library
+  (job `library_adopt`). The ids in pre-annotation, query runs, map runs and boxes are rewritten
+  with set-based `UPDATE`s. Nothing in the old `models/` folder is deleted. A past map can be
+  moved into a detection project (job `map_move`).
+
+Unit X added:
+
+- the e2e specs `library.spec.ts` (import, then a job with progress, then the new model
+  selected), `projects.spec.ts` and `past-detections.spec.ts`
+- the backend test `test_library_adoption.py::test_real_project_copy`, which opens a schema-0005
+  project through the API and adopts its model
+- the operator walkthrough `docs/usability/2026-09-23-library-walkthrough.md`
+- screenshots in `docs/evidence/model-library/`
+
+X also fixed two e2e problems found in the full suite:
+
+- The `asDetectionProject` helper fetched from the mock inside its route handler, so a request
+  still in flight when a test ended failed that test ("route.fetch: Test ended"). The helper now
+  reads the mock once, up front.
+- The contour spec's locked-Train check broke once Train counted library models trained in the
+  project. The spec now serves an empty library.
+
+Verified in the integration worktree (2026-09-23), with the gate lines from `AGENTS.md`:
+
+- contract check: clean
+- Ruff check and format: clean
+- pytest: 1066 passed, 9 deselected
+- frontend lint: 0 errors (1 existing hook warning in `MapView.tsx`)
+- unit tests: 703 in 147 files
+- build: passed
+- e2e: 67 browser tests, on free ports as `scripts\finish-task.ps1` runs them
+- `cargo test`: skipped, because this worktree has no frozen sidecar
+
+**Migration renumbered at merge:** `main` already had the survey timeline's `0006_map_captured_on`
+(down_revision `"0005"`), so this branch's migration became `0007_project_kind` (revision `"0007"`,
+down_revision `"0006"`); a single Alembic head `0007`, chain `0001..0007`. `map_move` copies every
+`GeoMap` column, so `captured_on` moves with the map. The Surveys screen is a detection-project
+screen (sidebar entry and `KindRoute` for `detect` only; the timeline read stays open to both kinds on
+the server).
+
 ## Project agent — 2026-09-22 (merged, installed)
 
 An in-project AI drawer that operates the app with the user's own OpenAI or Anthropic key. The

@@ -12,9 +12,9 @@ from pathlib import Path
 import pytest
 from local_paths import FRAMES_DIR, MODELS_DIR
 
+from app.library import service as library
 from app.providers.base import TilingSpec
 from app.providers.local_yolo import LocalYoloProvider, build_class_map
-from app.training import registry
 
 pytestmark = pytest.mark.gpu
 
@@ -40,17 +40,26 @@ def frame() -> Path:
 
 
 @pytest.fixture
-def imported_row(handle, project):
+def imported_row(app, handle, project):
     if not YOLO11M.is_file():
         pytest.skip(f"{YOLO11M} not present")
-    return registry.import_model(handle, "yolo11m", str(YOLO11M), {"truck": "dump_truck"})
+    task, names = library.read_checkpoint(YOLO11M)
+    return library.add_model(
+        app.state.library,
+        source_weights=YOLO11M,
+        name="yolo11m",
+        origin="imported",
+        task=task,
+        class_names=names,
+        class_aliases={"truck": "dump_truck"},
+    )
 
 
 @pytest.fixture
-def imported(handle, project, imported_row):
+def imported(app, handle, project, imported_row):
     classes = [c["name"] for c in project["classes"]]
     class_map = build_class_map(imported_row.class_names, classes, imported_row.class_aliases)
-    return handle.folder / imported_row.weights_path, class_map, classes
+    return library.weights_file(app.state.library, imported_row), class_map, classes
 
 
 def test_tiled_inference_on_a_real_frame_stays_inside_the_image(imported, frame):

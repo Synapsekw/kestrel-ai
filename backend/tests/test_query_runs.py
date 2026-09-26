@@ -6,8 +6,9 @@ import threading
 import time
 
 import pytest
+from library_helpers import add_library_model
 
-from app.db.models import Box, Image, Job, Model, QueryRun, Source
+from app.db.models import Box, Image, Job, QueryRun, Source
 from app.inference.ratelimit import TokenBucket
 from app.jobs.runner import JobContext
 from app.providers.base import Detection, ProviderError, TileResult
@@ -159,12 +160,8 @@ def test_estimate_for_the_real_frame_size_matches_the_twelve_tile_grid(client, p
     assert body["estimated_cost"] == pytest.approx(0.48)
 
 
-def test_a_local_run_costs_nothing(client, project_id, handle, frames):
-    with handle.session() as s:
-        model = Model(name="m", kind="imported", weights_path="models/m.pt", class_names=CLASSES)
-        s.add(model)
-        s.flush()
-        model_id = model.id
+def test_a_local_run_costs_nothing(client, app, tmp_path, project_id, handle, frames):
+    model_id = add_library_model(app, tmp_path, name="m", class_names=CLASSES).id
     body = {"kind": "local_model", "model_id": model_id, "image_ids": frames}
     estimate = client.post(f"{BASE}/{project_id}/query-runs/estimate", json=body).json()
     assert estimate["cost_per_request"] == 0
@@ -421,14 +418,13 @@ def test_a_second_run_in_the_same_job_folder_only_calls_the_missing_tiles(
     assert len(boxes_of(handle)) == 4  # the earlier boxes were replaced, not doubled
 
 
-def test_a_local_run_writes_model_provenance(client, handle, job_context, use_provider, no_sleep, frames):
+def test_a_local_run_writes_model_provenance(
+    client, app, tmp_path, handle, job_context, use_provider, no_sleep, frames
+):
     from app.inference.jobs import run_infer
 
+    model_id = add_library_model(app, tmp_path, name="m", class_names=CLASSES).id
     with handle.session() as s:
-        model = Model(name="m", kind="imported", weights_path="models/m.pt", class_names=CLASSES)
-        s.add(model)
-        s.flush()
-        model_id = model.id
         run = QueryRun(
             kind="local_model",
             model_id=model_id,
@@ -612,16 +608,14 @@ def test_the_job_rate_limits_cloud_calls(
 
 
 def test_a_local_run_is_not_rate_limited(
-    client, handle, job_context, use_provider, no_sleep, frames, monkeypatch
+    client, app, tmp_path, handle, job_context, use_provider, no_sleep, frames, monkeypatch
 ):
     from app.inference import jobs, ratelimit
 
     acquired = []
     monkeypatch.setattr(ratelimit.TokenBucket, "acquire", lambda self: acquired.append(1))
+    model = add_library_model(app, tmp_path, name="m", class_names=CLASSES)
     with handle.session() as s:
-        model = Model(name="m", kind="imported", weights_path="models/m.pt", class_names=CLASSES)
-        s.add(model)
-        s.flush()
         run = QueryRun(
             kind="local_model",
             model_id=model.id,

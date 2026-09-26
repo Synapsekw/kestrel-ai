@@ -1,5 +1,5 @@
 import type { QueryRun } from "@contract/client";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { Button, Pill, cx } from "@/ui";
 import { runTitle } from "./queryModel";
 

@@ -75,14 +75,25 @@ that binary is git-ignored, so a fresh worktree or clone never has it and the st
 failed. `scripts\finish-task.ps1` checks for it under the worktree being gated and prints a clear
 message when it skips.
 
-Two things that trip people up:
+Three things that trip people up:
 
 - **A worktree has no venv of its own.** `backend/.venv` is not created per worktree; backend
   commands run against the main checkout's interpreter, e.g.
   `E:\Dev\Yolo\app\backend\.venv\Scripts\python.exe`. Do not `uv venv` a fresh one inside a
   worktree.
+  The one exception: a unit that adds Python packages builds an overlay venv in its worktree while
+  it develops, and at landing installs only the new pins into the shared one, additively
+  (`--no-deps`, a `uv pip list` diff before and after), then gates normally
+  (`vault/decisions/2026-09-24-worktree-overlay-venv-for-new-dependencies.md`).
 - **`cargo` is not on PATH** in every shell. If `cargo test` fails to resolve, call the real binary
   directly: `%USERPROFILE%\.cargo\bin\cargo.exe test --manifest-path frontend/src-tauri/Cargo.toml`.
+- **There are two databases, each with its own migrations.** Each project has `project.db`, with its
+  migrations in `backend/app/db/migrations/`. The app-wide model library
+  (`%APPDATA%\kestrel-ai\library`) has `library.db`, with its migrations in
+  `backend/app/library/migrations/`. Library jobs use the project `JobRunner` and the same `Job`
+  ORM class (see `vault/decisions/2026-09-23-library-jobs-reuse-the-project-jobrunner.md`). A new
+  column on `app.db.models.Job` therefore needs a migration in **both** histories. Tests point the
+  library at a temporary data folder. Never run them against your real `%APPDATA%`.
 
 The GPU (`pytest -m gpu`), live-provider and real-frame tests read weights from
 `KESTREL_MODELS_DIR` (default `E:/Dev/Yolo/models`) and aerial frames from `KESTREL_FRAMES_DIR`
@@ -91,6 +102,16 @@ The GPU (`pytest -m gpu`), live-provider and real-frame tests read weights from
 Packaging changes additionally require `backend\scripts\build.ps1`,
 `backend\scripts\smoke_frozen.ps1` and `pnpm -C frontend build:installer` — see `README.md` →
 "Build".
+
+**reportlab (the detection PDF report).** `reportlab==5.0.1` (BSD, pure Python on top of Pillow)
+was added to `backend/requirements.txt` and the lock for the detection export. It is installed in
+the shared `backend/.venv`; a venv built before 2026-09-23 needs
+`.\.venv\Scripts\python.exe -m pip install -r requirements-lock.txt` (or `uv pip sync`) before
+`pytest` passes. `kestrel_backend.spec` bundles its data with `collect_data_files("reportlab")`;
+the standard-font metric modules come in through pyinstaller-hooks-contrib's
+`hook-reportlab.pdfbase._fontdata`. The frozen sidecar has not yet been rebuilt with it, so the
+next packaging run must check that a `detect_export` with `format: pdf` succeeds in the frozen
+build (not just in `pytest`).
 
 ## Dev memory
 

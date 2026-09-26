@@ -1,0 +1,23 @@
+# octree hierarchy along the path to the close rim pick (243511.795, 3178243.113, 189.376), chimney octree
+level 0 r type 0 points 22693 size 701.47 m
+level 1 r0 type 1 points 18369 size 350.74 m
+level 2 r07 type 1 points 5378 size 175.37 m
+level 3 r077 type 1 points 9763 size 87.68 m
+level 4 r0777 type 0 points 3792 size 43.84 m
+level 5 r07771 type 1 points 387 size 21.92 m
+spacing 5.480234382812341
+
+# the same for the open-ground ground point (243537.571, 3178250.794, -10)
+level 0 r type 0 points 22693 size 701.47 m
+level 1 r0 type 1 points 18369 size 350.74 m
+level 2 r06 type 1 points 25021 size 175.37 m
+level 3 r067 type 1 points 40056 size 87.68 m
+level 4 r0676 type 0 points 40234 size 43.84 m
+level 5 r06767 type 1 points 25936 size 21.92 m
+level 6 r067675 type 1 points 10262 size 10.96 m
+level 7 r0676753 type 1 points 5903 size 5.48 m
+level 8 r06767535 type 0 points 288 size 2.74 m
+spacing 5.480234382812341
+
+# source spacing at the rim (chimney.las, chunked laspy)
+source points within a 2 m cube around (243511.795, 3178243.113, 189.376): 149; nearest-neighbour spacing p50 0.074 m, p90 0.107 m, mean 0.085 m

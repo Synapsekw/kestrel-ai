@@ -9,6 +9,14 @@ from app.db.models import MapDetection
 from app.providers.base import Detection, ProviderError, TileResult
 
 BASE = "/api/v1/projects"
+
+
+@pytest.fixture
+def project_kind() -> str:
+    """Maps and query runs are detection work (spec 2026-09-23 section 5.2)."""
+    return "detect"
+
+
 SQUARES = [(200, 200, 60), (1250, 400, 60), (2500, 1000, 60), (2600, 300, 60)]  # 2nd sits on a seam
 
 
@@ -205,3 +213,44 @@ def test_run_on_a_map_that_is_not_ready_is_409(client, project_id, handle, with_
 @pytest.fixture
 def class_ids(project) -> dict:
     return {c["name"]: c["id"] for c in project["classes"]}
+
+
+def test_a_rerun_turns_measurements_masking_with_it_stale_and_says_so(
+    client, app, project_id, wait_job, squares_map, use_provider, with_key, handle
+):
+    """Review follow-up: the map_detect job rewrites the run's boxes, so the Volumes screen must hear
+    `volumes.changed` for the measurements masking with it, not only `map_runs.changed`."""
+    from app.db.models import Surface, VolumeMeasurement
+
+    map_id = squares_map()
+    use_provider(SquareProvider(fail_windows={1}))
+    run_id, _ = start(client, project_id, wait_job, run_body(map_id))
+    with handle.session() as s:
+        top = Surface(name="April", kind="cloud_dsm", status="ready")
+        s.add(top)
+        s.flush()
+        row = VolumeMeasurement(
+            name="Pile 1",
+            polygon_native=[[0, 0], [1, 0], [1, 1]],
+            top_surface_id=top.id,
+            base={"kind": "toe_plane", "z": None, "surface_id": None},
+            masks={"detection_run_ids": [run_id]},
+            alignment={},
+            status="ready",
+            results={"inputs_fingerprint": "computed before the rerun", "inputs": {}},
+        )
+        s.add(row)
+        s.flush()
+        mid = row.id
+    seen = []
+    real = app.state.events.publish
+    app.state.events.publish = lambda e: (seen.append(e), real(e))
+    try:
+        use_provider(SquareProvider())
+        r = client.post(f"{BASE}/{project_id}/map-runs/{run_id}/resume")
+        assert wait_job(project_id, r.json()["job"]["id"])["state"] == "succeeded"
+    finally:
+        app.state.events.publish = real
+    assert {"measurement_ids": [mid]} in [e["payload"] for e in seen if e["type"] == "volumes.changed"]
+    with handle.session() as s:
+        assert s.get(VolumeMeasurement, mid).status == "stale"

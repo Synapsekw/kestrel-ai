@@ -34,17 +34,24 @@ from app.datasets.schemas import (
     SourceCreate,
     SourceOut,
     SourcePage,
+    SourcePatch,
     SourceWithJob,
 )
-from app.db.models import Dataset, DatasetImage, Source
+from app.db.models import Dataset, DatasetImage, GeoMap, Source
 from app.errors import AppError, not_found
 from app.events_util import publish_image_ids_event
 from app.jobs.schemas import JobOut
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
+from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.schemas import ImportSettings, Stats
 from app.projects.service import ProjectHandle, get_project
 
-router = APIRouter(prefix="/projects/{projectId}", tags=["datasets"])
+# Images, sources and boxes are shared storage (both kinds); datasets are training work only.
+router = APIRouter(
+    prefix="/projects/{projectId}", tags=["datasets"], dependencies=[Depends(require_kind(ANY_KIND))]
+)
+TRAIN_ONLY = [Depends(require_kind(("train",)))]
+DETECT_ONLY = [Depends(require_kind(("detect",)))]
 
 
 def _cursor_datetime(value) -> datetime:
@@ -87,6 +94,20 @@ def _source(handle: ProjectHandle, source_id: str) -> Source:
         return row
 
 
+def _map_ids(s, source_ids: list[str]) -> dict[str, str]:
+    """source id -> the map it owns, for one page of sources in one query."""
+    if not source_ids:
+        return {}
+    rows = s.execute(select(GeoMap.source_id, GeoMap.id).where(GeoMap.source_id.in_(source_ids))).all()
+    return {source_id: map_id for source_id, map_id in rows}
+
+
+def _sources_out(handle: ProjectHandle, rows: list[Source]) -> list[SourceOut]:
+    with handle.session() as s:
+        maps = _map_ids(s, [r.id for r in rows])
+    return [SourceOut.from_row(r, maps.get(r.id)) for r in rows]
+
+
 @router.get("/sources", response_model=SourcePage)
 def list_sources(
     handle: ProjectHandle = Depends(get_project),
@@ -107,7 +128,7 @@ def list_sources(
     if len(rows) > n:
         rows = rows[:n]
         next_cursor = encode_cursor(created_at=rows[-1].created_at.isoformat(), id=rows[-1].id)
-    return SourcePage(items=[SourceOut.from_row(r) for r in rows], next_cursor=next_cursor)
+    return SourcePage(items=_sources_out(handle, rows), next_cursor=next_cursor)
 
 
 @router.post("/sources", response_model=SourceWithJob, status_code=202)
@@ -138,12 +159,35 @@ def create_source(
     with handle.session() as s:
         row = s.get(Source, source_id)
         s.expunge(row)
-    return SourceWithJob(source=SourceOut.from_row(row), job=JobOut.from_row(job, handle.id))
+    return SourceWithJob(source=_sources_out(handle, [row])[0], job=JobOut.from_row(job, handle.id))
 
 
 @router.get("/sources/{sourceId}", response_model=SourceOut)
 def get_source(sourceId: str, handle: ProjectHandle = Depends(get_project)) -> SourceOut:  # noqa: N803
-    return SourceOut.from_row(_source(handle, sourceId))
+    return _sources_out(handle, [_source(handle, sourceId)])[0]
+
+
+@router.patch("/sources/{sourceId}", response_model=SourceOut, dependencies=DETECT_ONLY)
+def update_source(
+    sourceId: str,  # noqa: N803
+    body: SourcePatch,
+    handle: ProjectHandle = Depends(get_project),
+) -> SourceOut:
+    """A map source's survey date is its map's `captured_on`: both are written in one transaction."""
+    sent = body.model_fields_set
+    with handle.session() as s:
+        row = s.get(Source, sourceId)
+        if row is None:
+            raise not_found("source", sourceId)
+        if "label" in sent:
+            row.label = body.label
+        if "captured_on" in sent:
+            row.captured_on = body.captured_on
+            for gmap in s.execute(select(GeoMap).where(GeoMap.source_id == sourceId)).scalars():
+                gmap.captured_on = body.captured_on
+        s.flush()
+        s.expunge(row)
+    return _sources_out(handle, [row])[0]
 
 
 @router.get("/sources/{sourceId}/stats", response_model=Stats)
@@ -263,7 +307,7 @@ def review_boxes(body: BoxReview, handle: ProjectHandle = Depends(get_project)) 
     return BoxReviewResult(updated=boxes.review_boxes(handle, body.box_ids, body.action))
 
 
-@router.get("/datasets", response_model=DatasetPage)
+@router.get("/datasets", response_model=DatasetPage, dependencies=TRAIN_ONLY)
 def list_datasets(
     handle: ProjectHandle = Depends(get_project),
     limit: int | None = Query(None, ge=1, le=1000),
@@ -286,7 +330,7 @@ def list_datasets(
     return DatasetPage(items=_datasets_out(handle, rows), next_cursor=next_cursor)
 
 
-@router.post("/datasets", response_model=DatasetWithJob, status_code=202)
+@router.post("/datasets", response_model=DatasetWithJob, status_code=202, dependencies=TRAIN_ONLY)
 def create_dataset(
     body: DatasetCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> DatasetWithJob:
@@ -302,7 +346,7 @@ def create_dataset(
     )
 
 
-@router.get("/datasets/{datasetId}", response_model=DatasetOut)
+@router.get("/datasets/{datasetId}", response_model=DatasetOut, dependencies=TRAIN_ONLY)
 def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetOut:  # noqa: N803
     with handle.session() as s:
         row = s.get(Dataset, datasetId)
@@ -312,11 +356,11 @@ def get_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) ->
     return _datasets_out(handle, [row])[0]
 
 
-@router.get("/datasets/{datasetId}/stats", response_model=DatasetStats)
+@router.get("/datasets/{datasetId}/stats", response_model=DatasetStats, dependencies=TRAIN_ONLY)
 def get_dataset_stats(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> DatasetStats:  # noqa: N803
     return stats.dataset_stats(handle, datasetId)
 
 
-@router.delete("/datasets/{datasetId}", status_code=204)
+@router.delete("/datasets/{datasetId}", status_code=204, dependencies=TRAIN_ONLY)
 def delete_dataset(datasetId: str, handle: ProjectHandle = Depends(get_project)) -> None:  # noqa: N803
     materialise.delete_dataset(handle, datasetId)

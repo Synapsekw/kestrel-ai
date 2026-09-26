@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { asDetectionProject } from "./kinds";
 
 const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const IMG = "10000000-5555-4000-8000-000000000001";
@@ -89,20 +90,23 @@ test("multi-select and mark as empty reports the result (E4)", async ({ page }) 
   await expect(page.getByRole("status")).toContainText("1 marked as empty");
 });
 
-test("run model opens the query screen with the selection; add to dataset posts the ids with the seed", async ({
-  page,
-}) => {
+test("in a detection project, run model opens the query screen with the selection", async ({ page }) => {
+  await asDetectionProject(page, P);
   await page.goto(`/p/${P}/data`);
   await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
+  await expect(page.getByRole("button", { name: "Add to dataset" })).toHaveCount(0);
   await page.getByRole("button", { name: "Run model" }).click();
   await page.waitForURL(`**/p/${P}/query`);
   await expect(page.getByLabel("Images")).toHaveValue("selection");
   await expect(page.getByTestId("image-count")).toHaveText("1 image selected");
+});
 
-  await page.goBack();
+test("in a training project, add to dataset posts the ids with the seed", async ({ page }) => {
+  await page.goto(`/p/${P}/data`);
   await page.getByRole("radio", { name: "List" }).click();
   await page.getByLabel("Select IX-12-02491_0031_0001.jpg").check();
+  await expect(page.getByRole("button", { name: "Run model" })).toHaveCount(0);
   await page.getByRole("button", { name: "Add to dataset" }).click();
   await page.getByLabel("Dataset name").fill("v1");
   await page.getByRole("button", { name: "Split options" }).click();

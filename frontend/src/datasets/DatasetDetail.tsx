@@ -6,7 +6,7 @@ import { deleteDataset, fetchDatasetStats } from "@/api/datasets";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { Alert, Button, Pill, Skeleton, buttonClass } from "@/ui";
 import { splitAdvice } from "./splitAdvice";
 

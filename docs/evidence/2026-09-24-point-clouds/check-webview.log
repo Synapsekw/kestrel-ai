@@ -1,0 +1,5 @@
+
+> kestrel-ai-frontend@0.1.0 check:webview E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend
+> powershell -NoProfile -ExecutionPolicy Bypass -File scripts/check-packaged-webview.ps1
+
+webview ok points=49723 red=0.108 green=0.109

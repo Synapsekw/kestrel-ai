@@ -21,4 +21,21 @@ describe("packaged app CSP", () => {
     const allowed = ["'self'", "ipc:", "http://ipc.localhost", "http://127.0.0.1:*", "ws://127.0.0.1:*"];
     expect(directive("connect-src").filter((s) => !allowed.includes(s))).toEqual([]);
   });
+
+  it("lets potree-core start its inline blob workers (spec §13)", () => {
+    expect(directive("worker-src")).toEqual(["blob:"]);
+  });
+
+  it("changes nothing else: default-src, script-src and connect-src stay as they were", () => {
+    expect(directive("default-src")).toEqual(["'self'"]);
+    expect(directive("script-src")).toEqual([]);
+    expect(directive("connect-src")).toEqual([
+      "'self'",
+      "ipc:",
+      "http://ipc.localhost",
+      "http://127.0.0.1:*",
+      "ws://127.0.0.1:*",
+    ]);
+    expect(conf.app.security.csp).not.toMatch(/unsafe-eval|wasm-unsafe-eval/);
+  });
 });

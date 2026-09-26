@@ -13,8 +13,10 @@ import {
   type MapLabel,
   type MapRun,
   type MapScore,
+  type LibraryModel,
+  type LibraryStatus,
   type MapZone,
-  type Model,
+  type ModelUsage,
   type Project,
   type Provider,
   type QueryRun,
@@ -53,6 +55,7 @@ export const exampleProject: Project = {
   id: PROJECT_ID,
   name: "Ahmadia",
   folder: "E:\\Projects\\Ahmadia",
+  kind: "train",
   classes: exampleClasses,
   preannotation_model_id: MODEL_ID,
   import_defaults: {
@@ -146,21 +149,24 @@ export const proposalBox: Box = {
   created_at: "2026-09-17T11:00:00Z",
 };
 
-export const exampleModel: Model = {
+export const exampleModel: LibraryModel = {
   id: MODEL_ID,
   name: "yolo11m-coco",
-  kind: "imported",
-  weights_path: "models/yolo11m.pt",
-  base_weights: null,
-  dataset_id: null,
-  hyperparameters: {},
-  metrics: null,
+  notes: "",
+  supplier: null,
+  task: "detect",
+  format: "pt",
+  origin: "starter",
+  state: "ready",
   class_names: ["person", "bicycle", "car", "motorcycle", "airplane", "bus", "train", "truck"],
   class_aliases: { truck: "dump_truck" },
+  provenance: {},
+  hyperparameters: {},
+  metrics: null,
   exports: {},
   artifacts: {},
-  run_id: null,
   train_gsd_cm: null,
+  sha256: "0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
   created_at: "2026-09-17T10:10:00Z",
 };
 
@@ -185,13 +191,28 @@ export const DATASET_ID = "d0000000-7777-4000-8000-000000000001";
 export const RUN_ID = "q0000000-8888-4000-8000-000000000001";
 export const JOB_ID = "j0000000-4444-4000-8000-000000000001";
 
-export const exampleTrainedModel: Model = {
+export const exampleTrainedModel: LibraryModel = {
   id: TRAINED_MODEL_ID,
   name: "ahmadia-v1-n",
-  kind: "trained",
-  weights_path: "models/ahmadia-v1-n.pt",
-  base_weights: "yolo11n.pt",
-  dataset_id: DATASET_ID,
+  notes: "First model trained on the April flights.",
+  supplier: null,
+  task: "detect",
+  format: "pt",
+  origin: "trained",
+  state: "ready",
+  class_names: ["excavator", "dump_truck"],
+  class_aliases: {},
+  provenance: {
+    project_id: PROJECT_ID,
+    project_name: "Ahmadia",
+    project_folder: "E:\\Projects\\Ahmadia",
+    dataset_id: DATASET_ID,
+    dataset_name: "v1",
+    run_id: "j0000000-4444-4000-8000-000000000009",
+    base_model_id: MODEL_ID,
+    base_model_name: "yolo11m-coco",
+    source_file: null,
+  },
   hyperparameters: { epochs: 3, imgsz: 1280, augmentation: "aerial" },
   metrics: {
     map50: 0.71,
@@ -203,17 +224,48 @@ export const exampleTrainedModel: Model = {
       { class_name: "dump_truck", map50: 0.62, map50_95: 0.38, precision: 0.74, recall: 0.62 },
     ],
   },
-  class_names: ["excavator", "dump_truck"],
-  class_aliases: {},
-  exports: { onnx: "models/ahmadia-v1-n.onnx" },
+  exports: { onnx: "exports/weights.onnx" },
   artifacts: {
-    results_csv: "runs/j1/results.csv",
-    confusion_matrix: "runs/j1/confusion_matrix.png",
-    pr_curve: "runs/j1/PR_curve.png",
+    results_csv: "artifacts/results.csv",
+    confusion_matrix: "artifacts/confusion_matrix.png",
+    pr_curve: "artifacts/PR_curve.png",
   },
-  run_id: "j0000000-4444-4000-8000-000000000009",
-  train_gsd_cm: null,
+  train_gsd_cm: 2,
+  sha256: "9f2c4a1b7e3d5f6a8b0c2d4e6f8a1b3c5d7e9f0a2b4c6d8e0f1a3b5c7d9e1f2a",
   created_at: "2026-09-17T15:00:00Z",
+};
+
+export const IMPORTED_MODEL_ID = "m0000000-2222-4000-8000-000000000003";
+
+export const exampleImportedModel: LibraryModel = {
+  ...exampleModel,
+  id: IMPORTED_MODEL_ID,
+  name: "client-x-machinery",
+  origin: "imported",
+  supplier: "Client X",
+  class_names: ["excavator", "truck"],
+  provenance: { source_file: "E:\\Models\\client-x\\best.pt" },
+  sha256: "1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b",
+  created_at: "2026-09-18T08:00:00Z",
+};
+
+export const exampleLibraryStatus: LibraryStatus = {
+  available: true,
+  root: "C:\\Users\\operator\\AppData\\Roaming\\kestrel-ai\\library",
+  error: null,
+};
+
+export const exampleUsage: ModelUsage = {
+  projects: [
+    {
+      project_id: PROJECT_ID,
+      name: "Ahmadia",
+      folder: "E:\\Projects\\Ahmadia",
+      preannotation: true,
+      query_runs: 2,
+      map_runs: 1,
+    },
+  ],
 };
 
 export const exampleDataset: Dataset = {
@@ -253,6 +305,12 @@ export const exampleQueryRun: QueryRun = {
   conf: 0.25,
   job_id: "j0000000-4444-4000-8000-000000000003",
   box_count: 7,
+  source_id: null,
+  model_snapshot: {},
+  class_map: {},
+  pinned: false,
+  counts: {},
+  verified_counts: {},
   promoted_at: null,
   created_at: "2026-09-17T13:00:00Z",
 };
@@ -297,6 +355,10 @@ export const RESULTS_CSV = [
 
 export const exampleSource: Source = {
   id: SOURCE_ID,
+  kind: "images",
+  label: null,
+  captured_on: null,
+  map_id: null,
   folder: "E:\\Dev\\Yolo\\Ahmadia Construction Data",
   site: "ahmadia",
   settings: exampleProject.import_defaults,
@@ -435,6 +497,12 @@ export const exampleMapRun: MapRun = {
   job_id: JOB_ID,
   state: "succeeded",
   counts: { [CLASS_ID(1)]: 42, [CLASS_ID(4)]: 17 },
+  source_id: null,
+  model_snapshot: {},
+  class_map: {},
+  pinned: false,
+  verified_counts: {},
+  area_counts: {},
   detection_count: 59,
   created_at: "2026-09-22T11:00:00Z",
 };
@@ -536,7 +604,9 @@ export const exampleTimeline = {
       run_id: "5e4d3c2b-0000-4000-8000-000000000001",
       model_name: "yolo11m-coco",
       conf: 0.25,
+      pinned: false,
       counts: { [CLASS_ID(1)]: 12 },
+      verified_counts: { [CLASS_ID(1)]: 9 },
       deltas: {},
       state: "ok" as const,
       reason: null,
@@ -549,7 +619,9 @@ export const exampleTimeline = {
       run_id: "5e4d3c2b-0000-4000-8000-000000000002",
       model_name: "yolo11m-coco",
       conf: 0.25,
+      pinned: false,
       counts: { [CLASS_ID(1)]: 15 },
+      verified_counts: { [CLASS_ID(1)]: 15 },
       deltas: { [CLASS_ID(1)]: 3 },
       state: "ok" as const,
       reason: null,

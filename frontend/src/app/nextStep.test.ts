@@ -9,6 +9,7 @@ const base = {
   models: 0,
   trainedModels: 0,
   queryRuns: 0,
+  maps: 0,
 };
 
 describe("nextStep", () => {
@@ -30,8 +31,8 @@ describe("nextStep", () => {
       to: "/p/p/datasets",
     });
     expect(nextStep("p", { ...base, images: 400, labeled: 250, datasets: 1 })).toMatchObject({
-      text: "Add a starter model",
-      to: "/p/p/models",
+      text: "Add a model to the library",
+      to: "/library",
     });
     expect(nextStep("p", { ...base, images: 400, labeled: 250, datasets: 1, models: 1 })).toMatchObject({
       text: "Train a model",

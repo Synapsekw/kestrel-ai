@@ -265,7 +265,7 @@ def test_a_viewed_image_is_rendered_for_the_next_model_call(start, settle, llm, 
 
 
 def test_label_the_first_images_with_new_classes_after_approval(
-    client, start, settle, llm, key, project_id, image_ids, monkeypatch, handle, app
+    client, start, settle, llm, key, project_id, image_ids, monkeypatch, handle, app, wait_job
 ):
     """The headline: add a class, prepare a cloud labeling run, approve it, and the run covers
     exactly the first N images by path."""
@@ -321,6 +321,9 @@ def test_label_the_first_images_with_new_classes_after_approval(
         for entry in call["history"]:
             assert SECRET_KEY not in repr(entry)
 
+    # The turn ends once the labeling job has started; let the job finish (and close its DB
+    # connections) before reading the project files, or Windows refuses to read the locked -shm.
+    assert wait_job(project_id, label_item["job_ids"][0])["state"] == "succeeded"
     # No key anywhere in the project folder (DB, WAL, labels, caches).
     for path in handle.folder.rglob("*"):
         if path.is_file():

@@ -35,7 +35,7 @@ const SCREEN_PATH: Record<Exclude<AgentNavigate["screen"], "home" | "editor">, s
   datasets: "datasets",
   models: "models",
   train: "train",
-  detect: "query",
+  detect: "runs",
   export: "export",
   settings: "settings",
 };

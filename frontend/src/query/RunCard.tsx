@@ -9,7 +9,7 @@ import { pushLog } from "@/app/diagnostics";
 import { elapsedSeconds, formatDuration, jobTitle, stateLabel } from "@/jobs/jobLabels";
 import { JobLogView } from "@/jobs/JobLogView";
 import { useNow } from "@/jobs/useNow";
-import { formatLocalDate } from "@/models/modelLabels";
+import { formatLocalDate } from "@/library/modelLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Field, Input, Pill, Progress, Skeleton, buttonClass, type PillTone } from "@/ui";
 import { REVIEW_LINK_MAX_IDS, reviewLink, runTitle } from "./queryModel";
@@ -24,7 +24,7 @@ const STATE_TONE: Record<Job["state"], PillTone> = {
 };
 
 /** The run's job: state, progress while it works, the error when it stopped, Cancel and the log. */
-function RunJob({ projectId, job }: { projectId: string; job: Job }) {
+function RunJob({ projectId, job, readOnly }: { projectId: string; job: Job; readOnly: boolean }) {
   const api = useApi();
   const active = isActiveJob(job);
   const now = useNow(1000, active);
@@ -57,7 +57,7 @@ function RunJob({ projectId, job }: { projectId: string; job: Job }) {
         {job.message && <span className="min-w-0 truncate tabular-nums text-muted">{job.message}</span>}
         {elapsed !== null && <span className="tabular-nums text-muted">{formatDuration(elapsed)}</span>}
         <span className="ml-auto flex items-center gap-1">
-          {active && (
+          {active && !readOnly && (
             <Button size="sm" variant="ghost" onClick={() => void cancel()} disabled={busy}>
               Cancel job
             </Button>
@@ -75,7 +75,19 @@ function RunJob({ projectId, job }: { projectId: string; job: Job }) {
   );
 }
 
-export function RunCard({ projectId, runId }: { projectId: string; runId: string }) {
+/**
+ * One detection run: its job, box count, the review link and accepting its boxes as labels.
+ * `readOnly` keeps the facts and the log and drops everything that changes the run.
+ */
+export function RunCard({
+  projectId,
+  runId,
+  readOnly = false,
+}: {
+  projectId: string;
+  runId: string;
+  readOnly?: boolean;
+}) {
   const api = useApi();
   const id = useId();
   const { run, job, error: loadError, replace, trackJob, retry } = useTrackedRun(projectId, runId);
@@ -211,8 +223,8 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
           {run.model_name ? `, model ${run.model_name}` : ""}
         </p>
       </header>
-      {job && <RunJob projectId={projectId} job={job} />}
-      {interrupted && (
+      {job && <RunJob projectId={projectId} job={job} readOnly={readOnly} />}
+      {interrupted && !readOnly && (
         <div className="flex flex-wrap items-center gap-3">
           <Button icon="play" onClick={() => void resume()} disabled={busy}>
             Resume run
@@ -231,7 +243,7 @@ export function RunCard({ projectId, runId }: { projectId: string; runId: string
           model: a model trained on few images, or for few epochs, is rarely sure of anything.
         </Alert>
       )}
-      {!(finished && run.box_count === 0) && (
+      {!readOnly && !(finished && run.box_count === 0) && (
         <>
           <div className="flex flex-wrap items-center gap-3">
             <Link to={link.to} className={buttonClass("primary", "sm")}>

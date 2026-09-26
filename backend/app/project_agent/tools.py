@@ -62,7 +62,10 @@ SCREENS = Literal[
     "editor",
 ]
 JOB_STATES = Literal["queued", "running", "succeeded", "failed", "cancelled"]
-JOB_TYPES = Literal["import", "dataset", "train", "infer", "export", "results_export"]
+# The model library's routes are app-wide, outside this project's path.
+LIBRARY = "/api/v1/library"
+# Project job types. A model export is a library job (`library_export`), not one of these.
+JOB_TYPES = Literal["import", "dataset", "train", "infer", "results_export"]
 
 
 # --------------------------------------------------------------------- types
@@ -484,23 +487,26 @@ class ListModels(Tool):
     risk = "read"
     Args = NoArgs
     description = (
-        "List the project's registered detection models (at most 50): id, name, kind (imported "
-        "or trained), base weights, dataset, mAP50 when trained, the classes the weights predict "
-        "(first 20) and their aliases to project classes, and exports. A model id labels images "
-        "locally for free (label_images with a local_model labeler) or is a base for training."
+        "List the detection models in the app-wide model library (at most 50): id, name, origin "
+        "(trained, imported or starter), whether its weights are ready, the project and dataset it "
+        "was trained on, mAP50 when trained, the classes the weights predict (first 20) and their "
+        "aliases to project classes, and exports. A ready model id labels images locally for free "
+        "(label_images with a local_model labeler) or is a base for training."
     )
 
     async def run(self, ctx, args):
-        page = await ctx.api.call("GET", "/models", params={"limit": LIST_ROWS})
+        page = await ctx.api.call("GET", f"{LIBRARY}/models", params={"limit": LIST_ROWS})
         rows = []
         for m in page["items"]:
+            provenance = m.get("provenance") or {}
             rows.append(
                 {
                     "id": m["id"],
                     "name": m["name"],
-                    "kind": m["kind"],
-                    "base_weights": m["base_weights"],
-                    "dataset_id": m["dataset_id"],
+                    "origin": m["origin"],
+                    "state": m["state"],
+                    "project_name": provenance.get("project_name"),
+                    "dataset_name": provenance.get("dataset_name"),
                     "map50": round(m["metrics"]["map50"], 3) if m.get("metrics") else None,
                     "class_count": len(m["class_names"]),
                     "classes": m["class_names"][:20],
@@ -638,7 +644,7 @@ class ListJobs(Tool):
     risk = "read"
     Args = ListJobsArgs
     description = (
-        "List the 20 newest background jobs (import, dataset, train, infer = labeling, export, "
+        "List the 20 newest background jobs (import, dataset, train, infer = labeling, "
         "results_export), optionally filtered by state or type: id, state, progress 0-1, "
         "message and error."
     )
@@ -667,8 +673,15 @@ class GetJob(Tool):
 
     async def run(self, ctx, args):
         job_id = _seg(args["job_id"])
-        j = await ctx.api.call("GET", f"/jobs/{job_id}")
-        lines = (await ctx.api.call("GET", f"/jobs/{job_id}/log", params={"tail": LOG_TAIL}))["lines"]
+        base = "/jobs"
+        try:
+            j = await ctx.api.call("GET", f"{base}/{job_id}")
+        except ApiCallError as e:
+            if e.status != 404:
+                raise
+            base = f"{LIBRARY}/jobs"  # starter and export jobs run in the model library
+            j = await ctx.api.call("GET", f"{base}/{job_id}")
+        lines = (await ctx.api.call("GET", f"{base}/{job_id}/log", params={"tail": LOG_TAIL}))["lines"]
         body = {**_job(j), "params": j["params"], "result": j["result"], "log": [ln[:300] for ln in lines]}
         return _ok(body, f"Read {j['type']} job ({j['state']})")
 
@@ -1067,7 +1080,7 @@ class ImportFolder(Tool):
 
 class StarterArgs(_Args):
     key: str = Field(description="A starter key from list_starter_models, e.g. yolo11n.")
-    name: str | None = Field(None, min_length=1, description="Registry name; defaults to <key>-coco.")
+    name: str | None = Field(None, min_length=1, description="Library name; defaults to <key>-coco.")
 
 
 class AcquireStarterModel(Tool):
@@ -1076,15 +1089,18 @@ class AcquireStarterModel(Tool):
     risk = "write"
     Args = StarterArgs
     description = (
-        "Register a COCO-pretrained YOLO starter model in the project through a background job "
-        "(it may download the weights). The finished job's result.model_id is the new model; "
-        "use it as a training base or, where its COCO classes fit, for local labeling."
+        "Add a COCO-pretrained YOLO starter model to the app-wide model library through a "
+        "library job (it may download the weights). Read it with get_job; the finished job's "
+        "result.model_id is the library model. Use it as a training base or, where its COCO "
+        "classes fit, for local labeling."
     )
 
     async def run(self, ctx, args):
-        body = {"key": args["key"]} | ({"name": args["name"]} if args["name"] else {})
-        job = (await ctx.api.call("POST", "/models/acquire-starter", json=body))["job"]
-        return _ok({"job_id": job["id"]}, f"Started getting {args['key']}", job_ids=[job["id"]])
+        body = {"name": args["name"]} if args["name"] else {}
+        path = f"{LIBRARY}/starters/{_seg(args['key'])}/acquire"
+        job = (await ctx.api.call("POST", path, json=body))["job"]
+        # A library job, not a project job: it is not attached to this project's job list.
+        return _ok({"job_id": job["id"]}, f"Started getting {args['key']}")
 
 
 class CreateDatasetArgs(_Args):
@@ -1166,14 +1182,15 @@ class ExportModel(Tool):
     risk = "write"
     Args = ExportModelArgs
     description = (
-        "Export a registered model to ONNX or TensorRT (engine) through a background job; the "
-        "file path lands in the model's exports."
+        "Export a library model to ONNX or TensorRT (engine) through a library job (read it with "
+        "get_job); the file path lands in the model's exports."
     )
 
     async def run(self, ctx, args):
         body = {"format": args["format"], "imgsz": args["imgsz"], "half": args["half"]}
-        job = (await ctx.api.call("POST", f"/models/{_seg(args['model_id'])}/export", json=body))["job"]
-        return _ok({"job_id": job["id"]}, f"Started {args['format']} export", job_ids=[job["id"]])
+        path = f"{LIBRARY}/models/{_seg(args['model_id'])}/export"
+        job = (await ctx.api.call("POST", path, json=body))["job"]
+        return _ok({"job_id": job["id"]}, f"Started {args['format']} export")
 
 
 class UpdateProjectArgs(_Args):
@@ -1309,7 +1326,7 @@ class TrainModel(Tool):
 
     async def prepare(self, ctx, args):
         d = await ctx.api.call("GET", f"/datasets/{_seg(args.dataset_id)}")
-        m = await ctx.api.call("GET", f"/models/{_seg(args.base_model_id)}")
+        m = await ctx.api.call("GET", f"{LIBRARY}/models/{_seg(args.base_model_id)}")
         return Prepared(
             title=f"Train {args.name} for {_plural(args.epochs, 'epoch')}",
             detail=f"Dataset {d['name']} · base {m['name']} · imgsz {args.imgsz}",
@@ -1318,7 +1335,7 @@ class TrainModel(Tool):
         )
 
     async def run(self, ctx, args):
-        job = (await ctx.api.call("POST", "/models/train", json=args))["job"]
+        job = (await ctx.api.call("POST", "/train", json=args))["job"]
         return _ok({"job_id": job["id"]}, f"Started training {args['name']}", job_ids=[job["id"]])
 
 
@@ -1424,21 +1441,22 @@ class DeleteModel(Tool):
     risk = "approval"
     Args = ModelIdArgs
     description = (
-        "Delete a registered model and its weights file. Boxes it produced keep their "
-        "provenance. Needs the user's approval; cannot be undone."
+        "Delete a model from the app-wide library, with its weights file. Every project loses "
+        "it; boxes and runs it produced keep their provenance. Needs the user's approval; cannot "
+        "be undone."
     )
 
     async def prepare(self, ctx, args):
-        m = await ctx.api.call("GET", f"/models/{_seg(args.model_id)}")
+        m = await ctx.api.call("GET", f"{LIBRARY}/models/{_seg(args.model_id)}")
         return Prepared(
             title=f"Delete model {m['name']}",
-            detail="Removes the registry entry and its weights; boxes it produced keep their provenance.",
+            detail="Removes it from the library for every project; boxes it produced keep their provenance.",
             estimated_cost=None,
             args={"model_id": m["id"], "name": m["name"]},
         )
 
     async def run(self, ctx, args):
-        await ctx.api.call("DELETE", f"/models/{_seg(args['model_id'])}")
+        await ctx.api.call("DELETE", f"{LIBRARY}/models/{_seg(args['model_id'])}")
         return _ok({"deleted": args["model_id"]}, f"Deleted model {args.get('name', '')}".strip())
 
 

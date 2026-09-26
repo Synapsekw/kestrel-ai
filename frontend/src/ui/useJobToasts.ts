@@ -13,6 +13,21 @@ const TYPE_NAME: Record<Job["type"], string> = {
   map_import: "Map import",
   map_detect: "Map detection",
   map_export: "Map export",
+  library_import: "Model import",
+  library_export: "Model export",
+  library_starter: "Model download",
+  library_adopt: "Moving models to the library",
+  map_move: "Map move",
+  accept_above: "Bulk accept",
+  recount: "Recount",
+  area_recount: "Site-area recount",
+  detect_export: "Detection export",
+  pointcloud_import: "Point cloud import",
+  pointcloud_export: "Point cloud export",
+  surface_build: "Build surface",
+  volume_calc: "Calculate volume",
+  volume_export: "Export volumes",
+  design_import: "Design surface import",
 };
 
 function num(v: unknown): number | null {
@@ -37,7 +52,7 @@ export function jobToastText(job: Job): string {
       return `Import finished: ${imported} ${imported === 1 ? "image" : "images"}${extra ? ` (${extra})` : ""}`;
     }
     case "train":
-      return "Training finished: the model is registered";
+      return "Training finished: the model is in the library";
     case "infer": {
       const boxes = num(r.boxes);
       return boxes === null
@@ -56,6 +71,43 @@ export function jobToastText(job: Job): string {
       return "Map detection finished";
     case "map_export":
       return "Map export finished";
+    case "library_import":
+      return "Model added to the library";
+    case "library_export":
+      return "Model export finished";
+    case "library_starter":
+      return "Starter model added to the library";
+    case "library_adopt":
+      return "Models moved to the library";
+    case "map_move":
+      return "Map moved";
+    case "accept_above": {
+      const accepted = num(r.accepted);
+      return accepted === null
+        ? "Bulk accept finished"
+        : `Bulk accept finished: ${accepted} ${accepted === 1 ? "detection" : "detections"} accepted`;
+    }
+    case "recount":
+      return "Recount finished";
+    case "area_recount":
+      return "Site-area counts updated";
+    case "detect_export":
+      return "Export finished";
+    case "pointcloud_import":
+      return "Point cloud imported";
+    case "pointcloud_export":
+      return "Point cloud export finished";
+    case "surface_build":
+      return "Surface built";
+    case "volume_calc":
+      return "Volume calculated";
+    case "volume_export":
+      return "Volume export finished";
+    case "design_import":
+      // One job type, three phases (spec 2026-09-23-design-surfaces section 4.1).
+      if (job.params?.phase === "build") return "Design surface imported";
+      if (job.params?.phase === "preview") return "Design preview ready";
+      return "Design file read";
   }
 }
 
@@ -70,10 +122,33 @@ const REPORTED_ON: Partial<Record<Job["type"], string>> = {
   infer: "query",
 };
 
-/** True when the screen at `pathname` shows this job's outcome itself, so a toast would repeat it. */
+/** Job ids whose outcome a mounted component reports itself (e.g. the Clouds screen's ExportWatch). */
+const claimed = new Map<string, number>();
+
+/**
+ * Claims one job's outcome for the caller, which then shows it; the global toast stays quiet for
+ * exactly that job while the claim is held. Returns the release. A claim, not a route: a job whose
+ * watcher is not mounted still gets the global toast, whatever screen is open.
+ */
+export function claimJobOutcome(jobId: string): () => void {
+  claimed.set(jobId, (claimed.get(jobId) ?? 0) + 1);
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    const n = (claimed.get(jobId) ?? 1) - 1;
+    if (n > 0) claimed.set(jobId, n);
+    else claimed.delete(jobId);
+  };
+}
+
+/** True when the screen at `pathname` (or a mounted claim) shows this job's outcome, so a toast would repeat it. */
 export function reportedInline(job: Job, pathname: string): boolean {
+  if (claimed.has(job.id)) return true;
   const segment = REPORTED_ON[job.type];
-  return !!segment && pathname.replace(/\/$/, "").endsWith(`/p/${job.project_id}/${segment}`);
+  if (!segment) return false;
+  const path = pathname.replace(/\/$/, "");
+  return path.endsWith(`/p/${job.project_id}/${segment}`);
 }
 
 /**

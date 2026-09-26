@@ -1,0 +1,36 @@
+
+> kestrel-ai-frontend@0.1.0 tauri E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend
+> tauri "build" "--no-bundle"
+
+        Info Looking up installed tauri packages to check mismatched versions...
+     Running beforeBuildCommand `pnpm build`
+
+> kestrel-ai-frontend@0.1.0 build E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend
+> tsc -b && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 773 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                                       0.44 kB │ gzip:   0.28 kB
+dist/assets/instrument-sans-latin-ext-wght-normal-B5bTHO_g.woff2     11.14 kB
+dist/assets/instrument-sans-latin-wght-normal-BbzFLZTg.woff2         30.09 kB
+dist/assets/index-Ix-z0zEl.css                                       42.82 kB │ gzip:   8.58 kB
+dist/assets/event-D1QGh-gH.js                                         1.15 kB │ gzip:   0.61 kB
+dist/assets/index-DAcIezN7.js                                         1.45 kB │ gzip:   0.50 kB
+dist/assets/app-Ci57zRfV.js                                           1.89 kB │ gzip:   0.76 kB
+dist/assets/core-Bjnh3KEM.js                                          2.11 kB │ gzip:   0.87 kB
+dist/assets/VolumesScreen-DIJZteun.js                                40.16 kB │ gzip:  13.51 kB
+dist/assets/AboutScreen-J4hH7ODX.js                                  43.39 kB │ gzip:  12.77 kB
+dist/assets/CloudsScreen-CX7Hdtym.js                                804.51 kB │ gzip: 238.55 kB
+dist/assets/index-siO-HuYW.js                                     1,463.32 kB │ gzip: 444.90 kB
+System.Management.Automation.RemoteException
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.49s
+   Compiling kestrel-ai v0.1.0 (E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend\src-tauri)
+    Finished `release` profile [optimized] target(s) in 57.17s
+       Built application at: E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\frontend\src-tauri\target\release\kestrel-ai.exe

@@ -48,11 +48,24 @@ class QueryRunOut(BaseModel):
     box_count: int
     promoted_at: datetime | None
     created_at: datetime
+    # Detection workspace (spec 2026-09-23 sections 7.2 and 9.2).
+    source_id: str | None
+    model_snapshot: dict
+    class_map: dict[str, str | None]
+    pinned: bool
+    counts: dict[str, int]
+    verified_counts: dict[str, int]
 
     @classmethod
     def from_row(cls, row: QueryRun, box_count: int) -> "QueryRunOut":
         return cls(
             id=row.id,
+            source_id=row.source_id,
+            model_snapshot=dict(row.model_snapshot or {}),
+            class_map=dict(row.class_map or {}),
+            pinned=bool(row.pinned),
+            counts=dict(row.counts or {}),
+            verified_counts=dict(row.verified_counts or {}),
             kind=row.kind,
             model_id=row.model_id,
             provider=row.provider,

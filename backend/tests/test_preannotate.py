@@ -3,8 +3,9 @@
 import threading
 
 import pytest
+from library_helpers import add_library_model
 
-from app.db.models import Box, Image, Model, Source
+from app.db.models import Box, Image, Source
 
 BASE = "/api/v1/projects"
 
@@ -56,18 +57,12 @@ def image_id(project_id, project_dir, handle, make_jpeg) -> str:
 
 
 @pytest.fixture
-def model_id(handle) -> str:
-    with handle.session() as s:
-        row = Model(
-            name="coco",
-            kind="imported",
-            weights_path="models/coco.pt",
-            class_names=["truck", "excavator"],
-            class_aliases={"truck": "dump_truck"},
-        )
-        s.add(row)
-        s.flush()
-        return row.id
+def model_id(app, handle, tmp_path) -> str:
+    """A library model; the weights file is a stand-in because `_load` is faked."""
+    row = add_library_model(
+        app, tmp_path, name="coco", class_names=["truck", "excavator"], class_aliases={"truck": "dump_truck"}
+    )
+    return row.id
 
 
 @pytest.fixture
@@ -142,13 +137,9 @@ def test_a_marked_empty_image_is_skipped_before_the_gpu_is_touched(
 
 
 def test_an_explicit_model_id_overrides_the_project_setting(
-    client, project_id, image_id, selected, handle, fake_yolo
+    client, app, tmp_path, project_id, image_id, selected, handle, fake_yolo
 ):
-    with handle.session() as s:
-        other = Model(name="other", kind="imported", weights_path="models/o.pt", class_names=["excavator"])
-        s.add(other)
-        s.flush()
-        other_id = other.id
+    other_id = add_library_model(app, tmp_path, name="other", class_names=["excavator"]).id
 
     body = client.post(
         f"{BASE}/{project_id}/images/{image_id}/preannotate", json={"model_id": other_id}

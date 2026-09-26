@@ -15,4 +15,10 @@ describe("AppSettingsScreen", () => {
     expect(screen.getByText(/shared by every project/)).toBeInTheDocument();
     expect(requests.every((r) => !r.url.includes("/projects/"))).toBe(true);
   });
+
+  it("links to About Kestrel AI", () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/providers$/, body: { items: exampleProviders } }]);
+    renderWithProviders(<AppSettingsScreen />, { api, route: "/settings", path: "/settings" });
+    expect(screen.getByRole("link", { name: "About Kestrel AI" })).toHaveAttribute("href", "/about");
+  });
 });

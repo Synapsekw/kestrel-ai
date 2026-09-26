@@ -1,3 +1,4 @@
+import threading
 import time
 
 import pytest
@@ -50,7 +51,7 @@ def _fast_progress_job(ctx):
 
 def _project(client, project_dir):
     return client.post(
-        "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": []}
+        "/api/v1/projects", json={"name": "A", "folder": str(project_dir), "classes": [], "kind": "train"}
     ).json()["id"]
 
 
@@ -251,3 +252,38 @@ def test_malformed_cursor_is_422(client, project_dir):
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
     r = client.get(f"/api/v1/projects/{pid}/jobs", params={"cursor": "%%%"})
     assert r.status_code == 422
+
+
+_HOLD = threading.Event()
+_RAN: list[str] = []
+
+
+@register_job_type("test_hold")
+def _hold_job(ctx):
+    _HOLD.wait(10)
+    return None
+
+
+@register_job_type("test_record")
+def _record_job(ctx):
+    _RAN.append(ctx.job_id)
+    return None
+
+
+def test_a_queued_job_cancelled_ends_at_once_and_never_runs(client, project_dir, app):
+    pid = _project(client, project_dir)
+    handle = app.state.projects.get(pid)
+    _HOLD.clear()
+    holders = [app.state.jobs.submit(handle, "test_hold", {}) for _ in range(app.state.jobs._workers)]
+    try:
+        queued = app.state.jobs.submit(handle, "test_record", {})
+        r = client.post(f"/api/v1/projects/{pid}/jobs/{queued.id}/cancel")
+        assert r.json()["state"] == "cancelled" and not app.state.jobs.is_live(queued.id)
+    finally:
+        _HOLD.set()
+    for h in holders:
+        _wait(client, pid, h.id)
+    after = app.state.jobs.submit(handle, "test_record", {})  # the pool has passed the cancelled one
+    _wait(client, pid, after.id)
+    assert queued.id not in _RAN
+    assert client.get(f"/api/v1/projects/{pid}/jobs/{queued.id}").json()["state"] == "cancelled"

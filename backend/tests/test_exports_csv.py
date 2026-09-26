@@ -19,6 +19,7 @@ def project_id(client, project_dir) -> str:
         "name": "T",
         "folder": str(project_dir),
         "classes": [{"name": n, "colour": c} for n, c in zip(CLASSES, ["#ff0000", "#00ff00"], strict=True)],
+        "kind": "train",
     }
     r = client.post("/api/v1/projects", json=body)
     assert r.status_code == 201, r.text

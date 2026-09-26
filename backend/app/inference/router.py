@@ -19,10 +19,16 @@ from app.inference.schemas import (
     UnpromoteResult,
 )
 from app.jobs.schemas import JobOut
+from app.projects.kinds import ANY_KIND, require_kind
 from app.projects.service import ProjectHandle, get_project
 from app.training.schemas import JobRef
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["query-runs"])
+# Query runs serve both kinds. The plan's table makes them detection-only, but the project agent's
+# labelling tools and the setup flow label a training project's images through query runs and
+# their promotion; refusing them would leave training projects without assisted labelling.
+QUERY_RUN_KINDS = [Depends(require_kind(ANY_KIND))]
+TRAIN_ONLY = [Depends(require_kind(("train",)))]
 
 
 def _boxes_changed(request: Request, handle: ProjectHandle, image_ids: list[str]) -> None:
@@ -33,14 +39,19 @@ def _config(request: Request):
     return request.app.state.provider_config
 
 
-@router.post("/query-runs/estimate", response_model=CostEstimate)
+def _library(request: Request):
+    """The model library, or None when it could not be opened (a local run then answers 503)."""
+    return getattr(request.app.state, "library", None)
+
+
+@router.post("/query-runs/estimate", response_model=CostEstimate, dependencies=QUERY_RUN_KINDS)
 def estimate_query_run(
     body: QueryRunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> CostEstimate:
-    return CostEstimate(**service.estimate(handle, _config(request), body))
+    return CostEstimate(**service.estimate(handle, _config(request), body, _library(request)))
 
 
-@router.get("/query-runs", response_model=QueryRunPage)
+@router.get("/query-runs", response_model=QueryRunPage, dependencies=QUERY_RUN_KINDS)
 def list_query_runs(
     handle: ProjectHandle = Depends(get_project),
     limit: int | None = Query(None, ge=1, le=1000),
@@ -52,23 +63,25 @@ def list_query_runs(
     )
 
 
-@router.post("/query-runs", response_model=QueryRunWithJob, status_code=202)
+@router.post("/query-runs", response_model=QueryRunWithJob, status_code=202, dependencies=QUERY_RUN_KINDS)
 def create_query_run(
     body: QueryRunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> QueryRunWithJob:
-    run = service.create_query_run(handle, request.app.state.keys, _config(request), body)
+    run = service.create_query_run(handle, request.app.state.keys, _config(request), body, _library(request))
     job = request.app.state.jobs.submit(handle, "infer", {"query_run_id": run.id})
     run = service.set_job(handle, run.id, job.id)
     return QueryRunWithJob(query_run=QueryRunOut.from_row(run, 0), job=JobOut.from_row(job, handle.id))
 
 
-@router.get("/query-runs/{runId}", response_model=QueryRunOut)
+@router.get("/query-runs/{runId}", response_model=QueryRunOut, dependencies=QUERY_RUN_KINDS)
 def get_query_run(runId: str, handle: ProjectHandle = Depends(get_project)) -> QueryRunOut:  # noqa: N803
     row, count = service.get_query_run(handle, runId)
     return QueryRunOut.from_row(row, count)
 
 
-@router.post("/query-runs/{runId}/resume", response_model=JobRef, status_code=202)
+@router.post(
+    "/query-runs/{runId}/resume", response_model=JobRef, status_code=202, dependencies=QUERY_RUN_KINDS
+)
 def resume_query_run(
     runId: str,  # noqa: N803
     request: Request,
@@ -81,7 +94,7 @@ def resume_query_run(
     return JobRef(job=JobOut.from_row(job, handle.id))
 
 
-@router.post("/query-runs/{runId}/promote", response_model=PromoteResult)
+@router.post("/query-runs/{runId}/promote", response_model=PromoteResult, dependencies=QUERY_RUN_KINDS)
 def promote_query_run(
     runId: str,  # noqa: N803
     request: Request,
@@ -94,7 +107,7 @@ def promote_query_run(
     return PromoteResult(query_run=QueryRunOut.from_row(row, count), accepted=accepted)
 
 
-@router.post("/query-runs/{runId}/unpromote", response_model=UnpromoteResult)
+@router.post("/query-runs/{runId}/unpromote", response_model=UnpromoteResult, dependencies=QUERY_RUN_KINDS)
 def unpromote_query_run(
     runId: str,  # noqa: N803
     request: Request,
@@ -105,12 +118,15 @@ def unpromote_query_run(
     return UnpromoteResult(query_run=QueryRunOut.from_row(row, count), reverted=reverted)
 
 
-@router.post("/images/{imageId}/preannotate", response_model=PreannotateResult)
+@router.post("/images/{imageId}/preannotate", response_model=PreannotateResult, dependencies=TRAIN_ONLY)
 def preannotate_image(
     imageId: str,  # noqa: N803
+    request: Request,
     handle: ProjectHandle = Depends(get_project),
     body: PreannotateRequest | None = Body(None),
 ) -> PreannotateResult:
     """Synchronous by design: the editor opens an image and wants its proposals in that response."""
-    skipped, model_id, rows = service.preannotate(handle, imageId, body or PreannotateRequest())
+    skipped, model_id, rows = service.preannotate(
+        handle, imageId, body or PreannotateRequest(), _library(request)
+    )
     return PreannotateResult(skipped=skipped, model_id=model_id, items=[BoxOut.from_row(r) for r in rows])

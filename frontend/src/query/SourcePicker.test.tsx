@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { exampleProviders, PROJECT_ID } from "@/test/fixtures";
+import { exampleModel, exampleProviders, exampleTrainedModel } from "@/test/fixtures";
 import { DEFAULT_QUERY_FORM } from "./queryModel";
 import { SourcePicker } from "./SourcePicker";
 
@@ -11,7 +11,6 @@ describe("SourcePicker", () => {
     render(
       <MemoryRouter>
         <SourcePicker
-          projectId={PROJECT_ID}
           form={{ ...DEFAULT_QUERY_FORM, kind: "cloud_provider", provider: "anthropic" }}
           onChange={() => {}}
           models={[]}
@@ -28,5 +27,26 @@ describe("SourcePicker", () => {
       "href",
       "/settings",
     );
+  });
+
+  it("lists library models under one group and disables a model whose file is missing", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <SourcePicker
+          form={DEFAULT_QUERY_FORM}
+          onChange={() => {}}
+          models={[exampleTrainedModel, { ...exampleModel, state: "unavailable" }]}
+          modelsUnavailable={false}
+          modelsLoading={false}
+          modelsError={null}
+          providers={exampleProviders}
+          providersUnavailable={false}
+        />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole("radio", { name: "Library model" })).toBeChecked();
+    expect(container.querySelector("optgroup")).toHaveAttribute("label", "Models in your library");
+    expect(screen.getByRole("option", { name: "ahmadia-v1-n (Trained)" })).toBeEnabled();
+    expect(screen.getByRole("option", { name: "yolo11m-coco (Starter) (file missing)" })).toBeDisabled();
   });
 });

@@ -64,6 +64,7 @@ def test_plan_to_import_to_first_labels(client, app, tmp_path, make_jpeg, wait_j
             "name": draft["name"],
             "folder": str(tmp_path / "survey"),
             "classes": [{"name": name, "colour": "#e5af64"} for name in draft["classes"]],
+            "kind": "train",
         },
     )
     assert created.status_code == 201, created.text

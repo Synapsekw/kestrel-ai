@@ -1,4 +1,4 @@
-import type { Dataset, Model, TrainRequest } from "@contract/client";
+import type { Dataset, LibraryModel, TrainRequest } from "@contract/client";
 
 export interface TrainForm {
   name: string;
@@ -98,7 +98,7 @@ export function parseEpochMessage(message: string): EpochProgress | null {
   };
 }
 
-export function suggestName(dataset: Dataset | undefined, base: Model | undefined): string {
+export function suggestName(dataset: Dataset | undefined, base: LibraryModel | undefined): string {
   if (!dataset || !base) return "";
   return `${dataset.name}-${base.name}`;
 }

@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-23
+last-updated: 2026-09-26
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -71,6 +71,9 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Project agent (in-project AI drawer with tool access) | merged to `main` (`b606360`); rebuilt and installed 2026-09-22 | plain-language operation of the app through ~35 tools over the existing API, approvals for spend/train/delete; 854 backend, 564 frontend, 62 browser and 8 Rust tests; frozen-sidecar route smoke and an installed-build CDP check. No live provider turn yet. See [[2026-09-22-1930-project-agent]] |
 | GeoTIFF maps — import, view, detect, label, score, export | merged to `main` (`759015a`, + `8dbb55e` layout fix); rebuilt and installed 2026-09-23 | an orthomosaic of any size and projection: bounded 256 px tiles, whole-map detection (windowed, resumable, seam-merged) with counts per class, evaluation zones and labels, precision/recall/F1 and count error, and GeoJSON/GeoPackage/CSV export with coordinates. 973 backend, 634 frontend, 63 browser and 8 Rust tests on the merged tree; frozen smoke green including `geo ok`. **Unrun on a real orthomosaic; the GeoPackage has never been opened by GIS software.** See [[2026-09-23-1655-geotiff-maps]] |
 | Survey timeline — counts over time across a site's maps | merged/pushed to `main` (`ddc95f6`) | a map carries the date it was flown (read from `TIFFTAG_DATETIME`, correctable); `GET /survey-timeline` gives each survey's counts and the change since the previous **comparable** one; a Surveys screen draws the chart and table. A survey counted with another model or confidence is marked and excluded from the deltas. 995 backend, 644 frontend, 65 browser tests. **Not in any installed build, and never run on two real orthomosaics.** Superseded the frame-projection design with measurements. See [[2026-09-23-1703-survey-timeline]] |
+| Train/Detect split, model library and detection workspace | merged/pushed to `main` (`c9f88e2`, then `f7d7ab6`); **not installed** | app-wide model Library, `train`/`detect` project kinds with a server-side guard, old models adopted into the library; detection projects get Sources, Runs with class mapping, Review with verified counts, Site areas, Analytics (absorbing Surveys) and CSV/PDF export. 1269 backend, 796 frontend, 76 browser tests at landing. **Frozen sidecar with `reportlab` never built; adoption never run on a real project.** See [[2026-09-24-0622-train-detect-split-and-library]] |
+| Design surfaces (S3) — import a DEM/LandXML/DXF design as a surface | merged/pushed to `main` (`23c1ca6`); installed 2026-09-26 (build of `3ad69e4`) | acceptance on the chimney site passes all five §15.4 steps headless (LandXML 98.4 % overlap, median dz +0.005 m; swap fix; 3D faces; contours; EPSG:32638 DEM; S2 volume against each); 1 M-point LandXML inspects in 7.9 s and builds 4996² in 8.4 s. 1969 backend, 982 frontend, 91 browser tests. **Not driven through the UI or installed.** See [[2026-09-26-0144-design-surfaces]] |
+| Point clouds (S1) — import LAS/LAZ, 3D viewer, measurements, map ↔ 3D, LAZ export | merged/pushed to `main` (`0af7084`), acceptance + fixes `ab3fa34`; CI green; installed 2026-09-26 (build of `3ad69e4`) | chimney import 9.5 s; 195 M points in 58.9 s (converter peak 8.98 GB); viewer settled < 0.7 s; picks within 0.002 mm; LAZ export 1.8 s. §17.10 rim u 0.171 m vs ≤ 0.05 m (data-limited, operator decision). 1974 backend, 995 frontend, 93 browser, 8 Rust tests. See [[2026-09-26-0404-point-clouds-s1]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -82,22 +85,33 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **The survey timeline — counts over time across a site's maps** —
-`d92441d..ddc95f6` (8 tasks in a task worktree, merged and pushed `e6e5f7d..ddc95f6`, worktree
-removed and branch deleted). Maps already counted objects per class; nothing compared one survey
-with the next. Now a map carries the date its imagery was flown, `GET /survey-timeline` returns every
-survey oldest first with the change since the previous **comparable** one, and a Surveys screen draws
-it. The guard is the point: a survey counted with another model or confidence is marked, drawn hollow
-and left out of the arithmetic, so a change of model cannot read as a change on the ground. Gate green
-on the merged result (995 backend, 644 frontend, 65 browser). A bug caught on the way: the new date
-broke the `source.json` sidecar, which had failed **every** map import. See
-[[2026-09-23-1703-survey-timeline]].
+**Shipped last:** **The point-cloud programme, complete on `main` and installed** —
+spike → three specs → four plans → F0 `ea262c9`, Volumes `798c0c3`, Design surfaces `23c1ca6`,
+Point clouds `0af7084`/`ab3fa34`, cross-plan follow-ups `2a1f634`/`3ad69e4`, CI e2e fix `6bd6e72`
+(ADR `d32722e`). CI green on `d32722e` (run 36217205986). Rebuilt from `3ad69e4` and installed
+2026-09-26 (smoke green incl. `pointcloud`, `cloud`, `design`, `volumes`; packaged-webview check
+rendered 49 724 points). See [[2026-09-26-0700-pointcloud-programme]] and the per-plan notes
+[[2026-09-26-0404-point-clouds-s1]], [[2026-09-26-0144-design-surfaces]],
+[[2026-09-25-2244-volumes-task17-docs]].
 
-The design that preceded it was killed by measurement rather than opinion: counting distinct objects
-from overlapping frames put the same object 10-17 m from itself between frames (28 m unprojected),
-and the best-fitting angle convention differed between flights.
-`docs/superpowers/specs/2026-09-23-object-counts-per-group-design.md` is marked superseded and carries
-the numbers.
+**In flight:** nothing from this programme.
+
+**Next:** the operator walks the three walkthroughs in the installed app (point clouds, volumes,
+design surfaces) on real data; see §5 for what that must settle.
+
+Before that: **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
+- **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
+- **Project kinds:** projects are `train` or `detect`, enforced per route.
+- **Adoption:** existing projects became training projects, and their models are adopted into the library by a background job (nothing is deleted).
+- **Detection projects:** Sources (photos and maps with a survey date), Runs (a library model plus a one-time class mapping), Review (counts increment in the same transaction), Site areas in WGS84, Analytics showing total (verified) and absorbing Surveys, and CSV/PDF export.
+- **Photo batches** report detections, never objects.
+
+Gate at landing: 1269 backend, 796 frontend, 76 browser. **Not installed yet,** and the frozen sidecar with the new `reportlab` has never been built. See [[2026-09-24-0622-train-detect-split-and-library]].
+
+Previously shipped: **The survey timeline — counts over time across a site's maps** —
+`d92441d..ddc95f6`. A map carries the date it was flown, `GET /survey-timeline` gives the change since
+the previous comparable survey, and a Surveys screen (now the Surveys section of Analytics in
+detection projects) draws it. See [[2026-09-23-1703-survey-timeline]].
 
 Previously shipped: **GeoTIFF maps — judge a model on the artefact the customer delivers** —
 `cf01fa8..449ecd3` (32 commits in a task worktree, merged `759015a`, worktree removed and branch
@@ -193,31 +207,93 @@ Before that: the repo was published to
 [`github.com/Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) and the fresh-clone
 verification (Task 12 Steps 1-3) passed.
 
-**In flight:** nothing from this block — the worktree is removed and its branch deleted. Two other
-sessions hold worktrees as this is written (`pointcloud-spike`, `train-detect-spec`); their state is
-not recorded here. The operator has decided to rebuild and install once that work lands, so the
-survey timeline waits for that build.
+Earlier (2026-09-26, now merged at `23c1ca6`): **Design surfaces (S3)** — Task 17 (acceptance, walkthrough, evidence, ledger) done on `task/design-surfaces` at `2633708`, gate green. See [[2026-09-26-0144-design-surfaces]].
 
-**Next:** rebuild and install once `pointcloud-spike` and `train-detect-spec` land — the installed
-build carries maps and the project agent but **not** the survey timeline — then walk the operator
-through Surveys on two real orthomosaics of one site. Then the **de-machinery pass** the operator
-approved on 2026-09-23: the editor's "No machinery (N)", the preset class list on the Projects
-screen and the agent placeholders all assume construction machinery, and the app is meant for any
-detector (plants, power-line anomalies). Also: run the maps walkthrough on a real orthomosaic
-(`docs/usability/2026-09-22-maps-walkthrough.md`) — step 8, opening the exported GeoPackage in
-QGIS, is the one check no software has ever run — then dispatch CI `sidecar-smoke`, since the
-bundle now carries GDAL and PROJ. A **point cloud viewer** (Potree/COPC) is researched and has a
-kickoff prompt but is unstarted. Previously agreed and now partly overtaken by the survey
-timeline: brainstorm direction **D, counts per flight** — per-flight/per-date machinery counts, a
-trend, an Excel export and a GPS map for site managers — agreed with the operator on 2026-09-22 as
-the next feature. Keep `ci` green (`gh run list --branch main` after each merge; dispatch
-`sidecar-smoke` after packaging changes). Backlog unchanged: plan wave 2 of rotated boxes (spec §5
-of `docs/superpowers/specs/2026-09-20-rotated-boxes-design.md`, no plan yet; decide first whether to
-bound the pytest step in `finish-task.ps1`, see
-[[2026-09-21-gotcha-concurrent-gate-runs-may-starve-the-job-runner]]); carry out the prepared
-folder rename when the operator is ready (§5).
+Earlier (now merged at `798c0c3`): **Volumes (S2)** — surfaces (the grid convention, the build pipeline with
+median/mean/max/min, despike, hole-fill, auto cell, hillshade + zoom tiles), the volume engine
+(fill/cut/net against a toe-plane, fitted toe surface, flat level or another survey/design surface,
+clutter masks from detection runs and hand-drawn exclusions, a two-surface alignment/shift check, a
+full uncertainty budget), the `volume_calc`/`volume_export` jobs and the Volumes screen — on
+`task/volumes`, gated at `94c4e8b` (contract check, ruff, ruff format, pytest 1543 passed/3
+skipped/9 deselected, frontend lint, 848/848 unit, build and 80/80 e2e all green). **Not merged
+yet:** a final-review fix wave (five Important findings plus cheap minors from the whole-branch
+review) is running in a separate worktree `volumes-tfx`, and `finish-task.ps1` re-runs the full gate
+before the merge to `main`. This block (Task 17) wrote the module-level acceptance evidence
+(`docs/evidence/volumes-acceptance.md`), the CloudCompare cross-check template
+(`docs/evidence/volumes-crosscheck.md`, rows still open — CloudCompare isn't installed here) and the
+walkthrough (`docs/usability/2026-09-24-volumes-walkthrough.md`), plus the top ledger entry in
+`docs/progress.md`; see [[2026-09-25-2244-volumes-task17-docs]]. Point-cloud foundation F0 (the
+shared scaffolding S1/S2/S3 build on) is already merged to `main` (`754c741`, 2026-09-24). Other
+sessions may still hold `model-gsd`, `pointcloud-specs` and `pointcloud-spike`; their state is not
+recorded here.
+
+Earlier next-steps (the rebuild and install is done — 2026-09-26, build of `3ad69e4`, which carries the survey timeline and the train/detect work). Still to do from them: run `docs/usability/2026-09-23-library-walkthrough.md` and
+`docs/usability/2026-09-23-detection-workspace-walkthrough.md` on the installed app, with a **backup
+copy** of a real training project (to watch adoption) and a real orthomosaic, and dispatch CI
+`sidecar-smoke` (the packaging gained `reportlab`). Then the ONNX model-import spec, the
+**de-machinery pass**, and patching `finish-task.ps1` per
+[[2026-09-24-gotcha-finish-task-rebase-drops-merge-resolutions]]. Still open from before: the maps
+walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point cloud viewer
+(unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Point-cloud programme: cross-cutting (opened 2026-09-26)
+
+- **CI `sidecar-smoke` fails on every `workflow_dispatch` run:** `build.ps1` needs the git-ignored
+  PotreeConverter payload, which CI never fetches (push runs skip the job, so `main` shows green).
+  Fix: run `fetch_potreeconverter.ps1` in that job — needs an MSVC runtime on the runner.
+- **Maps' live-job refusals still answer `conflict`** (resume, delete-run, delete-map); point clouds,
+  surfaces, volumes and design now answer `job_running` (`2a1f634`). Align when maps is next touched.
+- **Every existing masked volume measurement turns stale once** after `2a1f634` (fingerprint format
+  changed; reason reads "masks: detection run changed") — expected, one recalculation each.
+- **Leftover, unregistered folders** in `.claude/worktrees` (`design-surfaces-t5`,
+  `pointcloud-foundation`, `pointcloud-foundation-t8`, `volumes`) and ~1.4 GB of acceptance data in
+  `D:\kestrel-acceptance` — safe to delete by hand (no links inside, none registered with git).
+- **`task/model-gsd` (another session) carries `0007_model_train_gsd`,** which collides with `main`'s
+  `0007`; `main`'s head is now `0009` — renumber before merging it.
+- **COPC export was deliberately dropped** (potree-core can't read COPC; LAZ opens in QGIS and
+  CloudCompare, QGIS builds its own index). Revisit only if a client asks for COPC.
+- **The installer bundles no WebView2 bootstrapper** — fine on this machine, not on a clean one.
+
+### Point clouds (S1): operator checks (opened 2026-09-26)
+
+- **Walk** `docs/usability/2026-09-24-point-clouds-walkthrough.md` in the installed app (installed
+  2026-09-26): map right-click → 3D precision (§17.12), the LAZ in QGIS, the warn-tone screenshot.
+- **Decide §17.10:** close-range pick u on the chimney rim is 0.171 m vs ≤ 0.05 m; the rim's own
+  point spacing is 0.074 m.
+- **Z refine over noise:** the top-surface refine lands on airborne points over one open-ground spot.
+- **Re-import clouds imported before `430a726`** — their octrees decode 1 mm low.
+
+### Design surfaces (S3): live walkthrough (opened 2026-09-26; merged `23c1ca6`)
+
+- **Walk `docs/usability/2026-09-24-design-surfaces-walkthrough.md` in the app** — the acceptance ran
+  headless through the API only.
+- **Suggestion overlap is scored on file vertices, not the footprint** (spec §10): on the chimney TIN
+  it says 67 % where applying gives 98.4 % (repro in `docs/evidence/design-surfaces/README.md`).
+
+### Volumes (S2): acceptance ran at module level (opened 2026-09-25; merged `798c0c3`)
+
+Merged after its final-review fix wave; the detection-review fingerprint gap was closed again,
+properly, in `2a1f634` (exact masked box set, stale on review, stale export refused). Owed:
+- **Run the deferred in-app steps** (S1's import UI is on `main` and installed): repeat the
+  task-17 brief's Steps 1–7 through the real UI (import the chimney/+0.100 mm/195 M clouds, re-run
+  `docs/usability/2026-09-24-volumes-walkthrough.md` live), then install CloudCompare 2.13 and fill
+  in `docs/evidence/volumes-crosscheck.md`'s open rows, plus the QGIS/PDF/XLSX export review.
+- **Profile `app/surfaces/build.py`'s memory growth with site size** before accepting larger sites:
+  peak working set grew 2.9× (625 MiB → 1 818 MiB) across a 9× site though a single block should set
+  the ceiling; passes the ≤ 2 GB acceptance bound but misses the 1.5 GB target.
+- **Frozen `volumes-selftest` passed** in the 2026-09-26 rebuild (`volumes ok pdf 2038 xlsx 523.6
+  delaunay 2`); close the ADR's open hidden-import question with that evidence.
+
+### Train/Detect split and detection workspace: not installed, adoption unproven (opened 2026-09-24)
+
+Merged and pushed at `f7d7ab6`. Owed:
+- **Rebuild:** freeze the sidecar (first build with `reportlab`), run `smoke_frozen.ps1`, install, and dispatch CI `sidecar-smoke`.
+- **Adoption on a real project:** open a backup copy of a real training project on the new build and check that its models appear in the Library and its past runs open. Tests used fixtures built at revision 0005.
+- **The PDF report** has been checked only in pytest; open one from the installed app.
+- **`GET /survey-timeline`** still answers in training projects, while the UI shows Surveys only in detection projects. It's a small inconsistency, left as is.
+- **Not built:** ONNX import, video sources, and "Send to training project".
 
 ### Survey timeline: not installed, and unproven on real surveys (opened 2026-09-23)
 

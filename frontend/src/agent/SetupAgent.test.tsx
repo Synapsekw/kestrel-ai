@@ -56,7 +56,7 @@ function routes(hasKey = true): FakeRoute[] {
       body: { message: "Here is your plan.", plan, model_name: "configured-gpt" },
     },
     { method: "POST", path: /\/projects$/, body: exampleProject },
-    { method: "POST", path: /\/acquire-starter$/, body: { job: done } },
+    { method: "POST", path: /\/library\/starters\/[^/]+\/acquire$/, body: { job: done } },
     { method: "GET", path: /\/jobs\/[^/]+$/, body: done },
     { method: "POST", path: /\/sources$/, body: { source: exampleSource, job: { ...done, id: "import-1" } } },
     { method: "GET", path: /\/images$/, body: { ...exampleImagePage, next_cursor: "next-page" } },
@@ -140,6 +140,11 @@ describe("Setup agent", () => {
     expect(screen.getByLabelText("Message")).toHaveValue("");
     expect(screen.queryByRole("link", { name: "Review suggestions" })).toBeNull();
     expect(requests.filter((r) => r.method === "POST" && r.url === "/api/v1/projects")).toHaveLength(1);
+    // The setup agent creates training projects; the starter lands in the app-wide library.
+    expect(requests.find((r) => r.method === "POST" && r.url === "/api/v1/projects")?.body).toMatchObject({
+      kind: "train",
+    });
+    expect(requests.some((r) => r.url === "/api/v1/library/starters/yolo26n/acquire")).toBe(true);
     expect(requests.find((r) => r.method === "POST" && r.url.endsWith("/query-runs"))?.body).toMatchObject({
       image_ids: [exampleImagePage.items[0].id],
       provider: "openai",
@@ -164,7 +169,7 @@ describe("Setup agent", () => {
   });
   it("keeps a created project when starter acquisition fails and retries without recreating", async () => {
     const rs = routes();
-    const acquire = rs.find((r) => r.path.test("/acquire-starter"))!;
+    const acquire = rs.find((r) => r.path.test("/api/v1/library/starters/yolo26n/acquire"))!;
     acquire.status = 503;
     acquire.body = errorBody("unavailable", "Starter temporarily unavailable");
     const { api, requests } = fakeClient(rs);

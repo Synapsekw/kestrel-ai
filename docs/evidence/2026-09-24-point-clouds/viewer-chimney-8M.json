@@ -1,0 +1,23 @@
+{
+  "mode": "perf",
+  "budget": 8000000,
+  "cloud": {
+    "id": "a9581f4d-0a46-4f03-a3ef-0d65c71dbb55",
+    "points": 21697184
+  },
+  "firstPointsMs": 97.10000002384186,
+  "settledMs": 611.7000000476837,
+  "points": 460088,
+  "orbitFrames": 568,
+  "orbitP50Ms": 17.699999999999818,
+  "orbitP95Ms": 18.100000000000364,
+  "colours": {
+    "total": 527440,
+    "background": 0,
+    "red": 88,
+    "green": 0,
+    "white": 20
+  },
+  "whiteShareOfPoints": 0.00003791900500530866,
+  "webviewPeakGB": 0.67
+}

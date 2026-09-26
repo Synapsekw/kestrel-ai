@@ -62,18 +62,18 @@ test("pre-annotation model selection patches the project and tolerates a missing
   await select.selectOption("");
   expect((await patched).postDataJSON()).toEqual({ preannotation_model_id: null });
 
-  await page.route(`**/api/v1/projects/${P}/models*`, (route) =>
+  await page.route(`**/api/v1/library/models*`, (route) =>
     route.fulfill({
-      status: 501,
+      status: 503,
       contentType: "application/json",
       headers: { "Access-Control-Allow-Origin": "*" },
       body: JSON.stringify({
-        error: { code: "not_implemented", message: "models arrive with S3", details: {} },
+        error: { code: "library_unavailable", message: "library.db is not a database", details: {} },
       }),
     }),
   );
   await page.reload();
-  await expect(page.getByRole("note")).toContainText("The model registry is not available yet");
+  await expect(page.getByRole("note")).toContainText("The model library could not be opened");
   await expect(page.getByLabel("Pre-annotation model")).toBeDisabled();
 });
 

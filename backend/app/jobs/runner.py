@@ -11,7 +11,7 @@ from app.db.models import Job
 from app.errors import not_found
 from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.events import EventBus
-from app.jobs.registry import get_job_type
+from app.jobs.registry import cancelled_before_start_hook, get_job_type
 from app.projects.service import ProjectHandle
 
 PROGRESS_DB_INTERVAL_S = 0.25
@@ -29,6 +29,11 @@ class JobContext:
     ):
         self.runner, self.project, self.job_id, self.params, self.log = runner, project, job_id, params, log
         self.cancelled = threading.Event()
+        # Both under the runner's lock: `started` once a worker has taken the job, `settled` once a
+        # cancel has ended it while it was still queued (the worker then skips it).
+        self.started = False
+        self.settled = False
+        self.on_cancelled_before_start = None
         self._last_db_write = 0.0
         # The newest message, stored with the terminal state: the throttled write may have skipped it.
         self.last_message: str | None = None
@@ -76,6 +81,9 @@ class JobRunner:
         self._pool: ThreadPoolExecutor | None = None
         self._contexts: dict[str, JobContext] = {}
         self._lock = threading.Lock()
+        # The app-wide model library (a LibraryHandle), wired in the lifespan like `keys`; None when
+        # it could not be opened. Jobs that resolve library models read it from here.
+        self.library = None
 
     def start(self) -> None:
         self._pool = ThreadPoolExecutor(max_workers=self._workers, thread_name_prefix="job")
@@ -125,6 +133,7 @@ class JobRunner:
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         logger.addHandler(handler)
         ctx = JobContext(self, project, job.id, params, logger)
+        ctx.on_cancelled_before_start = cancelled_before_start_hook(type)
         with self._lock:
             self._contexts[job.id] = ctx
         self._pool.submit(self._run, ctx, fn)
@@ -135,6 +144,18 @@ class JobRunner:
             ctx = self._contexts.get(job_id)
         if ctx is not None:
             ctx.cancelled.set()
+            with self._lock:
+                claimed = not ctx.started and not ctx.settled
+                ctx.settled = ctx.settled or claimed
+            if claimed:
+                # Still queued behind other jobs: end it now, not when a worker frees up, so its
+                # rows settle (and the UI hears of it) at once.
+                self._cancelled_before_start(ctx, ctx.on_cancelled_before_start)
+                self._finish(ctx, state="cancelled")
+                ctx.log.info("job cancelled before it started")
+                with self._lock:  # no longer live: a delete waiting on it may go ahead
+                    self._contexts.pop(job_id, None)
+                self._close_log(ctx)
             return self.get(project, job_id)
         job = self.get(project, job_id)
         if job.state == "queued":  # left over from a previous process
@@ -176,7 +197,12 @@ class JobRunner:
 
     def _run(self, ctx: JobContext, fn) -> None:
         try:
+            with self._lock:
+                if ctx.settled:  # a cancel ended it while it was queued
+                    return
+                ctx.started = True
             if ctx.cancelled.is_set():
+                self._cancelled_before_start(ctx, ctx.on_cancelled_before_start)
                 raise JobCancelled()
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
             ctx.log.info("job %s started", ctx.job_id)
@@ -198,6 +224,17 @@ class JobRunner:
             self._close_log(ctx)
             with self._lock:
                 self._contexts.pop(ctx.job_id, None)
+
+    @staticmethod
+    def _cancelled_before_start(ctx: JobContext, hook) -> None:
+        """Before the terminal `cancelled` write, so a client that reloads on `job.state` already
+        reads the settled rows. A failing hook is logged; the job still ends `cancelled`."""
+        if hook is None:
+            return
+        try:
+            hook(ctx)
+        except Exception:
+            log.exception("the cancel hook of queued job %s failed", ctx.job_id)
 
     def _finish(self, ctx: JobContext, **fields) -> None:
         """Terminal state write; a DB failure here is logged and never escapes into the executor future."""

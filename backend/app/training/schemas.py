@@ -1,14 +1,12 @@
-"""Request and response models for `/projects/{projectId}/models` (contract: Model, ModelPage, ...)."""
+"""Training, starter catalogue and export request models (contract: TrainRequest, StarterModel, ...).
 
-from datetime import datetime
-from typing import Any, Literal
+Library models themselves are in `app.library.schemas`."""
 
-from pydantic import BaseModel, Field, field_validator
+from typing import Literal
 
-from app.db.models import Model
+from pydantic import BaseModel, Field
+
 from app.jobs.schemas import JobOut
-
-ARTIFACT_KEYS = ("results_csv", "confusion_matrix", "pr_curve")
 
 
 class ClassMetrics(BaseModel):
@@ -25,74 +23,6 @@ class ModelMetrics(BaseModel):
     precision: float
     recall: float
     per_class: list[ClassMetrics] = Field(default_factory=list)
-
-
-class ModelOut(BaseModel):
-    id: str
-    name: str
-    kind: Literal["imported", "trained"]
-    weights_path: str
-    base_weights: str | None
-    dataset_id: str | None
-    hyperparameters: dict[str, Any]
-    metrics: ModelMetrics | None
-    class_names: list[str]
-    class_aliases: dict[str, str]
-    exports: dict[str, str]
-    artifacts: dict[str, str]
-    run_id: str | None
-    train_gsd_cm: float | None
-    created_at: datetime
-
-    @classmethod
-    def from_row(cls, row: Model) -> "ModelOut":
-        artifacts = {k: v for k, v in (row.artifacts or {}).items() if k in ARTIFACT_KEYS and v}
-        return cls(
-            id=row.id,
-            name=row.name,
-            kind=row.kind,
-            weights_path=row.weights_path,
-            base_weights=row.base_weights,
-            dataset_id=row.dataset_id,
-            hyperparameters=row.hyperparameters or {},
-            metrics=ModelMetrics(**row.metrics) if row.metrics else None,
-            class_names=list(row.class_names or []),
-            class_aliases=dict(row.class_aliases or {}),
-            exports=dict(row.exports or {}),
-            artifacts=artifacts,
-            run_id=row.run_id,
-            train_gsd_cm=row.train_gsd_cm,
-            created_at=row.created_at,
-        )
-
-
-class ModelGsdEstimate(BaseModel):
-    train_gsd_cm: float
-    image_gsd_cm: float
-    median_alt_m: float
-    focal_mm: float
-    sensor_width_mm: float
-    sensor_source: Literal["focal_plane", "crop_factor"]
-    sample_size: int
-    imgsz: int
-    median_object_m: float
-    per_class_m: dict[str, float]
-    plausible: bool
-
-
-class ModelPatch(BaseModel):
-    train_gsd_cm: float | None = Field(default=None, gt=0)
-
-
-class ModelPage(BaseModel):
-    items: list[ModelOut]
-    next_cursor: str | None
-
-
-class ModelImport(BaseModel):
-    name: str = Field(min_length=1)
-    weights_path: str = Field(min_length=1)
-    class_aliases: dict[str, str] = Field(default_factory=dict)
 
 
 class TrainRequest(BaseModel):
@@ -120,20 +50,6 @@ class StarterModelOut(BaseModel):
 class StarterModelPage(BaseModel):
     items: list[StarterModelOut]
     next_cursor: str | None
-
-
-class StarterModelImport(BaseModel):
-    key: str
-    name: str | None = Field(None, min_length=1)
-
-    @field_validator("key")
-    @classmethod
-    def known_starter(cls, value: str) -> str:
-        from app.training.starter import STARTER_KEYS
-
-        if value not in STARTER_KEYS:
-            raise ValueError("Choose a supported detection starter model.")
-        return value
 
 
 class ExportRequest(BaseModel):

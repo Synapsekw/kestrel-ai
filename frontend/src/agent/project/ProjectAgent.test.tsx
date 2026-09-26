@@ -376,6 +376,7 @@ describe("screenRoute", () => {
   it("encodes the image id of an editor route", () => {
     expect(screenRoute("p1", { screen: "editor", image_id: "a/b?c" })).toBe("/p/p1/edit/a%2Fb%3Fc");
     expect(screenRoute("p1", { screen: "editor", image_id: null })).toBeNull();
-    expect(screenRoute("p1", { screen: "detect", image_id: null })).toBe("/p/p1/query");
+    // Detection runs are started and listed on Runs; the old Detect screen is no longer a step.
+    expect(screenRoute("p1", { screen: "detect", image_id: null })).toBe("/p/p1/runs");
   });
 });

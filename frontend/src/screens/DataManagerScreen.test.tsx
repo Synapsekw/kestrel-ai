@@ -4,6 +4,7 @@ import { Route, Routes, useLocation } from "react-router-dom";
 import { exampleImagePage, exampleProject, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
 import { useChangesStore } from "@/store/changes";
+import { useProjectKindStore } from "@/app/useProjectKind";
 import { DataManagerScreen } from "./DataManagerScreen";
 
 function Search() {
@@ -33,7 +34,10 @@ function renderScreen(route: string) {
 }
 
 describe("DataManagerScreen", () => {
-  beforeEach(() => useChangesStore.setState({ imagesRevision: 0, boxesRevision: {} }));
+  beforeEach(() => {
+    useChangesStore.setState({ imagesRevision: 0, boxesRevision: {} });
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "train" } });
+  });
 
   it("is titled Images and lists the shortcuts behind the keyboard button", async () => {
     renderScreen(`/p/${PROJECT_ID}/data`);
@@ -64,5 +68,13 @@ describe("DataManagerScreen", () => {
     expect(screen.getByText("Every image is labeled. Create a dataset next.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(screen.queryByText(/Every image is labeled/)).toBeNull();
+  });
+
+  it("does not point a detection project at Datasets", async () => {
+    useProjectKindStore.setState({ byProject: { [PROJECT_ID]: "detect" } });
+    renderScreen(`/p/${PROJECT_ID}/data?notice=all-labeled`);
+    await screen.findByRole("list", { name: "Images" });
+    expect(screen.queryByText(/Every image is labeled/)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Open Datasets" })).toBeNull();
   });
 });

@@ -7,7 +7,7 @@ sensor read off FocalPlaneXResolution, flown at a median 191.02 m, letterboxed t
 import pytest
 from sqlalchemy import select
 
-from app.training.gsd import (
+from app.library.gsd import (
     PLAUSIBLE_M,
     Intrinsics,
     image_gsd_cm,
@@ -117,7 +117,13 @@ def test_plausibility_does_not_catch_a_subtle_error():
     assert plausible(8.51 * 2) is True
 
 
-BASE = "/api/v1/projects"
+# ------------------------------------------------------------------ the library endpoint
+#
+# The library is app-wide, so the dataset the estimate measures lives in another database: the
+# model's `provenance` snapshot names the originating project folder and dataset id, and the route
+# opens that project the same way `/usage` does.
+
+LIB = "/api/v1/library"
 AERIA_EXIF = {
     "focal_mm": 18.5,
     "exif_width": 6000,
@@ -128,104 +134,102 @@ AERIA_EXIF = {
 }
 
 
-@pytest.fixture
-def imported_model(handle):
-    from app.db.models import Model
+def _dataset_of_frames(handle, make_jpeg, tmp_path, *, name, w, h, site, count, classes, boxes):
+    """A dataset of `count` frames carrying real Aeria X lens EXIF, with `boxes` on each frame.
 
-    row = Model(
-        name="yolo11m-coco",
-        kind="imported",
-        weights_path="models/yolo11m.pt",
-        dataset_id=None,
-        hyperparameters={},
-        class_names=["truck"],
-    )
-    with handle.session() as s:
-        s.add(row)
-        s.flush()
-        model_id = row.id
-    return model_id
-
-
-@pytest.fixture
-def trained_model_with_dataset(handle, make_jpeg, tmp_path):
-    """A dataset of 12 frames carrying real Aeria X lens EXIF, and a model trained on it.
-
-    Each frame also carries one excavator and one dump_truck box, sized (in stored-image pixels)
-    so that at the dataset's ~6.055 cm/px image GSD they imply real objects of roughly 8 m and
-    9.5 m: both inside the plausible band, so `plausible` comes back True.
-
-    The boxes are `review_state="accepted"`, which is how `datasets/boxes.py` creates a person-drawn
+    Each box is `review_state="accepted"`, which is how `datasets/boxes.py` creates a person-drawn
     box. The model default is `"unreviewed"`, i.e. a suggestion nobody has looked at, and those are
     not part of the training set the cross-check is supposed to measure.
     """
-    from app.db.models import Box, Dataset, DatasetImage, Image, Model, Source
+    from app.db.models import Box, Dataset, DatasetImage, Image, Source
 
-    classes = [{"id": "c1", "name": "excavator"}, {"id": "c2", "name": "dump_truck"}]
     with handle.session() as s:
-        source = Source(folder=str(tmp_path), site="test", image_count=12)
+        source = Source(folder=str(tmp_path / site), site=site, image_count=count)
         s.add(source)
         s.flush()
-        dataset = Dataset(name="ICVD_V3", classes=classes, split_method="by_group", path="datasets/icvd_v3")
+        dataset = Dataset(
+            name=name, classes=classes, split_method="by_group", path=f"datasets/{name.lower()}"
+        )
         s.add(dataset)
         s.flush()
-        for i in range(12):
-            rel = f"images/test/f{i:03d}.jpg"
-            make_jpeg(handle.folder / rel, 4000, 2667, seed=i, exif=AERIA_EXIF)
-            img = Image(path=rel, width=4000, height=2667, source_id=source.id, alt=191.0)
+        for i in range(count):
+            rel = f"images/{site}/f{i:03d}.jpg"
+            make_jpeg(handle.folder / rel, w, h, seed=i, exif=AERIA_EXIF)
+            img = Image(path=rel, width=w, height=h, source_id=source.id, alt=191.0)
             s.add(img)
             s.flush()
             s.add(DatasetImage(dataset_id=dataset.id, image_id=img.id, split="train"))
-            s.add(
-                Box(
-                    image_id=img.id,
-                    class_id="c1",
-                    x=1800,
-                    y=1200,
-                    w=132,
-                    h=110,
-                    provenance_kind="person",
-                    review_state="accepted",
+            for class_id, bw, bh in boxes:
+                s.add(
+                    Box(
+                        image_id=img.id,
+                        class_id=class_id,
+                        x=100,
+                        y=100,
+                        w=bw,
+                        h=bh,
+                        provenance_kind="person",
+                        review_state="accepted",
+                    )
                 )
-            )
-            s.add(
-                Box(
-                    image_id=img.id,
-                    class_id="c2",
-                    x=2200,
-                    y=1300,
-                    w=157,
-                    h=120,
-                    provenance_kind="person",
-                    review_state="accepted",
-                )
-            )
-        model = Model(
-            name="ICVD_V4",
-            kind="trained",
-            weights_path="models/icvd-v4.pt",
-            dataset_id=dataset.id,
-            hyperparameters={"imgsz": 1280, "epochs": 50},
-            class_names=["excavator", "dump_truck"],
-        )
-        s.add(model)
-        s.flush()
-        model_id = model.id
-    return model_id
+        return dataset.id
 
 
-def test_gsd_estimate_endpoint_returns_the_scale_and_its_evidence(
-    client, project_id, trained_model_with_dataset
-):
-    model_id = trained_model_with_dataset
-    r = client.get(f"{BASE}/{project_id}/models/{model_id}/gsd-estimate")
+@pytest.fixture
+def trained_model(app, handle, make_jpeg, tmp_path, project_id):
+    """A library model whose provenance points at a 12-frame dataset in the test project.
+
+    The boxes are sized (in stored-image pixels) so that at the dataset's ~6.055 cm/px image GSD
+    they imply real objects of roughly 8 m and 9.5 m: both inside the plausible band, so
+    `plausible` comes back True.
+    """
+    from library_helpers import add_library_model
+
+    dataset_id = _dataset_of_frames(
+        handle,
+        make_jpeg,
+        tmp_path,
+        name="ICVD_V3",
+        w=4000,
+        h=2667,
+        site="test",
+        count=12,
+        classes=[{"id": "c1", "name": "excavator"}, {"id": "c2", "name": "dump_truck"}],
+        boxes=[("c1", 132, 110), ("c2", 157, 120)],
+    )
+    row = add_library_model(
+        app,
+        tmp_path,
+        name="ICVD_V4",
+        origin="trained",
+        hyperparameters={"imgsz": 1280, "epochs": 50},
+        provenance={
+            "project_id": project_id,
+            "project_folder": str(handle.folder),
+            "dataset_id": dataset_id,
+            "dataset_name": "ICVD_V3",
+        },
+    )
+    return row.id, dataset_id
+
+
+@pytest.fixture
+def imported_model(app, tmp_path):
+    """`yolo11m-coco`: no dataset, nothing to measure."""
+    from library_helpers import add_library_model
+
+    return add_library_model(app, tmp_path, name="yolo11m-coco").id
+
+
+def test_gsd_estimate_returns_the_scale_and_its_evidence(client, trained_model):
+    model_id, _ = trained_model
+    r = client.get(f"{LIB}/models/{model_id}/gsd-estimate")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["sensor_source"] == "focal_plane"
     assert body["focal_mm"] == pytest.approx(18.5, abs=0.01)
     assert body["sensor_width_mm"] == pytest.approx(23.456, abs=0.05)
     assert body["train_gsd_cm"] == pytest.approx(18.92, rel=0.02)
-    assert body["sample_size"] <= 8
     assert body["plausible"] is True
     # Pins the arithmetic (Box.w, not Box.h -- the fixture's h values of 110/120 px would compute
     # to ~6.66/~7.27 m instead, still inside the plausible band but nowhere near these numbers)
@@ -234,69 +238,53 @@ def test_gsd_estimate_endpoint_returns_the_scale_and_its_evidence(
     assert body["median_object_m"] == pytest.approx(8.75, abs=0.05)
 
 
+def test_the_exif_sample_is_capped(client, trained_model):
+    """12 frames in the dataset, at most EXIF_SAMPLE headers opened."""
+    from app.library.gsd import EXIF_SAMPLE
+
+    model_id, _ = trained_model
+    assert client.get(f"{LIB}/models/{model_id}/gsd-estimate").json()["sample_size"] <= EXIF_SAMPLE
+
+
 @pytest.fixture
-def portrait_model(handle, make_jpeg, tmp_path):
-    """The same camera, but frames *stored* portrait — `prepare.py`'s `exif_transpose` of a frame
+def portrait_model(app, handle, make_jpeg, tmp_path):
+    """The same camera, but frames *stored* portrait - `prepare.py`'s `exif_transpose` of a frame
     shot at orientation 6/8. The EXIF still reports the 6000 px long axis, as a real file does."""
-    from app.db.models import Box, Dataset, DatasetImage, Image, Model, Source
+    from library_helpers import add_library_model
 
-    with handle.session() as s:
-        source = Source(folder=str(tmp_path / "p"), site="portrait", image_count=2)
-        s.add(source)
-        s.flush()
-        dataset = Dataset(
-            name="ICVD_V3_portrait",
-            classes=[{"id": "c1", "name": "excavator"}],
-            split_method="by_group",
-            path="datasets/icvd_v3_p",
-        )
-        s.add(dataset)
-        s.flush()
-        for i in range(2):
-            rel = f"images/portrait/p{i:03d}.jpg"
-            make_jpeg(handle.folder / rel, 2667, 4000, seed=100 + i, exif=AERIA_EXIF)
-            img = Image(path=rel, width=2667, height=4000, source_id=source.id, alt=191.0)
-            s.add(img)
-            s.flush()
-            s.add(DatasetImage(dataset_id=dataset.id, image_id=img.id, split="train"))
-            s.add(
-                Box(
-                    image_id=img.id,
-                    class_id="c1",
-                    x=100,
-                    y=100,
-                    w=132,
-                    h=110,
-                    provenance_kind="person",
-                    review_state="accepted",
-                )
-            )
-        model = Model(
-            name="ICVD_V4_portrait",
-            kind="trained",
-            weights_path="models/icvd-v4-p.pt",
-            dataset_id=dataset.id,
-            hyperparameters={"imgsz": 1280},
-            class_names=["excavator"],
-        )
-        s.add(model)
-        s.flush()
-        return model.id
+    dataset_id = _dataset_of_frames(
+        handle,
+        make_jpeg,
+        tmp_path,
+        name="ICVD_V3_portrait",
+        w=2667,
+        h=4000,
+        site="portrait",
+        count=2,
+        classes=[{"id": "c1", "name": "excavator"}],
+        boxes=[("c1", 132, 110)],
+    )
+    return add_library_model(
+        app,
+        tmp_path,
+        name="ICVD_V4_portrait",
+        origin="trained",
+        hyperparameters={"imgsz": 1280},
+        provenance={"project_folder": str(handle.folder), "dataset_id": dataset_id},
+    ).id
 
 
-def test_a_portrait_stored_frame_gives_the_same_scale(client, project_id, portrait_model):
+def test_a_portrait_stored_frame_gives_the_same_scale(client, portrait_model):
     # Dividing the ground width by the stored *width* (2667) and then letterboxing by the long side
     # (4000) does not cancel: it returned 28.4 cm/px, 1.5x too large, and dragged the cross-check's
-    # 8 m machines to 12 m — still inside the plausible band, so it would be offered silently.
-    body = client.get(f"{BASE}/{project_id}/models/{portrait_model}/gsd-estimate").json()
+    # 8 m machines to 12 m - still inside the plausible band, so it would be offered silently.
+    body = client.get(f"{LIB}/models/{portrait_model}/gsd-estimate").json()
     assert body["train_gsd_cm"] == pytest.approx(18.92, rel=0.02)
     assert body["image_gsd_cm"] == pytest.approx(6.055, abs=0.01)
     assert body["per_class_m"]["excavator"] == pytest.approx(7.99, abs=0.05)
 
 
-def test_the_cross_check_ignores_unreviewed_suggestions_and_deleted_classes(
-    client, project_id, handle, trained_model_with_dataset
-):
+def test_the_cross_check_ignores_unreviewed_suggestions_and_deleted_classes(client, handle, trained_model):
     """The evidence must be computed over the training set, not over everything in the table.
 
     On a project where suggestions were generated before curation, an unreviewed box is exactly
@@ -305,8 +293,8 @@ def test_the_cross_check_ignores_unreviewed_suggestions_and_deleted_classes(
     """
     from app.db.models import Box, DatasetImage
 
-    model_id = trained_model_with_dataset
-    before = client.get(f"{BASE}/{project_id}/models/{model_id}/gsd-estimate").json()
+    model_id, _ = trained_model
+    before = client.get(f"{LIB}/models/{model_id}/gsd-estimate").json()
 
     with handle.session() as s:
         image_id = s.execute(select(DatasetImage.image_id)).scalars().first()
@@ -328,28 +316,65 @@ def test_the_cross_check_ignores_unreviewed_suggestions_and_deleted_classes(
             )
         )
 
-    after = client.get(f"{BASE}/{project_id}/models/{model_id}/gsd-estimate").json()
+    after = client.get(f"{LIB}/models/{model_id}/gsd-estimate").json()
     assert after["per_class_m"] == before["per_class_m"]
     assert after["median_object_m"] == before["median_object_m"]
     assert after["plausible"] is True
     assert "c9" not in after["per_class_m"]
 
 
-def test_gsd_estimate_is_404_for_a_model_with_no_dataset(client, project_id, imported_model):
-    r = client.get(f"{BASE}/{project_id}/models/{imported_model}/gsd-estimate")
-    assert r.status_code == 404
+def test_gsd_estimate_is_404_for_a_model_with_no_dataset(client, imported_model):
+    assert client.get(f"{LIB}/models/{imported_model}/gsd-estimate").status_code == 404
 
 
-def test_patch_stores_the_scale_and_it_comes_back_on_the_model(
-    client, project_id, trained_model_with_dataset
-):
-    model_id = trained_model_with_dataset
-    r = client.patch(f"{BASE}/{project_id}/models/{model_id}", json={"train_gsd_cm": 18.92})
+def test_gsd_estimate_is_404_when_the_project_folder_is_gone(client, app, tmp_path):
+    """An app-wide library outlives the project it was trained in. No fallback is invented."""
+    from library_helpers import add_library_model
+
+    orphan = add_library_model(
+        app,
+        tmp_path,
+        name="orphan",
+        origin="trained",
+        hyperparameters={"imgsz": 1280},
+        provenance={"project_folder": str(tmp_path / "deleted"), "dataset_id": "d-gone"},
+    )
+    assert client.get(f"{LIB}/models/{orphan.id}/gsd-estimate").status_code == 404
+
+
+def test_patch_stores_the_scale_and_it_comes_back_on_the_model(client, trained_model):
+    model_id, _ = trained_model
+    r = client.patch(f"{LIB}/models/{model_id}", json={"train_gsd_cm": 18.92})
     assert r.status_code == 200, r.text
     assert r.json()["train_gsd_cm"] == pytest.approx(18.92)
-    assert client.get(f"{BASE}/{project_id}/models/{model_id}").json()["train_gsd_cm"] == pytest.approx(18.92)
+    assert client.get(f"{LIB}/models/{model_id}").json()["train_gsd_cm"] == pytest.approx(18.92)
 
 
-def test_patch_rejects_a_non_positive_scale(client, project_id, trained_model_with_dataset):
-    r = client.patch(f"{BASE}/{project_id}/models/{trained_model_with_dataset}", json={"train_gsd_cm": 0})
-    assert r.status_code == 422
+def test_patch_rejects_a_non_positive_scale(client, trained_model):
+    model_id, _ = trained_model
+    assert client.patch(f"{LIB}/models/{model_id}", json={"train_gsd_cm": 0}).status_code == 422
+
+
+def test_patch_leaves_the_scale_alone_when_the_field_is_absent(client, trained_model):
+    model_id, _ = trained_model
+    client.patch(f"{LIB}/models/{model_id}", json={"train_gsd_cm": 18.92})
+    client.patch(f"{LIB}/models/{model_id}", json={"notes": "notes only"})
+    assert client.get(f"{LIB}/models/{model_id}").json()["train_gsd_cm"] == pytest.approx(18.92)
+
+
+def test_the_derivation_the_training_job_calls(app, handle, trained_model):
+    """`training/jobs.py` derives the scale from the open project before registering the model, so
+    it does not depend on provenance it has not written yet."""
+    from app.library import service
+
+    _, dataset_id = trained_model
+    estimate = service.estimate_for_dataset(handle, dataset_id, 1280)
+    assert estimate is not None
+    assert estimate.train_gsd_cm == pytest.approx(18.92, rel=0.02)
+    assert estimate.plausible is True
+
+
+def test_an_unmeasurable_dataset_yields_no_estimate(handle):
+    from app.library import service
+
+    assert service.estimate_for_dataset(handle, "no-such-dataset", 1280) is None

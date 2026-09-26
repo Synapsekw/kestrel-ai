@@ -1,0 +1,13 @@
+============================= test session starts =============================
+platform win32 -- Python 3.11.15, pytest-9.1.1, pluggy-1.6.0 -- E:\Dev\Yolo\app\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default'
+rootdir: E:\Dev\Yolo\app\.claude\worktrees\point-clouds-t18\backend
+configfile: pyproject.toml
+plugins: anyio-4.15.1, hypothesis-6.168.0, asyncio-1.4.0, schemathesis-4.27.3
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 20 items / 19 deselected / 1 selected
+
+tests/test_pointcloud_api.py::test_195m_points_refused_with_4_gb_free PASSED [100%]
+
+====================== 1 passed, 19 deselected in 1.83s =======================

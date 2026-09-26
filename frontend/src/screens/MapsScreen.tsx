@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type OlMap from "ol/Map";
 import { boundingExtent } from "ol/extent";
 import {
@@ -12,6 +12,7 @@ import {
   type MapZone,
 } from "@contract/client";
 import { useApi, useBackend } from "@/api/client";
+import { listPointClouds, type PointCloud } from "@/api/clouds";
 import { messageOf } from "@/api/errors";
 import {
   createLabel,
@@ -32,16 +33,21 @@ import {
   type MapLabelUpdate,
 } from "@/api/maps";
 import { useProject } from "@/api/project";
+import { SiteAreaDrawBar } from "@/analytics/SiteAreaDrawBar";
+import { useSiteAreaOverlay } from "@/analytics/useSiteAreaOverlay";
+import { addMapDetection, type MapDetection } from "@/api/review";
 import { pushLog } from "@/app/diagnostics";
+import { cloudsForMap, jumpQuery, mapPixelToCloud, parseAt, type XY } from "@/clouds/jump";
 import { isTypingTarget } from "@/editor/hotkeys";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { ExportMapDialog } from "@/maps/ExportMapDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
 import { LabelPanel } from "@/maps/LabelPanel";
+import { MapContextMenu, type MapMenu } from "@/maps/MapContextMenu";
+import { MapReviewPanel } from "@/maps/MapReviewPanel";
 import { MapList } from "@/maps/MapList";
 import { MapOverlay } from "@/maps/MapOverlay";
 import { MapView } from "@/maps/MapView";
-import { NewRunDialog } from "@/maps/NewRunDialog";
 import { ResultsPanel, type CountScope } from "@/maps/ResultsPanel";
 import { RunList } from "@/maps/RunList";
 import { ScorePanel } from "@/maps/ScorePanel";
@@ -51,6 +57,7 @@ import { useLabelLayers, type Tool } from "@/maps/labelLayers";
 import { LabelHistory, outsideZones, pickClassCommand, type LabelApi } from "@/maps/labelModel";
 import { type Match, type RunLayerSpec, useRunLayer } from "@/maps/runLayer";
 import { matchLookup } from "@/maps/scoreView";
+import { useAtMarker } from "@/maps/useAtMarker";
 import {
   MAX_COMPARE,
   boxFacts,
@@ -59,6 +66,7 @@ import {
   type BoxFacts,
   type BoxGeom,
 } from "@/maps/runModel";
+import { RunDialog } from "@/runs/RunDialog";
 import { Alert, Button, EmptyState, Segmented, toast } from "@/ui";
 
 /**
@@ -127,8 +135,14 @@ function MapFacts({ m }: { m: GeoMap }) {
   );
 }
 
-export function MapsScreen() {
+/**
+ * The Maps screen. `readOnly` shows a training project's maps from before the split: maps, runs,
+ * results, scores and export stay; importing, new runs, labeling, zones and deleting are gone.
+ */
+export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {
   const { projectId = "", mapId } = useParams();
+  const mapsBase = readOnly ? `/p/${projectId}/past/maps` : `/p/${projectId}/maps`;
+  const Heading = readOnly ? "h2" : "h1";
   const api = useApi();
   const navigate = useNavigate();
   const { baseUrl, token } = useBackend();
@@ -139,6 +153,13 @@ export function MapsScreen() {
   const [olMap, setOlMap] = useState<OlMap | null>(null);
   const [readout, setReadout] = useState<Readout | null>(null);
   const [resolution, setResolution] = useState(1);
+  // Review mode (`?mode=review&run=<id>`, plan 2 unit V): one run, reviewed detection by detection.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const reviewMode = !readOnly && searchParams.get("mode") === "review";
+  const wantedReviewRun = searchParams.get("run");
+  const [reviewCurrent, setReviewCurrent] = useState<MapDetection | null>(null);
+  const [reviewDrawing, setReviewDrawing] = useState(false);
+  const [reviewDrawClass, setReviewDrawClass] = useState("");
 
   const [runs, setRuns] = useState<MapRun[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
@@ -149,7 +170,20 @@ export function MapsScreen() {
   const [wholeMap, setWholeMap] = useState<Record<string, Record<string, number>>>({});
   const [inView, setInView] = useState<Record<string, Record<string, number>>>({});
   const [inViewTruncated, setInViewTruncated] = useState<Record<string, boolean>>({});
-  const [popover, setPopover] = useState<{ x: number; y: number; facts: BoxFacts } | null>(null);
+  const [popover, setPopover] = useState<{
+    x: number;
+    y: number;
+    facts: BoxFacts;
+    box: BoxGeom;
+  } | null>(null);
+  const [clouds, setClouds] = useState<PointCloud[]>([]);
+  const [menu, setMenu] = useState<MapMenu | null>(null);
+  useEffect(() => {
+    if (readOnly) return;
+    void listPointClouds(api, projectId)
+      .then(setClouds)
+      .catch(() => setClouds([])); // no clouds is a normal state; the jump simply is not offered
+  }, [api, projectId, readOnly]);
 
   const [rightTab, setRightTab] = useState<RightTab>("results");
   const [zones, setZones] = useState<MapZone[]>([]);
@@ -188,6 +222,53 @@ export function MapsScreen() {
   useOnJobsFinished("map_import", reload);
 
   const active = maps?.find((m) => m.id === mapId) ?? null;
+  const linkedClouds = useMemo(
+    () => (active?.geotransform && active.proj4 ? cloudsForMap(clouds, active.id) : []),
+    [clouds, active],
+  );
+  const openIn3d = useCallback(
+    (cloud: PointCloud, px: number, py: number, box?: BoxGeom) => {
+      if (!active) return;
+      const at = mapPixelToCloud(active, cloud, px, py);
+      const fp: XY[] | undefined = box
+        ? [
+            [box.x, box.y],
+            [box.x + box.w, box.y],
+            [box.x + box.w, box.y + box.h],
+            [box.x, box.y + box.h],
+          ].map(([x, y]) => mapPixelToCloud(active, cloud, x, y))
+        : undefined;
+      navigate(`/p/${projectId}/clouds/${cloud.id}${jumpQuery(at, fp)}`);
+    },
+    [active, navigate, projectId],
+  );
+  // A menu opened on one map never lingers over the next.
+  const activeId = active?.id ?? null;
+  const [menuMap, setMenuMap] = useState(activeId);
+  if (menuMap !== activeId) {
+    setMenuMap(activeId);
+    setMenu(null);
+  }
+  const at = useMemo(() => parseAt(searchParams), [searchParams]);
+  const { outside: atOutside } = useAtMarker(olMap, active, at);
+  useEffect(() => {
+    if (atOutside) toast("info", "This spot is outside the map");
+  }, [atOutside]);
+  useEffect(() => {
+    // A past (read-only) map has no clouds to jump to, so it keeps the browser's own menu.
+    if (!olMap || readOnly) return;
+    const viewport = olMap.getViewport();
+    const onContext = (e: MouseEvent) => {
+      e.preventDefault();
+      const [px, py] = fromOl(olMap.getEventCoordinate(e));
+      const r = viewport.getBoundingClientRect();
+      setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, px, py });
+    };
+    viewport.addEventListener("contextmenu", onContext);
+    return () => viewport.removeEventListener("contextmenu", onContext);
+  }, [olMap, readOnly]);
+  // Site areas (plan 2 unit A): outlines on the map, and the outline tool for `?draw=site-area`.
+  const siteAreas = useSiteAreaOverlay(olMap, active, projectId, !readOnly);
   const read = useMemo(() => (active ? makeReadout(active) : null), [active]);
   const tileUrl = active ? mapTileUrl(baseUrl, token, projectId, active.id) : "";
 
@@ -313,6 +394,29 @@ export function MapsScreen() {
     [selected, runs],
   );
 
+  // The run under review: the one in the address, else the map's pinned run, else its newest finished one.
+  const reviewRun = useMemo(() => {
+    if (!reviewMode) return null;
+    const finished = runs.filter((r) => r.state === "succeeded");
+    return (
+      runs.find((r) => r.id === wantedReviewRun) ?? finished.find((r) => r.pinned) ?? finished[0] ?? null
+    );
+  }, [reviewMode, wantedReviewRun, runs]);
+  // Reviewing a run draws it on the map on its own: a render-phase adjustment, like the map switch above.
+  if (reviewRun && (selected.length !== 1 || selected[0] !== reviewRun.id)) {
+    setSelected([reviewRun.id]);
+  }
+  const leaveReview = useCallback(() => {
+    setReviewCurrent(null);
+    setReviewDrawing(false);
+    setSearchParams((sp) => {
+      const next = new URLSearchParams(sp);
+      next.delete("mode");
+      next.delete("run");
+      return next;
+    });
+  }, [setSearchParams]);
+
   // Whole-map counts at the current confidence: one density cell covers the entire map.
   useEffect(() => {
     if (liveSelected.length === 0) return;
@@ -383,6 +487,10 @@ export function MapsScreen() {
     return out;
   }, [scoreErrors, liveSelected]);
 
+  const reviewSelectedId = reviewRun ? (reviewCurrent?.id ?? null) : null;
+  // Review walks every unreviewed detection, whatever its confidence, so the map under review draws
+  // them all: a detection filtered off the map could be framed but never shown or highlighted.
+  const layerMinConf = reviewRun ? 0 : minConf;
   const specFor = useCallback(
     (
       runId: string | undefined,
@@ -393,10 +501,11 @@ export function MapsScreen() {
       return {
         runId,
         dashed,
-        minConf,
+        minConf: layerMinConf,
         hidden,
         colours,
         matchOf,
+        selectedId: reviewSelectedId,
         nameOf: (id: string) => classes.find((c) => c.id === id)?.name,
         load: (bbox, c) => fetchDetections(api, projectId, runId, bbox, c),
         density: (c) => fetchDensity(api, projectId, runId, 128, c),
@@ -406,7 +515,7 @@ export function MapsScreen() {
         },
       };
     },
-    [api, projectId, minConf, hidden, colours, classes],
+    [api, projectId, layerMinConf, hidden, colours, reviewSelectedId, classes],
   );
   // Only the first (primary) run is coloured by match status: it is the run the Score tab's mistake
   // list and per-class table are built from, so it is the only one whose overlay stays coherent with
@@ -417,7 +526,7 @@ export function MapsScreen() {
     [specFor, liveSelected, overlay, primaryScore],
   );
   const spec2 = useMemo(() => specFor(liveSelected[1], true), [specFor, liveSelected]);
-  useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec1);
+  const primaryLayer = useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec1);
   useRunLayer(olMap, active ?? EMPTY_GEOMAP, spec2);
 
   const onStepMistake = useCallback(
@@ -431,6 +540,26 @@ export function MapsScreen() {
     },
     [olMap, active],
   );
+
+  // Review: frame each detection as it comes up, and refresh the boxes and counts after a write.
+  const onReviewCurrent = useCallback(
+    (d: MapDetection | null) => {
+      setReviewCurrent(d);
+      if (!d || !olMap || !active) return;
+      olMap.getView().fit(boundingExtent([toOl(d.x, d.y), toOl(d.x + d.w, d.y + d.h)]), {
+        padding: [160, 160, 160, 160],
+        maxZoom: active.tile_grid.max_zoom,
+        duration: 250,
+      });
+    },
+    [olMap, active],
+  );
+  const refreshPrimary = primaryLayer.refresh;
+  const onReviewChanged = useCallback(() => {
+    refreshPrimary();
+    reloadRuns();
+  }, [refreshPrimary, reloadRuns]);
+  const effectiveReviewClass = reviewDrawClass || classes[0]?.id || "";
 
   const effectiveClassId = activeClassId || classes[0]?.id || "";
   const warnIds = useMemo(() => outsideZones(labels, zones), [labels, zones]);
@@ -463,11 +592,20 @@ export function MapsScreen() {
     labels,
     zones,
     colours,
-    tool: rightTab === "labels" ? tool : "pan",
+    tool: reviewRun ? (reviewDrawing ? "box" : "pan") : rightTab === "labels" ? tool : "pan",
     selectedId,
     warnIds,
     matchOf: overlay ? matchLookup(primaryScore, "label") : undefined,
     onBox: (box) => {
+      if (reviewRun) {
+        // A missed object: it belongs to the run under review, never to the ground-truth labels.
+        if (!effectiveReviewClass) return;
+        const body = { class_id: effectiveReviewClass, x: box.x, y: box.y, w: box.w, h: box.h };
+        void addMapDetection(api, projectId, reviewRun.id, body)
+          .then(onReviewChanged)
+          .catch((err: unknown) => reportFailure("add the missed object", err));
+        return;
+      }
       if (!active || !effectiveClassId) return;
       const body: MapLabelCreate = { class_id: effectiveClassId, x: box.x, y: box.y, w: box.w, h: box.h };
       void labelApi
@@ -500,9 +638,10 @@ export function MapsScreen() {
     onSelect: setSelectedId,
   });
 
-  // Hotkeys: only while the Labels tab is open, and never while typing into a field.
+  // Hotkeys: only while the Labels tab is open (review has its own), and never while typing into a field.
+  const labelKeys = rightTab === "labels" && !reviewRun;
   useEffect(() => {
-    if (rightTab !== "labels") return;
+    if (!labelKeys) return;
     const onKey = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       const ctrl = e.ctrlKey || e.metaKey;
@@ -559,13 +698,15 @@ export function MapsScreen() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rightTab, labelApi, selectedId, labels, classes, bumpHistory, doUndo, doRedo, pickClass]);
+  }, [labelKeys, labelApi, selectedId, labels, classes, bumpHistory, doUndo, doRedo, pickClass]);
 
+  const reviewing = reviewRun !== null;
   // The box popover (spec section 7): the class, confidence, centre readout and size of whatever
   // detection box sits under the pointer.
   useEffect(() => {
     if (!olMap || !active) return;
     const onClick = (e: { pixel: number[] }) => {
+      setMenu(null); // any click on the map puts the right-click menu away
       // `kind === "detection"` excludes ground-truth label features, which share the `classId`
       // property but have no confidence to show (see `labelLayers.ts`).
       const feature = olMap.forEachFeatureAtPixel(e.pixel, (f) =>
@@ -587,11 +728,27 @@ export function MapsScreen() {
         classId: (feature.get("classId") as string) ?? "",
       };
       const confidence = (feature.get("confidence") as number | undefined) ?? 0;
-      setPopover({ x: e.pixel[0], y: e.pixel[1], facts: boxFacts(active, box, classes, confidence) });
+      if (reviewing) {
+        // Clicking a box in review makes it the one under review.
+        setReviewCurrent({
+          id: String(feature.getId()),
+          class_id: box.classId,
+          confidence,
+          x: box.x,
+          y: box.y,
+          w: box.w,
+          h: box.h,
+          angle: null,
+          review_state: (feature.get("reviewState") as MapDetection["review_state"]) ?? "unreviewed",
+          provenance_kind:
+            (feature.get("provenanceKind") as MapDetection["provenance_kind"]) ?? "local_model",
+        });
+      }
+      setPopover({ x: e.pixel[0], y: e.pixel[1], facts: boxFacts(active, box, classes, confidence), box });
     };
     olMap.on("singleclick", onClick);
     return () => olMap.un("singleclick", onClick);
-  }, [olMap, active, classes]);
+  }, [olMap, active, classes, reviewing]);
   useEffect(() => {
     if (!popover) return;
     const onKey = (e: KeyboardEvent) => {
@@ -600,6 +757,14 @@ export function MapsScreen() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [popover]);
+
+  if (maps && maps.length === 0 && readOnly) {
+    return (
+      <EmptyState icon="map" title="No past maps">
+        This project has no maps from before training and detection were split.
+      </EmptyState>
+    );
+  }
 
   if (maps && maps.length === 0 && !importing) {
     return (
@@ -622,13 +787,15 @@ export function MapsScreen() {
     <div className="flex h-full min-h-0 w-full">
       <section className="flex w-52 shrink-0 flex-col gap-4 overflow-y-auto border-r border-line p-3 xl:w-64">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold tracking-tight">Maps</h1>
-          <Button size="sm" icon="import" onClick={() => setImporting(true)}>
-            Import map
-          </Button>
+          <Heading className="text-xl font-semibold tracking-tight">Maps</Heading>
+          {!readOnly && (
+            <Button size="sm" icon="import" onClick={() => setImporting(true)}>
+              Import map
+            </Button>
+          )}
         </div>
         {maps ? (
-          <MapList projectId={projectId} maps={maps} activeId={mapId} />
+          <MapList projectId={projectId} maps={maps} activeId={mapId} basePath={mapsBase} />
         ) : (
           mapsError && (
             <Alert
@@ -647,15 +814,17 @@ export function MapsScreen() {
           <div className="flex flex-col gap-2 border-t border-line pt-3">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-ink">Runs</h2>
-              <Button
-                size="sm"
-                variant="primary"
-                icon="detect"
-                disabled={active.status !== "ready"}
-                onClick={() => setNewRun(true)}
-              >
-                New run
-              </Button>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="detect"
+                  disabled={active.status !== "ready"}
+                  onClick={() => setNewRun(true)}
+                >
+                  New run
+                </Button>
+              )}
             </div>
             <RunList
               projectId={projectId}
@@ -663,6 +832,7 @@ export function MapsScreen() {
               selected={selected}
               onToggle={(id) => setSelected((s) => toggleCompare(s, id))}
               onChanged={reloadRuns}
+              readOnly={readOnly}
             />
           </div>
         )}
@@ -678,6 +848,15 @@ export function MapsScreen() {
               onViewChange={(v) => setResolution(v.resolution)}
             />
             <MapOverlay map={olMap} geoMap={active} readout={readout} resolution={resolution} />
+            {siteAreas.drawMode && (
+              <SiteAreaDrawBar
+                projectId={projectId}
+                mapId={active.id}
+                polygon={siteAreas.polygon}
+                onCancel={siteAreas.cancel}
+                onSaved={siteAreas.saved}
+              />
+            )}
             {popover && (
               <div
                 className="absolute z-10 flex max-w-64 flex-col gap-1 rounded-md border border-line bg-panel p-2.5 text-xs shadow-float"
@@ -688,12 +867,47 @@ export function MapsScreen() {
                 {popover.facts.readout.native && <p className="text-muted">{popover.facts.readout.native}</p>}
                 {popover.facts.readout.wgs84 && <p className="text-ink">{popover.facts.readout.wgs84}</p>}
                 {popover.facts.size && <p className="text-muted">{popover.facts.size}</p>}
+                {linkedClouds.length > 0 && (
+                  <div className="mt-1 flex flex-col gap-0.5 border-t border-line pt-1.5">
+                    {linkedClouds.map((c) => (
+                      <Button
+                        key={c.id}
+                        size="sm"
+                        variant="ghost"
+                        icon="cloud"
+                        onClick={() =>
+                          openIn3d(
+                            c,
+                            popover.box.x + popover.box.w / 2,
+                            popover.box.y + popover.box.h / 2,
+                            popover.box,
+                          )
+                        }
+                      >
+                        {linkedClouds.length === 1 ? "Open in 3D" : `Open in 3D: ${c.name}`}
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
+            )}
+            {menu && (
+              <MapContextMenu
+                menu={menu}
+                clouds={linkedClouds}
+                georeferenced={!!active.geotransform && !!active.proj4}
+                onOpen={(c) => {
+                  setMenu(null);
+                  openIn3d(c, menu.px, menu.py);
+                }}
+                onClose={() => setMenu(null)}
+              />
             )}
           </>
         ) : (
           <EmptyState icon="map" title={active ? `${active.name} is ${active.status}` : "Choose a map"}>
-            {active?.error ?? "Pick a map on the left, or import one."}
+            {active?.error ??
+              (readOnly ? "Pick a map on the left." : "Pick a map on the left, or import one.")}
           </EmptyState>
         )}
       </section>
@@ -716,92 +930,126 @@ export function MapsScreen() {
                 pixels, but not as GIS layers.
               </Alert>
             )}
-            <Segmented
-              label="Right panel"
-              size="sm"
-              value={rightTab}
-              onChange={setRightTab}
-              options={[
-                { value: "results", label: "Results" },
-                { value: "labels", label: "Labels" },
-                { value: "score", label: "Score" },
-              ]}
-            />
-            {rightTab === "results" ? (
-              liveSelected.length > 0 ? (
-                <ResultsPanel
-                  runs={runs}
-                  selected={liveSelected}
+            {reviewRun ? (
+              <>
+                <div className="flex items-center justify-between gap-2 border-t border-line pt-3">
+                  <h3 className="min-w-0 truncate text-sm font-semibold text-ink">
+                    Review · {reviewRun.model_name ?? "run"}
+                  </h3>
+                  <Button size="sm" variant="ghost" onClick={leaveReview}>
+                    Leave review
+                  </Button>
+                </div>
+                <MapReviewPanel
+                  projectId={projectId}
+                  run={reviewRun}
                   classes={classes}
-                  wholeMap={wholeMap}
-                  inView={inView}
-                  inViewTruncated={inViewTruncated}
-                  scope={scope}
-                  onScope={setScope}
-                  minConf={minConf}
-                  onMinConf={setMinConf}
-                  hidden={hidden}
-                  onToggleClass={(classId) =>
-                    setHidden((h) => {
-                      const next = new Set(h);
-                      if (next.has(classId)) next.delete(classId);
-                      else next.add(classId);
-                      return next;
-                    })
+                  current={reviewCurrent}
+                  onCurrent={onReviewCurrent}
+                  drawing={reviewDrawing}
+                  onDrawing={setReviewDrawing}
+                  drawClassId={effectiveReviewClass}
+                  onDrawClass={setReviewDrawClass}
+                  onChanged={onReviewChanged}
+                />
+              </>
+            ) : (
+              <>
+                <Segmented
+                  label="Right panel"
+                  size="sm"
+                  value={rightTab}
+                  onChange={setRightTab}
+                  options={
+                    readOnly
+                      ? [
+                          { value: "results", label: "Results" },
+                          { value: "score", label: "Score" },
+                        ]
+                      : [
+                          { value: "results", label: "Results" },
+                          { value: "labels", label: "Labels" },
+                          { value: "score", label: "Score" },
+                        ]
                   }
                 />
-              ) : (
-                <p className="text-sm text-muted">Tick a finished run to see its boxes and counts.</p>
-              )
-            ) : rightTab === "score" ? (
-              <ScorePanel
-                runs={runs}
-                selected={liveSelected}
-                scores={liveScores}
-                scoreErrors={liveScoreErrors}
-                classes={classes}
-                overlay={overlay}
-                onOverlay={setOverlay}
-                onStep={onStepMistake}
-              />
-            ) : (
-              <LabelPanel
-                tool={tool}
-                onTool={setTool}
-                classes={classes}
-                activeClassId={effectiveClassId}
-                onClass={pickClass}
-                selectedClassId={selectedLabel?.class_id ?? null}
-                zones={zones}
-                labels={labels}
-                warnCount={warnIds.size}
-                seededCount={seededCount}
-                runs={runs}
-                minConf={minConf}
-                onSeed={(runId, zoneId, minConfSeed) =>
-                  void seedLabels(api, projectId, active.id, {
-                    run_id: runId,
-                    zone_id: zoneId,
-                    min_conf: minConfSeed,
-                  })
-                    .then(() => reloadLabels())
-                    .catch((err: unknown) => reportFailure("seed labels", err))
-                }
-                onRenameZone={(id, name) =>
-                  void updateZone(api, projectId, active.id, id, { name })
-                    .then(() => reloadZones())
-                    .catch((err: unknown) => reportFailure("rename zone", err))
-                }
-                onDeleteZone={(id) =>
-                  void deleteZone(api, projectId, active.id, id)
-                    .then(() => reloadZones())
-                    .catch((err: unknown) => reportFailure("delete zone", err))
-                }
-                canUndo={canUndo && !historyBusyState}
-                canRedo={canRedo && !historyBusyState}
-                onUndo={doUndo}
-                onRedo={doRedo}
-              />
+                {rightTab === "results" ? (
+                  liveSelected.length > 0 ? (
+                    <ResultsPanel
+                      runs={runs}
+                      selected={liveSelected}
+                      classes={classes}
+                      wholeMap={wholeMap}
+                      inView={inView}
+                      inViewTruncated={inViewTruncated}
+                      scope={scope}
+                      onScope={setScope}
+                      minConf={minConf}
+                      onMinConf={setMinConf}
+                      hidden={hidden}
+                      onToggleClass={(classId) =>
+                        setHidden((h) => {
+                          const next = new Set(h);
+                          if (next.has(classId)) next.delete(classId);
+                          else next.add(classId);
+                          return next;
+                        })
+                      }
+                    />
+                  ) : (
+                    <p className="text-sm text-muted">Tick a finished run to see its boxes and counts.</p>
+                  )
+                ) : rightTab === "score" ? (
+                  <ScorePanel
+                    runs={runs}
+                    selected={liveSelected}
+                    scores={liveScores}
+                    scoreErrors={liveScoreErrors}
+                    classes={classes}
+                    overlay={overlay}
+                    onOverlay={setOverlay}
+                    onStep={onStepMistake}
+                  />
+                ) : (
+                  <LabelPanel
+                    tool={tool}
+                    onTool={setTool}
+                    classes={classes}
+                    activeClassId={effectiveClassId}
+                    onClass={pickClass}
+                    selectedClassId={selectedLabel?.class_id ?? null}
+                    zones={zones}
+                    labels={labels}
+                    warnCount={warnIds.size}
+                    seededCount={seededCount}
+                    runs={runs}
+                    minConf={minConf}
+                    onSeed={(runId, zoneId, minConfSeed) =>
+                      void seedLabels(api, projectId, active.id, {
+                        run_id: runId,
+                        zone_id: zoneId,
+                        min_conf: minConfSeed,
+                      })
+                        .then(() => reloadLabels())
+                        .catch((err: unknown) => reportFailure("seed labels", err))
+                    }
+                    onRenameZone={(id, name) =>
+                      void updateZone(api, projectId, active.id, id, { name })
+                        .then(() => reloadZones())
+                        .catch((err: unknown) => reportFailure("rename zone", err))
+                    }
+                    onDeleteZone={(id) =>
+                      void deleteZone(api, projectId, active.id, id)
+                        .then(() => reloadZones())
+                        .catch((err: unknown) => reportFailure("delete zone", err))
+                    }
+                    canUndo={canUndo && !historyBusyState}
+                    canRedo={canRedo && !historyBusyState}
+                    onUndo={doUndo}
+                    onRedo={doRedo}
+                  />
+                )}
+              </>
             )}
           </>
         )}
@@ -813,15 +1061,14 @@ export function MapsScreen() {
           onStarted={(m) => {
             setImporting(false);
             reload();
-            navigate(`/p/${projectId}/maps/${m.id}`);
+            navigate(`${mapsBase}/${m.id}`);
           }}
         />
       )}
       {newRun && active && (
-        <NewRunDialog
+        <RunDialog
           projectId={projectId}
-          geoMap={active}
-          runs={runs}
+          initialSourceIds={[active.id]}
           onClose={() => setNewRun(false)}
           onStarted={() => {
             setNewRun(false);

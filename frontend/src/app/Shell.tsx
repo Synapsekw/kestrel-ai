@@ -7,6 +7,7 @@ import { useAgentPanel } from "@/agent/panelStore";
 import { Header } from "@/app/Header";
 import { NextStepBar } from "@/app/NextStepBar";
 import { Sidebar } from "@/app/Sidebar";
+import { useProjectKindStore } from "@/app/useProjectKind";
 import { useProjectProgress } from "@/app/useProjectProgress";
 import { JobsPanel } from "@/jobs/JobsPanel";
 import { useInitialJobs } from "@/jobs/useJobList";
@@ -21,7 +22,10 @@ function useProjectName(projectId: string | undefined): string | null {
     void api
       .GET("/api/v1/projects/{projectId}", { params: { path: { projectId } } })
       .then(({ data }) => {
-        if (!cancelled && data) setLoaded({ id: projectId, name: data.name });
+        if (cancelled || !data) return;
+        setLoaded({ id: projectId, name: data.name });
+        // The same answer carries the kind; the sidebar and the kind routes read it from the store.
+        useProjectKindStore.getState().set(projectId, data.kind);
       })
       .catch((e: unknown) => {
         pushLog(`load project name failed: ${e}`);

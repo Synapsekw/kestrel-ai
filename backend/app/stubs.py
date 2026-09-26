@@ -1,4 +1,10 @@
-"""Helper to mount 501 placeholders so the contract is fully routed before a sub-project lands."""
+"""Helper to mount 501 placeholders so the contract is fully routed before a sub-project lands.
+
+Foundation F0 routes the point-cloud, volumes and design-surface operations through it
+(`app/pointclouds/router.py`, `app/surfaces/router.py`, `app/surfaces/design/router.py`,
+`app/volumes/router.py`); `tests/test_contract.py` lists them as expected 501s, and each unit that
+builds an operation removes it from its router's STUBS and from EXPECTED_STUBS.
+"""
 
 from fastapi import APIRouter, Body, Depends
 

@@ -6,7 +6,13 @@ from types import SimpleNamespace
 import pytest
 
 from app.jobs.cancellation import JobCancelled, JobFailure
+from app.library import service as library
 from app.training import starter, starter_download
+
+
+@pytest.fixture
+def lib(client, app):
+    return app.state.library
 
 
 class Context:
@@ -112,12 +118,9 @@ def test_catalogue_finds_downloaded_weights_in_writable_cache(tmp_path):
 @pytest.mark.parametrize("source", ["bundle", "cache"])
 @pytest.mark.parametrize("task", ["classify", "segment", "pose", "obb"])
 def test_starter_rejects_renamed_non_detection_checkpoint_before_registration(
-    handle, tmp_path, monkeypatch, source, task
+    lib, tmp_path, monkeypatch, source, task
 ):
     import sys
-
-    from app.errors import AppError
-    from app.training import registry
 
     folder = tmp_path / source
     folder.mkdir()
@@ -129,20 +132,16 @@ def test_starter_rejects_renamed_non_detection_checkpoint_before_registration(
         return SimpleNamespace(task=task, names={0: "truck"})
 
     monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=load_model))
-    ctx = Context(
-        handle, key="yolo26n", bundle_dir=str(tmp_path / "bundle"), cache_dir=str(tmp_path / "cache")
-    )
-    with pytest.raises(AppError, match="requires a detect checkpoint"):
+    ctx = Context(lib, key="yolo26n", bundle_dir=str(tmp_path / "bundle"), cache_dir=str(tmp_path / "cache"))
+    with pytest.raises(JobFailure, match="requires a detect checkpoint"):
         starter_download.run_acquire_starter(ctx)
     assert len(loads) == 1
-    assert registry.list_models(handle, None, None)[0] == []
-    assert list(handle.models_dir.glob("*.pt")) == []
+    assert library.list_models(lib, None, None)[0] == []
+    assert list(lib.models_dir.iterdir()) == []
 
 
-def test_starter_validates_detection_and_reads_names_in_one_model_load(handle, tmp_path, monkeypatch):
+def test_starter_validates_detection_and_reads_names_in_one_model_load(lib, tmp_path, monkeypatch):
     import sys
-
-    from app.training import registry
 
     (tmp_path / "yolo26n.pt").write_bytes(b"detection checkpoint")
     loads = []
@@ -152,7 +151,8 @@ def test_starter_validates_detection_and_reads_names_in_one_model_load(handle, t
         return SimpleNamespace(task="detect", names={0: "truck"})
 
     monkeypatch.setitem(sys.modules, "ultralytics", SimpleNamespace(YOLO=load_model))
-    ctx = Context(handle, key="yolo26n", bundle_dir=str(tmp_path), cache_dir=str(tmp_path / "cache"))
+    ctx = Context(lib, key="yolo26n", bundle_dir=str(tmp_path), cache_dir=str(tmp_path / "cache"))
     result = starter_download.run_acquire_starter(ctx)
     assert len(loads) == 1
-    assert registry.get_model(handle, result["model_id"]).class_names == ["truck"]
+    row = library.get_model(lib, result["model_id"])
+    assert row.class_names == ["truck"] and row.origin == "starter"

@@ -19,6 +19,19 @@ class Project(Base):
     preannotation_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     import_defaults: Mapped[dict] = mapped_column(JSON, default=dict)  # ImportSettings
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # "train" | "detect": set at creation, never changed (spec 2026-09-23 section 5.1).
+    kind: Mapped[str] = mapped_column(String, default="train", server_default="train")
+
+
+class ModelAdoption(Base):
+    """Old project `model` id -> app-wide library model id (spec 2026-09-23 section 6)."""
+
+    __tablename__ = "model_adoption"
+    old_model_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    library_model_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    status: Mapped[str] = mapped_column(String)  # "adopted" | "missing" | "failed"
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
 
 class Source(Base):
@@ -32,6 +45,11 @@ class Source(Base):
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     imported_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Detection workspace (spec 2026-09-23 section 7.1): "images" | "map" ("video" reserved).
+    kind: Mapped[str] = mapped_column(String, default="images", server_default="images")
+    label: Mapped[str | None] = mapped_column(String, nullable=True)  # e.g. "Flight 14 Sep"
+    # The survey date. A map source mirrors GeoMap.captured_on, which stays the one truth.
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
 
 class Image(Base):
@@ -120,8 +138,6 @@ class Model(Base):
     exports: Mapped[dict] = mapped_column(JSON, default=dict)  # {"onnx": "models/x.onnx"}
     artifacts: Mapped[dict] = mapped_column(JSON, default=dict)  # {results_csv, confusion_matrix, pr_curve}
     run_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
-    # cm of ground per model-input pixel during training; null until established (spec 2026-09-23)
-    train_gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
@@ -170,6 +186,10 @@ class GeoMap(Base):
     labels_version: Mapped[int] = mapped_column(Integer, default=0)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # The map source that owns this map (spec 2026-09-23 section 7.1); unlinked if it is deleted.
+    source_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("source.id", ondelete="SET NULL"), nullable=True
+    )
 
 
 class MapRun(Base):
@@ -186,9 +206,18 @@ class MapRun(Base):
     nms_iou: Mapped[float] = mapped_column(Float, default=0.5)
     conf: Mapped[float] = mapped_column(Float, default=0.25)
     target_gsd_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
-    counts: Mapped[dict] = mapped_column(JSON, default=dict)  # {class_id: n}
+    # {class_id: n}: every detection that is not rejected (app/detect/counts.py keeps it current).
+    counts: Mapped[dict] = mapped_column(JSON, default=dict)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Detection workspace (spec 2026-09-23 sections 7.2 and 9.2, plan 2 deviation 1).
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    model_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    class_map: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {model class: id|None}
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    verified_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {class_id: n}
+    # {area_id: {class_id: {"total": n, "verified": n}}}
+    area_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     __table_args__ = (Index("ix_map_run_map", "map_id"),)
 
 
@@ -203,7 +232,14 @@ class MapDetection(Base):
     w: Mapped[float] = mapped_column(Float)
     h: Mapped[float] = mapped_column(Float)
     angle: Mapped[float | None] = mapped_column(Float, nullable=True)  # reserved for OBB wave 2
-    __table_args__ = (Index("ix_map_detection_run_xy", "run_id", "x", "y"),)
+    # unreviewed | accepted | rejected | edited (spec 2026-09-23 section 8)
+    review_state: Mapped[str] = mapped_column(String, default="unreviewed", server_default="unreviewed")
+    # person | local_model | cloud_provider; a person-drawn detection is a row like any other
+    provenance_kind: Mapped[str] = mapped_column(String, default="local_model", server_default="local_model")
+    __table_args__ = (
+        Index("ix_map_detection_run_xy", "run_id", "x", "y"),
+        Index("ix_map_detection_run_state", "run_id", "review_state"),
+    )
 
 
 class MapZone(Base):
@@ -245,6 +281,32 @@ class QueryRun(Base):
     conf: Mapped[float] = mapped_column(Float, default=0.25)
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     promoted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Detection workspace (spec 2026-09-23 sections 7.2 and 9.2); counts are photo *detections*.
+    source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    model_snapshot: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    class_map: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    pinned: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
+    counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {class_id: n}
+    verified_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+
+
+class ModelClassMap(Base):
+    """A library model's class names mapped onto this project's classes (spec 2026-09-23 section 7.3)."""
+
+    __tablename__ = "model_class_map"
+    library_model_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    mapping: Mapped[dict] = mapped_column(JSON, default=dict)  # {model_class_name: project_class_id | None}
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class SiteArea(Base):
+    """A project-level area, stored in WGS84 and projected onto each map (spec 2026-09-23 section 9.3)."""
+
+    __tablename__ = "site_area"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    polygon_wgs84: Mapped[list] = mapped_column(JSON)  # [[lon, lat], ...], at least three
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
@@ -291,3 +353,109 @@ class AgentItem(Base):
         Index("ix_agent_item_seq", "seq", unique=True),
         Index("ix_agent_item_turn", "turn_id"),
     )
+
+
+class PointCloud(Base):
+    """A LAS/LAZ point cloud and its Potree display copy (spec 2026-09-23-point-clouds section 3)."""
+
+    __tablename__ = "point_cloud"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String, default="importing")  # importing | ready | failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    source_path: Mapped[str] = mapped_column(String)  # absolute; only ever read, never kept
+    source_size: Mapped[int] = mapped_column(Integer)
+    source_sha256: Mapped[str | None] = mapped_column(String, nullable=True)  # streamed in the work copy
+    source_mtime: Mapped[float | None] = mapped_column(Float, nullable=True)  # export refuses a change
+    las_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    point_format: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    point_count: Mapped[int | None] = mapped_column(Integer, nullable=True)  # scanned, not the header's
+    has_rgb: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    scale: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [sx, sy, sz]
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)  # horizontal; null = no coordinates
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    proj4: Mapped[str | None] = mapped_column(String, nullable=True)
+    vertical_crs: Mapped[str | None] = mapped_column(String, nullable=True)  # null = heights as stored
+    crs_source: Mapped[str | None] = mapped_column(String, nullable=True)  # file | assigned
+    bounds_native: Mapped[list | None] = mapped_column(JSON, nullable=True)  # true bounds, 6 numbers
+    bounds_repaired: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    bounds_wgs84: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [minlon, minlat, maxlon, maxlat]
+    # The octree's ROOT node spacing from metadata.json, not the point spacing (the brief's spacing_m).
+    octree_spacing_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    z_stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    class_counts: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # {"<code>": n}
+    octree_bytes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
+    map_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("geo_map.id", ondelete="SET NULL"), nullable=True
+    )
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+
+
+class CloudMeasurement(Base):
+    """A saved pick-based measurement on a point cloud (spec 2026-09-23-point-clouds section 3)."""
+
+    __tablename__ = "cloud_measurement"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    point_cloud_id: Mapped[str] = mapped_column(String(36), ForeignKey("point_cloud.id", ondelete="CASCADE"))
+    kind: Mapped[str] = mapped_column(String)  # point | distance | height | vertical
+    name: Mapped[str] = mapped_column(String)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
+    points: Mapped[list] = mapped_column(JSON)  # [{x, y, z, uncertainty_m}] in the cloud's native CRS
+    results: Mapped[dict] = mapped_column(JSON, default=dict)  # computed by the server, never the client
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_cloud_measurement_cloud", "point_cloud_id"),)
+
+
+class Surface(Base):
+    """A gridded surface: a cloud DSM (S2) or an imported design (S3) (spec 2026-09-23-volumes section 3)."""
+
+    __tablename__ = "surface"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    kind: Mapped[str] = mapped_column(String)  # cloud_dsm | design
+    status: Mapped[str] = mapped_column(String, default="building")  # building | ready | failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    # A surface's tif is self-contained, so it survives its cloud.
+    point_cloud_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("point_cloud.id", ondelete="SET NULL"), nullable=True
+    )
+    design_source: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # DesignSource; null: cloud_dsm
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)  # null = local metres
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cell_size_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    geotransform: Mapped[list | None] = mapped_column(JSON, nullable=True)  # GDAL order, north-up
+    bounds_native: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [minx, miny, maxx, maxy]
+    z_min: Mapped[float | None] = mapped_column(Float, nullable=True)
+    z_max: Mapped[float | None] = mapped_column(Float, nullable=True)
+    coverage_fraction: Mapped[float | None] = mapped_column(Float, nullable=True)
+    method: Mapped[str | None] = mapped_column(String, nullable=True)  # one SurfaceMethod value
+    build_params: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # SurfaceBuildStats; null for design
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_surface_status", "status"),)
+
+
+class VolumeMeasurement(Base):
+    """Cut and fill over a polygon on a top surface (spec 2026-09-23-volumes section 3)."""
+
+    __tablename__ = "volume_measurement"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    polygon_native: Mapped[list] = mapped_column(JSON)  # [[x, y], ...] in the top surface's CRS
+    top_surface_id: Mapped[str] = mapped_column(String(36), ForeignKey("surface.id", ondelete="RESTRICT"))
+    base: Mapped[dict] = mapped_column(JSON)  # {kind, z?, surface_id?}
+    masks: Mapped[dict] = mapped_column(JSON, default=dict)
+    alignment: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String, default="calculating")  # calculating|ready|failed|stale
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    results: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # VolumeResults
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_volume_measurement_top_surface", "top_surface_id"),)

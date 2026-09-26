@@ -8,11 +8,15 @@ export function MapList({
   projectId,
   maps,
   activeId,
+  basePath,
 }: {
   projectId: string;
   maps: GeoMap[];
   activeId?: string;
+  /** Where a map opens, `<basePath>/<mapId>`; the project's Maps screen by default. */
+  basePath?: string;
 }) {
+  const base = basePath ?? `/p/${projectId}/maps`;
   const { baseUrl, token } = useBackend();
   const jobs = useJobsStore((s) => s.jobs);
   return (
@@ -22,7 +26,7 @@ export function MapList({
         return (
           <li key={m.id}>
             <Link
-              to={`/p/${projectId}/maps/${m.id}`}
+              to={`${base}/${m.id}`}
               aria-current={m.id === activeId ? "page" : undefined}
               className={cx(
                 "flex gap-2.5 rounded-md p-2",

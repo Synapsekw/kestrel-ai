@@ -1,0 +1,816 @@
+{
+  "designs": [
+    {
+      "file": "site-nez.xml",
+      "inspect_s": [
+        0.86,
+        0.86
+      ],
+      "inspection": {
+        "state": "ready",
+        "error": null,
+        "format": "landxml",
+        "detected": {
+          "horizontal_unit": "metre",
+          "vertical_unit": "metre",
+          "unit_source": "LandXML <Metric linearUnit=meter>",
+          "epsg": 32639,
+          "crs_source": "LandXML <CoordinateSystem epsgCode>",
+          "crs_hint": null
+        },
+        "default_target": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+        "candidates": [
+          {
+            "id": "c0",
+            "kind": "tin_surface",
+            "name": "Design",
+            "geometry": "faces",
+            "point_count": 120744,
+            "face_count": 153466,
+            "entity_counts": {
+              "invisible_faces": 0
+            },
+            "default_selected": true,
+            "notes": []
+          }
+        ]
+      },
+      "preview_s": [
+        0.57,
+        0.57
+      ],
+      "preview": {
+        "state": "ready",
+        "error": null,
+        "overlap": 0.9841919299508569,
+        "target_covered": 0.9340507263650757,
+        "area_m2": 306299.25,
+        "triangles": 153466,
+        "z_check": {
+          "median_dz_m": 0.0053348541259765625,
+          "p05_dz_m": -3.1935462951660156,
+          "p95_dz_m": 3.2507405281066895,
+          "n_samples": 133981,
+          "design_z_min_m": -54.298274993896484,
+          "design_z_max_m": 173.5490264892578
+        },
+        "warnings": [
+          [
+            "crs_from_file",
+            "info",
+            "CRS from the file (LandXML <CoordinateSystem epsgCode>)"
+          ]
+        ],
+        "suggestions": []
+      },
+      "build_s": [
+        0.87,
+        0.87
+      ],
+      "surface": {
+        "id": "2d5094d3-1918-4bb7-8f49-a242fce71ce7",
+        "kind": "design",
+        "status": "ready",
+        "error": null,
+        "cell_size_m": 0.5,
+        "width": 1372,
+        "height": 1401,
+        "z_min": -62.79989242553711,
+        "z_max": 173.85873413085938,
+        "coverage_fraction": 0.6377556222856228,
+        "design_source": {
+          "path": "<scratch>\\designs\\site-nez.xml",
+          "format": "landxml",
+          "units": "metre",
+          "vertical_units": "metre",
+          "sha256": "d326d8ed004ec3cf40b1b17c83ba111317f948f18c49391e8972bb31486fa672",
+          "candidates": [
+            "Design"
+          ],
+          "source_epsg": 32639,
+          "swap_xy": false,
+          "max_edge_m": null,
+          "aligned_to_surface_id": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+          "accepted_warnings": []
+        }
+      },
+      "job_state": [
+        "succeeded",
+        null
+      ]
+    },
+    {
+      "file": "site-enz.xml",
+      "inspect_s": [
+        0.76,
+        0.77
+      ],
+      "inspection": {
+        "state": "ready",
+        "error": null,
+        "format": "landxml",
+        "detected": {
+          "horizontal_unit": "metre",
+          "vertical_unit": "metre",
+          "unit_source": "LandXML <Metric linearUnit=meter>",
+          "epsg": 32639,
+          "crs_source": "LandXML <CoordinateSystem epsgCode>",
+          "crs_hint": null
+        },
+        "default_target": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+        "candidates": [
+          {
+            "id": "c0",
+            "kind": "tin_surface",
+            "name": "Design",
+            "geometry": "faces",
+            "point_count": 120744,
+            "face_count": 153466,
+            "entity_counts": {
+              "invisible_faces": 0
+            },
+            "default_selected": true,
+            "notes": []
+          }
+        ]
+      },
+      "preview_s": [
+        0.51,
+        0.51
+      ],
+      "preview": {
+        "state": "ready",
+        "error": null,
+        "overlap": 0.0,
+        "target_covered": 0.0,
+        "area_m2": 306299.25,
+        "triangles": 153466,
+        "z_check": null,
+        "warnings": [
+          [
+            "no_overlap",
+            "warn",
+            "the design and the cloud surface don't overlap (0 % of the design lies on it)"
+          ],
+          [
+            "crs_from_file",
+            "info",
+            "CRS from the file (LandXML <CoordinateSystem epsgCode>)"
+          ]
+        ],
+        "suggestions": [
+          [
+            "swap_xy",
+            0.6710724637681159,
+            "With easting/northing swapped, 67 % of the design lies on the cloud surface.",
+            {
+              "swap_xy": true
+            }
+          ]
+        ]
+      },
+      "preview2_s": [
+        0.57,
+        0.57
+      ],
+      "preview_after_apply": {
+        "state": "ready",
+        "error": null,
+        "overlap": 0.9841919299508569,
+        "target_covered": 0.9340507263650757,
+        "area_m2": 306299.25,
+        "triangles": 153466,
+        "z_check": {
+          "median_dz_m": 0.0053348541259765625,
+          "p05_dz_m": -3.1935462951660156,
+          "p95_dz_m": 3.2507405281066895,
+          "n_samples": 133981,
+          "design_z_min_m": -54.298274993896484,
+          "design_z_max_m": 173.5490264892578
+        },
+        "warnings": [
+          [
+            "crs_from_file",
+            "info",
+            "CRS from the file (LandXML <CoordinateSystem epsgCode>)"
+          ]
+        ],
+        "suggestions": []
+      },
+      "build_s": [
+        0.92,
+        0.92
+      ],
+      "surface": {
+        "id": "9bb63d4c-b3ad-4ca1-9877-28d05f920923",
+        "kind": "design",
+        "status": "ready",
+        "error": null,
+        "cell_size_m": 0.5,
+        "width": 1372,
+        "height": 1401,
+        "z_min": -62.79989242553711,
+        "z_max": 173.85873413085938,
+        "coverage_fraction": 0.6377556222856228,
+        "design_source": {
+          "path": "<scratch>\\designs\\site-enz.xml",
+          "format": "landxml",
+          "units": "metre",
+          "vertical_units": "metre",
+          "sha256": "93fcf747cd09794c42a3d9999353da505f6ffcc1284db196ed18c6dfe682b97f",
+          "candidates": [
+            "Design"
+          ],
+          "source_epsg": 32639,
+          "swap_xy": true,
+          "max_edge_m": null,
+          "aligned_to_surface_id": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+          "accepted_warnings": []
+        }
+      },
+      "job_state": [
+        "succeeded",
+        null
+      ]
+    },
+    {
+      "file": "site-3dface.dxf",
+      "inspect_s": [
+        10.42,
+        10.42
+      ],
+      "inspection": {
+        "state": "ready",
+        "error": null,
+        "format": "dxf",
+        "detected": {
+          "horizontal_unit": "metre",
+          "vertical_unit": "metre",
+          "unit_source": "DXF $INSUNITS=6; $MEASUREMENT=1 (metric)",
+          "epsg": null,
+          "crs_source": null,
+          "crs_hint": null
+        },
+        "default_target": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+        "candidates": [
+          {
+            "id": "c0",
+            "kind": "dxf_layer",
+            "name": "DESIGN_TIN",
+            "geometry": "faces",
+            "point_count": 460398,
+            "face_count": 153466,
+            "entity_counts": {
+              "3dface": 153466,
+              "mesh": 0,
+              "polyface": 0,
+              "polymesh": 0,
+              "polyline_3d": 0,
+              "polyline_2d": 0,
+              "lwpolyline": 0,
+              "line": 0,
+              "point": 0,
+              "unsupported": 0
+            },
+            "default_selected": true,
+            "notes": []
+          }
+        ]
+      },
+      "preview_s": [
+        0.76,
+        0.76
+      ],
+      "preview": {
+        "state": "ready",
+        "error": null,
+        "overlap": 0.9841919299508569,
+        "target_covered": 0.9340507263650757,
+        "area_m2": 306299.25,
+        "triangles": 153466,
+        "z_check": {
+          "median_dz_m": 0.0053310394287109375,
+          "p05_dz_m": -3.19266414642334,
+          "p95_dz_m": 3.249744415283203,
+          "n_samples": 133981,
+          "design_z_min_m": -54.29633331298828,
+          "design_z_max_m": 173.54930114746094
+        },
+        "warnings": [
+          [
+            "crs_assumed",
+            "info",
+            "the file names no CRS; the cloud surface's CRS was assumed \u2014 confirm it"
+          ]
+        ],
+        "suggestions": []
+      },
+      "build_s": [
+        1.16,
+        1.16
+      ],
+      "surface": {
+        "id": "fdb80ae1-caa4-4f0d-961d-47009216b9d6",
+        "kind": "design",
+        "status": "ready",
+        "error": null,
+        "cell_size_m": 0.5,
+        "width": 1372,
+        "height": 1397,
+        "z_min": -62.79984664916992,
+        "z_max": 173.8591766357422,
+        "coverage_fraction": 0.6395816942177218,
+        "design_source": {
+          "path": "<scratch>\\designs\\site-3dface.dxf",
+          "format": "dxf",
+          "units": "metre",
+          "vertical_units": "metre",
+          "sha256": "27825f0d255bcc48bb84c9cf9d895081a6080c03a92a194d24aafe9e2b2a0076",
+          "candidates": [
+            "DESIGN_TIN"
+          ],
+          "source_epsg": 32639,
+          "swap_xy": false,
+          "max_edge_m": null,
+          "aligned_to_surface_id": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+          "accepted_warnings": []
+        }
+      },
+      "job_state": [
+        "succeeded",
+        null
+      ]
+    },
+    {
+      "file": "site-contours.dxf",
+      "inspect_s": [
+        39.33,
+        39.34
+      ],
+      "inspection": {
+        "state": "ready",
+        "error": null,
+        "format": "dxf",
+        "detected": {
+          "horizontal_unit": "metre",
+          "vertical_unit": "metre",
+          "unit_source": "DXF $INSUNITS=6; $MEASUREMENT=1 (metric)",
+          "epsg": null,
+          "crs_source": null,
+          "crs_hint": null
+        },
+        "default_target": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+        "candidates": [
+          {
+            "id": "c0",
+            "kind": "dxf_layer",
+            "name": "CONTOURS",
+            "geometry": "points",
+            "point_count": 688838,
+            "face_count": 0,
+            "entity_counts": {
+              "3dface": 0,
+              "mesh": 0,
+              "polyface": 0,
+              "polymesh": 0,
+              "polyline_3d": 50857,
+              "polyline_2d": 0,
+              "lwpolyline": 0,
+              "line": 0,
+              "point": 0,
+              "unsupported": 0
+            },
+            "default_selected": true,
+            "notes": []
+          }
+        ]
+      },
+      "preview_s": [
+        5.06,
+        5.06
+      ],
+      "preview": {
+        "state": "ready",
+        "error": null,
+        "overlap": 0.8822337925393096,
+        "target_covered": 0.9473872370608937,
+        "area_m2": 346576.5,
+        "triangles": 1304783,
+        "z_check": {
+          "median_dz_m": 0.06725120544433594,
+          "p05_dz_m": -3.165486717224121,
+          "p95_dz_m": 3.2846447944641066,
+          "n_samples": 135894,
+          "design_z_min_m": -54.29633331298828,
+          "design_z_max_m": 173.41357421875
+        },
+        "warnings": [
+          [
+            "crs_assumed",
+            "info",
+            "the file names no CRS; the cloud surface's CRS was assumed \u2014 confirm it"
+          ],
+          [
+            "long_edges_removed",
+            "info",
+            "3,559 long triangles were trimmed from the edges (maximum edge 6.1 m)"
+          ],
+          [
+            "degenerate_triangles",
+            "info",
+            "35 zero-area triangles were skipped"
+          ]
+        ],
+        "suggestions": []
+      },
+      "build_s": [
+        12.91,
+        12.92
+      ],
+      "surface": {
+        "id": "f707f106-a09b-483c-94ca-99a8dd811cf5",
+        "kind": "design",
+        "status": "ready",
+        "error": null,
+        "cell_size_m": 0.5,
+        "width": 1372,
+        "height": 1397,
+        "z_min": -61.710693359375,
+        "z_max": 173.81967163085938,
+        "coverage_fraction": 0.72236059778242,
+        "design_source": {
+          "path": "<scratch>\\designs\\site-contours.dxf",
+          "format": "dxf",
+          "units": "metre",
+          "vertical_units": "metre",
+          "sha256": "b315516fc93594862857d8a8aff51e278cba25b69979b469b2f708a56d727d9e",
+          "candidates": [
+            "CONTOURS"
+          ],
+          "source_epsg": 32639,
+          "swap_xy": false,
+          "max_edge_m": 6.12132035130675,
+          "aligned_to_surface_id": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+          "accepted_warnings": []
+        }
+      },
+      "job_state": [
+        "succeeded",
+        null
+      ]
+    },
+    {
+      "file": "site-dem-32638.tif",
+      "inspect_s": [
+        0.11,
+        0.11
+      ],
+      "inspection": {
+        "state": "ready",
+        "error": null,
+        "format": "geotiff",
+        "detected": {
+          "horizontal_unit": null,
+          "vertical_unit": "metre",
+          "unit_source": "CRS axis unit",
+          "epsg": 32638,
+          "crs_source": "GeoTIFF CRS",
+          "crs_hint": null
+        },
+        "default_target": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+        "candidates": [
+          {
+            "id": "c0",
+            "kind": "dem",
+            "name": "band 1",
+            "geometry": "raster",
+            "point_count": 0,
+            "face_count": 0,
+            "entity_counts": {},
+            "default_selected": true,
+            "notes": []
+          }
+        ]
+      },
+      "preview_s": [
+        0.28,
+        0.28
+      ],
+      "preview": {
+        "state": "ready",
+        "error": null,
+        "overlap": 1.0,
+        "target_covered": 0.8408578202081862,
+        "area_m2": 271380.0,
+        "triangles": null,
+        "z_check": {
+          "median_dz_m": -0.011615753173828125,
+          "p05_dz_m": -4.264020538330078,
+          "p95_dz_m": 4.1165618896484375,
+          "n_samples": 67845,
+          "design_z_min_m": -53.51932907104492,
+          "design_z_max_m": 173.24827575683594
+        },
+        "warnings": [
+          [
+            "crs_from_file",
+            "info",
+            "CRS from the file (GeoTIFF CRS)"
+          ]
+        ],
+        "suggestions": []
+      },
+      "build_s": [
+        2.17,
+        2.17
+      ],
+      "surface": {
+        "id": "4951687c-5e29-460c-99f0-384ad70abe2c",
+        "kind": "design",
+        "status": "ready",
+        "error": null,
+        "cell_size_m": 0.5,
+        "width": 1516,
+        "height": 1545,
+        "z_min": -67.47445678710938,
+        "z_max": 173.294677734375,
+        "coverage_fraction": 0.4637570339250796,
+        "design_source": {
+          "path": "<scratch>\\designs\\site-dem-32638.tif",
+          "format": "geotiff",
+          "units": null,
+          "vertical_units": "metre",
+          "sha256": "a68d1a064f673783c8b47bd7bbcb77c1b205fa126bdc1f7d25e9943a94ba6abb",
+          "candidates": [
+            "band 1"
+          ],
+          "source_epsg": 32638,
+          "swap_xy": false,
+          "max_edge_m": null,
+          "aligned_to_surface_id": "0c7c97cc-6587-4c25-8248-ee35200e5e06",
+          "accepted_warnings": []
+        }
+      },
+      "job_state": [
+        "succeeded",
+        null
+      ]
+    }
+  ],
+  "volumes": {
+    "ring": [
+      [
+        243506.25,
+        3178256.75
+      ],
+      [
+        243546.25,
+        3178256.75
+      ],
+      [
+        243546.25,
+        3178296.75
+      ],
+      [
+        243506.25,
+        3178296.75
+      ]
+    ],
+    "chimney_top": [
+      243526.25,
+      3178276.75,
+      184.32949829101562
+    ],
+    "results": [
+      {
+        "design": "Design site-dem-32638.tif",
+        "status": "ready",
+        "error": null,
+        "job_s": [
+          0.08,
+          0.08
+        ],
+        "fill_m3": 4924.470050078817,
+        "cut_m3": 4919.484663812444,
+        "net_m3": 4.985386266373098,
+        "area_m2": 1620.0,
+        "nodata_area_m2": 3.0,
+        "warnings": [
+          "no_stable_area"
+        ]
+      },
+      {
+        "design": "Design site-contours.dxf",
+        "status": "ready",
+        "error": null,
+        "job_s": [
+          0.07,
+          0.07
+        ],
+        "fill_m3": 5953.370828900486,
+        "cut_m3": 5740.6184980701655,
+        "net_m3": 212.75233083032072,
+        "area_m2": 1620.0,
+        "nodata_area_m2": 1.75,
+        "warnings": [
+          "no_stable_area"
+        ]
+      },
+      {
+        "design": "Design site-3dface.dxf",
+        "status": "ready",
+        "error": null,
+        "job_s": [
+          0.09,
+          0.09
+        ],
+        "fill_m3": 5943.395263407379,
+        "cut_m3": 5964.975704216398,
+        "net_m3": -21.58044080901891,
+        "area_m2": 1620.0,
+        "nodata_area_m2": 1.75,
+        "warnings": [
+          "no_stable_area"
+        ]
+      },
+      {
+        "design": "Design site-enz.xml",
+        "status": "ready",
+        "error": null,
+        "job_s": [
+          0.09,
+          0.1
+        ],
+        "fill_m3": 5943.646601576358,
+        "cut_m3": 5964.7264927448705,
+        "net_m3": -21.079891168512404,
+        "area_m2": 1620.0,
+        "nodata_area_m2": 1.75,
+        "warnings": [
+          "no_stable_area"
+        ]
+      },
+      {
+        "design": "Design site-nez.xml",
+        "status": "ready",
+        "error": null,
+        "job_s": [
+          0.07,
+          0.07
+        ],
+        "fill_m3": 5943.646601576358,
+        "cut_m3": 5964.7264927448705,
+        "net_m3": -21.079891168512404,
+        "area_m2": 1620.0,
+        "nodata_area_m2": 1.75,
+        "warnings": [
+          "no_stable_area"
+        ]
+      }
+    ]
+  },
+  "extras": {
+    "foot": {
+      "state": "ready",
+      "error": null,
+      "overlap": 0.0,
+      "target_covered": 0.0,
+      "area_m2": 28473.0,
+      "triangles": 153466,
+      "z_check": null,
+      "warnings": [
+        [
+          "no_overlap",
+          "warn",
+          "the design and the cloud surface don't overlap (0 % of the design lies on it)"
+        ],
+        [
+          "foot_ambiguity",
+          "warn",
+          "US survey and international feet differ by 2 ppm: survey vs international foot moves this design by up to 1.94 m \u2014 check which foot the designer used"
+        ],
+        [
+          "units_mismatch_crs",
+          "info",
+          "the file's unit (International foot (0.3048 m)) differs from the CRS unit: coordinates were scaled by 0.3048"
+        ],
+        [
+          "crs_from_file",
+          "info",
+          "CRS from the file (LandXML <CoordinateSystem epsgCode>)"
+        ]
+      ],
+      "suggestions": [
+        [
+          "horizontal_unit",
+          0.6710724637681159,
+          "Read in Metre, 67 % of the design lies on the cloud surface.",
+          {
+            "horizontal_unit": "metre"
+          }
+        ]
+      ],
+      "preview_s": [
+        0.45,
+        0.46
+      ]
+    },
+    "cancel_delete_inspection": 204,
+    "inspection_after_cancel": 404,
+    "dwg": [
+      422,
+      {
+        "error": {
+          "code": "validation_error",
+          "message": "DWG files can't be read. Open the drawing in your CAD program (or the free ODA File Converter) and save it as DXF, then import the DXF.",
+          "details": {
+            "reason": "dwg"
+          }
+        }
+      }
+    ],
+    "delete_used": [
+      409,
+      {
+        "error": {
+          "code": "conflict",
+          "message": "surface Design site-dem-32638.tif is used by Chimney vs Design site-dem-32638.tif; delete those first",
+          "details": {}
+        }
+      }
+    ],
+    "delete_unused": [
+      204,
+      false
+    ]
+  },
+  "perf": {
+    "inspect": {
+      "state": "ready",
+      "error": null,
+      "job_s": [
+        7.9,
+        7.91
+      ],
+      "created": "2026-09-25T22:34:20.759307Z",
+      "started": "2026-09-25T22:34:20.770905Z",
+      "finished": "2026-09-25T22:34:28.668622Z",
+      "points": 1000000,
+      "faces": 1996002
+    },
+    "preview": {
+      "state": "ready",
+      "error": null,
+      "overlap": null,
+      "target_covered": null,
+      "area_m2": 1000000.0,
+      "triangles": 1996002,
+      "z_check": null,
+      "warnings": [
+        [
+          "no_target",
+          "info",
+          "no cloud surface was chosen, so the design can't be checked against the site"
+        ],
+        [
+          "crs_from_file",
+          "info",
+          "CRS from the file (LandXML <CoordinateSystem epsgCode>)"
+        ]
+      ],
+      "suggestions": [],
+      "job_s": [
+        4.56,
+        4.57
+      ],
+      "output": {
+        "epsg": 32639,
+        "cell_size_m": 0.2,
+        "width": 4996,
+        "height": 4996,
+        "bounds_native": [
+          243194.0,
+          3177616.8,
+          244193.2,
+          3178616.0
+        ],
+        "preview_cell_size_m": 2.0
+      }
+    },
+    "build": {
+      "state": "succeeded",
+      "error": null,
+      "job_s": [
+        8.38,
+        8.38
+      ],
+      "created": "2026-09-25T22:34:33.801250Z",
+      "started": "2026-09-25T22:34:33.803246Z",
+      "finished": "2026-09-25T22:34:42.185751Z",
+      "width": 4996,
+      "height": 4996,
+      "cell": 0.2,
+      "status": "ready"
+    }
+  }
+}

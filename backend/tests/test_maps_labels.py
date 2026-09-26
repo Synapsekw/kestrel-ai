@@ -8,6 +8,14 @@ from sqlalchemy import event
 from test_maps_detect import SQUARES, SquareProvider, run_body, start  # reuse the detect fixtures' helpers
 
 BASE = "/api/v1/projects"
+
+
+@pytest.fixture
+def project_kind() -> str:
+    """Maps and query runs are detection work (spec 2026-09-23 section 5.2)."""
+    return "detect"
+
+
 ZONE = [[0, 0], [1500, 0], [1500, 1500], [0, 1500]]  # holds squares 1 and 2 of SQUARES
 
 

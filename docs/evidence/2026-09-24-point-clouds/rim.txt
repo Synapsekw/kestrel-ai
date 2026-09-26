@@ -1,0 +1,6 @@
+# KESTREL_RIM derived from the data (the "pick the rim in the app" step cannot run autonomously).
+# rim-scan.py: chunked scan, points within 0.3 m of the cloud's max Z; then a 20 x 20 m density check.
+top_points 44 median_xy 243513.718 3178242.151 z 189.264 189.554
+xy_spread 3.127 1.431
+near 20x20m 1810779 points, z percentiles 1/50/99/99.9 = -44.8 64.15 170.39 184.19  (the stack column, not stray sky noise)
+KESTREL_RIM=243513.718,3178242.151
