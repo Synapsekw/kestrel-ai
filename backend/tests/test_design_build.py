@@ -601,15 +601,19 @@ def test_a_queued_build_cancelled_before_it_starts_fails_the_row_and_says_so(
         r = commit(client, project_id, iid, p["id"])
         assert r.status_code == 202, r.text
         sid, job_id = r.json()["surface"]["id"], r.json()["job"]["id"]
-        assert client.post(url(project_id, f"/jobs/{job_id}/cancel")).status_code == 200
+        cancelled = client.post(url(project_id, f"/jobs/{job_id}/cancel"))
+        # settled by the cancel itself, not when a worker frees up (the holders still run)
+        assert cancelled.status_code == 200 and cancelled.json()["state"] == "cancelled"
+        early = row(handle, sid)
+        assert (early.status, early.error) == ("failed", "import cancelled")
+        assert len(changed(events, sid)) == 2
+        assert client.delete(url(project_id, f"/surfaces/{sid}")).status_code == 204
     finally:
         _RELEASE.set()
     assert wait_job(project_id, job_id)["state"] == "cancelled"
     for h in holders:
         wait_job(project_id, h.id)
-    s = row(handle, sid)
-    assert (s.status, s.error) == ("failed", "import cancelled")
-    assert len(changed(events, sid)) == 2  # on create and on the cancel
+    assert len(changed(events, sid)) == 3  # on create, on the cancel and on the delete: never again
     assert not surface_dir(handle, sid).exists() and store.inspection_dir(handle, iid).exists()
 
 

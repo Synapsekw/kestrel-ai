@@ -654,7 +654,8 @@ cm at the operator's GSDs. They are constants in `app/volumes/engine.py`, and th
 - `masks`, with each run's `{id, finished_at, kept}`: `kept` is, per class, the count and the
   integer sums (thousandths of a pixel) of x, y, w, h and angle of the boxes the masking uses (not
   rejected, at or above the run's confidence), so swapping which box is rejected or redrawing one
-  changes it (follow-up fix wave, 2026-09-26);
+  changes it (follow-up fix wave, 2026-09-26; masked measurements calculated before it turn
+  stale once, with "masks: detection run changed");
 - the alignment inputs;
 - `engine_version` (a constant in `app/volumes/engine.py`, bumped on any maths change).
 

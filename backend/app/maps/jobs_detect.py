@@ -50,6 +50,7 @@ from app.maps.windows import (
 )
 from app.providers.base import Detection, Tile
 from app.providers.factory import get_provider
+from app.volumes.service import refresh_mask_users
 
 
 def windows_dir(handle, run: MapRun) -> Path:
@@ -174,6 +175,14 @@ def _insert(ctx: JobContext, run_id: str, dets: list[Detection], by_name: dict[s
     return len(rows)
 
 
+def _masks_changed(ctx: JobContext, run_id: str) -> None:
+    """The run's boxes were rewritten: a volume measurement masking with it turns stale now and the
+    Volumes screen is told (volumes spec section 6.10)."""
+    ids = refresh_mask_users(ctx.project, [run_id])
+    if ids:
+        ctx.publish("volumes.changed", {"measurement_ids": ids})
+
+
 @register_job_type("map_detect")
 def run_map_detect(ctx: JobContext) -> dict:
     run, gmap, names, by_name = _load(ctx)
@@ -183,6 +192,7 @@ def run_map_detect(ctx: JobContext) -> dict:
     wins = plan_windows(gmap.width, gmap.height, run.tile_size, run.overlap, scale)
     with ctx.project.session() as s:
         s.execute(delete(MapDetection).where(MapDetection.run_id == run.id))
+    _masks_changed(ctx, run.id)
     totals = {
         "windows": len(wins),
         "skipped_windows": 0,
@@ -229,6 +239,7 @@ def run_map_detect(ctx: JobContext) -> dict:
         # counts, verified_counts and area_counts from the rows just written (app/detect/counts.py)
         recount_map_run(s, s.get(MapRun, run.id), areas_for_map(s, s.get(GeoMap, gmap.id)))
     ctx.publish("map_runs.changed", {"map_id": gmap.id, "run_ids": [run.id]})
+    _masks_changed(ctx, run.id)
     if run.kind == "local_model" and not totals["failed_windows"]:
         shutil.rmtree(windows_dir(ctx.project, run).parent, ignore_errors=True)  # repeatable for free
     ctx.log.info("map run %s finished: %s", run.id, totals)

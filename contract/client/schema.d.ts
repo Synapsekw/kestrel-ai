@@ -11221,7 +11221,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`), or the project is not a detection project (`code` is `wrong_project_kind`) */
+            /** @description a measurement is not `ready` - stale or failed, recalculate it first (`code` is `not_ready`); a measurement is being calculated (`code` is `job_running`); or the project is not a detection project (`code` is `wrong_project_kind`) */
             409: {
                 headers: {
                     [name: string]: unknown;

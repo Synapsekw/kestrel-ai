@@ -95,7 +95,7 @@ def create(
 
     Everything from the gate to recording `build_job_id` runs under `store.commit_lock`, so two
     concurrent commits (a double-click) cannot both pass the gate: the second sees the first's
-    live build and gets 409 `conflict`.
+    live build and gets 409 `job_running`.
 
     The inspection lookup is under the lock too (a delete takes it), and a folder that still vanishes
     between the lookup and a read (removed by something not holding the lock) is a 404, not a 500."""

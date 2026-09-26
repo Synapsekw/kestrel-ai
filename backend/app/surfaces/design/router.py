@@ -95,7 +95,7 @@ def delete_design_inspection(
     idir = store.require_inspection(handle, inspectionId)
     runner = request.app.state.jobs
     with store.commit_lock:  # no import may start between the build_live check and the delete
-        req = store.read_json(idir / "request.json")
+        req = _read_or_404(idir / "request.json", "design inspection", inspectionId)
         if store.build_live(req, runner):
             raise AppError("job_running", "a design surface is being imported from this inspection", 409)
         for job_id in store.job_ids(req):
@@ -190,7 +190,7 @@ def create_design_preview(
     # From the build_live check until this preview is recorded as the latest: a commit in between
     # would build from a preview that is about to be superseded.
     with store.commit_lock:
-        req = store.read_json(idir / "request.json")
+        req = _read_or_404(idir / "request.json", "design inspection", inspectionId)
         if store.build_live(req, runner):
             raise AppError("job_running", "a design surface is being imported from this inspection", 409)
         pid = store.new_id()

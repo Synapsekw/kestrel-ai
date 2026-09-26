@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import shutil
 from collections.abc import Callable
 from pathlib import PureWindowsPath
@@ -29,6 +30,7 @@ from app.volumes.schemas import (
     VolumeMeasurementPatch,
 )
 
+log = logging.getLogger(__name__)
 DEFAULT_MASKS = {"detection_run_ids": [], "class_ids": None, "buffer_m": 1.0, "exclusion_polygons": []}
 REASONS = {
     "polygon_native": "polygon changed",
@@ -293,8 +295,17 @@ def refresh_mask_users(handle: ProjectHandle, run_ids: list[str]) -> list[str]:
     one whose inputs changed is `stale` in the database at once. Returns their ids, to publish as
     `volumes.changed` so the Volumes screen reloads (spec §6.10).
 
-    Measurements are a project's handful of rows; only their `masks` are read to find the users."""
-    wanted = set(run_ids)
+    Measurements are a project's handful of rows; only their `masks` are read to find the users.
+    Called after the write it follows has committed, so a failure here is logged and not raised:
+    the write happened, and every read of a measurement refreshes it anyway."""
+    try:
+        return _refresh_mask_users(handle, set(run_ids))
+    except Exception:
+        log.exception("could not refresh the measurements masking with runs %s", run_ids)
+        return []
+
+
+def _refresh_mask_users(handle: ProjectHandle, wanted: set[str]) -> list[str]:
     with handle.session() as s:
         users = [
             mid
@@ -474,6 +485,8 @@ def validate_export(handle: ProjectHandle, measurement_ids: list[str]) -> None:
         for measurement_id in dict.fromkeys(measurement_ids):
             row = _get(s, measurement_id)
             _refresh(s, row)
+            if row.status == "calculating":
+                raise _job_running(f"{row.name} is being calculated; wait for it before exporting")
             if row.status != "ready":
                 raise AppError(
                     "not_ready", f"{row.name} is {row.status}; recalculate it before exporting", 409

@@ -29,6 +29,11 @@ class JobContext:
     ):
         self.runner, self.project, self.job_id, self.params, self.log = runner, project, job_id, params, log
         self.cancelled = threading.Event()
+        # Both under the runner's lock: `started` once a worker has taken the job, `settled` once a
+        # cancel has ended it while it was still queued (the worker then skips it).
+        self.started = False
+        self.settled = False
+        self.on_cancelled_before_start = None
         self._last_db_write = 0.0
         # The newest message, stored with the terminal state: the throttled write may have skipped it.
         self.last_message: str | None = None
@@ -128,9 +133,10 @@ class JobRunner:
         handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
         logger.addHandler(handler)
         ctx = JobContext(self, project, job.id, params, logger)
+        ctx.on_cancelled_before_start = cancelled_before_start_hook(type)
         with self._lock:
             self._contexts[job.id] = ctx
-        self._pool.submit(self._run, ctx, fn, cancelled_before_start_hook(type))
+        self._pool.submit(self._run, ctx, fn)
         return job
 
     def cancel(self, project: ProjectHandle, job_id: str) -> Job:
@@ -138,6 +144,18 @@ class JobRunner:
             ctx = self._contexts.get(job_id)
         if ctx is not None:
             ctx.cancelled.set()
+            with self._lock:
+                claimed = not ctx.started and not ctx.settled
+                ctx.settled = ctx.settled or claimed
+            if claimed:
+                # Still queued behind other jobs: end it now, not when a worker frees up, so its
+                # rows settle (and the UI hears of it) at once.
+                self._cancelled_before_start(ctx, ctx.on_cancelled_before_start)
+                self._finish(ctx, state="cancelled")
+                ctx.log.info("job cancelled before it started")
+                with self._lock:  # no longer live: a delete waiting on it may go ahead
+                    self._contexts.pop(job_id, None)
+                self._close_log(ctx)
             return self.get(project, job_id)
         job = self.get(project, job_id)
         if job.state == "queued":  # left over from a previous process
@@ -177,10 +195,14 @@ class JobRunner:
             )
         return job
 
-    def _run(self, ctx: JobContext, fn, on_cancelled_before_start=None) -> None:
+    def _run(self, ctx: JobContext, fn) -> None:
         try:
+            with self._lock:
+                if ctx.settled:  # a cancel ended it while it was queued
+                    return
+                ctx.started = True
             if ctx.cancelled.is_set():
-                self._cancelled_before_start(ctx, on_cancelled_before_start)
+                self._cancelled_before_start(ctx, ctx.on_cancelled_before_start)
                 raise JobCancelled()
             self.update(ctx.project, ctx.job_id, state="running", started_at=datetime.now(UTC))
             ctx.log.info("job %s started", ctx.job_id)

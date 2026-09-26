@@ -649,3 +649,16 @@ def test_deleting_the_mask_run_or_its_map_publishes_volumes_changed(
     ]
     with handle.session() as s:
         assert s.get(VolumeMeasurement, m["id"]).status == "stale"
+
+
+def test_exporting_a_measurement_being_calculated_is_409_job_running(
+    client, project_id, handle, top, measure
+):
+    m, _ = measure(top)
+    with handle.session() as s:
+        row = s.get(VolumeMeasurement, m["id"])
+        row.status, row.job_id = "calculating", None  # its job is still queued, as far as a read knows
+    r = client.post(
+        f"{BASE}/{project_id}/volume-exports", json={"measurement_ids": [m["id"]], "formats": ["csv"]}
+    )
+    assert r.status_code == 409 and r.json()["error"]["code"] == "job_running"
