@@ -13,6 +13,7 @@ export { Dialog } from "./Dialog";
 export { Disclosure } from "./Disclosure";
 export { EmptyState } from "./EmptyState";
 export { Field } from "./Field";
+export { FloatingToolbar, ToolButton, ToolSeparator, type ToolDef } from "./FloatingToolbar";
 export { GlassPanel, type GlassPanelProps, type GlassVariant } from "./GlassPanel";
 export { Icon, type IconName } from "./Icon";
 export { Input, Select, Textarea, fieldClass } from "./Input";
