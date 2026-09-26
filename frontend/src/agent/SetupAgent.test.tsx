@@ -12,6 +12,7 @@ import {
   type FakeRoute,
 } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
+import { useToastStore } from "@/ui";
 import { SetupAgent } from "./SetupAgent";
 
 const plan = {
@@ -28,6 +29,21 @@ const done = {
   message: "Done",
   result: { model_id: "model-1" },
 };
+function catalogueType(id: string, name: string) {
+  return {
+    id,
+    name,
+    colour: "#f97316",
+    kind: "object" as const,
+    default_severity: null,
+    hotkey: null,
+    group: null,
+    archived: false,
+    origin: "user" as const,
+  };
+}
+const TYPE_EXCAVATOR = "cat-type-excavator";
+const TYPE_TRUCK = "cat-type-truck";
 function routes(hasKey = true): FakeRoute[] {
   return [
     {
@@ -69,6 +85,12 @@ function routes(hasKey = true): FakeRoute[] {
       method: "POST",
       path: /\/query-runs$/,
       body: { query_run: { id: "run-1" }, job: { ...done, id: "label-1", type: "infer" } },
+    },
+    {
+      // Both planned classes already exist in the catalogue, so the agent's create sends their ids.
+      method: "GET",
+      path: /\/catalogue\/types$/,
+      body: { items: [catalogueType(TYPE_EXCAVATOR, "excavator"), catalogueType(TYPE_TRUCK, "truck")] },
     },
   ];
 }
@@ -144,7 +166,7 @@ describe("Setup agent", () => {
     expect(requests.find((r) => r.method === "POST" && r.url === "/api/v1/projects")?.body).toEqual({
       name: "Site detector",
       folder: "E:\\projects\\detector",
-      type_ids: [],
+      type_ids: [TYPE_EXCAVATOR, TYPE_TRUCK],
     });
     expect(requests.some((r) => r.url === "/api/v1/library/starters/yolo26n/acquire")).toBe(true);
     expect(requests.find((r) => r.method === "POST" && r.url.endsWith("/query-runs"))?.body).toMatchObject({
@@ -185,6 +207,25 @@ describe("Setup agent", () => {
     fireEvent.click(screen.getByRole("button", { name: "Retry starter download" }));
     await screen.findByLabelText("Image folder");
     expect(requests.filter((r) => r.method === "POST" && r.url === "/api/v1/projects")).toHaveLength(1);
+  });
+  it("still creates the project with no types and a notice when the catalogue is unavailable", async () => {
+    useToastStore.getState().clear();
+    const rs = routes();
+    const catalogue = rs.find((r) => r.method === "GET" && r.path.test("/api/v1/catalogue/types"))!;
+    catalogue.status = 503;
+    catalogue.body = errorBody("catalogue_unavailable", "catalogue.db could not be opened");
+    const { api, requests } = fakeClient(rs);
+    renderWithProviders(<Harness />, { api });
+    await chat();
+    fireEvent.change(screen.getByLabelText("Project folder"), { target: { value: "E:\\project" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create project" }));
+    await screen.findByLabelText("Image folder");
+    expect(requests.find((r) => r.method === "POST" && r.url === "/api/v1/projects")?.body).toMatchObject({
+      type_ids: [],
+    });
+    expect(useToastStore.getState().toasts.some((t) => t.text.includes("catalogue is unavailable"))).toBe(
+      true,
+    );
   });
   it("requires a new estimate after provider settings refresh without losing the selected batch", async () => {
     const rs = routes();

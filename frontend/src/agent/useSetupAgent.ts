@@ -27,6 +27,8 @@ import {
   DEFAULT_TILING,
 } from "@/api/queryRuns";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
+import { toast } from "@/ui";
+import { CatalogueUnavailableError, resolveTypeIds } from "./resolveTypeIds";
 
 type Stage = "starter" | "import" | "label";
 export function useSetupAgent(open: boolean) {
@@ -200,9 +202,16 @@ export function useSetupAgent(open: boolean) {
       if (!validPlan || !plan || !folder.trim()) return;
       let p = projectRef.current;
       if (!p) {
+        let typeIds: string[] = [];
+        try {
+          typeIds = await resolveTypeIds(api, plan.classes);
+        } catch (e) {
+          if (!(e instanceof CatalogueUnavailableError)) throw e;
+          toast("info", "The catalogue is unavailable; add the planned classes in project settings.");
+        }
         p = await unwrap(
           api.POST("/api/v1/projects", {
-            body: { name: plan.name.trim(), folder: folder.trim(), type_ids: [] },
+            body: { name: plan.name.trim(), folder: folder.trim(), type_ids: typeIds },
           }),
         );
         projectRef.current = p;
