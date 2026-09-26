@@ -11,11 +11,12 @@ import importlib.util
 import json
 import sqlite3
 import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path
 
 from alembic import command
-from library_helpers import wait_library_job  # noqa: F401  (re-exported for MG tests)
+from library_helpers import wait_library_job as _wait_library_job
 
 from app.db.session import alembic_config, open_project_db
 from app.projects.service import ProjectHandle
@@ -42,6 +43,18 @@ OUTCOMES = [
     ("unreviewed", "local_model"),
     ("rejected", "local_model"),
 ]
+
+
+def wait_library_job(client, job_id: str, timeout: float = 30.0) -> dict:
+    """`library_helpers.wait_library_job`, then also wait until the runner no longer counts the
+    job as live (F5): `JobRunner._finish` writes the job's terminal state before `_run`'s `finally`
+    drops it from the runner's live contexts, so a caller that sees "succeeded"/"failed" and
+    immediately resubmits can still observe a stale `live_job_id` for a few milliseconds."""
+    result = _wait_library_job(client, job_id, timeout)
+    deadline = time.time() + timeout
+    while client.app.state.jobs.is_live(job_id) and time.time() < deadline:
+        time.sleep(0.02)
+    return result
 
 
 @contextmanager

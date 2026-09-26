@@ -16,6 +16,8 @@ from app.db.base import new_id
 from app.db.models import Box, Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
+from app.migration.backup import BackupFailed
+from app.migration.state import MigrationStates, failed_error
 
 SUBDIRS = ("images", "labels", "datasets", "runs", "models", "cache/thumbs")
 DEFAULT_IMPORT_SETTINGS = {
@@ -30,8 +32,11 @@ log = logging.getLogger(__name__)
 
 
 class ProjectHandle:
-    def __init__(self, id: str, folder: Path, engine):
+    def __init__(self, id: str, folder: Path, engine, schema_version: int = 1):
         self.id, self.folder, self.engine = id, folder, engine
+        # The project's `schema_version`, cached: the migration gate reads it on every request
+        # (foundation spec §11.3), and the `project_migrate` job sets it when the upgrade finishes.
+        self.schema_version = schema_version
         self._factory = make_session_factory(engine)
 
     images_dir = property(lambda s: s.folder / "images")
@@ -144,19 +149,34 @@ class ProjectRegistry:
                     if remember:
                         self.appdata.remember(h.id, self._name(h), str(folder))
                     return h
-            engine = open_project_db(folder)
+            try:
+                engine = open_project_db(folder)
+            except BackupFailed as e:
+                raise self._backup_failed(folder, e) from e
             with make_session_factory(engine)() as s:
                 row = s.execute(select(Project)).scalar_one()
-                pid, name = row.id, row.name
-            return self._cache(pid, folder, engine, name, remember)
+                pid, name, version = row.id, row.name, row.schema_version
+            return self._cache(pid, folder, engine, name, remember, schema_version=version)
 
     @staticmethod
     def _name(h: ProjectHandle) -> str:
         with h.session() as s:
             return h.row(s).name
 
-    def _cache(self, pid: str, folder: Path, engine, name: str, remember: bool) -> ProjectHandle:
-        h = ProjectHandle(pid, folder, engine)
+    def _backup_failed(self, folder: Path, error: BackupFailed) -> AppError:
+        """Flag `failed/backup_failed` (foundation spec §11.2): the database was not touched. The
+        job_id already on the entry (a live `project_migrate` job's) is left alone: `set()` merges
+        fields, so only passing `job_id` here would overwrite it with `None`."""
+        entry = MigrationStates(self.appdata.data_dir).set(
+            folder, state="failed", code=BackupFailed.code, step=None, error=str(error), backup_path=None
+        )
+        log.error("project at %s was not upgraded: %s", folder, error)
+        return failed_error(entry)
+
+    def _cache(
+        self, pid: str, folder: Path, engine, name: str, remember: bool, schema_version: int = 1
+    ) -> ProjectHandle:
+        h = ProjectHandle(pid, folder, engine, schema_version)
         self._handles[pid] = h
         if remember:
             self.appdata.remember(pid, name, str(folder))
