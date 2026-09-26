@@ -93,60 +93,6 @@ def test_get_project_survives_registry_restart(settings, project_dir):
         assert c.get(f"/api/v1/projects/{pid}").json()["name"] == "A"
 
 
-def test_update_classes_reorders_and_keeps_ids(client, project_dir):
-    p = _create(client, project_dir, "A")
-    new = [dict(p["classes"][1], hotkey="9"), p["classes"][0]]
-    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=new)
-    assert r.status_code == 200
-    assert [c["name"] for c in r.json()["classes"]] == ["dump_truck", "excavator"]
-    assert r.json()["classes"][0]["id"] == p["classes"][1]["id"]
-    assert r.json()["classes"][0]["hotkey"] == "9"
-    assert [c["order"] for c in r.json()["classes"]] == [0, 1]
-
-
-# 409, not 422: these bodies match the schema (no uniqueItems, `\S` is satisfied by characters that
-# Python's strip() removes), and the contract's conformance check forbids 422 on schema-valid input.
-def test_duplicate_class_name_is_409(client, project_dir):
-    p = _create(client, project_dir, "A")
-    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[CLASSES[0], CLASSES[0]])
-    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict"
-    assert r.json()["error"]["message"] == "Two classes are called excavator. Class names must be unique."
-
-
-def test_a_blank_class_name_is_409(client, project_dir):
-    p = _create(client, project_dir, "A")
-    blank = dict(CLASSES[0], name=chr(0x85))  # not whitespace to the schema's regex, blank to Python
-    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[blank])
-    assert r.status_code == 409 and r.json()["error"]["message"] == "A class name cannot be blank."
-
-
-def test_duplicate_hotkey_is_409(client, project_dir):
-    p = _create(client, project_dir, "A")
-    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[CLASSES[0], dict(CLASSES[1], hotkey="1")])
-    assert r.status_code == 409 and r.json()["error"]["message"] == "Two classes use the hotkey 1."
-
-
-def test_removing_class_with_boxes_is_409(client, project_dir):
-    p = _create(client, project_dir, "A")
-    handle = client.app.state.projects.get(p["id"])
-    from app.db.models import Box, Image, Source
-
-    with handle.session() as s:
-        src = Source(folder="x", site="x")
-        s.add(src)
-        s.flush()
-        img = Image(path="images/x/a.jpg", width=10, height=10, source_id=src.id)
-        s.add(img)
-        s.flush()
-        s.add(
-            Box(image_id=img.id, class_id=p["classes"][0]["id"], x=0, y=0, w=1, h=1, provenance_kind="person")
-        )
-    r = client.put(f"/api/v1/projects/{p['id']}/classes", json=[p["classes"][1]])
-    assert r.status_code == 409
-    assert r.json()["error"]["code"] == "class_in_use"
-    assert r.json()["error"]["details"]["box_count"] == 1
-
-
 def test_patch_project_name_and_import_defaults(client, project_dir):
     p = _create(client, project_dir, "A")
     r = client.patch(f"/api/v1/projects/{p['id']}", json={"name": "B", "import_defaults": {"max_side": 3000}})

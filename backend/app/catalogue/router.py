@@ -4,7 +4,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 
-from app.catalogue import service
+from app.catalogue import project_types, service
 from app.catalogue.handle import CatalogueHandle, get_catalogue
 from app.catalogue.schemas import (
     CatalogueTypeCreate,
@@ -87,6 +87,7 @@ def patch_catalogue_type(
     cat: CatalogueHandle = Depends(get_catalogue),
 ) -> CatalogueTypePatchOut:
     ref, offer = service.patch_type(cat, typeId, body.model_dump(exclude_unset=True))
+    project_types.refresh_open_projects(request.app.state.projects, cat, [ref.id])
     publish_catalogue_changed(request, {"type_ids": [ref.id]})
     return CatalogueTypePatchOut(**CatalogueTypeOut.from_ref(ref).model_dump(), backfill_candidates=offer)
 

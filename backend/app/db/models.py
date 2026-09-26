@@ -25,7 +25,9 @@ class Project(Base):
     __tablename__ = "project"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String)
-    classes: Mapped[list] = mapped_column(JSON, default=list)  # [{id, name, colour, hotkey, order}]
+    # The pre-foundation class list: read-only, MG's migration input, kept for one release (spec
+    # section 6.1). The live list is `project_type`; `classes` below derives from it.
+    legacy_classes: Mapped[list] = mapped_column("classes", JSON, default=list)
     schema_version: Mapped[int] = mapped_column(Integer, default=1)
     # The high-water mark of finding numbers (spec section 8.1): allocation takes
     # max(finding_seq, max(finding.number)) + 1, so a deleted number is never handed out again.
@@ -35,6 +37,20 @@ class Project(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     # The `kind` column (migration 0007) is gone: migration 0010 drops it (spec 2026-09-26-foundation
     # section 6.1).
+
+    @property
+    def classes(self) -> list[dict]:
+        """The project type list as ClassDef dicts (spec section 7.3), read through this row's
+        session, so every `handle.row(s).classes` reader keeps working. There is no setter: a writer
+        left over from before the foundation fails loudly instead of writing the legacy column."""
+        from sqlalchemy.orm import object_session
+
+        from app.catalogue.project_types import project_classes
+
+        s = object_session(self)
+        if s is None:
+            raise RuntimeError("Project.classes reads project_type: the row must be in a session")
+        return project_classes(s, legacy=self)
 
 
 class ModelAdoption(Base):

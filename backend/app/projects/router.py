@@ -10,7 +10,6 @@ from app.migration.gate import migration_state, unavailable_state
 from app.migration.job import live_job_id, states_for
 from app.migration.state import MigrationStates
 from app.projects.schemas import (
-    ClassDefInput,
     MigrationStateOut,
     ProjectCreate,
     ProjectOpen,
@@ -19,13 +18,7 @@ from app.projects.schemas import (
     ProjectUpdate,
     Stats,
 )
-from app.projects.service import (
-    ProjectHandle,
-    ProjectRegistry,
-    check_removed_classes_unused,
-    get_project,
-    normalise_classes,
-)
+from app.projects.service import ProjectHandle, ProjectRegistry, get_project
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 log = logging.getLogger(__name__)
@@ -155,21 +148,7 @@ def update_project(
             merged = dict(row.import_defaults or {})
             merged.update(body.import_defaults.model_dump(exclude_none=True))
             row.import_defaults = merged
-        out = ProjectOut.from_row(row, handle.folder, _registry(request).last_opened_at(handle.id))
-    return out
-
-
-@router.put("/{projectId}/classes", response_model=ProjectOut)
-def update_classes(
-    body: list[ClassDefInput], request: Request, handle: ProjectHandle = Depends(get_project)
-) -> ProjectOut:
-    new = normalise_classes([c.model_dump() for c in body])
-    with handle.session() as s:
-        row = handle.row(s)
-        check_removed_classes_unused(s, row.classes or [], new)
-        row.classes = new
-        out = ProjectOut.from_row(row, handle.folder, _registry(request).last_opened_at(handle.id))
-    return out
+    return _out(handle, _registry(request).last_opened_at(handle.id))
 
 
 @router.get("/{projectId}/stats", response_model=Stats)

@@ -112,6 +112,8 @@ BACKEND_PENDING: dict[str, str] = {
     "updateProject": "BK, BC",
     "updateClasses": "BK, BC",
     "listLibraryModels": "BM",
+    # PUT /types answers a Project, whose `summary`/`migration` fields are not served yet.
+    "putProjectTypes": "BC, MG",
 }
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
@@ -159,6 +161,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createCatalogueType": {422},
     "patchCatalogueType": {422},
     "putSeverityScale": {422},
+    # BC: a generated type id the catalogue does not know (`unknown_type`).
+    "putProjectTypes": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

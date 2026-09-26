@@ -54,6 +54,10 @@ def project_opened(handle, runner) -> None:
         ("interrupted surface build sweep", sweep("app.surfaces.startup")),
         ("interrupted volume calculation sweep", sweep("app.volumes.startup")),
         ("stale design inspection sweep", sweep("app.surfaces.design.startup")),
+        (
+            "project type snapshot refresh",
+            lambda: importlib.import_module("app.catalogue.project_types").refresh_handle(handle),
+        ),
         # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
         ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),
     ):

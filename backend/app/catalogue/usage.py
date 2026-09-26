@@ -26,8 +26,7 @@ def projects_using_level(registry, level: int) -> list[str]:
     Fails closed: a project whose counts cannot be read (a locked or corrupt `project.db`) is
     counted as using the level, not skipped, so a scale edit never drops a level a project it could
     not check still relies on. That project is still named in the 409 details, best-effort."""
-    with registry._lock:  # the registry's own list of open projects (spec section 10.1 reads it too)
-        handles = list(registry._handles.values())
+    handles = registry.open_handles()  # the registry's own list (spec section 10.1 reads it too)
     names: list[str] = []
     for h in handles:
         try:

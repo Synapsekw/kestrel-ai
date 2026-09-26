@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from app.agent.router import router as agent_router
 from app.auth import require_token
+from app.catalogue.project_router import router as project_types_router
 from app.catalogue.router import router as catalogue_router
 from app.data_items.router import router as data_router
 from app.data_items.search import router as search_router
@@ -38,6 +39,7 @@ for r in (
     # This import also registers the `project_migrate` job type in the running app.
     migration_router,
     projects_router,
+    project_types_router,
     data_router,
     search_router,
     library_router,

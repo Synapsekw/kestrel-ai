@@ -403,6 +403,17 @@ def test_update_classes_adds_and_renames_keeping_ids(tool, client, project_id, p
     assert by_name["tower_crane"]["hotkey"] == "9"
 
 
+def test_update_classes_goes_through_the_catalogue(tool, client, project_id, project):
+    """An added name the catalogue already has reuses that type; a rename renames the catalogue type."""
+    r = client.post("/api/v1/catalogue/types", json={"name": "pile_driver", "kind": "object", "hotkey": "9"})
+    assert r.status_code == 201, r.text
+    ok(tool("update_classes", {"add": ["pile_driver"], "rename": [{"from": "crane", "to": "tower_crane"}]}))
+    after = {c["name"]: c for c in client.get(f"/api/v1/projects/{project_id}").json()["classes"]}
+    assert after["pile_driver"]["id"] == r.json()["id"]
+    crane_id = {c["name"]: c["id"] for c in project["classes"]}["crane"]
+    assert client.get(f"/api/v1/catalogue/types/{crane_id}").json()["name"] == "tower_crane"
+
+
 def test_update_classes_rename_of_an_unknown_class_is_an_error(tool):
     out = tool("update_classes", {"rename": [{"from": "spaceship", "to": "x"}]})
     assert out.is_error and "spaceship" in out.result

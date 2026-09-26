@@ -7,7 +7,7 @@ import pytest
 from project_factory import new_project
 from sqlalchemy import select
 
-from app.db.models import Box, Image, Source
+from app.db.models import Box, Image, ProjectType, Source
 from app.exports import csv_out, rows
 
 CLASSES = ["excavator", "dump_truck"]
@@ -240,11 +240,8 @@ def test_formula_injection_is_neutralised_in_text_columns_only(handle, project_d
         img = Image(path="images/a.jpg", width=100, height=100, source_id=source.id, group_key="-flight")
         s.add(img)
         s.flush()
-        project = handle.row(s)
-        classes = list(project.classes)
-        classes[0] = {**classes[0], "name": "=1+1"}
-        project.classes = classes
-        s.add(project)
+        classes = list(handle.row(s).classes)
+        s.get(ProjectType, classes[0]["id"]).name = "=1+1"
         s.flush()
         class_id = classes[0]["id"]
         s.add(
@@ -288,11 +285,8 @@ def test_a_class_name_with_a_comma_and_a_quote_round_trips_through_csv_quoting(h
         img = Image(path="images/a.jpg", width=100, height=100, source_id=source.id, group_key="g1")
         s.add(img)
         s.flush()
-        project = handle.row(s)
-        classes = list(project.classes)
-        classes[0] = {**classes[0], "name": tricky}
-        project.classes = classes
-        s.add(project)
+        classes = list(handle.row(s).classes)
+        s.get(ProjectType, classes[0]["id"]).name = tricky
         s.flush()
         s.add(
             Box(

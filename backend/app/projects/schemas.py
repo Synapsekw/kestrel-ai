@@ -23,19 +23,16 @@ class ImportSettingsPatch(BaseModel):
     group_regex: str | None = None
 
 
-class ClassDefInput(BaseModel):
-    id: str | None = None
-    name: str = Field(min_length=1, max_length=64)
-    colour: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
-    hotkey: str | None = Field(None, max_length=1)
-
-
 class ClassDef(BaseModel):
     id: str
     name: str
     colour: str
     hotkey: str | None
     order: int
+    # Defaults: a frozen `dataset.classes` entry has none of these.
+    kind: Literal["defect", "object"] = "object"
+    default_severity: int | None = None
+    group: str | None = None
 
 
 def _absolute(v: str) -> str:

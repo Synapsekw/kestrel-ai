@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.routing import _IncludedRouter
+from findings_helpers import add_type
 
 from app.db.models import Job
 
@@ -140,11 +141,13 @@ def test_a_project_has_no_kind(client, settings, tmp_path):
     assert recent[0]["id"] == created["id"] and "kind" not in recent[0]
 
 
-def test_create_takes_type_ids_and_starts_with_no_classes(client, tmp_path):
-    body = {"name": "A", "folder": str(tmp_path / "a"), "type_ids": ["t-1", "t-2"]}
+def test_create_takes_type_ids_as_its_classes(client, tmp_path):
+    """Unit BC: `type_ids` are catalogue types, and the project lists them, in order, as classes."""
+    ids = [add_type(client, name)["id"] for name in ("crack", "spalling")]
+    body = {"name": "A", "folder": str(tmp_path / "a"), "type_ids": list(reversed(ids))}
     r = client.post(BASE, json=body)
     assert r.status_code == 201, r.text
-    assert r.json()["classes"] == []
+    assert [c["id"] for c in r.json()["classes"]] == list(reversed(ids))
 
 
 def test_an_old_client_create_body_is_not_refused(client, tmp_path):

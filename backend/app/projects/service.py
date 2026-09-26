@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.appdata import AppData
 from app.db.base import new_id
-from app.db.models import Box, Job, Project
+from app.db.models import Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
 from app.migration.backup import BackupFailed, backup_path
@@ -32,6 +32,10 @@ log = logging.getLogger(__name__)
 
 
 class ProjectHandle:
+    # The app's CatalogueHandle, set by the registry when the project becomes live; None when the
+    # catalogue could not open (spec F2: the project then renders from its type snapshots).
+    catalogue = None
+
     def __init__(self, id: str, folder: Path, engine, schema_version: int = 1):
         self.id, self.folder, self.engine = id, folder, engine
         # The project's `schema_version`, cached: the migration gate reads it on every request
@@ -97,21 +101,6 @@ def normalise_classes(classes: list[dict]) -> list[dict]:
     return out
 
 
-def check_removed_classes_unused(s: Session, before: list[dict], after: list[dict]) -> None:
-    kept = {c["id"] for c in after}
-    for c in before:
-        if c["id"] in kept:
-            continue
-        n = s.execute(select(func.count()).select_from(Box).where(Box.class_id == c["id"])).scalar_one()
-        if n:
-            raise AppError(
-                "class_in_use",
-                f"class {c['name']!r} still has {n} boxes; reassign or delete them first",
-                409,
-                {"class_id": c["id"], "box_count": n},
-            )
-
-
 class ProjectRegistry:
     def __init__(self, data_dir: Path, on_open: Callable[[ProjectHandle], None] | None = None):
         """`on_open` runs once per project, the moment it becomes live in this process."""
@@ -119,24 +108,35 @@ class ProjectRegistry:
         self.on_open = on_open
         self._handles: dict[str, ProjectHandle] = {}
         self._lock = threading.Lock()
+        self.catalogue = None  # set in the lifespan (app.main.open_catalogue)
 
     def create(self, name: str, folder: Path, type_ids: list[str]) -> ProjectHandle:
-        """Create a project folder. `type_ids` are catalogue type ids: the project type list that
-        stores them arrives with unit BC (migration 0010), and until then the project starts with
-        no classes."""
+        """Create a project folder whose type list is `type_ids` (catalogue ids, in order). The
+        ids are checked before any folder is touched: 503 without a catalogue, 422 for an unknown
+        id. A new project has nothing to migrate: once the migration steps are armed it is born at
+        schema_version 2; while they are disarmed it starts at 1 like every other project, and the
+        steps (which keep existing `project_type` rows) bring it to 2 when they arm."""
+        from app.catalogue import project_types
+        from app.migration.job import armed
+
         folder = folder.resolve()
+        wanted = list(dict.fromkeys(type_ids))
+        project_types.lookup_types(self.catalogue, wanted)
         with self._lock:
             if (folder / "project.db").exists():
                 raise AppError("already_exists", f"{folder} already contains a project", 409)
             for sub in SUBDIRS:
                 (folder / sub).mkdir(parents=True, exist_ok=True)
             engine = open_project_db(folder)
-            row = Project(name=name, classes=[], import_defaults=dict(DEFAULT_IMPORT_SETTINGS))
+            version = 2 if armed() else 1
+            row = Project(name=name, schema_version=version, import_defaults=dict(DEFAULT_IMPORT_SETTINGS))
             with make_session_factory(engine)() as s:
                 s.add(row)
+                s.flush()
+                project_types.set_types(s, self.catalogue, wanted)
                 s.commit()
                 pid = row.id
-            return self._cache(pid, folder, engine, name, remember=True)
+            return self._cache(pid, folder, engine, name, remember=True, schema_version=version)
 
     def open(self, folder: Path, remember: bool = True) -> ProjectHandle:
         """Open a project folder. `remember` moves it to the top of the recent list (a user action)."""
@@ -179,6 +179,7 @@ class ProjectRegistry:
         self, pid: str, folder: Path, engine, name: str, remember: bool, schema_version: int = 1
     ) -> ProjectHandle:
         h = ProjectHandle(pid, folder, engine, schema_version)
+        h.catalogue = self.catalogue
         self._handles[pid] = h
         if remember:
             self.appdata.remember(pid, name, str(folder))
@@ -237,6 +238,11 @@ class ProjectRegistry:
         ids = [r["id"] for r in self.appdata.recent()]
         with self._lock:
             return [self._handles[i] for i in ids if i in self._handles]
+
+    def open_handles(self) -> list[ProjectHandle]:
+        """Every project open in this process (a copy, taken under the lock)."""
+        with self._lock:
+            return list(self._handles.values())
 
     def last_opened_at(self, project_id: str) -> datetime | None:
         return self.appdata.last_opened_at(project_id)

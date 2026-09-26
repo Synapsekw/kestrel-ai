@@ -64,6 +64,7 @@ SCREENS = Literal[
 JOB_STATES = Literal["queued", "running", "succeeded", "failed", "cancelled"]
 # The model library's routes are app-wide, outside this project's path.
 LIBRARY = "/api/v1/library"
+CATALOGUE_TYPES = "/api/v1/catalogue/types"
 # Project job types. A model export is a library job (`library_export`), not one of these.
 JOB_TYPES = Literal["import", "dataset", "train", "infer", "results_export"]
 
@@ -755,8 +756,10 @@ class UpdateClasses(Tool):
     risk = "write"
     Args = UpdateClassesArgs
     description = (
-        "Add classes to the project and/or rename existing ones. Renaming keeps the class id, so "
-        "boxes keep their class. New classes get a colour and a free hotkey. Classes cannot be "
+        "Add classes to the project and/or rename existing ones. A class is a type in the app-wide "
+        "catalogue: adding a name the catalogue already has reuses that type. Renaming keeps the "
+        "class id, so boxes keep their class, but a rename is app-wide: every project that uses the "
+        "type sees the new name. New classes get a colour and a free hotkey. Classes cannot be "
         "removed with this tool. Class names are what cloud labeling looks for, so use clear "
         "English names such as dump_truck."
     )
@@ -765,14 +768,12 @@ class UpdateClasses(Tool):
         if not args["add"] and not args["rename"]:
             raise ToolError("Nothing to change: give classes to add or to rename.")
         classes = await _classes(ctx)
-        items = [
-            {"id": c["id"], "name": c["name"], "colour": c["colour"], "hotkey": c["hotkey"]} for c in classes
-        ]
-        by_id = {i["id"]: i for i in items}
-        for r in args["rename"]:
-            by_id[_class_id(classes, r["from"])]["name"] = r["to"].strip()
-        existing = {i["name"].lower() for i in items}
-        used = {i["hotkey"] for i in items if i["hotkey"]}
+        renames = [(_class_id(classes, r["from"]), r["to"].strip()) for r in args["rename"]]
+        for type_id, name in renames:
+            await ctx.api.call("PATCH", f"{CATALOGUE_TYPES}/{_seg(type_id)}", json={"name": name})
+        type_ids = [c["id"] for c in classes]
+        existing = {c["name"].lower() for c in classes} | {name.lower() for _, name in renames}
+        used = {c["hotkey"] for c in classes if c["hotkey"]}
         added = []
         for name in args["add"]:
             name = name.strip()
@@ -781,10 +782,16 @@ class UpdateClasses(Tool):
             hotkey = next((k for k in HOTKEYS if k not in used), None)
             if hotkey:
                 used.add(hotkey)
-            items.append({"name": name, "colour": PALETTE[len(items) % len(PALETTE)], "hotkey": hotkey})
+            colour = PALETTE[len(type_ids) % len(PALETTE)]
+            type_id = await _catalogue_type(ctx, name, colour, hotkey)
+            if type_id not in type_ids:
+                type_ids.append(type_id)
             existing.add(name.lower())
             added.append(name)
-        project = await ctx.api.call("PUT", "/classes", json=items)
+        if added:
+            project = await ctx.api.call("PUT", "/types", json={"type_ids": type_ids})
+        else:
+            project = await ctx.api.call("GET", "")
         parts = []
         if added:
             parts.append(f"added {', '.join(added)}")
@@ -793,6 +800,25 @@ class UpdateClasses(Tool):
         text = "; ".join(parts) or "no change"
         summary = text[0].upper() + text[1:]  # never lower-case a class name
         return _ok({"classes": [c["name"] for c in project["classes"]]}, summary)
+
+
+async def _catalogue_type(ctx: ToolContext, name: str, colour: str, hotkey: str | None) -> str:
+    """The catalogue type id for `name`: a new `object` type, or the existing one of that name. A
+    hotkey another catalogue type holds is dropped."""
+    body: dict[str, Any] = {"name": name, "colour": colour, "kind": "object"}
+    if hotkey:
+        body["hotkey"] = hotkey
+    for _ in range(2):
+        try:
+            return (await ctx.api.call("POST", CATALOGUE_TYPES, json=body))["id"]
+        except ApiCallError as e:
+            if e.status == 409 and e.code == "type_exists" and e.details.get("type_id"):
+                return str(e.details["type_id"])
+            if e.status == 409 and e.code == "hotkey_conflict" and "hotkey" in body:
+                del body["hotkey"]
+                continue
+            raise
+    raise ToolError(f"Could not add {name!r} to the catalogue.")
 
 
 class LabelImages(Tool):

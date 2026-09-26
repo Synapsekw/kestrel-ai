@@ -19,11 +19,7 @@ from sqlalchemy.orm import Session
 from app.db.models import ModelClassMap
 from app.errors import AppError
 from app.library.db import LibraryModel
-from app.projects.service import ProjectHandle, normalise_classes
-
-# The app's standard class palette (the same one the project agent cycles through).
-PALETTE = ["#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#a855f7", "#ec4899", "#ef4444"]
-HOTKEYS = [str(i) for i in range(1, 10)]
+from app.projects.service import ProjectHandle
 
 Mapping = dict[str, str | None]
 
@@ -52,27 +48,13 @@ def _resolve(classes: list[dict], stored: Mapping, model: LibraryModel) -> tuple
 
 
 def append_classes(s: Session, handle: ProjectHandle, names: list[str]) -> dict[str, str]:
-    """Add each name as a project class unless one of that name exists; `{name: class_id}` for all.
+    """Add each name to the project's type list, resolved against the catalogue by normalise_name
+    (a missing name becomes a new `object` type, spec 2026-09-26-foundation section 7.3); returns
+    `{name: type_id}` for the list and for every requested name. Called inside the caller's
+    session, so the list and whatever maps onto it change together."""
+    from app.catalogue import project_types
 
-    New classes take the next palette colour and the next free digit hotkey. Called inside the
-    caller's session, so the class list and whatever maps onto it change together.
-    """
-    row = handle.row(s)
-    classes = [dict(c) for c in row.classes or []]
-    existing = {c["name"] for c in classes}
-    used = {c.get("hotkey") for c in classes if c.get("hotkey")}
-    for name in names:
-        name = name.strip()
-        if not name or name in existing:
-            continue
-        hotkey = next((k for k in HOTKEYS if k not in used), None)
-        if hotkey:
-            used.add(hotkey)
-        classes.append({"name": name, "colour": PALETTE[len(classes) % len(PALETTE)], "hotkey": hotkey})
-        existing.add(name)
-    row.classes = normalise_classes(classes)
-    s.flush()
-    return {c["name"]: c["id"] for c in row.classes}
+    return project_types.append_by_names(s, handle.catalogue, [n.strip() for n in names if n.strip()])
 
 
 def resolve(handle: ProjectHandle, model: LibraryModel, *, seed: bool = False) -> tuple[Mapping, list[str]]:
