@@ -9,8 +9,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.datasets.materialise import _label_text, detect_boxes
 from app.exports.rows import ExportImage
+from app.imagery.labels import detect_boxes
+from app.imagery.labels import label_text as _label_text
 from app.jobs.cancellation import JobFailure
 
 FOLDER = "labels_yolo"

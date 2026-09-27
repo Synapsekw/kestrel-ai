@@ -21,15 +21,15 @@ from sqlalchemy import select
 
 from app.datasets.materialise import (
     PROGRESS_EVERY,
-    _clip01,
-    _label_text,
     _place,
     data_yaml,
-    detect_boxes,
     materialised_name,
 )
 from app.db.models import Image, Job
 from app.geometry import corners_of
+from app.imagery.labels import clip01 as _clip01
+from app.imagery.labels import detect_boxes
+from app.imagery.labels import label_text as _label_text
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
