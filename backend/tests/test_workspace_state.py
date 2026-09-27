@@ -8,7 +8,7 @@ from pyproj import CRS
 from sqlalchemy import func, select
 from surfaces import fixture_spec, plane
 from volume_rows import add_surface
-from workspace_rows import add_local_surface, add_map
+from workspace_rows import BASE, add_local_surface, add_map
 
 from app.db.models import GeoMap, MapWorkspace, Surface
 from app.errors import AppError
@@ -138,3 +138,64 @@ def test_concurrent_first_loads_create_one_row(handle):
     for t in threads:
         t.join()
     assert errors == [] and _rows(handle) == 1
+
+
+def test_get_map_workspace_on_an_empty_project(client, project_id):
+    r = client.get(f"{BASE}/{project_id}/map-workspace")
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["frame"] == {
+        "kind": "local",
+        "epsg": None,
+        "crs_wkt": None,
+        "proj4": None,
+        "name": "Local metres",
+    }
+    assert body["state"] == {} and body["planned_surveys"] == [] and body["updated_at"]
+    assert body["frame_items"] == {"crs": 0, "local": 0}
+
+
+def test_set_frame_publishes_and_get_reflects_it(client, project_id, handle, monkeypatch):
+    add_map(handle, crs_wkt=UTM38, geotransform=GT38, width=400, height=400)
+    seen = []
+    monkeypatch.setattr(client.app.state.events, "publish", seen.append)
+    r = client.put(f"{BASE}/{project_id}/map-workspace/frame", json={"kind": "crs", "epsg": 32639})
+    assert r.status_code == 200, r.text
+    assert r.json()["frame"]["epsg"] == 32639 and "+zone=39" in r.json()["frame"]["proj4"]
+    events = [e for e in seen if e["type"] == "map_workspace.changed"]
+    assert events and events[-1]["payload"] == {"fields": ["frame"]}
+    assert client.get(f"{BASE}/{project_id}/map-workspace").json()["frame"]["epsg"] == 32639
+    assert (
+        client.put(f"{BASE}/{project_id}/map-workspace/frame", json={"kind": "local"}).json()["frame"]["kind"]
+        == "local"
+    )
+
+
+def test_set_frame_error_codes(client, project_id):
+    url = f"{BASE}/{project_id}/map-workspace/frame"
+    for body, code in (
+        ({"kind": "crs", "epsg": 4326}, "needs_projected_crs"),
+        ({"kind": "crs", "epsg": 999999}, "invalid_epsg"),
+        ({"kind": "crs"}, "invalid_epsg"),
+    ):
+        r = client.put(url, json=body)
+        assert (r.status_code, r.json()["error"]["code"]) == (422, code), body
+
+
+def test_put_map_workspace_round_trips_publishes_and_refuses_big_state(
+    client, project_id, handle, monkeypatch
+):
+    add_map(handle, crs_wkt=UTM38, geotransform=GT38, width=400, height=400)
+    seen = []
+    monkeypatch.setattr(client.app.state.events, "publish", seen.append)
+    body = {
+        "state": {"mode": "blend", "blend": 40},
+        "planned_surveys": [{"date": "2026-10-14", "note": None}],
+    }
+    r = client.put(f"{BASE}/{project_id}/map-workspace", json=body)
+    assert r.status_code == 200, r.text
+    assert r.json()["state"] == body["state"] and r.json()["planned_surveys"] == body["planned_surveys"]
+    events = [e for e in seen if e["type"] == "map_workspace.changed"]
+    assert events and events[-1]["payload"] == {"fields": ["state", "planned_surveys"]}
+    r = client.put(f"{BASE}/{project_id}/map-workspace", json={"state": {"x": "y" * 70_000}})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "state_too_large"
