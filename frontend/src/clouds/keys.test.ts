@@ -35,6 +35,10 @@ describe("the point cloud keys (spec §6 Keyboard)", () => {
     expect(WORKSPACE_KEYS["clouds.fly"].flatMap((e) => e.keys)).toEqual(["W", "A", "S", "D", "Q", "E"]);
     expect(cloudShortcut("area")).toBe("Q");
     expect(() => cloudShortcut("no-such-tool")).toThrow();
+    // F's global keys the workspace shows as key caps (the hint bar's Save and Cancel).
+    expect(cloudShortcut("commit")).toBe("Enter");
+    expect(cloudShortcut("cancel")).toBe("Escape");
+    expect(cloudShortcut("view-top")).toBe("Alt+1");
   });
 
   it("gives no two C tools one key, and no C key equals a global or review key", () => {

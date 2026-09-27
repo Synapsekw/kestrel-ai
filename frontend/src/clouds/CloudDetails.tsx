@@ -1,12 +1,13 @@
 import { useMemo, useState } from "react";
 import type { GeoMap } from "@contract/client";
 import { useApi } from "@/api/client";
-import { createPointCloudExport, deletePointCloud, patchPointCloud, type PointCloud } from "@/api/clouds";
+import { createPointCloudExport, patchPointCloud, type PointCloud } from "@/api/clouds";
 import { messageOf } from "@/api/errors";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
-import { Alert, Button, Dialog, Field, Input, Pill, Select } from "@/ui";
+import { Alert, Button, Field, Input, Pill, Select } from "@/ui";
 import { crsLabel, crsName, formatBytes, formatPoints, heightsLabel } from "./format";
 import { rankMaps } from "./link";
+import { DeleteCloudDialog } from "./workspace/DeleteCloudDialog";
 
 const m3 = (v: number) => v.toFixed(3);
 
@@ -174,34 +175,13 @@ export function CloudDetails({
           Delete
         </Button>
       </div>
-      {confirmDelete && (
-        <Dialog
-          open
-          title={`Delete ${cloud.name}?`}
-          description="The 3D view copy and the measurements go; the source file is not touched."
-          onClose={() => setConfirmDelete(false)}
-          footer={
-            <>
-              <Button onClick={() => setConfirmDelete(false)}>Keep it</Button>
-              <Button
-                variant="danger"
-                onClick={() =>
-                  void deletePointCloud(api, projectId, cloud.id)
-                    .then(onDeleted)
-                    .catch((e: unknown) => {
-                      setConfirmDelete(false);
-                      setError(messageOf(e, "could not delete"));
-                    })
-                }
-              >
-                Delete
-              </Button>
-            </>
-          }
-        >
-          <p className="text-sm text-muted">{cloud.source_path}</p>
-        </Dialog>
-      )}
+      <DeleteCloudDialog
+        open={confirmDelete}
+        projectId={projectId}
+        cloud={cloud}
+        onClose={() => setConfirmDelete(false)}
+        onDeleted={onDeleted}
+      />
     </div>
   );
 }

@@ -43,7 +43,8 @@ describe("routeInfo", () => {
     expect(routeInfo("/p/a/images/i1").layout).toBe("workspace");
     expect(routeInfo("/p/a/maps").layout).toBe("fullbleed");
     expect(routeInfo("/p/a/maps/m1").layout).toBe("fullbleed");
-    expect(routeInfo("/p/a/clouds/c1").layout).toBe("page");
+    expect(routeInfo("/p/a/clouds").layout).toBe("page");
+    expect(routeInfo("/p/a/clouds/c1").layout).toBe("fullbleed");
     expect(layoutOf("findings", true)).toBe("page");
   });
 

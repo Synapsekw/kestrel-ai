@@ -68,6 +68,9 @@ export interface CloudViewerHandle {
   topSnapshot(px?: number): Promise<ImageBitmap | null>;
   frameTimes(): number[];
   edl(): EdlState | null;
+  setEdl(on: boolean): void;
+  /** Draws one frame now (e.g. after the panels around the canvas changed its layout). */
+  requestRender(): void;
   /** C-V2 (spec §7): see `CloudEngine`. The clip box survives an engine rebuild, like the nav mode. */
   setClipBox(box: ClipBox | null, mode?: ClipBoxMode): void;
   clipBox(): ClipState | null;
@@ -91,6 +94,9 @@ export interface CloudViewerHandle {
   pickWithNormal(clientX: number, clientY: number): { point: Vec3; u: number; normal: Vec3 | null } | null;
 }
 
+/** What the 3D view is doing, for the workspace (plan Ruling 16). */
+export type ViewState = "running" | "no-webgl" | "lost" | "load-error";
+
 export interface CloudViewerProps {
   cloud: PointCloud;
   octreeUrl: string;
@@ -106,14 +112,20 @@ export interface CloudViewerProps {
   onDoublePick?(p: CloudPick): void;
   /** The octree loaded: which colour modes this cloud can show (spec §7 Colour). */
   onAttributes?(a: ColourAvailability): void;
+  /** The view started, could not start (no WebGL), failed to load, or lost its context. */
+  onViewState?(state: ViewState): void;
+  /** Points shown and nodes loading, at the engine's ≤ 4 Hz bar cadence (the old status bar's numbers). */
+  onPointsShown?(s: { pts: number; loading: number }): void;
+  /** Where the notices sit, in px from the viewer's edges (the workspace keeps them clear of its panels). */
+  noticeInset?: { left: number; right: number; top: number };
 }
 
-const fmt = (v: number) => v.toFixed(3);
-const points = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
+const DEFAULT_NOTICE_INSET = { left: 16, right: 16, top: 16 } as const;
 
 /** The React shell around `viewer/engine.ts` (spec §5 Viewer row): alerts, status bar, handle, hook. */
 export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(function CloudViewer(props, ref) {
   const { cloud, octreeUrl, token, budget, colour, elevationRange, pointSize, armed = false } = props;
+  const noticeInset = props.noticeInset ?? DEFAULT_NOTICE_INSET;
   const box = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engine = useRef<CloudEngine | null>(null);
@@ -124,6 +136,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     onHover: props.onHover,
     onDoublePick: props.onDoublePick,
     onAttributes: props.onAttributes,
+    onViewState: props.onViewState,
+    onPointsShown: props.onPointsShown,
     armed,
   });
   const [generation, setGeneration] = useState(0);
@@ -134,11 +148,6 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const [lostKey, setLostKey] = useState<string | null>(null);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [noWebGlKey, setNoWebGlKey] = useState<string | null>(null);
-  const [bar, setBar] = useState<{ pts: number; loading: number; pick: CloudPick | null }>({
-    pts: 0,
-    loading: 0,
-    pick: null,
-  });
   const bounds = cloud.bounds_native as Bounds6 | null;
   // Read when the engine is built, so a colour/size/budget change never rebuilds the scene.
   const materialRef = useRef({ colour, elevationRange, pointSize });
@@ -156,6 +165,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       onHover: props.onHover,
       onDoublePick: props.onDoublePick,
       onAttributes: props.onAttributes,
+      onViewState: props.onViewState,
+      onPointsShown: props.onPointsShown,
       armed,
     };
   });
@@ -179,16 +190,19 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         edl: !reducedEffects(),
         events: {
           isArmed: () => callbacks.current.armed,
-          onPick: (p) => {
-            setBar((b) => ({ ...b, pick: p }));
-            callbacks.current.onPick?.(p);
-          },
+          onPick: (p) => callbacks.current.onPick?.(p),
           onHover: (p) => callbacks.current.onHover?.(p),
           onDoublePick: (p) => callbacks.current.onDoublePick?.(p),
-          onBar: (s) => setBar((b) => ({ ...b, pts: s.pts, loading: s.loading })),
+          onBar: (s) => callbacks.current.onPointsShown?.({ pts: s.pts, loading: s.loading }),
           onLoaded: (a) => callbacks.current.onAttributes?.(a),
-          onLoadError: (message) => setLoadError({ key, message }),
-          onContextLost: () => setLostKey(key),
+          onLoadError: (message) => {
+            setLoadError({ key, message });
+            callbacks.current.onViewState?.("load-error");
+          },
+          onContextLost: () => {
+            setLostKey(key);
+            callbacks.current.onViewState?.("lost");
+          },
         },
       });
     } catch (err) {
@@ -196,11 +210,13 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       // the throw take the whole screen down to the router's error page.
       if (err instanceof NoWebGlError) {
         setNoWebGlKey(key);
+        callbacks.current.onViewState?.("no-webgl");
         return;
       }
       throw err;
     }
     engine.current = e;
+    callbacks.current.onViewState?.("running");
     if (navRef.current !== "orbit") e.setNavMode(navRef.current);
     if (hiddenRef.current.size > 0) e.setClassVisibility(hiddenRef.current);
     if (clipRef.current) e.setClipBox(clipRef.current.box, clipRef.current.mode);
@@ -376,6 +392,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       topSnapshot: (px) => engine.current?.topSnapshot(px) ?? Promise.resolve(null),
       frameTimes: () => engine.current?.frameTimes() ?? [],
       edl: () => engine.current?.edl() ?? null,
+      setEdl: (on) => engine.current?.setEdl(on),
+      requestRender: () => engine.current?.requestRender(),
       setClipBox(box, mode = "show_inside") {
         clipRef.current = box ? { box, mode } : null;
         engine.current?.setClipBox(box, mode);
@@ -414,53 +432,44 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       {savingKey === sceneKey && (
         <div
           role="status"
-          className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-chip bg-glass-solid shadow-elev-2"
+          className="pointer-events-none absolute z-[15] left-1/2 top-4 -translate-x-1/2 rounded-chip bg-glass-solid shadow-elev-2"
         >
           <Pill tone="neutral" live data-testid="cloud-saving-view">
             Saving view…
           </Pill>
         </div>
       )}
-      {/* The notices sit on the opaque glass-solid backing: the tones alone are 15% tints, unreadable over the points. */}
-      {noWebGlKey === sceneKey && (
-        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
-          <Alert tone="danger" title="The 3D view could not start">
-            This computer&apos;s graphics could not start WebGL, which the 3D view draws with. Updating the
-            graphics driver usually fixes this; the cloud&apos;s details and export still work.
-          </Alert>
+      {/* The notices sit on the opaque glass-solid backing: the tones alone are 15% tints, unreadable
+          over the points. z 15: above the glass panels (z 10), below the hint bar (z 20). */}
+      {(noWebGlKey === sceneKey || loadError?.key === sceneKey || lostKey === sceneKey) && (
+        <div
+          data-testid="cloud-viewer-notice"
+          className="absolute z-[15] rounded-control bg-glass-solid shadow-elev-2"
+          style={noticeInset}
+        >
+          {noWebGlKey === sceneKey ? (
+            <Alert tone="danger" title="The 3D view could not start">
+              This computer&apos;s graphics could not start WebGL, which the 3D view draws with. Updating the
+              graphics driver usually fixes this; the cloud&apos;s details and export still work.
+            </Alert>
+          ) : loadError?.key === sceneKey ? (
+            <Alert tone="danger" title="The 3D view could not be shown">
+              {loadError.message}
+            </Alert>
+          ) : (
+            <Alert
+              tone="warn"
+              actions={
+                <Button size="sm" icon="refresh" onClick={() => setGeneration((g) => g + 1)}>
+                  Reload view
+                </Button>
+              }
+            >
+              The 3D view lost its graphics context
+            </Alert>
+          )}
         </div>
       )}
-      {loadError?.key === sceneKey && (
-        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
-          <Alert tone="danger" title="The 3D view could not be shown">
-            {loadError.message}
-          </Alert>
-        </div>
-      )}
-      {lostKey === sceneKey && (
-        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
-          <Alert
-            tone="warn"
-            actions={
-              <Button size="sm" icon="refresh" onClick={() => setGeneration((g) => g + 1)}>
-                Reload view
-              </Button>
-            }
-          >
-            The 3D view lost its graphics context
-          </Alert>
-        </div>
-      )}
-      {/* S1's status bar: C-W1 deletes it (the readout pill replaces it). */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-glass px-3 py-1.5 text-xs tabular-nums text-muted">
-        <span data-testid="cloud-points-shown">{points.format(bar.pts / 1e6)} M points shown</span>
-        {bar.loading > 0 && <span>loading {bar.loading} nodes</span>}
-        {bar.pick && (
-          <span className="ml-auto text-ink">
-            E {fmt(bar.pick.x)} · N {fmt(bar.pick.y)} · Z {fmt(bar.pick.z)}
-          </span>
-        )}
-      </div>
     </div>
   );
 });
