@@ -21,6 +21,8 @@ export interface SamState {
    * server retries on every prepare, so `retry()` may recover) | absent (no assist routes in this build).
    */
   reason: string | null;
+  /** The server's own words for `unavailable` (the 409's message); null when parked from the list. */
+  reasonText: string | null;
   error: string | null;
   /** Bumped per point change; a segment answer for an older seq is ignored. */
   seq: number;
@@ -37,6 +39,7 @@ export const INITIAL_SAM: SamState = {
   outside: false,
   device: null,
   reason: null,
+  reasonText: null,
   error: null,
   seq: 0,
   busy: false,
@@ -50,7 +53,7 @@ export type SamAction =
   | { type: "removeLast" }
   | { type: "segmenting" }
   | { type: "segmented"; seq: number; polygon: number[][] | null; device: Device }
-  | { type: "unavailable"; state: string }
+  | { type: "unavailable"; state: string; message?: string }
   | { type: "failed"; message: string }
   | { type: "cancel" }
   | { type: "reset" };
@@ -92,7 +95,7 @@ export function samReducer(s: SamState, a: SamAction): SamState {
         device: a.device,
       };
     case "unavailable":
-      return { ...INITIAL_SAM, status: "unavailable", reason: a.state };
+      return { ...INITIAL_SAM, status: "unavailable", reason: a.state, reasonText: a.message ?? null };
     case "failed":
       return { ...s, status: "error", busy: false, error: a.message };
     case "cancel":

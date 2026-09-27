@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useEffect } from "react";
 import { act } from "@testing-library/react";
+import type { ApiClient } from "@contract/client";
 import { errorBody, exampleJob, fakeClient, type FakeRoute, type RecordedRequest } from "@/test/fixtures";
 import { useJobsStore } from "@/store/jobs";
 import { SMART_TOOL, useImagesWorkspace, wsGet } from "../bridge";
@@ -43,6 +44,23 @@ const prepares = (requests: RecordedRequest[]) => requests.filter((r) => r.url.e
 const decodes = (requests: RecordedRequest[]) => requests.filter((r) => r.url.endsWith("/segment"));
 /** G3: a setTimeout(0) prepare plus a fetch round trip; wait for it rather than counting flushes. */
 const prepared = () => vi.waitFor(() => expect(sam().status).toBe("ready"));
+/**
+ * Hold the `nth` POST whose path ends with `suffix` until the returned `release()` (a path template,
+ * e.g. `.../segment` or `.../segment/prepare`). The request is recorded only once released.
+ */
+function holdPost(api: ApiClient, suffix: string, nth = 1): { release: () => void } {
+  type Post = (path: string, init: unknown) => Promise<unknown>;
+  const post = api.POST.bind(api) as unknown as Post;
+  let seen = 0;
+  let release: () => void = () => {};
+  const gate = new Promise<void>((r) => (release = r));
+  const gated: Post = (path, init) => {
+    if (path.endsWith(suffix) && ++seen === nth) return gate.then(() => post(path, init));
+    return post(path, init);
+  };
+  api.POST = gated as unknown as typeof api.POST;
+  return { release: () => release() };
+}
 
 beforeEach(() => {
   resetAll();
@@ -122,8 +140,6 @@ describe("useSmartPolygon", () => {
   });
 
   it("sends only the newest click while one segment is in flight", async () => {
-    let answer: (() => void) | null = null;
-    const gate = () => new Promise<void>((r) => (answer = r));
     const { api, requests } = fakeClient(
       base([
         {
@@ -133,18 +149,7 @@ describe("useSmartPolygon", () => {
         },
       ]),
     );
-    // Hold the first decode open by gating the client's POST.
-    type Post = (path: string, init: unknown) => Promise<unknown>;
-    const post = api.POST.bind(api) as unknown as Post;
-    let held = false;
-    const gated: Post = (path, init) => {
-      if (!held && path.endsWith("/segment")) {
-        held = true;
-        return gate().then(() => post(path, init));
-      }
-      return post(path, init);
-    };
-    api.POST = gated as unknown as typeof api.POST;
+    const first = holdPost(api, "/segment");
     renderAi(<Harness />, api);
     choose();
     await prepared();
@@ -152,11 +157,134 @@ describe("useSmartPolygon", () => {
     act(() => hook.click({ x: 2, y: 2 }, true));
     act(() => hook.click({ x: 3, y: 3 }, false));
     expect(sam().points).toHaveLength(3);
-    await act(async () => answer?.());
+    await act(async () => first.release());
     await vi.waitFor(() => expect(decodes(requests)).toHaveLength(2));
     await vi.waitFor(() => expect(sam().busy).toBe(false));
     expect((decodes(requests)[0].body as { points: unknown[] }).points).toHaveLength(1);
     expect((decodes(requests)[1].body as { points: unknown[] }).points).toHaveLength(3);
+  });
+
+  it("a decode 409 with a click queued parks on unavailable and sends nothing more (I1)", async () => {
+    const message = "SAM failed to load: out of memory";
+    const { api, requests } = fakeClient(
+      base([
+        {
+          method: "POST",
+          path: /\/segment$/,
+          status: 409,
+          body: errorBody("assist_model_missing", message, { key: "sam2.1_t", state: "unavailable" }),
+        },
+      ]),
+    );
+    const first = holdPost(api, "/segment");
+    renderAi(<Harness />, api);
+    choose();
+    await prepared();
+    act(() => hook.click({ x: 1, y: 1 }, true));
+    act(() => hook.click({ x: 2, y: 2 }, true)); // queued behind the held decode
+    await act(async () => first.release());
+    await vi.waitFor(() => expect(sam().status).toBe("unavailable"));
+    await flush();
+    expect(decodes(requests)).toHaveLength(1);
+    expect(sam().status).toBe("unavailable");
+    expect(sam().reason).toBe("unavailable");
+    expect(sam().reasonText).toBe(message); // the 409's own words
+    expect(wsGet().draft).toBeNull();
+  });
+
+  it("a click during the settle window fixes the crop: no re-prepare after it (M1)", async () => {
+    const { api, requests } = fakeClient(
+      base([
+        {
+          method: "POST",
+          path: /\/segment$/,
+          body: { crop, polygon: null, score: 0, device: "cuda", encode_ms: 0, decode_ms: 8 },
+        },
+      ]),
+    );
+    renderAi(<Harness />, api);
+    choose();
+    await prepared();
+    act(() => useImagesWorkspace.setState({ view: { scale: 0.25, x: -40, y: 0 } })); // a small pan
+    act(() => hook.click({ x: 300, y: 300 }, true)); // inside the settle window
+    await act(() => new Promise((r) => setTimeout(r, VIEW_SETTLE_MS + 100)));
+    expect(prepares(requests)).toHaveLength(1);
+    expect(sam().status).toBe("ready");
+    expect(sam().crop).toEqual(crop);
+    expect(sam().points).toHaveLength(1);
+  });
+
+  it("refuses a click while a new crop is being prepared (M1)", async () => {
+    const { api, requests } = fakeClient(base());
+    const second = holdPost(api, "/segment/prepare", 2);
+    renderAi(<Harness />, api);
+    choose();
+    await prepared();
+    act(() => useImagesWorkspace.setState({ view: { scale: 1, x: -2500, y: -1500 } }));
+    await vi.waitFor(() => expect(sam().status).toBe("preparing"), { timeout: 2000 });
+    act(() => hook.click({ x: 10, y: 10 }, true));
+    expect(sam().points).toEqual([]);
+    expect(wsGet().draft).toBeNull();
+    await act(async () => second.release());
+    await prepared();
+    expect(prepares(requests)).toHaveLength(2);
+    expect(decodes(requests)).toHaveLength(0);
+  });
+
+  it("with the model missing, a pan does not replace the session state (M2)", async () => {
+    const { api } = fakeClient(base([], { ...ready, state: "missing" }));
+    renderAi(<Harness />, api);
+    choose();
+    await vi.waitFor(() => expect(sam().reason).toBe("missing"));
+    const before = useSamStore.getState().state;
+    act(() => useImagesWorkspace.setState({ view: { scale: 0.3, x: -10, y: 0 } }));
+    act(() => useImagesWorkspace.setState({ view: { scale: 0.3, x: -20, y: 0 } }));
+    await flush();
+    expect(useSamStore.getState().state).toBe(before);
+  });
+
+  it("two Enters before the create answers make one polygon (Review Focus 1, M3)", async () => {
+    const { api, requests } = fakeClient(
+      base([
+        {
+          method: "POST",
+          path: /\/segment$/,
+          body: {
+            crop,
+            polygon: [
+              [1, 1],
+              [9, 1],
+              [5, 8],
+            ],
+            score: 1,
+            device: "cuda",
+            encode_ms: 0,
+            decode_ms: 8,
+          },
+        },
+        {
+          method: "POST",
+          path: /\/images\/[^/]+\/boxes$/,
+          status: 201,
+          body: { id: "new", finding_id: null, repaired: false },
+        },
+      ]),
+    );
+    renderAi(<Harness />, api);
+    choose();
+    await prepared();
+    act(() => hook.click({ x: 3, y: 3 }, true));
+    await vi.waitFor(() => expect(sam().polygon).not.toBeNull());
+    let a = false;
+    let b = false;
+    act(() => {
+      a = hook.commit();
+      b = hook.commit();
+    });
+    expect([a, b]).toEqual([true, true]);
+    await vi.waitFor(() => expect(wsGet().draft).toBeNull());
+    await flush();
+    expect(requests.filter((r) => r.url.endsWith("/boxes"))).toHaveLength(1);
   });
 
   it("marks S unavailable on 409 assist_model_missing and needs no segment call", async () => {

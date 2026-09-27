@@ -70,10 +70,14 @@ function SmartPolygonStatus() {
       <>
         <p>
           {parked === "missing"
-            ? `Get smart polygon model (${size})`
+            ? size
+              ? `Get smart polygon model (${size})`
+              : "Get smart polygon model"
             : "The smart polygon model failed its check. Get it again."}
         </p>
-        {assist.model?.reason ? <p className="text-muted">{assist.model.reason}</p> : null}
+        {(s.reasonText ?? assist.model?.reason) ? (
+          <p className="text-muted">{s.reasonText ?? assist.model?.reason}</p>
+        ) : null}
         {acquiring ? (
           <Progress
             value={assist.job?.progress ?? undefined}
@@ -81,6 +85,10 @@ function SmartPolygonStatus() {
             label="Downloading the smart polygon model"
             thin
           />
+        ) : handle.availability === "ready" ? (
+          // A prepare 409 parked the session while the list still reads `ready`: an acquire would
+          // not change the list, so nothing would un-park it. Ask the server again instead.
+          tryAgain
         ) : (
           <div className="flex gap-2">
             <Button size="sm" variant="primary" onClick={assist.getModel}>
@@ -97,7 +105,7 @@ function SmartPolygonStatus() {
     // `unavailable`: SAM failed to load. The server retries the load on every prepare (I-BS).
     body = (
       <>
-        <p>{assist.model?.reason ?? "The smart polygon model could not be loaded."}</p>
+        <p>{s.reasonText ?? assist.model?.reason ?? "The smart polygon model could not be loaded."}</p>
         <p className="text-muted">The other tools work as usual.</p>
         {tryAgain}
       </>

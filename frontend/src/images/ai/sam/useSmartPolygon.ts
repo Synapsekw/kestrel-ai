@@ -43,6 +43,9 @@ const sam = () => useSamStore.getState().state;
 
 export const VIEW_SETTLE_MS = 300;
 
+/** The sender's refusal when the session has no prepared crop; never reported. */
+const NO_CROP = new Error("no prepared crop");
+
 /** FC's key rows `commit`/`remove-vertex` fire only while a draft exists (FC Task 8). */
 function markDrawing(): void {
   const s = wsGet();
@@ -71,27 +74,31 @@ export function useSmartPolygon(projectId: string): SmartPolygon {
   const availability = assist.availability;
   const [retryNonce, setRetryNonce] = useState(0);
 
-  const sender = useMemo(
-    () =>
-      new LatestOnly<{ imageId: string; points: SegmentPoint[]; seq: number }, SegmentResult>(
-        (v) => {
-          dispatch({ type: "segmenting" });
-          return segment(api, projectId, v.imageId, sam().crop!, v.points);
-        },
-        (r, v) => {
-          if (wsGet().imageId !== v.imageId) return;
-          dispatch({ type: "segmented", seq: v.seq, polygon: r.polygon, device: r.device });
-        },
-        (e) => {
-          if (codeOf(e) === "assist_model_missing") {
-            dispatch({ type: "unavailable", state: missingState(e) });
-            clearDrawing();
-            reload();
-          } else dispatch({ type: "failed", message: messageOf(e, "smart polygon failed") });
-        },
-      ),
-    [api, projectId, reload],
-  );
+  const sender = useMemo(() => {
+    const q = new LatestOnly<{ imageId: string; points: SegmentPoint[]; seq: number }, SegmentResult>(
+      (v) => {
+        const crop = sam().crop;
+        // No prepared crop (the session was reset or parked meanwhile): send nothing.
+        if (!crop) return Promise.reject(NO_CROP);
+        dispatch({ type: "segmenting" });
+        return segment(api, projectId, v.imageId, crop, v.points);
+      },
+      (r, v) => {
+        if (wsGet().imageId !== v.imageId) return;
+        dispatch({ type: "segmented", seq: v.seq, polygon: r.polygon, device: r.device });
+      },
+      (e) => {
+        if (e === NO_CROP) return;
+        if (codeOf(e) === "assist_model_missing") {
+          q.reset(); // drop a queued click: it would go out with no crop and replace the park (I1)
+          dispatch({ type: "unavailable", state: missingState(e), message: messageOf(e, "") || undefined });
+          clearDrawing();
+          reload();
+        } else dispatch({ type: "failed", message: messageOf(e, "smart polygon failed") });
+      },
+    );
+    return q;
+  }, [api, projectId, reload]);
 
   // A new image or leaving the tool ends the session (FC clears its draft on both).
   useEffect(() => {
@@ -111,7 +118,10 @@ export function useSmartPolygon(projectId: string): SmartPolygon {
     if (!active || !imageId) return;
     if (availability === "loading") return;
     if (NO_PREPARE.has(availability)) {
-      dispatch({ type: "unavailable", state: availability });
+      // Once per state: every pan frame re-runs this effect, and a new state object re-renders readers.
+      const s = sam();
+      if (s.status !== "unavailable" || s.reason !== availability)
+        dispatch({ type: "unavailable", state: availability });
       return;
     }
     // `ready`, or `unavailable` from the list: the server retries the load, so try. A 409 parks the
@@ -126,17 +136,22 @@ export function useSmartPolygon(projectId: string): SmartPolygon {
     const seq = ++prepareSeq.current;
     const timer = setTimeout(
       () => {
-        if (seq !== prepareSeq.current) return;
+        // R-FA8: the crop is fixed once a point is placed (a click inside the settle window).
+        if (seq !== prepareSeq.current || sam().points.length > 0) return;
         dispatch({ type: "prepare", key });
         prepareSegment(api, projectId, imageId, crop)
           .then((r) => {
-            if (wsGet().imageId === imageId)
+            if (wsGet().imageId === imageId && sam().key === key)
               dispatch({ type: "prepared", key, crop: r.crop, device: r.device });
           })
           .catch((e: unknown) => {
             if (wsGet().imageId !== imageId || sam().key !== key) return;
             if (codeOf(e) === "assist_model_missing") {
-              dispatch({ type: "unavailable", state: missingState(e) });
+              dispatch({
+                type: "unavailable",
+                state: missingState(e),
+                message: messageOf(e, "") || undefined,
+              });
               reload();
             } else dispatch({ type: "failed", message: messageOf(e, "could not prepare the smart polygon") });
           });
@@ -150,7 +165,9 @@ export function useSmartPolygon(projectId: string): SmartPolygon {
     (p: { x: number; y: number }, positive: boolean) => {
       const s = sam();
       const id = wsGet().imageId;
-      if (s.status === "unavailable" || !s.crop || !id) return; // R-FA7: nothing is drawn until ready
+      // R-FA7: nothing is drawn until ready. R-FA8: no point while a new crop is being prepared, so
+      // the crop a point was placed in is the one every segment call sends.
+      if (s.status === "unavailable" || s.status === "preparing" || !s.crop || !id) return;
       if (!inside(s.crop, p)) {
         dispatch({ type: "outside" }); // R-FA8: the panel shows SAM_OUTSIDE_HINT; no 422 round trip
         return;
@@ -186,16 +203,24 @@ export function useSmartPolygon(projectId: string): SmartPolygon {
     return true;
   }, [sender]);
 
+  const committing = useRef(false);
   const commit = useCallback(() => {
     const s = sam();
     if (!s.polygon) return s.points.length > 0; // Enter while still segmenting: S's, but nothing yet
+    if (committing.current) return true; // Review Focus 1: a second Enter while the create runs
+    committing.current = true;
     // FC's ToolApi adds the active type, or opens the T picker when there is none (R-FA9).
-    void toolApi.createShape({ shape: "polygon", points: s.polygon, assist: "sam" }).then((created) => {
-      if (!created) return;
-      sender.reset();
-      dispatch({ type: "cancel" });
-      clearDrawing();
-    });
+    void toolApi
+      .createShape({ shape: "polygon", points: s.polygon, assist: "sam" })
+      .then((created) => {
+        if (!created) return;
+        sender.reset();
+        dispatch({ type: "cancel" });
+        clearDrawing();
+      })
+      .finally(() => {
+        committing.current = false;
+      });
     return true;
   }, [toolApi, sender]);
 

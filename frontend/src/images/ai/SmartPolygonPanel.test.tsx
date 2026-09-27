@@ -112,6 +112,55 @@ describe("the S tool", () => {
     expect(requests.some((r) => r.url.endsWith("/acquire"))).toBe(true);
   });
 
+  it("a prepare 409 missing while the list reads ready offers Try again, not Get model", async () => {
+    let calls = 0;
+    const { api, requests } = fakeClient(
+      routes("ready", [
+        {
+          method: "POST",
+          path: /\/segment\/prepare$/,
+          status: () => (++calls === 1 ? 409 : 200),
+          body: () =>
+            calls === 1
+              ? errorBody("assist_model_missing", "The model file is gone.", {
+                  key: "sam2.1_t",
+                  state: "missing",
+                })
+              : { crop, device: "cuda", encode_ms: 100, cached: false },
+        },
+      ]),
+    );
+    renderAi(<Workspace />, api);
+    press("s");
+    expect(await screen.findByText("The model file is gone.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Get model" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await prepared();
+    expect(requests.filter((r) => r.url.endsWith("/segment/prepare"))).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+  });
+
+  it("names the model without an empty size when the list could not be read", async () => {
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/library\/assist-models$/,
+        status: 503,
+        body: errorBody("library_unavailable", "no library"),
+      },
+      {
+        method: "POST",
+        path: /\/segment\/prepare$/,
+        status: 409,
+        body: errorBody("assist_model_missing", "missing", { key: "sam2.1_t", state: "missing" }),
+      },
+    ]);
+    renderAi(<Workspace />, api);
+    press("s");
+    expect(await screen.findByText("Get smart polygon model")).toBeTruthy();
+    expect(screen.queryByText(/\(\)/)).toBeNull();
+  });
+
   it("explains a failed check, with Get model", async () => {
     const { api } = fakeClient(routes("invalid"));
     renderAi(<Workspace />, api);
