@@ -14,12 +14,18 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import PureWindowsPath
 from typing import Any
 
 import numpy as np
-from pyproj import CRS, Proj
+from pyproj import CRS, Proj, Transformer
+from sqlalchemy import func, select
 
-from app.db.models import Image
+from app.db.models import CloudCameraOffset, Image, Source
+from app.errors import AppError
+from app.pointclouds import rows
+from app.pointclouds.schemas import CloudCameraSet, CloudCameraSource
+from app.projects.service import ProjectHandle
 
 CAP = 20_000
 SIGMA_M = 3.0  # I records no RTK flag yet; an array so a flag can tighten it later (spec 10.1 step 5)
@@ -170,3 +176,180 @@ def search_box(
     cos_lat = max(math.cos(math.radians(max(abs(minlat), abs(maxlat)))), MIN_COS_LAT)
     dlon = buffer_m / (M_PER_DEG_LAT * cos_lat)
     return minlon - dlon, minlat - dlat, maxlon + dlon, maxlat + dlat
+
+
+NO_CRS = "Assign a coordinate system to this point cloud to place the drone photos."
+NOT_PROJECTED = (
+    "This point cloud's coordinate system is not projected (its units are degrees); assign a "
+    "projected coordinate system to place the drone photos."
+)
+
+
+def _target_crs(cloud) -> CRS:
+    """The cloud's projected CRS, or 409 needs_coordinates (C-B3 Ruling 8)."""
+    if not cloud.crs_wkt or not cloud.bounds_wgs84:
+        raise AppError("needs_coordinates", NO_CRS, 409)
+    crs = CRS.from_wkt(cloud.crs_wkt)
+    if not crs.is_projected:
+        raise AppError("needs_coordinates", NOT_PROJECTED, 409)
+    return crs
+
+
+def _label(folder: str | None, site: str | None, label: str | None, source_id: str) -> str:
+    """The set's label, else its site, else its folder's last component, else its id (never null)."""
+    return label or site or (PureWindowsPath(folder).name if folder else "") or source_id
+
+
+def _select(s, cloud, crs: CRS) -> tuple[list, bool]:
+    """ONE column-only query: the photos with GPS in the buffered box, at most CAP, by capture time."""
+    minlon, minlat, maxlon, maxlat = search_box(cloud.bounds_wgs84, cloud.bounds_native, crs)
+    query = (
+        select(
+            Image.id,
+            Image.source_id,
+            Image.width,
+            Image.height,
+            Image.lat,
+            Image.lon,
+            Image.alt,
+            *pose_select(),
+        )
+        .join(Source, Source.id == Image.source_id)
+        .where(
+            func.coalesce(Source.kind, "images") == "images",
+            Image.lat.is_not(None),
+            Image.lon.is_not(None),
+            Image.lat.between(minlat, maxlat),
+            Image.lon.between(minlon, maxlon),
+        )
+        .order_by(Image.capture_time.is_(None), Image.capture_time, Image.id)
+        .limit(CAP + 1)
+    )
+    found = list(s.execute(query).mappings())
+    return found[:CAP], len(found) > CAP
+
+
+def _round(value: float | None, digits: int) -> float | None:
+    return None if value is None else round(float(value), digits)
+
+
+def camera_set(handle: ProjectHandle, cloud_id: str) -> CloudCameraSet:
+    """The cameras payload (spec section 10.1). 404, then 409 not_ready, then 409 needs_coordinates."""
+    cloud = rows.require_ready(handle, cloud_id)
+    crs = _target_crs(cloud)
+    with handle.session() as s:
+        found, truncated = _select(s, cloud, crs)
+        source_ids = list(dict.fromkeys(m["source_id"] for m in found))
+        labels = {
+            sid: _label(folder, site, label, sid)
+            for sid, folder, site, label in (
+                s.execute(
+                    select(Source.id, Source.folder, Source.site, Source.label).where(
+                        Source.id.in_(source_ids)
+                    )
+                )
+                if source_ids
+                else []
+            )
+        }
+        offsets: dict[str, float] = dict(
+            s.execute(
+                select(CloudCameraOffset.source_id, CloudCameraOffset.height_offset_m).where(
+                    CloudCameraOffset.point_cloud_id == cloud_id
+                )
+            ).all()
+        )
+        # Controller ruling 11 (index log 3): the panel's "n photos without GPS" (spec section 14).
+        # Map-source rows are tiles, not photos: the same source filter as `_select`.
+        without_gps = int(
+            s.scalar(
+                select(func.count())
+                .select_from(Image)
+                .join(Source, Source.id == Image.source_id)
+                .where(
+                    func.coalesce(Source.kind, "images") == "images",
+                    Image.lat.is_(None) | Image.lon.is_(None),
+                )
+            )
+            or 0
+        )
+
+    n = len(found)
+    lons = np.fromiter((float(m["lon"]) for m in found), dtype=float, count=n)
+    lats = np.fromiter((float(m["lat"]) for m in found), dtype=float, count=n)
+    if n:
+        xs, ys = Transformer.from_crs(CRS.from_epsg(4326), crs, always_xy=True).transform(lons, lats)
+        xs, ys = np.asarray(xs, dtype=float).reshape(-1), np.asarray(ys, dtype=float).reshape(-1)
+    else:
+        xs = ys = np.zeros(0)
+    gamma = convergence(crs, lons, lats)
+
+    out: dict[str, list] = {
+        k: []
+        for k in (
+            "image_id",
+            "source_idx",
+            "x",
+            "y",
+            "z",
+            "yaw",
+            "pitch",
+            "roll",
+            "hfov",
+            "vfov",
+            "fov_assumed",
+            "width",
+            "height",
+            "sigma_m",
+        )
+    }
+    index = {sid: i for i, sid in enumerate(source_ids)}
+    counts = [0] * len(source_ids)
+    posed_counts = [0] * len(source_ids)
+    for i, m in enumerate(found):
+        if not (math.isfinite(xs[i]) and math.isfinite(ys[i]) and math.isfinite(gamma[i])):
+            continue  # outside the CRS's domain: never a NaN in the JSON
+        k = index[m["source_id"]]
+        pose = _pose_columns(m)
+        alt = _num(m["alt"])
+        hfov, vfov, assumed = fov_deg(int(m["width"]), int(m["height"]), pose)
+        if pose.posed:
+            yaw = (pose.yaw - float(gamma[i])) % 360.0
+            pitch, roll = pose.pitch, pose.roll if pose.roll is not None else 0.0
+            posed_counts[k] += 1
+        else:
+            yaw = pitch = roll = None
+        counts[k] += 1
+        out["image_id"].append(m["id"])
+        out["source_idx"].append(k)
+        out["x"].append(round(float(xs[i]), 3))
+        out["y"].append(round(float(ys[i]), 3))
+        out["z"].append(None if alt is None else round(alt + offsets.get(m["source_id"], 0.0), 3))
+        out["yaw"].append(_round(yaw, 4))
+        out["pitch"].append(_round(pitch, 4))
+        out["roll"].append(_round(roll, 4))
+        out["hfov"].append(round(hfov, 4))
+        out["vfov"].append(round(vfov, 4))
+        out["fov_assumed"].append(assumed)
+        out["width"].append(int(m["width"]))
+        out["height"].append(int(m["height"]))
+        out["sigma_m"].append(SIGMA_M)
+
+    z_stats = cloud.z_stats or {}
+    return CloudCameraSet(
+        **out,
+        sources=[
+            CloudCameraSource(
+                id=sid,
+                label=labels.get(sid, sid),
+                count=counts[k],
+                height_offset_m=offsets.get(sid, 0.0),
+                posed_count=posed_counts[k],
+            )
+            for sid, k in index.items()
+        ],
+        truncated=truncated,
+        z_p1=_num(z_stats.get("p1")),
+        z_p99=_num(z_stats.get("p99")),
+        without_gps=without_gps,
+    )

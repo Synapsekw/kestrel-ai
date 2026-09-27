@@ -10,6 +10,7 @@ from app.errors import not_implemented
 from app.pointclouds.jobs_export import run_pointcloud_export  # noqa: F401 - registers `pointcloud_export`
 from app.pointclouds.jobs_import import run_pointcloud_import  # noqa: F401 - registers `pointcloud_import`
 from app.pointclouds.jobs_profile import run_pointcloud_profile  # noqa: F401 - registers `pointcloud_profile`
+from app.pointclouds.routes_cameras import sub as camera_routes
 from app.pointclouds.routes_clouds import sub as cloud_routes
 from app.pointclouds.routes_export import sub as export_routes
 from app.pointclouds.routes_measurements import sub as measurement_routes
@@ -25,8 +26,7 @@ STUBS: list[tuple[str, str, str]] = [
     # C-B2: the profile job's routes
     ("POST", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry", "retryCloudProfile"),
     ("GET", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile", "getCloudProfile"),
-    # C-B3: the cameras
-    ("GET", "/pointclouds/{cloudId}/cameras", "getCloudCameras"),
+    # C-B3: the camera offsets
     ("PUT", "/pointclouds/{cloudId}/cameras/offsets/{sourceId}", "setCloudCameraOffset"),
     # C-B4: the report views
     ("PUT", "/findings/{findingId}/view3d", "putFindingView3d"),
@@ -58,7 +58,13 @@ for _method, _path, _name in STUBS:
 # S1 units land their operations as sub-routers (plan 2026-09-24-point-clouds): each one removes
 # its tuples from STUBS above and adds its router here. They inherit this router's prefix, tag and
 # project-kind guard.
-SUB_ROUTERS: tuple[APIRouter, ...] = (cloud_routes, octree_routes, measurement_routes, export_routes)
+SUB_ROUTERS: tuple[APIRouter, ...] = (
+    cloud_routes,
+    octree_routes,
+    measurement_routes,
+    export_routes,
+    camera_routes,
+)
 
 for _sub in SUB_ROUTERS:
     router.include_router(_sub)
