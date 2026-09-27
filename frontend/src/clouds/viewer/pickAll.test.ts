@@ -42,11 +42,18 @@ describe("pickWindowPixels", () => {
       {} as THREE.WebGLRenderer,
       new THREE.PerspectiveCamera(),
       new THREE.Ray(),
-      { windowSize: 2, pixel: new THREE.Vector3(10, 20, 0), nodes: chosen as never, params: { onBeforePickRender } },
+      {
+        windowSize: 2,
+        pixel: new THREE.Vector3(10, 20, 0),
+        nodes: chosen as never,
+        params: { onBeforePickRender },
+      },
     );
     expect(seenNodes).toBe(chosen);
     expect(seenParams).toMatchObject({ pickWindowSize: 2, onBeforePickRender });
-    expect((seenParams as unknown as { pixelPosition: THREE.Vector3 }).pixelPosition.toArray()).toEqual([10, 20, 0]);
+    expect((seenParams as unknown as { pixelPosition: THREE.Vector3 }).pixelPosition.toArray()).toEqual([
+      10, 20, 0,
+    ]);
     expect(got?.size).toBe(2);
     expect(got?.rgba[3]).toBe(2); // the copy taken before the alpha was zeroed
     expect(got?.nodes.map((n) => n.node)).toEqual(chosen);

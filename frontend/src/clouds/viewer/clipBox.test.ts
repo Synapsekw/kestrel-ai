@@ -136,7 +136,13 @@ function softPick(points: Vec3[], material: FakeMaterial): DrawnPoint[] {
     const seen = byPixel.get(key);
     if (!seen || p[1] < seen[1]) byPixel.set(key, p);
   }
-  return [...byPixel.values()].map((p) => ({ x: p[0], y: p[1], z: p[2], d2: p[0] ** 2 + p[2] ** 2, level: 0 }));
+  return [...byPixel.values()].map((p) => ({
+    x: p[0],
+    y: p[1],
+    z: p[2],
+    d2: p[0] ** 2 + p[2] ** 2,
+    level: 0,
+  }));
 }
 
 describe("picks respect the box (synthetic hollow box)", () => {
@@ -147,7 +153,9 @@ describe("picks respect the box (synthetic hollow box)", () => {
     const statics = PointCloudOctreePicker as unknown as {
       updatePickMaterial?: (pick: unknown, material: unknown, params: unknown) => void;
     };
-    expect(typeof statics.updatePickMaterial, "potree-core no longer has updatePickMaterial").toBe("function");
+    expect(typeof statics.updatePickMaterial, "potree-core no longer has updatePickMaterial").toBe(
+      "function",
+    );
     const cb = makeClipBox(clip.box);
     const material = { clipMode: ClipMode.CLIP_OUTSIDE, clipBoxes: [cb] };
     const pick = new FakeMaterial();

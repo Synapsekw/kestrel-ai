@@ -32,7 +32,9 @@ describe("read-back helpers", () => {
 describe("the finding pin sprite", () => {
   const accent: [number, number, number] = [229, 175, 100];
   const size = 64;
-  const px = (rgba: Uint8Array, x: number, y: number) => [...rgba.slice(4 * (y * size + x), 4 * (y * size + x) + 4)];
+  const px = (rgba: Uint8Array, x: number, y: number) => [
+    ...rgba.slice(4 * (y * size + x), 4 * (y * size + x) + 4),
+  ];
   it("is the accent colour inside a white ring, transparent outside, never a severity colour", () => {
     const rgba = pinSpriteRgba(size, accent);
     expect(px(rgba, 32, 32)).toEqual([...accent, 255]);
@@ -117,7 +119,11 @@ describe("encodeView", () => {
 describe("markObjects", () => {
   it("a finding is a screen-constant sprite over everything; a measurement is its overlay geometry", () => {
     const texture = new THREE.Texture();
-    const colours = { accent: new THREE.Color(1, 0, 0), ok: new THREE.Color(0, 1, 0), warn: new THREE.Color(0, 0, 1) };
+    const colours = {
+      accent: new THREE.Color(1, 0, 0),
+      ok: new THREE.Color(0, 1, 0),
+      warn: new THREE.Color(0, 0, 1),
+    };
     const origin = { x: 100, y: 200, z: 0 };
     const objs = markObjects(
       [

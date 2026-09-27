@@ -113,7 +113,9 @@ export class FlyControls {
   /** The point 10 m ahead of the camera: the orbit target leaving fly mode sets (and the target
    * `currentPose()` answers while flying). */
   ahead(): Vec3 {
-    const a = this.o.camera.position.clone().addScaledVector(forwardOf(this.yaw, this.pitch), FLY_EXIT_AHEAD_M);
+    const a = this.o.camera.position
+      .clone()
+      .addScaledVector(forwardOf(this.yaw, this.pitch), FLY_EXIT_AHEAD_M);
     return [a.x, a.y, a.z];
   }
 

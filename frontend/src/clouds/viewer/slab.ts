@@ -147,7 +147,8 @@ export function throttleLatest<A extends unknown[], R>(
   clock: ThrottleClock = realClock,
 ): (...args: A) => Promise<R> {
   let lastAt = -Infinity;
-  let pending: { args: A; waiters: Array<{ resolve: (r: R) => void; reject: (e: unknown) => void }> } | null = null;
+  let pending: { args: A; waiters: Array<{ resolve: (r: R) => void; reject: (e: unknown) => void }> } | null =
+    null;
   const fire = () => {
     const p = pending;
     pending = null;

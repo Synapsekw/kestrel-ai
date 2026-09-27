@@ -1,5 +1,11 @@
 import { Box3, Matrix4, Quaternion, Vector3 } from "three";
-import { ClipMode, createClipBox, type IClipBox, type PickParams, type PointCloudMaterial } from "potree-core";
+import {
+  ClipMode,
+  createClipBox,
+  type IClipBox,
+  type PickParams,
+  type PointCloudMaterial,
+} from "potree-core";
 import type { CloudClipBox } from "@contract/client";
 import type { Vec3 } from "./types";
 
@@ -50,7 +56,9 @@ export function insideClipBox(p: Vec3, b: ClipBox): boolean {
   const ly = -Math.sin(a) * dx + Math.cos(a) * dy;
   const eps = 1e-9;
   return (
-    Math.abs(lx) <= b.size[0] / 2 + eps && Math.abs(ly) <= b.size[1] / 2 + eps && Math.abs(dz) <= b.size[2] / 2 + eps
+    Math.abs(lx) <= b.size[0] / 2 + eps &&
+    Math.abs(ly) <= b.size[1] / 2 + eps &&
+    Math.abs(dz) <= b.size[2] / 2 + eps
   );
 }
 
@@ -91,5 +99,10 @@ export function pickClipParams(clip: ClipState | null): Partial<PickParams> {
 /** The report view's `render.clip_box` (C-C0's `CloudClipBox`). */
 export function toCloudClipBox(clip: ClipState | null): CloudClipBox | null {
   if (!clip) return null;
-  return { centre: [...clip.box.centre], size: [...clip.box.size], yaw_deg: clip.box.yawDeg, mode: clip.mode };
+  return {
+    centre: [...clip.box.centre],
+    size: [...clip.box.size],
+    yaw_deg: clip.box.yawDeg,
+    mode: clip.mode,
+  };
 }

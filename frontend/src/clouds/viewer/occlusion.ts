@@ -46,7 +46,11 @@ export function occlusionWindows(cssW: number, cssH: number, dpr: number): Occlu
 }
 
 /** NDC → device pixels (y up), or null behind the camera or off the canvas. */
-export function toDevicePixel(ndc: { x: number; y: number; z: number }, l: number, c: number): [number, number] | null {
+export function toDevicePixel(
+  ndc: { x: number; y: number; z: number },
+  l: number,
+  c: number,
+): [number, number] | null {
   if (!(ndc.z >= -1 && ndc.z <= 1) || Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1) return null;
   return [((ndc.x + 1) / 2) * l, ((ndc.y + 1) / 2) * c];
 }
@@ -118,7 +122,11 @@ function nearestNodes(pco: PointCloudOctree, camera: THREE.Camera, max: number):
  * pixels within 3 px of each projected point are decoded. Null unless the engine is idle with a
  * cloud (plan Ruling 11). `tolM[i]` is point i's tolerance.
  */
-export function runOcclusion(parts: EngineParts, points: readonly Vec3[], tolM: readonly number[]): boolean[] | null {
+export function runOcclusion(
+  parts: EngineParts,
+  points: readonly Vec3[],
+  tolM: readonly number[],
+): boolean[] | null {
   const pco = parts.pco();
   if (!pco || !parts.idle() || parts.frozen()) return null;
   const { renderer, camera, canvas } = parts;

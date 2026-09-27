@@ -1,8 +1,21 @@
 import * as THREE from "three";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { FLY_EXIT_AHEAD_M, FlyControls, anglesOf, flySpeed, forwardOf, look, moveDirection } from "./flyControls";
+import {
+  FLY_EXIT_AHEAD_M,
+  FlyControls,
+  anglesOf,
+  flySpeed,
+  forwardOf,
+  look,
+  moveDirection,
+} from "./flyControls";
 
-function key(type: "keydown" | "keyup", code: string, init: KeyboardEventInit = {}, target: EventTarget = window) {
+function key(
+  type: "keydown" | "keyup",
+  code: string,
+  init: KeyboardEventInit = {},
+  target: EventTarget = window,
+) {
   target.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true, cancelable: true, ...init }));
 }
 
@@ -107,7 +120,12 @@ describe("FlyControls", () => {
     document.body.append(input);
     key("keydown", "KeyW", {}, input);
     expect(fly.active()).toBe(false);
-    const ctrl = new KeyboardEvent("keydown", { code: "KeyS", ctrlKey: true, bubbles: true, cancelable: true });
+    const ctrl = new KeyboardEvent("keydown", {
+      code: "KeyS",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
     window.dispatchEvent(ctrl);
     expect(fly.active()).toBe(false);
     expect(ctrl.defaultPrevented).toBe(false);

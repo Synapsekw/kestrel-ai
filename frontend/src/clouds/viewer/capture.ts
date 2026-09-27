@@ -130,7 +130,8 @@ export async function encodeView(
   rgba: Uint8ClampedArray,
   w: number,
   h: number,
-  make: (w: number, h: number) => EncodeCanvas = (cw, ch) => new OffscreenCanvas(cw, ch) as unknown as EncodeCanvas,
+  make: (w: number, h: number) => EncodeCanvas = (cw, ch) =>
+    new OffscreenCanvas(cw, ch) as unknown as EncodeCanvas,
   imageData: (d: Uint8ClampedArray, w: number, h: number) => ImageData = (d, iw, ih) =>
     new ImageData(d as Uint8ClampedArray<ArrayBuffer>, iw, ih),
 ): Promise<Blob> {
@@ -174,7 +175,12 @@ export function markObjects(
   for (const m of marks) {
     if (m.kind === "finding") {
       const sprite = new THREE.Sprite(
-        new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, depthTest: false, transparent: true }),
+        new THREE.SpriteMaterial({
+          map: texture,
+          sizeAttenuation: false,
+          depthTest: false,
+          transparent: true,
+        }),
       );
       sprite.position.set(m.at[0] - origin.x, m.at[1] - origin.y, m.at[2] - origin.z);
       sprite.scale.set(scale, scale, 1);

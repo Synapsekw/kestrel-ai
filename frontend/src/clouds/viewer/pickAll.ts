@@ -130,7 +130,12 @@ export function pickWindowPixels(
   renderer: THREE.WebGLRenderer,
   camera: THREE.Camera,
   ray: THREE.Ray,
-  o: { windowSize: number; pixel: THREE.Vector3; nodes: PointCloudOctreeNode[]; params?: Partial<PickParams> },
+  o: {
+    windowSize: number;
+    pixel: THREE.Vector3;
+    nodes: PointCloudOctreeNode[];
+    params?: Partial<PickParams>;
+  },
 ): PickWindow | null {
   const spy = withPickerSpy(
     pco,
