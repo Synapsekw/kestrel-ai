@@ -96,7 +96,15 @@ def test_labels_are_ground_truth_of_the_selected_types_with_their_rotation(site)
             s, [ids["accepted"], ids["pending"], ids["other_type"]], Filter((handle.id,), (EXC, TRUCK))
         )
     assert [lb["type_id"] for lb in labels[ids["accepted"]]] == [EXC, TRUCK]
-    assert labels[ids["accepted"]][1] == {"type_id": TRUCK, "x": 10, "y": 12, "w": 30, "h": 8, "angle": 30.0}
+    assert labels[ids["accepted"]][1] == {
+        "type_id": TRUCK,
+        "x": 10,
+        "y": 12,
+        "w": 30,
+        "h": 8,
+        "angle": 30.0,
+        "shape": "box",
+    }
     assert len(labels[ids["pending"]]) == 1  # the unreviewed proposal is not a label
     assert ids["other_type"] not in labels
 

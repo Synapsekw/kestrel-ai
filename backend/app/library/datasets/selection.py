@@ -11,6 +11,8 @@ and the build pages through it 500 images at a time. Nothing loads an image set 
   such an image may hide an unlabelled object and would teach a false negative (plan BM decision 2).
 - The date range compares the image's capture time as a UTC day and falls back to its source's
   survey date; with a bound set, an image with neither is left out (plan BM decision 3).
+- An image with a label of a selected type the dataset's task cannot express (a point; a box in a
+  segment dataset without `boxes_as_polygons`) is skipped and counted (image spec I-D10).
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.db.models import Box, Image, Source
+from app.imagery import labels as label_rules
 
 GROUND_TRUTH_STATES = ("accepted", "edited")
 #: Per project, per preview (F §12.2 step 1).
@@ -39,6 +42,7 @@ class Filter:
     captured_from: date | None = None
     captured_to: date | None = None
     reviewed_only: bool = False
+    boxes_as_polygons: bool = False
 
     @classmethod
     def from_json(cls, value: dict) -> Filter:
@@ -51,6 +55,7 @@ class Filter:
             captured_from=day(value.get("captured_from")),
             captured_to=day(value.get("captured_to")),
             reviewed_only=bool(value.get("reviewed_only")),
+            boxes_as_polygons=bool(value.get("boxes_as_polygons")),
         )
 
 
@@ -96,7 +101,8 @@ def matching_images(f: Filter) -> Select:
 
 
 def labels_of(s: Session, image_ids: list[str], f: Filter) -> dict[str, list[dict]]:
-    """The frozen labels of one page of images: `{image_id: [{type_id, x, y, w, h, angle}]}`."""
+    """The frozen labels of one page of images:
+    `{image_id: [{type_id, shape, x, y, w, h, angle[, points]}]}`."""
     out: dict[str, list[dict]] = {}
     rows = s.execute(
         select(Box)
@@ -104,9 +110,19 @@ def labels_of(s: Session, image_ids: list[str], f: Filter) -> dict[str, list[dic
         .order_by(Box.created_at, Box.id)
     ).scalars()
     for b in rows:
-        out.setdefault(b.image_id, []).append(
-            {"type_id": b.class_id, "x": b.x, "y": b.y, "w": b.w, "h": b.h, "angle": b.angle or 0.0}
-        )
+        shape = b.shape or ("rbox" if b.angle else "box")
+        entry = {
+            "type_id": b.class_id,
+            "shape": shape,
+            "x": b.x,
+            "y": b.y,
+            "w": b.w,
+            "h": b.h,
+            "angle": b.angle or 0.0,
+        }
+        if shape == "polygon":
+            entry["points"] = b.points
+        out.setdefault(b.image_id, []).append(entry)
     return out
 
 
@@ -120,6 +136,21 @@ def count(s: Session, f: Filter) -> tuple[int, dict[str, int]]:
         .group_by(Box.class_id)
     ).all()
     return int(images), {str(t): int(n) for t, n in per_type}
+
+
+def unexpressible(f: Filter, task: str):
+    """`EXISTS` a ground-truth label of a selected type the task cannot write (image spec I-D10):
+    the SQL twin of `imagery.labels.expressible`, so the preview and the build agree with it."""
+    shapes = label_rules.unexpressible_shapes(task, boxes_as_polygons=f.boxes_as_polygons)
+    return exists().where(
+        Box.image_id == Image.id, Box.class_id.in_(f.type_ids), ground_truth(), Box.shape.in_(shapes)
+    )
+
+
+def skipped(s: Session, f: Filter, task: str) -> int:
+    """Matching images `task` would skip: one COUNT statement."""
+    q = matching_images(f).where(unexpressible(f, task)).subquery()
+    return int(s.execute(select(func.count()).select_from(q)).scalar_one())
 
 
 class PreviewTimeout(Exception):

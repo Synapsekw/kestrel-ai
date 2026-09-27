@@ -38,13 +38,14 @@ SEGMENT_NOT_SUPPORTED = (
 )
 
 
-def preview(registry, body: DatasetFilter) -> DatasetPreview:
+def preview(registry, body: DatasetFilter, task: str = "detect") -> DatasetPreview:
     """COUNTs only, per project, each under `selection.PREVIEW_TIMEOUT_S`. A project that is
     missing, will not open, or is too slow is reported and never fails the request (decision 14)."""
     f = selection.Filter.from_json(body.model_dump(mode="json"))
     projects: list[DatasetPreviewProject] = []
     per_type: dict[str, int] = {}
     total = 0
+    skipped_total = 0
     for project_id in f.project_ids:
         entry = DatasetPreviewProject(project_id=project_id, project_name=None, images=0, boxes=0, state="ok")
         try:
@@ -64,6 +65,7 @@ def preview(registry, body: DatasetFilter) -> DatasetPreview:
                 name = handle.row(s).name
                 with selection.interrupt_after(s, selection.PREVIEW_TIMEOUT_S):
                     images, boxes = selection.count(s, f)
+                    skipped = selection.skipped(s, f, task)
         except selection.PreviewTimeout:
             projects.append(entry.model_copy(update={"project_name": name, "state": "timed_out"}))
             continue
@@ -72,12 +74,15 @@ def preview(registry, body: DatasetFilter) -> DatasetPreview:
             projects.append(entry.model_copy(update={"project_name": name, "state": "unavailable"}))
             continue
         total += images
+        skipped_total += skipped
         for type_id, n in boxes.items():
             per_type[type_id] = per_type.get(type_id, 0) + n
         projects.append(
             entry.model_copy(update={"project_name": name, "images": images, "boxes": sum(boxes.values())})
         )
-    return DatasetPreview(images=total, boxes_per_type=per_type, projects=projects)
+    return DatasetPreview(
+        images=total, boxes_per_type=per_type, projects=projects, skipped_by_task=skipped_total
+    )
 
 
 # ---------------------------------------------------------------- folders and states
