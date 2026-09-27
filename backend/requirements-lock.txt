@@ -84,6 +84,7 @@ pygments==2.21.0
 pyinstaller==6.22.3
 pyinstaller-hooks-contrib==2026.7
 pyparsing==3.3.2
+pypdfium2==5.13.0
 pyproj==3.7.2
 pyrate-limiter==4.5.0
 pytest==9.1.1
