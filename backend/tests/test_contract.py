@@ -135,6 +135,11 @@ BACKEND_PENDING: dict[str, str] = {
     "chatWithSetupAgent": "I-BT",
 }
 
+# Point cloud workspace (unit C-C0, plan 2026-09-27-clouds-c0 Ruling 2): the create request widens to
+# area and profile, 200 points, `params` and `finding_id`, which C-B1 and C-B2 build. Whichever of
+# them merges second deletes this entry.
+BACKEND_PENDING |= {"createCloudMeasurement": "C-B1 and C-B2"}
+
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
 # §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path

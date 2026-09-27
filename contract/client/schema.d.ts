@@ -1853,7 +1853,12 @@ export interface paths {
         get: operations["getPointCloud"];
         put?: never;
         post?: never;
-        /** Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched. */
+        /**
+         * Delete the cloud, its measurements, report views and camera offsets, and its folder under
+         *     `pointclouds/`. The source file is untouched. Findings anchored on the cloud are deleted only
+         *     with `delete_findings=true` (through the findings service, attachments and comments included);
+         *     otherwise the delete is refused with 409 `cloud_has_findings`.
+         */
         delete: operations["deletePointCloud"];
         options?: never;
         head?: never;
@@ -1906,7 +1911,12 @@ export interface paths {
         /** The cloud's saved measurements, oldest first (at most 1 000). */
         get: operations["listCloudMeasurements"];
         put?: never;
-        /** Save a measurement. The server recomputes `results` from the points; a client never sends them. */
+        /**
+         * Save a measurement. The server recomputes `results` from the points; a client never sends
+         *     them. A `profile` is cut from the source file by a `pointcloud_profile` job: it answers 202
+         *     with the measurement at `status: computing` and its job, and `pointclouds.changed` reports it
+         *     `ready` or `failed`. Every other kind answers 201 at `status: ready`.
+         */
         post: operations["createCloudMeasurement"];
         delete?: never;
         options?: never;
@@ -1932,7 +1942,7 @@ export interface paths {
         delete: operations["deleteCloudMeasurement"];
         options?: never;
         head?: never;
-        /** Rename a measurement or change its note. */
+        /** Rename a measurement, change its note, or attach it to a cloud finding (null detaches it). */
         patch: operations["updateCloudMeasurement"];
         trace?: never;
     };
@@ -3859,8 +3869,16 @@ export interface components {
                  *     not_elevation, geographic_output and non_metric_output (422: an elevation import
                  *     that is not a single-band elevation raster, or would be written in a geographic or
                  *     non-metric CRS), invalid_patch (422: a date or role patch on a surface that is not a
-                 *     dem). A 501 not_implemented for an option of an existing operation carries details
-                 *     `{option, unit}`.
+                 *     dem),
+                 *     self_intersecting, degenerate_polygon, ring_needs_three_points, collinear_ring,
+                 *     profile_out_of_range and invalid_finding (422: a point-cloud measurement;
+                 *     invalid_finding is a `finding_id` that is not a cloud finding on that cloud),
+                 *     not_retryable (409: only a failed profile can be retried), needs_coordinates (409:
+                 *     the cloud has no CRS), cloud_has_findings (409: findings are anchored on the cloud;
+                 *     details `{count}`), not_a_cloud_finding (409: a report view for a finding with
+                 *     another anchor kind), bad_view_image (422: not a 1600 x 1000 PNG or JPEG of at most
+                 *     6 MiB; details `{reason}`), no_view (404: no report view is stored). A 501
+                 *     not_implemented for an option of an existing operation carries details `{option, unit}`.
                  */
                 code: string;
                 message: string;
@@ -7620,7 +7638,12 @@ export interface components {
             admission: components["schemas"]["PointCloudAdmission"];
         };
         /** @enum {string} */
-        CloudMeasurementKind: "point" | "distance" | "height" | "vertical";
+        CloudMeasurementKind: "point" | "distance" | "height" | "vertical" | "area" | "profile";
+        /**
+         * @description only a profile is ever `computing` (its `pointcloud_profile` job runs) or `failed`
+         * @enum {string}
+         */
+        CloudMeasurementStatus: "ready" | "computing" | "failed";
         CloudMeasurementPoint: {
             /** @description native CRS */
             x: number;
@@ -7628,19 +7651,44 @@ export interface components {
             z: number;
             /** @description the display spacing of the deepest loaded node that contains the pick */
             uncertainty_m: number;
+            /** @description a rings vertical check: 0 is the lower ring and 1 the upper; null or absent for every other kind */
+            group?: number | null;
+        };
+        /** @description per kind: area `{mode}`, vertical `{method}`, profile `{thickness_m, max_points}`; `view_dir` is the camera direction at save, used only to orient `plane_azimuth_deg`. A key that does not apply is absent or null */
+        CloudMeasurementParams: {
+            /**
+             * @description area: which area is primary; surface when absent
+             * @enum {string|null}
+             */
+            mode?: "surface" | "plan" | null;
+            /**
+             * @description vertical: two picks, or two fitted rings (6 to 64 points with `group` 0 and 1, at least 3 each); points when absent
+             * @enum {string|null}
+             */
+            method?: "points" | "rings" | null;
+            /** @description profile: the slab thickness; 0.20 when absent */
+            thickness_m?: number | null;
+            /** @description profile: the stored point cap; 200 000 when absent */
+            max_points?: number | null;
+            view_dir?: number[] | null;
         };
         CloudMeasurementCreate: {
             kind: components["schemas"]["CloudMeasurementKind"];
-            /** @description one point for `point`, two for the other kinds */
+            /** @description point 1; distance, height and vertical (points) 2; vertical (rings) 6 to 64 with `group`; area 3 to 200 (the outline, not closed); profile 2 (the section line A, B) */
             points: components["schemas"]["CloudMeasurementPoint"][];
             /** @description "Distance 3"-style numbering when absent */
             name?: string;
             note?: string;
+            params?: components["schemas"]["CloudMeasurementParams"] | null;
+            /** @description attach to this finding (a cloud finding on this cloud); null or absent for none */
+            finding_id?: string | null;
         };
         CloudMeasurementUpdate: {
             name?: string;
             /** @description null clears it */
             note?: string | null;
+            /** @description attach to this cloud finding on this cloud; null detaches */
+            finding_id?: string | null;
         };
         /** @description computed by the server from the stored points; a quantity that does not apply to the kind is null */
         CloudMeasurementResults: {
@@ -7662,6 +7710,29 @@ export interface components {
             lean_mm_per_m: number | null;
             uncertainty_m: number | null;
             angle_uncertainty_deg: number | null;
+            /** @description the primary area (`params.mode`) */
+            area_m2: number | null;
+            /** @description on the polygon's best-fit plane (Newell) */
+            area_surface_m2: number | null;
+            /** @description projected horizontally */
+            area_plan_m2: number | null;
+            perimeter_m: number | null;
+            /** @description the vertices' RMS distance from the best-fit plane */
+            plane_rms_m: number | null;
+            /** @description the plane's tilt from horizontal (0 is a slab, 90 a wall) */
+            plane_tilt_deg: number | null;
+            /** @description the plane normal's bearing, clockwise from grid north */
+            plane_azimuth_deg: number | null;
+            uncertainty_m2: number | null;
+            ring_radius_lower_m: number | null;
+            ring_radius_upper_m: number | null;
+            ring_rms_lower_m: number | null;
+            ring_rms_upper_m: number | null;
+            profile_length_m: number | null;
+            profile_z_min: number | null;
+            profile_z_max: number | null;
+            profile_width_max_m: number | null;
+            profile_point_count: number | null;
         };
         CloudMeasurementOut: {
             id: string;
@@ -7671,6 +7742,16 @@ export interface components {
             note: string | null;
             points: components["schemas"]["CloudMeasurementPoint"][];
             results: components["schemas"]["CloudMeasurementResults"];
+            params: components["schemas"]["CloudMeasurementParams"] | null;
+            status: components["schemas"]["CloudMeasurementStatus"];
+            /** @description why a profile failed; null otherwise */
+            error: string | null;
+            /** @description the profile's `pointcloud_profile` job */
+            job_id: string | null;
+            /** @description the cloud finding this measurement is attached to */
+            finding_id: string | null;
+            /** @description its stored report view (metadata only); null when there is none */
+            view: components["schemas"]["CloudViewOut"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -7679,11 +7760,104 @@ export interface components {
         CloudMeasurementList: {
             items: components["schemas"]["CloudMeasurementOut"][];
         };
+        CloudMeasurementWithJob: {
+            measurement: components["schemas"]["CloudMeasurementOut"];
+            job: components["schemas"]["Job"];
+        };
         PointCloudExportRequest: {
             /** @enum {string} */
             format: "laz";
             /** @description true when absent: write measurements.csv when the cloud has measurements */
             include_measurements?: boolean;
+        };
+        /** @description the camera that took a report view, in the cloud's native CRS; `fov_deg` is vertical and the aspect is fixed at 1.6 */
+        CloudViewPose: {
+            position: number[];
+            target: number[];
+            up: number[];
+            fov_deg: number;
+        };
+        CloudClipBox: {
+            centre: number[];
+            size: number[];
+            /** @description rotation about Z */
+            yaw_deg: number;
+            /** @enum {string} */
+            mode: "show_inside" | "highlight_inside";
+        };
+        /** @description the render settings on screen at capture, so a re-capture reproduces the view */
+        CloudViewRender: {
+            /** @enum {string} */
+            colour_mode: "rgb" | "elevation" | "intensity" | "classification";
+            point_budget: number;
+            point_size: number;
+            edl: boolean;
+            clip_box: components["schemas"]["CloudClipBox"] | null;
+            /** @description false when the capture timed out before every node had loaded */
+            complete: boolean;
+        };
+        /** @enum {string} */
+        CloudViewSubjectKind: "finding" | "cloud_measurement";
+        /**
+         * @description a stored report view's metadata (the image is served by the `view3d` GET); `stale` is computed on read
+         * @example {
+         *       "subject_kind": "finding",
+         *       "subject_id": "f0000000-7777-4000-8000-000000000001",
+         *       "pose": {
+         *         "position": [
+         *           243540.2,
+         *           3178030.5,
+         *           12.4
+         *         ],
+         *         "target": [
+         *           243552,
+         *           3178041,
+         *           -20.1
+         *         ],
+         *         "up": [
+         *           0,
+         *           0,
+         *           1
+         *         ],
+         *         "fov_deg": 50
+         *       },
+         *       "render": {
+         *         "colour_mode": "rgb",
+         *         "point_budget": 3000000,
+         *         "point_size": 1.4,
+         *         "edl": true,
+         *         "clip_box": null,
+         *         "complete": true
+         *       },
+         *       "anchor_normal": [
+         *         0.71,
+         *         -0.7,
+         *         0.05
+         *       ],
+         *       "sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b",
+         *       "bytes": 2311840,
+         *       "width": 1600,
+         *       "height": 1000,
+         *       "captured_at": "2026-09-27T10:00:00Z",
+         *       "stale": false
+         *     }
+         */
+        CloudViewOut: {
+            subject_kind: components["schemas"]["CloudViewSubjectKind"];
+            subject_id: string;
+            pose: components["schemas"]["CloudViewPose"];
+            render: components["schemas"]["CloudViewRender"];
+            /** @description findings only: the unit surface normal at the pin; null when unknown */
+            anchor_normal: number[] | null;
+            /** @description of the image bytes; the GET's `ETag` */
+            sha256: string;
+            bytes: number;
+            width: number;
+            height: number;
+            /** Format: date-time */
+            captured_at: string;
+            /** @description the subject's geometry changed since the capture */
+            stale: boolean;
         };
         /**
          * @description dem is a DSM or DTM GeoTIFF imported as elevation (map workspace)
@@ -15321,7 +15495,10 @@ export interface operations {
     };
     deletePointCloud: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description also delete the findings anchored on this cloud; false when absent */
+                delete_findings?: boolean;
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -15338,7 +15515,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description its import or export job is queued or running (`code` is `job_running`) */
+            /** @description its import or export job is queued or running (`code` is `job_running`), or findings are anchored on it and `delete_findings` is not true (`code` is `cloud_has_findings`, details `{count}`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15509,6 +15686,15 @@ export interface operations {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
                 };
             };
+            /** @description a profile measurement at `status: computing` and its `pointcloud_profile` job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementWithJob"];
+                };
+            };
             /** @description the cloud is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
@@ -15518,7 +15704,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description the wrong number of points for the kind (`wrong_point_count`), a distance, height difference or vertical check on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error` */
+            /** @description the wrong number of points for the kind (`wrong_point_count`), a distance, height difference, vertical check, area or profile on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), an area whose outline crosses itself (`self_intersecting`) or has no area (`degenerate_polygon`), a ring with fewer than three points (`ring_needs_three_points`) or in a line (`collinear_ring`), a profile line outside the cloud or of zero length (`profile_out_of_range`), a `finding_id` that is not a cloud finding on this cloud (`invalid_finding`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -15579,6 +15765,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
+                };
+            };
+            /** @description `finding_id` is not a cloud finding on this cloud (`code` is `invalid_finding`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];

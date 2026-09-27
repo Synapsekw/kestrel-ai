@@ -1,3 +1,5 @@
+import type { CloudMeasurementKind } from "@contract/client";
+
 import type { PointCloud } from "@/api/clouds";
 import type { Vec3 } from "./viewer/camera";
 import type { OverlayShape } from "./viewer/overlay";
@@ -32,11 +34,14 @@ export interface MPoint {
 }
 
 export const MIN_VERTICAL_SPAN_M = 0.5;
-export const KIND_LABEL: Record<MeasureKind, string> = {
+/** A label for every saved kind, including the ones later units build (area C-B1, profile C-B2). */
+export const KIND_LABEL: Record<CloudMeasurementKind, string> = {
   point: "Point",
   distance: "Distance",
   height: "Height difference",
   vertical: "Vertical check",
+  area: "Area",
+  profile: "Cross-section",
 };
 
 export const pointsNeeded = (kind: MeasureKind): 1 | 2 => (kind === "point" ? 1 : 2);

@@ -21,8 +21,7 @@ NAMES = [
     "PointCloudFileInfo",
     "PointCloudAdmission",
     "CloudMeasurementPoint",
-    "CloudMeasurementCreate",
-    "CloudMeasurementUpdate",
+    # CloudMeasurementCreate / CloudMeasurementUpdate: re-added by C-B1 when it widens them (C-C0 Ruling 2).
     "CloudMeasurementResults",
     "CloudMeasurementOut",
     "CloudMeasurementList",
