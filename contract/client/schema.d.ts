@@ -2357,7 +2357,7 @@ export interface paths {
          *     overrides a type's catalogue hotkey inside this project; null clears the override. Removing
          *     a type that still has annotations or findings fails with 409 `class_in_use`. A type id the
          *     catalogue does not know fails with 422 `unknown_type`: create it with `POST /catalogue/types`
-         *     first. Replaces the deprecated `PUT /projects/{projectId}/classes`.
+         *     first.
          */
         put: operations["putProjectTypes"];
         post?: never;
