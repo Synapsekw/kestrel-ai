@@ -833,7 +833,7 @@ paths:
               schema: { $ref: "#/components/schemas/QueryRunWithJob" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: "the model's weights file is missing (`code` is `model_unavailable`)"
+          description: "the model's weights file is missing (`code` is `model_unavailable`), or no API key is stored for a cloud provider (`code` is `conflict`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }

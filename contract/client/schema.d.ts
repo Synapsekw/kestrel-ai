@@ -12931,7 +12931,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the model's weights file is missing (`code` is `model_unavailable`) */
+            /** @description the model's weights file is missing (`code` is `model_unavailable`), or no API key is stored for a cloud provider (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;
