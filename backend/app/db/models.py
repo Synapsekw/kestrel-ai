@@ -97,11 +97,37 @@ class Image(Base):
     group_key: Mapped[str] = mapped_column(String, default="")
     marked_empty: Mapped[bool] = mapped_column(Boolean, default=False, server_default=sa.false())
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Camera and pose (image inspection spec §7.3, migration 0011). All nullable. The point-cloud
+    # workspace reads these names (`app/pointclouds/cameras.py:_pose_columns`): do not rename them.
+    rel_alt: Mapped[float | None] = mapped_column(Float, nullable=True)  # m above take-off
+    gimbal_pitch: Mapped[float | None] = mapped_column(Float, nullable=True)  # -90 = nadir
+    gimbal_yaw: Mapped[float | None] = mapped_column(Float, nullable=True)  # clockwise from north
+    gimbal_roll: Mapped[float | None] = mapped_column(Float, nullable=True)
+    flight_yaw: Mapped[float | None] = mapped_column(Float, nullable=True)  # the yaw fallback
+    lrf_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    focal_px: Mapped[float | None] = mapped_column(Float, nullable=True)  # px of the original frame
+    focal_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    sensor_w_mm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    orig_w: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    orig_h: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    camera_model: Mapped[str | None] = mapped_column(String, nullable=True)
+    original_name: Mapped[str | None] = mapped_column(String, nullable=True)  # relative to Source.folder
+    subject_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)  # the operator's value
+    footprint: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[lon, lat], ...]
+    footprint_kind: Mapped[str] = mapped_column(String, default="none", server_default="none")
+    metadata_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     __table_args__ = (
         Index("ix_image_source", "source_id"),
         Index("ix_image_group", "group_key"),
         Index("ix_image_path", "path", unique=True),
     )
+
+
+def _box_area(context) -> float:
+    """w times h at insert. The annotation service (unit I-BA) writes the real area of polygons and
+    points; this default keeps rows written by any other path from carrying a zero area."""
+    params = context.get_current_parameters()
+    return float(params.get("w") or 0.0) * float(params.get("h") or 0.0)
 
 
 class Box(Base):
@@ -124,12 +150,53 @@ class Box(Base):
     review_state: Mapped[str] = mapped_column(String, default="unreviewed")
     reviewed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Annotation shapes (image inspection spec §8.1, migration 0011). A polygon keeps x/y/w/h as its
+    # axis-aligned envelope with angle 0; a point has w = h = 0.
+    shape: Mapped[str] = mapped_column(String, default="box", server_default="box")  # box|rbox|polygon|point
+    points: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[x, y], ...], polygons only
+    assist: Mapped[str | None] = mapped_column(String, nullable=True)  # "sam" | None
+    area_px: Mapped[float] = mapped_column(Float, default=_box_area, server_default="0")
+    updated_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime, nullable=True, default=utcnow, onupdate=utcnow
+    )
     __table_args__ = (
         Index("ix_box_image", "image_id"),
         Index("ix_box_query_run", "query_run_id"),
         Index("ix_box_review", "review_state"),
         Index("ix_box_class", "class_id"),
+        Index("ix_box_image_class", "image_id", "class_id"),
+        Index("ix_box_image_review", "image_id", "review_state"),
     )
+
+
+class ImageSummary(Base):
+    """Per-image annotation aggregates (image inspection spec §7.1, decision I-D2), recomputed for one
+    image inside every box write by `app.imagery.summary.touch`."""
+
+    __tablename__ = "image_summary"
+    image_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("image.id", ondelete="CASCADE"), primary_key=True
+    )
+    annotation_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    pending_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    max_pending_conf: Mapped[float | None] = mapped_column(Float, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+
+class ImageMeasurement(Base):
+    """A length drawn on an image (spec §9.3). The length is computed on read, so it follows later
+    distance changes."""
+
+    __tablename__ = "image_measurement"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    image_id: Mapped[str] = mapped_column(String(36), ForeignKey("image.id", ondelete="CASCADE"))
+    x1: Mapped[float] = mapped_column(Float)
+    y1: Mapped[float] = mapped_column(Float)
+    x2: Mapped[float] = mapped_column(Float)
+    y2: Mapped[float] = mapped_column(Float)
+    label: Mapped[str] = mapped_column(String, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (Index("ix_image_measurement_image", "image_id"),)
 
 
 class Dataset(Base):
