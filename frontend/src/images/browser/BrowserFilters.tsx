@@ -225,7 +225,10 @@ export function BrowserFilters({ projectId, value, onChange, index }: BrowserFil
               icon={value.order === "asc" ? "arrow-left" : "arrow-right"}
               label={value.order === "asc" ? "Sort descending" : "Sort ascending"}
               onClick={() => set({ order: value.order === "asc" ? "desc" : "asc" })}
-              className={value.order === "asc" ? "rotate-90" : "-rotate-90"}
+              // Both rotate 90deg clockwise: arrow-left (pointing left, 9 o'clock) becomes up
+              // (12 o'clock) for asc; arrow-right (pointing right, 3 o'clock) becomes down
+              // (6 o'clock) for desc. Ruling 7: asc points up, desc points down.
+              className="rotate-90"
             />
           </div>
         </div>

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { exampleSource, fakeClient, PROJECT_ID, SOURCE_ID } from "@/test/fixtures";
 import { typedProject } from "@/test/findingFixtures";
 import { renderWithProviders } from "@/test/render";
@@ -98,5 +98,24 @@ describe("BrowserFilters", () => {
       vi.advanceTimersByTime(SEARCH_COMMIT_MS + 10);
     });
     expect(onChange).toHaveBeenLastCalledWith({ ...DEFAULT_BROWSER_FILTERS, search: "0031" });
+  });
+
+  it("sort-direction icon points up for asc and down for desc (Ruling 7)", async () => {
+    renderFilters();
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    const ascButton = await screen.findByRole("button", { name: "Sort descending" });
+    expect(ascButton.querySelector("svg")).toHaveAttribute("data-icon", "arrow-left");
+    let classes = ascButton.className.split(/\s+/);
+    expect(classes).toContain("rotate-90");
+    expect(classes).not.toContain("-rotate-90");
+    cleanup();
+
+    renderFilters({ ...DEFAULT_BROWSER_FILTERS, order: "desc" });
+    fireEvent.click(screen.getByRole("button", { name: /More/ }));
+    const descButton = await screen.findByRole("button", { name: "Sort ascending" });
+    expect(descButton.querySelector("svg")).toHaveAttribute("data-icon", "arrow-right");
+    classes = descButton.className.split(/\s+/);
+    expect(classes).toContain("rotate-90");
+    expect(classes).not.toContain("-rotate-90");
   });
 });
