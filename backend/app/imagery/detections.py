@@ -18,12 +18,11 @@ from app.geometry import aabb_of
 from app.imagery import annotations
 from app.imagery.shapes import ShapeFields, shape_fields
 from app.providers.base import Detection
+from app.providers.tiling import Envelope, envelope_iou
 
 log = logging.getLogger(__name__)
 
 COVER_IOU = 0.5  # spec §11.2 step 4
-
-Envelope = tuple[float, float, float, float]
 
 
 def to_fields(det: Detection, width: int, height: int) -> ShapeFields | None:
@@ -46,16 +45,6 @@ def to_fields(det: Detection, width: int, height: int) -> ShapeFields | None:
     except AppError as e:
         log.debug("dropping a %s detection of %s: %s", det.shape, det.label, e.message)
         return None
-
-
-def envelope_iou(a: Envelope, b: Envelope) -> float:
-    ix = min(a[0] + a[2], b[0] + b[2]) - max(a[0], b[0])
-    iy = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
-    if ix <= 0 or iy <= 0:
-        return 0.0
-    inter = ix * iy
-    union = a[2] * a[3] + b[2] * b[3] - inter
-    return inter / union if union > 0 else 0.0
 
 
 def row_envelope(row: Box) -> Envelope | None:

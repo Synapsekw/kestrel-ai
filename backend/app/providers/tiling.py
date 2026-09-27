@@ -88,10 +88,13 @@ def encode_tile(image: PILImage.Image, tile: Tile, max_side: int) -> str:
     return base64.b64encode(buffer.getvalue()).decode("ascii")
 
 
-def iou(a: Detection, b: Detection) -> float:
-    """Intersection over union of the two envelopes (NMS stays on envelopes, spec §11.3)."""
-    ax, ay, aw, ah = a.envelope()
-    bx, by, bw, bh = b.envelope()
+Envelope = tuple[float, float, float, float]
+
+
+def envelope_iou(a: Envelope, b: Envelope) -> float:
+    """Intersection over union of two axis-aligned `(x, y, w, h)` envelopes."""
+    ax, ay, aw, ah = a
+    bx, by, bw, bh = b
     ix = min(ax + aw, bx + bw) - max(ax, bx)
     iy = min(ay + ah, by + bh) - max(ay, by)
     if ix <= 0 or iy <= 0:
@@ -99,6 +102,12 @@ def iou(a: Detection, b: Detection) -> float:
     inter = ix * iy
     union = aw * ah + bw * bh - inter
     return inter / union if union > 0 else 0.0
+
+
+def iou(a: Detection, b: Detection) -> float:
+    """Intersection over union of the two detections' envelopes (NMS stays on envelopes, spec
+    §11.3)."""
+    return envelope_iou(a.envelope(), b.envelope())
 
 
 def not_covered_by(
