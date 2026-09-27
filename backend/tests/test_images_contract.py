@@ -229,3 +229,9 @@ def test_no_flow_mapping_comma_truncates_a_description(spec):
     schemas = {name: _schemas(spec)[name] for name in I_SCHEMA_NAMES}
     found = _phantom_keys(schemas, [])
     assert found == [], found
+
+
+def test_the_images_job_types(spec):
+    job_types = _schemas(spec)["JobType"]["enum"]
+    for job_type in ("image_metadata", "summary_rebuild", "assist_acquire"):
+        assert job_type in job_types

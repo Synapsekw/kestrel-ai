@@ -3,10 +3,14 @@ that builds it (plan 2026-09-27-images-c0). A unit that lands an operation delet
 its module's STUBS and its EXPECTED_STUBS entry; this test follows without an edit."""
 
 import importlib
+import inspect
 import re
 
+import pytest
 import yaml
 from project_factory import new_project
+
+from app.jobs.registry import get_job_type
 
 PROJECT_MODULES = [
     "app.imagery.routes_index",
@@ -16,6 +20,7 @@ PROJECT_MODULES = [
     "app.assist.router",
 ]
 I_TAGS = {"images", "boxes", "image-detect", "assist"}
+NEW_JOB_TYPES = ["image_metadata", "summary_rebuild", "assist_acquire"]
 
 
 def _concrete(path: str) -> str:
@@ -75,3 +80,17 @@ def test_literal_image_paths_are_not_swallowed_by_the_image_id_route(client, tmp
 
 def test_an_unknown_project_is_404(client):
     assert client.get("/api/v1/projects/nope/images/index").status_code == 404
+
+
+def test_the_three_job_types_are_registered(app):
+    for job_type in NEW_JOB_TYPES:
+        assert callable(get_job_type(job_type)), job_type
+
+
+@pytest.mark.parametrize("job_type", NEW_JOB_TYPES)
+def test_each_stub_job_fails_readably_until_its_unit_lands(app, handle, project_id, wait_job, job_type):
+    if 'raise JobFailure("not implemented")' not in inspect.getsource(get_job_type(job_type)):
+        pytest.skip(f"{job_type} is built; its unit's tests cover it")
+    job = app.state.jobs.submit(handle, job_type, {})
+    done = wait_job(project_id, job.id, timeout=30)
+    assert (done["state"], done["error"], done["type"]) == ("failed", "not implemented", job_type)

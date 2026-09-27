@@ -32,6 +32,9 @@ const TYPE_NAME: Record<Job["type"], string> = {
   findings_backfill: "Findings from annotations",
   findings_recount: "Findings recount",
   dataset_build: "Dataset build",
+  image_metadata: "Camera metadata",
+  summary_rebuild: "Image summary rebuild",
+  assist_acquire: "Smart polygon model",
 };
 
 function num(v: unknown): number | null {
@@ -120,6 +123,12 @@ export function jobToastText(job: Job): string {
       return "Findings recounted";
     case "dataset_build":
       return "Dataset built";
+    case "image_metadata":
+      return "Camera metadata read";
+    case "summary_rebuild":
+      return "Image summaries rebuilt";
+    case "assist_acquire":
+      return "Smart polygon model ready";
   }
 }
 

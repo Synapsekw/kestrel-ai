@@ -6,6 +6,7 @@ and its EXPECTED_STUBS entry.
 
 from fastapi import APIRouter
 
+from app.imagery.jobs_summary import run_summary_rebuild  # noqa: F401 - registers `summary_rebuild`
 from app.stubs import add_stubs
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["images"])

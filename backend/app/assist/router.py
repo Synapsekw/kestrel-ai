@@ -5,6 +5,7 @@ under a guard, so a broken stack costs only these endpoints."""
 
 from fastapi import APIRouter
 
+from app.assist.jobs_acquire import run_assist_acquire  # noqa: F401 - registers `assist_acquire`
 from app.stubs import add_stubs
 
 _project = APIRouter(prefix="/projects/{projectId}", tags=["assist"])

@@ -30,4 +30,7 @@ export const JOB_VERB: Record<Job["type"], string> = {
   findings_backfill: "Creating findings",
   findings_recount: "Recounting findings",
   dataset_build: "Building a dataset",
+  image_metadata: "Reading camera metadata",
+  summary_rebuild: "Rebuilding image summaries",
+  assist_acquire: "Getting the smart polygon model",
 };

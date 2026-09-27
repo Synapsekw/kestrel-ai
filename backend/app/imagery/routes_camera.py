@@ -4,6 +4,7 @@
 
 from fastapi import APIRouter
 
+from app.imagery.jobs_metadata import run_image_metadata  # noqa: F401 - registers `image_metadata`
 from app.stubs import add_stubs
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["images"])

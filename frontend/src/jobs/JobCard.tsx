@@ -47,6 +47,9 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   findings_backfill: "review",
   findings_recount: "refresh",
   dataset_build: "datasets",
+  image_metadata: "images",
+  summary_rebuild: "refresh",
+  assist_acquire: "sparkle",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

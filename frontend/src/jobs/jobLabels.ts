@@ -29,6 +29,9 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   findings_backfill: "Findings from annotations",
   findings_recount: "Findings recount",
   dataset_build: "Dataset build",
+  image_metadata: "Camera metadata",
+  summary_rebuild: "Image summary rebuild",
+  assist_acquire: "Smart polygon model",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -112,6 +115,11 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
       return { label: "Open projects", to: "/projects" };
     case "findings_recount":
       return { label: "Open findings", to: `${p}/findings` };
+    case "image_metadata":
+    case "summary_rebuild":
+      return { label: "Open images", to: `${p}/images` };
+    case "assist_acquire":
+      return null;
     case "import":
       if (job.params?.purpose === "starter_model") return model(str(job.result, "model_id"));
       return { label: "Open images", to: `${p}/images` };
