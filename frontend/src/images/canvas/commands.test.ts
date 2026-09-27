@@ -18,10 +18,12 @@ import {
 } from "./commands";
 
 let counter = 0;
-let measurementCounter = 0;
 const st = () => useImagesWorkspace.getState();
 
 function ctxWith(extra: FakeRoute[] = []) {
+  // m3: local to this call, so each test (or each ctxWith() call within a test) starts at 0 —
+  // a module-level counter would drift across tests that create more than one measurement.
+  let measurementCounter = 0;
   const routes: FakeRoute[] = [
     ...extra,
     {
@@ -228,6 +230,29 @@ describe("cmdSetType", () => {
     expect(await cmdSetType(ctx, ["p1"], "object", { confirmFindingDelete: true })).toBe("done");
     expect(requests.at(-1)?.url).toContain("confirm_finding_delete=true");
   });
+
+  it("pushes an undo entry for ids already retyped before a later one is refused (I2)", async () => {
+    const { ctx } = ctxWith([
+      {
+        method: "PATCH",
+        path: /\/boxes\/p1$/,
+        status: 200,
+        body: (req) => ({ ...polygon, ...(req.body as object) }),
+      },
+      {
+        method: "PATCH",
+        path: /\/boxes\/s1$/,
+        status: 409,
+        body: errorBody("finding_would_be_deleted", "would delete F-0002"),
+      },
+    ]);
+    expect(await cmdSetType(ctx, ["p1", "s1"], "object")).toBe("needs-confirm");
+    expect(st().boxes.p1.class_id).toBe("object");
+    expect(st().boxes.s1.class_id).toBe(proposal.class_id);
+    expect(st().history.canUndo()).toBe(true);
+    await cmdUndo(ctx);
+    expect(st().boxes.p1.class_id).toBe(polygon.class_id);
+  });
 });
 
 describe("cmdReview", () => {
@@ -242,17 +267,23 @@ describe("cmdReview", () => {
   });
 
   it("undo of an accept refused with finding_has_content keeps the entry", async () => {
-    const { ctx } = ctxWith();
-    await cmdReview(ctx, ["s1"], "accept");
-    const refusing = ctxWith([
+    // I1: one fake client whose review route toggles from success (the accept) to a 409 refusal
+    // (the undo) — not two separate CommandContexts, which commands.ts never mixes in practice.
+    let refuse = false;
+    const { ctx } = ctxWith([
       {
         method: "POST",
         path: /\/boxes\/review$/,
-        status: 409,
-        body: errorBody("finding_has_content", "has a note"),
+        status: () => (refuse ? 409 : 200),
+        body: () =>
+          refuse
+            ? errorBody("finding_has_content", "has a note")
+            : { updated: 1, finding_ids_created: ["f9"], finding_ids_deleted: [] },
       },
-    ]).ctx;
-    await cmdUndo(refusing);
+    ]);
+    await cmdReview(ctx, ["s1"], "accept");
+    refuse = true;
+    await cmdUndo(ctx);
     expect(st().boxes.s1.review_state).toBe("accepted");
     expect(st().history.canUndo()).toBe(true);
     expect(st().failure?.message).toBe("This finding has a note or photos; delete it from the inspector.");
@@ -292,6 +323,18 @@ describe("cmdDeleteShapes", () => {
     st().linkFindings({ p1: "f-p1" });
     await cmdDeleteShapes(ctx, ["p1"]);
     expect(st().findingOf.p1).toBeUndefined();
+  });
+
+  it("drops the finding link of a rejected proposal and re-links it on undo (m4)", async () => {
+    const { ctx } = ctxWith();
+    st().patchStates(["s1"], "accepted"); // an accepted proposal, not just unreviewed
+    st().linkFindings({ s1: "f-s1" });
+    await cmdDeleteShapes(ctx, ["s1"]);
+    expect(st().boxes.s1.review_state).toBe("rejected");
+    expect(st().findingOf.s1).toBeUndefined();
+    await cmdUndo(ctx);
+    expect(st().boxes.s1.review_state).toBe("accepted");
+    expect(st().findingOf.s1).toBe("f9"); // the default review route's finding_ids_created
   });
 });
 

@@ -47,22 +47,8 @@ export type ShapePatch =
 /** Spec §16's wording for an undo refused because the finding already has content. */
 export const FINDING_HAS_CONTENT_MESSAGE = "This finding has a note or photos; delete it from the inspector.";
 
-/**
- * The context of whichever command most recently ran. There is only ever one open image (one
- * `CommandContext`) at a time, but a command's `undo`/`redo` closure is created once, at push
- * time, and may run much later; reading `api`/`projectId` through this indirection (instead of
- * closing over the values captured at push time) means undo/redo always talk to the *current*
- * api client and project, not a stale one from whenever the command was first run.
- */
-let activeCtx: CommandContext | null = null;
-
-function live(ctx: CommandContext): CommandContext {
-  return activeCtx ?? ctx;
-}
-
 /** Queues a whole command behind the earlier ones of the same image, so history order equals action order. */
 export function enqueue<T>(ctx: CommandContext, fn: () => Promise<T>): Promise<T> {
-  activeCtx = ctx;
   ctx.store.getState().beginRequest();
   return ctx.history.run(fn).finally(() => ctx.store.getState().endRequest());
 }
@@ -82,7 +68,6 @@ export async function tracked<T>(
   fn: () => Promise<T>,
   retry?: () => void,
 ): Promise<T | undefined> {
-  activeCtx = ctx;
   const s = ctx.store.getState();
   s.beginRequest();
   s.clearFailure();
@@ -119,8 +104,8 @@ export async function cmdCreateShape(
   imageId: string,
   body: BoxCreate,
 ): Promise<BoxWriteResult | undefined> {
-  const { store, history } = ctx;
-  const run = () => createShape(live(ctx).api, live(ctx).projectId, imageId, body);
+  const { api, projectId, store, history } = ctx;
+  const run = () => createShape(api, projectId, imageId, body);
   const retry = () => void tracked(ctx, "draw shape", run).then((b) => b && afterCreate(ctx, b));
   const created = await tracked(ctx, "draw shape", run, retry);
   if (!created) return undefined;
@@ -129,13 +114,11 @@ export async function cmdCreateShape(
   history.push({
     label: "draw shape",
     undo: async () => {
-      const { api, projectId } = live(ctx);
       await deleteBox(api, projectId, ref.id);
       store.getState().removeBox(ref.id);
       store.getState().unlinkFinding(ref.id);
     },
     redo: async () => {
-      const { api, projectId } = live(ctx);
       const again = await createShape(api, projectId, imageId, body);
       history.alias(ref.id, again.id);
       ref.id = again.id;
@@ -186,20 +169,15 @@ export async function cmdUpdateShape(ctx: CommandContext, id: string, after: Sha
   history.push({
     label: "edit shape",
     undo: async () => {
-      const live_ = live(ctx);
       const current = history.resolve(id);
-      store.getState().upsertBox(await updateShape(live_.api, live_.projectId, current, patchBody(before)));
+      store.getState().upsertBox(await updateShape(api, projectId, current, patchBody(before)));
       if (restoreProposal) {
-        await reviewShapes(live_.api, live_.projectId, [current], "unreview");
+        await reviewShapes(api, projectId, [current], "unreview");
         store.getState().patchStates([current], "unreviewed");
       }
     },
-    redo: async () => {
-      const live_ = live(ctx);
-      store
-        .getState()
-        .upsertBox(await updateShape(live_.api, live_.projectId, history.resolve(id), patchBody(after)));
-    },
+    redo: async () =>
+      store.getState().upsertBox(await updateShape(api, projectId, history.resolve(id), patchBody(after))),
   });
 }
 
@@ -207,6 +185,12 @@ export async function cmdUpdateShape(ctx: CommandContext, id: string, after: Sha
  * Retype one or more shapes. `needs-confirm` when F refuses a defect → object change that would
  * delete a finding (409 finding_would_be_deleted); the caller confirms and calls again with
  * `confirmFindingDelete` (ruling FC-R5). Undo retypes back with confirm (FC-R3).
+ *
+ * I2: ids are retyped one at a time in order; if a later one is refused (or fails outright), the
+ * ids already retyped on the server stay retyped — so a history entry covering just *those* is
+ * pushed before returning "needs-confirm"/"failed", or every target's history entry pushed
+ * before returning "done". The confirm retry calls this again with the full original selection;
+ * ids already at `typeId` are filtered out of `targets`, so only the unfinished ones are retried.
  */
 export async function cmdSetType(
   ctx: CommandContext,
@@ -220,57 +204,63 @@ export async function cmdSetType(
     .filter((b): b is Box => !!b && b.class_id !== typeId);
   if (targets.length === 0) return "done";
   const previous = new Map(targets.map((b) => [b.id, b.class_id]));
-  activeCtx = ctx;
+  const applied: string[] = [];
+  let outcome: "done" | "needs-confirm" | "failed" = "done";
   store.getState().beginRequest();
   store.getState().clearFailure();
   try {
     for (const b of targets) {
       store.getState().upsertBox(await updateShape(api, projectId, b.id, { class_id: typeId }, opts));
+      applied.push(b.id);
     }
   } catch (e) {
-    if (e instanceof ApiFailure && e.code === "finding_would_be_deleted") return "needs-confirm";
-    pushLog(`change type failed: ${messageOf(e, String(e))}`);
-    store.getState().fail(failureText("change type", e));
-    return "failed";
+    if (e instanceof ApiFailure && e.code === "finding_would_be_deleted") {
+      outcome = "needs-confirm";
+    } else {
+      pushLog(`change type failed: ${messageOf(e, String(e))}`);
+      store.getState().fail(failureText("change type", e));
+      outcome = "failed";
+    }
   } finally {
     store.getState().endRequest();
   }
-  history.push({
-    label: "change type",
-    undo: async () => {
-      const live_ = live(ctx);
-      for (const [id, classId] of previous) {
-        store
-          .getState()
-          .upsertBox(
-            await updateShape(
-              live_.api,
-              live_.projectId,
-              history.resolve(id),
-              { class_id: classId },
-              { confirmFindingDelete: true },
-            ),
-          );
-      }
-    },
-    redo: async () => {
-      const live_ = live(ctx);
-      for (const id of previous.keys()) {
-        store
-          .getState()
-          .upsertBox(
-            await updateShape(
-              live_.api,
-              live_.projectId,
-              history.resolve(id),
-              { class_id: typeId },
-              { confirmFindingDelete: true },
-            ),
-          );
-      }
-    },
-  });
-  return "done";
+  if (applied.length > 0) {
+    const appliedPrevious = new Map(applied.map((id) => [id, previous.get(id)!]));
+    history.push({
+      label: "change type",
+      undo: async () => {
+        for (const [id, classId] of appliedPrevious) {
+          store
+            .getState()
+            .upsertBox(
+              await updateShape(
+                api,
+                projectId,
+                history.resolve(id),
+                { class_id: classId },
+                { confirmFindingDelete: true },
+              ),
+            );
+        }
+      },
+      redo: async () => {
+        for (const id of appliedPrevious.keys()) {
+          store
+            .getState()
+            .upsertBox(
+              await updateShape(
+                api,
+                projectId,
+                history.resolve(id),
+                { class_id: typeId },
+                { confirmFindingDelete: true },
+              ),
+            );
+        }
+      },
+    });
+  }
+  return outcome;
 }
 
 /** Accept or reject suggestions (A / X are FA's keys). Undo is `unreview` (§8.3). */
@@ -288,15 +278,13 @@ export async function cmdReview(
   history.push({
     label: `${action} suggestions`,
     undo: async () => {
-      const live_ = live(ctx);
-      await reviewShapes(live_.api, live_.projectId, ids, "unreview");
+      await reviewShapes(api, projectId, ids, "unreview");
       store.getState().patchStates(ids, "unreviewed");
       // index reconciliation 17: an undone accept deletes its finding, so drop the stale link.
       for (const id of ids) store.getState().unlinkFinding(id);
     },
     redo: async () => {
-      const live_ = live(ctx);
-      const r = await reviewShapes(live_.api, live_.projectId, ids, action);
+      const r = await reviewShapes(api, projectId, ids, action);
       store.getState().patchStates(ids, state);
       // F10: a redone accept re-creates its finding; re-link it (only unambiguous for a single id).
       if (action === "accept" && ids.length === 1 && r.finding_ids_created.length === 1) {
@@ -330,11 +318,10 @@ export async function cmdDeleteShapes(ctx: CommandContext, ids: string[]): Promi
   if (!ok) return;
   const apply = () => {
     const s = store.getState();
-    if (proposals.length)
-      s.patchStates(
-        proposals.map((b) => b.id),
-        "rejected",
-      );
+    for (const b of proposals) {
+      s.patchStates([b.id], "rejected");
+      s.unlinkFinding(b.id); // m4: rejecting an accepted proposal deletes its finding too.
+    }
     for (const { ref } of refs) {
       s.removeBox(ref.id);
       s.unlinkFinding(ref.id); // F11: a deleted shape's finding link is stale.
@@ -345,9 +332,8 @@ export async function cmdDeleteShapes(ctx: CommandContext, ids: string[]): Promi
   history.push({
     label: "delete",
     undo: async () => {
-      const live_ = live(ctx);
       for (const { ref, box } of refs) {
-        const again = await createShape(live_.api, live_.projectId, box.image_id, bodyOf(box));
+        const again = await createShape(api, projectId, box.image_id, bodyOf(box));
         history.alias(ref.id, again.id);
         ref.id = again.id;
         store.getState().upsertBox(again);
@@ -355,20 +341,23 @@ export async function cmdDeleteShapes(ctx: CommandContext, ids: string[]): Promi
       }
       for (const [id, prev] of previousStates) {
         const action = prev === "unreviewed" ? "unreview" : prev === "rejected" ? "reject" : "accept";
-        await reviewShapes(live_.api, live_.projectId, [id], action);
+        const r = await reviewShapes(api, projectId, [id], action);
         store.getState().patchStates([id], prev === "edited" ? "accepted" : prev);
+        // m4: restoring an accepted/edited proposal re-creates its finding; re-link it.
+        if (action === "accept" && r.finding_ids_created.length === 1) {
+          store.getState().linkFindings({ [id]: r.finding_ids_created[0] });
+        }
       }
     },
     redo: async () => {
-      const live_ = live(ctx);
       if (proposals.length)
         await reviewShapes(
-          live_.api,
-          live_.projectId,
+          api,
+          projectId,
           proposals.map((b) => b.id),
           "reject",
         );
-      for (const { ref } of refs) await deleteBox(live_.api, live_.projectId, ref.id);
+      for (const { ref } of refs) await deleteBox(api, projectId, ref.id);
       apply();
     },
   });
@@ -413,13 +402,11 @@ export async function cmdCreateMeasurement(
   history.push({
     label: "measure",
     undo: async () => {
-      const live_ = live(ctx);
-      await deleteImageMeasurement(live_.api, live_.projectId, ref.id);
+      await deleteImageMeasurement(api, projectId, ref.id);
       store.getState().removeMeasurement(ref.id);
     },
     redo: async () => {
-      const live_ = live(ctx);
-      const again = await createImageMeasurement(live_.api, live_.projectId, imageId, body);
+      const again = await createImageMeasurement(api, projectId, imageId, body);
       ref.id = again.id;
       store.getState().upsertMeasurement(again);
     },
@@ -442,14 +429,12 @@ export async function cmdDeleteMeasurement(ctx: CommandContext, id: string): Pro
   history.push({
     label: "delete measurement",
     undo: async () => {
-      const live_ = live(ctx);
-      const again = await createImageMeasurement(live_.api, live_.projectId, m.image_id, body);
+      const again = await createImageMeasurement(api, projectId, m.image_id, body);
       ref.id = again.id;
       store.getState().upsertMeasurement(again);
     },
     redo: async () => {
-      const live_ = live(ctx);
-      await deleteImageMeasurement(live_.api, live_.projectId, ref.id);
+      await deleteImageMeasurement(api, projectId, ref.id);
       store.getState().removeMeasurement(ref.id);
     },
   });
