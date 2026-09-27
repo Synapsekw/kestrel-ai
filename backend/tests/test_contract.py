@@ -110,6 +110,21 @@ EXPECTED_STUBS: set[str] = {
 }
 EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
 
+# Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
+# app/pointclouds/router.py::STUBS. Each C unit deletes its own names here and there; the last of
+# C-B2, C-B3 and C-B4 deletes this block.
+EXPECTED_STUBS |= {
+    "retryCloudProfile",  # C-B2
+    "getCloudProfile",  # C-B2
+    "getCloudCameras",  # C-B3
+    "setCloudCameraOffset",  # C-B3
+    "putFindingView3d",  # C-B4
+    "getFindingView3d",  # C-B4
+    "putCloudMeasurementView3d",  # C-B4
+    "getCloudMeasurementView3d",  # C-B4
+    "listCloudViews",  # C-B4
+}
+
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
 # the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/
 # `group` and `LibraryModel.class_map`, which the backend fills only when the named units land.

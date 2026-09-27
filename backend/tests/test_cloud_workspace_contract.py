@@ -49,10 +49,16 @@ MIRRORS = {
     "CloudClipBox": schemas.CloudClipBox,
     "CloudViewRender": schemas.CloudViewRender,
     "CloudViewOut": schemas.CloudViewOut,
+    "CloudProfile": schemas.CloudProfile,
+    "CloudCameraSource": schemas.CloudCameraSource,
+    "CloudCameraSet": schemas.CloudCameraSet,
+    "CloudCameraOffsetPut": schemas.CloudCameraOffsetPut,
+    "CloudViewMeta": schemas.CloudViewMeta,
+    "CloudViewList": schemas.CloudViewList,
 }
 
 # Response schemas the Prism mock serves: each carries its own example.
-EXAMPLED = ["CloudViewOut"]
+EXAMPLED = ["CloudViewOut", "CloudViewList", "CloudProfile", "CloudCameraSet", "CloudCameraSource"]
 
 
 @pytest.fixture(scope="module")
@@ -248,3 +254,69 @@ def test_a_legacy_row_still_lists_and_validates(spec, client, project_id, handle
     listed = client.get(_url(project_id, cloud_id)).json()
     assert [(i["status"], i["points"][0]["group"]) for i in listed["items"]] == [("ready", None)]
     assert _errors(spec, "CloudMeasurementList", listed) == []
+
+
+# ------------------------------------------------------------------------------ Task 3
+
+# operationId -> (method, path) of every operation C adds (spec section 12 rows 9-12, 15-17).
+C_OPERATIONS: dict[str, tuple[str, str]] = {
+    "retryCloudProfile": ("post", MEAS + "/retry"),
+    "getCloudProfile": ("get", MEAS + "/profile"),
+    "getCloudCameras": ("get", CLOUD + "/cameras"),
+    "setCloudCameraOffset": ("put", CLOUD + "/cameras/offsets/{sourceId}"),
+    "putFindingView3d": ("put", P + "/findings/{findingId}/view3d"),
+    "getFindingView3d": ("get", P + "/findings/{findingId}/view3d"),
+    "putCloudMeasurementView3d": ("put", MEAS + "/view3d"),
+    "getCloudMeasurementView3d": ("get", MEAS + "/view3d"),
+    "listCloudViews": ("get", CLOUD + "/views"),
+}
+
+
+@pytest.mark.parametrize("op_id", sorted(C_OPERATIONS))
+def test_the_c_operation_exists(spec, op_id):
+    method, path, op = _operations(spec)[op_id]
+    assert (method, path) == C_OPERATIONS[op_id]
+    assert op["tags"] == ["pointclouds"]
+    assert "default" in op["responses"], "every operation answers errors in the envelope"
+
+
+@pytest.mark.parametrize("op_id", ["putFindingView3d", "putCloudMeasurementView3d"])
+def test_a_view_is_uploaded_as_multipart_image_and_meta(spec, op_id):
+    _, _, op = _operations(spec)[op_id]
+    body = op["requestBody"]["content"]["multipart/form-data"]
+    assert body["schema"] == {"$ref": "#/components/schemas/CloudViewUpload"}
+    assert body["encoding"]["meta"]["contentType"] == "application/json"
+    upload = _schemas(spec)["CloudViewUpload"]
+    assert upload["required"] == ["image", "meta"]
+    assert op["responses"]["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/CloudViewOut"
+    }
+    assert "bad_view_image" in op["responses"]["422"]["description"]
+
+
+@pytest.mark.parametrize("op_id", ["getFindingView3d", "getCloudMeasurementView3d"])
+def test_a_view_is_served_as_png_or_jpeg_with_its_etag(spec, op_id):
+    _, _, op = _operations(spec)[op_id]
+    ok = op["responses"]["200"]
+    assert set(ok["content"]) == {"image/png", "image/jpeg"}
+    assert {"ETag", "Cache-Control"} <= set(ok["headers"])
+    assert "no_view" in op["responses"]["404"]["description"]
+
+
+def test_the_bounded_payloads_state_their_caps(spec):
+    s = _schemas(spec)
+    assert s["CloudProfile"]["properties"]["s"]["maxItems"] == 500000
+    assert s["CloudProfile"]["properties"]["rgb"]["maxItems"] == 1500000
+    for name in ("image_id", "x", "y", "z", "yaw", "pitch", "roll", "hfov", "vfov", "fov_assumed", "sigma_m"):
+        assert s["CloudCameraSet"]["properties"][name]["maxItems"] == 20000, name
+    assert s["CloudViewList"]["properties"]["items"]["maxItems"] == 1500
+    offset = s["CloudCameraOffsetPut"]["properties"]["height_offset_m"]
+    assert (offset["minimum"], offset["maximum"]) == (-500, 500)
+
+
+def test_the_router_stubs_are_c_operations():
+    from app.pointclouds import router
+
+    stubbed = {op_id for _, _, op_id in router.STUBS}
+    assert stubbed <= set(C_OPERATIONS), sorted(stubbed - set(C_OPERATIONS))
+    assert router.UPLOAD_STUBS <= {"putFindingView3d", "putCloudMeasurementView3d"}

@@ -230,6 +230,20 @@ class CloudViewOut(BaseModel):
     stale: bool
 
 
+class CloudViewMeta(BaseModel):
+    """The `meta` part of a view upload (C-B4 parses it from the multipart form)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pose: CloudViewPose
+    render: CloudViewRender
+    anchor_normal: Vec3 | None = None
+
+
+class CloudViewList(BaseModel):
+    items: list[CloudViewOut] = Field(max_length=1500)
+
+
 class CloudMeasurementOut(BaseModel):
     id: str
     point_cloud_id: str
@@ -266,3 +280,50 @@ class CloudMeasurementWithJob(BaseModel):
 class PointCloudExportRequest(BaseModel):
     format: Literal["laz"]
     include_measurements: bool = True
+
+
+class CloudProfile(BaseModel):
+    s: list[float]
+    z: list[float]
+    rgb: list[int] | None  # r, g, b per point (3 x count)
+    count: int
+    thickness_m: float
+    length_m: float
+
+
+class CloudCameraSource(BaseModel):
+    id: str
+    label: str
+    count: int
+    height_offset_m: float
+    posed_count: int
+
+
+class CloudCameraOffsetPut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    height_offset_m: float = Field(ge=-500, le=500)
+
+
+class CloudCameraSet(BaseModel):
+    """Parallel arrays, index i is one camera (spec section 10.1 step 5)."""
+
+    image_id: list[str]
+    source_idx: list[int]
+    x: list[float]
+    y: list[float]
+    z: list[float | None]
+    yaw: list[float | None]
+    pitch: list[float | None]
+    roll: list[float | None]
+    hfov: list[float]
+    vfov: list[float]
+    fov_assumed: list[bool]
+    width: list[int]
+    height: list[int]
+    sigma_m: list[float]
+    sources: list[CloudCameraSource]
+    truncated: bool
+    z_p1: float | None
+    z_p99: float | None
+    without_gps: int = Field(ge=0)

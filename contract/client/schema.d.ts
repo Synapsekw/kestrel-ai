@@ -1971,6 +1971,165 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run the `pointcloud_profile` job again for a `failed` profile; the measurement goes back to `computing`. */
+        post: operations["retryCloudProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The stored cross-section of a `ready` profile, cut from the source file by its job: at most
+         *     500 000 points, gzip-compressed on the wire. A measurement of another kind is 404 `not_found`.
+         */
+        get: operations["getCloudProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/view3d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        /** The measurement's stored report view; `ETag` is the quoted sha256 of the bytes. */
+        get: operations["getCloudMeasurementView3d"];
+        /** Store the measurement's report view (as `putFindingView3d`). Replaces the previous one; publishes `pointclouds.changed`. */
+        put: operations["putCloudMeasurementView3d"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        /** The metadata of every report view in the cloud (findings and measurements), no image bytes; at most 1 500. */
+        get: operations["listCloudViews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The project's drone photos near the cloud, reprojected into its CRS, as compact parallel
+         *     arrays: one column-only query, at most 20 000 cameras, no image file is read.
+         */
+        get: operations["getCloudCameras"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras/offsets/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the height offset added to this image set's altitudes for this cloud; publishes `pointclouds.changed`. */
+        put: operations["setCloudCameraOffset"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/view3d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        /** The cloud finding's stored report view (R's `view3d` source); `ETag` is the quoted sha256 of the bytes. */
+        get: operations["getFindingView3d"];
+        /**
+         * Store the report view of a cloud finding: a 1600 x 1000 PNG (a JPEG when the PNG is over
+         *     6 MiB) the workspace rendered, with the pose and render settings that took it. Replaces the
+         *     previous view; publishes `pointclouds.changed`. Owned by the point-cloud workspace.
+         */
+        put: operations["putFindingView3d"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/surfaces": {
         parameters: {
             query?: never;
@@ -7858,6 +8017,196 @@ export interface components {
             captured_at: string;
             /** @description the subject's geometry changed since the capture */
             stale: boolean;
+        };
+        CloudViewMeta: {
+            pose: components["schemas"]["CloudViewPose"];
+            render: components["schemas"]["CloudViewRender"];
+            /** @description findings only: the unit surface normal at the pin; null or absent when unknown */
+            anchor_normal?: number[] | null;
+        };
+        CloudViewUpload: {
+            /**
+             * Format: binary
+             * @description PNG or JPEG, exactly 1600 x 1000, at most 6 MiB
+             */
+            image: string;
+            meta: components["schemas"]["CloudViewMeta"];
+        };
+        /**
+         * @example {
+         *       "items": []
+         *     }
+         */
+        CloudViewList: {
+            items: components["schemas"]["CloudViewOut"][];
+        };
+        /**
+         * @description a stored cross-section: s (metres along the line from A) against z, thinned to at most `max_points`
+         * @example {
+         *       "s": [
+         *         0,
+         *         0.5,
+         *         1
+         *       ],
+         *       "z": [
+         *         -44.8,
+         *         -44.7,
+         *         -30.2
+         *       ],
+         *       "rgb": [
+         *         120,
+         *         120,
+         *         118,
+         *         121,
+         *         119,
+         *         117,
+         *         200,
+         *         40,
+         *         30
+         *       ],
+         *       "count": 3,
+         *       "thickness_m": 0.2,
+         *       "length_m": 12.84
+         *     }
+         */
+        CloudProfile: {
+            s: number[];
+            z: number[];
+            /** @description r, g, b per point (3 x `count` values); null when the cloud has no colour */
+            rgb: number[] | null;
+            count: number;
+            thickness_m: number;
+            length_m: number;
+        };
+        /**
+         * @example {
+         *       "id": "s0000000-3333-4000-8000-000000000001",
+         *       "label": "Flight 14 Sep",
+         *       "count": 2,
+         *       "height_offset_m": -31.5,
+         *       "posed_count": 1
+         *     }
+         */
+        CloudCameraSource: {
+            /** @description the image set (source) id */
+            id: string;
+            /** @description the set's label, else its site, else its folder name */
+            label: string;
+            /** @description this set's cameras in the payload */
+            count: number;
+            height_offset_m: number;
+            /** @description those with a gimbal pose */
+            posed_count: number;
+        };
+        CloudCameraOffsetPut: {
+            height_offset_m: number;
+        };
+        /**
+         * @description The drone photos near a cloud as parallel arrays (index i is one camera) in the cloud's
+         *     native CRS: at most 20 000, ordered by capture time, `truncated` when more exist.
+         * @example {
+         *       "image_id": [
+         *         "i0000000-5555-4000-8000-000000000001",
+         *         "i0000000-5555-4000-8000-000000000002"
+         *       ],
+         *       "source_idx": [
+         *         0,
+         *         0
+         *       ],
+         *       "x": [
+         *         243540.2,
+         *         243561.9
+         *       ],
+         *       "y": [
+         *         3178030.5,
+         *         3178044.1
+         *       ],
+         *       "z": [
+         *         12.4,
+         *         null
+         *       ],
+         *       "yaw": [
+         *         131.2,
+         *         null
+         *       ],
+         *       "pitch": [
+         *         -45,
+         *         null
+         *       ],
+         *       "roll": [
+         *         0,
+         *         null
+         *       ],
+         *       "hfov": [
+         *         73.7,
+         *         73.7
+         *       ],
+         *       "vfov": [
+         *         53.1,
+         *         53.1
+         *       ],
+         *       "fov_assumed": [
+         *         false,
+         *         true
+         *       ],
+         *       "width": [
+         *         2048,
+         *         2048
+         *       ],
+         *       "height": [
+         *         1536,
+         *         1536
+         *       ],
+         *       "sigma_m": [
+         *         3,
+         *         3
+         *       ],
+         *       "sources": [
+         *         {
+         *           "id": "s0000000-3333-4000-8000-000000000001",
+         *           "label": "Flight 14 Sep",
+         *           "count": 2,
+         *           "height_offset_m": -31.5,
+         *           "posed_count": 1
+         *         }
+         *       ],
+         *       "truncated": false,
+         *       "z_p1": -45.9,
+         *       "z_p99": -5.1,
+         *       "without_gps": 0
+         *     }
+         */
+        CloudCameraSet: {
+            image_id: string[];
+            /** @description an index into `sources` */
+            source_idx: number[];
+            x: number[];
+            y: number[];
+            /** @description EXIF altitude plus the set's height offset; null without an altitude */
+            z: (number | null)[];
+            /** @description grid yaw in degrees, clockwise from grid north; null without a pose */
+            yaw: (number | null)[];
+            /** @description degrees, -90 is nadir; null without a pose */
+            pitch: (number | null)[];
+            roll: (number | null)[];
+            /** @description horizontal field of view in degrees */
+            hfov: number[];
+            vfov: number[];
+            /** @description true when the FOV is the assumed 84 degree diagonal */
+            fov_assumed: boolean[];
+            /** @description the stored image's pixel size */
+            width: number[];
+            height: number[];
+            /** @description position uncertainty; 3.0 until an RTK flag exists */
+            sigma_m: number[];
+            sources: components["schemas"]["CloudCameraSource"][];
+            truncated: boolean;
+            /** @description the cloud's `z_stats.p1`, for the plausibility check */
+            z_p1: number | null;
+            /** @description the cloud's `z_stats.p99` */
+            z_p99: number | null;
+            /** @description project images with no GPS position (lat or lon null), one COUNT query; the cloud panel shows it as "n photos without GPS" */
+            without_gps: number;
         };
         /**
          * @description dem is a DSM or DTM GeoTIFF imported as elevation (map workspace)
@@ -15806,6 +16155,328 @@ export interface operations {
             };
             /** @description the cloud is not `ready` (`code` is `not_ready`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    retryCloudProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the measurement is not a `failed` profile (`code` is `not_retryable`), or the cloud is not `ready` (`not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCloudProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudProfile"];
+                };
+            };
+            /** @description the profile is still `computing`, or `failed` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCloudMeasurementView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the image */
+            200: {
+                headers: {
+                    /** @description "<sha256>" */
+                    ETag?: string;
+                    /** @description private, no-cache */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            /** @description the measurement does not exist (`code` is `not_found`) or has no view (`no_view`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putCloudMeasurementView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["CloudViewUpload"];
+            };
+        };
+        responses: {
+            /** @description the stored view's metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudViewOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCloudViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the views */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudViewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCloudCameras: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the cameras */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCameraSet"];
+                };
+            };
+            /** @description the cloud has no CRS (`code` is `needs_coordinates`) or is not `ready` (`not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setCloudCameraOffset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudCameraOffsetPut"];
+            };
+        };
+        responses: {
+            /** @description the image set with its new offset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCameraSource"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getFindingView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the image */
+            200: {
+                headers: {
+                    /** @description "<sha256>" */
+                    ETag?: string;
+                    /** @description private, no-cache */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            /** @description the finding does not exist (`code` is `not_found`) or has no view (`no_view`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putFindingView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["CloudViewUpload"];
+            };
+        };
+        responses: {
+            /** @description the stored view's metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudViewOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the finding is not anchored on a cloud (`code` is `not_a_cloud_finding`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
