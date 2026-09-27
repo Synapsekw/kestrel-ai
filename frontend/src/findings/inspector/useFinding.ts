@@ -9,6 +9,7 @@ import {
   type FindingPatch,
 } from "@/api/findings";
 import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { toast } from "@/ui";
 
 interface Loaded {
@@ -33,8 +34,13 @@ export function useFinding(projectId: string, findingId: string) {
   const api = useApi();
   const revision = useChangesStore((s) => s.findingsRevision);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
+  // The revision this hook's own successful PATCH produced, for the finding it wrote: that bump
+  // needs no re-read here, because the PATCH answer is already applied (rulings R8).
+  const ownBump = useRef<{ findingId: string; revision: number } | null>(null);
 
   useEffect(() => {
+    const own = ownBump.current;
+    if (own && own.findingId === findingId && own.revision === revision) return;
     let cancelled = false;
     fetchFinding(api, projectId, findingId)
       .then((finding) => {
@@ -66,9 +72,12 @@ export function useFinding(projectId: string, findingId: string) {
         );
       onThis((f) => ({ ...f, ...patch }) as FindingDetail);
       try {
-        const saved = await patchFinding(api, projectId, findingId, patch);
-        if (seq === writeSeq.current) onThis(() => saved);
-        useChangesStore.getState().bumpFindings();
+        await ownFindingsWrite([findingId], () => patchFinding(api, projectId, findingId, patch), {
+          onSaved: (saved, rev) => {
+            ownBump.current = { findingId, revision: rev };
+            if (seq === writeSeq.current) onThis(() => saved);
+          },
+        });
       } catch (e) {
         onThis((f) => {
           const reverted: Record<string, unknown> = { ...f };
@@ -82,8 +91,7 @@ export function useFinding(projectId: string, findingId: string) {
   );
 
   const remove = useCallback(async () => {
-    await deleteFinding(api, projectId, findingId);
-    useChangesStore.getState().bumpFindings();
+    await ownFindingsWrite([findingId], () => deleteFinding(api, projectId, findingId));
   }, [api, projectId, findingId]);
 
   return { finding: current?.finding ?? null, error: current?.error ?? null, update, remove };

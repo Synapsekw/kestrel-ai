@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import type { BulkSet } from "@/api/findings";
-import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { Button, GlassPanel, MenuButton, toast, type SeverityLevel } from "@/ui";
 import { applyBulk, bulkMessage } from "./bulk";
 import { STATUSES, STATUS_LABEL } from "./status";
@@ -27,14 +27,13 @@ export function BulkBar({
   async function apply(set: BulkSet, what: string) {
     setBusy(true);
     try {
-      const r = await applyBulk(api, projectId, ids, set);
+      // Earlier 1000-id chunks may have been applied even when a later one failed: bump either way.
+      const r = await ownFindingsWrite(ids, () => applyBulk(api, projectId, ids, set), { bumpOnError: true });
       toast(r.skipped.length ? "info" : "ok", bulkMessage(r.updated, r.skipped, what));
       onDone();
     } catch (e) {
       toast("danger", messageOf(e, "could not update the findings"));
     } finally {
-      // Earlier 1000-id chunks may have been applied even when a later one failed.
-      useChangesStore.getState().bumpFindings();
       setBusy(false);
     }
   }
