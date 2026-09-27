@@ -66,6 +66,11 @@ def test_a_truncated_png_is_not_an_image():
     assert _code(e) == (422, "bad_view_image", {"reason": "not_an_image"})
 
 
+def test_stored_view_rejects_an_unknown_subject_kind(handle):
+    with pytest.raises(ValueError):
+        views.stored_view(handle, "widget", "x")
+
+
 def test_meta_parses_and_normalises_a_finding_normal():
     meta = views.parse_meta(meta_json(anchor_normal=[0, 0, 2]), "finding")
     assert meta.anchor_normal == [0.0, 0.0, 1.0]

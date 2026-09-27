@@ -6,13 +6,15 @@ import os
 import time
 
 import pytest
-from cloud_views import META, gif, jpeg, meta_json, png
+from cloud_views import META, gif, jpeg, meta_json, noise_png, png
 from findings_helpers import insert_map
 from pointclouds import insert_cloud
 
 from app.pointclouds import views
 
 API = "/api/v1/projects"
+_NOISE = noise_png()
+TRUNCATED_PNG = _NOISE[: len(_NOISE) // 2]
 
 
 @pytest.fixture
@@ -106,8 +108,13 @@ def test_a_second_put_replaces_the_view_with_a_new_etag(client, base, crack, clo
 
 @pytest.mark.parametrize(
     ("data", "reason"),
-    [(png(1600, 1001), "wrong_size"), (gif(), "wrong_format"), (b"junk", "not_an_image")],
-    ids=["wrong_size", "wrong_format", "not_an_image"],  # byte payloads would make huge node ids
+    [
+        (png(1600, 1001), "wrong_size"),
+        (gif(), "wrong_format"),
+        (b"junk", "not_an_image"),
+        (TRUNCATED_PNG, "not_an_image"),
+    ],
+    ids=["wrong_size", "wrong_format", "not_an_image", "truncated_png"],  # byte payloads: explicit ids
 )
 def test_a_refused_upload_writes_nothing(client, base, handle, crack, cloud_id, data, reason):
     fid = _finding(client, base, crack["id"], cloud_id)
@@ -132,6 +139,19 @@ def test_malformed_or_missing_parts_are_validation_errors(client, base, crack, c
     assert _code(client.put(url, files={"image": ("v.png", png(), "image/png")})) == (422, "validation_error")
     assert _code(client.put(url, data={"meta": meta_json()})) == (422, "validation_error")
     assert _code(client.put(url, json=META)) == (422, "validation_error")
+
+
+def test_too_many_multipart_parts_is_a_validation_error(client, base, crack, cloud_id):
+    fid = _finding(client, base, crack["id"], cloud_id)
+    r = client.put(
+        f"{base}/findings/{fid}/view3d",
+        files={
+            "image": ("v.png", png(), "image/png"),
+            "meta": ("meta.json", meta_json().encode(), "application/json"),
+            "extra": ("extra.txt", b"x", "text/plain"),
+        },
+    )
+    assert _code(r) == (422, "validation_error")
 
 
 def test_unknown_subjects_answer_404_before_the_body_is_read(client, base, cloud_id):

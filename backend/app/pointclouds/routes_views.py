@@ -11,6 +11,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, Response
 from starlette.concurrency import run_in_threadpool
 from starlette.datastructures import UploadFile
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.errors import AppError
 from app.events_util import publish_pointclouds_changed
@@ -25,7 +26,12 @@ IMAGE_HEADERS = {"Cache-Control": "private, no-cache"}
 
 async def _parts(request: Request) -> tuple[bytes, str | bytes]:
     """The `image` bytes (at most MAX_BYTES + 1 read) and the raw `meta` (at most 64 KiB + 1)."""
-    form = await request.form(max_files=2, max_fields=2)
+    try:
+        form = await request.form(max_files=2, max_fields=2)
+    except StarletteHTTPException as e:
+        # too many parts, an oversize text part, or a missing boundary: starlette answers its own
+        # 400 before FastAPI's validation layer sees the request.
+        raise AppError("validation_error", str(e.detail), 422) from e
     try:
         image, meta = form.get("image"), form.get("meta")
         if not isinstance(image, UploadFile):

@@ -25,6 +25,7 @@ from PIL import Image as PILImage
 from PIL import UnidentifiedImageError
 from pydantic import ValidationError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.db.base import utcnow
 from app.db.models import CloudMeasurement, CloudView, Finding
@@ -97,7 +98,8 @@ def _invalid(message: str) -> AppError:
 def parse_meta(raw: str | bytes, subject_kind: str) -> CloudViewMeta:
     """The upload's `meta` part, validated; every number finite; a finding's normal made unit length
     (null when zero), a measurement's dropped (spec section 9.1: findings only)."""
-    if len(raw) > MAX_META_BYTES:
+    size = len(raw.encode("utf-8")) if isinstance(raw, str) else len(raw)
+    if size > MAX_META_BYTES:
         raise _invalid("the view's meta is over 64 KiB")
     try:
         meta = CloudViewMeta.model_validate_json(raw)
@@ -229,35 +231,54 @@ def store(handle: ProjectHandle, subject: Subject, data: bytes, meta: CloudViewM
     name = f"{subject.kind}-{subject.id}.{ext}"
     rel = f"pointclouds/{subject.cloud_id}/views/{name}"
     partial = folder / f"{PARTIAL}{uuid.uuid4().hex}"
+    target = folder / name
+    attempts = 5
     try:
         with open(partial, "wb") as fh:
             fh.write(data)
             fh.flush()
             os.fsync(fh.fileno())
-        os.replace(partial, folder / name)
+        for attempt in range(attempts):
+            try:
+                os.replace(partial, target)
+                break
+            except PermissionError:
+                # the target can be briefly open for a concurrent GET, R's report job, or the
+                # indexer/Defender on Windows; retry before giving up.
+                if attempt == attempts - 1:
+                    raise
+                time.sleep(0.1 * (attempt + 1))
     finally:
         partial.unlink(missing_ok=True)
-    with handle.session() as s:
-        row = s.execute(select(CloudView).where(_column(subject.kind) == subject.id)).scalar_one_or_none()
-        old = row.path if row is not None else None
-        if row is None:
-            row = CloudView(point_cloud_id=subject.cloud_id)
-            if subject.kind == "finding":
-                row.finding_id = subject.id
-            else:
-                row.cloud_measurement_id = subject.id
-            s.add(row)
-        row.anchor_normal = meta.anchor_normal
-        row.pose = meta.pose.model_dump()
-        row.render = meta.render.model_dump()
-        row.path = rel
-        row.sha256 = hashlib.sha256(data).hexdigest()
-        row.bytes = len(data)
-        row.width, row.height = WIDTH, HEIGHT
-        row.anchor_hash = subject.anchor_hash
-        row.captured_at = utcnow()
-        s.flush()
-        out = _out(row, subject.anchor_hash)
+    is_new = False
+    try:
+        with handle.session() as s:
+            row = s.execute(select(CloudView).where(_column(subject.kind) == subject.id)).scalar_one_or_none()
+            old = row.path if row is not None else None
+            is_new = row is None
+            if row is None:
+                row = CloudView(point_cloud_id=subject.cloud_id)
+                if subject.kind == "finding":
+                    row.finding_id = subject.id
+                else:
+                    row.cloud_measurement_id = subject.id
+                s.add(row)
+            row.anchor_normal = meta.anchor_normal
+            row.pose = meta.pose.model_dump()
+            row.render = meta.render.model_dump()
+            row.path = rel
+            row.sha256 = hashlib.sha256(data).hexdigest()
+            row.bytes = len(data)
+            row.width, row.height = WIDTH, HEIGHT
+            row.anchor_hash = subject.anchor_hash
+            row.captured_at = utcnow()
+            s.flush()
+            out = _out(row, subject.anchor_hash)
+    except IntegrityError:
+        # the subject (finding/measurement) was deleted between resolving it and this upsert.
+        if is_new:
+            _unlink(target)
+        raise not_found(subject.kind, subject.id) from None
     if old and old != rel:
         _unlink(handle.folder / old)
     return out
@@ -268,6 +289,8 @@ def store(handle: ProjectHandle, subject: Subject, data: bytes, meta: CloudViewM
 
 def stored_view(handle: ProjectHandle, subject_kind: str, subject_id: str) -> StoredView | None:
     """The subject's view with its file, or None when there is no row or no file (reports spec 9.4)."""
+    if subject_kind not in ("finding", "cloud_measurement"):
+        raise ValueError(f"subject_kind must be 'finding' or 'cloud_measurement', not {subject_kind!r}")
     with handle.session() as s:
         row = s.execute(select(CloudView).where(_column(subject_kind) == subject_id)).scalar_one_or_none()
         if row is None:
@@ -368,6 +391,8 @@ def sweep_cloud(
                 continue
             f.unlink()
             removed += 1
+        except FileNotFoundError:
+            continue  # a concurrent replace removed it first; nothing to warn about
         except OSError:
             log.warning("could not sweep the report view %s", f, exc_info=True)
     return removed
@@ -389,7 +414,12 @@ def sweep_all(handle: ProjectHandle) -> int:
     except Exception:
         log.exception("could not read the report views of project %s; sweeping partial files only", handle.id)
         keep = None
-    removed = sum(sweep_cloud(handle, cloud_id, keep, partials=True) for cloud_id in clouds)
+    removed = 0
+    for cloud_id in clouds:
+        try:
+            removed += sweep_cloud(handle, cloud_id, keep, partials=True)
+        except Exception:
+            log.exception("could not sweep the report views of point cloud %s", cloud_id)
     if removed:
         log.info("removed %d orphan report-view file(s) in project %s", removed, handle.id)
     return removed

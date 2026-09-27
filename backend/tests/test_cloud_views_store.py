@@ -125,6 +125,37 @@ def test_a_failed_replace_leaves_no_file_and_no_row(client, project_id, handle, 
     assert _rows(handle) == 0
 
 
+def test_a_permission_error_on_replace_is_retried(client, project_id, handle, crack, cloud_id, monkeypatch):
+    fid = _finding(client, project_id, crack["id"], cloud_id)
+    real = os.replace
+    calls: list[int] = []
+
+    def flaky(src, dst):
+        calls.append(len(calls))
+        if len(calls) <= 2:
+            raise PermissionError("the process cannot access the file because it is being used")
+        return real(src, dst)
+
+    monkeypatch.setattr(views.os, "replace", flaky)
+    monkeypatch.setattr(views.time, "sleep", lambda s: None)
+    out = views.store(handle, views.finding_subject(handle, fid), png(), _meta())
+    assert len(calls) == 3
+    folder = views.views_dir(handle, cloud_id)
+    assert sorted(p.name for p in folder.iterdir()) == [f"finding-{fid}.png"]
+    assert _rows(handle) == 1
+    assert out.subject_id == fid
+
+
+def test_a_deleted_subject_races_the_upsert_and_answers_not_found(handle, cloud_id):
+    subject = views.Subject("finding", "00000000-0000-4000-8000-000000000099", cloud_id, "0" * 64)
+    with pytest.raises(AppError) as e:
+        views.store(handle, subject, png(), _meta())
+    assert (e.value.status, e.value.code) == (404, "not_found")
+    folder = views.views_dir(handle, cloud_id)
+    assert list(folder.iterdir()) == []
+    assert _rows(handle) == 0
+
+
 def test_a_jpeg_replaces_a_png_and_removes_it(client, project_id, handle, crack, cloud_id):
     fid = _finding(client, project_id, crack["id"], cloud_id)
     subject = views.finding_subject(handle, fid)
