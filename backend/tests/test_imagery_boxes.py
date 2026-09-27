@@ -212,3 +212,91 @@ def test_marking_empty_touches_images_whose_proposals_were_rejected(client, ctx,
     )
     assert r.status_code == 200, r.text
     assert ctx["image_id"] in touched
+
+
+def test_polygon_on_a_defect_type_is_an_open_finding_and_leaves_with_its_box(client, ctx):
+    b = _post(client, ctx, class_id=ctx["crack"], shape="polygon", points=SQUARE).json()
+    [f] = client.get(f"{ctx['base']}/findings").json()["items"]
+    assert (f["id"], f["status"]) == (b["finding_id"], "open")
+    assert client.delete(f"{ctx['base']}/boxes/{b['id']}").status_code == 204
+    assert client.get(f"{ctx['base']}/findings").json()["items"] == []
+
+
+def test_polygon_retyped_to_an_object_needs_confirmation(client, ctx):
+    b = _post(client, ctx, class_id=ctx["crack"], shape="polygon", points=SQUARE).json()
+    r = _patch(client, ctx, b["id"], class_id=ctx["truck"])
+    assert r.status_code == 409 and _code(r) == "finding_would_be_deleted"
+    r = _patch(client, ctx, b["id"], params={"confirm_finding_delete": True}, class_id=ctx["truck"])
+    assert r.status_code == 200 and r.json()["finding_id"] is None
+
+
+def test_deleting_a_point_finding_deletes_the_point(client, ctx):
+    b = _post(client, ctx, class_id=ctx["crack"], shape="point", x=5, y=6).json()
+    assert client.delete(f"{ctx['base']}/findings/{b['finding_id']}").status_code == 204
+    assert client.get(f"{ctx['base']}/images/{ctx['image_id']}/boxes").json()["items"] == []
+
+
+def test_a_point_finding_has_a_thumbnail(client, ctx):
+    b = _post(client, ctx, class_id=ctx["crack"], shape="point", x=5, y=6).json()
+    r = client.get(f"{ctx['base']}/findings/{b['finding_id']}/thumbnail")
+    assert r.status_code == 200 and r.headers["content-type"] == "image/jpeg"
+
+
+def test_finding_create_with_a_rotated_box_anchor_recomputes_shape_and_area(client, ctx, handle):
+    r = client.post(
+        f"{ctx['base']}/findings",
+        json={
+            "type_id": ctx["crack"],
+            "anchor": {
+                "kind": "image",
+                "image_id": ctx["image_id"],
+                "box": {"x": 10, "y": 20, "w": 30, "h": 40, "angle": 30},
+            },
+        },
+    )
+    assert r.status_code == 201, r.text
+    annotation_id = r.json()["anchor"]["annotation_id"]
+    with handle.session() as s:
+        box = s.get(Box, annotation_id)
+        assert (box.shape, box.area_px) == ("rbox", 30 * 40)
+
+
+def test_single_image_mark_empty_touches_only_when_a_proposal_was_rejected(client, ctx, handle, touched):
+    r = client.patch(f"{ctx['base']}/images/{ctx['image_id']}", json={"marked_empty": True})
+    assert r.status_code == 200, r.text
+    assert touched == []
+
+    with handle.session() as s:
+        s.add(
+            Box(
+                image_id=ctx["image_id"],
+                class_id=ctx["truck"],
+                x=1,
+                y=1,
+                w=5,
+                h=5,
+                provenance_kind="local_model",
+                review_state="unreviewed",
+            )
+        )
+    r = client.patch(f"{ctx['base']}/images/{ctx['image_id']}", json={"marked_empty": False})
+    assert r.status_code == 200, r.text
+    touched.clear()
+
+    r = client.patch(f"{ctx['base']}/images/{ctx['image_id']}", json={"marked_empty": True})
+    assert r.status_code == 200, r.text
+    assert touched == [ctx["image_id"]]
+
+
+def test_unknown_type_details_name_the_bad_class_id(client, ctx):
+    r = _post(client, ctx, class_id="no-such-type", x=1, y=1, w=5, h=5)
+    assert r.status_code == 422
+    assert r.json()["error"]["details"] == {"type_ids": ["no-such-type"]}
+
+
+def test_patch_same_class_id_on_an_archived_type_is_still_allowed(client, ctx):
+    b = _post(client, ctx, x=10, y=20, w=30, h=40).json()
+    r = client.patch(f"{API}/catalogue/types/{ctx['truck']}", json={"archived": True})
+    assert r.status_code == 200, r.text
+    r = _patch(client, ctx, b["id"], x=11, class_id=ctx["truck"])
+    assert r.status_code == 200, r.text
