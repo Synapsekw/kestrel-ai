@@ -74,3 +74,28 @@ def test_dynamically_loaded_app_modules_are_covered_by_the_spec_hiddenimports():
     hidden = set(json.loads(result.stdout.strip().splitlines()[-1]))
     missing = targets - hidden
     assert not missing, f"kestrel_backend.spec's hiddenimports does not cover: {sorted(missing)}"
+
+
+def _spec_datas_entries() -> set[tuple[str, str]]:
+    """The literal `(str(Path(SPECPATH) / "a" / "b"), "dest")` entries of the spec's `datas`, as
+    (source path relative to the backend, destination) pairs. Parsed from the source, no build."""
+    spec_src = (BACKEND / "kestrel_backend.spec").read_text("utf-8")
+    _, sep, rest = spec_src.partition("\ndatas = (")
+    assert sep, "kestrel_backend.spec's shape changed: no 'datas = (' to read the entries from"
+    block = rest.split("\n)\n", 1)[0]
+    entries = set()
+    for parts, dest in re.findall(r'\(str\(Path\(SPECPATH\)((?:\s*/\s*"[^"]+")+)\),\s*"([^"]+)"\)', block):
+        entries.add(("/".join(re.findall(r'"([^"]+)"', parts)), dest))
+    return entries
+
+
+def test_every_alembic_history_on_disk_is_in_the_spec_datas():
+    # Each app/*/migrations folder is an Alembic history read from disk at runtime (command.upgrade),
+    # so a history left out of `datas` makes the frozen app fail to open that database.
+    histories = sorted(
+        p.relative_to(BACKEND).as_posix() for p in (BACKEND / "app").glob("*/migrations") if p.is_dir()
+    )
+    assert histories, "expected at least one app/*/migrations folder"
+    entries = _spec_datas_entries()
+    missing = [h for h in histories if (h, h) not in entries]
+    assert not missing, f"kestrel_backend.spec's datas does not ship these Alembic histories: {missing}"
