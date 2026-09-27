@@ -3712,6 +3712,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The project's measurements in one list (umbrella §3; map-workspace spec §4 item 8):
+         *     point-cloud, volume and map measurements, newest first (`created_at` descending, then
+         *     `kind`, then `id`), keyset-paged over the three providers. The Measurements tab and the
+         *     command palette read it; each row opens its own workspace.
+         */
+        get: operations["listMeasurements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Map measurements, newest first, keyset-paged; `frame=site` adds each one's vertices in the current site frame. */
+        get: operations["listMapMeasurements"];
+        put?: never;
+        /**
+         * Store a distance, area or elevation profile drawn in the site frame (map-workspace spec §9.1).
+         *     The server stores the vertices in the site CRS of the moment and computes `results`
+         *     synchronously and bounded: Geod length and area, the grid values and the 3D length; a
+         *     profile of at most 2 000 stations over 1 to 3 surfaces. Publishes `map_measurements.changed`.
+         */
+        post: operations["createMapMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-measurements/{mapMeasurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getMapMeasurement"];
+        put?: never;
+        post?: never;
+        /** Delete the measurement. Publishes `map_measurements.changed`. */
+        delete: operations["deleteMapMeasurement"];
+        options?: never;
+        head?: never;
+        /** Rename, annotate, move the vertices or change the surfaces; a geometry or surface change recomputes `results`. Publishes `map_measurements.changed`. */
+        patch: operations["patchMapMeasurement"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -10709,6 +10780,238 @@ export interface components {
             /** @description over 20 000 vertices matched; the shortest runs were dropped first */
             truncated: boolean;
         };
+        /** @description x, y */
+        SiteVertex: number[];
+        /** @enum {string} */
+        MapMeasurementKind: "distance" | "area" | "profile";
+        MapDistanceResults: {
+            /** @description ellipsoidal (pyproj Geod); null in a local frame */
+            length_m: number | null;
+            grid_length_m: number;
+            /** @description length_m / grid_length_m */
+            scale_factor: number | null;
+            /** @description the slope length over the DSM; null without one */
+            length_3d_m: number | null;
+            /** @description the share of the 3D line over nodata */
+            nodata_fraction: number | null;
+            dsm_surface_id: string | null;
+        };
+        MapAreaResults: {
+            /** @description ellipsoidal, absolute; null in a local frame */
+            area_m2: number | null;
+            perimeter_m: number | null;
+            grid_area_m2: number;
+            grid_perimeter_m: number;
+            areal_scale_factor: number | null;
+        };
+        ProfileSeries: {
+            surface_id: string;
+            label: string;
+            /** Format: date */
+            date: string | null;
+            /** @description one per station; null over nodata (drawn as a break) */
+            z: (number | null)[];
+        };
+        MapProfileResults: {
+            length_m: number | null;
+            grid_length_m: number;
+            /** @description chainage of each station */
+            stations_m: number[];
+            series: components["schemas"]["ProfileSeries"][];
+            z_min: number | null;
+            z_max: number | null;
+            /** @description between the first two series (trapezoidal); null with one series */
+            cut_area_m2: number | null;
+            fill_area_m2: number | null;
+            nodata_fraction: number;
+        };
+        /** @description computed by the server on create and on every PATCH that moves the vertices or changes the surfaces; one shape per kind */
+        MapMeasurementResults: components["schemas"]["MapDistanceResults"] | components["schemas"]["MapAreaResults"] | components["schemas"]["MapProfileResults"];
+        MapMeasurement: {
+            id: string;
+            name: string;
+            note: string | null;
+            kind: components["schemas"]["MapMeasurementKind"];
+            /** @description the frame it was drawn in (the site CRS at creation); null for local metres */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description in crs_wkt; an area ring is not closed */
+            vertices: components["schemas"]["SiteVertex"][];
+            /** @description only with frame=site: the vertices in the current site frame */
+            vertices_site?: components["schemas"]["SiteVertex"][];
+            surface_ids: string[];
+            /** @description the map of the right date at creation */
+            map_id: string | null;
+            results: components["schemas"]["MapMeasurementResults"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "mm000000-1414-4000-8000-000000000001",
+         *           "name": "Distance 1",
+         *           "note": null,
+         *           "kind": "distance",
+         *           "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *           "epsg": 32638,
+         *           "vertices": [
+         *             [
+         *               583100,
+         *               3265400
+         *             ],
+         *             [
+         *               583148.1,
+         *               3265403.2
+         *             ]
+         *           ],
+         *           "surface_ids": [],
+         *           "map_id": "a0000000-6666-4000-8000-000000000002",
+         *           "results": {
+         *             "length_m": 48.2,
+         *             "grid_length_m": 48.21,
+         *             "scale_factor": 0.99981,
+         *             "length_3d_m": null,
+         *             "nodata_fraction": null,
+         *             "dsm_surface_id": null
+         *           },
+         *           "created_at": "2026-09-27T09:00:00Z",
+         *           "updated_at": "2026-09-27T09:00:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        MapMeasurementPage: {
+            items: components["schemas"]["MapMeasurement"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "kind": "profile",
+         *       "vertices": [
+         *         [
+         *           583100,
+         *           3265400
+         *         ],
+         *         [
+         *           583290,
+         *           3265460
+         *         ]
+         *       ],
+         *       "surface_ids": [
+         *         "s0000000-9999-4000-8000-000000000001"
+         *       ]
+         *     }
+         */
+        MapMeasurementCreate: {
+            kind: components["schemas"]["MapMeasurementKind"];
+            /** @description in the site frame; distance and profile at least 2, area at least 3 and simple */
+            vertices: components["schemas"]["SiteVertex"][];
+            /** @description numbered like Distance 3 when absent */
+            name?: string;
+            note?: string;
+            /** @description profile: 1 to 3 surfaces; distance: an optional DSM for the 3D length; area: none */
+            surface_ids?: string[];
+            /** @description the map of the right date; null when absent */
+            map_id?: string | null;
+        };
+        MapMeasurementPatch: {
+            name?: string;
+            /** @description null clears it */
+            note?: string | null;
+            /** @description in the site frame */
+            vertices?: components["schemas"]["SiteVertex"][];
+            surface_ids?: string[];
+        };
+        /** @enum {string} */
+        MeasurementKind: "cloud" | "volume" | "map";
+        /**
+         * @description cloud: its CloudMeasurementKind, including C's area and profile; volume: volume; map: its MapMeasurementKind
+         * @enum {string}
+         */
+        MeasurementSubKind: "point" | "distance" | "height" | "vertical" | "area" | "profile" | "volume";
+        /** @enum {string} */
+        MeasurementUnit: "m" | "m2" | "m3" | "deg" | "mm_per_m";
+        /**
+         * @description a volume's calculating and a cloud measurement's computing are both computing
+         * @enum {string}
+         */
+        MeasurementStatus: "ready" | "computing" | "stale" | "failed";
+        MeasurementItem: {
+            kind: components["schemas"]["MeasurementKind"];
+            sub_kind: components["schemas"]["MeasurementSubKind"];
+            /** @description the id in its own table (cloud, volume or map measurement) */
+            id: string;
+            name: string;
+            /** @description the kind's headline figure in unit; null while computing, failed, or not mapped yet */
+            headline: number | null;
+            unit: components["schemas"]["MeasurementUnit"] | null;
+            /** @description what it was measured on: a point cloud, a volume's top surface (elevation), or a map measurement's map */
+            data_type: components["schemas"]["DataItemType"] | null;
+            data_id: string | null;
+            status: components["schemas"]["MeasurementStatus"];
+            /**
+             * Format: date-time
+             * @description the page key
+             */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "kind": "map",
+         *           "sub_kind": "profile",
+         *           "id": "mm000000-1414-4000-8000-000000000002",
+         *           "name": "Section across the pit",
+         *           "headline": 199.2,
+         *           "unit": "m",
+         *           "data_type": "map",
+         *           "data_id": "a0000000-6666-4000-8000-000000000002",
+         *           "status": "ready",
+         *           "created_at": "2026-09-27T09:10:00Z",
+         *           "updated_at": "2026-09-27T09:10:00Z"
+         *         },
+         *         {
+         *           "kind": "volume",
+         *           "sub_kind": "volume",
+         *           "id": "v0000000-8888-4000-8000-000000000001",
+         *           "name": "Pile 1",
+         *           "headline": 1250.4,
+         *           "unit": "m3",
+         *           "data_type": "elevation",
+         *           "data_id": "s0000000-9999-4000-8000-000000000001",
+         *           "status": "ready",
+         *           "created_at": "2026-09-26T15:00:00Z",
+         *           "updated_at": "2026-09-26T15:02:00Z"
+         *         },
+         *         {
+         *           "kind": "cloud",
+         *           "sub_kind": "distance",
+         *           "id": "cm000000-1515-4000-8000-000000000001",
+         *           "name": "Distance 3",
+         *           "headline": 12.84,
+         *           "unit": "m",
+         *           "data_type": "point_cloud",
+         *           "data_id": "p0000000-1111-4000-8000-000000000001",
+         *           "status": "ready",
+         *           "created_at": "2026-09-25T11:00:00Z",
+         *           "updated_at": "2026-09-25T11:00:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        MeasurementPage: {
+            items: components["schemas"]["MeasurementItem"][];
+            next_cursor: string | null;
+        };
     };
     responses: {
         /** @description error envelope */
@@ -10885,6 +11188,8 @@ export interface components {
         drawingId: string;
         /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
         drawingPage: number;
+        /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+        mapMeasurementId: string;
         /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
         tilePreview: string;
         /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
@@ -18672,6 +18977,232 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listMeasurements: {
+        parameters: {
+            query?: {
+                /** @description only these kinds; every kind when absent */
+                kind?: components["schemas"]["MeasurementKind"][];
+                /** @description only these sub-kinds; every sub-kind when absent */
+                sub_kind?: components["schemas"]["MeasurementSubKind"][];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapMeasurements: {
+        parameters: {
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+                kind?: components["schemas"]["MapMeasurementKind"];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of map measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurementPage"];
+                };
+            };
+            /** @description `frame=site` before the project has a site frame (`code` is `no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMapMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description created, with its results */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a named surface is not `ready` (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description too few vertices for the kind or a self-crossing area (`code` is `invalid_geometry`); surfaces the kind does not take, repeated or not elevation (`invalid_surfaces`); a profile surface outside the site frame (`surface_not_in_frame`); a profile with no elevation under the line (`no_surface_under_line`); the project already has the most map measurements it keeps (`measurement_limit`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapMeasurement: {
+        parameters: {
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description `frame=site` before the project has a site frame (`code` is `no_site_frame`), or the measurement was drawn in the other frame and cannot be shown in this one (`not_in_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMapMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchMapMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapMeasurementPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a named surface is not `ready` (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description as on create (`invalid_geometry`, `invalid_surfaces`, `surface_not_in_frame`, `no_surface_under_line`, `measurement_limit`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

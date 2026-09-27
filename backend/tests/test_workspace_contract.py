@@ -13,6 +13,7 @@ SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 P = "/api/v1/projects/{projectId}"
 DR = P + "/drawings/{drawingId}"
+MM = P + "/map-measurements/{mapMeasurementId}"
 
 # operationId -> (method, path, the unit that replaces its 501 stub)
 WORKSPACE_OPERATIONS: dict[str, tuple[str, str, str]] = {
@@ -46,6 +47,13 @@ WORKSPACE_OPERATIONS: dict[str, tuple[str, str, str]] = {
     "clearDrawingGeoref": ("delete", DR + "/georef", "M-B3"),
     "getDrawingVectorTile": ("get", DR + "/vtiles/{z}/{x}/{y}", "M-B3"),
     "getDrawingThumbnail": ("get", DR + "/thumbnail", "M-B3"),
+    # M-B4: map measurements and the measurements union (Task 4)
+    "listMeasurements": ("get", P + "/measurements", "M-B4"),
+    "listMapMeasurements": ("get", P + "/map-measurements", "M-B4"),
+    "createMapMeasurement": ("post", P + "/map-measurements", "M-B4"),
+    "getMapMeasurement": ("get", MM, "M-B4"),
+    "patchMapMeasurement": ("patch", MM, "M-B4"),
+    "deleteMapMeasurement": ("delete", MM, "M-B4"),
 }
 
 
@@ -158,3 +166,57 @@ def test_a_vector_tile_is_bounded(spec):
     assert {"$ref": "#/components/parameters/frameKey"} in op["parameters"]
     assert "no_coordinates" in op["responses"]["422"]["description"]
     assert "invalid_preview" in op["responses"]["422"]["description"]
+
+
+def test_the_union_item_carries_what_the_tab_and_the_clouds_need(spec):
+    s = _schemas(spec)
+    assert set(s["MeasurementItem"]["required"]) == {
+        "kind",
+        "sub_kind",
+        "id",
+        "name",
+        "headline",
+        "unit",
+        "data_type",
+        "data_id",
+        "status",
+        "created_at",
+        "updated_at",
+    }
+    assert s["MeasurementKind"]["enum"] == ["cloud", "volume", "map"]
+    assert s["MeasurementSubKind"]["enum"] == [
+        "point",
+        "distance",
+        "height",
+        "vertical",
+        "area",
+        "profile",
+        "volume",
+    ]
+    assert s["MeasurementStatus"]["enum"] == ["ready", "computing", "stale", "failed"]
+    params = spec["paths"][P + "/measurements"]["get"]["parameters"]
+    assert {p.get("name") for p in params} >= {"kind", "sub_kind"}
+    assert {"$ref": "#/components/parameters/cursor"} in params
+    assert {"$ref": "#/components/parameters/limit"} in params
+
+
+def test_every_workspace_page_example_ends(spec):
+    for name in ("MeasurementPage", "MapMeasurementPage"):
+        schema = _schemas(spec)[name]
+        assert set(schema["required"]) == {"items", "next_cursor"}
+        assert schema["example"]["next_cursor"] is None, name
+
+
+def test_map_measurements_are_bounded(spec):
+    s = _schemas(spec)
+    vertices = s["MapMeasurementCreate"]["properties"]["vertices"]
+    assert (vertices["minItems"], vertices["maxItems"]) == (2, 5000)
+    profile = s["MapProfileResults"]["properties"]
+    assert profile["stations_m"]["maxItems"] == 2000
+    assert profile["series"]["maxItems"] == 3
+    assert s["MapMeasurementKind"]["enum"] == ["distance", "area", "profile"]
+    create = spec["paths"][P + "/map-measurements"]["post"]["responses"]
+    for code in ("invalid_surfaces", "surface_not_in_frame", "measurement_limit"):
+        assert code in create["422"]["description"], code
+    assert "no_site_frame" in create["409"]["description"]
+    assert "not_in_site_frame" in spec["paths"][MM]["get"]["responses"]["409"]["description"]

@@ -138,6 +138,8 @@ export type Drawing = Schemas["Drawing"];
 export type DrawingInspection = Schemas["DrawingInspection"];
 export type DrawingGeoref = Schemas["DrawingGeoref"];
 export type DrawingVectorTile = Schemas["DrawingVectorTile"];
+export type MapMeasurement = Schemas["MapMeasurement"];
+export type MeasurementItem = Schemas["MeasurementItem"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */

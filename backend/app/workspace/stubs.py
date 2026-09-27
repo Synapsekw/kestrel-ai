@@ -58,7 +58,14 @@ B3_STUBS: list[Stub] = [
 ]
 
 # M-B4: map measurements and the project-wide measurements union (spec §9.1, §9.2, §4 item 8).
-B4_STUBS: list[Stub] = []
+B4_STUBS: list[Stub] = [
+    ("GET", "/measurements", "listMeasurements"),
+    ("GET", "/map-measurements", "listMapMeasurements"),
+    ("POST", "/map-measurements", "createMapMeasurement"),
+    ("GET", "/map-measurements/{mapMeasurementId}", "getMapMeasurement"),
+    ("PATCH", "/map-measurements/{mapMeasurementId}", "patchMapMeasurement"),
+    ("DELETE", "/map-measurements/{mapMeasurementId}", "deleteMapMeasurement"),
+]
 
 STUBS: list[Stub] = [*B1_STUBS, *B2_STUBS, *B3_STUBS, *B4_STUBS]
 
