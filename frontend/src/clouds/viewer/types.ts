@@ -32,6 +32,17 @@ export interface CameraPose {
   fov_deg: number;
 }
 
+/**
+ * What `goToPose` accepts: a `CameraPose`, or C-C0's stored `CloudViewPose` (`number[]` fields) as is.
+ * `poseView` checks the lengths and values; an invalid pose is ignored.
+ */
+export interface CameraPoseInput {
+  position: readonly number[];
+  target: readonly number[];
+  up: readonly number[];
+  fov_deg: number;
+}
+
 export interface ColourAvailability {
   rgb: boolean;
   elevation: true;

@@ -62,8 +62,12 @@ test("setView tweens to the named view in about 350 ms; a drag stops it; reduced
 }) => {
   await openGrid(page);
   await edlOn(page);
-  await page.evaluate(() => window.__kestrelCloudViewer!.setView("front"));
-  const early = await pose(page);
+  // read in the same round trip as setView: a slow run could otherwise finish the 350 ms tween first
+  const early = await page.evaluate(() => {
+    const h = window.__kestrelCloudViewer!;
+    h.setView("front");
+    return h.cameraPose()!;
+  });
   expect(Math.abs(early.position[2] - early.target[2])).toBeGreaterThan(1); // still on its way down
   await expect
     .poll(

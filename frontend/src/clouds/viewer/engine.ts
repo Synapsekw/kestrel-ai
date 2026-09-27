@@ -39,6 +39,7 @@ import { nearestToCentre, topmostWithin } from "./topmost";
 import { startTween, tweenAt, type Tween } from "./tween";
 import type {
   CameraPose,
+  CameraPoseInput,
   ColourAvailability,
   EdlState,
   FrameCallback,
@@ -95,7 +96,7 @@ export interface CloudEngine {
   topView(): void;
   lookAt(target: XYZ, distance: number): void;
   setView(view: ViewName): void;
-  goToPose(pose: CameraPose): void;
+  goToPose(pose: CameraPoseInput): void;
   currentPose(): CameraPose;
   setNavMode(mode: NavMode): void;
   navMode(): NavMode;

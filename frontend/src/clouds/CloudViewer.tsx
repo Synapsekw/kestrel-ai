@@ -13,9 +13,11 @@ import { reducedEffects, watchEffects } from "./viewer/edl";
 import { createEngine, emptyStats, NoWebGlError, type CloudEngine, type CloudPick } from "./viewer/engine";
 import { FrameBridge } from "./viewer/frameBridge";
 import type { ColourMode } from "./viewer/materialOptions";
+import { resolveNavMode, type AppliedNavMode } from "./viewer/navMode";
 import type { OverlayShape } from "./viewer/overlay";
 import type {
   CameraPose,
+  CameraPoseInput,
   ColourAvailability,
   EdlState,
   FrameCallback,
@@ -48,7 +50,8 @@ export interface CloudViewerHandle {
   navMode(): NavMode;
   /** A 350 ms tween; instant under reduced motion. */
   setView(view: ViewName): void;
-  goToPose(pose: CameraPose): void;
+  /** Takes a `CameraPose` or C-C0's stored `CloudViewPose` as is; an invalid pose is ignored. */
+  goToPose(pose: CameraPoseInput): void;
   currentPose(): CameraPose | null;
   setColourMode(mode: ColourMode): void;
   setClassVisibility(hidden: ReadonlySet<number>): void;
@@ -86,7 +89,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const box = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engine = useRef<CloudEngine | null>(null);
-  const bridge = useRef(new FrameBridge());
+  const [bridge] = useState(() => new FrameBridge()); // lazy: one bridge for the shell's life
   const callbacks = useRef({
     onPick: props.onPick,
     onHover: props.onHover,
@@ -110,6 +113,11 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   // Read when the engine is built, so a colour/size/budget change never rebuilds the scene.
   const materialRef = useRef({ colour, elevationRange, pointSize });
   const budgetRef = useRef(budget);
+  // The colour prop last applied, so the material effect below never reverts a handle colour (Ruling 12).
+  const colourProp = useRef(colour);
+  // Handle state that outlives an engine ("Reload view", a new cloud), re-applied to each new one.
+  const navRef = useRef<AppliedNavMode>("orbit");
+  const hiddenRef = useRef<ReadonlySet<number>>(new Set());
 
   useEffect(() => {
     callbacks.current = {
@@ -162,8 +170,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       throw err;
     }
     engine.current = e;
-    const frames = bridge.current;
-    frames.attach(e);
+    if (navRef.current !== "orbit") e.setNavMode(navRef.current);
+    if (hiddenRef.current.size > 0) e.setClassVisibility(hiddenRef.current);
+    bridge.attach(e);
     const stopEffects = watchEffects((reduced) => e.setEdl(!reduced));
 
     let releaseHook = () => {};
@@ -206,7 +215,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     return () => {
       releaseHook();
       stopEffects();
-      frames.detach();
+      bridge.detach();
       e.dispose();
       engine.current = null;
     };
@@ -214,10 +223,17 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloud.id, octreeUrl, token, generation]);
 
+  // The colour prop and the handle's setColourMode write the same state; the last write wins (Ruling 12).
   useEffect(() => {
-    materialRef.current = { colour, elevationRange, pointSize };
+    if (colourProp.current === colour) return;
+    colourProp.current = colour;
+    materialRef.current = { ...materialRef.current, colour };
+    engine.current?.setColourMode(colour);
+  }, [colour]);
+  useEffect(() => {
+    materialRef.current = { ...materialRef.current, elevationRange, pointSize };
     engine.current?.setMaterial(materialRef.current);
-  }, [colour, elevationRange, pointSize]);
+  }, [elevationRange, pointSize]);
   useEffect(() => {
     budgetRef.current = budget;
     engine.current?.setBudget(budget);
@@ -238,8 +254,11 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       },
       setOverlay: (key, shapes) => engine.current?.setOverlay(key, shapes),
       stats: () => engine.current?.stats() ?? emptyStats(),
-      setNavMode: (mode) => engine.current?.setNavMode(mode),
-      navMode: () => engine.current?.navMode() ?? "orbit",
+      setNavMode(mode) {
+        navRef.current = resolveNavMode(mode, navRef.current); // "fly" keeps the mode (Ruling 2)
+        engine.current?.setNavMode(mode);
+      },
+      navMode: () => engine.current?.navMode() ?? navRef.current,
       setView: (view) => engine.current?.setView(view),
       goToPose: (pose) => engine.current?.goToPose(pose),
       currentPose: () => engine.current?.currentPose() ?? null,
@@ -247,14 +266,17 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         materialRef.current = { ...materialRef.current, colour: mode }; // plan Ruling 12
         engine.current?.setColourMode(mode);
       },
-      setClassVisibility: (hidden) => engine.current?.setClassVisibility(hidden),
+      setClassVisibility(hidden) {
+        hiddenRef.current = new Set(hidden);
+        engine.current?.setClassVisibility(hiddenRef.current);
+      },
       colourAvailability: () => engine.current?.colourAvailability() ?? null,
-      onFrame: (cb) => bridge.current.add(cb),
+      onFrame: (cb) => bridge.add(cb),
       topSnapshot: (px) => engine.current?.topSnapshot(px) ?? Promise.resolve(null),
       frameTimes: () => engine.current?.frameTimes() ?? [],
       edl: () => engine.current?.edl() ?? null,
     }),
-    [],
+    [bridge],
   );
 
   return (

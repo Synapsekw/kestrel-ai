@@ -53,7 +53,7 @@ describe("CloudViewer handle without an engine", () => {
       h.fit();
       h.topView();
     }).not.toThrow();
-    expect(h.navMode()).toBe("orbit");
+    expect(h.navMode()).toBe("pan"); // the shell keeps it for the next engine
     expect(h.frameTimes()).toEqual([]);
     expect(h.currentPose()).toBeNull();
     expect(h.colourAvailability()).toBeNull();
