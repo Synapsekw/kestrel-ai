@@ -120,6 +120,30 @@ test("lookThrough fits the photo in the canvas and maps its centre to the canvas
   expect(pose.up).toEqual([0, 1, 0]);
 });
 
+test("a second lookThrough, then restore, goes back to the pose before the first, Z-up (review I1)", async ({
+  page,
+}) => {
+  await openGrid(page);
+  const before = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+  const photo = (x: number, up: [number, number, number]) => ({
+    position: [x, 3178050, 60] as [number, number, number],
+    forward: [0, 0, -1] as [number, number, number],
+    up,
+    hfovDeg: 73.7,
+    vfovDeg: 53.1,
+    width: 4000,
+    height: 3000,
+  });
+  await page.evaluate((p) => window.__kestrelCloudViewer!.lookThrough(p), photo(243540, [0, 1, 0]));
+  await page.evaluate((p) => window.__kestrelCloudViewer!.lookThrough(p), photo(243560, [1, 0, 0]));
+  await page.evaluate(() => window.__kestrelCloudViewer!.restoreLook());
+  const after = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+  after.position.forEach((v, i) => expect(v).toBeCloseTo(before.position[i], 6));
+  after.target.forEach((v, i) => expect(v).toBeCloseTo(before.target[i], 6));
+  expect(after.up).toEqual([0, 0, 1]);
+  expect(after.fov_deg).toBeCloseTo(before.fov_deg, 6);
+});
+
 test("sampleSlab reads the loaded points in float64 along the line", async ({ page }) => {
   await openGrid(page, 1);
   const r = await page.evaluate(() =>

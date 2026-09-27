@@ -251,8 +251,11 @@ export function createEngine(o: EngineOptions): CloudEngine {
   let clipParams = pickClipParams(null);
   /** A pick survives the clip box (plan Ruling 1: show_inside drops what is outside). */
   const inClip = (p: { x: number; y: number; z: number }): boolean => respectClip([p], clip).length > 0;
-  /** Set by lookThrough: the FOV to restore on the next navigation (plan Ruling 9). */
-  let posed: { fov: number } | null = null;
+  /**
+   * Set by lookThrough: the camera from before the first of a run of photo poses (plan Ruling 9). A
+   * second lookThrough keeps it, so `restore()` and the next navigation go back to the pre-photo view.
+   */
+  let posed: { position: THREE.Vector3; target: THREE.Vector3; fov: number } | null = null;
   const settleListeners = new Set<() => void>();
   let renderedSinceSettle = false;
   const fly = new FlyControls({
@@ -816,6 +819,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
     pickAtClient,
     pickDown,
     project(p) {
+      camera.updateMatrixWorld(); // a jump since the last frame (see pickAtClient)
       const v = new THREE.Vector3(p.x, p.y, p.z).project(camera);
       if (v.z > 1 || v.z < -1) return null;
       const r = canvas.getBoundingClientRect();
@@ -896,11 +900,11 @@ export function createEngine(o: EngineOptions): CloudEngine {
     lookThrough(pose) {
       tween = null;
       if (nav === "fly") engine.setNavMode("orbit");
-      const before = {
+      // stepping through photos keeps the snapshot from before the first one (review I1)
+      const before = posed ?? {
         position: camera.position.clone(),
         target: controls.target.clone(),
-        up: camera.up.clone(),
-        fov: posed ? posed.fov : camera.fov,
+        fov: camera.fov,
       };
       const rect = () => canvas.getBoundingClientRect();
       const first = rect();
@@ -912,7 +916,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       controls.target.copy(target); // not controls.update(): it would re-derive the orientation
       camera.updateProjectionMatrix();
       camera.updateMatrixWorld(true);
-      posed = { fov: before.fov };
+      posed = before;
       requestRender();
       const k = () => letterbox(pose, rect().width, rect().height).k;
       return {
@@ -921,7 +925,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
         restore: () => {
           camera.position.copy(before.position);
           controls.target.copy(before.target);
-          camera.up.copy(before.up);
+          camera.up.set(0, 0, 1); // orbit is always Z-up; a photo's up never outlives it
           camera.fov = before.fov;
           camera.updateProjectionMatrix();
           camera.lookAt(controls.target);

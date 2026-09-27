@@ -196,6 +196,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     let releaseHook = () => {};
     if (diagnosticsEnabled()) {
       let last: FrameCameraSample | null = null;
+      let lastLook: LookThrough | null = null;
       const stopRecording = e.onFrame((cam) => {
         last = {
           viewProj: Array.from(cam.viewProj),
@@ -226,6 +227,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         setClipBox: (box, mode) => e.setClipBox(box, mode),
         lookThrough: (pose) => {
           const lt = e.lookThrough(pose);
+          lastLook = lt;
           return { centre: lt.toCanvas(pose.width / 2, pose.height / 2), frame: lt.frame() };
         },
         sampleSlab: async (a, b, thicknessM) => {
@@ -240,6 +242,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           };
         },
         goToPose: (pose) => e.goToPose(pose),
+        restoreLook: () => lastLook?.restore(),
       });
       releaseHook = () => {
         stopRecording();

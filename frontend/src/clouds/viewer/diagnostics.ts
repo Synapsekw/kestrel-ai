@@ -82,6 +82,8 @@ export interface CloudViewerDiagnostics {
     centre: { x: number; y: number };
     frame: { left: number; top: number; width: number; height: number };
   };
+  /** C-V2: `restore()` of the last `lookThrough` (none: nothing happens). */
+  restoreLook(): void;
   /** C-V2: a slab sample, bounded for page.evaluate: count, total, and the first ≤ 5000 `s` and `z`. */
   sampleSlab(
     a: [number, number, number],
