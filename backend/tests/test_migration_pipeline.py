@@ -83,7 +83,7 @@ def test_a_rerun_resumes_at_the_first_unrecorded_step(handle):
     calls = []
     report = run_pipeline(handle, _env(handle), _steps(calls))
     assert calls == ["b", "c"]
-    assert report["steps"][0] == {"name": "a", "skipped": True}
+    assert report["steps"][0] == {"name": "a", "skipped": True, "detail": {"wrote": "a", "warnings": []}}
     assert _read(handle, "SELECT name FROM scratch ORDER BY rowid") == ["a", "b", "c"]
 
 

@@ -1,6 +1,7 @@
 """Running the migration's data steps in order, resumably (foundation spec §11.4).
 
-`run_pipeline` skips every step the ledger already records, and runs each remaining step in one
+`run_pipeline` skips every step the ledger already records (its recorded detail and warnings still
+go into the report, so a resumed run reports what the whole upgrade found), and runs each remaining step in one
 project transaction together with its ledger record. It ends with `finish`: the report
 `<project>/backups/migration-v2.json` is written first, then `project.schema_version = 2` and the
 `finish` record commit together. A failure raises `StepFailed` naming the step; nothing after it
@@ -77,7 +78,7 @@ def run_pipeline(handle, env: MigrationEnv, steps) -> dict:
     """Run every unrecorded step, then `finish`. Returns the report that `finish` wrote."""
     started = time.monotonic()
     with handle.session() as s:
-        done = ledger.done_steps(s)
+        done = ledger.details(s)
     report: dict = {
         "project_id": handle.id,
         "folder": str(env.origin_folder),
@@ -89,7 +90,9 @@ def run_pipeline(handle, env: MigrationEnv, steps) -> dict:
     for i, step in enumerate(steps):
         env.check_cancelled()
         if step.name in done:
-            report["steps"].append({"name": step.name, "skipped": True})
+            recorded = done[step.name]
+            report["warnings"] += [f"{step.name}: {w}" for w in recorded.get("warnings") or []]
+            report["steps"].append({"name": step.name, "skipped": True, "detail": recorded})
             continue
         env.progress(i / total, step.label)
         t0 = time.monotonic()

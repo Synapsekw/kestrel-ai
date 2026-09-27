@@ -250,3 +250,27 @@ def test_a_crash_between_steps_resumes_without_duplicates(tmp_path, stores):
     assert len(_state(h, stores)["ids"]) == 2 and len(_state(h, stores)["types"]) == 2
     with h.session() as s:
         assert s.execute(text("SELECT schema_version FROM project")).scalar_one() == 2
+
+
+def test_a_resumed_run_keeps_the_warnings_of_steps_it_skips(tmp_path, stores):
+    """A step the ledger already recorded is skipped on resume, but its warnings and detail still
+    reach the report (and so migration-v2.json and the Overview banner)."""
+    folder = at_revision(tmp_path / "p", "0009")
+    h = open_handle(folder)
+    env = env_for(stores, folder)
+
+    def warns(ctx):
+        return {"moved": 3, "warnings": ["something to look at"]}
+
+    def crash(ctx):
+        raise RuntimeError("the sidecar was killed")
+
+    with pytest.raises(StepFailed):
+        run_pipeline(h, env, (Step("first", "First", warns), Step("second", "Second", crash)))
+    report = run_pipeline(h, env, (Step("first", "First", warns), Step("second", "Second", lambda ctx: {})))
+    assert report["warnings"] == ["first: something to look at"]
+    first = report["steps"][0]
+    assert first["name"] == "first" and first["skipped"] is True
+    assert first["detail"] == {"moved": 3, "warnings": ["something to look at"]}
+    written = json.loads((folder / "backups" / "migration-v2.json").read_text("utf-8"))
+    assert written["warnings"] == ["first: something to look at"]
