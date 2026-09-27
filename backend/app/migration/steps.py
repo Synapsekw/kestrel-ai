@@ -274,6 +274,12 @@ def _dataset_per_class(s, dataset_id: str, id_map: dict[str, str]) -> dict[str, 
     return per_class
 
 
+def _fill_per_class(row, s, dataset_id: str, id_map: dict[str, str]) -> None:
+    """Fill a library dataset's empty `counts.per_class` (BM leaves it empty); a filled one stays."""
+    if row is not None and not (row.counts or {}).get("per_class"):
+        row.counts = {**(row.counts or {}), "per_class": _dataset_per_class(s, dataset_id, id_map)}
+
+
 def legacy_datasets(ctx: StepContext) -> dict:
     """Step 5: register each materialised project dataset in the library as a legacy dataset,
     through BM's `register_legacy_dataset`, so it stays trainable from Models (spec §6.1, §11.4,
@@ -282,7 +288,8 @@ def legacy_datasets(ctx: StepContext) -> dict:
     but the check-then-register-then-fill sequence for one dataset still runs under `STORE_LOCK`:
     two workers racing here would both pass the pre-check and collide on the unique dataset name.
     BM leaves `counts.per_class` empty; this step fills it (bounded `json_each` SQL) in the same
-    library session it reads the new row's name back from."""
+    library session it reads the new row's name back from, and on a re-run for an already
+    registered dataset whose `per_class` is still empty (a crash between the two commits)."""
     library = ports.require_library(ctx.env.library)
     s = ctx.session
     origin = _OriginHandle(ctx.handle, ctx.env.origin_folder)
@@ -298,6 +305,9 @@ def legacy_datasets(ctx: StepContext) -> dict:
             with library.session() as ls:
                 existing = ports.legacy_dataset_by_path(ls, str(root))
             if existing is not None:
+                # A crash between BM's commit and the fill below leaves `per_class` empty: fill it.
+                with library.session() as ls:
+                    _fill_per_class(ls.get(LibraryDataset, existing), s, d["id"], id_map)
                 already += 1
                 continue
             dataset_id = register_legacy_dataset(library, origin, d["id"])
@@ -306,8 +316,7 @@ def legacy_datasets(ctx: StepContext) -> dict:
                 continue
             with library.session() as ls:
                 row = ls.get(LibraryDataset, dataset_id)
-                if not row.counts.get("per_class"):
-                    row.counts = {**row.counts, "per_class": _dataset_per_class(s, d["id"], id_map)}
+                _fill_per_class(row, s, d["id"], id_map)
                 names.append(row.name)
     return {"registered": len(names), "names": names, "already_registered": already, "warnings": warnings}
 

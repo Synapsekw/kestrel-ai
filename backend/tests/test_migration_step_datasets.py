@@ -123,3 +123,21 @@ def test_a_dry_run_copy_registers_the_original_folder(tmp_path, stores):
     assert row["legacy_path"] == str((original / "datasets" / "v1").resolve())
     [source] = _sources(stores)
     assert source["project_folder"] == str(original)
+
+
+def test_a_crash_after_registering_still_fills_per_class_on_the_rerun(tmp_path, stores):
+    """The process died after BM committed the dataset but before the per-class fill: the re-run
+    takes the already-registered branch and fills the empty `per_class` there."""
+    from app.library.datasets.legacy import register_legacy_dataset
+
+    h = open_handle(_project(tmp_path, "p", "p1"))
+    env = env_for(stores, h.folder)
+    for fn in (steps.catalogue_merge, steps.rewrite_class_ids):
+        run_step(h, env, fn)
+    register_legacy_dataset(stores.library, steps._OriginHandle(h, h.folder), "ds-v1")  # then the crash
+    assert not json.loads(_legacy(stores)[0]["counts"]).get("per_class")
+    again = run_step(h, env, steps.legacy_datasets)
+    ids = {n: r["id"] for n, r in catalogue_types(stores).items()}
+    assert (again["registered"], again["already_registered"]) == (0, 1)
+    [row] = _legacy(stores)
+    assert json.loads(row["counts"])["per_class"] == {ids["excavator"]: 1, ids["dump_truck"]: 1}
