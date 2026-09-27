@@ -91,12 +91,8 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Images I-C0 stubs; each unit deletes its lines.
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "listImageMeasurements",  # I-BA
-    "createImageMeasurement",  # I-BA
-    "deleteImageMeasurement",  # I-BA
     "refreshImageMetadata",  # I-BK
     "getImageIndex",  # I-BX
     "rebuildImageSummary",  # I-BX
@@ -111,11 +107,6 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 EXPECTED_STUBS |= {
     "retryCloudProfile",  # C-B2
     "getCloudProfile",  # C-B2
-    "putFindingView3d",  # C-B4
-    "getFindingView3d",  # C-B4
-    "putCloudMeasurementView3d",  # C-B4
-    "getCloudMeasurementView3d",  # C-B4
-    "listCloudViews",  # C-B4
 }
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
@@ -129,10 +120,6 @@ BACKEND_PENDING: dict[str, str] = {
     "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
-    "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at
-    "createBox": "I-BA",  # BoxWriteResult; BoxCreate shapes
-    "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
-    "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
@@ -228,6 +215,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "backfillCatalogueType": {422},
     # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
     "acquireAssistModel": {409},
+    # C-B4 (spec 2026-09-26-point-cloud-workspace section 11.4): a schema-valid multipart whose image
+    # is not a 1600 x 1000 PNG/JPEG (`bad_view_image`), or a finding anchored on an image or a map
+    # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
+    "putFindingView3d": {409, 422},
+    "putCloudMeasurementView3d": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

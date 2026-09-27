@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, Request, Response
 
 from app.events_util import publish_pointclouds_changed
-from app.pointclouds import measurements
+from app.pointclouds import measurements, views
 from app.pointclouds.schemas import (
     CloudMeasurementCreate,
     CloudMeasurementList,
@@ -21,8 +21,11 @@ sub = APIRouter()
 def list_cloud_measurements(
     cloudId: str, handle: ProjectHandle = Depends(get_project)
 ) -> CloudMeasurementList:  # noqa: N803
+    by_id = views.measurement_views(handle, cloudId)
     return CloudMeasurementList(
-        items=[CloudMeasurementOut.from_row(m) for m in measurements.list_for(handle, cloudId)]
+        items=[
+            CloudMeasurementOut.from_row(m, by_id.get(m.id)) for m in measurements.list_for(handle, cloudId)
+        ]
     )
 
 
@@ -48,7 +51,7 @@ def update_cloud_measurement(
 ) -> CloudMeasurementOut:
     row = measurements.update(handle, cloudId, cloudMeasurementId, body)
     publish_pointclouds_changed(request, handle, [cloudId])
-    return CloudMeasurementOut.from_row(row)
+    return CloudMeasurementOut.from_row(row, views.measurement_view(handle, row.id))
 
 
 @sub.delete("/pointclouds/{cloudId}/measurements/{cloudMeasurementId}", status_code=204)

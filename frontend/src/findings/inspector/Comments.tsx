@@ -4,7 +4,7 @@ import { messageOf } from "@/api/errors";
 import { addComment, deleteComment, editComment, listComments, type FindingComment } from "@/api/findings";
 import { pushLog } from "@/app/diagnostics";
 import { useNow } from "@/jobs/useNow";
-import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { Alert, Button, IconButton, Textarea } from "@/ui";
 import { relativeTime } from "../format";
 
@@ -89,10 +89,9 @@ export function Comments({ projectId, findingId }: { projectId: string; findingI
     if (!text || sending.current) return;
     sending.current = true;
     try {
-      const c = await addComment(api, projectId, findingId, text);
+      const c = await ownFindingsWrite([findingId], () => addComment(api, projectId, findingId, text));
       setItems((xs) => [...xs, c]);
       setReply("");
-      useChangesStore.getState().bumpFindings();
     } catch (e) {
       setError(messageOf(e, "could not post the comment"));
     } finally {
@@ -113,10 +112,9 @@ export function Comments({ projectId, findingId }: { projectId: string; findingI
 
   async function remove(id: string) {
     try {
-      await deleteComment(api, projectId, findingId, id);
+      await ownFindingsWrite([findingId], () => deleteComment(api, projectId, findingId, id));
       setItems((xs) => xs.filter((x) => x.id !== id));
       setDeleting(null);
-      useChangesStore.getState().bumpFindings();
     } catch (e) {
       setError(messageOf(e, "could not delete the comment"));
     }
