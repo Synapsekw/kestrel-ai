@@ -29,7 +29,7 @@ export function Readout({
       aria-label="Pick readout"
       data-testid="cloud-readout"
       style={stagger(4)}
-      className="stagger absolute bottom-3.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-4 whitespace-nowrap rounded-full px-4 py-2 text-xs animate-reveal reduce-motion:animate-none"
+      className="stagger absolute inset-x-0 bottom-3.5 z-10 mx-auto flex w-fit items-center gap-4 whitespace-nowrap rounded-full px-4 py-2 text-xs animate-reveal reduce-motion:animate-none"
     >
       <span aria-hidden className={cx("h-[7px] w-[7px] rounded-full", pick ? "bg-ok" : "bg-dim")} />
       {values.map(([k, v]) => (
