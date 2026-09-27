@@ -83,6 +83,10 @@ def project_opened(handle, runner) -> None:
             "project type snapshot refresh",
             lambda: importlib.import_module("app.catalogue.project_types").refresh_handle(handle),
         ),
+        (
+            "image summary check",
+            lambda: importlib.import_module("app.imagery.jobs_summary").check_on_open(handle, runner),
+        ),
         # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
         ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),
     ):
