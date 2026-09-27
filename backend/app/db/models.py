@@ -316,6 +316,10 @@ class MapRun(Base):
     verified_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")  # {class_id: n}
     # {area_id: {class_id: {"total": n, "verified": n}}}
     area_counts: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    # Map workspace (spec 2026-09-26-map-workspace §9.3): a `region` run covers part of a map and
+    # never represents a survey. NOT NULL with a default, so `scope != 'region'` keeps every old run.
+    scope: Mapped[str] = mapped_column(String, default="map", server_default="map")
+    region_px: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [[x, y], ...] in map pixels
     __table_args__ = (Index("ix_map_run_map", "map_id"),)
 
 
@@ -334,9 +338,13 @@ class MapDetection(Base):
     review_state: Mapped[str] = mapped_column(String, default="unreviewed", server_default="unreviewed")
     # person | local_model | cloud_provider; a person-drawn detection is a row like any other
     provenance_kind: Mapped[str] = mapped_column(String, default="local_model", server_default="local_model")
+    # The finding an accepted defect detection became (spec 2026-09-26-map-workspace §9.3): unique,
+    # no foreign key (SQLite would rebuild this large table to add one; M-B5 keeps the link).
+    finding_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     __table_args__ = (
         Index("ix_map_detection_run_xy", "run_id", "x", "y"),
         Index("ix_map_detection_run_state", "run_id", "review_state"),
+        Index("ux_map_detection_finding", "finding_id", unique=True),
     )
 
 
@@ -405,6 +413,8 @@ class SiteArea(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String)
     polygon_wgs84: Mapped[list] = mapped_column(JSON)  # [[lon, lat], ...], at least three
+    # general | laydown | exclusion | excavation | other (spec 2026-09-26-map-workspace §9.4).
+    category: Mapped[str] = mapped_column(String, default="general", server_default="general")
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
 
 
@@ -504,7 +514,10 @@ class CloudMeasurement(Base):
     results: Mapped[dict] = mapped_column(JSON, default=dict)  # computed by the server, never the client
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
-    __table_args__ = (Index("ix_cloud_measurement_cloud", "point_cloud_id"),)
+    __table_args__ = (
+        Index("ix_cloud_measurement_cloud", "point_cloud_id"),
+        Index("ix_cloud_measurement_created", "created_at", "id"),  # the measurements union's page key
+    )
 
 
 class Surface(Base):
@@ -513,7 +526,7 @@ class Surface(Base):
     __tablename__ = "surface"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String)
-    kind: Mapped[str] = mapped_column(String)  # cloud_dsm | design
+    kind: Mapped[str] = mapped_column(String)  # cloud_dsm | design | dem
     status: Mapped[str] = mapped_column(String, default="building")  # building | ready | failed
     error: Mapped[str | None] = mapped_column(String, nullable=True)
     # A surface's tif is self-contained, so it survives its cloud.
@@ -536,6 +549,10 @@ class Surface(Base):
     stats: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # SurfaceBuildStats; null for design
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    # Map workspace (spec 2026-09-26-map-workspace §7, migration 0012): a `dem` surface is a `dsm` or a
+    # `dtm`; `captured_on` is the survey date (M-B2 copies a cloud DSM's from its cloud at build time).
+    elevation_role: Mapped[str | None] = mapped_column(String, nullable=True)
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)
     __table_args__ = (Index("ix_surface_status", "status"),)
 
 
@@ -556,7 +573,12 @@ class VolumeMeasurement(Base):
     job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
-    __table_args__ = (Index("ix_volume_measurement_top_surface", "top_surface_id"),)
+    # {name, density_t_m3} (spec 2026-09-26-map-workspace §10): not a calculation input, never stale.
+    material: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    __table_args__ = (
+        Index("ix_volume_measurement_top_surface", "top_surface_id"),
+        Index("ix_volume_measurement_created", "created_at", "id"),  # the measurements union's page key
+    )
 
 
 class ProjectType(Base):
@@ -711,3 +733,74 @@ class ClassIdMap(Base):
     __tablename__ = "class_id_map"
     old_class_id: Mapped[str] = mapped_column(String(36), primary_key=True)
     type_id: Mapped[str] = mapped_column(String(36))
+
+
+class MapWorkspace(Base):
+    """The project's one map-workspace row (spec 2026-09-26-map-workspace §6), created by the first
+    `GET /map-workspace`. `crs_wkt` and `epsg` are null for a `local` frame."""
+
+    __tablename__ = "map_workspace"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    frame_kind: Mapped[str] = mapped_column(String)  # crs | local
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    state: Mapped[dict] = mapped_column(JSON, default=dict)  # the client's view state, at most 64 KB
+    planned_surveys: Mapped[list] = mapped_column(JSON, default=list)  # [{date, note}]
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (CheckConstraint("id = 1", name="ck_map_workspace_one_row"),)
+
+
+class Drawing(Base):
+    """An imported plan: DXF or LandXML linework, or a PDF/PNG/JPG/TIF raster (spec
+    2026-09-26-map-workspace §8.1). The source file is only read; derived files live in
+    `<project>/drawings/<id>/`."""
+
+    __tablename__ = "drawing"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    format: Mapped[str] = mapped_column(String)  # dxf | pdf | png | jpg | tif | landxml
+    status: Mapped[str] = mapped_column(String, default="importing")  # importing | ready | failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_path: Mapped[str] = mapped_column(String)  # absolute; only ever read
+    source_size: Mapped[int] = mapped_column(Integer)
+    source_sha256: Mapped[str | None] = mapped_column(String, nullable=True)
+    page: Mapped[int | None] = mapped_column(Integer, nullable=True)  # PDF page, 1-based
+    units: Mapped[str | None] = mapped_column(String, nullable=True)  # LinearUnit; null for a raster
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)  # raster: rendered pixels
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dpi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    extent_src: Mapped[list | None] = mapped_column(JSON, nullable=True)  # [minx, miny, maxx, maxy]
+    # [{name, colour, entity_count, visible_default}]
+    layers: Mapped[list] = mapped_column(JSON, default=list)
+    georef: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # DrawingGeoref; null = not placed
+    georef_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    bounds_site: Mapped[dict | None] = mapped_column(JSON, nullable=True)  # cached footprint, keyed by frame
+    layer_state: Mapped[dict] = mapped_column(JSON, default=dict)  # {hidden_layers, knockout_white}
+    captured_on: Mapped[date | None] = mapped_column(Date, nullable=True)  # a revision date
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_drawing_status", "status"), Index("ix_drawing_created", "created_at", "id"))
+
+
+class MapMeasurement(Base):
+    """A distance, area or elevation profile drawn in the map workspace (spec
+    2026-09-26-map-workspace §9.1). `geometry` is a vertex list `[[x, y], ...]` in `crs_wkt` (the site
+    CRS at creation; null means local metres); `results` are computed by the server."""
+
+    __tablename__ = "map_measurement"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String)
+    note: Mapped[str | None] = mapped_column(String, nullable=True)
+    kind: Mapped[str] = mapped_column(String)  # distance | area | profile
+    crs_wkt: Mapped[str | None] = mapped_column(String, nullable=True)
+    epsg: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    geometry: Mapped[list] = mapped_column(JSON)
+    surface_ids: Mapped[list] = mapped_column(JSON, default=list)
+    map_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("geo_map.id", ondelete="SET NULL"), nullable=True
+    )
+    results: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (Index("ix_map_measurement_created", "created_at", "id"),)
