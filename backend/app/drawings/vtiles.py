@@ -119,7 +119,7 @@ def vector_tile(
     try:
         rs = runs.RunStore.open(folder)
     except BaseException:
-        idx.release()
+        idx.release(collect=True)  # exception cleanup: a traceback may still hold a view
         raise
     try:
         ids = idx.query(box)

@@ -303,3 +303,25 @@ def test_a_feet_drawing_in_a_metric_frame_sizes_labels_and_thin_runs_in_metres(
     assert t11["layers"] and [lab["text"] for lab in t11["labels"]] == ["PAD"]
     assert abs(t11["labels"][0]["height_m"] - 10 * 1200 / 3937) < 1e-3  # 3.048 m, not 10
     assert tile(10).status_code == 204  # 3.05 m label is 3 px, 0.91 m line under a pixel
+
+
+def test_an_uncached_tile_never_runs_the_garbage_collector(
+    client, project_id, wait_job, handle, tmp_path, monkeypatch
+):
+    """gc.collect() costs ~85 ms on a real heap and holds the GIL: the tile hot path relies on
+    reference counting to drop its memory maps; only jobs and exception cleanup collect."""
+    import gc
+
+    d = _drawing(
+        client,
+        project_id,
+        wait_job,
+        handle,
+        tmp_path,
+        lambda m: m.add_line((500040, 4983000), (500080, 4983000)),
+    )
+    calls = []
+    monkeypatch.setattr(gc, "collect", lambda *a: calls.append(a) or 0)
+    assert _tile(client, project_id, d["id"], 12, TX, TY).status_code == 200
+    assert _tile(client, project_id, d["id"], 12, TX, TY, t="1,0,0,0,1,0").status_code in (200, 204)
+    assert calls == []

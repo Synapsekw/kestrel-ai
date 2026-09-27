@@ -38,7 +38,7 @@ def run() -> dict:
         runs.build_index(store.lines_dir(idir))
         idx = runs.BucketIndex(store.lines_dir(idir))
         hits = len(idx.query((-6.0, -6.0, 11.0, 11.0)))
-        idx.release()
+        idx.release(collect=True)  # the temporary folder is removed next (Windows)
     return {"plan": f"{width}x{height}", "runs": hits, "layers": len(result.layers)}
 
 

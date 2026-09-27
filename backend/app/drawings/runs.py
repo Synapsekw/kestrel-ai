@@ -97,7 +97,9 @@ class RunWriter:
 
 class RunStore:
     """Memory-mapped runs. On Windows a live memmap keeps its file open: call release() before a
-    delete or a move."""
+    delete or a move. release() drops the maps by reference count; `collect=True` also runs the
+    garbage collector (~85 ms on a real heap, holding the GIL), so only job and exception cleanup
+    ask for it, never the tile hot path."""
 
     def __init__(self, folder: Path):
         self.meta = read_json(folder / "meta.json")
@@ -113,9 +115,10 @@ class RunStore:
     def run_count(self) -> int:
         return max(len(self.runs) - 1, 0)
 
-    def release(self) -> None:
+    def release(self, collect: bool = False) -> None:
         self.lines = self.runs = self.layer = None
-        gc.collect()
+        if collect:
+            gc.collect()
 
 
 def run_bboxes(rs: RunStore, a: int, b: int) -> np.ndarray:
@@ -164,7 +167,7 @@ def copy_runs(
         _drop_frames(e)
         raise
     finally:
-        rs.release()
+        rs.release(collect=True)
     return w.close(**meta_extra)
 
 
@@ -283,9 +286,11 @@ class BucketIndex:
         hit = (b[:, 0] <= bx1) & (b[:, 2] >= bx0) & (b[:, 1] <= by1) & (b[:, 3] >= by0)
         return cand[hit]
 
-    def release(self) -> None:
+    def release(self, collect: bool = False) -> None:
+        """See RunStore.release: `collect` only off the hot path."""
         self.offsets = self.ids = self.bbox = None
-        gc.collect()
+        if collect:
+            gc.collect()
 
 
 def extent_with_labels(extent, labels: list[dict]) -> list[float] | None:
@@ -321,4 +326,4 @@ def runs_thumbnail(folder: Path, out: Path, size: int = 160) -> None:
         _drop_frames(e)
         raise
     finally:
-        rs.release()
+        rs.release(collect=True)
