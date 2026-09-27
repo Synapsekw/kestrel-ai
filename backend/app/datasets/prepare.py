@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -182,6 +182,7 @@ def write_thumbnail(im: Image.Image, dest: Path) -> bool:
 @dataclass
 class Prepared:
     dest: str
+    src: str = ""
     width: int = 0
     height: int = 0
     phash: str = ""
@@ -189,6 +190,8 @@ class Prepared:
     lat: float | None = None
     lon: float | None = None
     alt: float | None = None
+    camera: CameraMeta = field(default_factory=CameraMeta)
+    thumb: str = ""  # the thumbnail written, or "" (the lazy endpoint covers it)
     action: str = "failed"  # converted | downscaled | existing | failed
     error: str = ""
 
@@ -240,19 +243,32 @@ def _exif_for_save(original: bytes | None, rotated: bytes | None) -> bytes | Non
         return rotated
 
 
-def process_one(src: str, dest: str, max_side: int, quality: int) -> Prepared:
+def _camera_of_source(src: str) -> CameraMeta:
+    """Header only: `Image.open` is lazy, so XMP and EXIF are read without decoding pixels."""
+    try:
+        with Image.open(src) as opened:
+            return read_camera(opened, original=True)
+    except Exception:
+        return CameraMeta()
+
+
+def process_one(src: str, dest: str, max_side: int, quality: int, thumb: str = "") -> Prepared:
     """Convert one source image to a prepared JPEG. Originals are only ever read."""
-    out = Prepared(dest=dest)
+    out = Prepared(dest=dest, src=src)
     try:
         if Path(dest).exists():
             with Image.open(dest) as im:
                 out.width, out.height = im.size
                 out.phash = str(imagehash.phash(im))
                 out.capture_time, out.lat, out.lon, out.alt = read_exif(im)
+                if thumb and write_thumbnail(im, Path(thumb)):
+                    out.thumb = thumb
+            out.camera = _camera_of_source(src)
             out.action = "existing"
             return out
         with Image.open(src) as opened:
             out.capture_time, out.lat, out.lon, out.alt = read_exif(opened)
+            out.camera = read_camera(opened, original=True)
             im = ImageOps.exif_transpose(opened)
             exif_bytes = _exif_for_save(opened.info.get("exif"), im.info.get("exif"))
             if im.mode != "RGB":
@@ -271,6 +287,8 @@ def process_one(src: str, dest: str, max_side: int, quality: int) -> Prepared:
                 kwargs["exif"] = exif_bytes
             Path(dest).parent.mkdir(parents=True, exist_ok=True)
             im.save(dest, "JPEG", **kwargs)
+            if thumb and write_thumbnail(im, Path(thumb)):
+                out.thumb = thumb
     except Exception as e:  # reported, never raised: the pool must keep going
         out.action, out.error = "failed", repr(e)
     return out
