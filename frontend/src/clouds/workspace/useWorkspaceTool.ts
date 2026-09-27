@@ -20,6 +20,16 @@ const inOverlay = (t: EventTarget | null) =>
   t instanceof Element && t.closest('[role="dialog"],[role="menu"],[role="listbox"]') !== null;
 
 /**
+ * Space belongs to the viewer only when nothing else has focus (the body) or focus is inside the
+ * viewport; a focused button, switch or tab keeps Space for itself (mirrors the images workspace's
+ * `canvasOwnsSpace`).
+ */
+const viewerOwnsSpace = (t: EventTarget | null) =>
+  !(t instanceof Element) ||
+  t === document.body ||
+  t.closest('[data-testid="cloud-centre"],[data-testid="cloud-viewer"]') !== null;
+
+/**
  * The armed tool and the workspace's keys, resolved through the one keymap (C-X1's resolveCloudKey).
  * Fly keys are V2's (it prevents them in the capture phase); review keys are C-P1's.
  */
@@ -68,6 +78,7 @@ export function useWorkspaceTool(o: {
       if (!key || key.scope === "review" || key.scope === "clouds.fly") return;
       const tool = byId(now.tools, now.active);
       if (key.action === "pan-hold") {
+        if (!viewerOwnsSpace(e.target)) return;
         e.preventDefault();
         if (!held && nav !== "fly") {
           held = true;

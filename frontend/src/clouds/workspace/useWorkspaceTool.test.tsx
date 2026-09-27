@@ -117,6 +117,17 @@ describe("the workspace's tools and keys (spec §6 Keyboard, plan Ruling 3)", ()
     expect(handle.setNavMode).toHaveBeenLastCalledWith("orbit");
   });
 
+  it("leaves Space to a focused button (keyboard activation)", () => {
+    render(<Harness tools={[]} />);
+    const button = screen
+      .getByRole("toolbar", { name: "Point cloud tools" })
+      .querySelector<HTMLButtonElement>('[aria-label="Distance"]')!;
+    button.focus();
+    const notPrevented = fireEvent.keyDown(button, { key: " " });
+    expect(notPrevented).toBe(true);
+    expect(handle.setNavMode).not.toHaveBeenCalledWith("pan");
+  });
+
   it("disables what is not available and never arms it", async () => {
     render(<Harness tools={[]} available={(id) => id === "orbit" || id === "pan"} />);
     const bar = screen.getByRole("toolbar", { name: "Point cloud tools" });

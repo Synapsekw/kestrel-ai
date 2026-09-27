@@ -24,7 +24,11 @@ export function HintBar({
   useEffect(() => {
     if (!nav) return;
     const t = window.setTimeout(() => setFadedFor(entry.id), HINT_FADE_MS);
-    return () => window.clearTimeout(t);
+    return () => {
+      window.clearTimeout(t);
+      // Each arm shows the hint again for HINT_FADE_MS (Orbit → Distance → Orbit is not pre-faded).
+      setFadedFor(null);
+    };
   }, [nav, entry.id]);
   const faded = nav && fadedFor === entry.id && !progress;
   return (
