@@ -99,12 +99,8 @@ EXPECTED_STUBS: set[str] = {
 EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
-# app/pointclouds/router.py::STUBS. Each C unit deletes its own names here and there; the last of
-# C-B2, C-B3 and C-B4 deletes this block.
-EXPECTED_STUBS |= {
-    "retryCloudProfile",  # C-B2
-    "getCloudProfile",  # C-B2
-}
+# app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
+# here and in app/pointclouds/router.py::STUBS; the block is empty.
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
 # the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/
@@ -124,10 +120,6 @@ BACKEND_PENDING: dict[str, str] = {
     "chatWithSetupAgent": "I-BT",
 }
 
-# Point cloud workspace (unit C-C0, plan 2026-09-27-clouds-c0 Ruling 2): the create request widens to
-# area and profile, 200 points, `params` and `finding_id`, which C-B1 and C-B2 build. Whichever of
-# them merges second deletes this entry.
-BACKEND_PENDING |= {"createCloudMeasurement": "C-B1 and C-B2"}
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
