@@ -2,12 +2,14 @@
 Task 3). Formats arrive task by task: this file covers PNG/JPG/TIF and the refusals."""
 
 import io
+import threading
 
 from drawings_helpers import BASE, inspect_ready, write_png, write_world_file
 from geotiffs import make_geotiff
 from PIL import Image
 
-from app.jobs.registry import get_job_type
+from app.drawings import phase_inspect, store
+from app.jobs.registry import get_job_type, register_job_type
 
 
 def inspect(client, project_id, path):
@@ -91,3 +93,54 @@ def test_unknown_inspection_is_404(client, project_id):
     uid = "00000000-0000-4000-8000-000000000000"
     assert client.get(f"{BASE}/{project_id}/drawing-inspections/{uid}").status_code == 404
     assert thumb(client, project_id, uid, 1).status_code == 404
+
+
+_RELEASE = threading.Event()
+
+
+@register_job_type("test_drawings_hold_a_worker")
+def _hold_a_worker(ctx):
+    _RELEASE.wait(30)
+    return None
+
+
+def test_an_inspection_cancelled_before_it_starts_ends_failed(
+    client, app, project_id, handle, wait_job, tmp_path
+):
+    """The runner never calls the job for a cancelled queued job; the inspection must still settle."""
+    src = write_png(tmp_path / "plan.png", 40, 30)
+    _RELEASE.clear()
+    holders = [
+        app.state.jobs.submit(handle, "test_drawings_hold_a_worker", {})
+        for _ in range(app.state.jobs._workers)
+    ]
+    try:
+        body = inspect(client, project_id, src).json()
+        job_id, iid = body["job"]["id"], body["inspection"]["id"]
+        cancelled = client.post(f"{BASE}/{project_id}/jobs/{job_id}/cancel")
+        assert cancelled.status_code == 200 and cancelled.json()["state"] == "cancelled"
+        got = client.get(f"{BASE}/{project_id}/drawing-inspections/{iid}").json()
+        assert (got["state"], got["error"]) == ("failed", phase_inspect.CANCELLED)
+        assert thumb(client, project_id, iid, 1).status_code == 204
+    finally:
+        _RELEASE.set()
+    for h in holders:
+        wait_job(project_id, h.id)
+
+
+def test_a_thumbnail_is_204_unless_the_inspection_is_ready(client, project_id, handle, wait_job, tmp_path):
+    insp = inspect_ready(client, project_id, wait_job, write_png(tmp_path / "plan.png", 40, 30))
+    idir = store.inspection_dir(handle, insp["id"])
+    assert store.page_thumb(idir, 1).is_file() and thumb(client, project_id, insp["id"], 1).status_code == 200
+    for state in ("inspecting", "failed"):
+        store.patch_json(idir / "inspection.json", state=state)
+        assert store.page_thumb(idir, 1).is_file()
+        assert thumb(client, project_id, insp["id"], 1).status_code == 204
+
+
+def test_a_failure_removes_partial_thumbnails(client, project_id, handle, wait_job, tmp_path):
+    insp = inspect_ready(client, project_id, wait_job, write_png(tmp_path / "plan.png", 40, 30))
+    idir = store.inspection_dir(handle, insp["id"])
+    phase_inspect._fail(idir, "reading the drawing was cancelled")
+    assert not list((idir / "thumbs").iterdir())
+    assert store.read_json(idir / "inspection.json")["state"] == "failed"

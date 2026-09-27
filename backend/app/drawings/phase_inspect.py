@@ -20,7 +20,16 @@ CANCELLED = "reading the drawing was cancelled"
 
 
 def _fail(idir: Path, message: str) -> None:
+    """The inspection is `failed`, and its partial output (page thumbnails) is gone: a thumbnail of a
+    failed read is never served."""
+    for thumb in (idir / "thumbs").glob("*"):
+        thumb.unlink(missing_ok=True)
     store.patch_json(idir / "inspection.json", state="failed", error=message)
+
+
+def cancelled_before_start(ctx) -> None:
+    """A queued inspect job cancelled before it ran: the runner never calls `run`, so settle it here."""
+    _fail(store.inspection_dir(ctx.project, ctx.params["inspection_id"]), CANCELLED)
 
 
 def run(ctx) -> dict:

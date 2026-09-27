@@ -64,6 +64,8 @@ def get_drawing_page_thumbnail(
 ) -> Response:
     """200 PNG; 204 while not ready, after a failure, or past the file's last page (M-C0)."""
     idir = store.require_inspection(handle, inspectionId)
+    if _read_or_404(idir / "inspection.json", "drawing inspection", inspectionId)["state"] != "ready":
+        return Response(status_code=204)
     thumb = store.page_thumb(idir, page)
     if not thumb.is_file():
         return Response(status_code=204)

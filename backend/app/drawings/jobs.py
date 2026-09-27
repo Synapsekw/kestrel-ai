@@ -16,9 +16,11 @@ MESSAGES = {"inspect": "Reading drawing", "build": "Importing drawing"}
 
 
 def _cancelled_before_start(ctx) -> None:
-    """Only a build leaves a row behind; an inspection is a folder its dialog owns."""
-    if ctx.params.get("phase") == "build":
-        importlib.import_module(PHASES["build"]).cancelled_before_start(ctx)
+    """A queued job cancelled before it ran: a build fails its row, an inspection its inspection.json
+    (neither phase module imports a native library at module scope)."""
+    phase = ctx.params.get("phase")
+    if phase in PHASES:
+        importlib.import_module(PHASES[phase]).cancelled_before_start(ctx)
 
 
 @register_job_type("drawing_import", on_cancelled_before_start=_cancelled_before_start)

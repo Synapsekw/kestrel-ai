@@ -7,6 +7,7 @@ module scope here never reaches the router's import chain."""
 from __future__ import annotations
 
 import contextlib
+import os
 import warnings
 from pathlib import Path
 
@@ -75,7 +76,9 @@ def read_rgba(src, window=None, out_shape: tuple[int, int] | None = None) -> np.
 
 def _png(rgba: np.ndarray, out: Path) -> None:
     out.parent.mkdir(parents=False, exist_ok=True)  # never recreate a deleted inspection folder
-    Image.fromarray(np.moveaxis(rgba, 0, -1), "RGBA").save(out)
+    tmp = out.with_name(out.name + ".tmp")  # atomic: a reader never sees a half-written PNG
+    Image.fromarray(np.moveaxis(rgba, 0, -1), "RGBA").save(tmp, format="PNG")
+    os.replace(tmp, out)
 
 
 def write_thumbnail(src, out: Path, size: int = THUMB) -> None:
