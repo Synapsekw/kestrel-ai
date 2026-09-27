@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import gc
 import math
+import os
 import traceback
 from pathlib import Path
 
@@ -305,7 +306,8 @@ def extent_with_labels(extent, labels: list[dict]) -> list[float] | None:
 
 
 def runs_thumbnail(folder: Path, out: Path, size: int = 160) -> None:
-    """At most 200 000 vertices (every n-th run), cyan on transparent, square-scaled."""
+    """At most 200 000 vertices (every n-th run), cyan on transparent, square-scaled. Written to a
+    temporary name and moved into place, so a reader never sees a half-written PNG."""
     rs = RunStore.open(folder)
     try:
         ext = rs.meta["extent"]
@@ -321,7 +323,13 @@ def runs_thumbnail(folder: Path, out: Path, size: int = 160) -> None:
             xy = np.column_stack([(pts[:, 0] - ext[0]) * scale, (ext[3] - pts[:, 1]) * scale])
             draw.line([tuple(p) for p in xy], fill=THUMB_COLOUR, width=1)
         out.parent.mkdir(parents=False, exist_ok=True)
-        img.save(out)
+        tmp = out.with_name(out.name + ".tmp")
+        try:
+            img.save(tmp, format="PNG")
+            os.replace(tmp, out)
+        except BaseException:
+            tmp.unlink(missing_ok=True)
+            raise
     except BaseException as e:
         _drop_frames(e)
         raise

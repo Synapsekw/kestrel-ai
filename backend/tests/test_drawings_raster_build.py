@@ -174,3 +174,17 @@ def test_patch_delete_and_unknown_ids(client, project_id, wait_job, handle, tmp_
     for method in ("get", "delete"):
         assert getattr(client, method)(f"{BASE}/{project_id}/drawings/{uid}").status_code == 404
     assert client.get(f"{BASE}/{project_id}/drawings/{uid}/thumbnail").status_code == 404
+
+
+def test_the_thumbnail_is_204_unless_the_drawing_is_ready(client, project_id, wait_job, handle, tmp_path):
+    """A rebuild or an interrupted import may leave a thumb.png behind; only a ready drawing serves it."""
+    from app.db.models import Drawing
+
+    src = write_png(tmp_path / "plan.png", 30, 20)
+    d = build_drawing(client, project_id, wait_job, inspect_ready(client, project_id, wait_job, src)["id"])
+    url = f"{BASE}/{project_id}/drawings/{d['id']}/thumbnail"
+    assert store.thumb_path(handle, d["id"]).is_file() and client.get(url).status_code == 200
+    for status in ("importing", "failed"):
+        with handle.session() as s:
+            s.get(Drawing, d["id"]).status = status
+        assert client.get(url).status_code == 204, status

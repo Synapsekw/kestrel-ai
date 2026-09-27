@@ -219,9 +219,9 @@ def delete_drawing(
 @router.get("/drawings/{drawingId}/thumbnail", response_class=Response)
 def get_drawing_thumbnail(drawingId: str, handle: ProjectHandle = Depends(get_project)) -> Response:  # noqa: N803
     with handle.session() as s:
-        service.require(s, drawingId)
+        ready = service.require(s, drawingId).status == "ready"
     thumb = store.thumb_path(handle, drawingId)
-    if not thumb.is_file():
+    if not ready or not thumb.is_file():
         return Response(status_code=204)
     return Response(
         thumb.read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=3600"}

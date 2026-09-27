@@ -171,3 +171,20 @@ def test_copy_and_index_report_progress(tmp_path):
     seen.clear()
     runs.build_index(tmp_path / "b", progress=seen.append)
     assert seen and seen == sorted(seen) and seen[-1] == 1.0
+
+
+def test_a_failed_thumbnail_write_leaves_no_partial_png(tmp_path, monkeypatch):
+    """thumb.png is written to a temporary name and moved into place (os.replace): a reader never sees
+    a half-written PNG, and a failed write leaves the previous one (or none)."""
+    _write(tmp_path / "t", [[(0, 0), (100, 50)]])
+    out = tmp_path / "t" / "thumb.png"
+
+    def broken_save(self, fp, *a, **k):
+        with open(fp, "wb") as f:
+            f.write(b"\x89PNG half")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(Image.Image, "save", broken_save)
+    with pytest.raises(OSError):
+        runs.runs_thumbnail(tmp_path / "t", out)
+    assert not out.exists()
