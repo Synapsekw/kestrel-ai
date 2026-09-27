@@ -19,14 +19,17 @@ export function AppearanceSection() {
   const [name, setName] = useState("");
   const [saved, setSaved] = useState<"idle" | "saved" | "failed">("idle");
   // The name loads asynchronously; if the operator starts typing before it lands, the fetch must
-  // not clobber what they typed.
+  // not clobber what they typed (`touched` never resets). `dirty` means "typed since the last
+  // successful save": a blur saves only then, so an idle blur, or an empty field whose read failed
+  // or has not landed, never PUTs over the stored name.
+  const touched = useRef(false);
   const dirty = useRef(false);
 
   useEffect(() => {
     let live = true;
     fetchOperatorName(api)
       .then((stored) => {
-        if (live && !dirty.current) setName(stored ?? "");
+        if (live && !touched.current) setName(stored ?? "");
       })
       .catch(() => {
         // The field stays empty (comments say "Operator"); saving still works once the backend answers.
@@ -89,17 +92,24 @@ export function AppearanceSection() {
           value={name}
           placeholder={DEFAULT_OPERATOR_NAME}
           onChange={(e) => {
+            touched.current = true;
             dirty.current = true;
             setSaved("idle");
             setName(e.target.value);
           }}
           onBlur={() => {
+            if (!dirty.current) return;
+            dirty.current = false;
             saveOperatorName(api, name)
               .then((stored) => {
-                setName(stored ?? "");
+                // Typing while the save was in flight keeps its text for the next blur.
+                if (!dirty.current) setName(stored ?? "");
                 setSaved("saved");
               })
-              .catch(() => setSaved("failed"));
+              .catch(() => {
+                dirty.current = true;
+                setSaved("failed");
+              });
           }}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
