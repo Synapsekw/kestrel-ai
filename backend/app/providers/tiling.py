@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import io
+from dataclasses import replace
 
 from PIL import Image as PILImage
 
@@ -45,7 +46,19 @@ def crop_tile(image: PILImage.Image, tile: Tile) -> PILImage.Image:
 
 
 def to_full_image(det: Detection, tile: Tile) -> Detection:
-    """Offset a tile-local detection into full-image pixels, clamped to the tile window."""
+    """Offset a tile-local detection into full-image pixels.
+
+    A box and a polygon are clamped to the tile window first; an rbox is only moved, because its
+    corners may legitimately overhang (rotated boxes spec 3.3: only the centre must be inside).
+    """
+    if det.polygon is not None:
+        ring = [
+            (min(max(px, 0.0), float(tile.w)) + tile.x, min(max(py, 0.0), float(tile.h)) + tile.y)
+            for px, py in det.polygon
+        ]
+        return Detection.from_polygon(det.label, ring, det.confidence, det.raw_ref)
+    if det.angle:
+        return replace(det, x=det.x + tile.x, y=det.y + tile.y)
     x0 = min(max(det.x, 0.0), float(tile.w))
     y0 = min(max(det.y, 0.0), float(tile.h))
     x1 = min(max(det.x + det.w, 0.0), float(tile.w))
@@ -76,12 +89,15 @@ def encode_tile(image: PILImage.Image, tile: Tile, max_side: int) -> str:
 
 
 def iou(a: Detection, b: Detection) -> float:
-    ix = min(a.x + a.w, b.x + b.w) - max(a.x, b.x)
-    iy = min(a.y + a.h, b.y + b.h) - max(a.y, b.y)
+    """Intersection over union of the two envelopes (NMS stays on envelopes, spec §11.3)."""
+    ax, ay, aw, ah = a.envelope()
+    bx, by, bw, bh = b.envelope()
+    ix = min(ax + aw, bx + bw) - max(ax, bx)
+    iy = min(ay + ah, by + bh) - max(ay, by)
     if ix <= 0 or iy <= 0:
         return 0.0
     inter = ix * iy
-    union = a.w * a.h + b.w * b.h - inter
+    union = aw * ah + bw * bh - inter
     return inter / union if union > 0 else 0.0
 
 
