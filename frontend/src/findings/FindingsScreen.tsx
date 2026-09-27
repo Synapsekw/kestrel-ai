@@ -4,7 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import type { BulkSet, Finding } from "@/api/findings";
 import { useNow } from "@/jobs/useNow";
-import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { Alert, Button, DataTable, EmptyState, InspectorLayout, toast, useSeverityScale } from "@/ui";
 import { applyBulk, bulkMessage } from "./bulk";
 import { BulkBar } from "./BulkBar";
@@ -75,14 +75,14 @@ export function FindingsScreen() {
       const targets = selected.size > 0 ? [...selected] : findingId ? [findingId] : [];
       if (targets.length === 0) return;
       try {
-        const r = await applyBulk(api, projectId, targets, set);
+        // Earlier 1000-id chunks may have been applied even when a later one failed: bump either way.
+        const r = await ownFindingsWrite(targets, () => applyBulk(api, projectId, targets, set), {
+          bumpOnError: true,
+        });
         if (r.skipped.length || targets.length > 1)
           toast(r.skipped.length ? "info" : "ok", bulkMessage(r.updated, r.skipped, what));
       } catch (e) {
         toast("danger", messageOf(e, "could not update the finding"));
-      } finally {
-        // Earlier 1000-id chunks may have been applied even when a later one failed.
-        useChangesStore.getState().bumpFindings();
       }
     },
     [api, projectId, selected, findingId],

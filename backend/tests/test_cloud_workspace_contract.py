@@ -346,7 +346,6 @@ def test_the_router_stubs_are_c_operations():
 
     stubbed = {op_id for _, _, op_id in router.STUBS}
     assert stubbed <= set(C_OPERATIONS), sorted(stubbed - set(C_OPERATIONS))
-    assert router.UPLOAD_STUBS <= {"putFindingView3d", "putCloudMeasurementView3d"}
 
 
 # ------------------------------------------------------------------------------ Task 4

@@ -43,8 +43,16 @@ export function patchPointCloud(
   return unwrap(api.PATCH(`${P}/pointclouds/{cloudId}`, { params: { path: { projectId, cloudId } }, body }));
 }
 
-export async function deletePointCloud(api: ApiClient, projectId: string, cloudId: string): Promise<void> {
-  await unwrap(api.DELETE(`${P}/pointclouds/{cloudId}`, { params: { path: { projectId, cloudId } } }));
+/** `deleteFindings` also deletes the findings anchored on the cloud; without it the server answers
+ * 409 `cloud_has_findings` with `details.count` when there are any (spec C14). */
+export async function deletePointCloud(
+  api: ApiClient,
+  projectId: string,
+  cloudId: string,
+  opts: { deleteFindings?: boolean } = {},
+): Promise<void> {
+  const query = opts.deleteFindings ? { delete_findings: true } : undefined;
+  await unwrap(api.DELETE(`${P}/pointclouds/{cloudId}`, { params: { path: { projectId, cloudId }, query } }));
 }
 
 export async function createPointCloudExport(

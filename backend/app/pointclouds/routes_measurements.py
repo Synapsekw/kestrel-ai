@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
 
 from app.events_util import publish_pointclouds_changed
-from app.pointclouds import measurements, profile
+from app.pointclouds import measurements, profile, views
 from app.pointclouds.schemas import (
     CloudMeasurementCreate,
     CloudMeasurementList,
@@ -22,8 +22,11 @@ sub = APIRouter()
 def list_cloud_measurements(
     cloudId: str, handle: ProjectHandle = Depends(get_project)
 ) -> CloudMeasurementList:  # noqa: N803
+    by_id = views.measurement_views(handle, cloudId)
     return CloudMeasurementList(
-        items=[CloudMeasurementOut.from_row(m) for m in measurements.list_for(handle, cloudId)]
+        items=[
+            CloudMeasurementOut.from_row(m, by_id.get(m.id)) for m in measurements.list_for(handle, cloudId)
+        ]
     )
 
 
@@ -34,8 +37,12 @@ def create_cloud_measurement(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> CloudMeasurementOut | JSONResponse:
+    # C-B1: `finding_id` is checked for every kind first; C-B2's profile branch follows this line.
+    measurements.require_finding(handle, cloudId, body.finding_id)
     if body.kind == "profile":
-        created = profile.create_profile_measurement(handle, request.app.state.jobs, cloudId, body)
+        created = profile.create_profile_measurement(
+            handle, request.app.state.jobs, cloudId, body, finding_id=body.finding_id
+        )
         publish_pointclouds_changed(request, handle, [cloudId])
         return JSONResponse(created.model_dump(mode="json"), status_code=202)
     row = measurements.create(handle, cloudId, body)
@@ -53,7 +60,7 @@ def update_cloud_measurement(
 ) -> CloudMeasurementOut:
     row = measurements.update(handle, cloudId, cloudMeasurementId, body)
     publish_pointclouds_changed(request, handle, [cloudId])
-    return CloudMeasurementOut.from_row(row)
+    return CloudMeasurementOut.from_row(row, views.measurement_view(handle, row.id))
 
 
 @sub.delete("/pointclouds/{cloudId}/measurements/{cloudMeasurementId}", status_code=204)

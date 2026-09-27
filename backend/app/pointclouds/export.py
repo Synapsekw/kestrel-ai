@@ -17,11 +17,28 @@ import laspy
 from pyproj import CRS
 
 from app.jobs.cancellation import JobFailure
+from app.pointclouds import measure
 from app.pointclouds.lasbounds import widen, write_header_bounds
-from app.pointclouds.measure import FIELDS
 
 CHUNK = 2_000_000
-CSV_COLUMNS = ["id", "name", "kind", "note", "x1", "y1", "z1", "u1", "x2", "y2", "z2", "u2", *FIELDS]
+S1_CSV_COLUMNS = [
+    "id",
+    "name",
+    "kind",
+    "note",
+    "x1",
+    "y1",
+    "z1",
+    "u1",
+    "x2",
+    "y2",
+    "z2",
+    "u2",
+    *measure.FIELDS,
+]
+NEW_RESULT_COLUMNS = [*measure.AREA_FIELDS, *measure.RING_FIELDS, *measure.PROFILE_FIELDS]
+# The S1 columns keep their order; the workspace columns only append (spec 2026-09-26 section 5).
+CSV_COLUMNS = [*S1_CSV_COLUMNS, "vertex_count", "geometry_wkt", *NEW_RESULT_COLUMNS]
 
 
 def slug(name: str) -> str:
@@ -92,14 +109,40 @@ def verify_laz(path: Path, *, point_count: int, epsg: int | None) -> None:
         raise JobFailure("the exported LAZ failed its checks: " + "; ".join(problems))
 
 
+def _wkt_xyz(p: dict) -> str:
+    return f"{float(p['x'])!r} {float(p['y'])!r} {float(p['z'])!r}"
+
+
+def geometry_wkt(kind: str, points: list[dict], params: dict | None) -> str:
+    """POINT Z, POLYGON Z (closed), or LINESTRING Z (a rings check: the axis between the fitted centres)."""
+    if kind == "point":
+        return f"POINT Z ({_wkt_xyz(points[0])})"
+    if kind == "area":
+        return "POLYGON Z ((" + ", ".join(_wkt_xyz(p) for p in [*points, points[0]]) + "))"
+    if kind == "vertical" and measure.method_of(params) == "rings":
+        try:
+            lower, upper = measure.ring_axis(points)
+        except measure.Refusal:
+            return ""  # a stored row the formulas now refuse: no geometry rather than a failed export
+        return f"LINESTRING Z ({_wkt_xyz(lower)}, {_wkt_xyz(upper)})"
+    return "LINESTRING Z (" + ", ".join(_wkt_xyz(p) for p in points) + ")"
+
+
+def _cell(value) -> object:
+    return "" if value is None else value
+
+
 def write_measurements_csv(path: Path, measurements: Iterable) -> None:
     with path.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(CSV_COLUMNS)
         for m in measurements:
-            pts = list(m.points) + [{}] * (2 - len(m.points))
-            coords = [pts[i].get(k, "") for i in range(2) for k in ("x", "y", "z", "uncertainty_m")]
+            points = list(m.points)
+            pair = points if len(points) <= 2 else []  # x1..u2 only for the 1-2-point kinds
+            pair = pair + [{}] * (2 - len(pair))
+            coords = [pair[i].get(k, "") for i in range(2) for k in ("x", "y", "z", "uncertainty_m")]
             results = m.results or {}
+            params = getattr(m, "params", None)
             w.writerow(
                 [
                     m.id,
@@ -107,7 +150,10 @@ def write_measurements_csv(path: Path, measurements: Iterable) -> None:
                     m.kind,
                     m.note or "",
                     *coords,
-                    *[("" if results.get(k) is None else results[k]) for k in FIELDS],
+                    *[_cell(results.get(k)) for k in measure.FIELDS],
+                    len(points),
+                    geometry_wkt(m.kind, points, params),
+                    *[_cell(results.get(k)) for k in NEW_RESULT_COLUMNS],
                 ]
             )
 

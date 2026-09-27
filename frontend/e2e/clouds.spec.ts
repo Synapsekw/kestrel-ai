@@ -25,6 +25,9 @@ async function viewerSettled(page: Page) {
     .poll(async () => (await viewerStats(page))?.settledMs ?? null, { timeout: 20_000 })
     .not.toBeNull();
   await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
+  // Spec §18: EDL moves the cloud to layer 1; the S1 picks must still work with it on. SwiftShader
+  // makes F's Auto effects reduced, so it is forced on here (plan Ruling 14).
+  await page.evaluate(() => window.__kestrelCloudViewer?.setEdl(true));
 }
 
 /** The fixture cloud, and a list holding only it: the mock's example cloud has other bounds. */
@@ -75,6 +78,11 @@ test("the viewer renders the cloud and its canvas fills the centre", async ({ pa
     .poll(async () => (await viewerStats(page))?.numVisiblePoints ?? 0, { timeout: 20_000 })
     .toBeGreaterThan(0);
   await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
+  await page.evaluate(() => window.__kestrelCloudViewer!.setEdl(true));
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.edl())).toEqual({
+    on: true,
+    rendersToTarget: false,
+  });
   expect(served).toContain("hierarchy.bin bytes=0-21");
   const centre = await page.getByTestId("cloud-centre").boundingBox();
   const canvas = await page.getByTestId("cloud-canvas").boundingBox();
@@ -520,4 +528,44 @@ test("right-click on the map opens that spot in 3D; a spot outside the cloud say
   await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds/${CLOUD}\\?at=`));
   await page.goto(`/p/${P}/clouds/${CLOUD}?at=100.000,200.000`);
   await expect(page.getByText("This spot is outside the cloud")).toBeVisible({ timeout: 20_000 });
+});
+
+test("colour modes: Intensity and Class are off for a cloud without those attributes", async ({ page }) => {
+  await routeCloud(page);
+  await routeOctree(
+    page,
+    CLOUD,
+    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
+  );
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await page.getByRole("radio", { name: "View" }).click();
+  await expect(page.getByRole("radio", { name: "RGB" })).toBeEnabled();
+  await expect(page.getByRole("radio", { name: "Elevation" })).toBeEnabled();
+  await expect(page.getByRole("radio", { name: "Intensity" })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: "Class" })).toBeDisabled();
+  await expect(page.getByText("This cloud has no intensity or classification.")).toBeVisible();
+});
+
+test("colour modes: a cloud with intensity and classification draws in both", async ({ page }) => {
+  await routeCloud(page);
+  const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 }).map((p, i) => ({
+    ...p,
+    intensity: (i * 977) % 65536,
+    classification: p.x < 243550 ? 2 : 6,
+  }));
+  await routeOctree(page, CLOUD, buildOctree(grid, 0.001, { intensity: true, classification: true }));
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await page.getByRole("radio", { name: "View" }).click();
+  await expect(page.getByRole("radio", { name: "Intensity" })).toBeEnabled();
+  await expect(page.getByRole("radio", { name: "Class" })).toBeEnabled();
+  await expect(page.getByText(/This cloud has no/)).toHaveCount(0);
+  for (const mode of ["Intensity", "Class"]) {
+    await page.getByRole("radio", { name: mode }).click();
+    const c = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
+    expect(c.total - c.background, `${mode} draws points`).toBeGreaterThan(0.01 * c.total);
+    expect(c.white, `${mode} is not blown out`).toBe(0);
+  }
+  expect((await page.evaluate(() => window.__kestrelCloudViewer!.stats())).errors).toEqual([]);
 });

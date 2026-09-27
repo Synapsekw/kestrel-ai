@@ -4004,10 +4004,10 @@ export interface components {
                  *     type deletes its finding; retry with `confirm_finding_delete=true`),
                  *     attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
                  *     `{reason}`), task_not_supported (422: a task this build cannot write or train),
-                 *     task_mismatch (422: the base model's task differs from the dataset's), class_in_use
-                 *     (409: also counts findings;
-                 *     details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
-                 *     run has neither a library `model_id` nor a cloud `provider`), query_required (422:
+                 *     task_mismatch (422: the base model's task differs from the dataset's),
+                 *     class_in_use (409: also counts findings; details `{type_id, box_count,
+                 *     finding_count}`), model_or_provider_required (422: a run has neither a library
+                 *     `model_id` nor a cloud `provider`), query_required (422:
                  *     a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
                  *     outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule),
                  *     state_too_large (422: the map workspace state is over 64 KB), local_frame (422: the
