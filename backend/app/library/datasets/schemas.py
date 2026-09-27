@@ -17,6 +17,8 @@ class DatasetFilter(BaseModel):
     captured_from: date | None = None
     captured_to: date | None = None
     reviewed_only: bool = False
+    # Boxes and rotated boxes enter a segment dataset as 4-point polygons (image spec §11.1).
+    boxes_as_polygons: bool = False
 
 
 class DatasetPreviewProject(BaseModel):
@@ -31,6 +33,8 @@ class DatasetPreview(BaseModel):
     images: int
     boxes_per_type: dict[str, int]
     projects: list[DatasetPreviewProject]
+    # Matching images the requested task cannot express (image spec I-D10; C0 ruling 12).
+    skipped_by_task: int = 0
 
 
 class LibraryDatasetCreate(BaseModel):

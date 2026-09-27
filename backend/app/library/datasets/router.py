@@ -64,10 +64,13 @@ def create_dataset(
 
 @router.post("/preview", response_model=DatasetPreview)
 def preview_dataset(
-    body: DatasetFilter, request: Request, lib: LibraryHandle = Depends(get_library)
+    body: DatasetFilter,
+    request: Request,
+    lib: LibraryHandle = Depends(get_library),
+    task: DatasetTask = "detect",
 ) -> DatasetPreview:
     """COUNTs only; the builder calls it as the filter changes (F §12.2 step 1)."""
-    return service.preview(request.app.state.projects, body)
+    return service.preview(request.app.state.projects, body, task)
 
 
 @router.get("/{datasetId}", response_model=LibraryDatasetOut)

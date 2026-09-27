@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from shapely.geometry import Polygon
+
 from app.exports.rows import ExportImage
 from app.geometry import aabb_of, corners_of
 
@@ -31,19 +33,29 @@ def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[
         )
         for box in image.boxes:
             cat_id = category_id.get(box.class_id)
-            if cat_id is None:
-                continue
-            bx, by, bw, bh = aabb_of(box.x, box.y, box.w, box.h, box.angle)
+            if cat_id is None or box.shape == "point":
+                continue  # a point has no extent; a zero-area annotation breaks COCO readers (R-BT9)
+            if box.shape == "polygon" and box.points:
+                bbox = [box.x, box.y, box.w, box.h]  # a polygon's stored x/y/w/h is its envelope
+                area = box.area_px or Polygon(box.points).area
+                segmentation = [[c for pt in box.points for c in pt]]
+            else:
+                bbox = list(aabb_of(box.x, box.y, box.w, box.h, box.angle))
+                # Rotation does not change area, so this stays the true box area, not the envelope's.
+                area = box.w * box.h
+                segmentation = (
+                    [[c for pt in corners_of(box.x, box.y, box.w, box.h, box.angle) for c in pt]]
+                    if box.angle
+                    else None
+                )
             ann = {
                 "id": ann_id,
                 "image_id": image_id,
                 "category_id": cat_id,
-                # COCO has no rotated-box standard. `bbox` stays the axis-aligned envelope so every
-                # existing reader keeps working; `segmentation` carries the exact rotated quad for
-                # anything that understands it. Nothing is lost and nothing breaks.
-                "bbox": [bx, by, bw, bh],
-                # Rotation does not change area, so this stays the true box area, not the envelope's.
-                "area": box.w * box.h,
+                # `bbox` is always the axis-aligned envelope so every reader keeps working;
+                # `segmentation` carries the exact rotated quad or polygon for readers that use it.
+                "bbox": bbox,
+                "area": area,
                 "iscrowd": 0,
                 # Present on every annotation (not only unreviewed ones): a reader must be able to
                 # tell an accepted/edited box from an unreviewed proposal without cross-referencing
@@ -52,10 +64,8 @@ def write(images: list[ExportImage], classes: list[dict], folder: Path) -> list[
             }
             if box.confidence is not None:
                 ann["score"] = box.confidence
-            if box.angle:
-                ann["segmentation"] = [
-                    [c for pt in corners_of(box.x, box.y, box.w, box.h, box.angle) for c in pt]
-                ]
+            if segmentation is not None:
+                ann["segmentation"] = segmentation
             annotations.append(ann)
             ann_id += 1
 

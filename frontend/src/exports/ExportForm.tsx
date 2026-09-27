@@ -35,6 +35,11 @@ const OPTIONS: FormatOption[] = [
     hint: "One .txt file per image with normalised box coordinates, for Ultralytics or any YOLO-compatible tool.",
   },
   {
+    key: "yolo_seg",
+    label: "Polygon labels in YOLO-seg format",
+    hint: "One .txt file per image with normalised polygon outlines (boxes as 4-point outlines), for Ultralytics segmentation.",
+  },
+  {
     key: "coco",
     label: "Labels in COCO format",
     hint: "One labels_coco.json with images, categories and annotations, for tools that read the COCO format.",

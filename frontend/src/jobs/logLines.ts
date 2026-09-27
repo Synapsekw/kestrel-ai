@@ -24,6 +24,7 @@ export function readableLogLine(line: string): string {
   const m = rec.metrics ?? {};
   const parts = [
     pct(m["metrics/mAP50(B)"]) && `mAP50 ${pct(m["metrics/mAP50(B)"])}`,
+    pct(m["metrics/mAP50(M)"]) && `mask mAP50 ${pct(m["metrics/mAP50(M)"])}`,
     pct(m["metrics/precision(B)"]) && `precision ${pct(m["metrics/precision(B)"])}`,
     pct(m["metrics/recall(B)"]) && `recall ${pct(m["metrics/recall(B)"])}`,
   ].filter(Boolean);

@@ -62,7 +62,7 @@ describe("library datasets API (F §12.3)", () => {
       },
     ]);
     // Non-null: the fixture's `filter` is always populated (only a `legacy` dataset's is null).
-    expect((await previewDataset(api, exampleLibraryDataset.filter!)).images).toBe(30);
+    expect((await previewDataset(api, exampleLibraryDataset.filter!, "detect")).images).toBe(30);
     expect(requests[0].body).toEqual(exampleLibraryDataset.filter);
     const created = await createLibraryDataset(api, {
       name: "machines-v1",

@@ -1,4 +1,4 @@
-"""Audited detection starter catalogue, listed without importing the model engine."""
+"""Audited detection and segmentation starter catalogue, listed without importing the model engine."""
 
 import logging
 import sys
@@ -21,6 +21,7 @@ class StarterSpec:
     name: str
     description: str
     family: str
+    task: str = "detect"
 
 
 # Fixed, audited COCO detection checkpoints supported by Ultralytics 8.4.154.
@@ -67,7 +68,19 @@ CATALOGUE = [
         ("yolov3-sppu", "YOLOv3u SPP"),
     )
 ]
-STARTER_KEYS = {spec.key for spec in CATALOGUE}
+CATALOGUE += [
+    StarterSpec(
+        f"yolo11{scale}-seg",
+        f"YOLO11 {SCALES[scale]} segmentation",
+        "COCO instance segmentation weights: they learn outlines, not boxes. Start polygon datasets "
+        "(cracks, spalling) from these. Larger sizes need more memory and take longer.",
+        "YOLO11-seg",
+        "segment",
+    )
+    for scale in "nsm"
+]
+STARTER_SPECS = {spec.key: spec for spec in CATALOGUE}
+STARTER_KEYS = set(STARTER_SPECS)
 
 # COCO has no construction classes; its `truck` is the closest to a dump truck.
 DEFAULT_ALIASES = {"truck": "dump_truck"}
@@ -99,7 +112,7 @@ def list_starters(folder: Path, cache: Path | None = None) -> list[dict]:
                 "name": spec.name,
                 "description": spec.description,
                 "family": spec.family,
-                "task": "detect",
+                "task": spec.task,
                 "size_mb": round(f.stat().st_size / 1_048_576, 1) if ok else 0,
                 "available": ok,
             }
@@ -127,8 +140,9 @@ def import_starter(lib: LibraryHandle, folder: Path, key: str, name: str | None)
         task, class_names = library.read_checkpoint(f)
     except Exception as e:
         raise JobFailure(f"{f.name} is not a loadable YOLO checkpoint: {e}") from e
-    if task != "detect":
-        raise JobFailure(f"This starter requires a detect checkpoint; found {task!r}.")
+    expected = STARTER_SPECS[key].task
+    if task != expected:
+        raise JobFailure(f"This starter requires a {expected} checkpoint; found {task!r}.")
     aliases = {src: dst for src, dst in DEFAULT_ALIASES.items() if src in class_names}
     return library.add_model(
         lib,

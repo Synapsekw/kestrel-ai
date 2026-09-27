@@ -1,0 +1,233 @@
+"""Segment datasets: shapes in frozen labels, inclusion by task, skipped counts (image spec §11.1,
+I-D10; plan I-BT Task 3)."""
+
+from pathlib import Path
+
+import pytest
+from catalogue_fake import catalogue  # noqa: F401 - fixture
+from library_datasets_helpers import (
+    LIB,
+    add_box,
+    add_image,
+    add_source,
+    build_dataset,
+    create_body,
+    make_project,
+)
+from library_helpers import add_library_model, wait_library_job
+
+from app.library.db import LibraryDatasetItem
+
+TRI = [[20.0, 10.0], [80.0, 20.0], [50.0, 60.0]]
+
+
+def _poly(handle, image_id, type_id, points=TRI):
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    return add_box(
+        handle,
+        image_id,
+        type_id,
+        shape="polygon",
+        points=points,
+        x=min(xs),
+        y=min(ys),
+        w=max(xs) - min(xs),
+        h=max(ys) - min(ys),
+        area_px=1500.0,
+    )
+
+
+@pytest.fixture
+def mixed(app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+    """One project: img1 a crack polygon, img2 a crack box, img3 a polygon plus a crack point,
+    img4 marked empty."""
+    crack = catalogue.add("Crack")
+    p = make_project(app, tmp_path / "p", "Bridge")
+    src = add_source(p)
+    ids = [
+        add_image(
+            p,
+            make_jpeg,
+            src,
+            f"DJI_000{i}.jpg",
+            w=100,
+            h=80,
+            group_key=f"g{i}",
+            seed=i,
+            marked_empty=(i == 4),
+        )
+        for i in (1, 2, 3, 4)
+    ]
+    _poly(p, ids[0], crack.id)
+    add_box(p, ids[1], crack.id, x=10, y=10, w=30, h=20)
+    _poly(p, ids[2], crack.id)
+    add_box(p, ids[2], crack.id, shape="point", x=40, y=40, w=0, h=0)
+    return p, crack, ids
+
+
+def _items(app, dataset_id):
+    with app.state.library.session() as s:
+        return {
+            i.image_id: i.labels
+            for i in s.query(LibraryDatasetItem).filter(LibraryDatasetItem.dataset_id == dataset_id)
+        }
+
+
+def _build(client, body) -> tuple[dict, dict]:
+    """The finished dataset and its `dataset_build` job result (which carries `skipped`)."""
+    r = client.post(f"{LIB}/datasets", json=body)
+    assert r.status_code == 202, r.text
+    done = wait_library_job(client, r.json()["job"]["id"])
+    assert done["state"] == "succeeded", done["error"]
+    return client.get(f"{LIB}/datasets/{r.json()['dataset']['id']}").json(), done["result"]
+
+
+def test_preview_counts_the_images_a_task_skips(client, mixed):
+    p, crack, _ = mixed
+    body = {"project_ids": [p.id], "type_ids": [crack.id], "reviewed_only": False}
+    # the point image in every task; the box image too in segment
+    for task, expected in (("detect", 1), ("obb", 1), ("segment", 2)):
+        r = client.post(f"{LIB}/datasets/preview", params={"task": task}, json=body)
+        assert r.status_code == 200, r.text
+        assert r.json()["images"] == 4 and r.json()["skipped_by_task"] == expected
+    r = client.post(
+        f"{LIB}/datasets/preview", params={"task": "segment"}, json={**body, "boxes_as_polygons": True}
+    )
+    assert r.json()["skipped_by_task"] == 1
+    assert (
+        client.post(f"{LIB}/datasets/preview", json=body).json()["skipped_by_task"] == 1
+    )  # detect when absent
+
+
+def test_segment_build_skips_box_images_and_counts_them(client, app, mixed):
+    p, crack, ids = mixed
+    d, result = _build(client, create_body("cracks", [p.id], [crack.id], task="segment"))
+    assert result["skipped"] == 2
+    items = _items(app, d["id"])
+    assert set(items) == {ids[0], ids[3]}  # the polygon image and the negative
+    [label] = items[ids[0]]
+    assert label["shape"] == "polygon" and label["points"] == TRI
+    assert items[ids[3]] == []
+
+
+def test_boxes_as_polygons_lets_box_images_in(client, app, mixed):
+    p, crack, ids = mixed
+    body = create_body("cracks", [p.id], [crack.id], task="segment")
+    body["filter"]["boxes_as_polygons"] = True
+    d, result = _build(client, body)
+    assert result["skipped"] == 1
+    assert d["filter"]["boxes_as_polygons"] is True
+    items = _items(app, d["id"])
+    assert set(items) == {ids[0], ids[1], ids[3]}
+    assert items[ids[1]][0]["shape"] == "box" and "points" not in items[ids[1]][0]
+
+
+def test_a_point_skips_its_image_in_every_task(client, app, mixed):
+    p, crack, ids = mixed
+    for task in ("detect", "obb"):
+        d, result = _build(client, create_body(f"c-{task}", [p.id], [crack.id], task=task))
+        assert result["skipped"] == 1
+        assert ids[2] not in _items(app, d["id"])
+
+
+def test_a_build_where_everything_is_skipped_says_why(client, app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+    exc = catalogue.add("Excavator")
+    p = make_project(app, tmp_path / "boxes", "Boxes")
+    src = add_source(p)
+    add_box(p, add_image(p, make_jpeg, src, "a.jpg"), exc.id)
+    r = client.post(f"{LIB}/datasets", json=create_body("seg", [p.id], [exc.id], task="segment"))
+    done = wait_library_job(client, r.json()["job"]["id"])
+    assert done["state"] == "failed"
+    assert "1 matching images were skipped" in done["error"]
+    assert "Boxes as polygons" in done["error"]
+
+
+def test_skipped_boxes_beside_a_negative_still_say_why(client, app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+    """A marked-empty image enters, so the build gets past pass one; the message must still name the
+    skipped boxes, not claim the filter selects no box (R-BT6)."""
+    exc = catalogue.add("Excavator")
+    p = make_project(app, tmp_path / "boxes", "Boxes")
+    src = add_source(p)
+    add_box(p, add_image(p, make_jpeg, src, "a.jpg", group_key="a", seed=1), exc.id)
+    add_image(p, make_jpeg, src, "b.jpg", group_key="b", seed=2, marked_empty=True)
+    r = client.post(f"{LIB}/datasets", json=create_body("seg", [p.id], [exc.id], task="segment"))
+    done = wait_library_job(client, r.json()["job"]["id"])
+    assert done["state"] == "failed"
+    assert "1 matching images were skipped" in done["error"]
+    assert "Boxes as polygons" in done["error"]
+
+
+def test_a_detect_dataset_freezes_boxes_with_their_shape(client, app, mixed):
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("det", [p.id], [crack.id]))
+    label = _items(app, d["id"])[ids[1]][0]
+    assert {k: label[k] for k in ("type_id", "x", "y", "w", "h", "angle", "shape")} == {
+        "type_id": crack.id,
+        "x": 10,
+        "y": 10,
+        "w": 30,
+        "h": 20,
+        "angle": 0.0,
+        "shape": "box",
+    }
+
+
+def _export(client, dataset_id):
+    r = client.post(f"{LIB}/datasets/{dataset_id}/export")
+    assert r.status_code == 202, r.text
+    return wait_library_job(client, r.json()["job"]["id"])
+
+
+def test_a_segment_dataset_exports_polygon_labels(client, app, mixed):
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("cracks", [p.id], [crack.id], task="segment"))
+    done = _export(client, d["id"])
+    assert done["state"] == "succeeded", done["error"]
+    folder = Path(client.get(f"{LIB}/datasets/{d['id']}").json()["export_path"])
+    texts = {f.stem: f.read_text("utf-8") for f in folder.glob("labels/*/*.txt")}
+    polygon = next(t for stem, t in texts.items() if stem.endswith("DJI_0001"))
+    values = polygon.split()
+    assert values[0] == "0" and len(values) == 7
+    got = sorted((round(float(values[i]) * 100, 3), round(float(values[i + 1]) * 80, 3)) for i in (1, 3, 5))
+    assert got == pytest.approx(sorted((x, y) for x, y in TRI), abs=1e-3)  # images are 100 x 80
+    negative = next(t for stem, t in texts.items() if stem.endswith("DJI_0004"))
+    assert negative == ""
+
+
+def test_a_pre_bt_segment_dataset_of_boxes_is_not_exported_as_background(client, app, mixed):
+    """F let a segment dataset of boxes be built; its items carry box labels without `shape`."""
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("old", [p.id], [crack.id], task="segment"))
+    with app.state.library.session() as s:  # rewrite the items as F froze them before BT
+        for item in s.query(LibraryDatasetItem).filter(LibraryDatasetItem.dataset_id == d["id"]):
+            item.labels = [{"type_id": crack.id, "x": 1, "y": 1, "w": 5, "h": 5, "angle": 0.0}]
+    done = _export(client, d["id"])
+    assert done["state"] == "failed"
+    assert "Rebuild this dataset" in done["error"]
+
+
+def test_a_pre_bt_segment_dataset_with_a_negative_is_not_exported_as_background(client, app, mixed):
+    """The negative stays expressible and writes an empty label file; with every labelled item
+    skipped the export must still fail rather than hand over background only (R-BT7)."""
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("old", [p.id], [crack.id], task="segment"))
+    with app.state.library.session() as s:  # rewrite the labelled items as F froze them before BT
+        for item in s.query(LibraryDatasetItem).filter(LibraryDatasetItem.dataset_id == d["id"]):
+            if item.labels:
+                item.labels = [{"type_id": crack.id, "x": 1, "y": 1, "w": 5, "h": 5, "angle": 0.0}]
+    assert _items(app, d["id"])[ids[3]] == []
+    done = _export(client, d["id"])
+    assert done["state"] == "failed"
+    assert "Rebuild this dataset" in done["error"]
+
+
+def test_training_a_segment_dataset_needs_a_segment_base(client, app, tmp_path, mixed):
+    p, crack, _ = mixed
+    d = build_dataset(client, create_body("cracks", [p.id], [crack.id], task="segment"))
+    det = add_library_model(app, tmp_path, name="det", task="detect")
+    seg = add_library_model(app, tmp_path, name="seg", task="segment")
+    body = {"name": "r", "dataset_id": d["id"], "epochs": 1}
+    r = client.post(f"{LIB}/training-runs", json={**body, "base_model_id": det.id})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "task_mismatch"
+    r = client.post(f"{LIB}/training-runs", json={**body, "base_model_id": seg.id})
+    assert r.status_code == 202, r.text  # no longer task_not_supported

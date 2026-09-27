@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { emptyBuilderForm, MAX_DATASET_TYPES, toCreateBody, toFilter, validateBuilder } from "./builderModel";
+import {
+  emptyBuilderForm,
+  MAX_DATASET_TYPES,
+  skippedReason,
+  toCreateBody,
+  toFilter,
+  validateBuilder,
+} from "./builderModel";
 
 const ready = { ...emptyBuilderForm(["p1"], ["t1"]), name: " machines-v2 " };
 
@@ -13,6 +20,7 @@ describe("dataset builder form", () => {
       captured_from: null,
       captured_to: null,
       reviewed_only: true,
+      boxes_as_polygons: false,
     });
   });
 
@@ -49,10 +57,23 @@ describe("dataset builder form", () => {
         captured_from: "2026-04-01",
         captured_to: null,
         reviewed_only: true,
+        boxes_as_polygons: false,
       },
       split_method: "by_group",
       val_fraction: 0.2,
       seed: 42,
     });
+  });
+
+  it("sends boxes_as_polygons with the filter", () => {
+    const f = { ...emptyBuilderForm(["p"], ["t"]), task: "segment" as const, boxesAsPolygons: true };
+    expect(toFilter(f)).toMatchObject({ boxes_as_polygons: true });
+    expect(toFilter(emptyBuilderForm(["p"], ["t"]))).toMatchObject({ boxes_as_polygons: false });
+  });
+
+  it("explains what a task skips", () => {
+    expect(skippedReason("segment", false)).toBe("they hold boxes or point markers of the chosen types");
+    expect(skippedReason("segment", true)).toBe("they hold point markers of the chosen types");
+    expect(skippedReason("detect", false)).toBe("they hold point markers of the chosen types");
   });
 });

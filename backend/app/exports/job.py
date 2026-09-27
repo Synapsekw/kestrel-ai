@@ -37,6 +37,7 @@ _PROCESS_STARTED_AT = time.time()
 FORMAT_LABEL = {
     "csv": "Tables",
     "yolo": "YOLO labels",
+    "yolo_seg": "YOLO polygon labels",
     "coco": "COCO file",
     "html": "Report",
 }
@@ -190,6 +191,8 @@ def _write_formats(
             files += csv_out.write(images, classes, folder)
         elif fmt == "yolo":
             files += yolo_out.write(images, classes, folder)
+        elif fmt == "yolo_seg":
+            files += yolo_out.write(images, classes, folder, task="segment")
         elif fmt == "coco":
             files += coco_out.write(images, classes, folder)
         elif fmt == "html":
@@ -224,7 +227,7 @@ def run_export(ctx: JobContext) -> dict:
     ctx.check_cancelled()
     images, classes = rows.load(handle, include_unreviewed, image_ids)
 
-    if "yolo" in formats:
+    if {"yolo", "yolo_seg"} & set(formats):
         # Before anything is written, let alone an export folder reserved (m4): a YOLO label-stem
         # collision is doomed regardless of the other formats, and the caller can fix it (drop
         # YOLO, or rename/remove an image) without an empty exports/<stamp>/ left to clean up.

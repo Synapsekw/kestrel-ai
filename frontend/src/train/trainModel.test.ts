@@ -72,6 +72,7 @@ describe("train form model", () => {
       epoch: 3,
       epochs: 50,
       map50: 0.612,
+      maskMap50: null,
       losses: {},
       etaSeconds: null,
     });
@@ -79,6 +80,7 @@ describe("train form model", () => {
       epoch: 1,
       epochs: 3,
       map50: null,
+      maskMap50: null,
       losses: {},
       etaSeconds: null,
     });
@@ -89,6 +91,7 @@ describe("train form model", () => {
       epoch: 2,
       epochs: 10,
       map50: 0.5,
+      maskMap50: null,
       losses: { box: 1.234, cls: 2.346, dfl: 1.111 },
       etaSeconds: 252,
     });
@@ -96,11 +99,25 @@ describe("train form model", () => {
       epoch: 1,
       epochs: 3,
       map50: null,
+      maskMap50: null,
       losses: { box: 0.5, seg: 0.25 },
       etaSeconds: null,
     });
     expect(parseEpochMessage("1386 / 3299 images")).toBeNull();
     expect(parseEpochMessage("")).toBeNull();
+  });
+
+  it("parses the mask mAP of a segmentation run", () => {
+    expect(
+      parseEpochMessage("epoch 2/10 mAP50 0.500 mask mAP50 0.412 loss box 1.000 seg 2.000 ETA 10s"),
+    ).toEqual({
+      epoch: 2,
+      epochs: 10,
+      map50: 0.5,
+      maskMap50: 0.412,
+      losses: { box: 1, seg: 2 },
+      etaSeconds: 10,
+    });
   });
 
   it("suggests a name from the dataset and the base model", () => {
@@ -158,6 +175,7 @@ describe("toTrainable", () => {
       val_count: 6,
       class_count: 2,
       split_method: "by_group",
+      task: "detect",
       exportBusy: false,
     });
   });

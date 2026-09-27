@@ -32,19 +32,16 @@ log = logging.getLogger(__name__)
 
 LIVE = ("queued", "running")
 TERMINAL = ("succeeded", "failed", "cancelled")
-SEGMENT_NOT_SUPPORTED = (
-    "YOLO segmentation datasets arrive with the Images workspace; this dataset cannot be exported "
-    "or trained yet."
-)
 
 
-def preview(registry, body: DatasetFilter) -> DatasetPreview:
+def preview(registry, body: DatasetFilter, task: str = "detect") -> DatasetPreview:
     """COUNTs only, per project, each under `selection.PREVIEW_TIMEOUT_S`. A project that is
     missing, will not open, or is too slow is reported and never fails the request (decision 14)."""
     f = selection.Filter.from_json(body.model_dump(mode="json"))
     projects: list[DatasetPreviewProject] = []
     per_type: dict[str, int] = {}
     total = 0
+    skipped_total = 0
     for project_id in f.project_ids:
         entry = DatasetPreviewProject(project_id=project_id, project_name=None, images=0, boxes=0, state="ok")
         try:
@@ -64,6 +61,7 @@ def preview(registry, body: DatasetFilter) -> DatasetPreview:
                 name = handle.row(s).name
                 with selection.interrupt_after(s, selection.PREVIEW_TIMEOUT_S):
                     images, boxes = selection.count(s, f)
+                    skipped = selection.skipped(s, f, task)
         except selection.PreviewTimeout:
             projects.append(entry.model_copy(update={"project_name": name, "state": "timed_out"}))
             continue
@@ -72,12 +70,15 @@ def preview(registry, body: DatasetFilter) -> DatasetPreview:
             projects.append(entry.model_copy(update={"project_name": name, "state": "unavailable"}))
             continue
         total += images
+        skipped_total += skipped
         for type_id, n in boxes.items():
             per_type[type_id] = per_type.get(type_id, 0) + n
         projects.append(
             entry.model_copy(update={"project_name": name, "images": images, "boxes": sum(boxes.values())})
         )
-    return DatasetPreview(images=total, boxes_per_type=per_type, projects=projects)
+    return DatasetPreview(
+        images=total, boxes_per_type=per_type, projects=projects, skipped_by_task=skipped_total
+    )
 
 
 # ---------------------------------------------------------------- folders and states
@@ -328,21 +329,18 @@ def list_items(
 
 
 def check_exportable(lib: LibraryHandle, dataset_id: str) -> None:
-    """404 unknown; 422 `task_not_supported` for segment; 409 `conflict` for a legacy dataset,
-    `not_ready` for one not built, `job_running` while its export is being written or while a
-    queued or running job (a `train`) names it: a new export would replace the folder that job
-    reads (amendment A3)."""
+    """404 unknown; 409 `conflict` for a legacy dataset, `not_ready` for one not built,
+    `job_running` while its export is being written or while a queued or running job (a `train`)
+    names it: a new export would replace the folder that job reads (amendment A3)."""
     with lib.session() as s:
         row = s.get(LibraryDataset, dataset_id)
         if row is None:
             raise not_found("dataset", dataset_id)
         jobs = job_states(s, [row.job_id, row.export_job_id])
         state, export_state = effective_state(row, jobs), effective_export_state(lib, row, jobs)
-        task, origin, name = row.task, row.origin, row.name
+        origin, name = row.origin, row.name
         in_use = live_job_naming(s, dataset_id)
         in_use_type = in_use.type if in_use is not None else None
-    if task == "segment":
-        raise AppError("task_not_supported", SEGMENT_NOT_SUPPORTED, 422)
     if origin == "legacy":
         raise AppError("conflict", f"{name} is a legacy dataset; it trains from its own folder.", 409)
     if state != "ready":

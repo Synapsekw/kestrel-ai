@@ -6,6 +6,7 @@ and `done.json` into the run folder and mirrors progress lines on stdout for the
 """
 
 import json
+import math
 import os
 import sys
 import time
@@ -115,6 +116,28 @@ def final_metrics_from(box, names) -> dict:
     }
 
 
+MASK_MAP50 = "metrics/mAP50(M)"
+MASK_MAP50_95 = "metrics/mAP50-95(M)"
+
+
+def _maybe_float(value) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
+def mask_metrics_from(values) -> dict:
+    """Mask mAP from a metrics mapping whose keys are `results.csv`'s columns (`trainer.metrics`, or
+    a row of the file): None for a box model, which has no `(M)` columns (R-BT11)."""
+    clean = {str(k).strip(): v for k, v in (values or {}).items()}
+    return {
+        "mask_map50": _maybe_float(clean.get(MASK_MAP50)),
+        "mask_map50_95": _maybe_float(clean.get(MASK_MAP50_95)),
+    }
+
+
 class ProgressWriter:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -179,6 +202,7 @@ def run_train(params: dict) -> dict:
         box = getattr(getattr(getattr(trainer, "validator", None), "metrics", None), "box", None)
         if box is not None:
             final.update(final_metrics_from(box, (getattr(trainer, "data", {}) or {}).get("names", {})))
+            final.update(mask_metrics_from(getattr(trainer, "metrics", None) or {}))
 
     model = YOLO(p.base_weights)
     model.add_callback("on_train_start", on_train_start)

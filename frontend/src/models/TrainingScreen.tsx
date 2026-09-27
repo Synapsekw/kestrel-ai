@@ -167,8 +167,8 @@ export function TrainingScreen() {
       datasets.datasets.filter((d) => d.state === "ready").map((d) => toTrainable(d, activeRunDatasetIds)),
     [datasets.datasets, activeRunDatasetIds],
   );
-  // Training starts from box models only: rotated-box weights would train a different task.
-  const baseModels = useMemo(() => library.models.filter((m) => m.task === "detect"), [library.models]);
+  // TrainForm offers only the chosen dataset's task (R-BT13).
+  const baseModels = library.models;
   const datasetName = useCallback(
     (id: string) => datasets.datasets.find((d) => d.id === id)?.name ?? "Deleted dataset",
     [datasets.datasets],
