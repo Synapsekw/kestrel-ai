@@ -1,10 +1,40 @@
 import { describe, expect, it } from "vitest";
 import { CSV_COLUMNS, measurementsCsv } from "./measureCsv";
 
+/** The fields C-C0 added to every saved measurement (contract 2026-09-27); the CSV ignores them. */
+const WORKSPACE = {
+  params: null,
+  status: "ready" as const,
+  error: null,
+  job_id: null,
+  finding_id: null,
+  view: null,
+};
+const NEW_RESULTS = {
+  area_m2: null,
+  area_surface_m2: null,
+  area_plan_m2: null,
+  perimeter_m: null,
+  plane_rms_m: null,
+  plane_tilt_deg: null,
+  plane_azimuth_deg: null,
+  uncertainty_m2: null,
+  ring_radius_lower_m: null,
+  ring_radius_upper_m: null,
+  ring_rms_lower_m: null,
+  ring_rms_upper_m: null,
+  profile_length_m: null,
+  profile_z_min: null,
+  profile_z_max: null,
+  profile_width_max_m: null,
+  profile_point_count: null,
+};
+
 describe("measurements CSV", () => {
   it("writes the export's columns and quotes text", () => {
     const csv = measurementsCsv([
       {
+        ...WORKSPACE,
         id: "m1",
         point_cloud_id: "c",
         kind: "distance",
@@ -15,6 +45,7 @@ describe("measurements CSV", () => {
           { x: 4, y: 6, z: 3, uncertainty_m: 0.02 },
         ],
         results: {
+          ...NEW_RESULTS,
           lon: null,
           lat: null,
           dx: 3,
@@ -44,6 +75,7 @@ describe("measurements CSV", () => {
   it("pads a single-point measurement's second point with empty cells", () => {
     const csv = measurementsCsv([
       {
+        ...WORKSPACE,
         id: "m2",
         point_cloud_id: "c",
         kind: "point",
@@ -51,6 +83,7 @@ describe("measurements CSV", () => {
         note: "gate post",
         points: [{ x: 1, y: 2, z: 3, uncertainty_m: 0.01 }],
         results: {
+          ...NEW_RESULTS,
           lon: 48.1,
           lat: 28.2,
           dx: null,

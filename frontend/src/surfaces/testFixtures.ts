@@ -32,6 +32,7 @@ const surfaceBase: Surface = {
   build_params: null,
   stats: null,
   captured_on: "2026-04-15",
+  elevation_role: null,
   map_id: null,
   tile_grid: { tile_size: 256, max_zoom: 4 },
   measurement_count: 0,

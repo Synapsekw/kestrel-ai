@@ -18,6 +18,8 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
+
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 AUTH = {"Authorization": "Bearer test-token"}
@@ -89,21 +91,19 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Images I-C0 stubs; each unit deletes its lines.
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "listImageMeasurements",  # I-BA
-    "createImageMeasurement",  # I-BA
-    "deleteImageMeasurement",  # I-BA
-    "getImageIndex",  # I-BX
-    "rebuildImageSummary",  # I-BX
-    "prepareImageSegment",  # I-BS
-    "segmentImage",  # I-BS
-    "listAssistModels",  # I-BS
-    "acquireAssistModel",  # I-BS
-    "importAssistModel",  # I-BS
     "detectImage",  # I-BP
     "detectImageBatch",  # I-BP
+}
+EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
+
+# Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
+# app/pointclouds/router.py::STUBS. Each C unit deletes its own names here and there; the last of
+# C-B2, C-B3 and C-B4 deletes this block.
+EXPECTED_STUBS |= {
+    "retryCloudProfile",  # C-B2
+    "getCloudProfile",  # C-B2
 }
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
@@ -114,11 +114,6 @@ EXPECTED_STUBS: set[str] = {
 BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
-    "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
-    "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at
-    "createBox": "I-BA",  # BoxWriteResult; BoxCreate shapes
-    "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
-    "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
@@ -129,6 +124,11 @@ BACKEND_PENDING: dict[str, str] = {
     "chatWithSetupAgent": "I-BT",
 }
 
+# Point cloud workspace (unit C-C0, plan 2026-09-27-clouds-c0 Ruling 2): the create request widens to
+# area and profile, 200 points, `params` and `finding_id`, which C-B1 and C-B2 build. Whichever of
+# them merges second deletes this entry.
+BACKEND_PENDING |= {"createCloudMeasurement": "C-B1 and C-B2"}
+
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
 # §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path
@@ -136,6 +136,19 @@ BACKEND_PENDING: dict[str, str] = {
 RETIRING: dict[str, str] = {
     # Images: replaced by detectImage; the old editor calls it until I-FW deletes editor/*.
     "preannotateImage": "I-FW",
+}
+
+# Existing operations whose new request options (map-workspace spec §12, unit M-C0) answer 501
+# `not_implemented` with details {option, unit} until the named unit builds them
+# (app/workspace/pending.py). Only a request that uses such an option gets the 501; every other
+# request to these operations is checked as usual. The unit deletes its entries with its guards.
+OPTION_STUBS: dict[str, str] = {
+    "createVolumeMeasurement": "M-B5",  # polygon_site, material, base toe_lowest
+    "patchVolumeMeasurement": "M-B5",  # polygon_site, material, base toe_lowest
+    "createRuns": "M-B5",  # region
+    "createSiteArea": "M-B5",  # category
+    "updateSiteArea": "M-B5",  # category
+    "patchSurface": "M-B2",  # captured_on, elevation_role
 }
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
@@ -161,6 +174,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "getPointCloudOctreeFile": {416},  # a Range the file cannot satisfy
     "createCloudMeasurement": {422},
+    "updateCloudMeasurement": {422},  # C-B1: a generated finding_id is never a finding on that cloud
     "createPointCloud": {422},  # a readable path that is not LAS/LAZ, or refused by admission
     "inspectPointCloudFile": {422},  # a readable path that is not LAS/LAZ
     "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
@@ -194,6 +208,13 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "addFindingAttachment": {422},
     # BC: a generated type that exists but is an object type (`not_a_defect`).
     "backfillCatalogueType": {422},
+    # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
+    "acquireAssistModel": {409},
+    # C-B4 (spec 2026-09-26-point-cloud-workspace section 11.4): a schema-valid multipart whose image
+    # is not a 1600 x 1000 PNG/JPEG (`bad_view_image`), or a finding anchored on an image or a map
+    # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
+    "putFindingView3d": {409, 422},
+    "putCloudMeasurementView3d": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
@@ -241,7 +262,7 @@ def test_responses_conform(case, app, project_id, tmp_path):
         return
     if is_stub:
         # A stub: the operation is routed but not built yet; it must still answer in the error envelope.
-        assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"
+        assert op_id in EXPECTED_STUBS or op_id in OPTION_STUBS, f"unexpected stub for {op_id}"
         checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
         case.validate_response(response, checks=checks)
         return

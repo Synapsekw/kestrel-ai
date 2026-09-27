@@ -165,6 +165,9 @@ class MapRunOut(BaseModel):
     pinned: bool
     verified_counts: dict[str, int]
     area_counts: dict[str, dict[str, dict[str, int]]]
+    # Map workspace (spec 2026-09-26-map-workspace §9.3): M-B5 fills them; old runs are `map`.
+    scope: Literal["map", "region"]
+    region_px: list[list[float]] | None
 
     @classmethod
     def from_row(cls, row: MapRun, state: str | None, detection_count: int) -> MapRunOut:
@@ -177,6 +180,8 @@ class MapRunOut(BaseModel):
             pinned=bool(row.pinned),
             verified_counts=dict(row.verified_counts or {}),
             area_counts=dict(row.area_counts or {}),
+            scope=row.scope or "map",
+            region_px=row.region_px,
             kind=row.kind,
             model_id=row.model_id,
             provider=row.provider,

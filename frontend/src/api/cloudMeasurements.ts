@@ -14,13 +14,16 @@ export async function listCloudMeasurements(
   return (await unwrap(api.GET(P, { params: { path: { projectId, cloudId } } }))).items;
 }
 
-export function createCloudMeasurement(
+export async function createCloudMeasurement(
   api: ApiClient,
   projectId: string,
   cloudId: string,
   body: S["CloudMeasurementCreate"],
 ): Promise<CloudMeasurement> {
-  return unwrap(api.POST(P, { params: { path: { projectId, cloudId } }, body }));
+  // A profile answers 202 with { measurement, job } (C-B2); every other kind answers 201 with the
+  // measurement directly (contract 2026-09-27, unit C-C0).
+  const result = await unwrap(api.POST(P, { params: { path: { projectId, cloudId } }, body }));
+  return "measurement" in result ? result.measurement : result;
 }
 
 export function updateCloudMeasurement(

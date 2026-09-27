@@ -606,6 +606,8 @@ export const exampleMapRun: MapRun = {
   pinned: false,
   verified_counts: {},
   area_counts: {},
+  scope: "map",
+  region_px: null,
   detection_count: 59,
   created_at: "2026-09-22T11:00:00Z",
 };

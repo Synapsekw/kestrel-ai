@@ -1641,7 +1641,10 @@ export interface paths {
         put?: never;
         /**
          * Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
-         *     state `edited`. The run's counts change in the same transaction.
+         *     state `edited`. The run's counts change in the same transaction. Accepting a detection of a
+         *     defect type also creates its finding (status `reviewed`) in that transaction; rejecting,
+         *     unaccepting or reclassing it to an object type deletes that finding, and only with
+         *     `confirm_finding_delete=true`.
          */
         post: operations["reviewMapDetections"];
         delete?: never;
@@ -1850,7 +1853,12 @@ export interface paths {
         get: operations["getPointCloud"];
         put?: never;
         post?: never;
-        /** Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched. */
+        /**
+         * Delete the cloud, its measurements, report views and camera offsets, and its folder under
+         *     `pointclouds/`. The source file is untouched. Findings anchored on the cloud are deleted only
+         *     with `delete_findings=true` (through the findings service, attachments and comments included);
+         *     otherwise the delete is refused with 409 `cloud_has_findings`.
+         */
         delete: operations["deletePointCloud"];
         options?: never;
         head?: never;
@@ -1903,7 +1911,12 @@ export interface paths {
         /** The cloud's saved measurements, oldest first (at most 1 000). */
         get: operations["listCloudMeasurements"];
         put?: never;
-        /** Save a measurement. The server recomputes `results` from the points; a client never sends them. */
+        /**
+         * Save a measurement. The server recomputes `results` from the points; a client never sends
+         *     them. A `profile` is cut from the source file by a `pointcloud_profile` job: it answers 202
+         *     with the measurement at `status: computing` and its job, and `pointclouds.changed` reports it
+         *     `ready` or `failed`. Every other kind answers 201 at `status: ready`.
+         */
         post: operations["createCloudMeasurement"];
         delete?: never;
         options?: never;
@@ -1929,7 +1942,7 @@ export interface paths {
         delete: operations["deleteCloudMeasurement"];
         options?: never;
         head?: never;
-        /** Rename a measurement or change its note. */
+        /** Rename a measurement, change its note, or attach it to a cloud finding (null detaches it). */
         patch: operations["updateCloudMeasurement"];
         trace?: never;
     };
@@ -1952,6 +1965,165 @@ export interface paths {
          *     size and mtime unchanged.
          */
         post: operations["createPointCloudExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run the `pointcloud_profile` job again for a `failed` profile; the measurement goes back to `computing`. */
+        post: operations["retryCloudProfile"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The stored cross-section of a `ready` profile, cut from the source file by its job: at most
+         *     500 000 points, gzip-compressed on the wire. A measurement of another kind is 404 `not_found`.
+         */
+        get: operations["getCloudProfile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/view3d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        /** The measurement's stored report view; `ETag` is the quoted sha256 of the bytes. */
+        get: operations["getCloudMeasurementView3d"];
+        /** Store the measurement's report view (as `putFindingView3d`). Replaces the previous one; publishes `pointclouds.changed`. */
+        put: operations["putCloudMeasurementView3d"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/views": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        /** The metadata of every report view in the cloud (findings and measurements), no image bytes; at most 1 500. */
+        get: operations["listCloudViews"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The project's drone photos near the cloud, reprojected into its CRS, as compact parallel
+         *     arrays: one column-only query, at most 20 000 cameras, no image file is read.
+         */
+        get: operations["getCloudCameras"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras/offsets/{sourceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the height offset added to this image set's altitudes for this cloud; publishes `pointclouds.changed`. */
+        put: operations["setCloudCameraOffset"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/findings/{findingId}/view3d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        /** The cloud finding's stored report view (R's `view3d` source); `ETag` is the quoted sha256 of the bytes. */
+        get: operations["getFindingView3d"];
+        /**
+         * Store the report view of a cloud finding: a 1600 x 1000 PNG (a JPEG when the PNG is over
+         *     6 MiB) the workspace rendered, with the pose and render settings that took it. Replaces the
+         *     previous view; publishes `pointclouds.changed`. Owned by the point-cloud workspace.
+         */
+        put: operations["putFindingView3d"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1995,7 +2167,7 @@ export interface paths {
         delete: operations["deleteSurface"];
         options?: never;
         head?: never;
-        /** Rename a surface. */
+        /** Rename a surface, or set a dem's survey date and elevation role. */
         patch: operations["patchSurface"];
         trace?: never;
     };
@@ -3285,6 +3457,504 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/map-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The site frame, the persisted view state and the planned surveys (map-workspace spec §6).
+         *     The first read creates the row. Its frame is the CRS of the first georeferenced map or
+         *     surface (a geographic CRS becomes the UTM zone of its centre), or local metres when nothing
+         *     has coordinates.
+         */
+        get: operations["getMapWorkspace"];
+        /**
+         * Replace the persisted view state and, when sent, the planned surveys (the client debounces
+         *     it by 1 s). Publishes `map_workspace.changed`.
+         */
+        put: operations["putMapWorkspace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/frame": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the site CRS (`{kind: crs, epsg}`, a projected CRS in metres) or switch to local
+         *     metres (`{kind: local}`). Stored geometry never changes; the client re-reads every tile and
+         *     vector in the new frame. Publishes `map_workspace.changed`.
+         */
+        put: operations["setSiteFrame"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/surveys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One entry per survey date in the current frame, oldest first, for the timeline scrubber and
+         *     the date chips: the ready maps and surfaces of that date, and the planned surveys. Items
+         *     without a capture date are grouped under their import date.
+         */
+        get: operations["listWorkspaceSurveys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Every map, surface and drawing as a layer row, with its tile kind and version, date,
+         *     footprint in the site frame, `max_zoom` and meta line. Items outside the frame (no CRS, the
+         *     other frame, a drawing not placed) are listed with `in_frame` false.
+         */
+        get: operations["listWorkspaceLayers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-tiles/{kind}/{layerId}/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                kind: components["parameters"]["siteTileKind"];
+                /** @description the map, surface, volume measurement or drawing the tile renders */
+                layerId: components["parameters"]["layerId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One 256 px PNG of a layer warped into the site tile grid (map-workspace spec §6), read from
+         *     one overview level. Pixels outside the layer's footprint, NaN and masked pixels are
+         *     transparent; a tile that misses the footprint entirely is 204 without any read.
+         */
+        get: operations["getSiteTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/anchor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert a point or polygon drawn in the site frame into the map's CRS, with its WGS84
+         *     centroid, ready for `createFinding` with a `map` anchor (F §8.5).
+         */
+        post: operations["convertAnchor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Findings with a `map` anchor inside `bbox`, read through F's finding service, with their
+         *     geometry in the site frame; at most 5 000, `truncated` past that.
+         */
+        get: operations["listMapFindingsInView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The height of each surface at one site-frame point (bilinear over 2 x 2 cells), for the
+         *     coordinate readout; the client throttles it to one call per 150 ms.
+         */
+        post: operations["sampleInFrame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/elevations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a plain DSM or DTM GeoTIFF as a `dem` surface (map-workspace spec §7). An
+         *     `elevation_import` job copies it when it already conforms, else re-grids it (onto the
+         *     `align_to_surface_id` surface's lattice when one is given). There is no preview step. A file
+         *     with no CRS, an RGB image, or a geographic or feet CRS without a target fails the job with a
+         *     readable message. Publishes `surfaces.changed`.
+         */
+        post: operations["importElevation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawing-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a drawing file (a `drawing_import` job, phase `inspect`, map-workspace spec §8.2): its
+         *     format, the DXF or LandXML layers and units, the PDF pages with 160 px thumbnails, the
+         *     raster size, and any world-file or GeoTIFF placement.
+         */
+        post: operations["createDrawingInspection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawing-inspections/{inspectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDrawingInspection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawing-inspections/{inspectionId}/pages/{page}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
+                page: components["parameters"]["drawingPage"];
+            };
+            cookie?: never;
+        };
+        /** A 160 px thumbnail of one PDF page. */
+        get: operations["getDrawingPageThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every drawing, newest first (one row per drawing, tens). */
+        get: operations["listDrawings"];
+        put?: never;
+        /**
+         * Build a drawing from a ready inspection (a `drawing_import` job, phase `build`): flatten and
+         *     index DXF or LandXML linework, render a PDF page in strips, or copy a raster window by window,
+         *     then place it by CRS, by its embedded georeference, or not at all (placed later with control
+         *     points). Publishes `drawings.changed`.
+         */
+        post: operations["createDrawing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/georef-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A dry-run control-point fit with the same maths as `putDrawingGeoref` (least squares,
+         *     similarity or affine, RMSE and residuals in metres, warnings); nothing is stored.
+         */
+        post: operations["fitDrawingGeoref"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDrawing"];
+        put?: never;
+        post?: never;
+        /** Delete the drawing and its folder under `drawings/`; the source file is never touched. */
+        delete: operations["deleteDrawing"];
+        options?: never;
+        head?: never;
+        /** Rename, set the revision date, or change the layer state (DXF layer visibility, raster knockout). Publishes `drawings.changed`. */
+        patch: operations["patchDrawing"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}/georef": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save a control-point placement (map-workspace spec §8.3): the server refits authoritatively,
+         *     stores the points with the site CRS they were picked in, bumps `georef_version` and, for a
+         *     raster, rewrites its geotransform in place. Publishes `drawings.changed`.
+         */
+        put: operations["putDrawingGeoref"];
+        post?: never;
+        /** Remove the placement; the drawing returns to "not placed". Publishes `drawings.changed`. */
+        delete: operations["clearDrawingGeoref"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}/vtiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The DXF or LandXML linework of one site tile (map-workspace spec §8.4): a bucket lookup,
+         *     clipped to the tile plus 2 %, transformed into the site frame and simplified to res(z) / 2;
+         *     at most 20 000 vertices. Labels only when at least 6 px tall.
+         */
+        get: operations["getDrawingVectorTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        /** A 160 px thumbnail of the drawing. */
+        get: operations["getDrawingThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The project's measurements in one list (umbrella §3; map-workspace spec §4 item 8):
+         *     point-cloud, volume and map measurements, newest first (`created_at` descending, then
+         *     `kind`, then `id`), keyset-paged over the three providers. The Measurements tab and the
+         *     command palette read it; each row opens its own workspace.
+         */
+        get: operations["listMeasurements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Map measurements, newest first, keyset-paged; `frame=site` adds each one's vertices in the current site frame. */
+        get: operations["listMapMeasurements"];
+        put?: never;
+        /**
+         * Store a distance, area or elevation profile drawn in the site frame (map-workspace spec §9.1).
+         *     The server stores the vertices in the site CRS of the moment and computes `results`
+         *     synchronously and bounded: Geod length and area, the grid values and the 3D length; a
+         *     profile of at most 2 000 stations over 1 to 3 surfaces. Publishes `map_measurements.changed`.
+         */
+        post: operations["createMapMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-measurements/{mapMeasurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getMapMeasurement"];
+        put?: never;
+        post?: never;
+        /** Delete the measurement. Publishes `map_measurements.changed`. */
+        delete: operations["deleteMapMeasurement"];
+        options?: never;
+        head?: never;
+        /** Rename, annotate, move the vertices or change the surfaces; a geometry or surface change recomputes `results`. Publishes `map_measurements.changed`. */
+        patch: operations["patchMapMeasurement"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3334,12 +4004,40 @@ export interface components {
                  *     type deletes its finding; retry with `confirm_finding_delete=true`),
                  *     attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
                  *     `{reason}`), task_not_supported (422: a task this build cannot write or train),
-                 *     task_mismatch (422: the base model's task differs from the dataset's), class_in_use
-                 *     (409: also counts findings;
-                 *     details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
-                 *     run has neither a library `model_id` nor a cloud `provider`), query_required (422:
+                 *     task_mismatch (422: the base model's task differs from the dataset's),
+                 *     class_in_use (409: also counts findings; details `{type_id, box_count,
+                 *     finding_count}`), model_or_provider_required (422: a run has neither a library
+                 *     `model_id` nor a cloud `provider`), query_required (422:
                  *     a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
-                 *     outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule)
+                 *     outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule),
+                 *     state_too_large (422: the map workspace state is over 64 KB), local_frame (422: the
+                 *     operation needs a georeferenced site frame, e.g. a finding anchor in a local-metres
+                 *     project), too_few_points, reflection and collinear (422: a drawing georeference with
+                 *     fewer points than its model needs, mirrored points, or affine points on one line),
+                 *     not_placed (409: the drawing has no georeference yet), not_vector (422: a raster
+                 *     drawing has no vector tiles), no_surface_under_line (422: a profile with no
+                 *     elevation under it), empty_region (422: a region run with no unmasked window),
+                 *     pdf_unavailable (422: PDF import is off because PDFium did not load),
+                 *     invalid_placement (422: a drawing placement its file cannot take), outside_map
+                 *     (422: an anchor outside its map's footprint), no_site_frame (409: the project has no
+                 *     site frame yet; open Maps first), not_in_site_frame (409: a map measurement drawn in
+                 *     the other frame), invalid_surfaces and surface_not_in_frame (422: a map
+                 *     measurement's surfaces are wrong for its kind, or a profile surface is outside the
+                 *     site frame), degenerate (422: coincident control points or a zero scale),
+                 *     invalid_preview (422: a malformed or degenerate preview placement `t`),
+                 *     not_elevation, geographic_output and non_metric_output (422: an elevation import
+                 *     that is not a single-band elevation raster, or would be written in a geographic or
+                 *     non-metric CRS), invalid_patch (422: a date or role patch on a surface that is not a
+                 *     dem),
+                 *     self_intersecting, degenerate_polygon, ring_needs_three_points, collinear_ring,
+                 *     profile_out_of_range and invalid_finding (422: a point-cloud measurement;
+                 *     invalid_finding is a `finding_id` that is not a cloud finding on that cloud),
+                 *     not_retryable (409: only a failed profile can be retried), needs_coordinates (409:
+                 *     the cloud has no CRS), cloud_has_findings (409: findings are anchored on the cloud;
+                 *     details `{count}`), not_a_cloud_finding (409: a report view for a finding with
+                 *     another anchor kind), bad_view_image (422: not a 1600 x 1000 PNG or JPEG of at most
+                 *     6 MiB; details `{reason}`), no_view (404: no report view is stored). A 501
+                 *     not_implemented for an option of an existing operation carries details `{option, unit}`.
                  */
                 code: string;
                 message: string;
@@ -5923,6 +6621,8 @@ export interface components {
          *         }
          *       },
          *       "detection_count": 59,
+         *       "scope": "map",
+         *       "region_px": null,
          *       "created_at": "2026-09-22T11:00:00Z"
          *     }
          */
@@ -5963,6 +6663,9 @@ export interface components {
                 [key: string]: number;
             };
             detection_count: number;
+            scope: components["schemas"]["MapRunScope"];
+            /** @description a region run's outline in map pixels; null for a whole-map run */
+            region_px: components["schemas"]["PixelPoint"][] | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -6005,6 +6708,8 @@ export interface components {
             w: number;
             h: number;
             angle: number | null;
+            /** @description only with frame=site: the box's four corners in the site frame */
+            corners_site?: components["schemas"]["SiteVertex"][] | null;
         };
         /**
          * @example {
@@ -6035,6 +6740,8 @@ export interface components {
             gy: number;
             class_id: string;
             count: number;
+            /** @description only with frame=site: the cell centre in the site frame; absent or null otherwise */
+            center_site?: components["schemas"]["SiteVertex"] | null;
         };
         MapDensity: {
             /** @description cell edge in map pixels; cell (gx */
@@ -6382,6 +7089,8 @@ export interface components {
             review: components["schemas"]["ReviewProgress"];
             /** Format: date-time */
             created_at: string;
+            /** @description map runs; absent for photo runs */
+            scope?: components["schemas"]["MapRunScope"];
         };
         RunSummaryPage: {
             items: components["schemas"]["RunSummary"][];
@@ -6410,6 +7119,7 @@ export interface components {
             tiling?: components["schemas"]["Tiling"];
             /** @description map runs: resample windows to this GSD; defaults to the model's training GSD */
             target_gsd_cm?: number | null;
+            region?: components["schemas"]["RunRegion"];
         };
         RunCreatedItem: {
             run_id: string;
@@ -6593,6 +7303,7 @@ export interface components {
          * @example {
          *       "id": "5a000000-aaaa-4000-8000-000000000001",
          *       "name": "North laydown yard",
+         *       "category": "laydown",
          *       "polygon_wgs84": [
          *         [
          *           47.761,
@@ -6619,6 +7330,9 @@ export interface components {
             name: string;
             /** @description the outline, not closed (the first point is not repeated) */
             polygon_wgs84: components["schemas"]["LonLat"][];
+            category: components["schemas"]["SiteAreaCategory"];
+            /** @description only with frame=site: the outline in the site frame */
+            polygon_site?: components["schemas"]["SiteVertex"][] | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -6652,6 +7366,8 @@ export interface components {
             polygon_wgs84?: components["schemas"]["LonLat"][];
             map_id?: string;
             polygon_px?: components["schemas"]["PixelPoint"][];
+            /** @description general when absent on create */
+            category?: components["schemas"]["SiteAreaCategory"];
         };
         /**
          * @description a new outline is either `polygon_wgs84`, or `map_id` with `polygon_px`
@@ -6664,6 +7380,8 @@ export interface components {
             polygon_wgs84?: components["schemas"]["LonLat"][];
             map_id?: string;
             polygon_px?: components["schemas"]["PixelPoint"][];
+            /** @description unchanged when absent */
+            category?: components["schemas"]["SiteAreaCategory"];
         };
         SiteAreaList: {
             items: components["schemas"]["SiteArea"][];
@@ -7079,7 +7797,12 @@ export interface components {
             admission: components["schemas"]["PointCloudAdmission"];
         };
         /** @enum {string} */
-        CloudMeasurementKind: "point" | "distance" | "height" | "vertical";
+        CloudMeasurementKind: "point" | "distance" | "height" | "vertical" | "area" | "profile";
+        /**
+         * @description only a profile is ever `computing` (its `pointcloud_profile` job runs) or `failed`
+         * @enum {string}
+         */
+        CloudMeasurementStatus: "ready" | "computing" | "failed";
         CloudMeasurementPoint: {
             /** @description native CRS */
             x: number;
@@ -7087,19 +7810,44 @@ export interface components {
             z: number;
             /** @description the display spacing of the deepest loaded node that contains the pick */
             uncertainty_m: number;
+            /** @description a rings vertical check: 0 is the lower ring and 1 the upper; null or absent for every other kind */
+            group?: number | null;
+        };
+        /** @description per kind: area `{mode}`, vertical `{method}`, profile `{thickness_m, max_points}`; `view_dir` is the camera direction at save, used only to orient `plane_azimuth_deg`. A key that does not apply is absent or null */
+        CloudMeasurementParams: {
+            /**
+             * @description area: which area is primary; surface when absent
+             * @enum {string|null}
+             */
+            mode?: "surface" | "plan" | null;
+            /**
+             * @description vertical: two picks, or two fitted rings (6 to 64 points with `group` 0 and 1, at least 3 each); points when absent
+             * @enum {string|null}
+             */
+            method?: "points" | "rings" | null;
+            /** @description profile: the slab thickness; 0.20 when absent */
+            thickness_m?: number | null;
+            /** @description profile: the stored point cap; 200 000 when absent */
+            max_points?: number | null;
+            view_dir?: number[] | null;
         };
         CloudMeasurementCreate: {
             kind: components["schemas"]["CloudMeasurementKind"];
-            /** @description one point for `point`, two for the other kinds */
+            /** @description point 1; distance, height and vertical (points) 2; vertical (rings) 6 to 64 with `group`; area 3 to 200 (the outline, not closed); profile 2 (the section line A, B) */
             points: components["schemas"]["CloudMeasurementPoint"][];
             /** @description "Distance 3"-style numbering when absent */
             name?: string;
             note?: string;
+            params?: components["schemas"]["CloudMeasurementParams"] | null;
+            /** @description attach to this finding (a cloud finding on this cloud); null or absent for none */
+            finding_id?: string | null;
         };
         CloudMeasurementUpdate: {
             name?: string;
             /** @description null clears it */
             note?: string | null;
+            /** @description attach to this cloud finding on this cloud; null detaches */
+            finding_id?: string | null;
         };
         /** @description computed by the server from the stored points; a quantity that does not apply to the kind is null */
         CloudMeasurementResults: {
@@ -7121,6 +7869,29 @@ export interface components {
             lean_mm_per_m: number | null;
             uncertainty_m: number | null;
             angle_uncertainty_deg: number | null;
+            /** @description the primary area (`params.mode`) */
+            area_m2: number | null;
+            /** @description on the polygon's best-fit plane (Newell) */
+            area_surface_m2: number | null;
+            /** @description projected horizontally */
+            area_plan_m2: number | null;
+            perimeter_m: number | null;
+            /** @description the vertices' RMS distance from the best-fit plane */
+            plane_rms_m: number | null;
+            /** @description the plane's tilt from horizontal (0 is a slab, 90 a wall) */
+            plane_tilt_deg: number | null;
+            /** @description the plane normal's bearing, clockwise from grid north */
+            plane_azimuth_deg: number | null;
+            uncertainty_m2: number | null;
+            ring_radius_lower_m: number | null;
+            ring_radius_upper_m: number | null;
+            ring_rms_lower_m: number | null;
+            ring_rms_upper_m: number | null;
+            profile_length_m: number | null;
+            profile_z_min: number | null;
+            profile_z_max: number | null;
+            profile_width_max_m: number | null;
+            profile_point_count: number | null;
         };
         CloudMeasurementOut: {
             id: string;
@@ -7130,6 +7901,16 @@ export interface components {
             note: string | null;
             points: components["schemas"]["CloudMeasurementPoint"][];
             results: components["schemas"]["CloudMeasurementResults"];
+            params: components["schemas"]["CloudMeasurementParams"] | null;
+            status: components["schemas"]["CloudMeasurementStatus"];
+            /** @description why a profile failed; null otherwise */
+            error: string | null;
+            /** @description the profile's `pointcloud_profile` job */
+            job_id: string | null;
+            /** @description the cloud finding this measurement is attached to */
+            finding_id: string | null;
+            /** @description its stored report view (metadata only); null when there is none */
+            view: components["schemas"]["CloudViewOut"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -7138,14 +7919,300 @@ export interface components {
         CloudMeasurementList: {
             items: components["schemas"]["CloudMeasurementOut"][];
         };
+        CloudMeasurementWithJob: {
+            measurement: components["schemas"]["CloudMeasurementOut"];
+            job: components["schemas"]["Job"];
+        };
         PointCloudExportRequest: {
             /** @enum {string} */
             format: "laz";
             /** @description true when absent: write measurements.csv when the cloud has measurements */
             include_measurements?: boolean;
         };
+        /** @description the camera that took a report view, in the cloud's native CRS; `fov_deg` is vertical and the aspect is fixed at 1.6 */
+        CloudViewPose: {
+            position: number[];
+            target: number[];
+            up: number[];
+            fov_deg: number;
+        };
+        CloudClipBox: {
+            centre: number[];
+            size: number[];
+            /** @description rotation about Z */
+            yaw_deg: number;
+            /** @enum {string} */
+            mode: "show_inside" | "highlight_inside";
+        };
+        /** @description the render settings on screen at capture, so a re-capture reproduces the view */
+        CloudViewRender: {
+            /** @enum {string} */
+            colour_mode: "rgb" | "elevation" | "intensity" | "classification";
+            point_budget: number;
+            point_size: number;
+            edl: boolean;
+            clip_box: components["schemas"]["CloudClipBox"] | null;
+            /** @description false when the capture timed out before every node had loaded */
+            complete: boolean;
+        };
         /** @enum {string} */
-        SurfaceKind: "cloud_dsm" | "design";
+        CloudViewSubjectKind: "finding" | "cloud_measurement";
+        /**
+         * @description a stored report view's metadata (the image is served by the `view3d` GET); `stale` is computed on read
+         * @example {
+         *       "subject_kind": "finding",
+         *       "subject_id": "f0000000-7777-4000-8000-000000000001",
+         *       "pose": {
+         *         "position": [
+         *           243540.2,
+         *           3178030.5,
+         *           12.4
+         *         ],
+         *         "target": [
+         *           243552,
+         *           3178041,
+         *           -20.1
+         *         ],
+         *         "up": [
+         *           0,
+         *           0,
+         *           1
+         *         ],
+         *         "fov_deg": 50
+         *       },
+         *       "render": {
+         *         "colour_mode": "rgb",
+         *         "point_budget": 3000000,
+         *         "point_size": 1.4,
+         *         "edl": true,
+         *         "clip_box": null,
+         *         "complete": true
+         *       },
+         *       "anchor_normal": [
+         *         0.71,
+         *         -0.7,
+         *         0.05
+         *       ],
+         *       "sha256": "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b",
+         *       "bytes": 2311840,
+         *       "width": 1600,
+         *       "height": 1000,
+         *       "captured_at": "2026-09-27T10:00:00Z",
+         *       "stale": false
+         *     }
+         */
+        CloudViewOut: {
+            subject_kind: components["schemas"]["CloudViewSubjectKind"];
+            subject_id: string;
+            pose: components["schemas"]["CloudViewPose"];
+            render: components["schemas"]["CloudViewRender"];
+            /** @description findings only: the unit surface normal at the pin; null when unknown */
+            anchor_normal: number[] | null;
+            /** @description of the image bytes; the GET's `ETag` */
+            sha256: string;
+            bytes: number;
+            width: number;
+            height: number;
+            /** Format: date-time */
+            captured_at: string;
+            /** @description the subject's geometry changed since the capture */
+            stale: boolean;
+        };
+        CloudViewMeta: {
+            pose: components["schemas"]["CloudViewPose"];
+            render: components["schemas"]["CloudViewRender"];
+            /** @description findings only: the unit surface normal at the pin; null or absent when unknown */
+            anchor_normal?: number[] | null;
+        };
+        CloudViewUpload: {
+            /**
+             * Format: binary
+             * @description PNG or JPEG, exactly 1600 x 1000, at most 6 MiB
+             */
+            image: string;
+            meta: components["schemas"]["CloudViewMeta"];
+        };
+        /**
+         * @example {
+         *       "items": []
+         *     }
+         */
+        CloudViewList: {
+            items: components["schemas"]["CloudViewOut"][];
+        };
+        /**
+         * @description a stored cross-section: s (metres along the line from A) against z, thinned to at most `max_points`
+         * @example {
+         *       "s": [
+         *         0,
+         *         0.5,
+         *         1
+         *       ],
+         *       "z": [
+         *         -44.8,
+         *         -44.7,
+         *         -30.2
+         *       ],
+         *       "rgb": [
+         *         120,
+         *         120,
+         *         118,
+         *         121,
+         *         119,
+         *         117,
+         *         200,
+         *         40,
+         *         30
+         *       ],
+         *       "count": 3,
+         *       "thickness_m": 0.2,
+         *       "length_m": 12.84
+         *     }
+         */
+        CloudProfile: {
+            s: number[];
+            z: number[];
+            /** @description r, g, b per point (3 x `count` values); null when the cloud has no colour */
+            rgb: number[] | null;
+            count: number;
+            thickness_m: number;
+            length_m: number;
+        };
+        /**
+         * @example {
+         *       "id": "s0000000-3333-4000-8000-000000000001",
+         *       "label": "Flight 14 Sep",
+         *       "count": 2,
+         *       "height_offset_m": -31.5,
+         *       "posed_count": 1
+         *     }
+         */
+        CloudCameraSource: {
+            /** @description the image set (source) id */
+            id: string;
+            /** @description the set's label, else its site, else its folder name */
+            label: string;
+            /** @description this set's cameras in the payload */
+            count: number;
+            height_offset_m: number;
+            /** @description those with a gimbal pose */
+            posed_count: number;
+        };
+        CloudCameraOffsetPut: {
+            height_offset_m: number;
+        };
+        /**
+         * @description The drone photos near a cloud as parallel arrays (index i is one camera) in the cloud's
+         *     native CRS: at most 20 000, ordered by capture time, `truncated` when more exist.
+         * @example {
+         *       "image_id": [
+         *         "i0000000-5555-4000-8000-000000000001",
+         *         "i0000000-5555-4000-8000-000000000002"
+         *       ],
+         *       "source_idx": [
+         *         0,
+         *         0
+         *       ],
+         *       "x": [
+         *         243540.2,
+         *         243561.9
+         *       ],
+         *       "y": [
+         *         3178030.5,
+         *         3178044.1
+         *       ],
+         *       "z": [
+         *         12.4,
+         *         null
+         *       ],
+         *       "yaw": [
+         *         131.2,
+         *         null
+         *       ],
+         *       "pitch": [
+         *         -45,
+         *         null
+         *       ],
+         *       "roll": [
+         *         0,
+         *         null
+         *       ],
+         *       "hfov": [
+         *         73.7,
+         *         73.7
+         *       ],
+         *       "vfov": [
+         *         53.1,
+         *         53.1
+         *       ],
+         *       "fov_assumed": [
+         *         false,
+         *         true
+         *       ],
+         *       "width": [
+         *         2048,
+         *         2048
+         *       ],
+         *       "height": [
+         *         1536,
+         *         1536
+         *       ],
+         *       "sigma_m": [
+         *         3,
+         *         3
+         *       ],
+         *       "sources": [
+         *         {
+         *           "id": "s0000000-3333-4000-8000-000000000001",
+         *           "label": "Flight 14 Sep",
+         *           "count": 2,
+         *           "height_offset_m": -31.5,
+         *           "posed_count": 1
+         *         }
+         *       ],
+         *       "truncated": false,
+         *       "z_p1": -45.9,
+         *       "z_p99": -5.1,
+         *       "without_gps": 0
+         *     }
+         */
+        CloudCameraSet: {
+            image_id: string[];
+            /** @description an index into `sources` */
+            source_idx: number[];
+            x: number[];
+            y: number[];
+            /** @description EXIF altitude plus the set's height offset; null without an altitude */
+            z: (number | null)[];
+            /** @description grid yaw in degrees, clockwise from grid north; null without a pose */
+            yaw: (number | null)[];
+            /** @description degrees, -90 is nadir; null without a pose */
+            pitch: (number | null)[];
+            roll: (number | null)[];
+            /** @description horizontal field of view in degrees */
+            hfov: number[];
+            vfov: number[];
+            /** @description true when the FOV is the assumed 84 degree diagonal */
+            fov_assumed: boolean[];
+            /** @description the stored image's pixel size */
+            width: number[];
+            height: number[];
+            /** @description position uncertainty; 3.0 until an RTK flag exists */
+            sigma_m: number[];
+            sources: components["schemas"]["CloudCameraSource"][];
+            truncated: boolean;
+            /** @description the cloud's `z_stats.p1`, for the plausibility check */
+            z_p1: number | null;
+            /** @description the cloud's `z_stats.p99` */
+            z_p99: number | null;
+            /** @description project images with no GPS position (lat or lon null), one COUNT query; the cloud panel shows it as "n photos without GPS" */
+            without_gps: number;
+        };
+        /**
+         * @description dem is a DSM or DTM GeoTIFF imported as elevation (map workspace)
+         * @enum {string}
+         */
+        SurfaceKind: "cloud_dsm" | "design" | "dem";
         /** @enum {string} */
         SurfaceStatus: "building" | "ready" | "failed";
         /**
@@ -7221,9 +8288,11 @@ export interface components {
             stats: components["schemas"]["SurfaceBuildStats"] | null;
             /**
              * Format: date
-             * @description read through from the cloud
+             * @description the survey date; a cloud DSM's comes from its cloud, a dem's from its import; null for a design
              */
             captured_on: string | null;
+            /** @description dem only; null for cloud_dsm and design */
+            elevation_role: components["schemas"]["ElevationRole"] | null;
             /** @description read through from the cloud; the ortho of the same flight */
             map_id: string | null;
             tile_grid: components["schemas"]["TileGrid"] | null;
@@ -7253,6 +8322,12 @@ export interface components {
         };
         SurfacePatch: {
             name?: string;
+            /**
+             * Format: date
+             * @description the survey date of a dem (the workspace's set date); null clears it
+             */
+            captured_on?: string | null;
+            elevation_role?: components["schemas"]["ElevationRole"];
         };
         SurfaceWithJob: {
             surface: components["schemas"]["Surface"];
@@ -7267,7 +8342,7 @@ export interface components {
         /** @enum {string} */
         VolumeStatus: "calculating" | "ready" | "failed" | "stale";
         /** @enum {string} */
-        VolumeBaseKind: "toe_plane" | "toe_surface" | "flat" | "surface";
+        VolumeBaseKind: "toe_plane" | "toe_surface" | "flat" | "surface" | "toe_lowest";
         /** @description z is required for flat and surface_id for surface; the server answers 422 otherwise */
         VolumeBase: {
             kind: components["schemas"]["VolumeBaseKind"];
@@ -7341,6 +8416,8 @@ export interface components {
             usable_edge_fraction: number;
             rms_m: number;
             plane: number[] | null;
+            /** @description toe_lowest: the level of the flat base (the lowest kept edge sample) */
+            z?: number | null;
         };
         VolumeUncertainty: {
             total_m3: number | null;
@@ -7407,6 +8484,10 @@ export interface components {
             base: components["schemas"]["VolumeBase"];
             masks: components["schemas"]["VolumeMasks"];
             alignment: components["schemas"]["VolumeAlignment"];
+            /** @description not a calculation input; changing it never makes the result stale */
+            material: components["schemas"]["VolumeMaterial"] | null;
+            /** @description only with frame=site: the polygon in the site frame; absent or null otherwise */
+            polygon_site?: components["schemas"]["SiteRing"] | null;
             results: components["schemas"]["VolumeResults"] | null;
             /** @description response only: the inputs that changed, e.g. "masks: detection run deleted" */
             stale_reasons: string[];
@@ -7419,9 +8500,13 @@ export interface components {
         VolumeMeasurementList: {
             items: components["schemas"]["VolumeMeasurement"][];
         };
+        /** @description exactly one of polygon_native and polygon_site; both or neither is 422 invalid_geometry */
         VolumeMeasurementCreate: {
             name: string;
-            polygon_native: components["schemas"]["VolumeRing"];
+            polygon_native?: components["schemas"]["VolumeRing"];
+            /** @description the polygon in the site frame; the server converts it into the top surface's CRS */
+            polygon_site?: components["schemas"]["SiteRing"];
+            material?: components["schemas"]["VolumeMaterial"];
             top_surface_id: string;
             base: components["schemas"]["VolumeBase"];
             masks?: components["schemas"]["VolumeMasksInput"];
@@ -7434,6 +8519,9 @@ export interface components {
             base?: components["schemas"]["VolumeBase"];
             masks?: components["schemas"]["VolumeMasksInput"];
             alignment?: components["schemas"]["VolumeAlignmentInput"];
+            polygon_site?: components["schemas"]["SiteRing"];
+            /** @description null clears it */
+            material?: components["schemas"]["VolumeMaterial"] | null;
         };
         VolumeMeasurementWithJob: {
             measurement: components["schemas"]["VolumeMeasurement"];
@@ -7444,6 +8532,8 @@ export interface components {
             detection_id: string;
             class_id: string;
             ring: components["schemas"]["VolumeRing"];
+            /** @description only with frame=site; absent or null otherwise */
+            ring_site?: components["schemas"]["SiteRing"] | null;
         };
         VolumeFootprints: {
             items: components["schemas"]["VolumeFootprint"][];
@@ -7624,7 +8714,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import" | "pointcloud_profile";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -7659,7 +8749,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count} */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -7701,7 +8791,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed" | "drawings.changed" | "map_measurements.changed" | "map_workspace.changed";
             /** @description the project id, or `library` for library jobs and `catalogue.changed` */
             project_id: string;
             job_id: string | null;
@@ -8644,7 +9734,7 @@ export interface components {
             items: components["schemas"]["AppJob"][];
             next_cursor: string | null;
         };
-        /** @description The type's headline figures; each type fills its own fields. `image_set`: image_count, duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min, z_max. `point_cloud`: point_count, has_rgb, epsg. `drawing`: defined by the map workspace. */
+        /** @description The type's headline figures; each type fills its own fields. `image_set`: image_count, duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min, z_max, elevation_role. `point_cloud`: point_count, has_rgb, epsg. `drawing`: format, placed, rmse_m. */
         DataItemSummary: {
             image_count?: number;
             duplicate_count?: number;
@@ -8658,6 +9748,10 @@ export interface components {
             z_max?: number | null;
             point_count?: number | null;
             has_rgb?: boolean | null;
+            elevation_role?: components["schemas"]["ElevationRole"] | null;
+            format?: components["schemas"]["DrawingFormat"];
+            placed?: boolean;
+            rmse_m?: number | null;
         };
         /**
          * @description one thing imported into the project, a view over its own table (foundation §6.3)
@@ -9352,6 +10446,1193 @@ export interface components {
             training_run: components["schemas"]["TrainingRun"];
             job: components["schemas"]["Job"];
         };
+        /** @enum {string} */
+        SiteFrameKind: "crs" | "local";
+        /**
+         * @description the project's display frame (map-workspace spec §6); every `*_site` coordinate is in it
+         * @example {
+         *       "kind": "crs",
+         *       "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *       "epsg": 32638,
+         *       "proj4": "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+         *       "name": "WGS 84 / UTM zone 38N"
+         *     }
+         */
+        SiteFrame: {
+            kind: components["schemas"]["SiteFrameKind"];
+            /** @description null for local */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description for the client's proj4 registration; null for local */
+            proj4: string | null;
+            /** @description the CRS name, or Local metres */
+            name: string;
+        };
+        PlannedSurvey: {
+            /** Format: date */
+            date: string;
+            note: string | null;
+        };
+        /** @description how many maps and surfaces each frame can show; the CRS chip offers the switch when both are above zero */
+        FrameItemCounts: {
+            crs: number;
+            local: number;
+        };
+        /**
+         * @example {
+         *       "frame": {
+         *         "kind": "crs",
+         *         "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *         "epsg": 32638,
+         *         "proj4": "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+         *         "name": "WGS 84 / UTM zone 38N"
+         *       },
+         *       "state": {},
+         *       "planned_surveys": [
+         *         {
+         *           "date": "2026-10-14",
+         *           "note": "October flight"
+         *         }
+         *       ],
+         *       "frame_items": {
+         *         "crs": 4,
+         *         "local": 0
+         *       },
+         *       "updated_at": "2026-09-27T10:00:00Z"
+         *     }
+         */
+        MapWorkspace: {
+            frame: components["schemas"]["SiteFrame"];
+            /** @description the client's view state (layers, compare mode and dates, blend, last view), opaque to the server; empty until first saved */
+            state: {
+                [key: string]: unknown;
+            };
+            planned_surveys: components["schemas"]["PlannedSurvey"][];
+            frame_items: components["schemas"]["FrameItemCounts"];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "state": {
+         *         "mode": "swipe",
+         *         "l": "2026-08-14",
+         *         "r": "2026-09-14"
+         *       }
+         *     }
+         */
+        MapWorkspacePut: {
+            /** @description at most 64 KB as JSON */
+            state: {
+                [key: string]: unknown;
+            };
+            /** @description unchanged when absent */
+            planned_surveys?: components["schemas"]["PlannedSurvey"][];
+        };
+        /**
+         * @example {
+         *       "kind": "crs",
+         *       "epsg": 32639
+         *     }
+         */
+        SiteFrameSet: {
+            kind: components["schemas"]["SiteFrameKind"];
+            /** @description required for crs: a projected CRS in metres */
+            epsg?: number;
+        };
+        /**
+         * @description dsm is the surface including objects; dtm is bare ground
+         * @enum {string}
+         */
+        ElevationRole: "dsm" | "dtm";
+        /** @enum {string} */
+        DrawingFormat: "dxf" | "pdf" | "png" | "jpg" | "tif" | "landxml";
+        WorkspaceSurveyMap: {
+            id: string;
+            name: string;
+            gsd_cm: number | null;
+            /** @description the run that represents this map (the pinned one, else the newest finished whole-map run); a region run never does */
+            basis_run_id: string | null;
+        };
+        WorkspaceSurveySurface: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["SurfaceKind"];
+            elevation_role: components["schemas"]["ElevationRole"] | null;
+        };
+        WorkspaceSurvey: {
+            /** Format: date */
+            date: string;
+            /** @description none of its items has a capture date, so `date` is the import date (shown as date not set) */
+            date_is_import_date: boolean;
+            /** @description a planned survey: a dashed tick that cannot be selected */
+            planned: boolean;
+            note: string | null;
+            maps: components["schemas"]["WorkspaceSurveyMap"][];
+            surfaces: components["schemas"]["WorkspaceSurveySurface"][];
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "date": "2026-08-14",
+         *           "date_is_import_date": false,
+         *           "planned": false,
+         *           "note": null,
+         *           "maps": [
+         *             {
+         *               "id": "a0000000-6666-4000-8000-000000000001",
+         *               "name": "August ortho",
+         *               "gsd_cm": 2.1,
+         *               "basis_run_id": null
+         *             }
+         *           ],
+         *           "surfaces": [
+         *             {
+         *               "id": "s0000000-9999-4000-8000-000000000001",
+         *               "name": "August DSM",
+         *               "kind": "dem",
+         *               "elevation_role": "dsm"
+         *             }
+         *           ]
+         *         },
+         *         {
+         *           "date": "2026-09-14",
+         *           "date_is_import_date": false,
+         *           "planned": false,
+         *           "note": null,
+         *           "maps": [
+         *             {
+         *               "id": "a0000000-6666-4000-8000-000000000002",
+         *               "name": "September ortho",
+         *               "gsd_cm": 2,
+         *               "basis_run_id": "r0000000-7777-4000-8000-000000000001"
+         *             }
+         *           ],
+         *           "surfaces": []
+         *         },
+         *         {
+         *           "date": "2026-10-14",
+         *           "date_is_import_date": false,
+         *           "planned": true,
+         *           "note": "October flight",
+         *           "maps": [],
+         *           "surfaces": []
+         *         }
+         *       ]
+         *     }
+         */
+        WorkspaceSurveyList: {
+            /** @description oldest first, one per date */
+            items: components["schemas"]["WorkspaceSurvey"][];
+        };
+        /** @enum {string} */
+        WorkspaceLayerKind: "map" | "surface" | "drawing";
+        /** @enum {string} */
+        WorkspaceLayerGroup: "base" | "elevation" | "drawing";
+        /** @enum {string} */
+        SiteTileKind: "map" | "surface" | "volume_diff" | "drawing_raster";
+        WorkspaceLayer: {
+            kind: components["schemas"]["WorkspaceLayerKind"];
+            id: string;
+            name: string;
+            group: components["schemas"]["WorkspaceLayerGroup"];
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            /** @description false for a map with no CRS, an item of the other frame, or a drawing not placed; such a row is listed greyed and has no tiles */
+            in_frame: boolean;
+            /** @description the getSiteTile kind; null for a vector drawing, which uses getDrawingVectorTile */
+            tile_kind: components["schemas"]["SiteTileKind"] | null;
+            /** @description a DXF or LandXML drawing */
+            vector: boolean;
+            /** @description the `v` of its tile URLs; it changes whenever the rendered input changes */
+            version: string;
+            /**
+             * Format: date
+             * @description the survey date; null for undated overlays (designs and drawings render on both compare sides)
+             */
+            date: string | null;
+            date_is_import_date: boolean;
+            /** @description minx, miny, maxx, maxy in the site frame; null when not in the frame */
+            footprint_site: number[] | null;
+            /** @description the smallest z with res(z) at most half the native cell; the client overzooms beyond it */
+            max_zoom: number | null;
+            /** @description the row's meta line, for example a GSD and size, a z range, or control points and RMSE */
+            meta: string;
+            surface_kind: components["schemas"]["SurfaceKind"] | null;
+            elevation_role: components["schemas"]["ElevationRole"] | null;
+            drawing_format: components["schemas"]["DrawingFormat"] | null;
+            /** @description drawings only */
+            placed: boolean | null;
+        };
+        /**
+         * @example {
+         *       "frame": {
+         *         "kind": "crs",
+         *         "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *         "epsg": 32638,
+         *         "proj4": "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+         *         "name": "WGS 84 / UTM zone 38N"
+         *       },
+         *       "items": [
+         *         {
+         *           "kind": "map",
+         *           "id": "a0000000-6666-4000-8000-000000000002",
+         *           "name": "September ortho",
+         *           "group": "base",
+         *           "status": "ready",
+         *           "in_frame": true,
+         *           "tile_kind": "map",
+         *           "vector": false,
+         *           "version": "a0000000-6666-4000-8000-000000000002",
+         *           "date": "2026-09-14",
+         *           "date_is_import_date": false,
+         *           "footprint_site": [
+         *             583000,
+         *             3265000,
+         *             583900,
+         *             3265800
+         *           ],
+         *           "max_zoom": 17,
+         *           "meta": "2.0 cm GSD · 1.4 GB",
+         *           "surface_kind": null,
+         *           "elevation_role": null,
+         *           "drawing_format": null,
+         *           "placed": null
+         *         },
+         *         {
+         *           "kind": "surface",
+         *           "id": "s0000000-9999-4000-8000-000000000001",
+         *           "name": "August DSM",
+         *           "group": "elevation",
+         *           "status": "ready",
+         *           "in_frame": true,
+         *           "tile_kind": "surface",
+         *           "vector": false,
+         *           "version": "2026-08-15T09:00:00Z",
+         *           "date": "2026-08-14",
+         *           "date_is_import_date": false,
+         *           "footprint_site": [
+         *             583000,
+         *             3265000,
+         *             583900,
+         *             3265800
+         *           ],
+         *           "max_zoom": 15,
+         *           "meta": "598.1 – 624.8 m",
+         *           "surface_kind": "dem",
+         *           "elevation_role": "dsm",
+         *           "drawing_format": null,
+         *           "placed": null
+         *         },
+         *         {
+         *           "kind": "drawing",
+         *           "id": "w0000000-1212-4000-8000-000000000001",
+         *           "name": "Foundation plan rev C",
+         *           "group": "drawing",
+         *           "status": "ready",
+         *           "in_frame": false,
+         *           "tile_kind": "drawing_raster",
+         *           "vector": false,
+         *           "version": "0",
+         *           "date": null,
+         *           "date_is_import_date": false,
+         *           "footprint_site": null,
+         *           "max_zoom": null,
+         *           "meta": "not placed",
+         *           "surface_kind": null,
+         *           "elevation_role": null,
+         *           "drawing_format": "pdf",
+         *           "placed": false
+         *         }
+         *       ]
+         *     }
+         */
+        WorkspaceLayerList: {
+            frame: components["schemas"]["SiteFrame"];
+            items: components["schemas"]["WorkspaceLayer"][];
+        };
+        /**
+         * @example {
+         *       "map_id": "a0000000-6666-4000-8000-000000000002",
+         *       "geometry_site": {
+         *         "type": "Point",
+         *         "coordinates": [
+         *           583120.4,
+         *           3265410.2
+         *         ]
+         *       }
+         *     }
+         */
+        AnchorConvertRequest: {
+            /** @description the topmost visible ortho of the right date that covers the geometry */
+            map_id: string;
+            /** @description the GeoJSON Point or Polygon in the site frame */
+            geometry_site: components["schemas"]["FindingGeometry"];
+        };
+        /**
+         * @example {
+         *       "map_id": "a0000000-6666-4000-8000-000000000002",
+         *       "geometry": {
+         *         "type": "Point",
+         *         "coordinates": [
+         *           583120.4,
+         *           3265410.2
+         *         ]
+         *       },
+         *       "lon": 47.7625,
+         *       "lat": 29.497
+         *     }
+         */
+        AnchorConverted: {
+            map_id: string;
+            geometry: components["schemas"]["FindingGeometry"];
+            /** @description WGS84 longitude of the centroid */
+            lon: number;
+            lat: number;
+        };
+        MapFindingPin: {
+            id: string;
+            /** @description shown as F-0031 */
+            number: number;
+            type_id: string;
+            severity: number | null;
+            status: components["schemas"]["FindingStatus"];
+            /** @description human, or model:<library_model_id> */
+            created_by: string;
+            map_id: string;
+            /** @description the anchor geometry in the site frame */
+            geometry_site: components["schemas"]["FindingGeometry"];
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "f0000000-1111-4000-8000-000000000031",
+         *           "number": 31,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "severity": 3,
+         *           "status": "reviewed",
+         *           "created_by": "model:m0000000-2222-4000-8000-000000000001",
+         *           "map_id": "a0000000-6666-4000-8000-000000000002",
+         *           "geometry_site": {
+         *             "type": "Point",
+         *             "coordinates": [
+         *               583120.4,
+         *               3265410.2
+         *             ]
+         *           }
+         *         }
+         *       ],
+         *       "truncated": false
+         *     }
+         */
+        MapFindingsInView: {
+            items: components["schemas"]["MapFindingPin"][];
+            /** @description more than 5 000 findings matched */
+            truncated: boolean;
+        };
+        FrameSampleRequest: {
+            /** @description site frame */
+            x: number;
+            y: number;
+            surface_ids: string[];
+        };
+        SurfaceZ: {
+            surface_id: string;
+            /** @description null over nodata, outside the surface, or for a surface not in the frame */
+            z: number | null;
+        };
+        /**
+         * @example {
+         *       "x": 583120.4,
+         *       "y": 3265410.2,
+         *       "samples": [
+         *         {
+         *           "surface_id": "s0000000-9999-4000-8000-000000000001",
+         *           "z": 611.42
+         *         }
+         *       ]
+         *     }
+         */
+        FrameSample: {
+            x: number;
+            y: number;
+            samples: components["schemas"]["SurfaceZ"][];
+        };
+        /**
+         * @example {
+         *       "path": "C:/survey/2026-09-14/dsm.tif",
+         *       "name": "DSM 14 Sep 2026",
+         *       "role": "dsm",
+         *       "captured_on": "2026-09-14",
+         *       "align_to_surface_id": null
+         *     }
+         */
+        ElevationImportRequest: {
+            /** @description absolute path of a single-band .tif or .tiff with a CRS */
+            path: string;
+            name: string;
+            role: components["schemas"]["ElevationRole"];
+            /**
+             * Format: date
+             * @description the survey date; the file's TIFFTAG_DATETIME when absent or null
+             */
+            captured_on?: string | null;
+            /** @description a ready surface whose CRS and cell the output adopts (same lattice); null when absent */
+            align_to_surface_id?: string | null;
+            /** @description without a target: the output cell; the source cell snapped to the S2 ladder when absent or null */
+            cell_size_m?: number | null;
+        };
+        DrawingLayer: {
+            name: string;
+            /** @description ACI or true colour as hex */
+            colour: string;
+            entity_count: number;
+            visible_default: boolean;
+        };
+        DrawingPage: {
+            page: number;
+            width_pt: number;
+            height_pt: number;
+        };
+        DrawingWarning: {
+            /** @description geodata_unverified, world_file_needs_crs, dpi_lowered, labels_capped, unsupported_entities, no_linework */
+            code: string;
+            message: string;
+        };
+        /** @description a placement the file carries itself */
+        DrawingEmbedded: {
+            /** @enum {string} */
+            source: "world_file" | "geotiff";
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f, where x = col and y = -row */
+            transform: number[];
+            /** @description a world file carries no CRS, so the dialog asks for one */
+            needs_crs: boolean;
+        };
+        /**
+         * @example {
+         *       "path": "C:/site/plans/foundation-rev-c.pdf"
+         *     }
+         */
+        DrawingInspectionCreate: {
+            /** @description absolute path of a .dxf, .pdf, .png, .jpg or .jpeg, .tif or .tiff, or .xml or .landxml file */
+            path: string;
+        };
+        /**
+         * @example {
+         *       "id": "i0000000-1313-4000-8000-000000000001",
+         *       "state": "ready",
+         *       "error": null,
+         *       "job_id": "j0000000-4444-4000-8000-000000000059",
+         *       "path": "C:/site/plans/site-plan.dxf",
+         *       "format": "dxf",
+         *       "file_size": 18234567,
+         *       "sha256": "9f2c8a61d0e4b7c3a1f5e2d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9",
+         *       "units": "metre",
+         *       "units_source": "DXF $INSUNITS=6",
+         *       "crs_hint": null,
+         *       "extent_src": [
+         *         582950,
+         *         3264980,
+         *         583950,
+         *         3265850
+         *       ],
+         *       "layers": [
+         *         {
+         *           "name": "C-ROAD",
+         *           "colour": "#ffffff",
+         *           "entity_count": 1840,
+         *           "visible_default": true
+         *         },
+         *         {
+         *           "name": "C-TOPO",
+         *           "colour": "#00ff00",
+         *           "entity_count": 12020,
+         *           "visible_default": true
+         *         }
+         *       ],
+         *       "page_count": null,
+         *       "pages": [],
+         *       "width": null,
+         *       "height": null,
+         *       "embedded": null,
+         *       "warnings": [],
+         *       "created_at": "2026-09-20T08:59:00Z"
+         *     }
+         */
+        DrawingInspection: {
+            id: string;
+            /** @enum {string} */
+            state: "inspecting" | "ready" | "failed";
+            error: string | null;
+            job_id: string;
+            path: string;
+            format: components["schemas"]["DrawingFormat"];
+            file_size: number;
+            sha256: string | null;
+            /** @description DXF or LandXML only */
+            units: components["schemas"]["LinearUnit"] | null;
+            /** @description for example DXF $INSUNITS=6 */
+            units_source: string | null;
+            /** @description an unverified CRS name (DXF GEODATA) */
+            crs_hint: string | null;
+            /** @description minx, miny, maxx, maxy in drawing coordinates */
+            extent_src: number[] | null;
+            layers: components["schemas"]["DrawingLayer"][];
+            /** @description PDF only */
+            page_count: number | null;
+            /** @description PDF: the first 50 pages */
+            pages: components["schemas"]["DrawingPage"][];
+            /** @description raster pixels */
+            width: number | null;
+            height: number | null;
+            embedded: components["schemas"]["DrawingEmbedded"] | null;
+            warnings: components["schemas"]["DrawingWarning"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        DrawingInspectionWithJob: {
+            inspection: components["schemas"]["DrawingInspection"];
+            job: components["schemas"]["Job"];
+        };
+        DrawingPlacementInput: {
+            /**
+             * @description none places it later with control points (the K tool)
+             * @enum {string}
+             */
+            method: "crs" | "embedded" | "none";
+            /** @description EPSG:<code> or WKT; required for crs, and for embedded from a world file */
+            crs?: string;
+            units?: components["schemas"]["LinearUnit"];
+        };
+        /**
+         * @example {
+         *       "inspection_id": "i0000000-1313-4000-8000-000000000001",
+         *       "name": "Site plan",
+         *       "placement": {
+         *         "method": "crs",
+         *         "crs": "EPSG:32638",
+         *         "units": "metre"
+         *       }
+         *     }
+         */
+        DrawingCreate: {
+            inspection_id: string;
+            name: string;
+            /** @description PDF only; 1 when absent */
+            page?: number;
+            /**
+             * @description PDF only; 150 when absent; lowered to stay within 20 000 px and 300 MP
+             * @enum {integer}
+             */
+            dpi?: 100 | 150 | 200 | 300;
+            /** @description DXF or LandXML layers to import; every layer when absent */
+            layers?: string[];
+            placement: components["schemas"]["DrawingPlacementInput"];
+            /**
+             * Format: date
+             * @description a revision date
+             */
+            captured_on?: string | null;
+        };
+        /** @enum {string} */
+        GeorefModel: "similarity" | "affine";
+        GeorefPoint: {
+            id: string;
+            /** @description drawing coordinates; a raster uses col and -row */
+            src: number[];
+            /** @description E and N in the georef's dst_crs_wkt */
+            dst: number[];
+        };
+        GeorefPointInput: {
+            /** @description client-generated; assigned when absent */
+            id?: string;
+            src: number[];
+            /** @description in the site frame (putDrawingGeoref) or any metric plane (fitDrawingGeoref) */
+            dst: number[];
+        };
+        GeorefWarning: {
+            /** @enum {string} */
+            code: "rmse_high" | "scale_mismatch" | "shear";
+            message: string;
+        };
+        DrawingGeoref: {
+            /** @enum {string} */
+            method: "crs" | "control_points" | "embedded";
+            /** @description the drawing's own CRS (method crs or embedded) */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description control points only */
+            model: components["schemas"]["GeorefModel"] | null;
+            points: components["schemas"]["GeorefPoint"][];
+            /** @description the CRS the points' dst were picked in; null in a local frame */
+            dst_crs_wkt: string | null;
+            /** @description a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f (a similarity is a, -b', c, b', a, f) */
+            transform: number[];
+            /** @description 0 with exactly the model's minimum of points; null without points */
+            rmse_m: number | null;
+            /** @description one per point */
+            residuals_m: number[];
+            warnings: components["schemas"]["GeorefWarning"][];
+        };
+        DrawingLayerState: {
+            /** @description DXF or LandXML layers switched off */
+            hidden_layers: string[];
+            /** @description raster: white pixels transparent */
+            knockout_white: boolean;
+        };
+        Drawing: {
+            id: string;
+            name: string;
+            format: components["schemas"]["DrawingFormat"];
+            /**
+             * @description vector for DXF and LandXML
+             * @enum {string}
+             */
+            kind: "vector" | "raster";
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            error: string | null;
+            job_id: string | null;
+            source_path: string;
+            source_size: number;
+            page: number | null;
+            units: components["schemas"]["LinearUnit"] | null;
+            width: number | null;
+            height: number | null;
+            dpi: number | null;
+            /** @description drawing coordinates; a raster is 0, -height, width, 0 */
+            extent_src: number[] | null;
+            layers: components["schemas"]["DrawingLayer"][];
+            /** @description null: not placed yet */
+            georef: components["schemas"]["DrawingGeoref"] | null;
+            /** @description bumped on every placement change; part of the tile cache key */
+            georef_version: number;
+            /** @description the footprint in the current site frame; null when not placed or not in the frame */
+            bounds_site: number[] | null;
+            layer_state: components["schemas"]["DrawingLayerState"];
+            /** Format: date */
+            captured_on: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "w0000000-1212-4000-8000-000000000001",
+         *           "name": "Foundation plan rev C",
+         *           "format": "pdf",
+         *           "kind": "raster",
+         *           "status": "ready",
+         *           "error": null,
+         *           "job_id": "j0000000-4444-4000-8000-000000000060",
+         *           "source_path": "C:/site/plans/foundation-rev-c.pdf",
+         *           "source_size": 4812345,
+         *           "page": 1,
+         *           "units": null,
+         *           "width": 7016,
+         *           "height": 4961,
+         *           "dpi": 150,
+         *           "extent_src": [
+         *             0,
+         *             -4961,
+         *             7016,
+         *             0
+         *           ],
+         *           "layers": [],
+         *           "georef": {
+         *             "method": "control_points",
+         *             "crs_wkt": null,
+         *             "epsg": null,
+         *             "model": "similarity",
+         *             "points": [
+         *               {
+         *                 "id": "p1",
+         *                 "src": [
+         *                   812,
+         *                   -1204
+         *                 ],
+         *                 "dst": [
+         *                   583120.4,
+         *                   3265410.2
+         *                 ]
+         *               },
+         *               {
+         *                 "id": "p2",
+         *                 "src": [
+         *                   6120,
+         *                   -980
+         *                 ],
+         *                 "dst": [
+         *                   583402.9,
+         *                   3265421.7
+         *                 ]
+         *               },
+         *               {
+         *                 "id": "p3",
+         *                 "src": [
+         *                   3300,
+         *                   -4100
+         *                 ],
+         *                 "dst": [
+         *                   583255.1,
+         *                   3265246
+         *                 ]
+         *               }
+         *             ],
+         *             "dst_crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *             "transform": [
+         *               0.0532,
+         *               0.0021,
+         *               583077,
+         *               -0.0021,
+         *               0.0532,
+         *               3265476.3
+         *             ],
+         *             "rmse_m": 0.06,
+         *             "residuals_m": [
+         *               0.05,
+         *               0.07,
+         *               0.06
+         *             ],
+         *             "warnings": []
+         *           },
+         *           "georef_version": 3,
+         *           "bounds_site": [
+         *             583077,
+         *             3265200,
+         *             583450,
+         *             3265480
+         *           ],
+         *           "layer_state": {
+         *             "hidden_layers": [],
+         *             "knockout_white": true
+         *           },
+         *           "captured_on": "2026-07-01",
+         *           "created_at": "2026-09-20T09:00:00Z",
+         *           "updated_at": "2026-09-20T09:30:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        DrawingList: {
+            items: components["schemas"]["Drawing"][];
+        };
+        DrawingWithJob: {
+            drawing: components["schemas"]["Drawing"];
+            job: components["schemas"]["Job"];
+        };
+        DrawingPatch: {
+            name?: string;
+            layer_state?: components["schemas"]["DrawingLayerState"];
+            /**
+             * Format: date
+             * @description null clears it
+             */
+            captured_on?: string | null;
+        };
+        /**
+         * @example {
+         *       "model": "similarity",
+         *       "dst_frame": "site",
+         *       "points": [
+         *         {
+         *           "src": [
+         *             812,
+         *             -1204
+         *           ],
+         *           "dst": [
+         *             583120.4,
+         *             3265410.2
+         *           ]
+         *         },
+         *         {
+         *           "src": [
+         *             6120,
+         *             -980
+         *           ],
+         *           "dst": [
+         *             583402.9,
+         *             3265421.7
+         *           ]
+         *         },
+         *         {
+         *           "src": [
+         *             3300,
+         *             -4100
+         *           ],
+         *           "dst": [
+         *             583255.1,
+         *             3265246
+         *           ]
+         *         }
+         *       ]
+         *     }
+         */
+        DrawingGeorefPut: {
+            model: components["schemas"]["GeorefModel"];
+            points: components["schemas"]["GeorefPointInput"][];
+            /**
+             * @description the frame the dst coordinates are in
+             * @enum {string}
+             */
+            dst_frame: "site";
+        };
+        GeorefFitRequest: {
+            model: components["schemas"]["GeorefModel"];
+            points: components["schemas"]["GeorefPointInput"][];
+            /** @description the drawing's units, for the scale_mismatch warning; null or absent for a raster */
+            units?: components["schemas"]["LinearUnit"] | null;
+        };
+        /**
+         * @example {
+         *       "model": "similarity",
+         *       "transform": [
+         *         0.0532,
+         *         0.0021,
+         *         583077,
+         *         -0.0021,
+         *         0.0532,
+         *         3265476.3
+         *       ],
+         *       "rmse_m": 0.06,
+         *       "residuals_m": [
+         *         0.05,
+         *         0.07,
+         *         0.06
+         *       ],
+         *       "warnings": [],
+         *       "scale": 0.05324,
+         *       "rotation_deg": -2.26
+         *     }
+         */
+        GeorefFit: {
+            model: components["schemas"]["GeorefModel"];
+            transform: number[];
+            rmse_m: number;
+            residuals_m: number[];
+            warnings: components["schemas"]["GeorefWarning"][];
+            /** @description metres per drawing unit (the mean of the two axes for affine) */
+            scale: number;
+            /** @description counter-clockwise from the drawing's x axis to east */
+            rotation_deg: number;
+        };
+        DrawingVectorLayer: {
+            name: string;
+            colour: string;
+            /** @description each a flat x0, y0, x1, y1, ... list in the site frame */
+            lines: number[][];
+        };
+        DrawingLabel: {
+            text: string;
+            x: number;
+            y: number;
+            height_m: number;
+            /** @description degrees counter-clockwise */
+            rotation: number;
+            /** @description the DXF or LandXML layer, so hidden layers hide their labels too */
+            layer?: string;
+        };
+        /**
+         * @example {
+         *       "layers": [
+         *         {
+         *           "name": "C-ROAD",
+         *           "colour": "#ffffff",
+         *           "lines": [
+         *             [
+         *               583100,
+         *               3265400,
+         *               583180,
+         *               3265402.5,
+         *               583240,
+         *               3265430
+         *             ]
+         *           ]
+         *         }
+         *       ],
+         *       "labels": [
+         *         {
+         *           "text": "ACCESS ROAD",
+         *           "x": 583150,
+         *           "y": 3265405,
+         *           "height_m": 1.5,
+         *           "rotation": 2,
+         *           "layer": "C-ROAD"
+         *         }
+         *       ],
+         *       "truncated": false
+         *     }
+         */
+        DrawingVectorTile: {
+            layers: components["schemas"]["DrawingVectorLayer"][];
+            labels: components["schemas"]["DrawingLabel"][];
+            /** @description over 20 000 vertices matched; the shortest runs were dropped first */
+            truncated: boolean;
+        };
+        /** @description x, y */
+        SiteVertex: number[];
+        /** @enum {string} */
+        MapMeasurementKind: "distance" | "area" | "profile";
+        MapDistanceResults: {
+            /** @description ellipsoidal (pyproj Geod); null in a local frame */
+            length_m: number | null;
+            grid_length_m: number;
+            /** @description length_m / grid_length_m */
+            scale_factor: number | null;
+            /** @description the slope length over the DSM; null without one */
+            length_3d_m: number | null;
+            /** @description the share of the 3D line over nodata */
+            nodata_fraction: number | null;
+            dsm_surface_id: string | null;
+        };
+        MapAreaResults: {
+            /** @description ellipsoidal, absolute; null in a local frame */
+            area_m2: number | null;
+            perimeter_m: number | null;
+            grid_area_m2: number;
+            grid_perimeter_m: number;
+            areal_scale_factor: number | null;
+        };
+        ProfileSeries: {
+            surface_id: string;
+            label: string;
+            /** Format: date */
+            date: string | null;
+            /** @description one per station; null over nodata (drawn as a break) */
+            z: (number | null)[];
+        };
+        MapProfileResults: {
+            length_m: number | null;
+            grid_length_m: number;
+            /** @description chainage of each station */
+            stations_m: number[];
+            series: components["schemas"]["ProfileSeries"][];
+            z_min: number | null;
+            z_max: number | null;
+            /** @description between the first two series (trapezoidal); null with one series */
+            cut_area_m2: number | null;
+            fill_area_m2: number | null;
+            nodata_fraction: number;
+        };
+        /** @description computed by the server on create and on every PATCH that moves the vertices or changes the surfaces; one shape per kind */
+        MapMeasurementResults: components["schemas"]["MapDistanceResults"] | components["schemas"]["MapAreaResults"] | components["schemas"]["MapProfileResults"];
+        MapMeasurement: {
+            id: string;
+            name: string;
+            note: string | null;
+            kind: components["schemas"]["MapMeasurementKind"];
+            /** @description the frame it was drawn in (the site CRS at creation); null for local metres */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description in crs_wkt; an area ring is not closed */
+            vertices: components["schemas"]["SiteVertex"][];
+            /** @description only with frame=site: the vertices in the current site frame */
+            vertices_site?: components["schemas"]["SiteVertex"][];
+            surface_ids: string[];
+            /** @description the map of the right date at creation */
+            map_id: string | null;
+            results: components["schemas"]["MapMeasurementResults"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "mm000000-1414-4000-8000-000000000001",
+         *           "name": "Distance 1",
+         *           "note": null,
+         *           "kind": "distance",
+         *           "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *           "epsg": 32638,
+         *           "vertices": [
+         *             [
+         *               583100,
+         *               3265400
+         *             ],
+         *             [
+         *               583148.1,
+         *               3265403.2
+         *             ]
+         *           ],
+         *           "surface_ids": [],
+         *           "map_id": "a0000000-6666-4000-8000-000000000002",
+         *           "results": {
+         *             "length_m": 48.2,
+         *             "grid_length_m": 48.21,
+         *             "scale_factor": 0.99981,
+         *             "length_3d_m": null,
+         *             "nodata_fraction": null,
+         *             "dsm_surface_id": null
+         *           },
+         *           "created_at": "2026-09-27T09:00:00Z",
+         *           "updated_at": "2026-09-27T09:00:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        MapMeasurementPage: {
+            items: components["schemas"]["MapMeasurement"][];
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "kind": "profile",
+         *       "vertices": [
+         *         [
+         *           583100,
+         *           3265400
+         *         ],
+         *         [
+         *           583290,
+         *           3265460
+         *         ]
+         *       ],
+         *       "surface_ids": [
+         *         "s0000000-9999-4000-8000-000000000001"
+         *       ]
+         *     }
+         */
+        MapMeasurementCreate: {
+            kind: components["schemas"]["MapMeasurementKind"];
+            /** @description in the site frame; distance and profile at least 2, area at least 3 and simple */
+            vertices: components["schemas"]["SiteVertex"][];
+            /** @description numbered like Distance 3 when absent */
+            name?: string;
+            note?: string;
+            /** @description profile: 1 to 3 surfaces; distance: an optional DSM for the 3D length; area: none */
+            surface_ids?: string[];
+            /** @description the map of the right date; null when absent */
+            map_id?: string | null;
+        };
+        MapMeasurementPatch: {
+            name?: string;
+            /** @description null clears it */
+            note?: string | null;
+            /** @description in the site frame */
+            vertices?: components["schemas"]["SiteVertex"][];
+            surface_ids?: string[];
+        };
+        /** @enum {string} */
+        MeasurementKind: "cloud" | "volume" | "map";
+        /**
+         * @description cloud: its CloudMeasurementKind, including C's area and profile; volume: volume; map: its MapMeasurementKind
+         * @enum {string}
+         */
+        MeasurementSubKind: "point" | "distance" | "height" | "vertical" | "area" | "profile" | "volume";
+        /** @enum {string} */
+        MeasurementUnit: "m" | "m2" | "m3" | "deg" | "mm_per_m";
+        /**
+         * @description a volume's calculating and a cloud measurement's computing are both computing
+         * @enum {string}
+         */
+        MeasurementStatus: "ready" | "computing" | "stale" | "failed";
+        MeasurementItem: {
+            kind: components["schemas"]["MeasurementKind"];
+            sub_kind: components["schemas"]["MeasurementSubKind"];
+            /** @description the id in its own table (cloud, volume or map measurement) */
+            id: string;
+            name: string;
+            /** @description the kind's headline figure in unit; null while computing, failed, or not mapped yet */
+            headline: number | null;
+            unit: components["schemas"]["MeasurementUnit"] | null;
+            /** @description what it was measured on: a point cloud, a volume's top surface (elevation), or a map measurement's map */
+            data_type: components["schemas"]["DataItemType"] | null;
+            data_id: string | null;
+            status: components["schemas"]["MeasurementStatus"];
+            /**
+             * Format: date-time
+             * @description the page key
+             */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "kind": "map",
+         *           "sub_kind": "profile",
+         *           "id": "mm000000-1414-4000-8000-000000000002",
+         *           "name": "Section across the pit",
+         *           "headline": 199.2,
+         *           "unit": "m",
+         *           "data_type": "map",
+         *           "data_id": "a0000000-6666-4000-8000-000000000002",
+         *           "status": "ready",
+         *           "created_at": "2026-09-27T09:10:00Z",
+         *           "updated_at": "2026-09-27T09:10:00Z"
+         *         },
+         *         {
+         *           "kind": "volume",
+         *           "sub_kind": "volume",
+         *           "id": "v0000000-8888-4000-8000-000000000001",
+         *           "name": "Pile 1",
+         *           "headline": 1250.4,
+         *           "unit": "m3",
+         *           "data_type": "elevation",
+         *           "data_id": "s0000000-9999-4000-8000-000000000001",
+         *           "status": "ready",
+         *           "created_at": "2026-09-26T15:00:00Z",
+         *           "updated_at": "2026-09-26T15:02:00Z"
+         *         },
+         *         {
+         *           "kind": "cloud",
+         *           "sub_kind": "distance",
+         *           "id": "cm000000-1515-4000-8000-000000000001",
+         *           "name": "Distance 3",
+         *           "headline": 12.84,
+         *           "unit": "m",
+         *           "data_type": "point_cloud",
+         *           "data_id": "p0000000-1111-4000-8000-000000000001",
+         *           "status": "ready",
+         *           "created_at": "2026-09-25T11:00:00Z",
+         *           "updated_at": "2026-09-25T11:00:00Z"
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        MeasurementPage: {
+            items: components["schemas"]["MeasurementItem"][];
+            next_cursor: string | null;
+        };
+        /** @description x, y vertices in the site frame; not closed */
+        SiteRing: components["schemas"]["SiteVertex"][];
+        /**
+         * @example {
+         *       "name": "Gravel",
+         *       "density_t_m3": 1.8
+         *     }
+         */
+        VolumeMaterial: {
+            name: string;
+            /** @description tonnes per cubic metre; tonnage is the net volume times this */
+            density_t_m3: number;
+        };
+        /**
+         * @description a region run covers part of one map and never represents a survey (timeline, analytics and recounts skip it)
+         * @enum {string}
+         */
+        MapRunScope: "map" | "region";
+        /** @description run a map source's model over part of one map only */
+        RunRegion: {
+            map_id: string;
+            polygon_site: components["schemas"]["SiteRing"];
+        };
+        /** @enum {string} */
+        SiteAreaCategory: "general" | "laydown" | "exclusion" | "excavation" | "other";
     };
     responses: {
         /** @description error envelope */
@@ -9399,7 +11680,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a malformed body (`validation_error`). */
+        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a region with no unmasked window (`empty_region`); a malformed body (`validation_error`). */
         UnmappedClasses: {
             headers: {
                 [name: string]: unknown;
@@ -9512,6 +11793,28 @@ export interface components {
         attachmentId: string;
         /** @description findings pages hold at most 500 */
         findingsLimit: number;
+        siteTileKind: components["schemas"]["SiteTileKind"];
+        /** @description the map, surface, volume measurement or drawing the tile renders */
+        layerId: string;
+        /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+        siteZ: number;
+        /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+        siteX: number;
+        /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+        siteY: number;
+        /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+        siteFrame: "site";
+        /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
+        tileVersion: string;
+        drawingId: string;
+        /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
+        drawingPage: number;
+        /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+        mapMeasurementId: string;
+        /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
+        tilePreview: string;
+        /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
+        frameKey: string;
     };
     requestBodies: never;
     headers: never;
@@ -12093,6 +14396,8 @@ export interface operations {
                 bbox?: string;
                 min_conf?: number;
                 class_id?: string;
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
             };
             header?: never;
             path: {
@@ -12149,6 +14454,8 @@ export interface operations {
             query?: {
                 cells?: number;
                 min_conf?: number;
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
             };
             header?: never;
             path: {
@@ -12848,7 +15155,10 @@ export interface operations {
     };
     reviewMapDetections: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description false when absent; true lets the review delete the findings accepted defect detections created */
+                confirm_finding_delete?: boolean;
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -12872,6 +15182,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description the review would delete findings and `confirm_finding_delete` is not true (`code` is `finding_would_be_deleted`; details `{finding_ids}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -12880,6 +15199,8 @@ export interface operations {
             query?: {
                 /** @description the detection the viewer is on; omitted starts from the top */
                 after_id?: string;
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
             };
             header?: never;
             path: {
@@ -12905,7 +15226,10 @@ export interface operations {
     };
     listSiteAreas: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -12926,6 +15250,7 @@ export interface operations {
                      *         {
                      *           "id": "5a000000-aaaa-4000-8000-000000000001",
                      *           "name": "North laydown yard",
+                     *           "category": "laydown",
                      *           "polygon_wgs84": [
                      *             [
                      *               47.761,
@@ -12949,6 +15274,7 @@ export interface operations {
                      *         {
                      *           "id": "5a000000-aaaa-4000-8000-000000000002",
                      *           "name": "Batching plant",
+                     *           "category": "general",
                      *           "polygon_wgs84": [
                      *             [
                      *               47.765,
@@ -13518,7 +15844,10 @@ export interface operations {
     };
     deletePointCloud: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description also delete the findings anchored on this cloud; false when absent */
+                delete_findings?: boolean;
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -13535,7 +15864,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description its import or export job is queued or running (`code` is `job_running`) */
+            /** @description its import or export job is queued or running (`code` is `job_running`), or findings are anchored on it and `delete_findings` is not true (`code` is `cloud_has_findings`, details `{count}`) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -13706,6 +16035,15 @@ export interface operations {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
                 };
             };
+            /** @description a profile measurement at `status: computing` and its `pointcloud_profile` job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudMeasurementWithJob"];
+                };
+            };
             /** @description the cloud is not `ready` (`code` is `not_ready`) */
             409: {
                 headers: {
@@ -13715,7 +16053,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description the wrong number of points for the kind (`wrong_point_count`), a distance, height difference or vertical check on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error` */
+            /** @description the wrong number of points for the kind (`wrong_point_count`), a distance, height difference, vertical check, area or profile on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), an area whose outline crosses itself (`self_intersecting`) or has no area (`degenerate_polygon`), a ring with fewer than three points (`ring_needs_three_points`) or in a line (`collinear_ring`), a profile line outside the cloud or of zero length (`profile_out_of_range`), a `finding_id` that is not a cloud finding on this cloud (`invalid_finding`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -13778,6 +16116,15 @@ export interface operations {
                     "application/json": components["schemas"]["CloudMeasurementOut"];
                 };
             };
+            /** @description `finding_id` is not a cloud finding on this cloud (`code` is `invalid_finding`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -13808,6 +16155,328 @@ export interface operations {
             };
             /** @description the cloud is not `ready` (`code` is `not_ready`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    retryCloudProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description the measurement is not a `failed` profile (`code` is `not_retryable`), or the cloud is not `ready` (`not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCloudProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the profile */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudProfile"];
+                };
+            };
+            /** @description the profile is still `computing`, or `failed` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCloudMeasurementView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the image */
+            200: {
+                headers: {
+                    /** @description "<sha256>" */
+                    ETag?: string;
+                    /** @description private, no-cache */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            /** @description the measurement does not exist (`code` is `not_found`) or has no view (`no_view`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putCloudMeasurementView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                /** @description a point-cloud measurement; `measurementId` is a volume measurement */
+                cloudMeasurementId: components["parameters"]["cloudMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["CloudViewUpload"];
+            };
+        };
+        responses: {
+            /** @description the stored view's metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudViewOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listCloudViews: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the views */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudViewList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getCloudCameras: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the cameras */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCameraSet"];
+                };
+            };
+            /** @description the cloud has no CRS (`code` is `needs_coordinates`) or is not `ready` (`not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setCloudCameraOffset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                cloudId: components["parameters"]["cloudId"];
+                sourceId: components["parameters"]["sourceId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloudCameraOffsetPut"];
+            };
+        };
+        responses: {
+            /** @description the image set with its new offset */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudCameraSource"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getFindingView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the image */
+            200: {
+                headers: {
+                    /** @description "<sha256>" */
+                    ETag?: string;
+                    /** @description private, no-cache */
+                    "Cache-Control"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            /** @description the finding does not exist (`code` is `not_found`) or has no view (`no_view`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putFindingView3d: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                findingId: components["parameters"]["findingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["CloudViewUpload"];
+            };
+        };
+        responses: {
+            /** @description the stored view's metadata */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudViewOut"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the finding is not anchored on a cloud (`code` is `not_a_cloud_finding`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error` */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13964,6 +16633,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Surface"];
+                };
+            };
+            /** @description `captured_on` or `elevation_role` on a surface that is not a dem (`code` is `invalid_patch`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
@@ -14401,7 +17079,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error` */
+            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface, or neither (or both) of `polygon_native` and `polygon_site` given) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -14415,7 +17093,10 @@ export interface operations {
     };
     getVolumeMeasurement: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -14600,7 +17281,10 @@ export interface operations {
     };
     getVolumeFootprints: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -16481,6 +19165,1046 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWorkspace"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putMapWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapWorkspacePut"];
+            };
+        };
+        responses: {
+            /** @description the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWorkspace"];
+                };
+            };
+            /** @description the state is over 64 KB as JSON (`code` is `state_too_large`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setSiteFrame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteFrameSet"];
+            };
+        };
+        responses: {
+            /** @description the workspace in its new frame */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWorkspace"];
+                };
+            };
+            /** @description `epsg` is missing for `crs` or unknown to pyproj (`code` is `invalid_epsg`), or it is not a projected CRS in metres (`needs_projected_crs`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWorkspaceSurveys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the surveys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSurveyList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWorkspaceLayers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the layers and the frame they are in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceLayerList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSiteTile: {
+        parameters: {
+            query?: {
+                /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
+                v?: components["parameters"]["tileVersion"];
+                /** @description surface only; hillshade when absent; tint is the hypsometric tint over hillshade */
+                style?: "hillshade" | "tint" | "contours";
+                /** @description contours only: metres between lines; the nice number nearest (z_p98 - z_p02) / 20 when absent */
+                interval?: number;
+                /** @description drawing_raster only: white pixels (min of R, G, B at least 245) transparent; false when absent */
+                knockout?: boolean;
+                /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
+                t?: components["parameters"]["tilePreview"];
+                /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
+                frame_key?: components["parameters"]["frameKey"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                kind: components["parameters"]["siteTileKind"];
+                /** @description the map, surface, volume measurement or drawing the tile renders */
+                layerId: components["parameters"]["layerId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the tile does not touch the layer's footprint */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the layer is still importing or building (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the layer is not in the site frame: no CRS, the other frame, or a drawing not placed and no `t` sent (`code` is `no_coordinates`); `t` is malformed, degenerate or sent for a kind other than drawing_raster (`invalid_preview`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    convertAnchor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnchorConvertRequest"];
+            };
+        };
+        responses: {
+            /** @description the anchor geometry in the map's CRS */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnchorConverted"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the map has no CRS (`code` is `no_coordinates`), the workspace is in local metres (`local_frame`), the geometry is not a finite point or a closed ring (`invalid_geometry`), or it lies outside the map's footprint (`outside_map`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapFindingsInView: {
+        parameters: {
+            query: {
+                /** @description minx,miny,maxx,maxy in the site frame */
+                bbox: string;
+                /** @description only findings anchored on these maps (the maps of the selected dates); every map when absent */
+                map_ids?: string[];
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the findings in view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapFindingsInView"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    sampleInFrame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FrameSampleRequest"];
+            };
+        };
+        responses: {
+            /** @description one sample per surface */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameSample"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    importElevation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ElevationImportRequest"];
+            };
+        };
+        responses: {
+            /** @description surface created in `building` with kind `dem`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceWithJob"];
+                };
+            };
+            /** @description the file or the `align_to_surface_id` surface does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the `align_to_surface_id` surface is not `ready` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the file is not a .tif or .tiff (`code` is `validation_error`, `details.reason` is `extension`); not a single-band elevation raster (`not_elevation`); gone or changed since it was chosen (`source_missing`); outside the `align_to_surface_id` surface (`no_overlap`); a geographic output CRS (`geographic_output`) or one not in metres (`non_metric_output`) without a target; a grid over the cell ceiling (`grid_too_large`); not enough free disk (`insufficient_disk`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDrawingInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingInspectionCreate"];
+            };
+        };
+        responses: {
+            /** @description inspection created in `inspecting`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingInspectionWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a DWG (`code` is `validation_error`, `details.reason` is `dwg`), an unknown extension (`details.reason` is `extension`), or a PDF while PDFium did not load (`pdf_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the inspection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingInspection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingPageThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
+                page: components["parameters"]["drawingPage"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the page has no thumbnail (the inspection is not ready, or the page is past the file's end) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listDrawings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description drawings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingCreate"];
+            };
+        };
+        responses: {
+            /** @description drawing created in `importing`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the inspection has not been read yet or reading it failed (`code` is `not_ready`), or a build from it is queued or running (`job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a placement the file cannot take, such as `crs` for a raster, `embedded` without an embedded georeference, or a world file without `crs` (`code` is `invalid_placement`); a page past the file's end or unknown layers (`validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    fitDrawingGeoref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeorefFitRequest"];
+            };
+        };
+        responses: {
+            /** @description the fit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeorefFit"];
+                };
+            };
+            /** @description fewer points than the model needs, 2 for similarity and 3 for affine (`code` is `too_few_points`); points picked in mirrored order (`reflection`); affine points on one line (`collinear`); coincident points or a zero scale (`degenerate`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the drawing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description its import job is queued or running (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated drawing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putDrawingGeoref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingGeorefPut"];
+            };
+        };
+        responses: {
+            /** @description the placed drawing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the drawing is still importing or failed (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description fewer points than the model needs (`code` is `too_few_points`), mirrored points (`reflection`), collinear affine points (`collinear`), or coincident points or a zero scale (`degenerate`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearDrawingGeoref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the drawing, now with `georef` null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingVectorTile: {
+        parameters: {
+            query?: {
+                /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
+                v?: components["parameters"]["tileVersion"];
+                /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
+                t?: components["parameters"]["tilePreview"];
+                /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
+                frame_key?: components["parameters"]["frameKey"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the tile's lines and labels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingVectorTile"];
+                };
+            };
+            /** @description nothing of the drawing is in this tile */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the drawing is still importing (`code` is `not_ready`), not placed yet and no `t` sent (`not_placed`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a raster drawing has no vector tiles; it is a `drawing_raster` site tile (`code` is `not_vector`); the drawing's placement cannot reach the site frame (`no_coordinates`); `t` is malformed or degenerate (`invalid_preview`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the drawing has no thumbnail yet */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listMeasurements: {
+        parameters: {
+            query?: {
+                /** @description only these kinds; every kind when absent */
+                kind?: components["schemas"]["MeasurementKind"][];
+                /** @description only these sub-kinds; every sub-kind when absent */
+                sub_kind?: components["schemas"]["MeasurementSubKind"][];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MeasurementPage"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapMeasurements: {
+        parameters: {
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+                kind?: components["schemas"]["MapMeasurementKind"];
+                limit?: components["parameters"]["limit"];
+                /** @description opaque cursor from the previous page's `next_cursor` */
+                cursor?: components["parameters"]["cursor"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description a page of map measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurementPage"];
+                };
+            };
+            /** @description `frame=site` before the project has a site frame (`code` is `no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createMapMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description created, with its results */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a named surface is not `ready` (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description too few vertices for the kind or a self-crossing area (`code` is `invalid_geometry`); surfaces the kind does not take, repeated or not elevation (`invalid_surfaces`); a profile surface outside the site frame (`surface_not_in_frame`); a profile with no elevation under the line (`no_surface_under_line`); the project already has the most map measurements it keeps (`measurement_limit`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapMeasurement: {
+        parameters: {
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description `frame=site` before the project has a site frame (`code` is `no_site_frame`), or the measurement was drawn in the other frame and cannot be shown in this one (`not_in_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteMapMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    patchMapMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one */
+                mapMeasurementId: components["parameters"]["mapMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapMeasurementPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated measurement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a named surface is not `ready` (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description as on create (`invalid_geometry`, `invalid_surfaces`, `surface_not_in_frame`, `no_surface_under_line`, `measurement_limit`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

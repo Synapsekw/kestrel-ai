@@ -60,6 +60,21 @@ export type MapLabel = Schemas["MapLabel"];
 export type MapScore = Schemas["MapScore"];
 export type PointCloud = Schemas["PointCloudOut"];
 export type CloudMeasurement = Schemas["CloudMeasurementOut"];
+export type CloudMeasurementKind = Schemas["CloudMeasurementKind"];
+export type CloudMeasurementStatus = Schemas["CloudMeasurementStatus"];
+export type CloudMeasurementParams = Schemas["CloudMeasurementParams"];
+export type CloudMeasurementWithJob = Schemas["CloudMeasurementWithJob"];
+export type CloudViewOut = Schemas["CloudViewOut"];
+export type CloudViewPose = Schemas["CloudViewPose"];
+export type CloudViewRender = Schemas["CloudViewRender"];
+export type CloudClipBox = Schemas["CloudClipBox"];
+export type CloudViewSubjectKind = Schemas["CloudViewSubjectKind"];
+export type CloudProfile = Schemas["CloudProfile"];
+export type CloudCameraSet = Schemas["CloudCameraSet"];
+export type CloudCameraSource = Schemas["CloudCameraSource"];
+export type CloudCameraOffsetPut = Schemas["CloudCameraOffsetPut"];
+export type CloudViewMeta = Schemas["CloudViewMeta"];
+export type CloudViewList = Schemas["CloudViewList"];
 export type Surface = Schemas["Surface"];
 export type VolumeMeasurement = Schemas["VolumeMeasurement"];
 export type CatalogueType = Schemas["CatalogueType"];
@@ -126,6 +141,20 @@ export type AssistModel = Schemas["AssistModel"];
 export type AssistModelKey = Schemas["AssistModelKey"];
 export type AssistModelPage = Schemas["AssistModelPage"];
 export type AssistModelImport = Schemas["AssistModelImport"];
+
+export type SiteFrame = Schemas["SiteFrame"];
+export type MapWorkspace = Schemas["MapWorkspace"];
+export type WorkspaceSurvey = Schemas["WorkspaceSurvey"];
+export type WorkspaceLayer = Schemas["WorkspaceLayer"];
+export type SiteTileKind = Schemas["SiteTileKind"];
+export type MapFindingPin = Schemas["MapFindingPin"];
+export type ElevationRole = Schemas["ElevationRole"];
+export type Drawing = Schemas["Drawing"];
+export type DrawingInspection = Schemas["DrawingInspection"];
+export type DrawingGeoref = Schemas["DrawingGeoref"];
+export type DrawingVectorTile = Schemas["DrawingVectorTile"];
+export type MapMeasurement = Schemas["MapMeasurement"];
+export type MeasurementItem = Schemas["MeasurementItem"];
 
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */
@@ -233,4 +262,58 @@ export function volumeDiffTileUrl(
   const q = new URLSearchParams({ token });
   if (v) q.set("v", v);
   return `${base}/api/v1/projects/${projectId}/volumes/${measurementId}/diff-tiles/{z}/{x}/{y}?${q}`;
+}
+
+/**
+ * OpenLayers tile URL template for one layer in the project's site tile grid (map-workspace spec §6):
+ * `v` is the layer's `version` from `listWorkspaceLayers`; `extra` carries `style`, `interval` or
+ * `knockout`.
+ */
+export function siteTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  kind: SiteTileKind,
+  layerId: string,
+  v: string,
+  extra: Record<string, string> = {},
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token, v, ...extra });
+  return `${base}/api/v1/projects/${projectId}/site-tiles/${kind}/${layerId}/{z}/{x}/{y}?${q}`;
+}
+
+/** URL template for a DXF or LandXML drawing's vector tiles on the site tile grid; `v` is its `georef_version`. */
+export function drawingVectorTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  drawingId: string,
+  v: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token, v });
+  return `${base}/api/v1/projects/${projectId}/drawings/${drawingId}/vtiles/{z}/{x}/{y}?${q}`;
+}
+
+export function drawingThumbnailUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  drawingId: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  return `${base}/api/v1/projects/${projectId}/drawings/${drawingId}/thumbnail?${new URLSearchParams({ token })}`;
+}
+
+export function drawingPageThumbnailUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  inspectionId: string,
+  page: number,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/drawing-inspections/${inspectionId}/pages/${page}/thumbnail?${q}`;
 }

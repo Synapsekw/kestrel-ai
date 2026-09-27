@@ -148,6 +148,7 @@ export const siteAreas: SiteArea[] = [
   {
     id: AREA_1,
     name: "North laydown yard",
+    category: "laydown",
     polygon_wgs84: [
       [15.0, 44.99],
       [15.01, 44.99],

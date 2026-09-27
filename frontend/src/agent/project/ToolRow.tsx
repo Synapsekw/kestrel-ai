@@ -31,6 +31,7 @@ const JOB_NAME: Record<Job["type"], string> = {
   detect_export: "Detection export",
   pointcloud_import: "Point cloud import",
   pointcloud_export: "Point cloud export",
+  pointcloud_profile: "Cross-section profile",
   surface_build: "Build surface",
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
@@ -42,6 +43,8 @@ const JOB_NAME: Record<Job["type"], string> = {
   image_metadata: "Camera metadata",
   summary_rebuild: "Image summary rebuild",
   assist_acquire: "Smart polygon model",
+  elevation_import: "Elevation import",
+  drawing_import: "Drawing import",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

@@ -1,7 +1,8 @@
 import type { Page } from "@playwright/test";
 
 /** A minimal Potree 2.0 octree built in memory (DEFAULT encoding, one leaf root node, position +
- * rgb), served with HTTP Range exactly as the backend does (spec §7). Nothing binary is committed. */
+ * rgb, optionally intensity and classification), served with HTTP Range exactly as the backend
+ * does (spec §7). Nothing binary is committed. */
 export interface FixturePoint {
   x: number;
   y: number;
@@ -9,13 +10,22 @@ export interface FixturePoint {
   r: number;
   g: number;
   b: number;
+  /** 0..65535, written only when buildOctree's `extra.intensity` is set. */
+  intensity?: number;
+  /** ASPRS class, written only when `extra.classification` is set. */
+  classification?: number;
 }
 
 export type OctreeFiles = Record<"metadata.json" | "hierarchy.bin" | "octree.bin", Buffer>;
 
-const RECORD = 18; // int32 x, y, z + uint16 r, g, b
+const BASE_RECORD = 18; // int32 x, y, z + uint16 r, g, b
 
-export function buildOctree(points: FixturePoint[], scale = 0.001): OctreeFiles {
+export function buildOctree(
+  points: FixturePoint[],
+  scale = 0.001,
+  extra: { intensity?: boolean; classification?: boolean } = {},
+): OctreeFiles {
+  const record = BASE_RECORD + (extra.intensity ? 2 : 0) + (extra.classification ? 1 : 0);
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
   for (const p of points) {
@@ -26,15 +36,21 @@ export function buildOctree(points: FixturePoint[], scale = 0.001): OctreeFiles 
   }
   const size = Math.max(max[0] - min[0], max[1] - min[1], max[2] - min[2], 1);
   const cubeMax = min.map((v) => v + size);
-  const octree = Buffer.alloc(points.length * RECORD);
+  const octree = Buffer.alloc(points.length * record);
   points.forEach((p, i) => {
-    const o = i * RECORD;
+    const o = i * record;
     octree.writeInt32LE(Math.round((p.x - min[0]) / scale), o);
     octree.writeInt32LE(Math.round((p.y - min[1]) / scale), o + 4);
     octree.writeInt32LE(Math.round((p.z - min[2]) / scale), o + 8);
     octree.writeUInt16LE(p.r * 257, o + 12);
     octree.writeUInt16LE(p.g * 257, o + 14);
     octree.writeUInt16LE(p.b * 257, o + 16);
+    let k = o + BASE_RECORD;
+    if (extra.intensity) {
+      octree.writeUInt16LE(Math.max(0, Math.min(65535, Math.round(p.intensity ?? 0))), k);
+      k += 2;
+    }
+    if (extra.classification) octree.writeUInt8(Math.max(0, Math.min(255, p.classification ?? 1)), k);
   });
   const hierarchy = Buffer.alloc(22);
   hierarchy.writeUInt8(1, 0); // leaf
@@ -75,6 +91,34 @@ export function buildOctree(points: FixturePoint[], scale = 0.001): OctreeFiles 
         min: [0, 0, 0],
         max: [65535, 65535, 65535],
       },
+      ...(extra.intensity
+        ? [
+            {
+              name: "intensity",
+              description: "",
+              size: 2,
+              numElements: 1,
+              elementSize: 2,
+              type: "uint16",
+              min: [0],
+              max: [65535],
+            },
+          ]
+        : []),
+      ...(extra.classification
+        ? [
+            {
+              name: "classification",
+              description: "",
+              size: 1,
+              numElements: 1,
+              elementSize: 1,
+              type: "uint8",
+              min: [0],
+              max: [255],
+            },
+          ]
+        : []),
     ],
   };
   return {

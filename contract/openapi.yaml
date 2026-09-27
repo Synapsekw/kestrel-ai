@@ -43,7 +43,8 @@ x-websocket:
     - `map_runs.changed`: `payload` is `{map_id, run_ids: [...]}` after a map detection run finishes.
     - `map_labels.changed`: `payload` is `{map_id}` after a zone or ground-truth label changes.
     - `pointclouds.changed`: `payload` is `{cloud_ids: [...]}` after a point cloud is created, changes
-      status, is patched or deleted, or one of its measurements changes.
+      status, is patched or deleted, one of its measurements changes (a profile turning `ready` or
+      `failed` included), a camera height offset is set, or a report view is stored.
     - `surfaces.changed`: `payload` is `{surface_ids: [...]}` after a surface (cloud DSM or design)
       is created, built, renamed or deleted, or its build is cancelled before it started.
     - `volumes.changed`: `payload` is `{measurement_ids: [...]}` after a volume measurement is
@@ -57,6 +58,12 @@ x-websocket:
       types change, or `{severity: true}` after the severity scale changes.
     - `migration.changed`: `project_id` is the migrated project's id; `payload` is
       `{folder, state, job_id}` whenever a project's migration state changes (`MigrationState`).
+    - `drawings.changed`: `payload` is `{drawing_ids: [...]}` after a drawing is created, imported,
+      placed, patched or deleted.
+    - `map_measurements.changed`: `payload` is `{measurement_ids: [...]}` after a map measurement is
+      created, changed or deleted.
+    - `map_workspace.changed`: `payload` is `{fields: [...]}` (`frame`, `state`, `planned_surveys`)
+      after the site frame or the persisted map workspace changes.
   message: "#/components/schemas/Event"
 
 tags:
@@ -83,6 +90,7 @@ tags:
   - name: catalogue
   - name: findings
   - name: data
+  - name: workspace
 
 paths:
   /api/v1/agent/chat:
@@ -1759,6 +1767,7 @@ paths:
         - { name: bbox, in: query, required: false, schema: { type: string, pattern: "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$" }, description: "x0,y0,x1,y1" }
         - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
         - { name: class_id, in: query, required: false, schema: { type: string } }
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: boxes
@@ -1794,6 +1803,7 @@ paths:
       parameters:
         - { name: cells, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 256, default: 128 } }
         - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: grid counts
@@ -2227,7 +2237,18 @@ paths:
       operationId: reviewMapDetections
       summary: |
         Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
-        state `edited`. The run's counts change in the same transaction.
+        state `edited`. The run's counts change in the same transaction. Accepting a detection of a
+        defect type also creates its finding (status `reviewed`) in that transaction; rejecting,
+        unaccepting or reclassing it to an object type deletes that finding, and only with
+        `confirm_finding_delete=true`.
+      parameters:
+        - {
+            name: confirm_finding_delete,
+            in: query,
+            required: false,
+            schema: { type: boolean },
+            description: "false when absent; true lets the review delete the findings accepted defect detections created",
+          }
       requestBody:
         required: true
         content:
@@ -2240,6 +2261,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MapDetectionReviewResult" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the review would delete findings and `confirm_finding_delete` is not true (`code` is `finding_would_be_deleted`; details `{finding_ids}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}/next-unreviewed:
     parameters:
@@ -2251,6 +2277,7 @@ paths:
       summary: The next unreviewed detection in reading order (`y`, then `x`) after `after_id`, and how many remain.
       parameters:
         - { name: after_id, in: query, required: false, schema: { type: string }, description: the detection the viewer is on; omitted starts from the top }
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: the next detection, or null when none is left
@@ -2265,6 +2292,8 @@ paths:
     get:
       tags: [detect]
       operationId: listSiteAreas
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: site areas, oldest first
@@ -2275,10 +2304,12 @@ paths:
                 items:
                   - id: "5a000000-aaaa-4000-8000-000000000001"
                     name: "North laydown yard"
+                    category: laydown
                     polygon_wgs84: [[47.7610, 29.4960], [47.7640, 29.4960], [47.7640, 29.4980], [47.7610, 29.4980]]
                     created_at: "2026-09-23T09:00:00Z"
                   - id: "5a000000-aaaa-4000-8000-000000000002"
                     name: "Batching plant"
+                    category: general
                     polygon_wgs84: [[47.7650, 29.4930], [47.7680, 29.4930], [47.7680, 29.4950]]
                     created_at: "2026-09-23T09:05:00Z"
         default: { $ref: "#/components/responses/Error" }
@@ -2618,11 +2649,21 @@ paths:
     delete:
       tags: [pointclouds]
       operationId: deletePointCloud
-      summary: Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched.
+      summary: |
+        Delete the cloud, its measurements, report views and camera offsets, and its folder under
+        `pointclouds/`. The source file is untouched. Findings anchored on the cloud are deleted only
+        with `delete_findings=true` (through the findings service, attachments and comments included);
+        otherwise the delete is refused with 409 `cloud_has_findings`.
+      parameters:
+        - name: delete_findings
+          in: query
+          required: false
+          description: "also delete the findings anchored on this cloud; false when absent"
+          schema: { type: boolean }
       responses:
         "204": { description: deleted }
         "409":
-          description: "its import or export job is queued or running (`code` is `job_running`)"
+          description: "its import or export job is queued or running (`code` is `job_running`), or findings are anchored on it and `delete_findings` is not true (`code` is `cloud_has_findings`, details `{count}`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2701,7 +2742,11 @@ paths:
     post:
       tags: [pointclouds]
       operationId: createCloudMeasurement
-      summary: Save a measurement. The server recomputes `results` from the points; a client never sends them.
+      summary: |
+        Save a measurement. The server recomputes `results` from the points; a client never sends
+        them. A `profile` is cut from the source file by a `pointcloud_profile` job: it answers 202
+        with the measurement at `status: computing` and its job, and `pointclouds.changed` reports it
+        `ready` or `failed`. Every other kind answers 201 at `status: ready`.
       requestBody:
         required: true
         content:
@@ -2713,13 +2758,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        "202":
+          description: "a profile measurement at `status: computing` and its `pointcloud_profile` job"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudMeasurementWithJob" }
         "409":
           description: "the cloud is not `ready` (`code` is `not_ready`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: "the wrong number of points for the kind (`wrong_point_count`), a distance, height difference or vertical check on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error`"
+          description: "the wrong number of points for the kind (`wrong_point_count`), a distance, height difference, vertical check, area or profile on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), an area whose outline crosses itself (`self_intersecting`) or has no area (`degenerate_polygon`), a ring with fewer than three points (`ring_needs_three_points`) or in a line (`collinear_ring`), a profile line outside the cloud or of zero length (`profile_out_of_range`), a `finding_id` that is not a cloud finding on this cloud (`invalid_finding`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2732,7 +2782,7 @@ paths:
     patch:
       tags: [pointclouds]
       operationId: updateCloudMeasurement
-      summary: Rename a measurement or change its note.
+      summary: Rename a measurement, change its note, or attach it to a cloud finding (null detaches it).
       requestBody:
         required: true
         content:
@@ -2744,6 +2794,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        "422":
+          description: "`finding_id` is not a cloud finding on this cloud (`code` is `invalid_finding`); a malformed body is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [pointclouds]
@@ -2776,6 +2831,218 @@ paths:
               schema: { $ref: "#/components/schemas/JobRef" }
         "409":
           description: "the cloud is not `ready` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ point cloud workspace (C, spec 2026-09-26 section 12)
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    post:
+      tags: [pointclouds]
+      operationId: retryCloudProfile
+      summary: Run the `pointcloud_profile` job again for a `failed` profile; the measurement goes back to `computing`.
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "the measurement is not a `failed` profile (`code` is `not_retryable`), or the cloud is not `ready` (`not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    get:
+      tags: [pointclouds]
+      operationId: getCloudProfile
+      summary: |
+        The stored cross-section of a `ready` profile, cut from the source file by its job: at most
+        500 000 points, gzip-compressed on the wire. A measurement of another kind is 404 `not_found`.
+      responses:
+        "200":
+          description: the profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudProfile" }
+        "409":
+          description: "the profile is still `computing`, or `failed` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/view3d:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    put:
+      tags: [pointclouds]
+      operationId: putCloudMeasurementView3d
+      summary: Store the measurement's report view (as `putFindingView3d`). Replaces the previous one; publishes `pointclouds.changed`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/CloudViewUpload" }
+            encoding:
+              meta: { contentType: application/json }
+      responses:
+        "200":
+          description: the stored view's metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudViewOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [pointclouds]
+      operationId: getCloudMeasurementView3d
+      summary: "The measurement's stored report view; `ETag` is the quoted sha256 of the bytes."
+      responses:
+        "200":
+          description: the image
+          headers:
+            ETag: { schema: { type: string }, description: "\"<sha256>\"" }
+            Cache-Control: { schema: { type: string }, description: "private, no-cache" }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404":
+          description: "the measurement does not exist (`code` is `not_found`) or has no view (`no_view`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/views:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    get:
+      tags: [pointclouds]
+      operationId: listCloudViews
+      summary: The metadata of every report view in the cloud (findings and measurements), no image bytes; at most 1 500.
+      responses:
+        "200":
+          description: the views
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudViewList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    get:
+      tags: [pointclouds]
+      operationId: getCloudCameras
+      summary: |
+        The project's drone photos near the cloud, reprojected into its CRS, as compact parallel
+        arrays: one column-only query, at most 20 000 cameras, no image file is read.
+      responses:
+        "200":
+          description: the cameras
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudCameraSet" }
+        "409":
+          description: "the cloud has no CRS (`code` is `needs_coordinates`) or is not `ready` (`not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras/offsets/{sourceId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/sourceId"
+    put:
+      tags: [pointclouds]
+      operationId: setCloudCameraOffset
+      summary: Set the height offset added to this image set's altitudes for this cloud; publishes `pointclouds.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudCameraOffsetPut" }
+      responses:
+        "200":
+          description: the image set with its new offset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudCameraSource" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/view3d:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    put:
+      tags: [pointclouds]
+      operationId: putFindingView3d
+      summary: |
+        Store the report view of a cloud finding: a 1600 x 1000 PNG (a JPEG when the PNG is over
+        6 MiB) the workspace rendered, with the pose and render settings that took it. Replaces the
+        previous view; publishes `pointclouds.changed`. Owned by the point-cloud workspace.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/CloudViewUpload" }
+            encoding:
+              meta: { contentType: application/json }
+      responses:
+        "200":
+          description: the stored view's metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudViewOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the finding is not anchored on a cloud (`code` is `not_a_cloud_finding`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [pointclouds]
+      operationId: getFindingView3d
+      summary: "The cloud finding's stored report view (R's `view3d` source); `ETag` is the quoted sha256 of the bytes."
+      responses:
+        "200":
+          description: the image
+          headers:
+            ETag: { schema: { type: string }, description: "\"<sha256>\"" }
+            Cache-Control: { schema: { type: string }, description: "private, no-cache" }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404":
+          description: "the finding does not exist (`code` is `not_found`) or has no view (`no_view`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2839,7 +3106,7 @@ paths:
     patch:
       tags: [surfaces]
       operationId: patchSurface
-      summary: Rename a surface.
+      summary: Rename a surface, or set a dem's survey date and elevation role.
       requestBody:
         required: true
         content:
@@ -2851,6 +3118,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Surface" }
+        "422":
+          description: "`captured_on` or `elevation_role` on a surface that is not a dem (`code` is `invalid_patch`); a malformed body is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [surfaces]
@@ -3141,7 +3413,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: "a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error`"
+          description: "a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface, or neither (or both) of `polygon_native` and `polygon_site` given) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -3153,6 +3425,8 @@ paths:
     get:
       tags: [volumes]
       operationId: getVolumeMeasurement
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: the measurement
@@ -3255,6 +3529,8 @@ paths:
       tags: [volumes]
       operationId: getVolumeFootprints
       summary: The buffered detection footprints the measurement masks, in the surface CRS; at most 5 000.
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: footprints
@@ -4537,6 +4813,740 @@ paths:
         "503": { $ref: "#/components/responses/LibraryUnavailable" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ map workspace (M-C0)
+  /api/v1/projects/{projectId}/map-workspace:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: getMapWorkspace
+      summary: |
+        The site frame, the persisted view state and the planned surveys (map-workspace spec §6).
+        The first read creates the row. Its frame is the CRS of the first georeferenced map or
+        surface (a geographic CRS becomes the UTM zone of its centre), or local metres when nothing
+        has coordinates.
+      responses:
+        "200":
+          description: the workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapWorkspace" }
+        default: { $ref: "#/components/responses/Error" }
+    put:
+      tags: [workspace]
+      operationId: putMapWorkspace
+      summary: |
+        Replace the persisted view state and, when sent, the planned surveys (the client debounces
+        it by 1 s). Publishes `map_workspace.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapWorkspacePut" }
+      responses:
+        "200":
+          description: the workspace
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapWorkspace" }
+        "422":
+          description: "the state is over 64 KB as JSON (`code` is `state_too_large`); a malformed body is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-workspace/frame:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    put:
+      tags: [workspace]
+      operationId: setSiteFrame
+      summary: |
+        Change the site CRS (`{kind: crs, epsg}`, a projected CRS in metres) or switch to local
+        metres (`{kind: local}`). Stored geometry never changes; the client re-reads every tile and
+        vector in the new frame. Publishes `map_workspace.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SiteFrameSet" }
+      responses:
+        "200":
+          description: the workspace in its new frame
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapWorkspace" }
+        "422":
+          description: "`epsg` is missing for `crs` or unknown to pyproj (`code` is `invalid_epsg`), or it is not a projected CRS in metres (`needs_projected_crs`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-workspace/surveys:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listWorkspaceSurveys
+      summary: |
+        One entry per survey date in the current frame, oldest first, for the timeline scrubber and
+        the date chips: the ready maps and surfaces of that date, and the planned surveys. Items
+        without a capture date are grouped under their import date.
+      responses:
+        "200":
+          description: the surveys
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceSurveyList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-workspace/layers:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listWorkspaceLayers
+      summary: |
+        Every map, surface and drawing as a layer row, with its tile kind and version, date,
+        footprint in the site frame, `max_zoom` and meta line. Items outside the frame (no CRS, the
+        other frame, a drawing not placed) are listed with `in_frame` false.
+      responses:
+        "200":
+          description: the layers and the frame they are in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WorkspaceLayerList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/site-tiles/{kind}/{layerId}/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/siteTileKind"
+      - $ref: "#/components/parameters/layerId"
+      - $ref: "#/components/parameters/siteZ"
+      - $ref: "#/components/parameters/siteX"
+      - $ref: "#/components/parameters/siteY"
+    get:
+      tags: [workspace]
+      operationId: getSiteTile
+      summary: |
+        One 256 px PNG of a layer warped into the site tile grid (map-workspace spec §6), read from
+        one overview level. Pixels outside the layer's footprint, NaN and masked pixels are
+        transparent; a tile that misses the footprint entirely is 204 without any read.
+      parameters:
+        - $ref: "#/components/parameters/tileVersion"
+        - {
+            name: style,
+            in: query,
+            required: false,
+            schema: { type: string, enum: [hillshade, tint, contours] },
+            description: "surface only; hillshade when absent; tint is the hypsometric tint over hillshade",
+          }
+        - {
+            name: interval,
+            in: query,
+            required: false,
+            schema: { type: number, exclusiveMinimum: 0, maximum: 1000 },
+            description: "contours only: metres between lines; the nice number nearest (z_p98 - z_p02) / 20 when absent",
+          }
+        - {
+            name: knockout,
+            in: query,
+            required: false,
+            schema: { type: boolean },
+            description: "drawing_raster only: white pixels (min of R, G, B at least 245) transparent; false when absent",
+          }
+        - $ref: "#/components/parameters/tilePreview"
+        - $ref: "#/components/parameters/frameKey"
+      responses:
+        "200":
+          description: tile image
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the tile does not touch the layer's footprint }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the layer is still importing or building (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the layer is not in the site frame: no CRS, the other frame, or a drawing not placed and no `t` sent (`code` is `no_coordinates`); `t` is malformed, degenerate or sent for a kind other than drawing_raster (`invalid_preview`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-workspace/anchor:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: convertAnchor
+      summary: |
+        Convert a point or polygon drawn in the site frame into the map's CRS, with its WGS84
+        centroid, ready for `createFinding` with a `map` anchor (F §8.5).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AnchorConvertRequest" }
+      responses:
+        "200":
+          description: the anchor geometry in the map's CRS
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AnchorConverted" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the map has no CRS (`code` is `no_coordinates`), the workspace is in local metres (`local_frame`), the geometry is not a finite point or a closed ring (`invalid_geometry`), or it lies outside the map's footprint (`outside_map`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-workspace/findings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listMapFindingsInView
+      summary: |
+        Findings with a `map` anchor inside `bbox`, read through F's finding service, with their
+        geometry in the site frame; at most 5 000, `truncated` past that.
+      parameters:
+        - {
+            name: bbox,
+            in: query,
+            required: true,
+            schema:
+              {
+                type: string,
+                pattern: "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$",
+              },
+            description: "minx,miny,maxx,maxy in the site frame",
+          }
+        - {
+            name: map_ids,
+            in: query,
+            required: false,
+            style: form,
+            explode: true,
+            schema: { type: array, maxItems: 50, items: { type: string } },
+            description: "only findings anchored on these maps (the maps of the selected dates); every map when absent",
+          }
+        - $ref: "#/components/parameters/siteFrame"
+      responses:
+        "200":
+          description: the findings in view
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapFindingsInView" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-workspace/sample:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: sampleInFrame
+      summary: |
+        The height of each surface at one site-frame point (bilinear over 2 x 2 cells), for the
+        coordinate readout; the client throttles it to one call per 150 ms.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FrameSampleRequest" }
+      responses:
+        "200":
+          description: one sample per surface
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FrameSample" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/elevations:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: importElevation
+      summary: |
+        Import a plain DSM or DTM GeoTIFF as a `dem` surface (map-workspace spec §7). An
+        `elevation_import` job copies it when it already conforms, else re-grids it (onto the
+        `align_to_surface_id` surface's lattice when one is given). There is no preview step. A file
+        with no CRS, an RGB image, or a geographic or feet CRS without a target fails the job with a
+        readable message. Publishes `surfaces.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ElevationImportRequest" }
+      responses:
+        "202":
+          description: surface created in `building` with kind `dem`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfaceWithJob" }
+        "404":
+          description: "the file or the `align_to_surface_id` surface does not exist (`code` is `not_found`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "the `align_to_surface_id` surface is not `ready` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the file is not a .tif or .tiff (`code` is `validation_error`, `details.reason` is `extension`); not a single-band elevation raster (`not_elevation`); gone or changed since it was chosen (`source_missing`); outside the `align_to_surface_id` surface (`no_overlap`); a geographic output CRS (`geographic_output`) or one not in metres (`non_metric_output`) without a target; a grid over the cell ceiling (`grid_too_large`); not enough free disk (`insufficient_disk`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawing-inspections:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: createDrawingInspection
+      summary: |
+        Read a drawing file (a `drawing_import` job, phase `inspect`, map-workspace spec §8.2): its
+        format, the DXF or LandXML layers and units, the PDF pages with 160 px thumbnails, the
+        raster size, and any world-file or GeoTIFF placement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingInspectionCreate" }
+      responses:
+        "202":
+          description: inspection created in `inspecting`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingInspectionWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "a DWG (`code` is `validation_error`, `details.reason` is `dwg`), an unknown extension (`details.reason` is `extension`), or a PDF while PDFium did not load (`pdf_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawing-inspections/{inspectionId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+    get:
+      tags: [workspace]
+      operationId: getDrawingInspection
+      responses:
+        "200":
+          description: the inspection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingInspection" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawing-inspections/{inspectionId}/pages/{page}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+      - $ref: "#/components/parameters/drawingPage"
+    get:
+      tags: [workspace]
+      operationId: getDrawingPageThumbnail
+      summary: A 160 px thumbnail of one PDF page.
+      responses:
+        "200":
+          description: thumbnail
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204":
+          {
+            description: "the page has no thumbnail (the inspection is not ready, or the page is past the file's end)",
+          }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listDrawings
+      summary: Every drawing, newest first (one row per drawing, tens).
+      responses:
+        "200":
+          description: drawings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [workspace]
+      operationId: createDrawing
+      summary: |
+        Build a drawing from a ready inspection (a `drawing_import` job, phase `build`): flatten and
+        index DXF or LandXML linework, render a PDF page in strips, or copy a raster window by window,
+        then place it by CRS, by its embedded georeference, or not at all (placed later with control
+        points). Publishes `drawings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingCreate" }
+      responses:
+        "202":
+          description: drawing created in `importing`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the inspection has not been read yet or reading it failed (`code` is `not_ready`), or a build from it is queued or running (`job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a placement the file cannot take, such as `crs` for a raster, `embedded` without an embedded georeference, or a world file without `crs` (`code` is `invalid_placement`); a page past the file's end or unknown layers (`validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/georef-fit:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: fitDrawingGeoref
+      summary: |
+        A dry-run control-point fit with the same maths as `putDrawingGeoref` (least squares,
+        similarity or affine, RMSE and residuals in metres, warnings); nothing is stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeorefFitRequest" }
+      responses:
+        "200":
+          description: the fit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeorefFit" }
+        "422":
+          description: "fewer points than the model needs, 2 for similarity and 3 for affine (`code` is `too_few_points`); points picked in mirrored order (`reflection`); affine points on one line (`collinear`); coincident points or a zero scale (`degenerate`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+    get:
+      tags: [workspace]
+      operationId: getDrawing
+      responses:
+        "200":
+          description: the drawing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [workspace]
+      operationId: patchDrawing
+      summary: Rename, set the revision date, or change the layer state (DXF layer visibility, raster knockout). Publishes `drawings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingPatch" }
+      responses:
+        "200":
+          description: the updated drawing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [workspace]
+      operationId: deleteDrawing
+      summary: Delete the drawing and its folder under `drawings/`; the source file is never touched.
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "its import job is queued or running (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}/georef:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+    put:
+      tags: [workspace]
+      operationId: putDrawingGeoref
+      summary: |
+        Save a control-point placement (map-workspace spec §8.3): the server refits authoritatively,
+        stores the points with the site CRS they were picked in, bumps `georef_version` and, for a
+        raster, rewrites its geotransform in place. Publishes `drawings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingGeorefPut" }
+      responses:
+        "200":
+          description: the placed drawing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the drawing is still importing or failed (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "fewer points than the model needs (`code` is `too_few_points`), mirrored points (`reflection`), collinear affine points (`collinear`), or coincident points or a zero scale (`degenerate`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [workspace]
+      operationId: clearDrawingGeoref
+      summary: Remove the placement; the drawing returns to "not placed". Publishes `drawings.changed`.
+      responses:
+        "200":
+          description: the drawing, now with `georef` null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}/vtiles/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+      - $ref: "#/components/parameters/siteZ"
+      - $ref: "#/components/parameters/siteX"
+      - $ref: "#/components/parameters/siteY"
+    get:
+      tags: [workspace]
+      operationId: getDrawingVectorTile
+      summary: |
+        The DXF or LandXML linework of one site tile (map-workspace spec §8.4): a bucket lookup,
+        clipped to the tile plus 2 %, transformed into the site frame and simplified to res(z) / 2;
+        at most 20 000 vertices. Labels only when at least 6 px tall.
+      parameters:
+        - $ref: "#/components/parameters/tileVersion"
+        - $ref: "#/components/parameters/tilePreview"
+        - $ref: "#/components/parameters/frameKey"
+      responses:
+        "200":
+          description: the tile's lines and labels
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingVectorTile" }
+        "204": { description: nothing of the drawing is in this tile }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the drawing is still importing (`code` is `not_ready`), not placed yet and no `t` sent (`not_placed`), or the project has no site frame yet (`no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a raster drawing has no vector tiles; it is a `drawing_raster` site tile (`code` is `not_vector`); the drawing's placement cannot reach the site frame (`no_coordinates`); `t` is malformed or degenerate (`invalid_preview`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+    get:
+      tags: [workspace]
+      operationId: getDrawingThumbnail
+      summary: A 160 px thumbnail of the drawing.
+      responses:
+        "200":
+          description: thumbnail
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the drawing has no thumbnail yet }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/measurements:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listMeasurements
+      summary: |
+        The project's measurements in one list (umbrella §3; map-workspace spec §4 item 8):
+        point-cloud, volume and map measurements, newest first (`created_at` descending, then
+        `kind`, then `id`), keyset-paged over the three providers. The Measurements tab and the
+        command palette read it; each row opens its own workspace.
+      parameters:
+        - {
+            name: kind,
+            in: query,
+            required: false,
+            style: form,
+            explode: true,
+            schema:
+              {
+                type: array,
+                uniqueItems: true,
+                items: { $ref: "#/components/schemas/MeasurementKind" },
+              },
+            description: "only these kinds; every kind when absent",
+          }
+        - {
+            name: sub_kind,
+            in: query,
+            required: false,
+            style: form,
+            explode: true,
+            schema:
+              {
+                type: array,
+                uniqueItems: true,
+                items: { $ref: "#/components/schemas/MeasurementSubKind" },
+              },
+            description: "only these sub-kinds; every sub-kind when absent",
+          }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: a page of measurements
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MeasurementPage" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-measurements:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listMapMeasurements
+      summary: Map measurements, newest first, keyset-paged; `frame=site` adds each one's vertices in the current site frame.
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
+        - {
+            name: kind,
+            in: query,
+            required: false,
+            schema: { $ref: "#/components/schemas/MapMeasurementKind" },
+          }
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: a page of map measurements
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapMeasurementPage" }
+        "409":
+          description: "`frame=site` before the project has a site frame (`code` is `no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [workspace]
+      operationId: createMapMeasurement
+      summary: |
+        Store a distance, area or elevation profile drawn in the site frame (map-workspace spec §9.1).
+        The server stores the vertices in the site CRS of the moment and computes `results`
+        synchronously and bounded: Geod length and area, the grid values and the 3D length; a
+        profile of at most 2 000 stations over 1 to 3 surfaces. Publishes `map_measurements.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapMeasurementCreate" }
+      responses:
+        "201":
+          description: created, with its results
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapMeasurement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a named surface is not `ready` (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "too few vertices for the kind or a self-crossing area (`code` is `invalid_geometry`); surfaces the kind does not take, repeated or not elevation (`invalid_surfaces`); a profile surface outside the site frame (`surface_not_in_frame`); a profile with no elevation under the line (`no_surface_under_line`); the project already has the most map measurements it keeps (`measurement_limit`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/map-measurements/{mapMeasurementId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/mapMeasurementId"
+    get:
+      tags: [workspace]
+      operationId: getMapMeasurement
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
+      responses:
+        "200":
+          description: the measurement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapMeasurement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "`frame=site` before the project has a site frame (`code` is `no_site_frame`), or the measurement was drawn in the other frame and cannot be shown in this one (`not_in_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [workspace]
+      operationId: patchMapMeasurement
+      summary: Rename, annotate, move the vertices or change the surfaces; a geometry or surface change recomputes `results`. Publishes `map_measurements.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MapMeasurementPatch" }
+      responses:
+        "200":
+          description: the updated measurement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MapMeasurement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "a named surface is not `ready` (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "as on create (`invalid_geometry`, `invalid_surfaces`, `surface_not_in_frame`, `no_surface_under_line`, `measurement_limit`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [workspace]
+      operationId: deleteMapMeasurement
+      summary: Delete the measurement. Publishes `map_measurements.changed`.
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4743,6 +5753,80 @@ components:
       in: query
       description: findings pages hold at most 500
       schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+    siteTileKind:
+      name: kind
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/SiteTileKind" }
+    layerId:
+      name: layerId
+      in: path
+      required: true
+      description: the map, surface, volume measurement or drawing the tile renders
+      schema: { type: string }
+    siteZ:
+      name: z
+      in: path
+      required: true
+      description: "site tile zoom: res(z) = 1024 / 2^z metres per pixel"
+      schema: { type: integer, minimum: 0, maximum: 20 }
+    siteX:
+      name: x
+      in: path
+      required: true
+      description: site tile column, floor(E / (256 res)); negative west of the frame origin
+      schema: { type: integer }
+    siteY:
+      name: y
+      in: path
+      required: true
+      description: site tile row, floor(-N / (256 res)); negative north of the frame origin
+      schema: { type: integer }
+    siteFrame:
+      name: frame
+      in: query
+      required: false
+      description: "`site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only"
+      schema: { type: string, enum: [site] }
+    tileVersion:
+      name: v
+      in: query
+      required: false
+      description: "the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL)"
+      schema: { type: string }
+    drawingId:
+      name: drawingId
+      in: path
+      required: true
+      schema: { type: string }
+    drawingPage:
+      name: page
+      in: path
+      required: true
+      description: a PDF page, 1-based; thumbnails exist for the first 50
+      schema: { type: integer, minimum: 1, maximum: 50 }
+    mapMeasurementId:
+      name: mapMeasurementId
+      in: path
+      required: true
+      description: a map measurement; `measurementId` is a volume measurement and `cloudMeasurementId` a point-cloud one
+      schema: { type: string }
+    tilePreview:
+      name: t
+      in: query
+      required: false
+      description: "a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview`"
+      schema:
+        {
+          type: string,
+          pattern: "^-?\\d+(\\.\\d+)?([eE][-+]?\\d+)?(,-?\\d+(\\.\\d+)?([eE][-+]?\\d+)?){5}$",
+        }
+    frameKey:
+      name: frame_key
+      in: query
+      required: false
+      description: "the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server"
+      schema: { type: string, maxLength: 200 }
 
   responses:
     Error:
@@ -4769,7 +5853,7 @@ components:
           example:
             error: { code: not_found, message: "run r0000000… not found", details: {} }
     UnmappedClasses:
-      description: "`createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a malformed body (`validation_error`)."
+      description: "`createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a region with no unmasked window (`empty_region`); a malformed body (`validation_error`)."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/UnmappedClassesError" }
@@ -4844,12 +5928,40 @@ components:
                 type deletes its finding; retry with `confirm_finding_delete=true`),
                 attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
                 `{reason}`), task_not_supported (422: a task this build cannot write or train),
-                task_mismatch (422: the base model's task differs from the dataset's), class_in_use
-                (409: also counts findings;
-                details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
-                run has neither a library `model_id` nor a cloud `provider`), query_required (422:
+                task_mismatch (422: the base model's task differs from the dataset's),
+                class_in_use (409: also counts findings; details `{type_id, box_count,
+                finding_count}`), model_or_provider_required (422: a run has neither a library
+                `model_id` nor a cloud `provider`), query_required (422:
                 a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
-                outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule)
+                outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule),
+                state_too_large (422: the map workspace state is over 64 KB), local_frame (422: the
+                operation needs a georeferenced site frame, e.g. a finding anchor in a local-metres
+                project), too_few_points, reflection and collinear (422: a drawing georeference with
+                fewer points than its model needs, mirrored points, or affine points on one line),
+                not_placed (409: the drawing has no georeference yet), not_vector (422: a raster
+                drawing has no vector tiles), no_surface_under_line (422: a profile with no
+                elevation under it), empty_region (422: a region run with no unmasked window),
+                pdf_unavailable (422: PDF import is off because PDFium did not load),
+                invalid_placement (422: a drawing placement its file cannot take), outside_map
+                (422: an anchor outside its map's footprint), no_site_frame (409: the project has no
+                site frame yet; open Maps first), not_in_site_frame (409: a map measurement drawn in
+                the other frame), invalid_surfaces and surface_not_in_frame (422: a map
+                measurement's surfaces are wrong for its kind, or a profile surface is outside the
+                site frame), degenerate (422: coincident control points or a zero scale),
+                invalid_preview (422: a malformed or degenerate preview placement `t`),
+                not_elevation, geographic_output and non_metric_output (422: an elevation import
+                that is not a single-band elevation raster, or would be written in a geographic or
+                non-metric CRS), invalid_patch (422: a date or role patch on a surface that is not a
+                dem),
+                self_intersecting, degenerate_polygon, ring_needs_three_points, collinear_ring,
+                profile_out_of_range and invalid_finding (422: a point-cloud measurement;
+                invalid_finding is a `finding_id` that is not a cloud finding on that cloud),
+                not_retryable (409: only a failed profile can be retried), needs_coordinates (409:
+                the cloud has no CRS), cloud_has_findings (409: findings are anchored on the cloud;
+                details `{count}`), not_a_cloud_finding (409: a report view for a finding with
+                another anchor kind), bad_view_image (422: not a 1600 x 1000 PNG or JPEG of at most
+                6 MiB; details `{reason}`), no_view (404: no report view is stored). A 501
+                not_implemented for an option of an existing operation carries details `{option, unit}`.
             message: { type: string }
             details:
               type: object
@@ -6781,7 +7893,7 @@ components:
       example: { map_id: "a0000000-6666-4000-8000-000000000001", kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", tile_size: 1280, overlap: 0.2, nms_iou: 0.5, conf: 0.25, target_gsd_cm: 2.0 }
     MapRun:
       type: object
-      required: [id, map_id, source_id, kind, model_id, provider, model_name, model_snapshot, class_map, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, pinned, counts, verified_counts, area_counts, detection_count, created_at]
+      required: [id, map_id, source_id, kind, model_id, provider, model_name, model_snapshot, class_map, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, pinned, counts, verified_counts, area_counts, detection_count, created_at, scope, region_px]
       properties:
         id: { type: string }
         map_id: { type: string }
@@ -6817,6 +7929,13 @@ components:
           description: "detections per class id in every review state except rejected (the total); filled when the run finishes and kept current by review"
           additionalProperties: { type: integer }
         detection_count: { type: integer }
+        scope: { $ref: "#/components/schemas/MapRunScope" }
+        region_px:
+          {
+            type: [array, "null"],
+            items: { $ref: "#/components/schemas/PixelPoint" },
+            description: "a region run's outline in map pixels; null for a whole-map run",
+          }
         created_at: { type: string, format: date-time }
       example:
         id: "r0000000-7777-4000-8000-000000000001"
@@ -6843,6 +7962,8 @@ components:
           "5a000000-aaaa-4000-8000-000000000001":
             "c1a2b3c4-0000-4000-8000-000000000001": { total: 12, verified: 9 }
         detection_count: 59
+        scope: map
+        region_px: null
         created_at: "2026-09-22T11:00:00Z"
     MapRunWithJob:
       type: object
@@ -6882,6 +8003,7 @@ components:
         w: { type: number }
         h: { type: number }
         angle: { type: [number, "null"] }
+        corners_site: { type: [array, "null"], minItems: 4, maxItems: 4, items: { $ref: "#/components/schemas/SiteVertex" }, description: "only with frame=site: the box's four corners in the site frame" }
     MapDetectionPage:
       type: object
       required: [items, truncated]
@@ -6901,6 +8023,7 @@ components:
         gy: { type: integer }
         class_id: { type: string }
         count: { type: integer }
+        center_site: { oneOf: [{ $ref: "#/components/schemas/SiteVertex" }, { type: "null" }], description: "only with frame=site: the cell centre in the site frame; absent or null otherwise" }
     MapDensity:
       type: object
       required: [cell_size, cells]
@@ -7149,6 +8272,7 @@ components:
         verified_counts: { type: object, additionalProperties: { type: integer }, description: per project class id; accepted, edited or drawn by a person }
         review: { $ref: "#/components/schemas/ReviewProgress" }
         created_at: { type: string, format: date-time }
+        scope: { $ref: "#/components/schemas/MapRunScope", description: "map runs; absent for photo runs" }
       example:
         id: "r0000000-7777-4000-8000-000000000001"
         kind: map
@@ -7190,6 +8314,7 @@ components:
           type: [number, "null"]
           exclusiveMinimum: 0
           description: "map runs: resample windows to this GSD; defaults to the model's training GSD"
+        region: { $ref: "#/components/schemas/RunRegion" }
       example: { source_ids: ["50000000-3333-4000-8000-000000000001", "50000000-3333-4000-8000-000000000002"], model_id: "m0000000-2222-4000-8000-000000000001", conf: 0.25 }
     RunCreatedItem:
       type: object
@@ -7345,7 +8470,7 @@ components:
       items: { type: number }
     SiteArea:
       type: object
-      required: [id, name, polygon_wgs84, created_at]
+      required: [id, name, polygon_wgs84, category, created_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -7354,10 +8479,13 @@ components:
           minItems: 3
           description: the outline, not closed (the first point is not repeated)
           items: { $ref: "#/components/schemas/LonLat" }
+        category: { $ref: "#/components/schemas/SiteAreaCategory" }
+        polygon_site: { type: [array, "null"], items: { $ref: "#/components/schemas/SiteVertex" }, description: "only with frame=site: the outline in the site frame" }
         created_at: { type: string, format: date-time }
       example:
         id: "5a000000-aaaa-4000-8000-000000000001"
         name: "North laydown yard"
+        category: laydown
         polygon_wgs84: [[47.7610, 29.4960], [47.7640, 29.4960], [47.7640, 29.4980], [47.7610, 29.4980]]
         created_at: "2026-09-23T09:00:00Z"
     SiteAreaCreate:
@@ -7375,6 +8503,11 @@ components:
           type: array
           minItems: 3
           items: { $ref: "#/components/schemas/PixelPoint" }
+        category:
+          {
+            $ref: "#/components/schemas/SiteAreaCategory",
+            description: "general when absent on create",
+          }
       example: { name: "North laydown yard", map_id: "a0000000-6666-4000-8000-000000000001", polygon_px: [[1000, 800], [4000, 800], [4000, 3000], [1000, 3000]] }
     SiteAreaPatch:
       type: object
@@ -7390,6 +8523,11 @@ components:
           type: array
           minItems: 3
           items: { $ref: "#/components/schemas/PixelPoint" }
+        category:
+          {
+            $ref: "#/components/schemas/SiteAreaCategory",
+            description: "unchanged when absent",
+          }
       example: { name: "North yard" }
     SiteAreaList:
       type: object
@@ -7747,7 +8885,11 @@ components:
         admission: { $ref: "#/components/schemas/PointCloudAdmission" }
     CloudMeasurementKind:
       type: string
-      enum: [point, distance, height, vertical]
+      enum: [point, distance, height, vertical, area, profile]
+    CloudMeasurementStatus:
+      type: string
+      description: "only a profile is ever `computing` (its `pointcloud_profile` job runs) or `failed`"
+      enum: [ready, computing, failed]
     CloudMeasurementPoint:
       type: object
       required: [x, y, z, uncertainty_m]
@@ -7756,6 +8898,21 @@ components:
         y: { type: number }
         z: { type: number }
         uncertainty_m: { type: number, minimum: 0, description: the display spacing of the deepest loaded node that contains the pick }
+        group: { type: [integer, "null"], minimum: 0, maximum: 1, description: "a rings vertical check: 0 is the lower ring and 1 the upper; null or absent for every other kind" }
+    CloudMeasurementParams:
+      type: object
+      additionalProperties: false
+      description: "per kind: area `{mode}`, vertical `{method}`, profile `{thickness_m, max_points}`; `view_dir` is the camera direction at save, used only to orient `plane_azimuth_deg`. A key that does not apply is absent or null"
+      properties:
+        mode: { type: [string, "null"], enum: [surface, plan, null], description: "area: which area is primary; surface when absent" }
+        method: { type: [string, "null"], enum: [points, rings, null], description: "vertical: two picks, or two fitted rings (6 to 64 points with `group` 0 and 1, at least 3 each); points when absent" }
+        thickness_m: { type: [number, "null"], minimum: 0.01, maximum: 5, description: "profile: the slab thickness; 0.20 when absent" }
+        max_points: { type: [integer, "null"], minimum: 1000, maximum: 500000, description: "profile: the stored point cap; 200 000 when absent" }
+        view_dir:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
     CloudMeasurementCreate:
       type: object
       required: [kind, points]
@@ -7763,22 +8920,28 @@ components:
         kind: { $ref: "#/components/schemas/CloudMeasurementKind" }
         points:
           type: array
-          description: one point for `point`, two for the other kinds
+          description: "point 1; distance, height and vertical (points) 2; vertical (rings) 6 to 64 with `group`; area 3 to 200 (the outline, not closed); profile 2 (the section line A, B)"
           items: { $ref: "#/components/schemas/CloudMeasurementPoint" }
           minItems: 1
-          maxItems: 2
+          maxItems: 200
         name: { type: string, minLength: 1, maxLength: 200, description: "\"Distance 3\"-style numbering when absent" }
         note: { type: string, maxLength: 2000 }
+        params:
+          oneOf:
+            - $ref: "#/components/schemas/CloudMeasurementParams"
+            - type: "null"
+        finding_id: { type: [string, "null"], description: "attach to this finding (a cloud finding on this cloud); null or absent for none" }
     CloudMeasurementUpdate:
       type: object
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         note: { type: [string, "null"], maxLength: 2000, description: null clears it }
+        finding_id: { type: [string, "null"], description: "attach to this cloud finding on this cloud; null detaches" }
     CloudMeasurementResults:
       type: object
       description: computed by the server from the stored points; a quantity that does not apply to the kind is null
-      required: [lon, lat, dx, dy, dz, distance_3d, distance_horizontal, distance_vertical, height_difference, lean_offset_m, lean_angle_deg, lean_azimuth_deg, lean_mm_per_m, uncertainty_m, angle_uncertainty_deg]
+      required: [lon, lat, dx, dy, dz, distance_3d, distance_horizontal, distance_vertical, height_difference, lean_offset_m, lean_angle_deg, lean_azimuth_deg, lean_mm_per_m, uncertainty_m, angle_uncertainty_deg, area_m2, area_surface_m2, area_plan_m2, perimeter_m, plane_rms_m, plane_tilt_deg, plane_azimuth_deg, uncertainty_m2, ring_radius_lower_m, ring_radius_upper_m, ring_rms_lower_m, ring_rms_upper_m, profile_length_m, profile_z_min, profile_z_max, profile_width_max_m, profile_point_count]
       properties:
         lon: { type: [number, "null"] }
         lat: { type: [number, "null"] }
@@ -7795,9 +8958,26 @@ components:
         lean_mm_per_m: { type: [number, "null"] }
         uncertainty_m: { type: [number, "null"] }
         angle_uncertainty_deg: { type: [number, "null"] }
+        area_m2: { type: [number, "null"], description: "the primary area (`params.mode`)" }
+        area_surface_m2: { type: [number, "null"], description: "on the polygon's best-fit plane (Newell)" }
+        area_plan_m2: { type: [number, "null"], description: projected horizontally }
+        perimeter_m: { type: [number, "null"] }
+        plane_rms_m: { type: [number, "null"], description: the vertices' RMS distance from the best-fit plane }
+        plane_tilt_deg: { type: [number, "null"], description: "the plane's tilt from horizontal (0 is a slab, 90 a wall)" }
+        plane_azimuth_deg: { type: [number, "null"], description: "the plane normal's bearing, clockwise from grid north" }
+        uncertainty_m2: { type: [number, "null"] }
+        ring_radius_lower_m: { type: [number, "null"] }
+        ring_radius_upper_m: { type: [number, "null"] }
+        ring_rms_lower_m: { type: [number, "null"] }
+        ring_rms_upper_m: { type: [number, "null"] }
+        profile_length_m: { type: [number, "null"] }
+        profile_z_min: { type: [number, "null"] }
+        profile_z_max: { type: [number, "null"] }
+        profile_width_max_m: { type: [number, "null"] }
+        profile_point_count: { type: [integer, "null"] }
     CloudMeasurementOut:
       type: object
-      required: [id, point_cloud_id, kind, name, note, points, results, created_at, updated_at]
+      required: [id, point_cloud_id, kind, name, note, points, results, params, status, error, job_id, finding_id, view, created_at, updated_at]
       properties:
         id: { type: string }
         point_cloud_id: { type: string }
@@ -7808,8 +8988,21 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CloudMeasurementPoint" }
           minItems: 1
-          maxItems: 2
+          maxItems: 200
         results: { $ref: "#/components/schemas/CloudMeasurementResults" }
+        params:
+          oneOf:
+            - $ref: "#/components/schemas/CloudMeasurementParams"
+            - type: "null"
+        status: { $ref: "#/components/schemas/CloudMeasurementStatus" }
+        error: { type: [string, "null"], description: "why a profile failed; null otherwise" }
+        job_id: { type: [string, "null"], description: "the profile's `pointcloud_profile` job" }
+        finding_id: { type: [string, "null"], description: the cloud finding this measurement is attached to }
+        view:
+          description: its stored report view (metadata only); null when there is none
+          oneOf:
+            - $ref: "#/components/schemas/CloudViewOut"
+            - type: "null"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     CloudMeasurementList:
@@ -7819,16 +9012,209 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/CloudMeasurementOut" }
+    CloudMeasurementWithJob:
+      type: object
+      required: [measurement, job]
+      properties:
+        measurement: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        job: { $ref: "#/components/schemas/Job" }
     PointCloudExportRequest:
       type: object
       required: [format]
       properties:
         format: { type: string, enum: [laz] }
         include_measurements: { type: boolean, description: "true when absent: write measurements.csv when the cloud has measurements" }
+    # ------------------------------------------------------------ point cloud workspace (C)
+    CloudViewPose:
+      type: object
+      additionalProperties: false
+      description: "the camera that took a report view, in the cloud's native CRS; `fov_deg` is vertical and the aspect is fixed at 1.6"
+      required: [position, target, up, fov_deg]
+      properties:
+        position: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        target: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        up: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        fov_deg: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 180 }
+    CloudClipBox:
+      type: object
+      additionalProperties: false
+      required: [centre, size, yaw_deg, mode]
+      properties:
+        centre: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        size: { type: array, items: { type: number, exclusiveMinimum: 0 }, minItems: 3, maxItems: 3 }
+        yaw_deg: { type: number, description: rotation about Z }
+        mode: { type: string, enum: [show_inside, highlight_inside] }
+    CloudViewRender:
+      type: object
+      additionalProperties: false
+      description: the render settings on screen at capture, so a re-capture reproduces the view
+      required: [colour_mode, point_budget, point_size, edl, clip_box, complete]
+      properties:
+        colour_mode: { type: string, enum: [rgb, elevation, intensity, classification] }
+        point_budget: { type: integer, minimum: 1000000, maximum: 8000000 }
+        point_size: { type: number, exclusiveMinimum: 0, maximum: 10 }
+        edl: { type: boolean }
+        clip_box:
+          oneOf:
+            - $ref: "#/components/schemas/CloudClipBox"
+            - type: "null"
+        complete: { type: boolean, description: "false when the capture timed out before every node had loaded" }
+    CloudViewSubjectKind:
+      type: string
+      enum: [finding, cloud_measurement]
+    CloudViewOut:
+      type: object
+      description: "a stored report view's metadata (the image is served by the `view3d` GET); `stale` is computed on read"
+      required: [subject_kind, subject_id, pose, render, anchor_normal, sha256, bytes, width, height, captured_at, stale]
+      properties:
+        subject_kind: { $ref: "#/components/schemas/CloudViewSubjectKind" }
+        subject_id: { type: string }
+        pose: { $ref: "#/components/schemas/CloudViewPose" }
+        render: { $ref: "#/components/schemas/CloudViewRender" }
+        anchor_normal:
+          type: [array, "null"]
+          description: "findings only: the unit surface normal at the pin; null when unknown"
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+        sha256: { type: string, description: "of the image bytes; the GET's `ETag`" }
+        bytes: { type: integer, minimum: 1, maximum: 6291456 }
+        width: { type: integer }
+        height: { type: integer }
+        captured_at: { type: string, format: date-time }
+        stale: { type: boolean, description: "the subject's geometry changed since the capture" }
+      example:
+        subject_kind: finding
+        subject_id: "f0000000-7777-4000-8000-000000000001"
+        pose: { position: [243540.2, 3178030.5, 12.4], target: [243552.0, 3178041.0, -20.1], up: [0, 0, 1], fov_deg: 50 }
+        render: { colour_mode: rgb, point_budget: 3000000, point_size: 1.4, edl: true, clip_box: null, complete: true }
+        anchor_normal: [0.71, -0.70, 0.05]
+        sha256: "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b"
+        bytes: 2311840
+        width: 1600
+        height: 1000
+        captured_at: "2026-09-27T10:00:00Z"
+        stale: false
+    CloudViewMeta:
+      type: object
+      additionalProperties: false
+      required: [pose, render]
+      properties:
+        pose: { $ref: "#/components/schemas/CloudViewPose" }
+        render: { $ref: "#/components/schemas/CloudViewRender" }
+        anchor_normal:
+          type: [array, "null"]
+          description: "findings only: the unit surface normal at the pin; null or absent when unknown"
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+    CloudViewUpload:
+      type: object
+      required: [image, meta]
+      properties:
+        image: { type: string, format: binary, description: "PNG or JPEG, exactly 1600 x 1000, at most 6 MiB" }
+        meta: { $ref: "#/components/schemas/CloudViewMeta" }
+    CloudViewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 1500
+          items: { $ref: "#/components/schemas/CloudViewOut" }
+      example:
+        items: []
+    CloudProfile:
+      type: object
+      description: "a stored cross-section: s (metres along the line from A) against z, thinned to at most `max_points`"
+      required: [s, z, rgb, count, thickness_m, length_m]
+      properties:
+        s: { type: array, items: { type: number }, maxItems: 500000 }
+        z: { type: array, items: { type: number }, maxItems: 500000 }
+        rgb:
+          type: [array, "null"]
+          description: "r, g, b per point (3 x `count` values); null when the cloud has no colour"
+          items: { type: integer, minimum: 0, maximum: 255 }
+          maxItems: 1500000
+        count: { type: integer, minimum: 0 }
+        thickness_m: { type: number }
+        length_m: { type: number }
+      example:
+        s: [0.0, 0.5, 1.0]
+        z: [-44.8, -44.7, -30.2]
+        rgb: [120, 120, 118, 121, 119, 117, 200, 40, 30]
+        count: 3
+        thickness_m: 0.2
+        length_m: 12.84
+    CloudCameraSource:
+      type: object
+      required: [id, label, count, height_offset_m, posed_count]
+      properties:
+        id: { type: string, description: the image set (source) id }
+        label: { type: string, description: "the set's label, else its site, else its folder name" }
+        count: { type: integer, minimum: 0, description: this set's cameras in the payload }
+        height_offset_m: { type: number, minimum: -500, maximum: 500 }
+        posed_count: { type: integer, minimum: 0, description: those with a gimbal pose }
+      example: { id: "s0000000-3333-4000-8000-000000000001", label: "Flight 14 Sep", count: 2, height_offset_m: -31.5, posed_count: 1 }
+    CloudCameraOffsetPut:
+      type: object
+      additionalProperties: false
+      required: [height_offset_m]
+      properties:
+        height_offset_m: { type: number, minimum: -500, maximum: 500 }
+    CloudCameraSet:
+      type: object
+      description: |
+        The drone photos near a cloud as parallel arrays (index i is one camera) in the cloud's
+        native CRS: at most 20 000, ordered by capture time, `truncated` when more exist.
+      required: [image_id, source_idx, x, y, z, yaw, pitch, roll, hfov, vfov, fov_assumed, width, height, sigma_m, sources, truncated, z_p1, z_p99, without_gps]
+      properties:
+        image_id: { type: array, items: { type: string }, maxItems: 20000 }
+        source_idx: { type: array, items: { type: integer, minimum: 0 }, maxItems: 20000, description: "an index into `sources`" }
+        x: { type: array, items: { type: number }, maxItems: 20000 }
+        y: { type: array, items: { type: number }, maxItems: 20000 }
+        z: { type: array, items: { type: [number, "null"] }, maxItems: 20000, description: "EXIF altitude plus the set's height offset; null without an altitude" }
+        yaw: { type: array, items: { type: [number, "null"] }, maxItems: 20000, description: "grid yaw in degrees, clockwise from grid north; null without a pose" }
+        pitch: { type: array, items: { type: [number, "null"] }, maxItems: 20000, description: "degrees, -90 is nadir; null without a pose" }
+        roll: { type: array, items: { type: [number, "null"] }, maxItems: 20000 }
+        hfov: { type: array, items: { type: number }, maxItems: 20000, description: horizontal field of view in degrees }
+        vfov: { type: array, items: { type: number }, maxItems: 20000 }
+        fov_assumed: { type: array, items: { type: boolean }, maxItems: 20000, description: "true when the FOV is the assumed 84 degree diagonal" }
+        width: { type: array, items: { type: integer }, maxItems: 20000, description: "the stored image's pixel size" }
+        height: { type: array, items: { type: integer }, maxItems: 20000 }
+        sigma_m: { type: array, items: { type: number }, maxItems: 20000, description: "position uncertainty; 3.0 until an RTK flag exists" }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/CloudCameraSource" }
+        truncated: { type: boolean }
+        z_p1: { type: [number, "null"], description: "the cloud's `z_stats.p1`, for the plausibility check" }
+        z_p99: { type: [number, "null"], description: "the cloud's `z_stats.p99`" }
+        without_gps: { type: integer, minimum: 0, description: "project images with no GPS position (lat or lon null), one COUNT query; the cloud panel shows it as \"n photos without GPS\"" }
+      example:
+        image_id: ["i0000000-5555-4000-8000-000000000001", "i0000000-5555-4000-8000-000000000002"]
+        source_idx: [0, 0]
+        x: [243540.2, 243561.9]
+        y: [3178030.5, 3178044.1]
+        z: [12.4, null]
+        yaw: [131.2, null]
+        pitch: [-45.0, null]
+        roll: [0.0, null]
+        hfov: [73.7, 73.7]
+        vfov: [53.1, 53.1]
+        fov_assumed: [false, true]
+        width: [2048, 2048]
+        height: [1536, 1536]
+        sigma_m: [3.0, 3.0]
+        sources: [{ id: "s0000000-3333-4000-8000-000000000001", label: "Flight 14 Sep", count: 2, height_offset_m: -31.5, posed_count: 1 }]
+        truncated: false
+        z_p1: -45.9
+        z_p99: -5.1
+        without_gps: 0
     # ------------------------------------------------------------ surfaces and volumes (S2)
     SurfaceKind:
       type: string
-      enum: [cloud_dsm, design]
+      description: "dem is a DSM or DTM GeoTIFF imported as elevation (map workspace)"
+      enum: [cloud_dsm, design, dem]
     SurfaceStatus:
       type: string
       enum: [building, ready, failed]
@@ -7883,7 +9269,7 @@ components:
         build_s: { type: number }
     Surface:
       type: object
-      required: [id, name, kind, status, error, point_cloud_id, design_source, crs_wkt, epsg, proj4, cell_size_m, width, height, geotransform, bounds_native, z_min, z_max, coverage_fraction, method, build_params, stats, captured_on, map_id, tile_grid, measurement_count, job_id, created_at]
+      required: [id, name, kind, status, error, point_cloud_id, design_source, crs_wkt, epsg, proj4, cell_size_m, width, height, geotransform, bounds_native, z_min, z_max, coverage_fraction, method, build_params, stats, captured_on, elevation_role, map_id, tile_grid, measurement_count, job_id, created_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -7916,7 +9302,17 @@ components:
         method: { oneOf: [{ $ref: "#/components/schemas/SurfaceMethod" }, { type: "null" }], description: null while building }
         build_params: { oneOf: [{ $ref: "#/components/schemas/SurfaceBuildParams" }, { type: "null" }], description: null for design }
         stats: { oneOf: [{ $ref: "#/components/schemas/SurfaceBuildStats" }, { type: "null" }], description: null for design }
-        captured_on: { type: [string, "null"], format: date, description: read through from the cloud }
+        captured_on:
+          {
+            type: [string, "null"],
+            format: date,
+            description: "the survey date; a cloud DSM's comes from its cloud, a dem's from its import; null for a design",
+          }
+        elevation_role:
+          {
+            oneOf: [{ $ref: "#/components/schemas/ElevationRole" }, { type: "null" }],
+            description: "dem only; null for cloud_dsm and design",
+          }
         map_id: { type: [string, "null"], description: read through from the cloud; the ortho of the same flight }
         tile_grid: { oneOf: [{ $ref: "#/components/schemas/TileGrid" }, { type: "null" }] }
         measurement_count: { type: integer }
@@ -7950,6 +9346,15 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1 }
+        captured_on:
+          {
+            type: [string, "null"],
+            format: date,
+            minLength: 10,
+            maxLength: 10,
+            description: "the survey date of a dem (the workspace's set date); null clears it",
+          }
+        elevation_role: { $ref: "#/components/schemas/ElevationRole" }
     SurfaceWithJob:
       type: object
       required: [surface, job]
@@ -7968,7 +9373,7 @@ components:
       enum: [calculating, ready, failed, stale]
     VolumeBaseKind:
       type: string
-      enum: [toe_plane, toe_surface, flat, surface]
+      enum: [toe_plane, toe_surface, flat, surface, toe_lowest]
     VolumeBase:
       type: object
       required: [kind]
@@ -8066,6 +9471,7 @@ components:
           items: { type: number }
           minItems: 3
           maxItems: 3
+        z: { type: [number, "null"], description: "toe_lowest: the level of the flat base (the lowest kept edge sample)" }
     VolumeUncertainty:
       type: object
       required: [total_m3, base_m3, alignment_m3, cell_size_m3, nodata_m3, patch_m3, complete]
@@ -8124,7 +9530,7 @@ components:
         computed_at: { type: string, format: date-time }
     VolumeMeasurement:
       type: object
-      required: [id, name, status, error, polygon_native, top_surface_id, base, masks, alignment, results, stale_reasons, job_id, created_at, updated_at]
+      required: [id, name, status, error, polygon_native, top_surface_id, base, masks, alignment, material, results, stale_reasons, job_id, created_at, updated_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -8135,6 +9541,16 @@ components:
         base: { $ref: "#/components/schemas/VolumeBase" }
         masks: { $ref: "#/components/schemas/VolumeMasks" }
         alignment: { $ref: "#/components/schemas/VolumeAlignment" }
+        material:
+          {
+            oneOf: [{ $ref: "#/components/schemas/VolumeMaterial" }, { type: "null" }],
+            description: "not a calculation input; changing it never makes the result stale",
+          }
+        polygon_site:
+          {
+            oneOf: [{ $ref: "#/components/schemas/SiteRing" }, { type: "null" }],
+            description: "only with frame=site: the polygon in the site frame; absent or null otherwise",
+          }
         results: { oneOf: [{ $ref: "#/components/schemas/VolumeResults" }, { type: "null" }] }
         stale_reasons: { type: array, items: { type: string }, description: "response only: the inputs that changed, e.g. \"masks: detection run deleted\"" }
         job_id: { type: [string, "null"] }
@@ -8149,10 +9565,17 @@ components:
           items: { $ref: "#/components/schemas/VolumeMeasurement" }
     VolumeMeasurementCreate:
       type: object
-      required: [name, polygon_native, top_surface_id, base]
+      description: "exactly one of polygon_native and polygon_site; both or neither is 422 invalid_geometry"
+      required: [name, top_surface_id, base]
       properties:
         name: { type: string, minLength: 1 }
         polygon_native: { $ref: "#/components/schemas/VolumeRing" }
+        polygon_site:
+          {
+            $ref: "#/components/schemas/SiteRing",
+            description: "the polygon in the site frame; the server converts it into the top surface's CRS",
+          }
+        material: { $ref: "#/components/schemas/VolumeMaterial" }
         top_surface_id: { type: string }
         base: { $ref: "#/components/schemas/VolumeBase" }
         masks: { $ref: "#/components/schemas/VolumeMasksInput" }
@@ -8167,6 +9590,12 @@ components:
         base: { $ref: "#/components/schemas/VolumeBase" }
         masks: { $ref: "#/components/schemas/VolumeMasksInput" }
         alignment: { $ref: "#/components/schemas/VolumeAlignmentInput" }
+        polygon_site: { $ref: "#/components/schemas/SiteRing" }
+        material:
+          {
+            oneOf: [{ $ref: "#/components/schemas/VolumeMaterial" }, { type: "null" }],
+            description: null clears it,
+          }
     VolumeMeasurementWithJob:
       type: object
       required: [measurement, job]
@@ -8181,6 +9610,11 @@ components:
         detection_id: { type: string }
         class_id: { type: string }
         ring: { $ref: "#/components/schemas/VolumeRing" }
+        ring_site:
+          {
+            oneOf: [{ $ref: "#/components/schemas/SiteRing" }, { type: "null" }],
+            description: "only with frame=site; absent or null otherwise",
+          }
     VolumeFootprints:
       type: object
       required: [items, truncated]
@@ -8368,7 +9802,7 @@ components:
         accepted_warnings: { type: array, items: { type: string } }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -8389,7 +9823,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }
@@ -8452,6 +9886,9 @@ components:
               data.changed,
               catalogue.changed,
               migration.changed,
+              drawings.changed,
+              map_measurements.changed,
+              map_workspace.changed,
             ]
         project_id: { type: string, description: "the project id, or `library` for library jobs and `catalogue.changed`" }
         job_id: { type: [string, "null"] }
@@ -9097,7 +10534,8 @@ components:
       description: >-
         The type's headline figures; each type fills its own fields. `image_set`: image_count,
         duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min,
-        z_max. `point_cloud`: point_count, has_rgb, epsg. `drawing`: defined by the map workspace.
+        z_max, elevation_role. `point_cloud`: point_count, has_rgb, epsg. `drawing`: format, placed,
+        rmse_m.
       properties:
         image_count: { type: integer, minimum: 0 }
         duplicate_count: { type: integer, minimum: 0 }
@@ -9111,6 +10549,11 @@ components:
         z_max: { type: [number, "null"] }
         point_count: { type: [integer, "null"] }
         has_rgb: { type: [boolean, "null"] }
+        elevation_role:
+          { oneOf: [{ $ref: "#/components/schemas/ElevationRole" }, { type: "null" }] }
+        format: { $ref: "#/components/schemas/DrawingFormat" }
+        placed: { type: boolean }
+        rmse_m: { type: [number, "null"] }
     DataItem:
       type: object
       description: one thing imported into the project, a view over its own table (foundation §6.3)
@@ -9484,3 +10927,1558 @@ components:
       properties:
         training_run: { $ref: "#/components/schemas/TrainingRun" }
         job: { $ref: "#/components/schemas/Job" }
+    # ------------------------------------------------------------ map workspace (M-C0)
+    SiteFrameKind:
+      type: string
+      enum: [crs, local]
+    SiteFrame:
+      type: object
+      description: the project's display frame (map-workspace spec §6); every `*_site` coordinate is in it
+      required: [kind, crs_wkt, epsg, proj4, name]
+      properties:
+        kind: { $ref: "#/components/schemas/SiteFrameKind" }
+        crs_wkt: { type: [string, "null"], description: null for local }
+        epsg: { type: [integer, "null"] }
+        proj4:
+          {
+            type: [string, "null"],
+            description: "for the client's proj4 registration; null for local",
+          }
+        name: { type: string, description: "the CRS name, or Local metres" }
+      example:
+        {
+          kind: crs,
+          crs_wkt: 'PROJCRS["WGS 84 / UTM zone 38N"]',
+          epsg: 32638,
+          proj4: "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+          name: "WGS 84 / UTM zone 38N",
+        }
+    PlannedSurvey:
+      type: object
+      required: [date, note]
+      properties:
+        date: { type: string, format: date }
+        note: { type: [string, "null"], maxLength: 200 }
+    FrameItemCounts:
+      type: object
+      description: how many maps and surfaces each frame can show; the CRS chip offers the switch when both are above zero
+      required: [crs, local]
+      properties:
+        crs: { type: integer, minimum: 0 }
+        local: { type: integer, minimum: 0 }
+    MapWorkspace:
+      type: object
+      required: [frame, state, planned_surveys, frame_items, updated_at]
+      properties:
+        frame: { $ref: "#/components/schemas/SiteFrame" }
+        state:
+          {
+            type: object,
+            additionalProperties: true,
+            description: "the client's view state (layers, compare mode and dates, blend, last view), opaque to the server; empty until first saved",
+          }
+        planned_surveys:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/PlannedSurvey" },
+          }
+        frame_items: { $ref: "#/components/schemas/FrameItemCounts" }
+        updated_at: { type: string, format: date-time }
+      example:
+        frame:
+          {
+            kind: crs,
+            crs_wkt: 'PROJCRS["WGS 84 / UTM zone 38N"]',
+            epsg: 32638,
+            proj4: "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+            name: "WGS 84 / UTM zone 38N",
+          }
+        state: {}
+        planned_surveys: [{ date: "2026-10-14", note: "October flight" }]
+        frame_items: { crs: 4, local: 0 }
+        updated_at: "2026-09-27T10:00:00Z"
+    MapWorkspacePut:
+      type: object
+      required: [state]
+      properties:
+        state:
+          {
+            type: object,
+            additionalProperties: true,
+            description: at most 64 KB as JSON,
+          }
+        planned_surveys:
+          {
+            type: array,
+            maxItems: 100,
+            items: { $ref: "#/components/schemas/PlannedSurvey" },
+            description: unchanged when absent,
+          }
+      example: { state: { mode: swipe, l: "2026-08-14", r: "2026-09-14" } }
+    SiteFrameSet:
+      type: object
+      required: [kind]
+      properties:
+        kind: { $ref: "#/components/schemas/SiteFrameKind" }
+        epsg:
+          {
+            type: integer,
+            minimum: 1024,
+            maximum: 999999,
+            description: "required for crs: a projected CRS in metres",
+          }
+      example: { kind: crs, epsg: 32639 }
+    ElevationRole:
+      type: string
+      description: "dsm is the surface including objects; dtm is bare ground"
+      enum: [dsm, dtm]
+    DrawingFormat:
+      type: string
+      enum: [dxf, pdf, png, jpg, tif, landxml]
+    WorkspaceSurveyMap:
+      type: object
+      required: [id, name, gsd_cm, basis_run_id]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        gsd_cm: { type: [number, "null"] }
+        basis_run_id:
+          {
+            type: [string, "null"],
+            description: "the run that represents this map (the pinned one, else the newest finished whole-map run); a region run never does",
+          }
+    WorkspaceSurveySurface:
+      type: object
+      required: [id, name, kind, elevation_role]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        kind: { $ref: "#/components/schemas/SurfaceKind" }
+        elevation_role:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/ElevationRole" }, { type: "null" }],
+          }
+    WorkspaceSurvey:
+      type: object
+      required: [date, date_is_import_date, planned, note, maps, surfaces]
+      properties:
+        date: { type: string, format: date }
+        date_is_import_date:
+          {
+            type: boolean,
+            description: "none of its items has a capture date, so `date` is the import date (shown as date not set)",
+          }
+        planned:
+          {
+            type: boolean,
+            description: "a planned survey: a dashed tick that cannot be selected",
+          }
+        note: { type: [string, "null"] }
+        maps:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/WorkspaceSurveyMap" },
+          }
+        surfaces:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/WorkspaceSurveySurface" },
+          }
+    WorkspaceSurveyList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/WorkspaceSurvey" },
+            description: "oldest first, one per date",
+          }
+      example:
+        items:
+          - {
+              date: "2026-08-14",
+              date_is_import_date: false,
+              planned: false,
+              note: null,
+              maps:
+                [
+                  {
+                    id: "a0000000-6666-4000-8000-000000000001",
+                    name: "August ortho",
+                    gsd_cm: 2.1,
+                    basis_run_id: null,
+                  },
+                ],
+              surfaces:
+                [
+                  {
+                    id: "s0000000-9999-4000-8000-000000000001",
+                    name: "August DSM",
+                    kind: dem,
+                    elevation_role: dsm,
+                  },
+                ],
+            }
+          - {
+              date: "2026-09-14",
+              date_is_import_date: false,
+              planned: false,
+              note: null,
+              maps:
+                [
+                  {
+                    id: "a0000000-6666-4000-8000-000000000002",
+                    name: "September ortho",
+                    gsd_cm: 2.0,
+                    basis_run_id: "r0000000-7777-4000-8000-000000000001",
+                  },
+                ],
+              surfaces: [],
+            }
+          - {
+              date: "2026-10-14",
+              date_is_import_date: false,
+              planned: true,
+              note: "October flight",
+              maps: [],
+              surfaces: [],
+            }
+    WorkspaceLayerKind:
+      type: string
+      enum: [map, surface, drawing]
+    WorkspaceLayerGroup:
+      type: string
+      enum: [base, elevation, drawing]
+    SiteTileKind:
+      type: string
+      enum: [map, surface, volume_diff, drawing_raster]
+    WorkspaceLayer:
+      type: object
+      required:
+        [
+          kind,
+          id,
+          name,
+          group,
+          status,
+          in_frame,
+          tile_kind,
+          vector,
+          version,
+          date,
+          date_is_import_date,
+          footprint_site,
+          max_zoom,
+          meta,
+          surface_kind,
+          elevation_role,
+          drawing_format,
+          placed,
+        ]
+      properties:
+        kind: { $ref: "#/components/schemas/WorkspaceLayerKind" }
+        id: { type: string }
+        name: { type: string }
+        group: { $ref: "#/components/schemas/WorkspaceLayerGroup" }
+        status: { type: string, enum: [importing, ready, failed] }
+        in_frame:
+          {
+            type: boolean,
+            description: "false for a map with no CRS, an item of the other frame, or a drawing not placed; such a row is listed greyed and has no tiles",
+          }
+        tile_kind:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/SiteTileKind" }, { type: "null" }],
+            description: "the getSiteTile kind; null for a vector drawing, which uses getDrawingVectorTile",
+          }
+        vector: { type: boolean, description: a DXF or LandXML drawing }
+        version:
+          {
+            type: string,
+            description: "the `v` of its tile URLs; it changes whenever the rendered input changes",
+          }
+        date:
+          {
+            type: [string, "null"],
+            format: date,
+            description: "the survey date; null for undated overlays (designs and drawings render on both compare sides)",
+          }
+        date_is_import_date: { type: boolean }
+        footprint_site:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "minx, miny, maxx, maxy in the site frame; null when not in the frame",
+          }
+        max_zoom:
+          {
+            type: [integer, "null"],
+            minimum: 0,
+            maximum: 20,
+            description: "the smallest z with res(z) at most half the native cell; the client overzooms beyond it",
+          }
+        meta:
+          {
+            type: string,
+            description: "the row's meta line, for example a GSD and size, a z range, or control points and RMSE",
+          }
+        surface_kind:
+          {
+            oneOf: [{ $ref: "#/components/schemas/SurfaceKind" }, { type: "null" }],
+          }
+        elevation_role:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/ElevationRole" }, { type: "null" }],
+          }
+        drawing_format:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/DrawingFormat" }, { type: "null" }],
+          }
+        placed: { type: [boolean, "null"], description: drawings only }
+    WorkspaceLayerList:
+      type: object
+      required: [frame, items]
+      properties:
+        frame: { $ref: "#/components/schemas/SiteFrame" }
+        items:
+          { type: array, items: { $ref: "#/components/schemas/WorkspaceLayer" } }
+      example:
+        frame:
+          {
+            kind: crs,
+            crs_wkt: 'PROJCRS["WGS 84 / UTM zone 38N"]',
+            epsg: 32638,
+            proj4: "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+            name: "WGS 84 / UTM zone 38N",
+          }
+        items:
+          - {
+              kind: map,
+              id: "a0000000-6666-4000-8000-000000000002",
+              name: "September ortho",
+              group: base,
+              status: ready,
+              in_frame: true,
+              tile_kind: map,
+              vector: false,
+              version: "a0000000-6666-4000-8000-000000000002",
+              date: "2026-09-14",
+              date_is_import_date: false,
+              footprint_site: [583000.0, 3265000.0, 583900.0, 3265800.0],
+              max_zoom: 17,
+              meta: "2.0 cm GSD · 1.4 GB",
+              surface_kind: null,
+              elevation_role: null,
+              drawing_format: null,
+              placed: null,
+            }
+          - {
+              kind: surface,
+              id: "s0000000-9999-4000-8000-000000000001",
+              name: "August DSM",
+              group: elevation,
+              status: ready,
+              in_frame: true,
+              tile_kind: surface,
+              vector: false,
+              version: "2026-08-15T09:00:00Z",
+              date: "2026-08-14",
+              date_is_import_date: false,
+              footprint_site: [583000.0, 3265000.0, 583900.0, 3265800.0],
+              max_zoom: 15,
+              meta: "598.1 – 624.8 m",
+              surface_kind: dem,
+              elevation_role: dsm,
+              drawing_format: null,
+              placed: null,
+            }
+          - {
+              kind: drawing,
+              id: "w0000000-1212-4000-8000-000000000001",
+              name: "Foundation plan rev C",
+              group: drawing,
+              status: ready,
+              in_frame: false,
+              tile_kind: drawing_raster,
+              vector: false,
+              version: "0",
+              date: null,
+              date_is_import_date: false,
+              footprint_site: null,
+              max_zoom: null,
+              meta: "not placed",
+              surface_kind: null,
+              elevation_role: null,
+              drawing_format: pdf,
+              placed: false,
+            }
+    AnchorConvertRequest:
+      type: object
+      required: [map_id, geometry_site]
+      properties:
+        map_id:
+          {
+            type: string,
+            description: "the topmost visible ortho of the right date that covers the geometry",
+          }
+        geometry_site:
+          {
+            $ref: "#/components/schemas/FindingGeometry",
+            description: the GeoJSON Point or Polygon in the site frame,
+          }
+      example:
+        {
+          map_id: "a0000000-6666-4000-8000-000000000002",
+          geometry_site: { type: Point, coordinates: [583120.4, 3265410.2] },
+        }
+    AnchorConverted:
+      type: object
+      required: [map_id, geometry, lon, lat]
+      properties:
+        map_id: { type: string }
+        geometry: { $ref: "#/components/schemas/FindingGeometry" }
+        lon: { type: number, description: WGS84 longitude of the centroid }
+        lat: { type: number }
+      example:
+        {
+          map_id: "a0000000-6666-4000-8000-000000000002",
+          geometry: { type: Point, coordinates: [583120.4, 3265410.2] },
+          lon: 47.7625,
+          lat: 29.4970,
+        }
+    MapFindingPin:
+      type: object
+      required:
+        [id, number, type_id, severity, status, created_by, map_id, geometry_site]
+      properties:
+        id: { type: string }
+        number: { type: integer, description: "shown as F-0031" }
+        type_id: { type: string }
+        severity: { type: [integer, "null"], minimum: 1, maximum: 9 }
+        status: { $ref: "#/components/schemas/FindingStatus" }
+        created_by:
+          { type: string, description: "human, or model:<library_model_id>" }
+        map_id: { type: string }
+        geometry_site:
+          {
+            $ref: "#/components/schemas/FindingGeometry",
+            description: the anchor geometry in the site frame,
+          }
+    MapFindingsInView:
+      type: object
+      required: [items, truncated]
+      properties:
+        items:
+          {
+            type: array,
+            maxItems: 5000,
+            items: { $ref: "#/components/schemas/MapFindingPin" },
+          }
+        truncated: { type: boolean, description: more than 5 000 findings matched }
+      example:
+        items:
+          - {
+              id: "f0000000-1111-4000-8000-000000000031",
+              number: 31,
+              type_id: "c1a2b3c4-0000-4000-8000-000000000009",
+              severity: 3,
+              status: reviewed,
+              created_by: "model:m0000000-2222-4000-8000-000000000001",
+              map_id: "a0000000-6666-4000-8000-000000000002",
+              geometry_site: { type: Point, coordinates: [583120.4, 3265410.2] },
+            }
+        truncated: false
+    FrameSampleRequest:
+      type: object
+      required: [x, y, surface_ids]
+      properties:
+        x: { type: number, description: site frame }
+        y: { type: number }
+        surface_ids:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 8,
+            uniqueItems: true,
+            items: { type: string },
+          }
+    SurfaceZ:
+      type: object
+      required: [surface_id, z]
+      properties:
+        surface_id: { type: string }
+        z:
+          {
+            type: [number, "null"],
+            description: "null over nodata, outside the surface, or for a surface not in the frame",
+          }
+    FrameSample:
+      type: object
+      required: [x, y, samples]
+      properties:
+        x: { type: number }
+        y: { type: number }
+        samples: { type: array, items: { $ref: "#/components/schemas/SurfaceZ" } }
+      example:
+        {
+          x: 583120.4,
+          y: 3265410.2,
+          samples:
+            [{ surface_id: "s0000000-9999-4000-8000-000000000001", z: 611.42 }],
+        }
+    ElevationImportRequest:
+      type: object
+      required: [path, name, role]
+      properties:
+        path:
+          {
+            type: string,
+            minLength: 1,
+            description: absolute path of a single-band .tif or .tiff with a CRS,
+          }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        role: { $ref: "#/components/schemas/ElevationRole" }
+        captured_on:
+          {
+            type: [string, "null"],
+            format: date,
+            description: "the survey date; the file's TIFFTAG_DATETIME when absent or null",
+          }
+        align_to_surface_id:
+          {
+            type: [string, "null"],
+            description: "a ready surface whose CRS and cell the output adopts (same lattice); null when absent",
+          }
+        cell_size_m:
+          {
+            type: [number, "null"],
+            minimum: 0.01,
+            maximum: 5,
+            description: "without a target: the output cell; the source cell snapped to the S2 ladder when absent or null",
+          }
+      example:
+        {
+          path: "C:/survey/2026-09-14/dsm.tif",
+          name: "DSM 14 Sep 2026",
+          role: dsm,
+          captured_on: "2026-09-14",
+          align_to_surface_id: null,
+        }
+    DrawingLayer:
+      type: object
+      required: [name, colour, entity_count, visible_default]
+      properties:
+        name: { type: string }
+        colour:
+          {
+            type: string,
+            pattern: "^#[0-9a-fA-F]{6}$",
+            description: ACI or true colour as hex,
+          }
+        entity_count: { type: integer, minimum: 0 }
+        visible_default: { type: boolean }
+    DrawingPage:
+      type: object
+      required: [page, width_pt, height_pt]
+      properties:
+        page: { type: integer, minimum: 1 }
+        width_pt: { type: number }
+        height_pt: { type: number }
+    DrawingWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          {
+            type: string,
+            description: "geodata_unverified, world_file_needs_crs, dpi_lowered, labels_capped, unsupported_entities, no_linework",
+          }
+        message: { type: string }
+    DrawingEmbedded:
+      type: object
+      description: a placement the file carries itself
+      required: [source, crs_wkt, epsg, transform, needs_crs]
+      properties:
+        source: { type: string, enum: [world_file, geotiff] }
+        crs_wkt: { type: [string, "null"] }
+        epsg: { type: [integer, "null"] }
+        transform:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 6,
+            maxItems: 6,
+            description: "a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f, where x = col and y = -row",
+          }
+        needs_crs:
+          {
+            type: boolean,
+            description: "a world file carries no CRS, so the dialog asks for one",
+          }
+    DrawingInspectionCreate:
+      type: object
+      required: [path]
+      properties:
+        path:
+          {
+            type: string,
+            minLength: 1,
+            description: "absolute path of a .dxf, .pdf, .png, .jpg or .jpeg, .tif or .tiff, or .xml or .landxml file",
+          }
+      example: { path: "C:/site/plans/foundation-rev-c.pdf" }
+    DrawingInspection:
+      type: object
+      required:
+        [
+          id,
+          state,
+          error,
+          job_id,
+          path,
+          format,
+          file_size,
+          sha256,
+          units,
+          units_source,
+          crs_hint,
+          extent_src,
+          layers,
+          page_count,
+          pages,
+          width,
+          height,
+          embedded,
+          warnings,
+          created_at,
+        ]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [inspecting, ready, failed] }
+        error: { type: [string, "null"] }
+        job_id: { type: string }
+        path: { type: string }
+        format: { $ref: "#/components/schemas/DrawingFormat" }
+        file_size: { type: integer }
+        sha256: { type: [string, "null"] }
+        units:
+          {
+            oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }],
+            description: DXF or LandXML only,
+          }
+        units_source:
+          { type: [string, "null"], description: "for example DXF $INSUNITS=6" }
+        crs_hint:
+          {
+            type: [string, "null"],
+            description: "an unverified CRS name (DXF GEODATA)",
+          }
+        extent_src:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "minx, miny, maxx, maxy in drawing coordinates",
+          }
+        layers:
+          { type: array, items: { $ref: "#/components/schemas/DrawingLayer" } }
+        page_count: { type: [integer, "null"], description: PDF only }
+        pages:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/DrawingPage" },
+            description: "PDF: the first 50 pages",
+          }
+        width: { type: [integer, "null"], description: raster pixels }
+        height: { type: [integer, "null"] }
+        embedded:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/DrawingEmbedded" }, { type: "null" }],
+          }
+        warnings:
+          { type: array, items: { $ref: "#/components/schemas/DrawingWarning" } }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "i0000000-1313-4000-8000-000000000001"
+        state: ready
+        error: null
+        job_id: "j0000000-4444-4000-8000-000000000059"
+        path: "C:/site/plans/site-plan.dxf"
+        format: dxf
+        file_size: 18234567
+        sha256: "9f2c8a61d0e4b7c3a1f5e2d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9"
+        units: metre
+        units_source: "DXF $INSUNITS=6"
+        crs_hint: null
+        extent_src: [582950.0, 3264980.0, 583950.0, 3265850.0]
+        layers:
+          - {
+              name: "C-ROAD",
+              colour: "#ffffff",
+              entity_count: 1840,
+              visible_default: true,
+            }
+          - {
+              name: "C-TOPO",
+              colour: "#00ff00",
+              entity_count: 12020,
+              visible_default: true,
+            }
+        page_count: null
+        pages: []
+        width: null
+        height: null
+        embedded: null
+        warnings: []
+        created_at: "2026-09-20T08:59:00Z"
+    DrawingInspectionWithJob:
+      type: object
+      required: [inspection, job]
+      properties:
+        inspection: { $ref: "#/components/schemas/DrawingInspection" }
+        job: { $ref: "#/components/schemas/Job" }
+    DrawingPlacementInput:
+      type: object
+      required: [method]
+      properties:
+        method:
+          {
+            type: string,
+            enum: [crs, embedded, none],
+            description: "none places it later with control points (the K tool)",
+          }
+        crs:
+          {
+            type: string,
+            minLength: 1,
+            description: "EPSG:<code> or WKT; required for crs, and for embedded from a world file",
+          }
+        units: { $ref: "#/components/schemas/LinearUnit" }
+    DrawingCreate:
+      type: object
+      required: [inspection_id, name, placement]
+      properties:
+        inspection_id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        page: { type: integer, minimum: 1, description: "PDF only; 1 when absent" }
+        dpi:
+          {
+            type: integer,
+            enum: [100, 150, 200, 300],
+            description: "PDF only; 150 when absent; lowered to stay within 20 000 px and 300 MP",
+          }
+        layers:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { type: string },
+            description: "DXF or LandXML layers to import; every layer when absent",
+          }
+        placement: { $ref: "#/components/schemas/DrawingPlacementInput" }
+        captured_on:
+          { type: [string, "null"], format: date, description: a revision date }
+      example:
+        {
+          inspection_id: "i0000000-1313-4000-8000-000000000001",
+          name: "Site plan",
+          placement: { method: crs, crs: "EPSG:32638", units: metre },
+        }
+    GeorefModel:
+      type: string
+      enum: [similarity, affine]
+    GeorefPoint:
+      type: object
+      required: [id, src, dst]
+      properties:
+        id: { type: string }
+        src:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 2,
+            maxItems: 2,
+            description: "drawing coordinates; a raster uses col and -row",
+          }
+        dst:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 2,
+            maxItems: 2,
+            description: "E and N in the georef's dst_crs_wkt",
+          }
+    GeorefPointInput:
+      type: object
+      required: [src, dst]
+      properties:
+        id: { type: string, description: client-generated; assigned when absent }
+        src: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        dst:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 2,
+            maxItems: 2,
+            description: "in the site frame (putDrawingGeoref) or any metric plane (fitDrawingGeoref)",
+          }
+    GeorefWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [rmse_high, scale_mismatch, shear] }
+        message: { type: string }
+    DrawingGeoref:
+      type: object
+      required:
+        [
+          method,
+          crs_wkt,
+          epsg,
+          model,
+          points,
+          dst_crs_wkt,
+          transform,
+          rmse_m,
+          residuals_m,
+          warnings,
+        ]
+      properties:
+        method: { type: string, enum: [crs, control_points, embedded] }
+        crs_wkt:
+          {
+            type: [string, "null"],
+            description: "the drawing's own CRS (method crs or embedded)",
+          }
+        epsg: { type: [integer, "null"] }
+        model:
+          {
+            oneOf: [{ $ref: "#/components/schemas/GeorefModel" }, { type: "null" }],
+            description: control points only,
+          }
+        points:
+          {
+            type: array,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/GeorefPoint" },
+          }
+        dst_crs_wkt:
+          {
+            type: [string, "null"],
+            description: "the CRS the points' dst were picked in; null in a local frame",
+          }
+        transform:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 6,
+            maxItems: 6,
+            description: "a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f (a similarity is a, -b', c, b', a, f)",
+          }
+        rmse_m:
+          {
+            type: [number, "null"],
+            description: "0 with exactly the model's minimum of points; null without points",
+          }
+        residuals_m:
+          { type: array, items: { type: number }, description: one per point }
+        warnings:
+          { type: array, items: { $ref: "#/components/schemas/GeorefWarning" } }
+    DrawingLayerState:
+      type: object
+      required: [hidden_layers, knockout_white]
+      properties:
+        hidden_layers:
+          {
+            type: array,
+            items: { type: string },
+            description: DXF or LandXML layers switched off,
+          }
+        knockout_white:
+          { type: boolean, description: "raster: white pixels transparent" }
+    Drawing:
+      type: object
+      required:
+        [
+          id,
+          name,
+          format,
+          kind,
+          status,
+          error,
+          job_id,
+          source_path,
+          source_size,
+          page,
+          units,
+          width,
+          height,
+          dpi,
+          extent_src,
+          layers,
+          georef,
+          georef_version,
+          bounds_site,
+          layer_state,
+          captured_on,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        format: { $ref: "#/components/schemas/DrawingFormat" }
+        kind:
+          {
+            type: string,
+            enum: [vector, raster],
+            description: "vector for DXF and LandXML",
+          }
+        status: { type: string, enum: [importing, ready, failed] }
+        error: { type: [string, "null"] }
+        job_id: { type: [string, "null"] }
+        source_path: { type: string }
+        source_size: { type: integer }
+        page: { type: [integer, "null"] }
+        units:
+          { oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }] }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
+        dpi: { type: [integer, "null"] }
+        extent_src:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "drawing coordinates; a raster is 0, -height, width, 0",
+          }
+        layers:
+          { type: array, items: { $ref: "#/components/schemas/DrawingLayer" } }
+        georef:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/DrawingGeoref" }, { type: "null" }],
+            description: "null: not placed yet",
+          }
+        georef_version:
+          {
+            type: integer,
+            minimum: 0,
+            description: bumped on every placement change; part of the tile cache key,
+          }
+        bounds_site:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "the footprint in the current site frame; null when not placed or not in the frame",
+          }
+        layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
+        captured_on: { type: [string, "null"], format: date }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DrawingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Drawing" } }
+      example:
+        items:
+          - id: "w0000000-1212-4000-8000-000000000001"
+            name: "Foundation plan rev C"
+            format: pdf
+            kind: raster
+            status: ready
+            error: null
+            job_id: "j0000000-4444-4000-8000-000000000060"
+            source_path: "C:/site/plans/foundation-rev-c.pdf"
+            source_size: 4812345
+            page: 1
+            units: null
+            width: 7016
+            height: 4961
+            dpi: 150
+            extent_src: [0, -4961, 7016, 0]
+            layers: []
+            georef:
+              method: control_points
+              crs_wkt: null
+              epsg: null
+              model: similarity
+              points:
+                - { id: "p1", src: [812.0, -1204.0], dst: [583120.4, 3265410.2] }
+                - { id: "p2", src: [6120.0, -980.0], dst: [583402.9, 3265421.7] }
+                - { id: "p3", src: [3300.0, -4100.0], dst: [583255.1, 3265246.0] }
+              dst_crs_wkt: 'PROJCRS["WGS 84 / UTM zone 38N"]'
+              transform: [0.0532, 0.0021, 583077.0, -0.0021, 0.0532, 3265476.3]
+              rmse_m: 0.06
+              residuals_m: [0.05, 0.07, 0.06]
+              warnings: []
+            georef_version: 3
+            bounds_site: [583077.0, 3265200.0, 583450.0, 3265480.0]
+            layer_state: { hidden_layers: [], knockout_white: true }
+            captured_on: "2026-07-01"
+            created_at: "2026-09-20T09:00:00Z"
+            updated_at: "2026-09-20T09:30:00Z"
+    DrawingWithJob:
+      type: object
+      required: [drawing, job]
+      properties:
+        drawing: { $ref: "#/components/schemas/Drawing" }
+        job: { $ref: "#/components/schemas/Job" }
+    DrawingPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
+        captured_on:
+          { type: [string, "null"], format: date, description: null clears it }
+    DrawingGeorefPut:
+      type: object
+      required: [model, points, dst_frame]
+      properties:
+        model: { $ref: "#/components/schemas/GeorefModel" }
+        points:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/GeorefPointInput" },
+          }
+        dst_frame:
+          {
+            type: string,
+            enum: [site],
+            description: the frame the dst coordinates are in,
+          }
+      example:
+        {
+          model: similarity,
+          dst_frame: site,
+          points:
+            [
+              { src: [812.0, -1204.0], dst: [583120.4, 3265410.2] },
+              { src: [6120.0, -980.0], dst: [583402.9, 3265421.7] },
+              { src: [3300.0, -4100.0], dst: [583255.1, 3265246.0] },
+            ],
+        }
+    GeorefFitRequest:
+      type: object
+      required: [model, points]
+      properties:
+        model: { $ref: "#/components/schemas/GeorefModel" }
+        points:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/GeorefPointInput" },
+          }
+        units:
+          {
+            oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }],
+            description: "the drawing's units, for the scale_mismatch warning; null or absent for a raster",
+          }
+    GeorefFit:
+      type: object
+      required:
+        [model, transform, rmse_m, residuals_m, warnings, scale, rotation_deg]
+      properties:
+        model: { $ref: "#/components/schemas/GeorefModel" }
+        transform:
+          { type: array, items: { type: number }, minItems: 6, maxItems: 6 }
+        rmse_m: { type: number }
+        residuals_m: { type: array, items: { type: number } }
+        warnings:
+          { type: array, items: { $ref: "#/components/schemas/GeorefWarning" } }
+        scale:
+          {
+            type: number,
+            description: "metres per drawing unit (the mean of the two axes for affine)",
+          }
+        rotation_deg:
+          {
+            type: number,
+            description: counter-clockwise from the drawing's x axis to east,
+          }
+      example:
+        {
+          model: similarity,
+          transform: [0.0532, 0.0021, 583077.0, -0.0021, 0.0532, 3265476.3],
+          rmse_m: 0.06,
+          residuals_m: [0.05, 0.07, 0.06],
+          warnings: [],
+          scale: 0.05324,
+          rotation_deg: -2.26,
+        }
+    DrawingVectorLayer:
+      type: object
+      required: [name, colour, lines]
+      properties:
+        name: { type: string }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        lines:
+          {
+            type: array,
+            items: { type: array, minItems: 4, items: { type: number } },
+            description: "each a flat x0, y0, x1, y1, ... list in the site frame",
+          }
+    DrawingLabel:
+      type: object
+      required: [text, x, y, height_m, rotation]
+      properties:
+        text: { type: string }
+        x: { type: number }
+        y: { type: number }
+        height_m: { type: number }
+        rotation: { type: number, description: degrees counter-clockwise }
+        layer:
+          {
+            type: string,
+            description: "the DXF or LandXML layer, so hidden layers hide their labels too",
+          }
+    DrawingVectorTile:
+      type: object
+      required: [layers, labels, truncated]
+      properties:
+        layers:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/DrawingVectorLayer" },
+          }
+        labels:
+          { type: array, items: { $ref: "#/components/schemas/DrawingLabel" } }
+        truncated:
+          {
+            type: boolean,
+            description: "over 20 000 vertices matched; the shortest runs were dropped first",
+          }
+      example:
+        layers:
+          [
+            {
+              name: "C-ROAD",
+              colour: "#ffffff",
+              lines:
+                [[583100.0, 3265400.0, 583180.0, 3265402.5, 583240.0, 3265430.0]],
+            },
+          ]
+        labels:
+          [
+            {
+              text: "ACCESS ROAD",
+              x: 583150.0,
+              y: 3265405.0,
+              height_m: 1.5,
+              rotation: 2.0,
+              layer: "C-ROAD",
+            },
+          ]
+        truncated: false
+    SiteVertex:
+      type: array
+      description: "x, y"
+      minItems: 2
+      maxItems: 2
+      items: { type: number }
+    MapMeasurementKind:
+      type: string
+      enum: [distance, area, profile]
+    MapDistanceResults:
+      type: object
+      required:
+        [
+          length_m,
+          grid_length_m,
+          scale_factor,
+          length_3d_m,
+          nodata_fraction,
+          dsm_surface_id,
+        ]
+      properties:
+        length_m:
+          {
+            type: [number, "null"],
+            description: "ellipsoidal (pyproj Geod); null in a local frame",
+          }
+        grid_length_m: { type: number }
+        scale_factor:
+          { type: [number, "null"], description: "length_m / grid_length_m" }
+        length_3d_m:
+          {
+            type: [number, "null"],
+            description: "the slope length over the DSM; null without one",
+          }
+        nodata_fraction:
+          {
+            type: [number, "null"],
+            minimum: 0,
+            maximum: 1,
+            description: "the share of the 3D line over nodata",
+          }
+        dsm_surface_id: { type: [string, "null"] }
+    MapAreaResults:
+      type: object
+      required:
+        [area_m2, perimeter_m, grid_area_m2, grid_perimeter_m, areal_scale_factor]
+      properties:
+        area_m2:
+          {
+            type: [number, "null"],
+            description: "ellipsoidal, absolute; null in a local frame",
+          }
+        perimeter_m: { type: [number, "null"] }
+        grid_area_m2: { type: number }
+        grid_perimeter_m: { type: number }
+        areal_scale_factor: { type: [number, "null"] }
+    ProfileSeries:
+      type: object
+      required: [surface_id, label, date, z]
+      properties:
+        surface_id: { type: string }
+        label: { type: string }
+        date: { type: [string, "null"], format: date }
+        z:
+          {
+            type: array,
+            maxItems: 2000,
+            items: { type: [number, "null"] },
+            description: "one per station; null over nodata (drawn as a break)",
+          }
+    MapProfileResults:
+      type: object
+      required:
+        [
+          length_m,
+          grid_length_m,
+          stations_m,
+          series,
+          z_min,
+          z_max,
+          cut_area_m2,
+          fill_area_m2,
+          nodata_fraction,
+        ]
+      properties:
+        length_m: { type: [number, "null"] }
+        grid_length_m: { type: number }
+        stations_m:
+          {
+            type: array,
+            maxItems: 2000,
+            items: { type: number },
+            description: chainage of each station,
+          }
+        series:
+          {
+            type: array,
+            minItems: 1,
+            maxItems: 3,
+            items: { $ref: "#/components/schemas/ProfileSeries" },
+          }
+        z_min: { type: [number, "null"] }
+        z_max: { type: [number, "null"] }
+        cut_area_m2:
+          {
+            type: [number, "null"],
+            description: "between the first two series (trapezoidal); null with one series",
+          }
+        fill_area_m2: { type: [number, "null"] }
+        nodata_fraction: { type: number, minimum: 0, maximum: 1 }
+    MapMeasurementResults:
+      description: "computed by the server on create and on every PATCH that moves the vertices or changes the surfaces; one shape per kind"
+      anyOf:
+        - $ref: "#/components/schemas/MapDistanceResults"
+        - $ref: "#/components/schemas/MapAreaResults"
+        - $ref: "#/components/schemas/MapProfileResults"
+    MapMeasurement:
+      type: object
+      required:
+        [
+          id,
+          name,
+          note,
+          kind,
+          crs_wkt,
+          epsg,
+          vertices,
+          surface_ids,
+          map_id,
+          results,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        note: { type: [string, "null"] }
+        kind: { $ref: "#/components/schemas/MapMeasurementKind" }
+        crs_wkt:
+          {
+            type: [string, "null"],
+            description: "the frame it was drawn in (the site CRS at creation); null for local metres",
+          }
+        epsg: { type: [integer, "null"] }
+        vertices:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 5000,
+            items: { $ref: "#/components/schemas/SiteVertex" },
+            description: "in crs_wkt; an area ring is not closed",
+          }
+        vertices_site:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/SiteVertex" },
+            description: "only with frame=site: the vertices in the current site frame",
+          }
+        surface_ids: { type: array, maxItems: 3, items: { type: string } }
+        map_id:
+          {
+            type: [string, "null"],
+            description: "the map of the right date at creation",
+          }
+        results: { $ref: "#/components/schemas/MapMeasurementResults" }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MapMeasurementPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          { type: array, items: { $ref: "#/components/schemas/MapMeasurement" } }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - id: "mm000000-1414-4000-8000-000000000001"
+            name: "Distance 1"
+            note: null
+            kind: distance
+            crs_wkt: 'PROJCRS["WGS 84 / UTM zone 38N"]'
+            epsg: 32638
+            vertices: [[583100.0, 3265400.0], [583148.1, 3265403.2]]
+            surface_ids: []
+            map_id: "a0000000-6666-4000-8000-000000000002"
+            results:
+              {
+                length_m: 48.2,
+                grid_length_m: 48.21,
+                scale_factor: 0.99981,
+                length_3d_m: null,
+                nodata_fraction: null,
+                dsm_surface_id: null,
+              }
+            created_at: "2026-09-27T09:00:00Z"
+            updated_at: "2026-09-27T09:00:00Z"
+        next_cursor: null
+    MapMeasurementCreate:
+      type: object
+      required: [kind, vertices]
+      properties:
+        kind: { $ref: "#/components/schemas/MapMeasurementKind" }
+        vertices:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 5000,
+            items: { $ref: "#/components/schemas/SiteVertex" },
+            description: "in the site frame; distance and profile at least 2, area at least 3 and simple",
+          }
+        name:
+          {
+            type: string,
+            minLength: 1,
+            maxLength: 200,
+            description: "numbered like Distance 3 when absent",
+          }
+        note: { type: string, maxLength: 2000 }
+        surface_ids:
+          {
+            type: array,
+            uniqueItems: true,
+            maxItems: 3,
+            items: { type: string },
+            description: "profile: 1 to 3 surfaces; distance: an optional DSM for the 3D length; area: none",
+          }
+        map_id:
+          {
+            type: [string, "null"],
+            description: "the map of the right date; null when absent",
+          }
+      example:
+        {
+          kind: profile,
+          vertices: [[583100.0, 3265400.0], [583290.0, 3265460.0]],
+          surface_ids: ["s0000000-9999-4000-8000-000000000001"],
+        }
+    MapMeasurementPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        note:
+          { type: [string, "null"], maxLength: 2000, description: null clears it }
+        vertices:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 5000,
+            items: { $ref: "#/components/schemas/SiteVertex" },
+            description: in the site frame,
+          }
+        surface_ids:
+          { type: array, uniqueItems: true, maxItems: 3, items: { type: string } }
+    MeasurementKind:
+      type: string
+      enum: [cloud, volume, map]
+    MeasurementSubKind:
+      type: string
+      description: "cloud: its CloudMeasurementKind, including C's area and profile; volume: volume; map: its MapMeasurementKind"
+      enum: [point, distance, height, vertical, area, profile, volume]
+    MeasurementUnit:
+      type: string
+      enum: [m, m2, m3, deg, mm_per_m]
+    MeasurementStatus:
+      type: string
+      description: "a volume's calculating and a cloud measurement's computing are both computing"
+      enum: [ready, computing, stale, failed]
+    MeasurementItem:
+      type: object
+      required:
+        [
+          kind,
+          sub_kind,
+          id,
+          name,
+          headline,
+          unit,
+          data_type,
+          data_id,
+          status,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        kind: { $ref: "#/components/schemas/MeasurementKind" }
+        sub_kind: { $ref: "#/components/schemas/MeasurementSubKind" }
+        id:
+          {
+            type: string,
+            description: "the id in its own table (cloud, volume or map measurement)",
+          }
+        name: { type: string }
+        headline:
+          {
+            type: [number, "null"],
+            description: "the kind's headline figure in unit; null while computing, failed, or not mapped yet",
+          }
+        unit:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/MeasurementUnit" }, { type: "null" }],
+          }
+        data_type:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/DataItemType" }, { type: "null" }],
+            description: "what it was measured on: a point cloud, a volume's top surface (elevation), or a map measurement's map",
+          }
+        data_id: { type: [string, "null"] }
+        status: { $ref: "#/components/schemas/MeasurementStatus" }
+        created_at: { type: string, format: date-time, description: the page key }
+        updated_at: { type: string, format: date-time }
+    MeasurementPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items:
+          { type: array, items: { $ref: "#/components/schemas/MeasurementItem" } }
+        next_cursor: { type: [string, "null"] }
+      example:
+        items:
+          - {
+              kind: map,
+              sub_kind: profile,
+              id: "mm000000-1414-4000-8000-000000000002",
+              name: "Section across the pit",
+              headline: 199.2,
+              unit: m,
+              data_type: map,
+              data_id: "a0000000-6666-4000-8000-000000000002",
+              status: ready,
+              created_at: "2026-09-27T09:10:00Z",
+              updated_at: "2026-09-27T09:10:00Z",
+            }
+          - {
+              kind: volume,
+              sub_kind: volume,
+              id: "v0000000-8888-4000-8000-000000000001",
+              name: "Pile 1",
+              headline: 1250.4,
+              unit: m3,
+              data_type: elevation,
+              data_id: "s0000000-9999-4000-8000-000000000001",
+              status: ready,
+              created_at: "2026-09-26T15:00:00Z",
+              updated_at: "2026-09-26T15:02:00Z",
+            }
+          - {
+              kind: cloud,
+              sub_kind: distance,
+              id: "cm000000-1515-4000-8000-000000000001",
+              name: "Distance 3",
+              headline: 12.84,
+              unit: m,
+              data_type: point_cloud,
+              data_id: "p0000000-1111-4000-8000-000000000001",
+              status: ready,
+              created_at: "2026-09-25T11:00:00Z",
+              updated_at: "2026-09-25T11:00:00Z",
+            }
+        next_cursor: null
+    SiteRing:
+      type: array
+      description: "x, y vertices in the site frame; not closed"
+      minItems: 3
+      maxItems: 5000
+      items: { $ref: "#/components/schemas/SiteVertex" }
+    VolumeMaterial:
+      type: object
+      required: [name, density_t_m3]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        density_t_m3:
+          {
+            type: number,
+            exclusiveMinimum: 0,
+            maximum: 30,
+            description: "tonnes per cubic metre; tonnage is the net volume times this",
+          }
+      example: { name: "Gravel", density_t_m3: 1.8 }
+    MapRunScope:
+      type: string
+      description: "a region run covers part of one map and never represents a survey (timeline, analytics and recounts skip it)"
+      enum: [map, region]
+    RunRegion:
+      type: object
+      description: "run a map source's model over part of one map only"
+      required: [map_id, polygon_site]
+      properties:
+        map_id: { type: string }
+        polygon_site: { $ref: "#/components/schemas/SiteRing" }
+    SiteAreaCategory:
+      type: string
+      enum: [general, laydown, exclusion, excavation, other]

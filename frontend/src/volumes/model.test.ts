@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { exampleMapRun } from "@/test/fixtures";
 import { PROJECT_ID, exampleMeasurement, exampleSurface, otherFlightRun } from "@/test/volumeFixtures";
 import {
+  BASE_KIND_TEXT,
+  PANEL_BASE_KINDS,
   buildDefaults,
   buildRequest,
   exportState,
@@ -112,5 +114,12 @@ describe("volumes model", () => {
     );
     expect(viewIn3dHref(PROJECT_ID, { ...exampleSurface, point_cloud_id: null }, [])).toBeNull();
     expect(viewIn3dHref(PROJECT_ID, { ...exampleSurface, kind: "design" }, [])).toBeNull();
+  });
+
+  describe("bases", () => {
+    it("keeps the lowest-point base off the volumes screen", () => {
+      expect(PANEL_BASE_KINDS).toEqual(["toe_plane", "toe_surface", "flat", "surface"]);
+      expect(BASE_KIND_TEXT.toe_lowest).toBe("Stockpile toe — lowest point");
+    });
   });
 });

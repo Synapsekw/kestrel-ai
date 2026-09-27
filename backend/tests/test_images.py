@@ -223,3 +223,18 @@ def test_derived_files_are_published_atomically(imported, client, project_dir):
     assert [p.name for p in cache.rglob("*.tmp*")] == []
     names = {p.name for p in cache.rglob("*.jpg")}
     assert {f"{image['id']}.jpg", f"{image['id']}_160.jpg"} <= names
+
+
+def test_bulk_delete_drops_the_summary_rows(imported, client):
+    from app.db.models import ImageSummary
+
+    pid = imported["pid"]
+    ids = [i["id"] for i in _list(client, pid, limit=3)["items"]]
+    _add_boxes(client, pid, ids[0], imported["classes"][0]["id"])
+    handle = client.app.state.projects.get(pid)
+    with handle.session() as s:
+        assert s.get(ImageSummary, ids[0]) is not None
+    r = client.post(f"/api/v1/projects/{pid}/images/bulk-delete", json={"image_ids": ids})
+    assert r.status_code == 200 and r.json()["deleted"] == 3
+    with handle.session() as s:
+        assert s.query(ImageSummary).filter(ImageSummary.image_id.in_(ids)).count() == 0

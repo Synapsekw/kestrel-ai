@@ -16,12 +16,14 @@ from app.db.models import SiteArea
 from app.detect import analytics, site_areas
 from app.errors import AppError
 from app.projects.service import ProjectHandle, get_project
+from app.workspace.pending import guard_site_area_category
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["detect"])
 
 LonLat = Annotated[list[float], Field(min_length=2, max_length=2)]
 PixelPoint = Annotated[list[float], Field(min_length=2, max_length=2)]
 Name = Annotated[str, Field(min_length=1, max_length=200)]
+SiteAreaCategory = Literal["general", "laydown", "exclusion", "excavation", "other"]
 
 
 # --- schemas (contract/openapi.yaml is the source of truth) --------------------------------------
@@ -31,11 +33,18 @@ class SiteAreaOut(BaseModel):
     id: str
     name: str
     polygon_wgs84: list[list[float]]
+    category: SiteAreaCategory
     created_at: datetime
 
     @classmethod
     def from_row(cls, row: SiteArea) -> SiteAreaOut:
-        return cls(id=row.id, name=row.name, polygon_wgs84=row.polygon_wgs84, created_at=row.created_at)
+        return cls(
+            id=row.id,
+            name=row.name,
+            polygon_wgs84=row.polygon_wgs84,
+            category=row.category or "general",
+            created_at=row.created_at,
+        )
 
 
 class SiteAreaCreate(BaseModel):
@@ -43,6 +52,7 @@ class SiteAreaCreate(BaseModel):
     polygon_wgs84: list[LonLat] | None = Field(default=None, min_length=3)
     map_id: str | None = None
     polygon_px: list[PixelPoint] | None = Field(default=None, min_length=3)
+    category: SiteAreaCategory | None = None
 
 
 class SiteAreaPatch(BaseModel):
@@ -50,6 +60,7 @@ class SiteAreaPatch(BaseModel):
     polygon_wgs84: list[LonLat] | None = Field(default=None, min_length=3)
     map_id: str | None = None
     polygon_px: list[PixelPoint] | None = Field(default=None, min_length=3)
+    category: SiteAreaCategory | None = None
 
 
 class SiteAreaList(BaseModel):
@@ -179,6 +190,7 @@ def list_site_areas(handle: ProjectHandle = Depends(get_project)) -> SiteAreaLis
 def create_site_area(
     body: SiteAreaCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> SiteAreaOut:
+    guard_site_area_category(body)
     outline = site_areas.outline_wgs84(handle, body.polygon_wgs84, body.map_id, body.polygon_px)
     if outline is None:
         raise AppError(
@@ -196,6 +208,7 @@ def update_site_area(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> SiteAreaOut:
+    guard_site_area_category(body)
     outline = site_areas.outline_wgs84(handle, body.polygon_wgs84, body.map_id, body.polygon_px)
     row = site_areas.update_area(handle, areaId, body.name, outline)
     if outline is not None:

@@ -39,6 +39,7 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   detect_export: "download",
   pointcloud_import: "cloud",
   pointcloud_export: "cloud",
+  pointcloud_profile: "cloud",
   surface_build: "volume",
   volume_calc: "volume",
   volume_export: "volume",
@@ -50,6 +51,8 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   image_metadata: "images",
   summary_rebuild: "refresh",
   assist_acquire: "sparkle",
+  elevation_import: "elevation",
+  drawing_import: "drawing",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

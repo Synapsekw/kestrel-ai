@@ -1,5 +1,13 @@
 import { create } from "zustand";
 import type { AppEvent } from "@contract/client";
+import {
+  consumeEcho,
+  EMPTY_LEDGER,
+  expectEchoes,
+  releaseEchoes,
+  renewEchoes,
+  type EchoLedger,
+} from "./changesEcho";
 
 interface ChangesState {
   /** Bumped whenever the image list may have changed (import batches, box counts). */
@@ -14,8 +22,15 @@ interface ChangesState {
   catalogueRevision: number;
   /** Bumped on `data.changed` (spec 2026-09-26-foundation section 13): the tab counts and the Data list. */
   dataRevision: number;
-  /** Bumped on `findings.changed` and after this client's own finding writes (F §8.3). */
+  /** Bumped on `findings.changed` (except the echo of this client's own write) and after this
+   * client's own finding writes (F §8.3). */
   findingsRevision: number;
+  /** Own finding writes whose `findings.changed` echo is still expected (rulings R8). */
+  findingEchoes: EchoLedger;
+  expectFindingEchoes: (ids: readonly string[]) => void;
+  releaseFindingEchoes: (ids: readonly string[]) => void;
+  /** An own write succeeded: its expected echo gets a fresh TTL from now. */
+  renewFindingEchoes: (ids: readonly string[]) => void;
   /** Bumped on `migration.changed`: the Projects list re-reads (F §11.3). */
   projectsRevision: number;
   /** The project the route has open (set by the Shell), or null. The events socket is app-wide, so
@@ -49,6 +64,11 @@ export const useChangesStore = create<ChangesState>((set) => ({
   catalogueRevision: 0,
   dataRevision: 0,
   findingsRevision: 0,
+  findingEchoes: EMPTY_LEDGER,
+  expectFindingEchoes: (ids) =>
+    set((s) => ({ findingEchoes: expectEchoes(s.findingEchoes, ids, Date.now()) })),
+  releaseFindingEchoes: (ids) => set((s) => ({ findingEchoes: releaseEchoes(s.findingEchoes, ids) })),
+  renewFindingEchoes: (ids) => set((s) => ({ findingEchoes: renewEchoes(s.findingEchoes, ids, Date.now()) })),
   projectsRevision: 0,
   openProjectId: null,
   setOpenProject: (openProjectId) => set({ openProjectId }),
@@ -70,7 +90,12 @@ export const useChangesStore = create<ChangesState>((set) => ({
       if (ev.type === "surfaces.changed") return { surfacesRevision: s.surfacesRevision + 1 };
       if (ev.type === "volumes.changed") return { volumesRevision: s.volumesRevision + 1 };
       if (ev.type === "data.changed") return { dataRevision: s.dataRevision + 1 };
-      if (ev.type === "findings.changed") return { findingsRevision: s.findingsRevision + 1 };
+      if (ev.type === "findings.changed") {
+        // This client's own write already bumped once; its echo would re-read every view again.
+        const echo = consumeEcho(s.findingEchoes, ev.payload, Date.now());
+        if (echo.skip) return { findingEchoes: echo.ledger };
+        return { findingsRevision: s.findingsRevision + 1, findingEchoes: echo.ledger };
+      }
       if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
       if (ev.type === "catalogue.changed") return { catalogueRevision: s.catalogueRevision + 1 };
       return s;

@@ -13,7 +13,8 @@ from pydantic import BaseModel, Field
 from app.jobs.schemas import JobOut
 from app.maps.schemas import TileGrid
 
-SurfaceKind = Literal["cloud_dsm", "design"]
+SurfaceKind = Literal["cloud_dsm", "design", "dem"]
+ElevationRole = Literal["dsm", "dtm"]
 SurfaceStatus = Literal["building", "ready", "failed"]
 SurfaceMethod = Literal["median", "mean", "max", "min", "tin", "delaunay", "dem_resample", "dem_copy"]
 SurfaceBuildMethod = Literal["median", "mean", "max", "min"]
@@ -89,6 +90,7 @@ class SurfaceOut(BaseModel):
     build_params: SurfaceBuildParams | None
     stats: SurfaceBuildStats | None
     captured_on: date | None
+    elevation_role: ElevationRole | None
     map_id: str | None
     tile_grid: TileGrid | None
     measurement_count: int
@@ -102,6 +104,9 @@ class SurfaceList(BaseModel):
 
 class SurfacePatch(BaseModel):
     name: str | None = Field(default=None, min_length=1)
+    # Map workspace (spec §5.2 "set date and role", §7): answer 501 until M-B2 (app/workspace/pending.py).
+    captured_on: date | None = None
+    elevation_role: ElevationRole | None = None
 
 
 class SurfaceWithJob(BaseModel):

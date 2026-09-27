@@ -24,6 +24,7 @@ const TYPE_NAME: Record<Job["type"], string> = {
   detect_export: "Detection export",
   pointcloud_import: "Point cloud import",
   pointcloud_export: "Point cloud export",
+  pointcloud_profile: "Cross-section profile",
   surface_build: "Build surface",
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
@@ -35,6 +36,8 @@ const TYPE_NAME: Record<Job["type"], string> = {
   image_metadata: "Camera metadata",
   summary_rebuild: "Image summary rebuild",
   assist_acquire: "Smart polygon model",
+  elevation_import: "Elevation import",
+  drawing_import: "Drawing import",
 };
 
 function num(v: unknown): number | null {
@@ -104,6 +107,8 @@ export function jobToastText(job: Job): string {
       return "Point cloud imported";
     case "pointcloud_export":
       return "Point cloud export finished";
+    case "pointcloud_profile":
+      return "Cross-section profile ready";
     case "surface_build":
       return "Surface built";
     case "volume_calc":
@@ -129,6 +134,11 @@ export function jobToastText(job: Job): string {
       return "Image summaries rebuilt";
     case "assist_acquire":
       return "Smart polygon model ready";
+    case "elevation_import":
+      return "Elevation imported";
+    case "drawing_import":
+      // One job type, two phases (spec 2026-09-26-map-workspace section 8.2).
+      return job.params?.phase === "build" ? "Drawing imported" : "Drawing file read";
   }
 }
 

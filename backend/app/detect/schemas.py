@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -41,6 +41,16 @@ class RunSummaryPage(BaseModel):
     next_cursor: str | None = None
 
 
+SitePoint = Annotated[list[float], Field(min_length=2, max_length=2)]
+
+
+class RunRegion(BaseModel):
+    """A map run over part of one map (map-workspace spec §9.3); answers 501 until M-B5."""
+
+    map_id: str
+    polygon_site: list[SitePoint] = Field(min_length=3, max_length=5000)
+
+
 class RunCreate(BaseModel):
     source_ids: list[str] = Field(min_length=1)
     model_id: str | None = None
@@ -49,6 +59,7 @@ class RunCreate(BaseModel):
     conf: float = Field(default=0.25, ge=0, le=1)
     tiling: Tiling | None = None
     target_gsd_cm: float | None = Field(default=None, gt=0)
+    region: RunRegion | None = None
 
 
 class RunCreatedItem(BaseModel):

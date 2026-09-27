@@ -63,3 +63,20 @@ def publish_surfaces_changed(request: Request, handle: ProjectHandle, surface_id
 def publish_volumes_changed(request: Request, handle: ProjectHandle, measurement_ids: list[str]) -> None:
     """`volumes.changed {measurement_ids}` (spec 2026-09-23-volumes section 11.3)."""
     _publish_ids_changed(request, handle, "volumes.changed", "measurement_ids", measurement_ids)
+
+
+def publish_drawings_changed(request: Request, handle: ProjectHandle, drawing_ids: list[str]) -> None:
+    """`drawings.changed {drawing_ids}` (spec 2026-09-26-map-workspace §12)."""
+    _publish_ids_changed(request, handle, "drawings.changed", "drawing_ids", drawing_ids)
+
+
+def publish_map_measurements_changed(
+    request: Request, handle: ProjectHandle, measurement_ids: list[str]
+) -> None:
+    """`map_measurements.changed {measurement_ids}` (spec 2026-09-26-map-workspace §12)."""
+    _publish_ids_changed(request, handle, "map_measurements.changed", "measurement_ids", measurement_ids)
+
+
+def publish_map_workspace_changed(request: Request, handle: ProjectHandle, fields: list[str]) -> None:
+    """`map_workspace.changed {fields}`: which of `frame`, `state`, `planned_surveys` changed."""
+    _publish_ids_changed(request, handle, "map_workspace.changed", "fields", fields)

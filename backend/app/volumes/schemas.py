@@ -14,7 +14,7 @@ from app.jobs.schemas import JobOut
 from app.surfaces.schemas import SurfaceKind, SurfaceMethod
 
 VolumeStatus = Literal["calculating", "ready", "failed", "stale"]
-VolumeBaseKind = Literal["toe_plane", "toe_surface", "flat", "surface"]
+VolumeBaseKind = Literal["toe_plane", "toe_surface", "flat", "surface", "toe_lowest"]
 ExclusionMode = Literal["patch", "exclude"]
 Point = Annotated[list[float], Field(min_length=2, max_length=2)]
 VolumeRing = Annotated[list[Point], Field(min_length=3, max_length=5000)]
@@ -42,6 +42,13 @@ class VolumeBase(BaseModel):
     kind: VolumeBaseKind
     z: float | None = None
     surface_id: str | None = None
+
+
+class VolumeMaterial(BaseModel):
+    """Not a calculation input (map-workspace spec §10): tonnage is net volume x density."""
+
+    name: str = Field(min_length=1, max_length=100)
+    density_t_m3: float = Field(gt=0, le=30)
 
 
 class ExclusionPolygon(BaseModel):
@@ -166,6 +173,7 @@ class VolumeMeasurementOut(BaseModel):
     base: VolumeBase
     masks: VolumeMasks
     alignment: VolumeAlignment
+    material: VolumeMaterial | None
     results: VolumeResults | None
     stale_reasons: list[str]
     job_id: str | None
@@ -179,11 +187,14 @@ class VolumeMeasurementList(BaseModel):
 
 class VolumeMeasurementCreate(BaseModel):
     name: str = Field(min_length=1)
-    polygon_native: VolumeRing
+    # Exactly one of the two (map-workspace spec §10); `polygon_site` answers 501 until M-B5.
+    polygon_native: VolumeRing | None = None
+    polygon_site: VolumeRing | None = None
     top_surface_id: str
     base: VolumeBase
     masks: VolumeMasksInput | None = None
     alignment: VolumeAlignmentInput | None = None
+    material: VolumeMaterial | None = None
 
 
 class VolumeMeasurementPatch(BaseModel):
@@ -193,7 +204,7 @@ class VolumeMeasurementPatch(BaseModel):
     def _sent_fields_are_values(self) -> VolumeMeasurementPatch:
         if not self.model_fields_set:
             raise ValueError("send at least one field to change")
-        nulls = sorted(k for k in self.model_fields_set if getattr(self, k) is None)
+        nulls = sorted(k for k in self.model_fields_set if getattr(self, k) is None and k != "material")
         if nulls:
             raise ValueError(f"{', '.join(nulls)} cannot be null; leave the field out instead")
         return self
@@ -204,6 +215,8 @@ class VolumeMeasurementPatch(BaseModel):
     base: VolumeBase | None = None
     masks: VolumeMasksInput | None = None
     alignment: VolumeAlignmentInput | None = None
+    polygon_site: VolumeRing | None = None
+    material: VolumeMaterial | None = None  # null clears it
 
 
 class VolumeMeasurementWithJob(BaseModel):

@@ -19,7 +19,11 @@ export const BASE_KIND_TEXT: Record<BaseKind, string> = {
   toe_surface: "Stockpile toe — fitted surface",
   flat: "Flat level",
   surface: "Another surface",
+  toe_lowest: "Stockpile toe — lowest point",
 };
+
+/** The bases the volumes screen offers; the map workspace's base cards offer `toe_lowest` (M-W4). */
+export const PANEL_BASE_KINDS: BaseKind[] = ["toe_plane", "toe_surface", "flat", "surface"];
 
 export interface Labels {
   fill: string;

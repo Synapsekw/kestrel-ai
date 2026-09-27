@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from app.datasets.images import ImageRow, get_image
 from app.db.models import Box, Image, QueryRun
 from app.errors import AppError, not_found
+from app.imagery import summary
 from app.projects.service import ProjectHandle
 
 GROUND_TRUTH = ("accepted", "edited")
@@ -111,6 +112,7 @@ def set_marked_empty(handle: ProjectHandle, image_id: str, value: bool) -> tuple
             if _reject_pending(s, image_id, datetime.now(UTC)):
                 rejected_ids.append(image_id)
                 recount_runs_of(s, rejected_ids)
+                summary.touch(s, image_id)
         image.marked_empty = value
         s.flush()
     return get_image(handle, image_id), rejected_ids
@@ -160,4 +162,6 @@ def bulk_mark_empty(handle: ProjectHandle, image_ids: list[str], value: bool) ->
         for chunk in _chunks(to_mark):
             s.execute(update(Image).where(Image.id.in_(chunk)).values(marked_empty=True))
         recount_runs_of(s, rejected_ids)
+        for image_id in rejected_ids:  # bounded: the ids named in the request
+            summary.touch(s, image_id)
         return len(to_mark), len(has_ground_truth), rejected_ids
