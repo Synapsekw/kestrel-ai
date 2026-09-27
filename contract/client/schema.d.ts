@@ -3285,6 +3285,201 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/map-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The site frame, the persisted view state and the planned surveys (map-workspace spec §6).
+         *     The first read creates the row. Its frame is the CRS of the first georeferenced map or
+         *     surface (a geographic CRS becomes the UTM zone of its centre), or local metres when nothing
+         *     has coordinates.
+         */
+        get: operations["getMapWorkspace"];
+        /**
+         * Replace the persisted view state and, when sent, the planned surveys (the client debounces
+         *     it by 1 s). Publishes `map_workspace.changed`.
+         */
+        put: operations["putMapWorkspace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/frame": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Change the site CRS (`{kind: crs, epsg}`, a projected CRS in metres) or switch to local
+         *     metres (`{kind: local}`). Stored geometry never changes; the client re-reads every tile and
+         *     vector in the new frame. Publishes `map_workspace.changed`.
+         */
+        put: operations["setSiteFrame"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/surveys": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One entry per survey date in the current frame, oldest first, for the timeline scrubber and
+         *     the date chips: the ready maps and surfaces of that date, and the planned surveys. Items
+         *     without a capture date are grouped under their import date.
+         */
+        get: operations["listWorkspaceSurveys"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/layers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Every map, surface and drawing as a layer row, with its tile kind and version, date,
+         *     footprint in the site frame, `max_zoom` and meta line. Items outside the frame (no CRS, the
+         *     other frame, a drawing not placed) are listed with `in_frame` false.
+         */
+        get: operations["listWorkspaceLayers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/site-tiles/{kind}/{layerId}/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                kind: components["parameters"]["siteTileKind"];
+                /** @description the map, surface, volume measurement or drawing the tile renders */
+                layerId: components["parameters"]["layerId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        /**
+         * One 256 px PNG of a layer warped into the site tile grid (map-workspace spec §6), read from
+         *     one overview level. Pixels outside the layer's footprint, NaN and masked pixels are
+         *     transparent; a tile that misses the footprint entirely is 204 without any read.
+         */
+        get: operations["getSiteTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/anchor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert a point or polygon drawn in the site frame into the map's CRS, with its WGS84
+         *     centroid, ready for `createFinding` with a `map` anchor (F §8.5).
+         */
+        post: operations["convertAnchor"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/findings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /**
+         * Findings with a `map` anchor inside `bbox`, read through F's finding service, with their
+         *     geometry in the site frame; at most 5 000, `truncated` past that.
+         */
+        get: operations["listMapFindingsInView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/map-workspace/sample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The height of each surface at one site-frame point (bilinear over 2 x 2 cells), for the
+         *     coordinate readout; the client throttles it to one call per 150 ms.
+         */
+        post: operations["sampleInFrame"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9352,6 +9547,420 @@ export interface components {
             training_run: components["schemas"]["TrainingRun"];
             job: components["schemas"]["Job"];
         };
+        /** @enum {string} */
+        SiteFrameKind: "crs" | "local";
+        /**
+         * @description the project's display frame (map-workspace spec §6); every `*_site` coordinate is in it
+         * @example {
+         *       "kind": "crs",
+         *       "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *       "epsg": 32638,
+         *       "proj4": "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+         *       "name": "WGS 84 / UTM zone 38N"
+         *     }
+         */
+        SiteFrame: {
+            kind: components["schemas"]["SiteFrameKind"];
+            /** @description null for local */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description for the client's proj4 registration; null for local */
+            proj4: string | null;
+            /** @description the CRS name, or Local metres */
+            name: string;
+        };
+        PlannedSurvey: {
+            /** Format: date */
+            date: string;
+            note: string | null;
+        };
+        /** @description how many maps and surfaces each frame can show; the CRS chip offers the switch when both are above zero */
+        FrameItemCounts: {
+            crs: number;
+            local: number;
+        };
+        /**
+         * @example {
+         *       "frame": {
+         *         "kind": "crs",
+         *         "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *         "epsg": 32638,
+         *         "proj4": "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+         *         "name": "WGS 84 / UTM zone 38N"
+         *       },
+         *       "state": {},
+         *       "planned_surveys": [
+         *         {
+         *           "date": "2026-10-14",
+         *           "note": "October flight"
+         *         }
+         *       ],
+         *       "frame_items": {
+         *         "crs": 4,
+         *         "local": 0
+         *       },
+         *       "updated_at": "2026-09-27T10:00:00Z"
+         *     }
+         */
+        MapWorkspace: {
+            frame: components["schemas"]["SiteFrame"];
+            /** @description the client's view state (layers, compare mode and dates, blend, last view), opaque to the server; empty until first saved */
+            state: {
+                [key: string]: unknown;
+            };
+            planned_surveys: components["schemas"]["PlannedSurvey"][];
+            frame_items: components["schemas"]["FrameItemCounts"];
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "state": {
+         *         "mode": "swipe",
+         *         "l": "2026-08-14",
+         *         "r": "2026-09-14"
+         *       }
+         *     }
+         */
+        MapWorkspacePut: {
+            /** @description at most 64 KB as JSON */
+            state: {
+                [key: string]: unknown;
+            };
+            /** @description unchanged when absent */
+            planned_surveys?: components["schemas"]["PlannedSurvey"][];
+        };
+        /**
+         * @example {
+         *       "kind": "crs",
+         *       "epsg": 32639
+         *     }
+         */
+        SiteFrameSet: {
+            kind: components["schemas"]["SiteFrameKind"];
+            /** @description required for crs: a projected CRS in metres */
+            epsg?: number;
+        };
+        /**
+         * @description dsm is the surface including objects; dtm is bare ground
+         * @enum {string}
+         */
+        ElevationRole: "dsm" | "dtm";
+        /** @enum {string} */
+        DrawingFormat: "dxf" | "pdf" | "png" | "jpg" | "tif" | "landxml";
+        WorkspaceSurveyMap: {
+            id: string;
+            name: string;
+            gsd_cm: number | null;
+            /** @description the run that represents this map (the pinned one, else the newest finished whole-map run); a region run never does */
+            basis_run_id: string | null;
+        };
+        WorkspaceSurveySurface: {
+            id: string;
+            name: string;
+            kind: components["schemas"]["SurfaceKind"];
+            elevation_role: components["schemas"]["ElevationRole"] | null;
+        };
+        WorkspaceSurvey: {
+            /** Format: date */
+            date: string;
+            /** @description none of its items has a capture date, so `date` is the import date (shown as date not set) */
+            date_is_import_date: boolean;
+            /** @description a planned survey: a dashed tick that cannot be selected */
+            planned: boolean;
+            note: string | null;
+            maps: components["schemas"]["WorkspaceSurveyMap"][];
+            surfaces: components["schemas"]["WorkspaceSurveySurface"][];
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "date": "2026-08-14",
+         *           "date_is_import_date": false,
+         *           "planned": false,
+         *           "note": null,
+         *           "maps": [
+         *             {
+         *               "id": "a0000000-6666-4000-8000-000000000001",
+         *               "name": "August ortho",
+         *               "gsd_cm": 2.1,
+         *               "basis_run_id": null
+         *             }
+         *           ],
+         *           "surfaces": [
+         *             {
+         *               "id": "s0000000-9999-4000-8000-000000000001",
+         *               "name": "August DSM",
+         *               "kind": "cloud_dsm",
+         *               "elevation_role": "dsm"
+         *             }
+         *           ]
+         *         },
+         *         {
+         *           "date": "2026-09-14",
+         *           "date_is_import_date": false,
+         *           "planned": false,
+         *           "note": null,
+         *           "maps": [
+         *             {
+         *               "id": "a0000000-6666-4000-8000-000000000002",
+         *               "name": "September ortho",
+         *               "gsd_cm": 2,
+         *               "basis_run_id": "r0000000-7777-4000-8000-000000000001"
+         *             }
+         *           ],
+         *           "surfaces": []
+         *         },
+         *         {
+         *           "date": "2026-10-14",
+         *           "date_is_import_date": false,
+         *           "planned": true,
+         *           "note": "October flight",
+         *           "maps": [],
+         *           "surfaces": []
+         *         }
+         *       ]
+         *     }
+         */
+        WorkspaceSurveyList: {
+            /** @description oldest first, one per date */
+            items: components["schemas"]["WorkspaceSurvey"][];
+        };
+        /** @enum {string} */
+        WorkspaceLayerKind: "map" | "surface" | "drawing";
+        /** @enum {string} */
+        WorkspaceLayerGroup: "base" | "elevation" | "drawing";
+        /** @enum {string} */
+        SiteTileKind: "map" | "surface" | "volume_diff" | "drawing_raster";
+        WorkspaceLayer: {
+            kind: components["schemas"]["WorkspaceLayerKind"];
+            id: string;
+            name: string;
+            group: components["schemas"]["WorkspaceLayerGroup"];
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            /** @description false for a map with no CRS, an item of the other frame, or a drawing not placed; such a row is listed greyed and has no tiles */
+            in_frame: boolean;
+            /** @description the getSiteTile kind; null for a vector drawing, which uses getDrawingVectorTile */
+            tile_kind: components["schemas"]["SiteTileKind"] | null;
+            /** @description a DXF or LandXML drawing */
+            vector: boolean;
+            /** @description the `v` of its tile URLs; it changes whenever the rendered input changes */
+            version: string;
+            /**
+             * Format: date
+             * @description the survey date; null for undated overlays (designs and drawings render on both compare sides)
+             */
+            date: string | null;
+            date_is_import_date: boolean;
+            /** @description minx, miny, maxx, maxy in the site frame; null when not in the frame */
+            footprint_site: number[] | null;
+            /** @description the smallest z with res(z) at most half the native cell; the client overzooms beyond it */
+            max_zoom: number | null;
+            /** @description the row's meta line, for example a GSD and size, a z range, or control points and RMSE */
+            meta: string;
+            surface_kind: components["schemas"]["SurfaceKind"] | null;
+            elevation_role: components["schemas"]["ElevationRole"] | null;
+            drawing_format: components["schemas"]["DrawingFormat"] | null;
+            /** @description drawings only */
+            placed: boolean | null;
+        };
+        /**
+         * @example {
+         *       "frame": {
+         *         "kind": "crs",
+         *         "crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *         "epsg": 32638,
+         *         "proj4": "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+         *         "name": "WGS 84 / UTM zone 38N"
+         *       },
+         *       "items": [
+         *         {
+         *           "kind": "map",
+         *           "id": "a0000000-6666-4000-8000-000000000002",
+         *           "name": "September ortho",
+         *           "group": "base",
+         *           "status": "ready",
+         *           "in_frame": true,
+         *           "tile_kind": "map",
+         *           "vector": false,
+         *           "version": "a0000000-6666-4000-8000-000000000002",
+         *           "date": "2026-09-14",
+         *           "date_is_import_date": false,
+         *           "footprint_site": [
+         *             583000,
+         *             3265000,
+         *             583900,
+         *             3265800
+         *           ],
+         *           "max_zoom": 17,
+         *           "meta": "2.0 cm GSD · 1.4 GB",
+         *           "surface_kind": null,
+         *           "elevation_role": null,
+         *           "drawing_format": null,
+         *           "placed": null
+         *         },
+         *         {
+         *           "kind": "surface",
+         *           "id": "s0000000-9999-4000-8000-000000000001",
+         *           "name": "August DSM",
+         *           "group": "elevation",
+         *           "status": "ready",
+         *           "in_frame": true,
+         *           "tile_kind": "surface",
+         *           "vector": false,
+         *           "version": "2026-08-15T09:00:00Z",
+         *           "date": "2026-08-14",
+         *           "date_is_import_date": false,
+         *           "footprint_site": [
+         *             583000,
+         *             3265000,
+         *             583900,
+         *             3265800
+         *           ],
+         *           "max_zoom": 15,
+         *           "meta": "598.1 – 624.8 m",
+         *           "surface_kind": "cloud_dsm",
+         *           "elevation_role": "dsm",
+         *           "drawing_format": null,
+         *           "placed": null
+         *         },
+         *         {
+         *           "kind": "drawing",
+         *           "id": "w0000000-1212-4000-8000-000000000001",
+         *           "name": "Foundation plan rev C",
+         *           "group": "drawing",
+         *           "status": "ready",
+         *           "in_frame": false,
+         *           "tile_kind": "drawing_raster",
+         *           "vector": false,
+         *           "version": "0",
+         *           "date": null,
+         *           "date_is_import_date": false,
+         *           "footprint_site": null,
+         *           "max_zoom": null,
+         *           "meta": "not placed",
+         *           "surface_kind": null,
+         *           "elevation_role": null,
+         *           "drawing_format": "pdf",
+         *           "placed": false
+         *         }
+         *       ]
+         *     }
+         */
+        WorkspaceLayerList: {
+            frame: components["schemas"]["SiteFrame"];
+            items: components["schemas"]["WorkspaceLayer"][];
+        };
+        /**
+         * @example {
+         *       "map_id": "a0000000-6666-4000-8000-000000000002",
+         *       "geometry_site": {
+         *         "type": "Point",
+         *         "coordinates": [
+         *           583120.4,
+         *           3265410.2
+         *         ]
+         *       }
+         *     }
+         */
+        AnchorConvertRequest: {
+            /** @description the topmost visible ortho of the right date that covers the geometry */
+            map_id: string;
+            /** @description the GeoJSON Point or Polygon in the site frame */
+            geometry_site: components["schemas"]["FindingGeometry"];
+        };
+        /**
+         * @example {
+         *       "map_id": "a0000000-6666-4000-8000-000000000002",
+         *       "geometry": {
+         *         "type": "Point",
+         *         "coordinates": [
+         *           583120.4,
+         *           3265410.2
+         *         ]
+         *       },
+         *       "lon": 47.7625,
+         *       "lat": 29.497
+         *     }
+         */
+        AnchorConverted: {
+            map_id: string;
+            geometry: components["schemas"]["FindingGeometry"];
+            /** @description WGS84 longitude of the centroid */
+            lon: number;
+            lat: number;
+        };
+        MapFindingPin: {
+            id: string;
+            /** @description shown as F-0031 */
+            number: number;
+            type_id: string;
+            severity: number | null;
+            status: components["schemas"]["FindingStatus"];
+            /** @description human, or model:<library_model_id> */
+            created_by: string;
+            map_id: string;
+            /** @description the anchor geometry in the site frame */
+            geometry_site: components["schemas"]["FindingGeometry"];
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "f0000000-1111-4000-8000-000000000031",
+         *           "number": 31,
+         *           "type_id": "c1a2b3c4-0000-4000-8000-000000000009",
+         *           "severity": 3,
+         *           "status": "reviewed",
+         *           "created_by": "model:m0000000-2222-4000-8000-000000000001",
+         *           "map_id": "a0000000-6666-4000-8000-000000000002",
+         *           "geometry_site": {
+         *             "type": "Point",
+         *             "coordinates": [
+         *               583120.4,
+         *               3265410.2
+         *             ]
+         *           }
+         *         }
+         *       ],
+         *       "truncated": false
+         *     }
+         */
+        MapFindingsInView: {
+            items: components["schemas"]["MapFindingPin"][];
+            /** @description more than 5 000 findings matched */
+            truncated: boolean;
+        };
+        FrameSampleRequest: {
+            /** @description site frame */
+            x: number;
+            y: number;
+            surface_ids: string[];
+        };
+        SurfaceZ: {
+            surface_id: string;
+            /** @description null over nodata, outside the surface, or for a surface not in the frame */
+            z: number | null;
+        };
+        /**
+         * @example {
+         *       "x": 583120.4,
+         *       "y": 3265410.2,
+         *       "samples": [
+         *         {
+         *           "surface_id": "s0000000-9999-4000-8000-000000000001",
+         *           "z": 611.42
+         *         }
+         *       ]
+         *     }
+         */
+        FrameSample: {
+            x: number;
+            y: number;
+            samples: components["schemas"]["SurfaceZ"][];
+        };
     };
     responses: {
         /** @description error envelope */
@@ -9512,6 +10121,23 @@ export interface components {
         attachmentId: string;
         /** @description findings pages hold at most 500 */
         findingsLimit: number;
+        siteTileKind: components["schemas"]["SiteTileKind"];
+        /** @description the map, surface, volume measurement or drawing the tile renders */
+        layerId: string;
+        /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+        siteZ: number;
+        /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+        siteX: number;
+        /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+        siteY: number;
+        /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+        siteFrame: "site";
+        /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
+        tileVersion: string;
+        /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
+        tilePreview: string;
+        /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
+        frameKey: string;
     };
     requestBodies: never;
     headers: never;
@@ -16481,6 +17107,312 @@ export interface operations {
             };
             404: components["responses"]["NotFound"];
             503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getMapWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWorkspace"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    putMapWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapWorkspacePut"];
+            };
+        };
+        responses: {
+            /** @description the workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWorkspace"];
+                };
+            };
+            /** @description the state is over 64 KB as JSON (`code` is `state_too_large`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    setSiteFrame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SiteFrameSet"];
+            };
+        };
+        responses: {
+            /** @description the workspace in its new frame */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapWorkspace"];
+                };
+            };
+            /** @description `epsg` is missing for `crs` or unknown to pyproj (`code` is `invalid_epsg`), or it is not a projected CRS in metres (`needs_projected_crs`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWorkspaceSurveys: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the surveys */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceSurveyList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listWorkspaceLayers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the layers and the frame they are in */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceLayerList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getSiteTile: {
+        parameters: {
+            query?: {
+                /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
+                v?: components["parameters"]["tileVersion"];
+                /** @description surface only; hillshade when absent; tint is the hypsometric tint over hillshade */
+                style?: "hillshade" | "tint" | "contours";
+                /** @description contours only: metres between lines; the nice number nearest (z_p98 - z_p02) / 20 when absent */
+                interval?: number;
+                /** @description drawing_raster only: white pixels (min of R, G, B at least 245) transparent; false when absent */
+                knockout?: boolean;
+                /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
+                t?: components["parameters"]["tilePreview"];
+                /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
+                frame_key?: components["parameters"]["frameKey"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                kind: components["parameters"]["siteTileKind"];
+                /** @description the map, surface, volume measurement or drawing the tile renders */
+                layerId: components["parameters"]["layerId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description tile image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the tile does not touch the layer's footprint */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the layer is still importing or building (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the layer is not in the site frame: no CRS, the other frame, or a drawing not placed and no `t` sent (`code` is `no_coordinates`); `t` is malformed, degenerate or sent for a kind other than drawing_raster (`invalid_preview`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    convertAnchor: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnchorConvertRequest"];
+            };
+        };
+        responses: {
+            /** @description the anchor geometry in the map's CRS */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnchorConverted"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the map has no CRS (`code` is `no_coordinates`), the workspace is in local metres (`local_frame`), the geometry is not a finite point or a closed ring (`invalid_geometry`), or it lies outside the map's footprint (`outside_map`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listMapFindingsInView: {
+        parameters: {
+            query: {
+                /** @description minx,miny,maxx,maxy in the site frame */
+                bbox: string;
+                /** @description only findings anchored on these maps (the maps of the selected dates); every map when absent */
+                map_ids?: string[];
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the findings in view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapFindingsInView"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    sampleInFrame: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FrameSampleRequest"];
+            };
+        };
+        responses: {
+            /** @description one sample per surface */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FrameSample"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };

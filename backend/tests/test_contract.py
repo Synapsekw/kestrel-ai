@@ -18,6 +18,8 @@ from schemathesis.specs.openapi.checks import (
     unsupported_method,
 )
 
+from app.workspace.stubs import stub_operation_ids as workspace_stub_operation_ids
+
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 AUTH = {"Authorization": "Bearer test-token"}
@@ -106,6 +108,7 @@ EXPECTED_STUBS: set[str] = {
     "detectImage",  # I-BP
     "detectImageBatch",  # I-BP
 }
+EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
 # the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/

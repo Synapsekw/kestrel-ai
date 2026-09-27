@@ -132,3 +132,16 @@ for _module in (
         api_router.include_router(importlib.import_module(_module).router)
     except Exception:
         log.exception("%s failed to load; its endpoints will be unavailable", _module)
+
+# The map workspace (spec 2026-09-26-map-workspace §12, unit M-C0). It shares the maps stack
+# (rasterio, pyproj), so it loads only when the maps router did, like the review router above: a
+# broken GDAL costs these endpoints, never the app, and no "map" path is left half-served
+# (tests/test_api_maps_guard.py). Each M unit inserts one line, its router module, before
+# "app.workspace.stubs" and deletes its tuples from app/workspace/stubs.py.
+for _module in ("app.workspace.stubs",):
+    try:
+        if "maps_router" not in globals():
+            raise ImportError("the maps router did not load")
+        api_router.include_router(importlib.import_module(_module).router)
+    except Exception:
+        log.exception("%s failed to load; its endpoints will be unavailable", _module)

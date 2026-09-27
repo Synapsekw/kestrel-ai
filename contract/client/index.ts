@@ -127,6 +127,14 @@ export type AssistModelKey = Schemas["AssistModelKey"];
 export type AssistModelPage = Schemas["AssistModelPage"];
 export type AssistModelImport = Schemas["AssistModelImport"];
 
+export type SiteFrame = Schemas["SiteFrame"];
+export type MapWorkspace = Schemas["MapWorkspace"];
+export type WorkspaceSurvey = Schemas["WorkspaceSurvey"];
+export type WorkspaceLayer = Schemas["WorkspaceLayer"];
+export type SiteTileKind = Schemas["SiteTileKind"];
+export type MapFindingPin = Schemas["MapFindingPin"];
+export type ElevationRole = Schemas["ElevationRole"];
+
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */
   baseUrl: string;
