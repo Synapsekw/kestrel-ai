@@ -180,8 +180,3 @@ class BulkDelete(BaseModel):
 
 class BulkDeleteResult(BaseModel):
     deleted: int
-
-
-# Moved to app.imagery.schemas (images unit I-BA); re-exported for app.inference until the
-# deprecated /preannotate goes.
-from app.imagery.schemas import BoxOut, Provenance  # noqa: E402, F401

@@ -1,4 +1,4 @@
-"""Query run creation, listing, promotion and synchronous pre-annotation (spec sections 7 and 8)."""
+"""Query run creation, listing and promotion (spec section 8)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import delete, func, select, tuple_
+from sqlalchemy import func, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.datasets.empties import clear_mark_for_ground_truth, count_marked_empty
@@ -16,16 +16,12 @@ from app.db.models import Box, Image, Job, QueryRun
 from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
 from app.findings import annotations, trash
-from app.inference.schemas import PreannotateRequest, QueryRunCreate
-from app.jobs.gpu import GpuBusy
+from app.inference.schemas import QueryRunCreate
 from app.library import service as library
-from app.library.db import LibraryModel
 from app.library.handle import LibraryHandle, library_unavailable
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
-from app.providers.base import Detection, TilingSpec
 from app.providers.config import ProviderConfigStore
-from app.providers.factory import get_provider
 from app.providers.keys import KeyStore
 from app.providers.tiling import make_tiles
 
@@ -36,7 +32,6 @@ BUSY_JOB_STATES = ("queued", "running")
 # Checking that a run has no live job and recording the new one is one decision, not two: two
 # resume requests in that gap would otherwise each start a job against the same tile folder.
 _RESUME_LOCK = threading.Lock()
-PREANNOTATE_GPU_TIMEOUT_S = 2.0
 
 
 def tiles_dir(handle: ProjectHandle, run_id: str) -> Path:
@@ -302,114 +297,3 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
         s.expunge(row)
     trash.move(handle, trashed)
     return row, count, len(promoted), image_ids
-
-
-def preannotate(
-    handle: ProjectHandle, image_id: str, body: PreannotateRequest, lib: LibraryHandle | None
-) -> tuple[bool, str, list[Box]]:
-    """Run the project's pre-annotation model on one image, synchronously (spec section 7).
-
-    FastAPI runs a sync endpoint in the threadpool, so this blocks one worker and no more. It waits
-    up to `PREANNOTATE_GPU_TIMEOUT_S` for the GPU and then answers 409 rather than queueing behind
-    a training run the editor cannot see. The image is only ever pre-annotated once per model:
-    boxes from that model are the record that it has run.
-    """
-    with handle.session() as s:
-        image = s.get(Image, image_id)
-        if image is None:
-            raise not_found("image", image_id)
-        model_id = body.model_id or handle.row(s).preannotation_model_id
-        if not model_id:
-            raise AppError("validation_error", "no pre-annotation model selected", 422)
-        if image.marked_empty:  # a person already said there is no machinery here; skip the GPU
-            return True, model_id, []
-        names = class_names(handle, s)
-        path = handle.folder / image.path
-
-    if lib is None:
-        raise library_unavailable()
-    model = library.require_ready(lib, model_id)
-    existing = _boxes_from_model(handle, image_id, model_id)
-    if existing:
-        return True, model_id, existing
-
-    provider = get_provider(
-        "local_model",
-        weights=library.weights_file(lib, model),
-        keys=None,
-        config=None,
-        model_row=model,
-        project_class_names=names,
-        imgsz=body.imgsz,
-        gpu_timeout=PREANNOTATE_GPU_TIMEOUT_S,
-    )
-    try:
-        dets = provider.detect(
-            path, "", names, TilingSpec(enabled=False), conf=body.conf, log=logging.getLogger(__name__)
-        )
-    except GpuBusy as e:
-        # A training or export job holds the card and may do so for hours. Say so, so the editor
-        # can open the image without proposals instead of blocking on a request that never returns.
-        raise AppError("conflict", "GPU busy (training in progress); try again later", 409) from e
-    return False, model_id, _write_proposals(handle, image_id, model, dets)
-
-
-def _boxes_from_model(handle: ProjectHandle, image_id: str, model_id: str) -> list[Box]:
-    with handle.session() as s:
-        rows = list(
-            s.execute(
-                select(Box)
-                .where(
-                    Box.image_id == image_id,
-                    Box.provenance_kind == "local_model",
-                    Box.model_id == model_id,
-                )
-                .order_by(Box.created_at, Box.id)
-            ).scalars()
-        )
-        for r in rows:
-            s.expunge(r)
-    return rows
-
-
-def _write_proposals(
-    handle: ProjectHandle, image_id: str, model: LibraryModel, dets: list[Detection]
-) -> list[Box]:
-    """Replace this model's unreviewed proposals on the image, in one transaction.
-
-    Two editor tabs can ask at the same moment: both see no boxes, both run the model, and an
-    appending write would leave two copies. Replacing makes the second writer idempotent, and
-    restricting the delete to `unreviewed` means a review decision is never undone by it.
-    """
-    with handle.session() as s:
-        by_name = class_ids_by_name(handle, s)
-        s.execute(
-            delete(Box).where(
-                Box.image_id == image_id,
-                Box.model_id == model.id,
-                Box.provenance_kind == "local_model",
-                Box.query_run_id.is_(None),
-                Box.review_state == "unreviewed",
-            )
-        )
-        rows = [
-            Box(
-                image_id=image_id,
-                class_id=by_name[d.label],
-                x=d.x,
-                y=d.y,
-                w=d.w,
-                h=d.h,
-                confidence=d.confidence,
-                provenance_kind="local_model",
-                model_id=model.id,
-                model_name=model.name,
-                review_state="unreviewed",
-            )
-            for d in dets
-            if d.label in by_name
-        ]
-        s.add_all(rows)
-        s.flush()
-    # read back, so a first call and a skipped one list the boxes in the same order
-    return _boxes_from_model(handle, image_id, model.id)

@@ -115,7 +115,9 @@ BACKEND_PENDING: dict[str, str] = {
     # fields. Each unit deletes its lines once its routes fill them.
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
-    "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
+    # The route is gone (I-BP); the deprecated path stays until I-FW deletes it with its last
+    # frontend helper, so the operation only has to answer < 500 (a 404) until then.
+    "preannotateImage": "I-FW",
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
     "previewLibraryDataset": "I-BT",  # DatasetPreview.skipped_by_task, the task parameter
