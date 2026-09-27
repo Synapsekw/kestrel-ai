@@ -116,3 +116,69 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
             progress((i + 1) / n, MESSAGE)
     store.write_json(idir / "pages.json", {"pages": sizes})
     return Inspected(page_count=n, pages=sizes[:MAX_THUMB_PAGES])
+
+
+def strip_crop(r0: int, r1: int, height: int, scale: float) -> tuple[float, float, float, float]:
+    """(left, bottom, right, top) crop in points that makes render() return rows r0..r1 exactly.
+    pypdfium2 5.13 turns crop into pixels with math.ceil(c * scale); the 0.25 px bias lands every
+    strip on its whole row despite float error (test_strip_crop_lands_on_whole_rows)."""
+    return (0.0, (height - r1 - 0.25) / scale, 0.0, (r0 - 0.25) / scale)
+
+
+def render_page_to_plan(
+    path: Path, page_n: int, dpi: int, dst: Path, *, progress, check_cancelled, strip_rows: int | None = None
+) -> tuple[int, int]:
+    """Render page `page_n` (1-based) at `dpi` into plan.tif, STRIP_ROWS rows at a time (spec §13:
+    one strip of <= 20 000 px x 1024 rows x 4 B in memory). Written to .partial, renamed at the end.
+    numpy and rasterio are imported here, not at module scope, so `pdf` stays light for `placement`."""
+    import numpy as np
+    from rasterio.windows import Window
+
+    from app.drawings import raster_io
+
+    rows = strip_rows or STRIP_ROWS
+    partial = dst.with_name(dst.name + ".partial")
+    try:
+        with open_pdf(path) as doc:
+            if not 1 <= page_n <= len(doc):
+                raise JobFailure(f"page {page_n} is not in {path.name}")
+            page = doc[page_n - 1]
+            try:
+                scale = dpi / 72
+                w_pt, h_pt = page.get_size()
+                # render() sizes its canvas as ceil(size * scale), which float error can push one row
+                # past the true size (7200 pt at 150 dpi -> 15000.000000000002 -> 15001). The plan is
+                # the true size, as the DPI cap computed it; the surplus row/column is cropped away.
+                src_w, src_h = math.ceil(w_pt * scale), math.ceil(h_pt * scale)
+                width = min(src_w, math.ceil(w_pt * dpi / 72))
+                height = min(src_h, math.ceil(h_pt * dpi / 72))
+                with raster_io.open_plan(partial, width, height) as out:
+                    for r0 in range(0, height, rows):
+                        check_cancelled()
+                        r1 = min(height, r0 + rows)
+                        bitmap = page.render(
+                            scale=scale, crop=strip_crop(r0, r1, src_h, scale), rev_byteorder=True
+                        )
+                        try:
+                            rgb = page_rgb(bitmap)
+                            if rgb.shape[:2] != (r1 - r0, src_w):
+                                raise JobFailure(
+                                    f"PDF strip rendered {rgb.shape[:2]}, expected {(r1 - r0, src_w)}"
+                                )
+                            rgb = rgb[:, :width]
+                            strip = np.empty((4, r1 - r0, width), np.uint8)
+                            strip[:3] = np.moveaxis(rgb, -1, 0)
+                            strip[3] = 255
+                            out.write(strip, window=Window(0, r0, width, r1 - r0))
+                            del strip, rgb
+                        finally:
+                            bitmap.close()
+                        progress(0.88 * r1 / height, f"rows {r1} / {height}")
+            finally:
+                page.close()
+        raster_io.build_overviews(partial, progress=progress, check_cancelled=check_cancelled)
+        os.replace(partial, dst)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    return width, height

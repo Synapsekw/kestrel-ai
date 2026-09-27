@@ -66,8 +66,36 @@ def _build_raster(ctx, insp: dict, idir: Path, src: Path, folder: Path) -> dict:
     }
 
 
-# Format -> builder. Task 6 adds "pdf"; task 12 adds "dxf" and "landxml".
-BUILDERS: dict[str, Callable] = {"png": _build_raster, "jpg": _build_raster, "tif": _build_raster}
+def _build_pdf(ctx, insp: dict, idir: Path, src: Path, folder: Path) -> dict:
+    from app.drawings import pdf
+
+    plan, dpi = folder / "plan.tif", ctx.params["dpi"]
+    width, height = pdf.render_page_to_plan(
+        src,
+        ctx.params["page"],
+        dpi,
+        plan,
+        progress=_progress(ctx, 0.02, 0.95),
+        check_cancelled=ctx.check_cancelled,
+    )
+    raster_io.write_plan_thumbnail(plan, folder / "thumb.png")
+    return {
+        "width": width,
+        "height": height,
+        "dpi": dpi,
+        "extent_src": [0.0, float(-height), float(width), 0.0],
+        "layers": [],
+        "units": None,
+    }
+
+
+# Format -> builder. Task 12 adds "dxf" and "landxml".
+BUILDERS: dict[str, Callable] = {
+    "png": _build_raster,
+    "jpg": _build_raster,
+    "tif": _build_raster,
+    "pdf": _build_pdf,
+}
 
 
 def run(ctx) -> dict:
