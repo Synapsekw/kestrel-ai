@@ -1,4 +1,40 @@
-import type { Dataset, LibraryModel, TrainRequest } from "@contract/client";
+import type { LibraryModel, TrainRequest } from "@contract/client";
+import type { LibraryDataset } from "@/api/libraryDatasets";
+
+/** What the training form needs of a dataset: a ready library dataset through `toTrainable`. */
+export interface TrainableDataset {
+  id: string;
+  name: string;
+  image_count: number;
+  train_count: number;
+  val_count: number;
+  class_count: number;
+  split_method: string;
+  /**
+   * Another job is exporting this dataset, so a run started now fails at once (the backend refuses a
+   * second export of the same dataset). Start stays disabled until that export finishes.
+   */
+  exportBusy: boolean;
+}
+
+/**
+ * The form's view of a library dataset. `activeRunDatasetIds` names the datasets with a queued or
+ * running training run: such a run exports its dataset first unless the export is already ready.
+ */
+export function toTrainable(d: LibraryDataset, activeRunDatasetIds?: ReadonlySet<string>): TrainableDataset {
+  return {
+    id: d.id,
+    name: d.name,
+    image_count: d.counts.images,
+    train_count: d.counts.train,
+    val_count: d.counts.val,
+    class_count: d.classes.length,
+    split_method: d.split_method,
+    exportBusy:
+      d.export_state === "building" ||
+      (Boolean(activeRunDatasetIds?.has(d.id)) && d.export_state !== "ready"),
+  };
+}
 
 export interface TrainForm {
   name: string;
@@ -98,13 +134,13 @@ export function parseEpochMessage(message: string): EpochProgress | null {
   };
 }
 
-export function suggestName(dataset: Dataset | undefined, base: LibraryModel | undefined): string {
+export function suggestName(dataset: TrainableDataset | undefined, base: LibraryModel | undefined): string {
   if (!dataset || !base) return "";
   return `${dataset.name}-${base.name}`;
 }
 
 /** Warnings shown above Start training: setups that run fine and produce a model nobody can use. */
-export function trainAdvice(dataset: Dataset | undefined, f: TrainForm): string[] {
+export function trainAdvice(dataset: TrainableDataset | undefined, f: TrainForm): string[] {
   if (!dataset) return [];
   const advice: string[] = [];
   if (dataset.train_count < 50)

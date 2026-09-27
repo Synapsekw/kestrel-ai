@@ -8,7 +8,6 @@ import type {
   LibraryStatus,
   ModelUsage,
   StarterModelKey,
-  TrainRequest,
   components,
 } from "@contract/client";
 import { codeOf, unwrap } from "./errors";
@@ -143,14 +142,6 @@ export function fetchResultsCsv(api: ApiClient, modelId: string): Promise<string
       headers: { Accept: "text/csv" },
     }) as Promise<{ data?: string; error?: unknown; response: Response }>,
   );
-}
-
-/** 202 with the training job; the trained model is registered in the library when it succeeds. */
-export async function trainModel(api: ApiClient, projectId: string, body: TrainRequest): Promise<Job> {
-  const r = await unwrap(
-    api.POST("/api/v1/projects/{projectId}/train", { params: { path: { projectId } }, body }),
-  );
-  return r.job;
 }
 
 /** Model class name → catalogue type id, or null for "ignore" (F §7.4, F10). */

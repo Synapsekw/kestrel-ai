@@ -1,10 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { exampleDataset, exampleModel } from "@/test/fixtures";
+import { exampleModel } from "@/test/fixtures";
+import { exampleLibraryDataset, exampleTrainable } from "@/test/appSectionFixtures";
 import {
   DEFAULT_TRAIN_FORM,
   parseEpochMessage,
   resultAdvice,
   suggestName,
+  toTrainable,
   trainAdvice,
   toTrainRequest,
   validateTrainForm,
@@ -102,14 +104,14 @@ describe("train form model", () => {
   });
 
   it("suggests a name from the dataset and the base model", () => {
-    expect(suggestName(exampleDataset, exampleModel)).toBe("v1-yolo11m-coco");
+    expect(suggestName(exampleTrainable, exampleModel)).toBe("v1-yolo11m-coco");
     expect(suggestName(undefined, exampleModel)).toBe("");
   });
 });
 
 describe("trainAdvice", () => {
-  const tiny = { ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 };
-  const decent = { ...exampleDataset, image_count: 400, train_count: 320, val_count: 80 };
+  const tiny = { ...exampleTrainable, image_count: 14, train_count: 8, val_count: 6 };
+  const decent = { ...exampleTrainable, image_count: 400, train_count: 320, val_count: 80 };
 
   it("warns before a training on a handful of images", () => {
     expect(trainAdvice(tiny, DEFAULT_TRAIN_FORM)).toContain(
@@ -143,5 +145,31 @@ describe("resultAdvice", () => {
   it("is silent for a usable model or an unknown score", () => {
     expect(resultAdvice(0.45)).toBeNull();
     expect(resultAdvice(null)).toBeNull();
+  });
+});
+
+describe("toTrainable", () => {
+  it("maps a library dataset's counts and classes onto the form's view", () => {
+    expect(toTrainable(exampleLibraryDataset)).toEqual({
+      id: exampleLibraryDataset.id,
+      name: "machines-v1",
+      image_count: 30,
+      train_count: 24,
+      val_count: 6,
+      class_count: 2,
+      split_method: "by_group",
+      exportBusy: false,
+    });
+  });
+
+  it("is export busy while another job builds its export", () => {
+    expect(toTrainable({ ...exampleLibraryDataset, export_state: "building" }).exportBusy).toBe(true);
+  });
+
+  it("is export busy when an active run will export it first, and not once the export is ready", () => {
+    const active = new Set([exampleLibraryDataset.id]);
+    expect(toTrainable({ ...exampleLibraryDataset, export_state: "stale" }, active).exportBusy).toBe(true);
+    expect(toTrainable({ ...exampleLibraryDataset, export_state: "ready" }, active).exportBusy).toBe(false);
+    expect(toTrainable({ ...exampleLibraryDataset, export_state: "none" }, new Set()).exportBusy).toBe(false);
   });
 });

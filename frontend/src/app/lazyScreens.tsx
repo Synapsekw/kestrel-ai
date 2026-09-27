@@ -19,6 +19,9 @@ export const CatalogueScreen = lazy(() =>
 export const DatasetsScreen = lazy(() =>
   import("@/models/DatasetsScreen").then((m) => ({ default: m.DatasetsScreen })),
 );
+export const TrainingScreen = lazy(() =>
+  import("@/models/TrainingScreen").then((m) => ({ default: m.TrainingScreen })),
+);
 
 /** A screen-shaped placeholder while a screen's code is still loading. */
 export function ScreenPlaceholder() {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { screen, fireEvent } from "@testing-library/react";
-import { exampleDataset, exampleModel, exampleTrainedModel, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { exampleModel, exampleTrainedModel, fakeClient } from "@/test/fixtures";
+import { exampleTrainable } from "@/test/appSectionFixtures";
 import { MemoryRouter } from "react-router-dom";
 import { renderWithProviders, TestApiProvider } from "@/test/render";
 import { TrainForm } from "./TrainForm";
@@ -11,8 +12,7 @@ describe("TrainForm", () => {
     const onStart = vi.fn();
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[exampleModel, exampleTrainedModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -23,14 +23,17 @@ describe("TrainForm", () => {
       />,
       { api },
     );
-    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id);
+    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleTrainable.id);
     expect(screen.getByLabelText("Base model")).toHaveValue(exampleModel.id);
     expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
     fireEvent.click(screen.getByRole("button", { name: "More options" }));
     expect(screen.getByLabelText("Image size")).toHaveValue(1280);
     expect(screen.getByLabelText("Automatic batch size")).toBeChecked();
     expect(screen.getByLabelText("Batch size")).toBeDisabled();
-    expect(screen.getByRole("link", { name: "Create dataset" })).toHaveAttribute("href", "/models/datasets");
+    expect(screen.getByRole("link", { name: "Create dataset" })).toHaveAttribute(
+      "href",
+      "/models/datasets?new=1",
+    );
     // "30 images" also appears in the option label, so match the split summary line.
     expect(screen.getByText(/30 images: 24 train \/ 6 val/)).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "3" } });
@@ -40,7 +43,7 @@ describe("TrainForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Start training" }));
     expect(onStart).toHaveBeenCalledWith({
       name: "v1-yolo11m-coco",
-      dataset_id: exampleDataset.id,
+      dataset_id: exampleTrainable.id,
       base_model_id: exampleModel.id,
       epochs: 3,
       imgsz: 1280,
@@ -55,8 +58,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[exampleModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -81,12 +83,11 @@ describe("TrainForm", () => {
   });
 
   it("preselects the dataset named by initialDatasetId over the newest one", () => {
-    const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
+    const older = { ...exampleTrainable, id: "older-dataset", name: "v0" };
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset, older]}
+        datasets={[exampleTrainable, older]}
         models={[exampleModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -107,7 +108,6 @@ describe("TrainForm", () => {
     const onStart = vi.fn();
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
         datasets={[]}
         models={[exampleModel]}
         datasetsUnavailable={true}
@@ -128,9 +128,8 @@ describe("TrainForm", () => {
 
   it("keeps a name the user cleared when the lists arrive again", () => {
     const { api } = fakeClient([]);
-    const form = (datasets: (typeof exampleDataset)[], models: (typeof exampleModel)[]) => (
+    const form = (datasets: (typeof exampleTrainable)[], models: (typeof exampleModel)[]) => (
       <TrainForm
-        projectId={PROJECT_ID}
         datasets={datasets}
         models={models}
         datasetsUnavailable={false}
@@ -141,12 +140,12 @@ describe("TrainForm", () => {
         onStart={vi.fn()}
       />
     );
-    const { rerender } = renderWithProviders(form([exampleDataset], [exampleModel]), { api });
+    const { rerender } = renderWithProviders(form([exampleTrainable], [exampleModel]), { api });
     fireEvent.change(screen.getByLabelText("Model name"), { target: { value: "" } });
     // A refetch hands the form new arrays with the same content (the Train screen polls them).
     rerender(
       <TestApiProvider api={api}>
-        <MemoryRouter>{form([{ ...exampleDataset }], [{ ...exampleModel }])}</MemoryRouter>
+        <MemoryRouter>{form([{ ...exampleTrainable }], [{ ...exampleModel }])}</MemoryRouter>
       </TestApiProvider>,
     );
     expect(screen.getByLabelText("Model name")).toHaveValue("");
@@ -158,8 +157,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -179,8 +177,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[exampleModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -199,8 +196,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -218,8 +214,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[]}
         datasetsUnavailable={false}
         modelsUnavailable={true}
@@ -237,8 +232,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -256,8 +250,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[{ ...exampleDataset, image_count: 14, train_count: 8, val_count: 6 }]}
+        datasets={[{ ...exampleTrainable, image_count: 14, train_count: 8, val_count: 6 }]}
         models={[exampleModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -281,8 +274,7 @@ describe("TrainForm", () => {
     const { api } = fakeClient([]);
     renderWithProviders(
       <TrainForm
-        projectId={PROJECT_ID}
-        datasets={[exampleDataset]}
+        datasets={[exampleTrainable]}
         models={[{ ...exampleModel, state: "unavailable" }, exampleTrainedModel]}
         datasetsUnavailable={false}
         modelsUnavailable={false}
@@ -295,5 +287,30 @@ describe("TrainForm", () => {
     );
     expect(screen.getByRole("option", { name: /yolo11m-coco .* \(file missing\)$/ })).toBeDisabled();
     expect(screen.getByLabelText("Base model")).toHaveValue(exampleTrainedModel.id);
+  });
+
+  it("disables Start while the chosen dataset is being exported by another run, and says why", () => {
+    const { api } = fakeClient([]);
+    const onStart = vi.fn();
+    renderWithProviders(
+      <TrainForm
+        datasets={[{ ...exampleTrainable, exportBusy: true }]}
+        models={[exampleModel]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={onStart}
+      />,
+      { api },
+    );
+    const start = screen.getByRole("button", { name: "Start training" });
+    expect(start).toBeDisabled();
+    expect(start).toHaveAccessibleDescription(
+      "Dataset is being exported by another run; start when it has finished.",
+    );
+    fireEvent.submit(start.closest("form")!);
+    expect(onStart).not.toHaveBeenCalled();
   });
 });

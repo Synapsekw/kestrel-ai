@@ -8,7 +8,6 @@ import {
   exampleUsage,
   fakeClient,
   MODEL_ID,
-  PROJECT_ID,
   RESULTS_CSV,
   runningJob,
   TRAINED_MODEL_ID,
@@ -30,7 +29,6 @@ import {
   isLibraryUnavailable,
   libraryArtifactUrl,
   saveClassMap,
-  trainModel,
   updateLibraryModel,
 } from "./library";
 
@@ -126,7 +124,7 @@ describe("library api", () => {
     });
   });
 
-  it("starts export, starter and training jobs", async () => {
+  it("starts export and starter jobs", async () => {
     const { api, requests } = fakeClient([
       {
         method: "POST",
@@ -135,7 +133,6 @@ describe("library api", () => {
         body: { job: { ...libraryJob, type: "library_export" } },
       },
       { method: "POST", path: /\/starters\/[^/]+\/acquire$/, status: 202, body: { job: libraryJob } },
-      { method: "POST", path: /\/projects\/[^/]+\/train$/, status: 202, body: { job: runningJob } },
     ]);
     const exported = await exportLibraryModel(api, MODEL_ID, { format: "onnx", imgsz: 1280, half: false });
     expect(exported.type).toBe("library_export");
@@ -150,19 +147,6 @@ describe("library api", () => {
       url: "/api/v1/library/starters/yolo11s/acquire",
       body: { name: "small-coco" },
     });
-    const body = {
-      name: "ahmadia-v1-n",
-      dataset_id: "d",
-      base_model_id: MODEL_ID,
-      epochs: 3,
-      imgsz: 1280,
-      batch: null,
-      patience: 50,
-      augmentation: "aerial" as const,
-      device: "0",
-    };
-    expect((await trainModel(api, PROJECT_ID, body)).id).toBe(runningJob.id);
-    expect(requests[3]).toMatchObject({ url: `/api/v1/projects/${PROJECT_ID}/train`, body });
   });
 
   it("lists, gets and cancels library jobs, and reads the status", async () => {

@@ -1,16 +1,16 @@
 import type { RouteObject } from "react-router-dom";
-import { SectionPlaceholder } from "@/app/InterimScreens";
-import { AboutScreen, CatalogueScreen, DatasetsScreen, JobsScreen, Later } from "@/app/lazyScreens";
+import {
+  AboutScreen,
+  CatalogueScreen,
+  DatasetsScreen,
+  JobsScreen,
+  Later,
+  TrainingScreen,
+} from "@/app/lazyScreens";
 import { LibraryScreen } from "@/library/LibraryScreen";
 import { ModelsLayout } from "@/models/ModelsLayout";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
 import { Redirect } from "./Redirect";
-
-const training = (
-  <SectionPlaceholder title="Training" icon="train">
-    Training runs on those datasets, and their results, are listed here.
-  </SectionPlaceholder>
-);
 
 /** The app-level routes (spec 2026-09-26-foundation section 5.3). S2 adds or swaps entries here only. */
 export const appRoutes: RouteObject[] = [
@@ -36,8 +36,22 @@ export const appRoutes: RouteObject[] = [
           </Later>
         ),
       },
-      { path: "training", element: training },
-      { path: "training/:runId", element: training },
+      {
+        path: "training",
+        element: (
+          <Later>
+            <TrainingScreen />
+          </Later>
+        ),
+      },
+      {
+        path: "training/:runId",
+        element: (
+          <Later>
+            <TrainingScreen />
+          </Later>
+        ),
+      },
     ],
   },
   {

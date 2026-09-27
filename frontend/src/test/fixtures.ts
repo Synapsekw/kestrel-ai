@@ -6,7 +6,6 @@ import {
   type ClassDef,
   type components,
   type CostEstimate,
-  type Dataset,
   type GeoMap,
   type Image as ImageRow,
   type ImagePage,
@@ -308,20 +307,6 @@ export const exampleUsage: ModelUsage = {
       map_runs: 1,
     },
   ],
-};
-
-export const exampleDataset: Dataset = {
-  id: DATASET_ID,
-  name: "v1",
-  classes: [exampleClasses[0]],
-  split_method: "by_group",
-  split_params: { val_fraction: 0.2, seed: 42 },
-  path: "datasets/v1",
-  image_count: 30,
-  train_count: 24,
-  val_count: 6,
-  job_id: "j0000000-4444-4000-8000-000000000002",
-  created_at: "2026-09-17T12:00:00Z",
 };
 
 export const exampleProviders: Provider[] = [

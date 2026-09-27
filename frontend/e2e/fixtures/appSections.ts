@@ -224,3 +224,67 @@ export async function routeDatasets(page: import("@playwright/test").Page): Prom
     },
   );
 }
+
+export const TRAINING_RUN = {
+  id: "t-1",
+  name: "machines-v1-yolo11m-coco",
+  dataset_id: "d-lib-1",
+  base_model_id: "m0000000-2222-4000-8000-000000000001",
+  params: {
+    name: "machines-v1-yolo11m-coco",
+    dataset_id: "d-lib-1",
+    base_model_id: "m0000000-2222-4000-8000-000000000001",
+    epochs: 50,
+    imgsz: 1280,
+    batch: null,
+    patience: 50,
+    augmentation: "default",
+    device: "0",
+  },
+  job_id: "j-train",
+  state: "running",
+  model_id: null,
+  metrics: null,
+  created_at: T0,
+  finished_at: null,
+};
+
+/** Routes `/library/training-runs…` and the run's job; the model list comes from the Prism mock. */
+export async function routeTraining(page: import("@playwright/test").Page): Promise<void> {
+  await page.route(
+    (url) => url.pathname.startsWith("/api/v1/library/training-runs"),
+    (route) => {
+      const { pathname } = new URL(route.request().url());
+      if (route.request().method() === "POST")
+        return fulfilJson(
+          route,
+          {
+            training_run: { ...TRAINING_RUN, id: "t-2", state: "queued" },
+            job: libraryJob({ id: "j-train-2", type: "train" }),
+          },
+          202,
+        );
+      if (pathname === "/api/v1/library/training-runs")
+        return fulfilJson(route, { items: [TRAINING_RUN], next_cursor: null });
+      return fulfilJson(
+        route,
+        pathname.endsWith("/t-2") ? { ...TRAINING_RUN, id: "t-2", state: "queued" } : TRAINING_RUN,
+      );
+    },
+  );
+  await page.route(
+    (url) => /^\/api\/v1\/library\/jobs\/j-train(-2)?$/.test(url.pathname),
+    (route) =>
+      fulfilJson(
+        route,
+        libraryJob({
+          id: "j-train",
+          type: "train",
+          state: "running",
+          progress: 0.2,
+          message: "epoch 10/50 mAP50 0.412",
+          started_at: T0,
+        }),
+      ),
+  );
+}

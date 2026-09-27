@@ -1,21 +1,21 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { exampleDataset, exampleModel, fakeClient, PROJECT_ID } from "@/test/fixtures";
+import { exampleModel, fakeClient } from "@/test/fixtures";
+import { exampleTrainable } from "@/test/appSectionFixtures";
 import { TestApiProvider } from "@/test/render";
 import { TrainForm } from "./TrainForm";
 
 // The dataset and model lists arrive after the form mounts (and change again when a training
 // job finishes). Whatever the user typed must survive; untouched fields take the new defaults.
 function mount(
-  datasets: (typeof exampleDataset)[],
+  datasets: (typeof exampleTrainable)[],
   models: (typeof exampleModel)[],
   initialDatasetId?: string,
 ) {
   const { api } = fakeClient([]);
   const onStart = vi.fn();
   const props = {
-    projectId: PROJECT_ID,
     datasetsUnavailable: false,
     modelsUnavailable: false,
     modelsLoading: false,
@@ -41,50 +41,50 @@ describe("TrainForm when the lists arrive late", () => {
     fireEvent.change(screen.getByLabelText("Model name"), { target: { value: "cp3-model" } });
     fireEvent.click(screen.getByRole("button", { name: "More options" }));
     fireEvent.change(screen.getByLabelText("Epochs"), { target: { value: "1" } });
-    rerender([exampleDataset], [exampleModel]);
+    rerender([exampleTrainable], [exampleModel]);
     expect(screen.getByLabelText("Model name")).toHaveValue("cp3-model");
     expect(screen.getByLabelText("Epochs")).toHaveValue(1);
-    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id);
+    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleTrainable.id);
     expect(screen.getByLabelText("Base model")).toHaveValue(exampleModel.id);
   });
 
   it("suggests the name once both pickers can be filled and the user has not typed one", () => {
     const { rerender } = mount([], []);
     expect(screen.getByLabelText("Model name")).toHaveValue("");
-    rerender([exampleDataset], [exampleModel]);
+    rerender([exampleTrainable], [exampleModel]);
     expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
   });
 
   it("falls back to the first dataset once the list arrives and an unknown ?dataset= id is not in it (I5)", () => {
     const { rerender } = mount([], [], "nope-not-a-real-dataset");
-    rerender([exampleDataset], [exampleModel]);
-    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleDataset.id);
+    rerender([exampleTrainable], [exampleModel]);
+    expect(screen.getByLabelText("Dataset")).toHaveValue(exampleTrainable.id);
     expect(screen.getByLabelText("Model name")).toHaveValue("v1-yolo11m-coco");
   });
 
   it("explains the fallback next to the picker when the linked dataset is gone (I-B2)", () => {
     const { rerender } = mount([], [], "nope-not-a-real-dataset");
     expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
-    rerender([exampleDataset], [exampleModel]);
+    rerender([exampleTrainable], [exampleModel]);
     expect(
       screen.getByText("The dataset from the link no longer exists; the newest one is selected instead."),
     ).toBeInTheDocument();
   });
 
   it("says nothing when the ?dataset= id is valid, or when none was given", () => {
-    const { rerender } = mount([], [], exampleDataset.id);
-    rerender([exampleDataset], [exampleModel]);
+    const { rerender } = mount([], [], exampleTrainable.id);
+    rerender([exampleTrainable], [exampleModel]);
     expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
 
     const noId = mount([], []);
-    noId.rerender([exampleDataset], [exampleModel]);
+    noId.rerender([exampleTrainable], [exampleModel]);
     expect(screen.queryByText(/no longer exists/)).not.toBeInTheDocument();
   });
 
   it("keeps a valid initialDatasetId once a later list arrives, even when it is not the first one", () => {
-    const older = { ...exampleDataset, id: "older-dataset", name: "v0" };
+    const older = { ...exampleTrainable, id: "older-dataset", name: "v0" };
     const { rerender } = mount([], [], older.id);
-    rerender([exampleDataset, older], [exampleModel]);
+    rerender([exampleTrainable, older], [exampleModel]);
     expect(screen.getByLabelText("Dataset")).toHaveValue(older.id);
   });
 });

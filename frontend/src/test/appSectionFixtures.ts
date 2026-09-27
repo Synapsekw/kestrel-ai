@@ -1,4 +1,5 @@
 import type { ClassDef, components } from "@contract/client";
+import type { TrainableDataset } from "@/train/trainModel";
 import { IMAGE_ID, JOB_ID, MODEL_ID, PROJECT_ID, TRAINED_MODEL_ID, runningJob } from "./fixtures";
 
 type S = components["schemas"];
@@ -234,3 +235,15 @@ export const exampleAppJobs: S["AppJob"][] = [
     finished_at: "2026-09-26T08:35:01Z",
   },
 ];
+
+/** The training form's view of a dataset; the same id, name and counts as the old project fixture. */
+export const exampleTrainable: TrainableDataset = {
+  id: "d0000000-7777-4000-8000-000000000001",
+  name: "v1",
+  image_count: 30,
+  train_count: 24,
+  val_count: 6,
+  class_count: 1,
+  split_method: "by_group",
+  exportBusy: false,
+};

@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
-import type { Dataset, LibraryModel, TrainRequest } from "@contract/client";
+import type { LibraryModel, TrainRequest } from "@contract/client";
 import { originLabel } from "@/library/modelLabels";
+import { datasetBuilderHref } from "@/models/links";
 import { Alert, Button, Checkbox, Disclosure, Field, Input, Select } from "@/ui";
 import {
   DEFAULT_TRAIN_FORM,
@@ -9,12 +10,12 @@ import {
   toTrainRequest,
   trainAdvice,
   validateTrainForm,
+  type TrainableDataset,
   type TrainForm as Form,
 } from "./trainModel";
 
 interface Props {
-  projectId: string;
-  datasets: Dataset[];
+  datasets: TrainableDataset[];
   models: LibraryModel[];
   datasetsUnavailable: boolean;
   modelsUnavailable: boolean;
@@ -75,6 +76,8 @@ export function TrainForm({
   const [moreOpen, setMoreOpen] = useState(() => changed.length > 0);
   const dataset = datasets.find((d) => d.id === form.datasetId);
   const advice = trainAdvice(dataset, form);
+  // A run started now would fail at once: the backend refuses a second export of the same dataset.
+  const exportBusy = dataset?.exportBusy ?? false;
   // Purely derived from props: true once a non-empty dataset list has actually loaded and the
   // linked dataset (a "Train on this dataset" link, or ?dataset=) is not in it (I-B2).
   const initialDatasetMissing =
@@ -151,18 +154,18 @@ export function TrainForm({
     setError(problem);
     // A folded setting can only be invalid once it was changed: show it next to the message.
     if (problem && changed.length > 0) setMoreOpen(true);
-    if (!problem) onStart(toTrainRequest(form));
+    if (!problem && !exportBusy) onStart(toTrainRequest(form));
   }
 
   const datasetHint = (
     <>
       {dataset
-        ? `${dataset.image_count} images: ${dataset.train_count} train / ${dataset.val_count} val, ${dataset.classes.length} classes.`
+        ? `${dataset.image_count} images: ${dataset.train_count} train / ${dataset.val_count} val, ${dataset.class_count} classes.`
         : "Datasets are frozen from labeled images."}{" "}
-      <Link to="/models/datasets" className={link}>
+      <Link to={datasetBuilderHref()} className={link}>
         Create dataset
       </Link>
-      , or select images on the Images screen and use Add to dataset.
+      , or select images on the Images tab and choose Use in dataset.
       {initialDatasetMissing && (
         <span role="note" className="mt-1 block text-warn">
           The dataset from the link no longer exists; the newest one is selected instead.
@@ -342,9 +345,23 @@ export function TrainForm({
         </Alert>
       )}
       {error && <Alert tone="danger">{error}</Alert>}
-      <Button type="submit" variant="primary" icon="play" loading={busy} className="self-start">
-        Start training
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          type="submit"
+          variant="primary"
+          icon="play"
+          loading={busy}
+          disabled={exportBusy}
+          aria-describedby={exportBusy ? `${id}-export-busy` : undefined}
+        >
+          Start training
+        </Button>
+        {exportBusy && (
+          <p id={`${id}-export-busy`} className="text-xs text-muted">
+            Dataset is being exported by another run; start when it has finished.
+          </p>
+        )}
+      </div>
     </form>
   );
 }
