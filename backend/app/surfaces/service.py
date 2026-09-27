@@ -88,7 +88,9 @@ def to_out(s: Session, row: Surface) -> SurfaceOut:
         method=row.method,
         build_params=row.build_params,
         stats=row.stats,
-        captured_on=cloud.captured_on if cloud else None,
+        captured_on=(
+            row.captured_on if row.captured_on is not None else (cloud.captured_on if cloud else None)
+        ),
         elevation_role=row.elevation_role,
         map_id=cloud.map_id if cloud else None,
         tile_grid=TileGrid(max_zoom=max_zoom(row.width, row.height)) if ready else None,
@@ -244,6 +246,7 @@ def create_surface(
             kind="cloud_dsm",
             status="building",
             point_cloud_id=cloud.id,
+            captured_on=cloud.captured_on,
             method=None,
             build_params=params,
         )
