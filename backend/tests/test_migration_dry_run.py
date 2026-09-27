@@ -186,6 +186,19 @@ def test_a_nonempty_reused_work_dir_is_refused(mod, real_like, tmp_path, capsys)
     assert "not empty" in capsys.readouterr().err
 
 
+def test_the_armed_dry_run_reports_what_the_gate_reads(mod, real_like, tmp_path):
+    data_dir, old, busy = real_like
+    report = mod.dry_run([busy, old], data_dir, tmp_path / "work")
+    assert report["ok"] and report["armed"], report
+    by_name = {Path(p["folder"]).name: p for p in report["projects"]}
+    assert by_name["busy"]["checks"] == {"project_types": 2, "unmapped_boxes": 0, "findings": 0}
+    assert by_name["busy"]["schema_version_after"] == 2
+    stores = report["stores"]
+    assert sorted(t["name"] for t in stores["catalogue_types"]) == ["dump_truck", "excavator"]
+    assert all(t["kind"] == "object" for t in stores["catalogue_types"]) and stores["needs_classification"]
+    assert [d["name"] for d in stores["legacy_datasets"]] == ["v1 (Busy)"]
+
+
 def test_the_temp_work_dir_is_removed_without_keep_and_kept_with_keep(mod, real_like, monkeypatch):
     data_dir, _old, busy = real_like
     made: list[Path] = []

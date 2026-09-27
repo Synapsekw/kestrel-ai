@@ -23,3 +23,5 @@ def test_every_real_project_upgrades_on_a_copy(tmp_path):
     failures = [(p["folder"], p["error"], p["mismatches"]) for p in report["projects"] if not p["ok"]]
     assert not failures, failures
     assert all(p["originals_unchanged"] for p in report["projects"])
+    assert report["armed"], "the steps are not wired: this run proves nothing"
+    assert all(p["checks"].get("unmapped_boxes") == 0 for p in report["projects"]), report["projects"]

@@ -31,7 +31,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import select, text  # noqa: E402
 
 from app.db.models import Project  # noqa: E402
 from app.db.session import current_revision, head_revision, open_project_db, project_script  # noqa: E402
@@ -127,8 +127,16 @@ def open_stores(appdata: Path):
 
 
 def project_checks(handle) -> dict:
-    """Per-project facts the merge gate reads once the steps exist (Part B fills this in)."""
-    return {}
+    """Per-project facts the merge gate reads: the type list, boxes whose class is no project type
+    (must be 0 on real data, or explained), and findings created (0 under F4)."""
+    with handle.session() as s:
+        return {
+            "project_types": s.execute(text("SELECT COUNT(*) FROM project_type")).scalar_one(),
+            "unmapped_boxes": s.execute(
+                text("SELECT COUNT(*) FROM box WHERE class_id NOT IN (SELECT type_id FROM project_type)")
+            ).scalar_one(),
+            "findings": s.execute(text("SELECT COUNT(*) FROM finding")).scalar_one(),
+        }
 
 
 def _handle(dest: Path, engine) -> ProjectHandle:
@@ -206,8 +214,28 @@ def dry_run_one(folder: Path, dest: Path, library, catalogue) -> dict:
 
 
 def summarise_stores(library, catalogue) -> dict:
-    """App-wide facts the merge gate reads once the steps exist (Part B fills this in)."""
-    return {}
+    """App-wide facts the merge gate reads: the merged catalogue and the legacy datasets."""
+    out: dict = {}
+    if catalogue is not None:
+        with catalogue.session() as cs:
+            out["catalogue_types"] = [
+                dict(r)
+                for r in cs.execute(
+                    text("SELECT name, kind, origin, hotkey FROM catalogue_type ORDER BY name")
+                ).mappings()
+            ]
+            out["needs_classification"] = (
+                cs.execute(text("SELECT 1 FROM catalogue_meta WHERE key = 'needs_classification'")).first()
+                is not None
+            )
+    with library.session() as ls:
+        out["legacy_datasets"] = [
+            dict(r)
+            for r in ls.execute(
+                text("SELECT name, legacy_path FROM dataset WHERE origin = 'legacy' ORDER BY name")
+            ).mappings()
+        ]
+    return out
 
 
 def dry_run(folders, data_dir: Path, work: Path) -> dict:
