@@ -17,8 +17,8 @@ from sqlalchemy import select
 from app.db.base import utcnow
 from app.db.models import Drawing
 from app.drawings import store
-from app.surfaces.design.store import ID_RE
 from app.projects.service import ProjectHandle
+from app.surfaces.design.store import ID_RE
 
 INTERRUPTED = "import interrupted by application restart; import the drawing again"
 MAX_AGE = timedelta(hours=24)
