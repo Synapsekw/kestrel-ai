@@ -4,6 +4,7 @@ from datetime import date
 from pathlib import Path
 
 import jsonschema_rs
+import pytest
 import yaml
 from surfaces import WKT, cone_cloud, fixture_spec, plane, write_cloud
 from volume_rows import add_cloud, add_surface
@@ -65,3 +66,41 @@ def test_a_dem_reports_its_kind_role_and_own_date(client, project_id, handle):
     validate("Surface", body)
     listed = client.get(f"{BASE}/{project_id}/surfaces").json()["items"]
     assert [(i["id"], i["elevation_role"]) for i in listed] == [(sid, "dtm")]
+
+
+def test_patch_sets_a_dems_date_and_role(client, project_id, handle):
+    sid = add_surface(handle, fixture_spec(0.5), plane, kind="dem", method="dem_copy")
+    set_columns(handle, sid, elevation_role="dsm")
+    r = client.patch(
+        f"{BASE}/{project_id}/surfaces/{sid}", json={"captured_on": "2026-08-14", "elevation_role": "dtm"}
+    )
+    assert r.status_code == 200, r.text
+    assert (r.json()["captured_on"], r.json()["elevation_role"]) == ("2026-08-14", "dtm")
+    r = client.patch(f"{BASE}/{project_id}/surfaces/{sid}", json={"captured_on": None})
+    assert r.json()["captured_on"] is None and r.json()["elevation_role"] == "dtm"
+    r = client.patch(f"{BASE}/{project_id}/surfaces/{sid}", json={"name": "Renamed"})
+    assert (r.json()["name"], r.json()["elevation_role"]) == ("Renamed", "dtm")
+
+
+def test_patch_dates_a_cloud_surface_over_its_cloud(client, project_id, handle, tmp_path):
+    sid = add_surface(handle, fixture_spec(0.5), plane, cloud_id=dated_cloud(handle, tmp_path))
+    r = client.patch(f"{BASE}/{project_id}/surfaces/{sid}", json={"captured_on": "2026-08-20"})
+    assert r.status_code == 200 and r.json()["captured_on"] == "2026-08-20"
+
+
+@pytest.mark.parametrize(
+    ("kind", "patch"),
+    [("design", {"captured_on": "2026-08-14"}), ("cloud_dsm", {"elevation_role": "dsm"})],
+)
+def test_patch_refusals(client, project_id, handle, kind, patch):
+    sid = add_surface(handle, fixture_spec(0.5), plane, kind=kind, method="median")
+    r = client.patch(f"{BASE}/{project_id}/surfaces/{sid}", json=patch)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_patch"
+
+
+def test_patch_refuses_a_null_role(client, project_id, handle):
+    """`elevation_role` is a non-nullable `ElevationRole`, so an explicit null never reaches the
+    service: pydantic itself refuses it (controller ruling R3)."""
+    sid = add_surface(handle, fixture_spec(0.5), plane, kind="dem", method="median")
+    r = client.patch(f"{BASE}/{project_id}/surfaces/{sid}", json={"elevation_role": None})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"

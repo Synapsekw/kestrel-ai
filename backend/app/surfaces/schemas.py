@@ -103,10 +103,12 @@ class SurfaceList(BaseModel):
 
 
 class SurfacePatch(BaseModel):
+    """Map workspace (spec §5.2 "set date and role", §7). `elevation_role` is not nullable: an
+    explicit null in the request is refused by pydantic itself, before the service ever sees it."""
+
     name: str | None = Field(default=None, min_length=1)
-    # Map workspace (spec §5.2 "set date and role", §7): answer 501 until M-B2 (app/workspace/pending.py).
     captured_on: date | None = None
-    elevation_role: ElevationRole | None = None
+    elevation_role: ElevationRole = None
 
 
 class SurfaceWithJob(BaseModel):

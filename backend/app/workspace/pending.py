@@ -2,9 +2,10 @@
 
 Each guard answers 501 `not_implemented` with details `{option, unit}` when a request uses an
 option its unit has not built yet, before any lookup; `tests/test_contract.py::OPTION_STUBS` lets
-the contract test accept exactly those answers. `guard_surface_patch` belongs to M-B2; the other
-guards belong to M-B5. Each unit deletes its own guards with their call sites and their
-OPTION_STUBS entries as it builds the option; this module is deleted once every guard is gone.
+the contract test accept exactly those answers. These guards belong to M-B5 (M-B2 landed its own
+survey-date/role guard for `PATCH /surfaces/{id}`, and retired it once that option was built).
+Each unit deletes its own guards with their call sites and their OPTION_STUBS entries as it builds
+the option; this module is deleted once every guard is gone.
 """
 
 from app.errors import AppError
@@ -40,10 +41,3 @@ def guard_site_area_category(body) -> None:
     """`category` on a site-area create or patch (spec §9.4)."""
     if body.category is not None:
         raise option_pending("category", "M-B5")
-
-
-def guard_surface_patch(body) -> None:
-    """`captured_on` and `elevation_role` on a surface patch (spec §5.2 row menu, §7): M-B2."""
-    for option in ("captured_on", "elevation_role"):
-        if option in body.model_fields_set:
-            raise option_pending(option, "M-B2")

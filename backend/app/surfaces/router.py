@@ -29,7 +29,6 @@ from app.surfaces.schemas import (
     SurfaceWithJob,
 )
 from app.surfaces.tiles import SURFACE_TILES, render_hillshade_tile, render_ortho_tile
-from app.workspace.pending import guard_surface_patch
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["surfaces"])
 IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}
@@ -84,8 +83,7 @@ def patch_surface(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> SurfaceOut:
-    guard_surface_patch(body)
-    out = service.rename(handle, surfaceId, body.name)
+    out = service.patch_surface(handle, surfaceId, body)
     publish_surfaces_changed(request, handle, [surfaceId])
     return out
 

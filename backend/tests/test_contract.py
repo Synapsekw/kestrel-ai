@@ -154,7 +154,6 @@ OPTION_STUBS: dict[str, str] = {
     "createRuns": "M-B5",  # region
     "createSiteArea": "M-B5",  # category
     "updateSiteArea": "M-B5",  # category
-    "patchSurface": "M-B2",  # captured_on, elevation_role
 }
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express

@@ -25,7 +25,7 @@ from app.surfaces import build
 from app.surfaces.build import BuildParams, BuildRejected, CloudSource
 from app.surfaces.grid import MAX_CELLS, GridSpec
 from app.surfaces.paths import surface_dir
-from app.surfaces.schemas import SurfaceBuildRequest, SurfaceOut
+from app.surfaces.schemas import SurfaceBuildRequest, SurfaceOut, SurfacePatch
 from app.surfaces.tiles import SURFACE_TILES
 
 SPILL_BYTES_PER_POINT = 8 * 1.25
@@ -289,11 +289,22 @@ def submit_failed(handle: ProjectHandle, surface_id: str, error: BaseException) 
             row.status, row.error = "failed", f"the build could not be queued: {error}"
 
 
-def rename(handle: ProjectHandle, surface_id: str, name: str | None) -> SurfaceOut:
+def patch_surface(handle: ProjectHandle, surface_id: str, body: SurfacePatch) -> SurfaceOut:
+    """Name, survey date and DSM/DTM role (map workspace spec §5.2 row menu). A design is never
+    dated; only an imported elevation has a role, and it keeps one."""
+    sent = body.model_fields_set
     with handle.session() as s:
         row = _get(s, surface_id)
-        if name:
-            row.name = name
+        if "captured_on" in sent and row.kind == "design":
+            raise AppError("invalid_patch", "a design surface has no survey date", 422)
+        if "elevation_role" in sent and row.kind != "dem":
+            raise AppError("invalid_patch", "only an imported elevation has a DSM/DTM role", 422)
+        if body.name:
+            row.name = body.name
+        if "captured_on" in sent:
+            row.captured_on = body.captured_on
+        if "elevation_role" in sent:
+            row.elevation_role = body.elevation_role
         s.flush()
         return to_out(s, row)
 
