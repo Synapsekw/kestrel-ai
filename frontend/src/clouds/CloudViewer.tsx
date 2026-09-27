@@ -84,6 +84,8 @@ export interface CloudViewerHandle {
     marks: readonly CaptureMark[],
     opts?: { timeoutMs?: number },
   ): Promise<CaptureResult>;
+  /** C-V2 (spec §9.1): the pick's point, u and surface normal; null without a running engine. */
+  pickWithNormal(clientX: number, clientY: number): { point: Vec3; u: number; normal: Vec3 | null } | null;
 }
 
 export interface CloudViewerProps {
@@ -281,6 +283,10 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
             colours: classifyPixels(new Uint8Array(data.buffer), tokenRgb("bg")),
           };
         },
+        pickCenterWithNormal: () => {
+          const r = canvas.getBoundingClientRect();
+          return e.pickWithNormal(r.left + r.width / 2, r.top + r.height / 2);
+        },
       });
       releaseHook = () => {
         stopRecording();
@@ -376,6 +382,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         engine.current
           ? engine.current.capture(pose, marks, opts)
           : Promise.reject(new Error("the 3D view is not running")),
+      pickWithNormal: (x, y) => engine.current?.pickWithNormal(x, y) ?? null,
     }),
     [bridge, settle],
   );

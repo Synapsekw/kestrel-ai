@@ -107,6 +107,12 @@ export interface CloudViewerDiagnostics {
     ms: number;
     colours: ColourSample;
   }>;
+  /** C-V2: the centre pick with its u and surface normal (spec §9.1). */
+  pickCenterWithNormal(): {
+    point: [number, number, number];
+    u: number;
+    normal: [number, number, number] | null;
+  } | null;
 }
 
 declare global {

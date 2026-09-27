@@ -102,6 +102,7 @@ describe("CloudViewer C-V2 members without an engine", () => {
       }),
     ).toBeNull();
     expect(h.occlusion([[0, 0, 0]], [0.3])).toBeNull();
+    expect(h.pickWithNormal(1, 1)).toBeNull();
     const off = h.onSettle(() => {});
     expect(typeof off).toBe("function");
     off();

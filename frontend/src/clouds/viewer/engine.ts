@@ -47,7 +47,8 @@ import { makeMaterialOptions, type ColourMode } from "./materialOptions";
 import { mouseButtonsFor, resolveNavMode } from "./navMode";
 import { runOcclusion } from "./occlusion";
 import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
-import { pickAllPoints } from "./pickAll";
+import { pcaNormal } from "./normal";
+import { pickAllPoints, type DrawnPoint } from "./pickAll";
 import { flipRows, splitHalves } from "./pixels";
 import { makeRequestManager, metadataUrl } from "./requestManager";
 import { SLAB_MAX_POINTS, sliceSlab, slabNodes, throttleLatest, type SlabSample } from "./slab";
@@ -162,6 +163,8 @@ export interface CloudEngine {
   ): Promise<CaptureResult>;
   /** C-V2: true while a capture runs (the shell's "Saving view…" chip). */
   onCaptureState(cb: (busy: boolean) => void): () => void;
+  /** C-V2 (spec §9.1): `pickAtClient`'s point with its `u` and the PCA surface normal (null when none). */
+  pickWithNormal(clientX: number, clientY: number): { point: Vec3; u: number; normal: Vec3 | null } | null;
   /** For C-V2 (clip box, fly, capture): the live objects. Read them; do not replace them. */
   readonly three: {
     renderer: THREE.WebGLRenderer;
@@ -559,8 +562,15 @@ export function createEngine(o: EngineOptions): CloudEngine {
     return { x: p.x, y: p.y, z: p.z, level, uncertainty_m: pickUncertainty(rootSpacing(), level) };
   };
 
-  function pickAtClient(clientX: number, clientY: number): CloudPick | null {
-    if (!pco) return null;
+  /**
+   * One 15 px pick at a client point: the chosen pick and the window hits it was chosen from (null
+   * when the plain-pick fallback ran). pickAtClient and pickWithNormal share it, so their points agree.
+   */
+  function pickWindowAt(
+    clientX: number,
+    clientY: number,
+  ): { pick: CloudPick | null; hits: DrawnPoint[] | null } {
+    if (!pco) return { pick: null, hits: null };
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -574,13 +584,20 @@ export function createEngine(o: EngineOptions): CloudEngine {
     // potree's rule (the drawn point nearest the window centre), over the valid hits only: its own
     // pick answered null on the chimney with 18 points drawn in the window (see pickAllPoints)
     const all = pickAllPoints(pco, renderer, camera, ray.ray, PICK_WINDOW, clipParams);
-    const plain = all
-      ? null
-      : (pco.pick(renderer, camera, ray.ray, { ...clipParams, pickWindowSize: PICK_WINDOW })?.position ??
-        null);
-    // picks respect the clip box in show_inside mode (plan Ruling 1)
-    const p = all ? nearestToCentre(respectClip(all, clip)) : plain && inClip(plain) ? plain : null;
-    return p ? toCloudPick(new THREE.Vector3(p.x, p.y, p.z)) : null;
+    if (!all) {
+      const plain =
+        pco.pick(renderer, camera, ray.ray, { ...clipParams, pickWindowSize: PICK_WINDOW })?.position ?? null;
+      // picks respect the clip box in show_inside mode (plan Ruling 1)
+      const p = plain && inClip(plain) ? plain : null;
+      return { pick: p ? toCloudPick(new THREE.Vector3(p.x, p.y, p.z)) : null, hits: null };
+    }
+    const hits = respectClip(all, clip); // plan Ruling 1
+    const best = nearestToCentre(hits);
+    return { pick: best ? toCloudPick(new THREE.Vector3(best.x, best.y, best.z)) : null, hits };
+  }
+
+  function pickAtClient(clientX: number, clientY: number): CloudPick | null {
+    return pickWindowAt(clientX, clientY).pick;
   }
 
   function pickDown(x: number, y: number, radius: number): CloudPick | null {
@@ -1003,6 +1020,21 @@ export function createEngine(o: EngineOptions): CloudEngine {
       return () => {
         captureListeners.delete(cb);
       };
+    },
+    pickWithNormal(clientX, clientY) {
+      const { pick, hits } = pickWindowAt(clientX, clientY);
+      if (!pick) return null;
+      const point: Vec3 = [pick.x, pick.y, pick.z];
+      // the plain-pick fallback has no window hits to fit a plane to
+      const normal = hits
+        ? pcaNormal(
+            hits.map((h): Vec3 => [h.x, h.y, h.z]),
+            point,
+            pick.uncertainty_m,
+            tuple(camera.position),
+          )
+        : null;
+      return { point, u: pick.uncertainty_m, normal };
     },
     three: { renderer, scene, overlayScene, camera, controls, potree, potreeRenderer, pco: () => pco },
   };

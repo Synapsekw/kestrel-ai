@@ -35,6 +35,7 @@ function hook(): CloudViewerDiagnostics {
     goToPose: () => {},
     occlusion: () => ({ result: null, ms: 0 }),
     captureSample: () => Promise.reject(new Error("unused")),
+    pickCenterWithNormal: () => null,
   };
 }
 

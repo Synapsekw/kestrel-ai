@@ -304,3 +304,15 @@ test("a second capture while one runs is refused, and the chip shows", async ({ 
   expect(got.chipSeen).toBe(true);
   await expect(page.getByTestId("cloud-saving-view")).toHaveCount(0);
 });
+
+test("pickWithNormal: the south wall seen from the south has a normal facing south", async ({ page }) => {
+  // dense enough that the 15 px window holds well over 8 points at the front view's distance
+  await openCloud(page, hollowBox({ centre: [C.x, C.y, C.z], half: 5, step: 0.05 }), BOX_BOUNDS);
+  await frontSettled(page);
+  const got = await page.evaluate(() => window.__kestrelCloudViewer!.pickCenterWithNormal());
+  expect(got).not.toBeNull();
+  const plain = await page.evaluate(() => window.__kestrelCloudViewer!.pickCenter());
+  expect(got!.point).toEqual([plain!.x, plain!.y, plain!.z]); // the same pick as pickAtClient
+  expect(got!.normal).not.toBeNull();
+  expect(got!.normal![1]).toBeLessThan(-0.95);
+});
