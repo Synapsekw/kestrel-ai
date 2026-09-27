@@ -89,6 +89,13 @@ describe("Minimap (M §5, deviation 5)", () => {
     expect(seen.at(-1)?.ring?.[0]).toEqual([37.5, 35]);
   });
 
+  it("renders nothing, not an empty box, with no in-frame footprint", () => {
+    layerFeed.layers = [mapLayer("aug", "2026-08-14", { in_frame: false })];
+    setup();
+    expect(screen.queryByTestId("minimap")).toBeNull();
+    expect(screen.queryByText("Site overview")).toBeNull();
+  });
+
   it("draws no viewport before the stage is measured", () => {
     useStageSize.setState({ size: null });
     setup();

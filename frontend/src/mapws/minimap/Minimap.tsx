@@ -39,6 +39,8 @@ function MinimapPanel({ projectId, frame }: PanelProps) {
   );
   const onRecentre = useCallback((c: Coord) => viewApi?.centreOn(c), [viewApi]);
 
+  // Nothing in this frame has a footprint: no overview to show, so no empty glass box either.
+  if (!extent) return null;
   return (
     <GlassPanel
       variant="float"
@@ -46,16 +48,14 @@ function MinimapPanel({ projectId, frame }: PanelProps) {
       data-testid="minimap"
       className="relative h-[110px] w-[172px] overflow-hidden"
     >
-      {extent && (
-        <MinimapCanvas
-          frame={frame}
-          projectId={projectId}
-          ortho={ortho}
-          extent={extent}
-          ring={ring}
-          onRecentre={onRecentre}
-        />
-      )}
+      <MinimapCanvas
+        frame={frame}
+        projectId={projectId}
+        ortho={ortho}
+        extent={extent}
+        ring={ring}
+        onRecentre={onRecentre}
+      />
       <span className="pointer-events-none absolute bottom-1.5 left-2 rounded-chip bg-glass-solid px-1.5 py-0.5 text-2xs text-ink">
         Site overview
       </span>
