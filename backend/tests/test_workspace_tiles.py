@@ -154,7 +154,14 @@ def test_parse_preview():
         -0.125,
         3300000.0,
     )
-    for bad in ("1,2,3", "a,b,c,d,e,f", "1,0,0,0,0,0", "nan,0,0,0,1,0", "1,2,3,2,4,6"):
+    for bad in (
+        "1,2,3",
+        "a,b,c,d,e,f",
+        "1,0,0,0,0,0",
+        "nan,0,0,0,1,0",
+        "1,2,3,2,4,6",
+        "1e-300,0,0,0,1e-300,0",  # near-singular: exact a*e == b*d is not the only case to refuse
+    ):
         with pytest.raises(AppError) as e:
             tiles.parse_preview(bad)
         assert (e.value.status, e.value.code) == (422, "invalid_preview"), bad

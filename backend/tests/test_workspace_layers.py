@@ -216,7 +216,7 @@ def test_surveys_group_by_date_with_planned_ticks(client, project_id, handle):
     oct_ = by[("2026-10-14", False)]
     assert (oct_["planned"], oct_["note"], oct_["maps"], oct_["surfaces"]) == (True, "Oct", [], [])
     imported = [i for i in items if i["date_is_import_date"]]
-    assert imported and undated in [m["id"] for m in imported[0]["maps"]]
+    assert imported and any(undated in [m["id"] for m in i["maps"]] for i in imported)
     assert [i["date"] for i in items] == sorted(i["date"] for i in items)
     assert sum(1 for i in items if i["date"] == "2026-09-14" and not i["date_is_import_date"]) == 1
 

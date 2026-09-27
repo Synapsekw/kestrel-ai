@@ -63,19 +63,21 @@ def _invalid_preview(message: str) -> AppError:
 
 
 def parse_preview(t: str | None) -> tuple[float, float, float, float, float, float] | None:
-    """The `t` query: "a,b,c,d,e,f" (plan pixel -> site, E = a*col + b*row + c, N = d*col + e*row + f).
-    Ruling R-B1-11: anything else, non-finite values or a singular 2x2 part is 422 invalid_preview."""
+    """The `t` query: "a,b,c,d,e,f", a preview placement from drawing coordinates to the site frame
+    (E = a*x + b*y + c, N = d*x + e*y + f) used instead of the stored georef while aligning; the
+    drawing_raster resolver (M-B3) composes it with the plan pixel -> drawing coordinates transform.
+    Ruling R-B1-11: anything else, non-finite values or a near-singular 2x2 part is 422 invalid_preview."""
     if t is None:
         return None
     try:
         values = tuple(float(v) for v in t.split(","))
     except ValueError:
         values = ()
-    if (
-        len(values) != 6
-        or not all(math.isfinite(v) for v in values)
-        or values[0] * values[4] == values[1] * values[3]
-    ):
+    if len(values) != 6 or not all(math.isfinite(v) for v in values):
+        raise _invalid_preview("t must be six finite numbers a,b,c,d,e,f of an invertible affine")
+    a, b, _c, d, e, _f = values
+    tolerance = 1e-12 * max(1.0, abs(a), abs(b), abs(d), abs(e)) ** 2
+    if abs(a * e - b * d) <= tolerance:
         raise _invalid_preview("t must be six finite numbers a,b,c,d,e,f of an invertible affine")
     return values
 
