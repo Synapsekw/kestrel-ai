@@ -1544,7 +1544,7 @@ paths:
     post:
       tags: [query-runs]
       operationId: unpromoteQueryRun
-      summary: Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone.
+      summary: Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. Refuses with 409 `finding_has_content` (nothing changes) when a reverted box's finding has a note, photo, comment, a status other than reviewed, or a person-set severity.
       responses:
         "200":
           description: run with `promoted_at` cleared and the number of boxes returned to unreviewed
@@ -8345,7 +8345,7 @@ components:
       example: { pinned: true }
     UnmappedClassesError:
       type: object
-      description: the `Error` envelope for `createRuns`'s 422s
+      description: the `Error` envelope for `createRuns`'s, `detectImage`'s and `detectImageBatch`'s 422s
       required: [error]
       properties:
         error:
@@ -8354,7 +8354,7 @@ components:
           properties:
             code:
               type: string
-              description: "`unmapped_classes`, `task_not_supported`, `model_or_provider_required`, `query_required`, or `validation_error` for a malformed body"
+              description: "`unmapped_classes`, `task_not_supported` (`createRuns` only), `model_or_provider_required`, `query_required`, `no_images`, `too_many_images`, or `validation_error` for a malformed body"
             message: { type: string }
             details:
               type: object

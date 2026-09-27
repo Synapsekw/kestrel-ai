@@ -1127,7 +1127,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. */
+        /** Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. Refuses with 409 `finding_has_content` (nothing changes) when a reverted box's finding has a note, photo, comment, a status other than reviewed, or a person-set severity. */
         post: operations["unpromoteQueryRun"];
         delete?: never;
         options?: never;
@@ -7142,7 +7142,7 @@ export interface components {
             pinned: boolean;
         };
         /**
-         * @description the `Error` envelope for `createRuns`'s 422s
+         * @description the `Error` envelope for `createRuns`'s, `detectImage`'s and `detectImageBatch`'s 422s
          * @example {
          *       "error": {
          *         "code": "unmapped_classes",
@@ -7159,7 +7159,7 @@ export interface components {
          */
         UnmappedClassesError: {
             error: {
-                /** @description `unmapped_classes`, `task_not_supported`, `model_or_provider_required`, `query_required`, or `validation_error` for a malformed body */
+                /** @description `unmapped_classes`, `task_not_supported` (`createRuns` only), `model_or_provider_required`, `query_required`, `no_images`, `too_many_images`, or `validation_error` for a malformed body */
                 code: string;
                 message: string;
                 details: {

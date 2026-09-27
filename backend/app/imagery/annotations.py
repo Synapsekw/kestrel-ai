@@ -356,7 +356,7 @@ def _has_content(s, f: Finding) -> bool:
     )
 
 
-def _refuse_unreview_with_content(s, rows: list[Box]) -> None:
+def refuse_unreview_with_content(s, rows: list[Box]) -> None:
     """An unreview is an undo: it never takes a note, comment or photo with it (spec 8.3, R-BA2).
     Any touched finding refuses the whole request before anything changes."""
     touched = []
@@ -391,7 +391,7 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> Revi
         # Materialised first: the hooks below query and flush on this session mid-loop.
         rows = s.execute(select(Box).where(Box.id.in_(box_ids))).scalars().all()
         if action == "unreview":
-            _refuse_unreview_with_content(s, rows)
+            refuse_unreview_with_content(s, rows)
         for row in rows:
             if row.provenance_kind == "person":
                 continue

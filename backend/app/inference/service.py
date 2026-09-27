@@ -16,6 +16,7 @@ from app.db.models import Box, Image, Job, QueryRun
 from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
 from app.findings import annotations, trash
+from app.imagery.annotations import refuse_unreview_with_content
 from app.inference.schemas import QueryRunCreate
 from app.library import service as library
 from app.library.handle import LibraryHandle, library_unavailable
@@ -285,6 +286,7 @@ def unpromote(handle: ProjectHandle, run_id: str) -> tuple[QueryRun, int, int, l
                     )
                 ).scalars()
             )
+        refuse_unreview_with_content(s, promoted)  # 409 before any box changes (R-BA2)
         for box in promoted:
             box.review_state, box.reviewed_at = "unreviewed", None
             trashed += annotations.on_box_changed(s, handle.id, handle.catalogue, box)
