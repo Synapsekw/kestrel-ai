@@ -263,10 +263,10 @@ export const ShapeLayer = memo(function ShapeLayer({ ctx }: { ctx: CommandContex
       const s = ctx.store.getState();
       const box = s.boxes[id];
       const node = e.target as Konva.Node & NodeLike;
-      const image = s.image;
-      if (!box || !image) return;
-      // Read the box when the queued command runs: a polygon's drag offset applies to its points.
-      void cmdUpdateShape(ctx, id, (current) => dragPatch(current, node, image))
+      if (!box || !s.image) return;
+      // Computed now, from the box as drawn: the node's offset is relative to that geometry, even
+      // while an earlier drag's save is still queued (the node is resynced only after it lands).
+      void cmdUpdateShape(ctx, id, dragPatch(box, node, s.image))
         .catch((err: unknown) => pushLog(`commit shape failed: ${String(err)}`))
         .then(() => resync(node, ctx.store.getState().boxes[id]));
     },

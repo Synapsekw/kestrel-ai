@@ -74,13 +74,15 @@ function SelectionGlow({
 
 function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; scale: number }) {
   const points = useMemo(() => toPoints(box.points ?? []), [box.points]);
-  // The edit applies to the points as they stand when the queued command runs, so a second
-  // vertex drag made while the first is saving does not undo it.
-  const save = (edit: (current: Point[]) => Point[] | null) =>
-    void cmdUpdateShape(ctx, box.id, (current) => {
-      const next = edit(toPoints(current.points ?? []));
-      return next ? { kind: "points", points: next } : null;
-    });
+  // Insert and remove use indices of the points as drawn, so their patch is computed now. A vertex
+  // move sets one absolute position, so it applies to the points as they stand when it runs and a
+  // second drag made while the first is saving does not undo it.
+  const save = (next: Point[]) => void cmdUpdateShape(ctx, box.id, { kind: "points", points: next });
+  const saveMove = (i: number, at: Point) =>
+    void cmdUpdateShape(ctx, box.id, (current) => ({
+      kind: "points",
+      points: moveVertex(toPoints(current.points ?? []), i, at),
+    }));
   // Only Alt+click uses the edges; otherwise a press must reach the polygon below (select, drag)
   // instead of bubbling to the stage, where the select tool would clear the selection.
   const altHeld = useImagesWorkspace((s) => s.altHeld);
@@ -101,7 +103,7 @@ function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; sca
           e.cancelBubble = true;
           const at = e.target.getStage()?.getRelativePointerPosition();
           const hit = at ? nearestEdge(points, at) : null;
-          if (hit) save((current) => insertVertex(current, hit.index, hit.at));
+          if (hit) save(insertVertex(points, hit.index, hit.at));
         }}
       />
       {points.map((p, i) => (
@@ -120,14 +122,15 @@ function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; sca
           onMouseDown={(e: KonvaEventObject<MouseEvent>) => {
             e.cancelBubble = true;
             if (!e.evt.altKey) return;
-            if (removeVertex(points, i)) save((current) => removeVertex(current, i));
+            const next = removeVertex(points, i);
+            if (next) save(next);
             else toast("info", "A polygon needs at least 3 points.");
           }}
           onDragEnd={(e: KonvaEventObject<DragEvent>) => {
             e.cancelBubble = true;
             const image = ctx.store.getState().image;
             const at = image ? clampPoint({ x: e.target.x(), y: e.target.y() }, image) : null;
-            if (at) save((current) => moveVertex(current, i, at));
+            if (at) saveMove(i, at);
           }}
         />
       ))}

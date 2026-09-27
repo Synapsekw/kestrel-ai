@@ -1,11 +1,11 @@
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleClasses, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import { ensureBuiltInTools } from "@/images/tools";
 import { dragPatch, ShapeLayer } from "./ShapeLayer";
-import { renders } from "./testKonva";
-import { makeDetail, makeMeasurement, makeShape } from "./testing";
+import { lastProps, renders } from "./testKonva";
+import { gatedClient, makeDetail, makeMeasurement, makeShape } from "./testing";
 import type { CommandContext } from "./commands";
 
 vi.mock("react-konva", () => import("./testKonva"));
@@ -46,6 +46,60 @@ beforeEach(() => {
 });
 
 describe("ShapeLayer (layer 2)", () => {
+  it("two polygon drags ending before the first save resolves move it by both offsets", async () => {
+    const tri = makeShape({
+      id: "tri",
+      class_id: type.id,
+      shape: "polygon",
+      points: [
+        [10, 10],
+        [60, 10],
+        [60, 50],
+      ],
+      x: 10,
+      y: 10,
+      w: 50,
+      h: 40,
+    });
+    st().loadImage(makeDetail(), [tri], []);
+    const { api, requests, gate } = gatedClient([
+      {
+        method: "PATCH",
+        path: /\/boxes\/tri$/,
+        body: (req) => ({ ...st().boxes.tri, ...(req.body as object) }),
+      },
+    ]);
+    render(
+      <ShapeLayer ctx={{ api, projectId: PROJECT_ID, store: useImagesWorkspace, history: st().history }} />,
+    );
+    // The Konva node keeps its drag offset until the save lands and resync puts it back at 0.
+    let at = { x: 0, y: 0 };
+    const node = {
+      x: () => at.x,
+      y: () => at.y,
+      width: () => 0,
+      height: () => 0,
+      scaleX: () => 1,
+      scaleY: () => 1,
+      rotation: () => 0,
+      position: (p: { x: number; y: number }) => void (at = p),
+      getLayer: () => null,
+    };
+    const dragEnd = lastProps.line.onDragEnd as (e: unknown) => void;
+    at = { x: 5, y: 0 };
+    act(() => dragEnd({ target: node, cancelBubble: false }));
+    at = { x: 12, y: 0 }; // the second drag starts from the first one's offset and adds 7
+    act(() => dragEnd({ target: node, cancelBubble: false }));
+    await waitFor(() => expect(gate.arrived).toBe(1));
+    gate.release();
+    await waitFor(() => expect(gate.arrived).toBe(2));
+    gate.release();
+    await waitFor(() => expect(requests).toHaveLength(2));
+    await waitFor(() => expect(st().pending).toBe(0));
+    expect((requests[1].body as { points: number[][] }).points[0]).toEqual([22, 10]);
+    expect(st().boxes.tri.points?.[0]).toEqual([22, 10]);
+  });
+
   it("stops listening at the layer during a gesture without re-rendering the nodes (m1)", () => {
     render(<ShapeLayer ctx={ctx()} />);
     const before = renders.rect ?? 0;
