@@ -34,7 +34,7 @@ export function HintBar({
       aria-live="polite"
       data-testid="cloud-hintbar"
       className={cx(
-        "absolute left-1/2 top-3.5 z-20 flex max-w-[min(760px,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-2 text-sm transition-opacity duration-base ease-out",
+        "absolute left-1/2 top-3.5 z-20 flex max-w-[min(760px,calc(100%-2rem))] -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full px-3.5 py-2 text-sm transition-opacity duration-base ease-out reduce-motion:transition-none",
         faded ? "pointer-events-none opacity-0" : "opacity-100",
       )}
     >
