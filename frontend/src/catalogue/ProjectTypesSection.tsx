@@ -32,15 +32,17 @@ export function ProjectTypesSection({
   const api = useApi();
   const catalogue = useCatalogue();
   const initial = useMemo(() => rowsOf(project.classes, catalogue.types), [project.classes, catalogue.types]);
-  const [edited, setEdited] = useState<TypeRow[] | null>(null);
-  const rows = edited ?? initial;
+  // `base` is the list the edit started from, so a catalogue that answers mid-edit cannot turn an
+  // untouched empty override into a `null` that clears the project's stored one.
+  const [edited, setEdited] = useState<{ rows: TypeRow[]; base: TypeRow[] } | null>(null);
+  const rows = edited?.rows ?? initial;
   const [query, setQuery] = useState("");
   const [newKind, setNewKind] = useState<TypeKind>("defect");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const edit = (next: TypeRow[]) => {
-    setEdited(next);
+    setEdited((e) => ({ rows: next, base: e?.base ?? initial }));
     setStatus(null);
   };
   const matches = suggestions(query, catalogue.types, rows);
@@ -82,7 +84,7 @@ export function ProjectTypesSection({
     if (problem) return;
     setBusy(true);
     try {
-      const saved = await saveProjectTypes(api, project.id, toTypesBody(rows));
+      const saved = await saveProjectTypes(api, project.id, toTypesBody(rows, edited?.base ?? initial));
       setEdited(null);
       setStatus("Types saved");
       onSaved(saved);

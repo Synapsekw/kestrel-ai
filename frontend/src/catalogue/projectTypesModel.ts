@@ -84,13 +84,20 @@ export function hotkeyProblem(rows: TypeRow[]): string | null {
 
 /**
  * `hotkeys[type_id]` is the override string, or `null` to clear one; a type id left out of the map
- * keeps whatever the project already has (the contract's `ProjectTypesUpdate.hotkeys`). Every row is
- * sent explicitly (`null` for an empty override) so clearing one on the UI clears it on the server
- * too, instead of silently leaving the previous override in place.
+ * keeps whatever the project already has (the contract's `ProjectTypesUpdate.hotkeys`). The body is
+ * a diff against `base`, the rows the edit started from: a set override is sent as its string, an
+ * override that was set in `base` and is now empty is sent as `null` (so clearing one on the UI
+ * clears it on the server), and an empty override that was already empty is left out. Without the
+ * catalogue (503, or before its first answer) every row's override reads as empty, so leaving the
+ * untouched ones out is what keeps a reorder from wiping the project's stored overrides.
  */
-export function toTypesBody(rows: TypeRow[]): ProjectTypesUpdate {
+export function toTypesBody(rows: TypeRow[], base: TypeRow[]): ProjectTypesUpdate {
+  const before = new Map(base.map((r) => [r.typeId, r.override]));
   const hotkeys: Record<string, string | null> = {};
-  for (const r of rows) hotkeys[r.typeId] = r.override || null;
+  for (const r of rows) {
+    if (r.override) hotkeys[r.typeId] = r.override;
+    else if (before.get(r.typeId)) hotkeys[r.typeId] = null;
+  }
   return { type_ids: rows.map((r) => r.typeId), hotkeys };
 }
 

@@ -47,21 +47,33 @@ describe("project type list (F §7.3)", () => {
     expect(hotkeyProblem(rowsOf(projectClasses, exampleTypes))).toBeNull();
   });
 
-  it("sends the order and a hotkey entry (string or null) for every row", () => {
-    expect(toTypesBody(rowsOf(projectClasses, exampleTypes))).toEqual({
+  it("sends the order, keeps a set override and leaves untouched empty overrides out", () => {
+    const rows = rowsOf(projectClasses, exampleTypes);
+    expect(toTypesBody(rows, rows)).toEqual({
       type_ids: [TYPE_ID(1), TYPE_ID(3)],
-      hotkeys: { [TYPE_ID(1)]: "9", [TYPE_ID(3)]: null },
+      hotkeys: { [TYPE_ID(1)]: "9" },
     });
   });
 
   it("clearing a project's override sends null for that type (a left-out entry would keep it)", () => {
-    const rows = rowsOf(projectClasses, exampleTypes).map((r) =>
-      r.name === "Excavator" ? { ...r, override: "" } : r,
-    );
-    expect(toTypesBody(rows)).toEqual({
+    const base = rowsOf(projectClasses, exampleTypes);
+    const rows = base.map((r) => (r.name === "Excavator" ? { ...r, override: "" } : r));
+    expect(toTypesBody(rows, base)).toEqual({
       type_ids: [TYPE_ID(1), TYPE_ID(3)],
-      hotkeys: { [TYPE_ID(1)]: null, [TYPE_ID(3)]: null },
+      hotkeys: { [TYPE_ID(1)]: null },
     });
+  });
+
+  it("without the catalogue, a reorder sends no null and so keeps every stored override", () => {
+    const base = rowsOf(projectClasses, []);
+    const rows = moveRow(base, 0, 1);
+    expect(toTypesBody(rows, base)).toEqual({ type_ids: [TYPE_ID(3), TYPE_ID(1)], hotkeys: {} });
+  });
+
+  it("sends a newly set override as a string", () => {
+    const base = rowsOf(projectClasses, exampleTypes);
+    const rows = base.map((r) => (r.name === "Crack" ? { ...r, override: "x" } : r));
+    expect(toTypesBody(rows, base).hotkeys).toEqual({ [TYPE_ID(1)]: "9", [TYPE_ID(3)]: "x" });
   });
 
   it("suggests live catalogue types not yet in the list, by normalised text", () => {

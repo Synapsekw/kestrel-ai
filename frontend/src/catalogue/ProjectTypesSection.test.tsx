@@ -13,8 +13,15 @@ import { ProjectTypesSection } from "./ProjectTypesSection";
 const project = { ...exampleProject, classes: exampleProjectClasses };
 const TYPES: FakeRoute = { method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage };
 
-function renderSection(routes: FakeRoute[]) {
-  const { api, requests } = fakeClient([TYPES, ...routes]);
+const TYPES_503: FakeRoute = {
+  method: "GET",
+  path: /\/catalogue\/types$/,
+  status: 503,
+  body: errorBody("catalogue_unavailable", "locked"),
+};
+
+function renderSection(routes: FakeRoute[], types: FakeRoute = TYPES) {
+  const { api, requests } = fakeClient([types, ...routes]);
   const onSaved = vi.fn();
   renderWithProviders(<ProjectTypesSection project={project} onSaved={onSaved} />, { api });
   return { requests, onSaved };
@@ -33,7 +40,7 @@ describe("ProjectTypesSection", () => {
     expect(requests.find((r) => r.method === "PUT")?.url).toBe(`/api/v1/projects/${PROJECT_ID}/types`);
     expect(requests.find((r) => r.method === "PUT")?.body).toEqual({
       type_ids: [TYPE_ID(1), TYPE_ID(3), TYPE_ID(2)],
-      hotkeys: { [TYPE_ID(1)]: "9", [TYPE_ID(3)]: null, [TYPE_ID(2)]: null },
+      hotkeys: { [TYPE_ID(1)]: "9" },
     });
   });
 
@@ -45,7 +52,25 @@ describe("ProjectTypesSection", () => {
     await waitFor(() => expect(requests.some((r) => r.method === "PUT")).toBe(true));
     expect(requests.find((r) => r.method === "PUT")?.body).toEqual({
       type_ids: [TYPE_ID(1), TYPE_ID(3)],
-      hotkeys: { [TYPE_ID(1)]: null, [TYPE_ID(3)]: null },
+      hotkeys: { [TYPE_ID(1)]: null },
+    });
+  });
+
+  it("with the catalogue unavailable, hides the add field and a reorder keeps every override", async () => {
+    const { requests } = renderSection(
+      [{ method: "PUT", path: /\/projects\/[^/]+\/types$/, body: project }],
+      TYPES_503,
+    );
+    expect(
+      await screen.findByText("The catalogue is not available, so types cannot be added now."),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText("Add type")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Move Excavator down" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save types" }));
+    await waitFor(() => expect(requests.some((r) => r.method === "PUT")).toBe(true));
+    expect(requests.find((r) => r.method === "PUT")?.body).toEqual({
+      type_ids: [TYPE_ID(3), TYPE_ID(1)],
+      hotkeys: {},
     });
   });
 
