@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -9,7 +9,21 @@ import { ENTRY, type CloudToolId } from "./tools";
 import type { WorkspaceTool } from "./types";
 import { useWorkspaceTool } from "./useWorkspaceTool";
 
-const handle = { setNavMode: vi.fn(), setView: vi.fn() };
+// The engine's nav mode and its frame listeners, so a test can play the engine leaving fly itself.
+let engineNav = "orbit";
+const frames = new Set<() => void>();
+const handle = {
+  setNavMode: vi.fn((m: string) => {
+    engineNav = m;
+  }),
+  setView: vi.fn(),
+  navMode: () => engineNav,
+  onFrame: (cb: () => void) => {
+    frames.add(cb);
+    return () => frames.delete(cb);
+  },
+};
+const renderFrame = () => act(() => [...frames].forEach((cb) => cb()));
 
 function Harness({
   tools,
@@ -40,7 +54,10 @@ const pressed = (name: string) =>
     .querySelector(`[aria-label="${name}"]`)!
     .getAttribute("aria-pressed");
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  engineNav = "orbit";
+});
 
 describe("the workspace's tools and keys (spec §6 Keyboard, plan Ruling 3)", () => {
   it("arms a tool from its key and shows its hint", async () => {
@@ -157,5 +174,17 @@ describe("the workspace's tools and keys (spec §6 Keyboard, plan Ruling 3)", ()
     expect(onCommit).toHaveBeenCalledOnce();
     await userEvent.click(screen.getByRole("button", { name: /Cancel/ }));
     expect(pressed("Orbit")).toBe("true");
+  });
+
+  it("returns to Orbit when the engine leaves fly itself (a photo's lookThrough, C-V2 hand-off)", async () => {
+    render(<Harness tools={[]} />);
+    await userEvent.click(screen.getByRole("button", { name: "Fly" }));
+    expect(pressed("Fly")).toBe("true");
+    renderFrame(); // the engine is flying: the tool stays
+    expect(pressed("Fly")).toBe("true");
+    engineNav = "orbit"; // lookThrough switched the engine to orbit without telling the workspace
+    renderFrame();
+    expect(pressed("Orbit")).toBe("true");
+    expect(handle.setNavMode).toHaveBeenLastCalledWith("orbit");
   });
 });

@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components -- a test double and its controls */
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import type { CloudPick, CloudViewerHandle, CloudViewerProps, ViewState } from "@/clouds/CloudViewer";
-import type { ColourAvailability, FrameCamera } from "@/clouds/viewer/types";
+import type { ColourAvailability, FrameCamera, NavMode } from "@/clouds/viewer/types";
 
 export const FAKE_PICK: CloudPick = { x: 243500.5, y: 3178000.25, z: 12.5, level: 3, uncertainty_m: 0.04 };
 
@@ -68,6 +68,7 @@ export const FakeCloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(
         (...args: unknown[]) => {
           fake.calls.push({ name, args });
         };
+      let nav: NavMode = "orbit";
       const handle = {
         fit: rec("fit"),
         topView: rec("topView"),
@@ -87,8 +88,11 @@ export const FakeCloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(
           contextLost: false,
           cameraDistance: 120,
         }),
-        setNavMode: rec("setNavMode"),
-        navMode: () => "orbit",
+        setNavMode: (...args: unknown[]) => {
+          fake.calls.push({ name: "setNavMode", args });
+          nav = args[0] as NavMode;
+        },
+        navMode: () => nav,
         setView: rec("setView"),
         goToPose: rec("goToPose"),
         currentPose: () => ({
@@ -112,7 +116,19 @@ export const FakeCloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(
         edl: () => ({ on: true, rendersToTarget: false }),
         setEdl: rec("setEdl"),
         requestRender: rec("requestRender"),
-        ...(fake.v2 ? { setClipBox: rec("setClipBox") } : {}),
+        // C-V2's members; without them the handle is a pre-V2 one (canClip false: Fly and Clip disabled).
+        ...(fake.v2
+          ? {
+              setClipBox: rec("setClipBox"),
+              clipBox: () => null,
+              lookThrough: () => null,
+              sampleSlab: () => Promise.reject(new Error("the fake viewer samples no slab")),
+              onSettle: () => () => {},
+              occlusion: () => null,
+              capture: () => Promise.reject(new Error("the fake viewer captures nothing")),
+              pickWithNormal: () => null,
+            }
+          : {}),
       };
       return handle as unknown as CloudViewerHandle;
     }, []);

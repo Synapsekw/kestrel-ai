@@ -140,12 +140,18 @@ export function useWorkspaceTool(o: {
     const onLock = () => {
       if (!document.pointerLockElement && latest.current.active === "fly") arm("orbit");
     };
+    // C-V2's lookThrough (a photo pose) leaves fly without a word: after the frame it draws, a Fly tool
+    // over an engine that no longer flies returns to Orbit, so the palette never shows Fly while orbiting.
+    const stopFrames = viewer.current?.onFrame?.(() => {
+      if (latest.current.active === "fly" && viewer.current?.navMode() !== "fly") arm("orbit");
+    });
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     // Alt+Tab mid-hold: the keyup goes to another window, so the hold ends with the focus.
     window.addEventListener("blur", release);
     document.addEventListener("pointerlockchange", onLock);
     return () => {
+      stopFrames?.();
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", release);
