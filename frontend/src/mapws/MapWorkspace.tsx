@@ -9,6 +9,7 @@ import { arrivalRequest } from "./arrival/arrival";
 import { CoordinatesPanel } from "./chrome/CoordinatesPanel";
 import { LayersPanel } from "./chrome/LayersPanel";
 import { NavControls } from "./chrome/NavControls";
+import { StageMenu } from "./chrome/StageMenu";
 import { ToolHint } from "./chrome/ToolHint";
 import { ToolPalette } from "./chrome/ToolPalette";
 import { WorkspaceEmpty } from "./chrome/WorkspaceEmpty";
@@ -19,6 +20,7 @@ import {
   useWorkspaceStores,
   type WorkspaceStores,
 } from "./context";
+import { useSiteMapProbe } from "./diagnostics";
 import { InspectorHost } from "./inspect/InspectorHost";
 import { inspectorRegistry } from "./inspect/inspectorRegistry";
 import { layerRegistry, type LayerRowsContext } from "./layers/layerRegistry";
@@ -65,7 +67,7 @@ function Problem({ message, onRetry }: { message: string; onRetry: () => void })
 /** The Maps tab (spec §5): the full-bleed map workspace. */
 export function MapWorkspace() {
   const { projectId = "" } = useParams();
-  const { data, error, retry } = useWorkspaceData(projectId);
+  const { data, error, retry, loading } = useWorkspaceData(projectId);
   // One pair of stores per project; a project switch starts fresh.
   const stores = useMemo(
     () => ({ workspace: createWorkspaceStore(), tools: createToolStore() }),
@@ -100,7 +102,7 @@ export function MapWorkspace() {
     );
   return (
     <WorkspaceProvider value={value}>
-      <WorkspaceBody data={data} />
+      <WorkspaceBody data={data} loading={loading} />
     </WorkspaceProvider>
   );
 }
@@ -113,7 +115,7 @@ function unionExtent(extents: readonly SiteExtent[]): SiteExtent | null {
   );
 }
 
-function WorkspaceBody({ data }: { data: WorkspaceData }) {
+function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolean }) {
   const { workspace, projectId, frame } = useWorkspaceStores();
   const api = useApi();
   const location = useLocation();
@@ -132,6 +134,13 @@ function WorkspaceBody({ data }: { data: WorkspaceData }) {
 
   useUrlState(ready);
   usePersist(ready);
+
+  // One layer and cloud read, shared with every plugin (useWorkspaceLayers, useOpenIn3d).
+  useEffect(() => {
+    workspace.getState().setLayers(data.layers, loading);
+    workspace.getState().setClouds(data.clouds);
+  }, [workspace, data.layers, data.clouds, loading]);
+  useSiteMapProbe();
 
   const playing = useWorkspace((s) => s.playing);
   useEffect(() => {
@@ -266,6 +275,7 @@ function WorkspaceBody({ data }: { data: WorkspaceData }) {
   return (
     <div
       data-testid="map-workspace"
+      data-frame={frame.kind}
       className={cx(
         "relative h-full w-full overflow-hidden bg-bg",
         active === "pan" || panHold ? "cursor-grab" : "cursor-crosshair",
@@ -292,6 +302,7 @@ function WorkspaceBody({ data }: { data: WorkspaceData }) {
       <CoordinatesPanel projectId={projectId} />
       <PanelSlotHost slot="bottom-center" projectId={projectId} frame={frame} />
       <NavControls nativeRes={nativeRes} />
+      <StageMenu />
       <PanelSlotHost slot="bottom-right" projectId={projectId} frame={frame} />
       <Dialog
         open={confirm !== null}

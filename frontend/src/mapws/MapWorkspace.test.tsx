@@ -18,7 +18,10 @@ const LAYER = layer("map", MAP_ID, {
 const LAYERS = { frame: UTM33, items: [LAYER] };
 
 function renderWorkspace(
-  api = fakeClient(workspaceRoutes({ layers: LAYERS })).api,
+  api = fakeClient([
+    ...workspaceRoutes({ layers: LAYERS }),
+    { method: "GET", path: /\/pointclouds$/, body: { items: [] } },
+  ]).api,
   route = `/p/${PROJECT_ID}/maps`,
 ) {
   return renderWithProviders(
@@ -147,5 +150,13 @@ describe("MapWorkspace", () => {
     expect(location()).toHaveTextContent("sel=zone%3Az1");
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(location()).not.toHaveTextContent("sel="));
+  });
+
+  it("publishes the loaded layers to plugins and marks its frame", async () => {
+    renderWorkspace();
+    await screen.findByTestId("site-map");
+    expect(screen.getByTestId("map-workspace")).toHaveAttribute("data-frame", "crs");
+    expect(screen.getByTestId("coord-readout")).toHaveTextContent("EPSG:32633");
+    expect(screen.getByTestId("tool-hint")).toHaveTextContent("Select");
   });
 });

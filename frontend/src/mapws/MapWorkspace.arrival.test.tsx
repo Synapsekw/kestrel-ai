@@ -32,6 +32,7 @@ const base = (finding: FakeRoute["body"], findingStatus = 200): FakeRoute[] => [
     status: findingStatus,
     body: finding,
   },
+  { method: "GET", path: /\/pointclouds$/, body: { items: [] } },
 ];
 
 /** The probe sits outside the routes, so it still reports after a navigation to /images/… . */

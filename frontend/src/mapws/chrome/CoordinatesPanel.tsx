@@ -23,6 +23,7 @@ export function CoordinatesPanel({ projectId }: { projectId: string }) {
       variant="float"
       radius="panel"
       style={stagger(2)}
+      data-testid="coord-readout"
       className="stagger absolute bottom-4 left-4 z-10 flex min-w-[360px] flex-col gap-1.5 px-3 py-2 animate-rise reduce-motion:animate-none"
     >
       <div className="flex items-center gap-3">

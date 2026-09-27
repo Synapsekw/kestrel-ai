@@ -1,6 +1,7 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
+import type { PointCloud } from "@/api/clouds";
 import { GROUP_ORDER, type LayerGroup } from "../layers/layerRegistry";
-import type { CompareMode, Coord, Selection, Survey } from "../types";
+import type { CompareMode, Coord, Selection, Survey, WorkspaceLayer } from "../types";
 import type { SiteExtent } from "../view/siteGrid";
 import { SURVEY_DATE_RE, canCompare, flownDates, stepSurvey } from "./surveys";
 
@@ -34,6 +35,13 @@ export interface ViewApi {
   pixelOf: (c: Coord) => [number, number] | null;
   /** The site coordinate under a pixel of that map (the inverse of pixelOf); null before it renders. */
   coordOf: (px: [number, number]) => Coord | null;
+}
+
+/** The right-click menu: where it opened (client px) and the site coordinate under it. */
+export interface StageMenuState {
+  x: number;
+  y: number;
+  coord: Coord;
 }
 
 /** `PUT /map-workspace {state}` (spec §5.2). */
@@ -73,6 +81,16 @@ export interface WorkspaceState {
   /** The view to start from (the persisted one); null fits the site. */
   initialView: ViewInfo | null;
   viewApi: ViewApi | null;
+  /** listWorkspaceLayers, loaded once per revision by MapWorkspace and shared (useWorkspaceLayers). */
+  layers: WorkspaceLayer[];
+  layersLoading: boolean;
+  /** The project's point clouds (for the 3D jump). */
+  clouds: PointCloud[];
+  stageMenu: StageMenuState | null;
+  setLayers: (layers: WorkspaceLayer[], loading: boolean) => void;
+  setClouds: (clouds: PointCloud[]) => void;
+  openStageMenu: (menu: StageMenuState) => void;
+  closeStageMenu: () => void;
 
   setSurveys: (surveys: Survey[]) => void;
   setMode: (mode: CompareMode) => void;
@@ -216,6 +234,14 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
     viewInfo: null,
     initialView: null,
     viewApi: null,
+    layers: [],
+    layersLoading: true,
+    clouds: [],
+    stageMenu: null,
+    setLayers: (layers, layersLoading) => set({ layers, layersLoading }),
+    setClouds: (clouds) => set({ clouds }),
+    openStageMenu: (stageMenu) => set({ stageMenu }),
+    closeStageMenu: () => set({ stageMenu: null }),
 
     setSurveys: (surveys) =>
       set((s) => {

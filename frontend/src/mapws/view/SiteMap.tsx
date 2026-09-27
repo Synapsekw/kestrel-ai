@@ -5,7 +5,7 @@ import OlMap from "ol/Map";
 import type MapBrowserEvent from "ol/MapBrowserEvent";
 import View from "ol/View";
 import { defaults as defaultInteractions } from "ol/interaction/defaults";
-import { useWorkspace } from "../context";
+import { useWorkspace, useWorkspaceStores } from "../context";
 import type { Placement } from "../layers/placement";
 import { mapsFor } from "../layers/placement";
 import type { ViewInfo } from "../state/workspaceStore";
@@ -128,6 +128,7 @@ function MapPaneView({
   const target = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<OlMap | null>(null);
   const setPointer = useWorkspace((s) => s.setPointer);
+  const { workspace } = useWorkspaceStores();
 
   useEffect(() => {
     if (!target.current) return;
@@ -146,6 +147,13 @@ function MapPaneView({
     const leave = () => setPointer(null);
     m.on("pointermove", move);
     m.getViewport().addEventListener("pointerleave", leave);
+    // Right-click: the stage menu ("Open this spot in 3D") at the site coordinate under the pointer.
+    const menu = (e: MouseEvent) => {
+      e.preventDefault();
+      const c = m.getEventCoordinate(e);
+      workspace.getState().openStageMenu({ x: e.clientX, y: e.clientY, coord: [c[0], c[1]] });
+    };
+    m.getViewport().addEventListener("contextmenu", menu);
     setMap(m);
     onMap(side, m);
     return () => {
@@ -153,15 +161,20 @@ function MapPaneView({
       move.cancel();
       m.un("pointermove", move);
       m.getViewport().removeEventListener("pointerleave", leave);
+      m.getViewport().removeEventListener("contextmenu", menu);
       m.setTarget(undefined);
       m.dispose();
       setMap(null);
     };
-  }, [view, setPointer, onMap, side]);
+  }, [view, setPointer, onMap, side, workspace]);
 
   const pane = useMemo(() => (map ? { map, side } : null), [map, side]);
   return (
-    <div ref={target} data-testid={`site-map-${side}`} className="relative h-full w-full">
+    <div
+      ref={target}
+      data-testid={side === "single" ? "site-map" : `site-map-${side}`}
+      className="relative h-full w-full"
+    >
       {pane && (
         <PaneContext.Provider value={pane}>
           <DrawHost />

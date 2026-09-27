@@ -23,7 +23,13 @@ export function InspectorHost({ projectId, frame }: { projectId: string; frame: 
       onClose={() => select(null)}
     />
   );
-  if (!kind.framed) return <div className={PLACE}>{body}</div>;
+  const sel = `${selection.kind}:${selection.id}`;
+  if (!kind.framed)
+    return (
+      <div data-testid="map-inspector" data-sel={sel} className={PLACE}>
+        {body}
+      </div>
+    );
   return (
     <GlassPanel
       as="aside"
@@ -31,6 +37,8 @@ export function InspectorHost({ projectId, frame }: { projectId: string; frame: 
       radius="panel"
       aria-label={kind.label}
       style={{ scrollbarWidth: "none" }}
+      data-testid="map-inspector"
+      data-sel={sel}
       className={`${PLACE} overflow-y-auto p-3.5 animate-slide-in reduce-motion:animate-none`}
     >
       {body}

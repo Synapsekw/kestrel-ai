@@ -31,7 +31,12 @@ export function LayerRowView({
   const describeId = `layer-nic-${row.key}`;
   if (row.unavailable) {
     return (
-      <li className="grid grid-cols-[14px_minmax(0,1fr)] gap-2 rounded-sm px-1.5 py-1.5 opacity-45">
+      <li
+        data-testid="layer-row"
+        data-kind={row.layer?.kind ?? "annotation"}
+        data-id={row.id}
+        className="grid grid-cols-[14px_minmax(0,1fr)] gap-2 rounded-sm px-1.5 py-1.5 opacity-45"
+      >
         <span />
         <div className="min-w-0">
           <p className="truncate text-sm text-ink">{row.name}</p>
@@ -65,6 +70,9 @@ export function LayerRowView({
       onDragStart={onDragStart}
       onDragOver={onDragOver}
       onDrop={onDrop}
+      data-testid="layer-row"
+      data-kind={row.layer?.kind ?? "annotation"}
+      data-id={row.id}
       className={cx(
         "group/row grid grid-cols-[14px_28px_12px_minmax(0,1fr)_auto] items-start gap-1.5 rounded-sm px-1.5 py-1.5 hover:bg-hover",
         !state.visible && "opacity-45",

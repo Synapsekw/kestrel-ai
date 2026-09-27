@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { listPointClouds, type PointCloud } from "@/api/clouds";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
@@ -12,28 +13,33 @@ export interface WorkspaceData {
   persisted: Partial<PersistedState>;
   layers: WorkspaceLayer[];
   surveys: Survey[];
+  clouds: PointCloud[];
 }
 
 /**
- * Three bounded reads (frame + state, layers, surveys), again on a data, surface or workspace event.
- * The last good data stays up while a re-read runs; an error shows only when there is none.
+ * Four bounded reads (frame + state, layers, surveys, clouds), again on a data, surface or workspace
+ * event. The last good data stays up while a re-read runs; an error shows only when there is none.
  */
 export function useWorkspaceData(projectId: string): {
   data: WorkspaceData | null;
   error: string | null;
   retry: () => void;
+  loading: boolean;
 } {
   const api = useApi();
   const revision = useChangesStore(
     (s) => `${s.dataRevision}|${s.surfacesRevision}|${s.mapWorkspaceRevision}`,
   );
   const [attempt, setAttempt] = useState(0);
+  const key = `${projectId}|${revision}|${attempt}`;
   const [state, setState] = useState<{
     projectId: string;
+    key: string | null;
     data: WorkspaceData | null;
     error: string | null;
   }>({
     projectId,
+    key: null,
     data: null,
     error: null,
   });
@@ -44,17 +50,20 @@ export function useWorkspaceData(projectId: string): {
       fetchWorkspace(api, projectId),
       listWorkspaceLayers(api, projectId),
       listWorkspaceSurveys(api, projectId),
+      listPointClouds(api, projectId).catch(() => [] as PointCloud[]),
     ])
-      .then(([ws, layers, surveys]) => {
+      .then(([ws, layers, surveys, clouds]) => {
         if (cancelled) return;
         setState({
           projectId,
+          key,
           error: null,
           data: {
             frame: ws.frame,
             persisted: parsePersisted(ws.state),
             layers,
             surveys,
+            clouds,
           },
         });
       })
@@ -63,6 +72,7 @@ export function useWorkspaceData(projectId: string): {
         pushLog(`load map workspace failed: ${messageOf(e, String(e))}`);
         setState((s) => ({
           projectId,
+          key,
           data: s.projectId === projectId ? s.data : null,
           error: messageOf(e, "Could not load the map workspace."),
         }));
@@ -70,7 +80,7 @@ export function useWorkspaceData(projectId: string): {
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, revision, attempt]);
+  }, [api, projectId, key]);
 
   const retry = useCallback(() => setAttempt((a) => a + 1), []);
   const current = state.projectId === projectId ? state : { data: null, error: null };
@@ -78,5 +88,6 @@ export function useWorkspaceData(projectId: string): {
     data: current.data,
     error: current.data ? null : current.error,
     retry,
+    loading: state.key !== key,
   };
 }
