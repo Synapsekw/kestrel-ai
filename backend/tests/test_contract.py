@@ -203,6 +203,12 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
     "putFindingView3d": {409, 422},
     "putCloudMeasurementView3d": {422},
+    # M-B3 drawings: `pdf_unavailable`; DWG/extension refusals are `validation_error` and only
+    # reachable with a real file.
+    "createDrawingInspection": {422},
+    "putDrawingGeoref": {422},  # generated points can be mirrored, collinear or coincident
+    "fitDrawingGeoref": {422},
+    "getDrawingVectorTile": {422},  # a generated t is invalid_preview
     # M-B1: a schema-valid EPSG pyproj does not know (`invalid_epsg`) or that is not a projected
     # metre CRS (`needs_projected_crs`); a schema-valid state over 64 KB (`state_too_large`); an
     # anchor on a map without CRS, in a local frame or off the map (`no_coordinates`, `local_frame`,

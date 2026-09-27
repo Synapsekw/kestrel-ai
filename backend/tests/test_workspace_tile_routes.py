@@ -92,12 +92,17 @@ def test_preview_query_rules(client, project_id, handle):
     assert plain.status_code == 200
     r = client.get(url, params={"frame_key": "epsg:32639"})
     assert r.status_code == 200 and r.content == plain.content and "immutable" in r.headers["cache-control"]
-    for t in ("1,2,3", "a,b,c,d,e,f", "0.1,0,0,0,-0.1,0"):
+    for t in ("1,2,3", "a,b,c,d,e,f", "0.1,0,0,0,0.1,0"):
         r = client.get(url, params={"t": t})
         assert (r.status_code, r.json()["error"]["code"]) == (422, "invalid_preview"), t
         assert r.headers["cache-control"] == "no-store", t  # contract tilePreview: any response to `t`
     assert "cache-control" not in client.get(f"{BASE}/{project_id}/site-tiles/map/nope/13/{x}/{y}").headers
     assert client.get(url, params={"frame_key": "k" * 201}).status_code == 422
+
+
+def _pixel(t):
+    a, b, c, d, e, f = t
+    return (a, -b, c, d, -e, f)
 
 
 def test_a_drawing_preview_is_no_store(client, project_id, handle, tmp_path, drawing_resolver):
@@ -117,21 +122,25 @@ def test_a_drawing_preview_is_no_store(client, project_id, handle, tmp_path, dra
             paint=tiles.rgba_paint(False),
             bands=(1, 2, 3, 4),
             alpha_band=4,
-            src_transform=Affine(*s.preview) if s.preview else None,
+            # t maps drawing coordinates (col, -row) to the site: the pixel geotransform flips b and e
+            src_transform=Affine(*_pixel(s.preview)) if s.preview else None,
         )
     )
     set_frame(client, project_id, 32639)
     x, y = grid.tile_of(500001.0, 3299999.0, 13)
     url = f"{BASE}/{project_id}/site-tiles/drawing_raster/D/13/{x}/{y}"
-    r = client.get(url, params={"t": "0.125,0,500000,0,-0.125,3300000"})
+    r = client.get(url, params={"t": "0.125,0,500000,0,0.125,3300000"})
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
-    r = client.get(f"{BASE}/{project_id}/site-tiles/drawing_raster/D/13/0/0", params={"t": "1,0,0,0,-1,0"})
+    r = client.get(url, params={"t": "0.125,0,500000,0,-0.125,3300000"})
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "invalid_preview")  # mirrored (det < 0)
+    assert r.headers["cache-control"] == "no-store"
+    r = client.get(f"{BASE}/{project_id}/site-tiles/drawing_raster/D/13/0/0", params={"t": "1,0,0,0,1,0"})
     assert r.status_code == 204 and r.headers["cache-control"] == "no-store"  # also on its 204
     r = client.get(f"{BASE}/{project_id}/site-tiles/drawing_raster/D/13/{x}/{y}", params={"t": "1,0,0,0,0,0"})
     assert (r.status_code, r.headers["cache-control"]) == (422, "no-store")  # singular: invalid_preview
     assert "immutable" in client.get(url).headers["cache-control"]
     drawing_resolver(lambda h, i, s: (_ for _ in ()).throw(not_found("drawing", i)))
-    r = client.get(url, params={"t": "0.125,0,500000,0,-0.125,3300000"})
+    r = client.get(url, params={"t": "0.125,0,500000,0,0.125,3300000"})
     assert (r.status_code, r.headers["cache-control"]) == (404, "no-store")  # the resolver's error too
 
 

@@ -11686,7 +11686,7 @@ components:
           }
         placement: { $ref: "#/components/schemas/DrawingPlacementInput" }
         captured_on:
-          { type: [string, "null"], format: date, description: a revision date }
+          { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: a revision date }
       example:
         {
           inspection_id: "i0000000-1313-4000-8000-000000000001",
@@ -11944,7 +11944,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
         layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
         captured_on:
-          { type: [string, "null"], format: date, description: null clears it }
+          { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: null clears it }
     DrawingGeorefPut:
       type: object
       required: [model, points, dst_frame]

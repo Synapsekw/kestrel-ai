@@ -85,6 +85,9 @@ datas = (
     # The detection PDF report (plan 2 unit E). reportlab's standard-font metric modules are named
     # by pyinstaller-hooks-contrib (hook-reportlab.pdfbase._fontdata); its fonts/ folder is data.
     + collect_data_files("reportlab")
+    # PDF drawings (plan 2026-09-27-maps-b3): pypdfium2's version.json files; PDFium itself is below.
+    + collect_data_files("pypdfium2")
+    + collect_data_files("pypdfium2_raw")
 )
 
 # PotreeConverter 2.1.5 + laszip.dll + the MSVC runtime + licence texts (spec §14), fetched by
@@ -103,6 +106,7 @@ binaries = (
     + collect_dynamic_libs("onnxruntime")
     + collect_dynamic_libs("rasterio")  # rasterio.libs/: GDAL, PROJ, GEOS, libjpeg ...
     + collect_dynamic_libs("pyproj")
+    + collect_dynamic_libs("pypdfium2_raw")  # pdfium.dll
 )
 
 a = Analysis(
