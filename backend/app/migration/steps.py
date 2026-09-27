@@ -17,6 +17,8 @@ import threading
 
 from sqlalchemy import text
 
+from app.catalogue.names import normalise_hotkey
+from app.errors import AppError
 from app.library.datasets.legacy import register_legacy_dataset
 from app.library.db import LibraryDataset
 from app.migration import ports
@@ -157,7 +159,9 @@ def project_types(ctx: StepContext) -> dict:
     own hotkey applies, unless that hotkey is itself already in use by another row's override in
     this project (BC's `add_types` convention: a `hotkey_override` is a project-only string, never
     checked against the catalogue's own uniqueness) — then the row gets `hotkey_override = ""`
-    ("no hotkey in this project") and a warning, rather than a silent clash with an existing row."""
+    ("no hotkey in this project") and a warning, rather than a silent clash with an existing row.
+    The old key is normalised first (`normalise_hotkey`): an invalid one is no override and a
+    warning, and "A" against the catalogue's "a" is no override at all."""
     s = ctx.session
     catalogue = ports.require_catalogue(ctx.env.catalogue)
     id_map = dict(s.execute(text("SELECT old_class_id, type_id FROM class_id_map")).all())
@@ -182,24 +186,30 @@ def project_types(ctx: StepContext) -> dict:
     for type_id in ordered:
         if type_id in existing:
             continue
-        snap, key = snaps[type_id], wanted[type_id]
-        override = None
+        snap, raw = snaps[type_id], wanted[type_id]
+        override = note = None
+        try:
+            key = normalise_hotkey(raw)
+        except AppError:
+            key, note = None, f"hotkey {raw!r} of {snap['name']} is not a valid hotkey"
         if key and key != snap["hotkey"]:
             if key in catalogue_keys or key in used:
-                warnings.append(
-                    f"hotkey {key} of {snap['name']} is taken in this project; it uses "
-                    f"{snap['hotkey'] or 'no hotkey'}"
-                )
+                note = f"hotkey {key} of {snap['name']} is taken in this project"
             else:
                 override = key
                 overrides += 1
         effective = override or snap["hotkey"]
         if override is None and effective and effective in used:
+            # The catalogue's key is taken too: one warning that says the type ends with none.
             warnings.append(
-                f"the catalogue hotkey {effective} of {snap['name']} is already used by"
+                f"{note}, and so is its catalogue hotkey {effective}; it uses no hotkey"
+                if note
+                else f"the catalogue hotkey {effective} of {snap['name']} is already used by"
                 " another type in this project; it uses no hotkey"
             )
             override, effective = "", None
+        elif note:
+            warnings.append(f"{note}; it uses {snap['hotkey'] or 'no hotkey'}")
         if effective:
             used.add(effective)
         ports.insert_project_type(

@@ -1,8 +1,8 @@
 """Running the migration's data steps in order, resumably (foundation spec §11.4).
 
 `run_pipeline` skips every step the ledger already records (its recorded detail and warnings still
-go into the report, so a resumed run reports what the whole upgrade found), and runs each remaining step in one
-project transaction together with its ledger record. It ends with `finish`: the report
+go into the report, so a resumed run reports what the whole upgrade found), and runs each
+remaining step in one project transaction together with its ledger record. It ends with `finish`: the report
 `<project>/backups/migration-v2.json` is written first, then `project.schema_version = 2` and the
 `finish` record commit together. A failure raises `StepFailed` naming the step; nothing after it
 runs, and a later run starts from that step.

@@ -126,6 +126,55 @@ def test_a_new_types_catalogue_hotkey_taken_by_an_existing_override_is_dropped(t
     assert detail["hotkey_overrides"] == 0 and any("roller" in w for w in detail["warnings"])
 
 
+def test_the_old_hotkey_is_normalised_before_it_becomes_an_override(tmp_path, stores):
+    """An upper-case old key equal to the catalogue's lower-case one is no override; a free upper-case
+    key is stored lower case; an invalid key is no override and a warning."""
+    classes = [_cls("c1", "crane", "A"), _cls("c2", "roller", "F1", 1), _cls("c3", "grader", None, 2)]
+    h = open_handle(at_revision(tmp_path / "p", "0009", classes=classes))
+    _through(h, stores, steps.catalogue_merge)
+    with stores.catalogue.session() as cs:  # grader's catalogue key differs from the project's wish
+        cs.execute(text("UPDATE catalogue_type SET hotkey = 'g' WHERE name = 'grader'"))
+    with h.session() as s:
+        s.execute(
+            text("UPDATE project SET classes = :c"),
+            {"c": json.dumps([*classes[:2], _cls("c3", "grader", "B", 2)])},
+        )
+    *_, detail = _through(h, stores, steps.rewrite_class_ids, steps.project_types)
+    rows = {t["name"]: t for t in _types(h)}
+    assert rows["crane"]["hotkey"] == "a" and rows["crane"]["hotkey_override"] is None
+    assert rows["roller"]["hotkey"] is None and rows["roller"]["hotkey_override"] is None
+    assert rows["grader"]["hotkey"] == "g" and rows["grader"]["hotkey_override"] == "b"
+    assert detail["hotkey_overrides"] == 1
+    assert detail["warnings"] == ["hotkey 'F1' of roller is not a valid hotkey; it uses no hotkey"]
+
+
+def test_old_and_catalogue_hotkey_both_taken_is_one_warning(tmp_path, stores):
+    """Roller's old key 5 and its catalogue key 4 are both another row's override: one warning that
+    says what happens (no hotkey), not two contradictory ones."""
+    first = open_handle(at_revision(tmp_path / "a", "0009", pid="pa", classes=[_cls("a1", "roller", "4")]))
+    _through(first, stores, steps.catalogue_merge)
+    classes = [_cls("c1", "crane"), _cls("c2", "excavator", order=1), _cls("c3", "roller", "5", 2)]
+    h = open_handle(at_revision(tmp_path / "p", "0009", classes=classes))
+    _through(h, stores, steps.catalogue_merge)
+    ids = {n: r["id"] for n, r in catalogue_types(stores).items()}
+    with h.session() as s:  # BC-era rows holding 4 and 5 as project-only overrides
+        for pos, (name, key) in enumerate((("crane", "4"), ("excavator", "5"))):
+            s.execute(
+                text(
+                    "INSERT INTO project_type (type_id, position, hotkey_override, name, colour, kind,"
+                    " default_severity, hotkey, \"group\", refreshed_at) VALUES (:t, :p, :k, :n,"
+                    " '#000000', 'object', NULL, NULL, NULL, '2026-01-01 00:00:00.000000')"
+                ),
+                {"t": ids[name], "p": pos, "k": key, "n": name},
+            )
+    *_, detail = _through(h, stores, steps.rewrite_class_ids, steps.project_types)
+    rows = {t["name"]: t for t in _types(h)}
+    assert rows["roller"]["hotkey"] == "4" and rows["roller"]["hotkey_override"] == ""
+    assert detail["warnings"] == [
+        "hotkey 5 of roller is taken in this project, and so is its catalogue hotkey 4; it uses no hotkey"
+    ]
+
+
 def test_model_class_maps_move_into_the_library_first_mapping_wins(tmp_path, stores):
     add_library_model(stores.library, "lib-m1", {"bird": "t-bird"})
     a = at_revision(tmp_path / "a", "0009", pid="pa")
