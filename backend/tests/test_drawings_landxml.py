@@ -6,7 +6,7 @@ import pytest
 from drawings_helpers import write_landxml
 
 from app.drawings import landxml_lines, runs, store
-from app.jobs.cancellation import JobFailure
+from app.jobs.cancellation import JobCancelled, JobFailure
 
 SURFACE = """<Surfaces><Surface name="EG"><SourceData><Breaklines><Breakline>
 <PntList3D>4983000 500000 100 4983010 500005 101 4983020 500000 102</PntList3D></Breakline></Breaklines>
@@ -92,3 +92,38 @@ def test_without_a_namespace(tmp_path):
 def test_no_linework_fails(tmp_path):
     with pytest.raises(JobFailure, match="no lines, arcs or text found"):
         _inspect(tmp_path, write_landxml(tmp_path / "e.xml", ""))
+
+
+def test_a_coordgeom_only_file_can_be_cancelled(tmp_path):
+    lines = "".join(
+        f"<Line><Start>4983000 {500000 + i}</Start><End>4983001 {500000 + i}</End></Line>"
+        for i in range(4000)
+    )
+    body = (
+        f"<PlanFeatures><PlanFeature name='Kerbs'><CoordGeom>{lines}</CoordGeom></PlanFeature></PlanFeatures>"
+    )
+    path = write_landxml(tmp_path / "c.xml", body)
+    idir = tmp_path / "insp"
+    (idir / "thumbs").mkdir(parents=True)
+    calls, fractions = [], []
+
+    def check():
+        calls.append(1)
+        if len(calls) > 1:
+            raise JobCancelled()
+
+    with pytest.raises(JobCancelled):
+        landxml_lines.inspect_file(
+            path, idir, progress=lambda f, m="": fractions.append(f), check_cancelled=check
+        )
+    assert len(calls) == 2 and fractions and 0 < fractions[0] <= 0.9
+    assert not (store.lines_dir(idir) / "meta.json").exists()
+
+
+def test_a_malformed_coordinate_fails_readably(tmp_path):
+    body = (
+        "<PlanFeatures><PlanFeature name='Fence'><CoordGeom><IrregularLine><PntList2D>"
+        "100 200 110 abc</PntList2D></IrregularLine></CoordGeom></PlanFeature></PlanFeatures>"
+    )
+    with pytest.raises(JobFailure, match="a coordinate reads '100 200 110 abc', not numbers"):
+        _inspect(tmp_path, write_landxml(tmp_path / "m.xml", body))

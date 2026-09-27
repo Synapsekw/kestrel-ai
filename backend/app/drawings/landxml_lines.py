@@ -27,20 +27,28 @@ MESSAGE = "Reading drawing"
 SAGITTA_M = 0.05
 HULL_BATCH = 200_000
 CLEAR_EVERY = 10_000
+CHECK_EVERY = 5_000
 PRIMITIVES = ("Line", "Curve", "Spiral", "IrregularLine")
 LAYER_COLOURS = {"Breaklines": "#f2b134", "Alignments": "#56c1ff", "Plan features": "#9be564"}
 BOUNDARY_COLOUR = "#e0e0e0"
 
 
+def _numbers(text: str | None) -> list[float]:
+    try:
+        return [float(v) for v in (text or "").split()]
+    except ValueError:
+        raise JobFailure(f"a coordinate reads '{(text or '').strip()[:60]}', not numbers") from None
+
+
 def _pairs(text: str | None, dims: int) -> list[tuple[float, float]]:
-    vals = [float(v) for v in (text or "").split()]
+    vals = _numbers(text)
     return [(vals[i + 1], vals[i]) for i in range(0, len(vals) - dims + 1, dims)]
 
 
 def _point(el) -> tuple[float, float] | None:
     if el is None or len((el.text or "").split()) < 2:
         return None
-    n, e = (float(v) for v in el.text.split()[:2])
+    n, e = _numbers(el.text)[:2]
     return (e, n)
 
 
@@ -170,7 +178,7 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
     reader = _Reader(writer)
     names: list[str] = []
     elems: list = []
-    size, rows = max(path.stat().st_size, 1), 0
+    size, rows, ends = max(path.stat().st_size, 1), 0, 0
     try:
         with path.open("rb") as f:
             for event, elem in ET.iterparse(f, events=("start", "end")):
@@ -190,8 +198,10 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
                     rows += 1
                     if rows % CLEAR_EVERY == 0:
                         elems[-1].clear()  # drop the cleared rows the container still lists
-                        check_cancelled()
-                        progress(min(0.9, f.tell() / size), MESSAGE)
+                ends += 1
+                if ends % CHECK_EVERY == 0:  # every element kind, not only TIN rows
+                    check_cancelled()
+                    progress(min(0.9, f.tell() / size), MESSAGE)
     except ET.ParseError as e:
         writer.abort()
         raise JobFailure(f"{path.name} is not valid XML ({e})") from None
