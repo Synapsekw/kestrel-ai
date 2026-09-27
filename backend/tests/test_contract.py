@@ -218,6 +218,9 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
     "putFindingView3d": {409, 422},
     "putCloudMeasurementView3d": {422},
+    # M-B3 drawings: `pdf_unavailable`; DWG/extension refusals are `validation_error` and only
+    # reachable with a real file.
+    "createDrawingInspection": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

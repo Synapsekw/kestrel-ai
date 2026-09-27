@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+import numpy as np
+from PIL import Image
 from pyproj import CRS
 from sqlalchemy import delete
 
@@ -24,3 +28,43 @@ def seed_frame(handle, epsg: int | None) -> None:
                 planned_surveys=[],
             )
         )
+
+
+def write_png(path: Path, width: int, height: int, *, mode: str = "RGB", seed: int = 0) -> Path:
+    """Seeded noise in PIL `mode` (RGB, RGBA, L, LA, P, I;16)."""
+    rng = np.random.default_rng(seed)
+    if mode == "P":
+        img = Image.fromarray(rng.integers(0, 4, (height, width), dtype=np.uint8), "P")
+        img.putpalette([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255] + [0] * (256 * 3 - 12))
+    elif mode == "I;16":
+        img = Image.fromarray(rng.integers(0, 65535, (height, width), dtype=np.uint16), "I;16")
+    else:
+        bands = {"RGB": 3, "RGBA": 4, "L": 1, "LA": 2}[mode]
+        data = rng.integers(0, 255, (height, width, bands), dtype=np.uint8)
+        img = Image.fromarray(data[..., 0] if bands == 1 else data, mode)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    img.save(path)
+    return path
+
+
+WORLD_EXT = {".png": ".pgw", ".jpg": ".jgw", ".jpeg": ".jgw", ".tif": ".tfw", ".tiff": ".tfw"}
+
+
+def write_world_file(image: Path, *, pixel: float, top_left: tuple[float, float]) -> Path:
+    """An ESRI world file placing `image` north-up; `top_left` is the outer corner (a world file names
+    the centre of the top-left pixel, so half a pixel is added here)."""
+    ext = WORLD_EXT[image.suffix.lower()]
+    x, y = top_left
+    lines = [pixel, 0.0, 0.0, -pixel, x + pixel / 2, y - pixel / 2]
+    out = image.with_suffix(ext)
+    out.write_text("\n".join(repr(float(v)) for v in lines) + "\n", "ascii")
+    return out
+
+
+def inspect_ready(client, project_id, wait_job, path) -> dict:
+    r = client.post(f"{BASE}/{project_id}/drawing-inspections", json={"path": str(path)})
+    assert r.status_code == 202, r.text
+    body = r.json()
+    job = wait_job(project_id, body["job"]["id"])
+    assert job["state"] == "succeeded", job
+    return client.get(f"{BASE}/{project_id}/drawing-inspections/{body['inspection']['id']}").json()

@@ -42,9 +42,6 @@ B2_STUBS: list[Stub] = [
 
 # M-B3: drawings - inspect, build, georeference, tiles (spec §8).
 B3_STUBS: list[Stub] = [
-    ("POST", "/drawing-inspections", "createDrawingInspection"),
-    ("GET", "/drawing-inspections/{inspectionId}", "getDrawingInspection"),
-    ("GET", "/drawing-inspections/{inspectionId}/pages/{page}/thumbnail", "getDrawingPageThumbnail"),
     ("GET", "/drawings", "listDrawings"),
     ("POST", "/drawings", "createDrawing"),
     ("POST", "/drawings/georef-fit", "fitDrawingGeoref"),
