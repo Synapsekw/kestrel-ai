@@ -6,6 +6,11 @@ Contract rulings applied here (`.superpowers/sdd/2026-09-27-maps-b4/contract-rul
   `vertices_site` instead of swapping `vertices`.
 - C2: `patch(...)` takes no `site` keyword; its response is always the stored frame.
 - C3: `list_page(..., kind=...)` is a single-value equality filter.
+
+Fix round 1: `vertices_site` must be absent (not `null`) from `model_dump` when it does not apply
+(create, patch, `get(site=False)`), and present only for `get(site=True)` in a matching frame; a
+listed profile row's `results` carries `stations_m`/`series` as empty arrays, not `null`
+(the contract's `MapProfileResults` requires both as non-nullable arrays).
 """
 
 import pytest
@@ -139,17 +144,21 @@ def test_patch_against_a_missing_or_building_surface_changes_nothing(handle, dsm
 def test_site_frame_reads_convert_and_filter(handle, dsm):
     out = _create(handle, kind="distance", vertices=LINE)
     assert out.vertices_site is None  # create has no frame view (no ?frame= on POST)
+    assert "vertices_site" not in out.model_dump(mode="json")
     set_site_frame(handle, 32638)  # the operator switched the site CRS to the neighbouring zone
     got = service.get(handle, out.id, site=True)
     want = Transformer.from_crs(EPSG, 32638, always_xy=True).transform(*LINE[0])
     assert got.vertices == LINE  # C1: vertices is always the stored frame
     assert got.vertices_site[0] == pytest.approx(list(want), abs=1e-6)
+    assert "vertices_site" in got.model_dump(mode="json")  # present in a matching site frame
     assert got.results == out.results
     plain = service.get(handle, out.id, site=False)
     assert plain.vertices == LINE and plain.vertices_site is None
+    assert "vertices_site" not in plain.model_dump(mode="json")
     # C2: PATCH has no frame param; its response is always the stored frame, no vertices_site.
     patched = service.patch(handle, out.id, MapMeasurementPatch(note="n"))
     assert patched.vertices == LINE and patched.vertices_site is None
+    assert "vertices_site" not in patched.model_dump(mode="json")
     set_site_frame(handle, None)  # local frame: the CRS row is not in it
     assert _code(lambda: service.get(handle, out.id, site=True)) == ("not_in_site_frame", 409)
     assert service.list_page(handle, site=True, limit=None, cursor=None).items == []
@@ -176,8 +185,13 @@ def test_list_pages_and_strips_profile_arrays(handle, dsm):
     walked = [i.id for i in first.items + rest.items]
     assert sorted(walked) == sorted(ids) and len(first.items) == 2 and rest.next_cursor is None
     item = first.items[0]
-    assert item.results.series is None and item.results.stations_m is None and item.results.z_max is not None
-    assert service.get(handle, item.id, site=False).results.series is not None
+    # contract: MapProfileResults requires stations_m/series as non-nullable arrays, so a listed
+    # profile row carries them as [] rather than the SQL strip's absent/null keys.
+    assert item.results.series == [] and item.results.stations_m == [] and item.results.z_max is not None
+    dumped = item.model_dump(mode="json")
+    assert dumped["results"]["stations_m"] == [] and dumped["results"]["series"] == []
+    got = service.get(handle, item.id, site=False)
+    assert got.results.series and len(got.results.series) == 1 and got.results.stations_m
 
 
 def test_delete(handle, dsm):

@@ -15,6 +15,9 @@ Contract rulings (binding, see `schemas.py`):
 - C3: `list_page(..., kind=...)` is a single-value equality filter on `MapMeasurement.kind`.
 - C4: `_results` stamps `dsm_surface_id` from the resolved DSM ref, not left null by
   `geodesy.distance_results`.
+- Fix round 1: `list_page`'s `_list_results` backfills `stations_m: []`/`series: []` on a listed
+  profile row (SQL still strips the actual arrays) because the contract's `MapProfileResults`
+  requires both as non-nullable arrays, unlike the other two kinds, which never carry them.
 """
 
 from __future__ import annotations
@@ -161,6 +164,17 @@ def _site_vertices(s: Session, row: MapMeasurement, site: bool) -> list | None:
         raise AppError("not_in_site_frame", "this measurement was drawn in another site frame", 409) from None
 
 
+def _list_results(row: MapMeasurement, results: dict | None) -> dict:
+    """The list strips `stations_m`/`series` in SQL (`json_remove`, never loaded). A profile row's
+    `results` must still carry both keys as empty arrays: the contract's `MapProfileResults`
+    requires them as non-nullable arrays, unlike the two other kinds, which never had them."""
+    out = dict(results or {})
+    if row.kind == "profile":
+        out.setdefault("stations_m", [])
+        out.setdefault("series", [])
+    return out
+
+
 def _get(s: Session, measurement_id: str) -> MapMeasurement:
     row = s.get(MapMeasurement, measurement_id)
     if row is None:
@@ -236,7 +250,7 @@ def list_page(
         items = [
             _out(
                 r,
-                summaries.get(r.id),
+                _list_results(r, summaries.get(r.id)),
                 r.geometry,
                 convert_vertices(r.geometry, frame_of(r.crs_wkt, r.epsg), frame) if frame else None,
             )
