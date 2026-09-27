@@ -126,6 +126,9 @@ export const exampleImage: ImageRow = {
   labeled: true,
   marked_empty: false,
   created_at: "2026-09-17T10:06:00Z",
+  finding_count: 1,
+  worst_severity: 3,
+  reviewed: false,
 };
 
 export const exampleImage2: ImageRow = {
@@ -142,6 +145,8 @@ export const exampleImage2: ImageRow = {
   pending_count: 0,
   max_pending_confidence: null,
   labeled: false,
+  finding_count: 0,
+  worst_severity: null,
 };
 
 export const exampleImagePage: ImagePage = {
@@ -164,6 +169,11 @@ export const personBox: Box = {
   review_state: "accepted",
   reviewed_at: "2026-09-17T10:45:00Z",
   created_at: "2026-09-17T10:45:00Z",
+  shape: "box",
+  points: null,
+  assist: null,
+  area_px: 12600,
+  updated_at: "2026-09-17T10:45:00Z",
 };
 
 export const proposalBox: Box = {
@@ -186,6 +196,11 @@ export const proposalBox: Box = {
   review_state: "unreviewed",
   reviewed_at: null,
   created_at: "2026-09-17T11:00:00Z",
+  shape: "box",
+  points: null,
+  assist: null,
+  area_px: 5856,
+  updated_at: "2026-09-17T11:00:00Z",
 };
 
 export const exampleModel: LibraryModel = {

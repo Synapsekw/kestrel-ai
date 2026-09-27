@@ -172,7 +172,8 @@ def test_the_new_job_types_and_events(spec):
 def test_the_replaced_operations_are_deprecated_with_the_unit_that_removes_them(spec):
     ops = _operations(spec).items()
     retired = {op_id: op.get("x-retire-with") for op_id, (_, _, op) in ops if op.get("deprecated")}
-    assert retired == {}
+    # Foundation's own retirements are all gone; later sub-projects deprecate theirs (I-C0: I-FW).
+    assert {op_id: unit for op_id, unit in retired.items() if str(unit).startswith("F-")} == {}
 
 
 # ------------------------------------------------------------------------------ every task

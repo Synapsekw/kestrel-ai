@@ -99,13 +99,27 @@ EXPECTED_STUBS: set[str] = set()
 # `group` and `LibraryModel.class_map`, which the backend fills only when the named units land.
 # For these the request must still not crash (< 500); conformance is checked again once the entry
 # is gone. The unit that lands last for an entry deletes it.
-BACKEND_PENDING: dict[str, str] = {}
+BACKEND_PENDING: dict[str, str] = {
+    # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
+    # fields. Each unit deletes its lines once its routes fill them.
+    "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
+    "getImage": "I-BK",  # ImageDetail
+    "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
+    "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at
+    "createBox": "I-BA",  # BoxWriteResult; BoxCreate shapes
+    "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
+    "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
+    "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
+}
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
 # §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path
 # from openapi.yaml deletes the entry.
-RETIRING: dict[str, str] = {}
+RETIRING: dict[str, str] = {
+    # Images: replaced by detectImage; the old editor calls it until I-FW deletes editor/*.
+    "preannotateImage": "I-FW",
+}
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
 # the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an

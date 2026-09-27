@@ -366,6 +366,13 @@ paths:
           in: query
           description: case-insensitive substring of the image path (file name included)
           schema: { type: string }
+        - $ref: "#/components/parameters/imageHasFindings"
+        - $ref: "#/components/parameters/imageSeverity"
+        - $ref: "#/components/parameters/imageFindingStatus"
+        - $ref: "#/components/parameters/imageTypeIds"
+        - $ref: "#/components/parameters/imageHasSuggestions"
+        - $ref: "#/components/parameters/imageReviewed"
+        - $ref: "#/components/parameters/imageUnlabeled"
         - name: ids
           in: query
           description: comma-separated image ids; when present other filters are ignored
@@ -374,7 +381,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [path, source_id, group_key, labeled, box_count, pending_count, max_pending_confidence, capture_time, created_at]
+            enum: [path, source_id, group_key, labeled, box_count, pending_count, max_pending_confidence, capture_time, created_at, worst_severity]
             default: path
         - name: order
           in: query
@@ -441,12 +448,12 @@ paths:
           description: the image record
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Image" }
+              schema: { $ref: "#/components/schemas/ImageDetail" }
         default: { $ref: "#/components/responses/Error" }
     patch:
       tags: [images]
       operationId: updateImage
-      summary: Mark the image as containing no machinery (it then counts as labeled and enters datasets as a negative), or undo it. Marking rejects its unreviewed proposals. 409 `conflict` while the image has accepted or edited boxes.
+      summary: Mark the image as containing no machinery (it then counts as labeled and enters datasets as a negative), or undo it. Marking rejects its unreviewed proposals. 409 `conflict` while the image has accepted or edited boxes. Also sets or clears the operator's subject distance (image inspection spec §9.3).
       requestBody:
         required: true
         content:
@@ -457,7 +464,7 @@ paths:
           description: the updated image record
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Image" }
+              schema: { $ref: "#/components/schemas/ImageDetail" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/images/{imageId}/file:
     parameters:
@@ -500,8 +507,10 @@ paths:
     post:
       tags: [images]
       operationId: preannotateImage
+      deprecated: true
+      x-retire-with: I-FW
       summary: |
-        Run the project's pre-annotation model (or `model_id`) on one image synchronously and
+        Replaced by `detectImage` (image inspection spec §11.2). Run the project's pre-annotation model (or `model_id`) on one image synchronously and
         write proposal boxes with `local_model` provenance. Skipped (`skipped: true`) when the
         image already has boxes from that model. Runs at `imgsz` 2560 by default.
       requestBody:
@@ -542,7 +551,7 @@ paths:
     post:
       tags: [boxes]
       operationId: createBox
-      summary: Create a person-drawn box. Provenance is `person`, review state `accepted`.
+      summary: Create a person-drawn annotation (box, rbox, polygon or point). Provenance is `person`, review state `accepted`; on a defect type it also creates the finding (`finding_id`).
       requestBody:
         required: true
         content:
@@ -553,7 +562,12 @@ paths:
           description: created
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Box" }
+              schema: { $ref: "#/components/schemas/BoxWriteResult" }
+        "422":
+          description: "`invalid_shape` (a field the shape needs is missing), `out_of_bounds`, `empty_polygon` (nothing left after repair and clip), `point_needs_defect_type`, `too_many_annotations` (5,000 per image), `unknown_type`, or `validation_error` for a malformed body"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/boxes/{boxId}:
     parameters:
@@ -580,9 +594,14 @@ paths:
           description: updated
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/Box" }
+              schema: { $ref: "#/components/schemas/BoxWriteResult" }
         "409":
           description: "the reclass would delete the box's finding (`code` is `finding_would_be_deleted`, details `{finding_id}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`invalid_shape` (`points` on a shape that is not a polygon, or rectangle fields on a polygon or point), `out_of_bounds`, `empty_polygon`, `point_needs_defect_type` (retyping a point to an object type), `unknown_type`, or `validation_error` for a malformed body"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -612,6 +631,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/BoxReviewResult" }
+        "409":
+          description: "an unreview would delete a finding that has a note, photos, comments, a changed severity or a status other than `reviewed` (`code` is `finding_has_content`, details `{finding_id, finding_ids}`: the first blocking finding and all of them)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
   # ------------------------------------------------------------ model adoption
@@ -4299,6 +4323,41 @@ components:
       required: true
       description: a point-cloud measurement; `measurementId` is a volume measurement
       schema: { type: string }
+    imageHasFindings:
+      name: has_findings
+      in: query
+      description: true = at least one finding that is not `closed`; false = none
+      schema: { type: boolean }
+    imageSeverity:
+      name: severity
+      in: query
+      description: "comma-separated severity levels; with `finding_status`, both must hold on the same finding (image inspection spec §7.1)"
+      schema: { type: string, pattern: "^[1-9](,[1-9])*$" }
+    imageFindingStatus:
+      name: finding_status
+      in: query
+      description: comma-separated finding statuses
+      schema: { type: string, pattern: "^(open|reviewed|closed)(,(open|reviewed|closed))*$" }
+    imageTypeIds:
+      name: type_ids
+      in: query
+      description: comma-separated catalogue type ids; the image has an annotation of one of them
+      schema: { type: string, minLength: 1 }
+    imageHasSuggestions:
+      name: has_suggestions
+      in: query
+      description: true = has unreviewed proposals (the same test as `listImages`' `has_pending`)
+      schema: { type: boolean }
+    imageReviewed:
+      name: reviewed
+      in: query
+      description: matches `Image.reviewed`
+      schema: { type: boolean }
+    imageUnlabeled:
+      name: unlabeled
+      in: query
+      description: true = no ground truth and not marked empty (the same test as `labeled=false`)
+      schema: { type: boolean }
     octreeFile:
       name: octreeFile
       in: path
@@ -4778,7 +4837,7 @@ components:
 
     Image:
       type: object
-      required: [id, path, file_name, width, height, source_id, group_key, capture_time, lat, lon, alt, phash, box_count, pending_count, max_pending_confidence, labeled, marked_empty, created_at]
+      required: [id, path, file_name, width, height, source_id, group_key, capture_time, lat, lon, alt, phash, box_count, pending_count, max_pending_confidence, labeled, marked_empty, created_at, finding_count, worst_severity, reviewed]
       properties:
         id: { type: string }
         path: { type: string, description: relative to the project folder, forward slashes }
@@ -4798,6 +4857,9 @@ components:
         labeled: { type: boolean, description: has an accepted or edited box, or is marked empty }
         marked_empty: { type: boolean, description: "a person said there is no machinery on this image; it counts as labeled and enters datasets as a negative example" }
         created_at: { type: string, format: date-time }
+        finding_count: { type: integer, minimum: 0, description: "the image's findings that are not `closed`" }
+        worst_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "highest severity among the image's findings that are not `closed`; null when none has one" }
+        reviewed: { type: boolean, description: no unreviewed proposal is left, and the image has ground truth or is marked empty }
       example:
         id: "10000000-5555-4000-8000-000000000001"
         path: "images/ahmadia/IX-12-02491_0031_0001.jpg"
@@ -4817,6 +4879,9 @@ components:
         labeled: true
         marked_empty: false
         created_at: "2026-09-17T10:06:00Z"
+        finding_count: 1
+        worst_severity: 3
+        reviewed: false
     ImagePage:
       type: object
       required: [items, next_cursor, total]
@@ -4846,6 +4911,9 @@ components:
             labeled: true
             marked_empty: false
             created_at: "2026-09-17T10:06:00Z"
+            finding_count: 1
+            worst_severity: 3
+            reviewed: false
           - id: "10000000-5555-4000-8000-000000000002"
             path: "images/ahmadia/IX-12-02491_0031_0002.jpg"
             file_name: "IX-12-02491_0031_0002.jpg"
@@ -4864,13 +4932,22 @@ components:
             labeled: false
             marked_empty: false
             created_at: "2026-09-17T10:06:00Z"
+            finding_count: 0
+            worst_severity: null
+            reviewed: false
         next_cursor: null
         total: 2
     ImageUpdate:
       type: object
-      required: [marked_empty]
+      minProperties: 1
+      description: Every field is optional; a field left out is left alone.
       properties:
-        marked_empty: { type: boolean }
+        marked_empty: { type: boolean, description: "mark the image as having nothing to report, or undo it; 409 `conflict` while it has ground truth" }
+        subject_distance_m:
+          type: [number, "null"]
+          exclusiveMinimum: 0
+          maximum: 10000
+          description: "the operator's camera-to-subject distance in metres; it overrides every other distance rule (image inspection spec §9.3). null clears it."
       example: { marked_empty: true }
     BulkMarkEmpty:
       type: object
@@ -4904,6 +4981,83 @@ components:
       properties:
         deleted: { type: integer }
       example: { deleted: 1 }
+    ImageCamera:
+      type: object
+      description: >-
+        What the camera recorded and what the server derives from it (image inspection spec §7.3,
+        §9.3). A field is null when unknown. `distance_m`, `distance_sigma_m` and `gsd_mm` come from
+        the first distance rule that applies (`distance_source`); with `none`, sizes are in pixels.
+      required: [rel_alt, gimbal_pitch, gimbal_yaw, focal_mm, focal_px, sensor_w_mm, lrf_distance_m, subject_distance_m, distance_m, distance_sigma_m, distance_source, gsd_mm, camera_model]
+      properties:
+        rel_alt: { type: [number, "null"], description: metres above the take-off point }
+        gimbal_pitch: { type: [number, "null"], description: "degrees; -90 is nadir" }
+        gimbal_yaw: { type: [number, "null"], description: degrees clockwise from north }
+        focal_mm: { type: [number, "null"] }
+        focal_px: { type: [number, "null"], description: calibrated focal length in pixels of the original frame }
+        sensor_w_mm: { type: [number, "null"] }
+        lrf_distance_m: { type: [number, "null"], description: the laser range finder distance, kept only when its status was Normal }
+        subject_distance_m: { type: [number, "null"], description: the operator's value }
+        distance_m: { type: [number, "null"] }
+        distance_sigma_m: { type: [number, "null"] }
+        distance_source: { type: string, enum: [manual, lrf, rel_alt, none] }
+        gsd_mm: { type: [number, "null"], description: millimetres per stored-image pixel }
+        camera_model: { type: [string, "null"] }
+    ImageFootprintKind:
+      type: string
+      enum: [trapezoid, wedge, point, none]
+    ImageDetail:
+      description: one image with its camera metadata and its ground footprint (image inspection spec §14)
+      allOf:
+        - $ref: "#/components/schemas/Image"
+        - type: object
+          required: [camera, footprint, footprint_kind]
+          properties:
+            camera: { $ref: "#/components/schemas/ImageCamera" }
+            footprint:
+              description: "WGS84 lon/lat: a Polygon for `trapezoid` and `wedge`, a Point for `point`, null for `none`. A visual aid, never used to measure."
+              oneOf:
+                - $ref: "#/components/schemas/GeoJsonPolygon"
+                - $ref: "#/components/schemas/GeoJsonPoint"
+                - type: "null"
+            footprint_kind: { $ref: "#/components/schemas/ImageFootprintKind" }
+      example:
+        id: "10000000-5555-4000-8000-000000000001"
+        path: "images/ahmadia/IX-12-02491_0031_0001.jpg"
+        file_name: "IX-12-02491_0031_0001.jpg"
+        width: 4000
+        height: 2667
+        source_id: "50000000-3333-4000-8000-000000000001"
+        group_key: "0031"
+        capture_time: "2019-04-15T06:35:36Z"
+        lat: 29.49469
+        lon: 47.76513
+        alt: 191.3
+        phash: "82a81f67f94615ae"
+        box_count: 3
+        pending_count: 2
+        max_pending_confidence: 0.81
+        labeled: true
+        marked_empty: false
+        created_at: "2026-09-17T10:06:00Z"
+        finding_count: 1
+        worst_severity: 3
+        reviewed: false
+        camera:
+          rel_alt: 38.4
+          gimbal_pitch: -89.9
+          gimbal_yaw: 12.3
+          focal_mm: 12.29
+          focal_px: 3713.3
+          sensor_w_mm: 17.3
+          lrf_distance_m: null
+          subject_distance_m: null
+          distance_m: 38.4
+          distance_sigma_m: 1.0
+          distance_source: rel_alt
+          gsd_mm: 10.3
+          camera_model: "M3E"
+        footprint: { type: Polygon, coordinates: [[[47.7649, 29.49455], [47.76536, 29.49455], [47.76536, 29.49483], [47.7649, 29.49483], [47.7649, 29.49455]]] }
+        footprint_kind: trapezoid
     PreannotateRequest:
       type: object
       properties:
@@ -4937,6 +5091,11 @@ components:
             review_state: unreviewed
             reviewed_at: null
             created_at: "2026-09-17T11:00:00Z"
+            shape: box
+            points: null
+            assist: null
+            area_px: 5856.0
+            updated_at: "2026-09-17T11:00:00Z"
 
     ProvenanceKind:
       type: string
@@ -4944,6 +5103,13 @@ components:
     ReviewState:
       type: string
       enum: [unreviewed, accepted, rejected, edited]
+    BoxShape:
+      type: string
+      enum: [box, rbox, polygon, point]
+      description: >-
+        `box` and `rbox` are rectangles (the server keeps `rbox` exactly when `angle` is not 0);
+        `polygon` has `points`, and `x, y, w, h` are its axis-aligned envelope with `angle` 0;
+        `point` is a marker at `x, y` with `w = h = 0`, on defect types only (image inspection spec §8.1).
     Provenance:
       type: object
       required: [kind, model_id, provider, model_name, query_run_id]
@@ -4956,7 +5122,7 @@ components:
       example: { kind: person, model_id: null, provider: null, model_name: null, query_run_id: null }
     Box:
       type: object
-      required: [id, image_id, class_id, x, y, w, h, angle, confidence, provenance, review_state, reviewed_at, created_at]
+      required: [id, image_id, class_id, x, y, w, h, angle, confidence, provenance, review_state, reviewed_at, created_at, shape, points, assist, area_px, updated_at]
       properties:
         id: { type: string }
         image_id: { type: string }
@@ -4978,6 +5144,14 @@ components:
         review_state: { $ref: "#/components/schemas/ReviewState" }
         reviewed_at: { type: [string, "null"], format: date-time }
         created_at: { type: string, format: date-time }
+        shape: { $ref: "#/components/schemas/BoxShape" }
+        points:
+          type: [array, "null"]
+          description: "polygon vertices `[[x, y], ...]` in stored-image pixels: one ring, implicitly closed, counter-clockwise, 3 to 2,000 vertices; null for every other shape"
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        assist: { type: [string, "null"], enum: [sam, null], description: "`sam` when the smart-polygon tool drew it" }
+        area_px: { type: number, minimum: 0, description: "area in square pixels; 0 for a point" }
+        updated_at: { type: string, format: date-time }
       example:
         id: "b0000000-6666-4000-8000-000000000001"
         image_id: "10000000-5555-4000-8000-000000000001"
@@ -4992,6 +5166,11 @@ components:
         review_state: accepted
         reviewed_at: "2026-09-17T10:45:00Z"
         created_at: "2026-09-17T10:45:00Z"
+        shape: box
+        points: null
+        assist: null
+        area_px: 12600.0
+        updated_at: "2026-09-17T10:45:00Z"
     BoxList:
       type: object
       required: [items]
@@ -5014,6 +5193,11 @@ components:
             review_state: accepted
             reviewed_at: "2026-09-17T10:45:00Z"
             created_at: "2026-09-17T10:45:00Z"
+            shape: box
+            points: null
+            assist: null
+            area_px: 12600.0
+            updated_at: "2026-09-17T10:45:00Z"
           - id: "b0000000-6666-4000-8000-000000000002"
             image_id: "10000000-5555-4000-8000-000000000001"
             class_id: "c1a2b3c4-0000-4000-8000-000000000004"
@@ -5027,16 +5211,25 @@ components:
             review_state: unreviewed
             reviewed_at: null
             created_at: "2026-09-17T11:00:00Z"
+            shape: box
+            points: null
+            assist: null
+            area_px: 5856.0
+            updated_at: "2026-09-17T11:00:00Z"
     BoxCreate:
       type: object
-      required: [class_id, x, y, w, h]
+      required: [class_id]
       description: >-
-        `x`/`y` have no minimum: they describe the *unrotated* box, so a box rotated near the left
-        or top edge has a negative one while its centre is still inside the image. The server is
-        the single judge of bounds — a box at angle 0 must still lie fully inside, and a rotated
-        one needs its centre inside (see Box.angle) — and it answers with a message saying so.
+        A person-drawn annotation. `shape` is `box` when absent. `box` and `rbox` need `x, y, w, h`
+        (and `angle` for a rotated one); `polygon` needs `points` and ignores `x, y, w, h, angle`
+        (the server derives the envelope); `point` needs `x, y`, ignores the rest and takes only a
+        defect type. A missing field answers 422 `invalid_shape`. `x`/`y` have no minimum: they
+        describe the *unrotated* box, so a box rotated near the left or top edge has a negative one
+        while its centre is still inside the image. The server is the single judge of bounds and of
+        polygon validity (image inspection spec §8.2).
       properties:
         class_id: { type: string }
+        shape: { $ref: "#/components/schemas/BoxShape" }
         x: { type: number }
         y: { type: number }
         w: { type: number, exclusiveMinimum: 0 }
@@ -5048,12 +5241,21 @@ components:
             Any value is accepted and normalised into [0, 180) on write, because a rectangle has
             180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore
             guaranteed on the way out (see Box.angle), not demanded on the way in.
+        points:
+          type: array
+          minItems: 3
+          maxItems: 2000
+          description: polygon vertices in stored-image pixels, any orientation; the server repairs and clips them and says so in `repaired`
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        assist: { type: string, enum: [sam], description: "`sam` when the smart-polygon tool drew it; absent otherwise" }
       example: { class_id: "c1a2b3c4-0000-4000-8000-000000000001", x: 512, y: 300, w: 140, h: 90 }
     BoxUpdate:
       type: object
       description: >-
-        Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason
-        given on BoxCreate.
+        Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason given
+        on BoxCreate. `points` replaces a polygon's vertices and is refused (422 `invalid_shape`) on
+        any other shape; the shape itself never changes through an update, except that a rectangle
+        is `rbox` exactly when its angle is not 0.
       properties:
         class_id: { type: string }
         x: { type: number }
@@ -5067,6 +5269,11 @@ components:
             angle unchanged. Any value is accepted and normalised into [0, 180) on write, because
             a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds
             are therefore guaranteed on the way out (see Box.angle), not demanded on the way in.
+        points:
+          type: array
+          minItems: 3
+          maxItems: 2000
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
       example: { x: 520, y: 305 }
     BoxReview:
       type: object
@@ -5083,10 +5290,42 @@ components:
       example: { box_ids: ["b0000000-6666-4000-8000-000000000002"], action: accept }
     BoxReviewResult:
       type: object
-      required: [updated]
+      required: [updated, finding_ids_created, finding_ids_deleted]
       properties:
         updated: { type: integer }
-      example: { updated: 1 }
+        finding_ids_created: { type: array, items: { type: string }, description: findings the accepts created (defect types) }
+        finding_ids_deleted: { type: array, items: { type: string }, description: untouched findings the unreviews deleted }
+      example: { updated: 1, finding_ids_created: ["f0000000-1212-4000-8000-000000000231"], finding_ids_deleted: [] }
+    BoxWriteResult:
+      description: the written annotation, plus what the write did (image inspection spec §8.3)
+      allOf:
+        - $ref: "#/components/schemas/Box"
+        - type: object
+          required: [repaired, finding_id]
+          properties:
+            repaired: { type: boolean, description: "the server changed the geometry (made valid, clipped to the image, re-oriented or rounded); the UI says so" }
+            finding_id: { type: [string, "null"], description: "the annotation's finding (a person's annotation on a defect type creates one); null when it has none" }
+      example:
+        id: "b0000000-6666-4000-8000-000000000001"
+        image_id: "10000000-5555-4000-8000-000000000001"
+        class_id: "c1a2b3c4-0000-4000-8000-000000000001"
+        x: 512.0
+        y: 300.0
+        w: 140.0
+        h: 90.0
+        angle: 0.0
+        confidence: null
+        provenance: { kind: person, model_id: null, provider: null, model_name: null, query_run_id: null }
+        review_state: accepted
+        reviewed_at: "2026-09-17T10:45:00Z"
+        created_at: "2026-09-17T10:45:00Z"
+        shape: box
+        points: null
+        assist: null
+        area_px: 12600.0
+        updated_at: "2026-09-17T10:45:00Z"
+        repaired: false
+        finding_id: null
 
     SplitMethod:
       type: string

@@ -252,7 +252,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Mark the image as containing no machinery (it then counts as labeled and enters datasets as a negative), or undo it. Marking rejects its unreviewed proposals. 409 `conflict` while the image has accepted or edited boxes. */
+        /** Mark the image as containing no machinery (it then counts as labeled and enters datasets as a negative), or undo it. Marking rejects its unreviewed proposals. 409 `conflict` while the image has accepted or edited boxes. Also sets or clears the operator's subject distance (image inspection spec §9.3). */
         patch: operations["updateImage"];
         trace?: never;
     };
@@ -309,9 +309,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Run the project's pre-annotation model (or `model_id`) on one image synchronously and
+         * Replaced by `detectImage` (image inspection spec §11.2). Run the project's pre-annotation model (or `model_id`) on one image synchronously and
          *     write proposal boxes with `local_model` provenance. Skipped (`skipped: true`) when the
          *     image already has boxes from that model. Runs at `imgsz` 2560 by default.
+         * @deprecated
          */
         post: operations["preannotateImage"];
         delete?: never;
@@ -333,7 +334,7 @@ export interface paths {
         /** All boxes on an image (ground truth and proposals). */
         get: operations["listBoxes"];
         put?: never;
-        /** Create a person-drawn box. Provenance is `person`, review state `accepted`. */
+        /** Create a person-drawn annotation (box, rbox, polygon or point). Provenance is `person`, review state `accepted`; on a defect type it also creates the finding (`finding_id`). */
         post: operations["createBox"];
         delete?: never;
         options?: never;
@@ -3581,7 +3582,10 @@ export interface components {
          *       "max_pending_confidence": 0.81,
          *       "labeled": true,
          *       "marked_empty": false,
-         *       "created_at": "2026-09-17T10:06:00Z"
+         *       "created_at": "2026-09-17T10:06:00Z",
+         *       "finding_count": 1,
+         *       "worst_severity": 3,
+         *       "reviewed": false
          *     }
          */
         Image: {
@@ -3611,6 +3615,12 @@ export interface components {
             marked_empty: boolean;
             /** Format: date-time */
             created_at: string;
+            /** @description the image's findings that are not `closed` */
+            finding_count: number;
+            /** @description highest severity among the image's findings that are not `closed`; null when none has one */
+            worst_severity: number | null;
+            /** @description no unreviewed proposal is left */
+            reviewed: boolean;
         };
         /**
          * @example {
@@ -3633,7 +3643,10 @@ export interface components {
          *           "max_pending_confidence": 0.81,
          *           "labeled": true,
          *           "marked_empty": false,
-         *           "created_at": "2026-09-17T10:06:00Z"
+         *           "created_at": "2026-09-17T10:06:00Z",
+         *           "finding_count": 1,
+         *           "worst_severity": 3,
+         *           "reviewed": false
          *         },
          *         {
          *           "id": "10000000-5555-4000-8000-000000000002",
@@ -3653,7 +3666,10 @@ export interface components {
          *           "max_pending_confidence": null,
          *           "labeled": false,
          *           "marked_empty": false,
-         *           "created_at": "2026-09-17T10:06:00Z"
+         *           "created_at": "2026-09-17T10:06:00Z",
+         *           "finding_count": 0,
+         *           "worst_severity": null,
+         *           "reviewed": false
          *         }
          *       ],
          *       "next_cursor": null,
@@ -3667,12 +3683,16 @@ export interface components {
             total: number;
         };
         /**
+         * @description Every field is optional; a field left out is left alone.
          * @example {
          *       "marked_empty": true
          *     }
          */
         ImageUpdate: {
-            marked_empty: boolean;
+            /** @description mark the image as having nothing to report, or undo it; 409 `conflict` while it has ground truth */
+            marked_empty?: boolean;
+            /** @description the operator's camera-to-subject distance in metres; it overrides every other distance rule (image inspection spec §9.3). null clears it. */
+            subject_distance_m?: number | null;
         };
         /**
          * @example {
@@ -3716,6 +3736,107 @@ export interface components {
         BulkDeleteResult: {
             deleted: number;
         };
+        /** @description What the camera recorded and what the server derives from it (image inspection spec §7.3, §9.3). A field is null when unknown. `distance_m`, `distance_sigma_m` and `gsd_mm` come from the first distance rule that applies (`distance_source`); with `none`, sizes are in pixels. */
+        ImageCamera: {
+            /** @description metres above the take-off point */
+            rel_alt: number | null;
+            /** @description degrees; -90 is nadir */
+            gimbal_pitch: number | null;
+            /** @description degrees clockwise from north */
+            gimbal_yaw: number | null;
+            focal_mm: number | null;
+            /** @description calibrated focal length in pixels of the original frame */
+            focal_px: number | null;
+            sensor_w_mm: number | null;
+            /** @description the laser range finder distance */
+            lrf_distance_m: number | null;
+            /** @description the operator's value */
+            subject_distance_m: number | null;
+            distance_m: number | null;
+            distance_sigma_m: number | null;
+            /** @enum {string} */
+            distance_source: "manual" | "lrf" | "rel_alt" | "none";
+            /** @description millimetres per stored-image pixel */
+            gsd_mm: number | null;
+            camera_model: string | null;
+        };
+        /** @enum {string} */
+        ImageFootprintKind: "trapezoid" | "wedge" | "point" | "none";
+        /**
+         * @description one image with its camera metadata and its ground footprint (image inspection spec §14)
+         * @example {
+         *       "id": "10000000-5555-4000-8000-000000000001",
+         *       "path": "images/ahmadia/IX-12-02491_0031_0001.jpg",
+         *       "file_name": "IX-12-02491_0031_0001.jpg",
+         *       "width": 4000,
+         *       "height": 2667,
+         *       "source_id": "50000000-3333-4000-8000-000000000001",
+         *       "group_key": "0031",
+         *       "capture_time": "2019-04-15T06:35:36Z",
+         *       "lat": 29.49469,
+         *       "lon": 47.76513,
+         *       "alt": 191.3,
+         *       "phash": "82a81f67f94615ae",
+         *       "box_count": 3,
+         *       "pending_count": 2,
+         *       "max_pending_confidence": 0.81,
+         *       "labeled": true,
+         *       "marked_empty": false,
+         *       "created_at": "2026-09-17T10:06:00Z",
+         *       "finding_count": 1,
+         *       "worst_severity": 3,
+         *       "reviewed": false,
+         *       "camera": {
+         *         "rel_alt": 38.4,
+         *         "gimbal_pitch": -89.9,
+         *         "gimbal_yaw": 12.3,
+         *         "focal_mm": 12.29,
+         *         "focal_px": 3713.3,
+         *         "sensor_w_mm": 17.3,
+         *         "lrf_distance_m": null,
+         *         "subject_distance_m": null,
+         *         "distance_m": 38.4,
+         *         "distance_sigma_m": 1,
+         *         "distance_source": "rel_alt",
+         *         "gsd_mm": 10.3,
+         *         "camera_model": "M3E"
+         *       },
+         *       "footprint": {
+         *         "type": "Polygon",
+         *         "coordinates": [
+         *           [
+         *             [
+         *               47.7649,
+         *               29.49455
+         *             ],
+         *             [
+         *               47.76536,
+         *               29.49455
+         *             ],
+         *             [
+         *               47.76536,
+         *               29.49483
+         *             ],
+         *             [
+         *               47.7649,
+         *               29.49483
+         *             ],
+         *             [
+         *               47.7649,
+         *               29.49455
+         *             ]
+         *           ]
+         *         ]
+         *       },
+         *       "footprint_kind": "trapezoid"
+         *     }
+         */
+        ImageDetail: components["schemas"]["Image"] & {
+            camera: components["schemas"]["ImageCamera"];
+            /** @description WGS84 lon/lat: a Polygon for `trapezoid` and `wedge`, a Point for `point`, null for `none`. A visual aid, never used to measure. */
+            footprint: components["schemas"]["GeoJsonPolygon"] | components["schemas"]["GeoJsonPoint"] | null;
+            footprint_kind: components["schemas"]["ImageFootprintKind"];
+        };
         /**
          * @example {
          *       "imgsz": 2560,
@@ -3754,7 +3875,12 @@ export interface components {
          *           },
          *           "review_state": "unreviewed",
          *           "reviewed_at": null,
-         *           "created_at": "2026-09-17T11:00:00Z"
+         *           "created_at": "2026-09-17T11:00:00Z",
+         *           "shape": "box",
+         *           "points": null,
+         *           "assist": null,
+         *           "area_px": 5856,
+         *           "updated_at": "2026-09-17T11:00:00Z"
          *         }
          *       ]
          *     }
@@ -3769,6 +3895,11 @@ export interface components {
         ProvenanceKind: "person" | "local_model" | "cloud_provider";
         /** @enum {string} */
         ReviewState: "unreviewed" | "accepted" | "rejected" | "edited";
+        /**
+         * @description `box` and `rbox` are rectangles (the server keeps `rbox` exactly when `angle` is not 0); `polygon` has `points`, and `x, y, w, h` are its axis-aligned envelope with `angle` 0; `point` is a marker at `x, y` with `w = h = 0`, on defect types only (image inspection spec §8.1).
+         * @enum {string}
+         */
+        BoxShape: "box" | "rbox" | "polygon" | "point";
         /**
          * @example {
          *       "kind": "person",
@@ -3805,7 +3936,12 @@ export interface components {
          *       },
          *       "review_state": "accepted",
          *       "reviewed_at": "2026-09-17T10:45:00Z",
-         *       "created_at": "2026-09-17T10:45:00Z"
+         *       "created_at": "2026-09-17T10:45:00Z",
+         *       "shape": "box",
+         *       "points": null,
+         *       "assist": null,
+         *       "area_px": 12600,
+         *       "updated_at": "2026-09-17T10:45:00Z"
          *     }
          */
         Box: {
@@ -3825,6 +3961,18 @@ export interface components {
             reviewed_at: string | null;
             /** Format: date-time */
             created_at: string;
+            shape: components["schemas"]["BoxShape"];
+            /** @description polygon vertices `[[x, y], ...]` in stored-image pixels: one ring, implicitly closed, counter-clockwise, 3 to 2,000 vertices; null for every other shape */
+            points: number[][] | null;
+            /**
+             * @description `sam` when the smart-polygon tool drew it
+             * @enum {string|null}
+             */
+            assist: "sam" | null;
+            /** @description area in square pixels; 0 for a point */
+            area_px: number;
+            /** Format: date-time */
+            updated_at: string;
         };
         /**
          * @example {
@@ -3848,7 +3996,12 @@ export interface components {
          *           },
          *           "review_state": "accepted",
          *           "reviewed_at": "2026-09-17T10:45:00Z",
-         *           "created_at": "2026-09-17T10:45:00Z"
+         *           "created_at": "2026-09-17T10:45:00Z",
+         *           "shape": "box",
+         *           "points": null,
+         *           "assist": null,
+         *           "area_px": 12600,
+         *           "updated_at": "2026-09-17T10:45:00Z"
          *         },
          *         {
          *           "id": "b0000000-6666-4000-8000-000000000002",
@@ -3869,7 +4022,12 @@ export interface components {
          *           },
          *           "review_state": "unreviewed",
          *           "reviewed_at": null,
-         *           "created_at": "2026-09-17T11:00:00Z"
+         *           "created_at": "2026-09-17T11:00:00Z",
+         *           "shape": "box",
+         *           "points": null,
+         *           "assist": null,
+         *           "area_px": 5856,
+         *           "updated_at": "2026-09-17T11:00:00Z"
          *         }
          *       ]
          *     }
@@ -3878,7 +4036,7 @@ export interface components {
             items: components["schemas"]["Box"][];
         };
         /**
-         * @description `x`/`y` have no minimum: they describe the *unrotated* box, so a box rotated near the left or top edge has a negative one while its centre is still inside the image. The server is the single judge of bounds — a box at angle 0 must still lie fully inside, and a rotated one needs its centre inside (see Box.angle) — and it answers with a message saying so.
+         * @description A person-drawn annotation. `shape` is `box` when absent. `box` and `rbox` need `x, y, w, h` (and `angle` for a rotated one); `polygon` needs `points` and ignores `x, y, w, h, angle` (the server derives the envelope); `point` needs `x, y`, ignores the rest and takes only a defect type. A missing field answers 422 `invalid_shape`. `x`/`y` have no minimum: they describe the *unrotated* box, so a box rotated near the left or top edge has a negative one while its centre is still inside the image. The server is the single judge of bounds and of polygon validity (image inspection spec §8.2).
          * @example {
          *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
          *       "x": 512,
@@ -3889,15 +4047,23 @@ export interface components {
          */
         BoxCreate: {
             class_id: string;
-            x: number;
-            y: number;
-            w: number;
-            h: number;
+            shape?: components["schemas"]["BoxShape"];
+            x?: number;
+            y?: number;
+            w?: number;
+            h?: number;
             /** @description Rotation in degrees about the box's own centre. Optional; omitting it means 0. Any value is accepted and normalised into [0, 180) on write, because a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore guaranteed on the way out (see Box.angle), not demanded on the way in. */
             angle?: number;
+            /** @description polygon vertices in stored-image pixels, any orientation; the server repairs and clips them and says so in `repaired` */
+            points?: number[][];
+            /**
+             * @description `sam` when the smart-polygon tool drew it; absent otherwise
+             * @enum {string}
+             */
+            assist?: "sam";
         };
         /**
-         * @description Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason given on BoxCreate.
+         * @description Every field is optional and none is nullable. `x`/`y` have no minimum, for the reason given on BoxCreate. `points` replaces a polygon's vertices and is refused (422 `invalid_shape`) on any other shape; the shape itself never changes through an update, except that a rectangle is `rbox` exactly when its angle is not 0.
          * @example {
          *       "x": 520,
          *       "y": 305
@@ -3911,6 +4077,7 @@ export interface components {
             h?: number;
             /** @description Rotation in degrees about the box's own centre. Optional; omitting it leaves the angle unchanged. Any value is accepted and normalised into [0, 180) on write, because a rectangle has 180 degree symmetry — 190 is a legitimate way to say 10. The bounds are therefore guaranteed on the way out (see Box.angle), not demanded on the way in. */
             angle?: number;
+            points?: number[][];
         };
         /**
          * @example {
@@ -3930,11 +4097,56 @@ export interface components {
         };
         /**
          * @example {
-         *       "updated": 1
+         *       "updated": 1,
+         *       "finding_ids_created": [
+         *         "f0000000-1212-4000-8000-000000000231"
+         *       ],
+         *       "finding_ids_deleted": []
          *     }
          */
         BoxReviewResult: {
             updated: number;
+            /** @description findings the accepts created (defect types) */
+            finding_ids_created: string[];
+            /** @description untouched findings the unreviews deleted */
+            finding_ids_deleted: string[];
+        };
+        /**
+         * @description the written annotation, plus what the write did (image inspection spec §8.3)
+         * @example {
+         *       "id": "b0000000-6666-4000-8000-000000000001",
+         *       "image_id": "10000000-5555-4000-8000-000000000001",
+         *       "class_id": "c1a2b3c4-0000-4000-8000-000000000001",
+         *       "x": 512,
+         *       "y": 300,
+         *       "w": 140,
+         *       "h": 90,
+         *       "angle": 0,
+         *       "confidence": null,
+         *       "provenance": {
+         *         "kind": "person",
+         *         "model_id": null,
+         *         "provider": null,
+         *         "model_name": null,
+         *         "query_run_id": null
+         *       },
+         *       "review_state": "accepted",
+         *       "reviewed_at": "2026-09-17T10:45:00Z",
+         *       "created_at": "2026-09-17T10:45:00Z",
+         *       "shape": "box",
+         *       "points": null,
+         *       "assist": null,
+         *       "area_px": 12600,
+         *       "updated_at": "2026-09-17T10:45:00Z",
+         *       "repaired": false,
+         *       "finding_id": null
+         *     }
+         */
+        BoxWriteResult: components["schemas"]["Box"] & {
+            /** @description the server changed the geometry (made valid, clipped to the image, re-oriented or rounded); the UI says so */
+            repaired: boolean;
+            /** @description the annotation's finding (a person's annotation on a defect type creates one); null when it has none */
+            finding_id: string | null;
         };
         /** @enum {string} */
         SplitMethod: "by_group" | "by_tile" | "random";
@@ -8649,6 +8861,20 @@ export interface components {
         cloudId: string;
         /** @description a point-cloud measurement; `measurementId` is a volume measurement */
         cloudMeasurementId: string;
+        /** @description true = at least one finding that is not `closed`; false = none */
+        imageHasFindings: boolean;
+        /** @description comma-separated severity levels; with `finding_status`, both must hold on the same finding (image inspection spec §7.1) */
+        imageSeverity: string;
+        /** @description comma-separated finding statuses */
+        imageFindingStatus: string;
+        /** @description comma-separated catalogue type ids; the image has an annotation of one of them */
+        imageTypeIds: string;
+        /** @description true = has unreviewed proposals (the same test as `listImages`' `has_pending`) */
+        imageHasSuggestions: boolean;
+        /** @description matches `Image.reviewed` */
+        imageReviewed: boolean;
+        /** @description true = no ground truth and not marked empty (the same test as `labeled=false`) */
+        imageUnlabeled: boolean;
         octreeFile: "metadata.json" | "hierarchy.bin" | "octree.bin";
         surfaceId: string;
         /** @description a volume measurement */
@@ -9097,9 +9323,23 @@ export interface operations {
                 has_pending?: boolean;
                 /** @description case-insensitive substring of the image path (file name included) */
                 search?: string;
+                /** @description true = at least one finding that is not `closed`; false = none */
+                has_findings?: components["parameters"]["imageHasFindings"];
+                /** @description comma-separated severity levels; with `finding_status`, both must hold on the same finding (image inspection spec §7.1) */
+                severity?: components["parameters"]["imageSeverity"];
+                /** @description comma-separated finding statuses */
+                finding_status?: components["parameters"]["imageFindingStatus"];
+                /** @description comma-separated catalogue type ids; the image has an annotation of one of them */
+                type_ids?: components["parameters"]["imageTypeIds"];
+                /** @description true = has unreviewed proposals (the same test as `listImages`' `has_pending`) */
+                has_suggestions?: components["parameters"]["imageHasSuggestions"];
+                /** @description matches `Image.reviewed` */
+                reviewed?: components["parameters"]["imageReviewed"];
+                /** @description true = no ground truth and not marked empty (the same test as `labeled=false`) */
+                unlabeled?: components["parameters"]["imageUnlabeled"];
                 /** @description comma-separated image ids; when present other filters are ignored */
                 ids?: string;
-                sort?: "path" | "source_id" | "group_key" | "labeled" | "box_count" | "pending_count" | "max_pending_confidence" | "capture_time" | "created_at";
+                sort?: "path" | "source_id" | "group_key" | "labeled" | "box_count" | "pending_count" | "max_pending_confidence" | "capture_time" | "created_at" | "worst_severity";
                 order?: "asc" | "desc";
                 limit?: components["parameters"]["limit"];
                 /** @description opaque cursor from the previous page's `next_cursor` */
@@ -9197,7 +9437,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Image"];
+                    "application/json": components["schemas"]["ImageDetail"];
                 };
             };
             default: components["responses"]["Error"];
@@ -9225,7 +9465,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Image"];
+                    "application/json": components["schemas"]["ImageDetail"];
                 };
             };
             default: components["responses"]["Error"];
@@ -9365,7 +9605,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Box"];
+                    "application/json": components["schemas"]["BoxWriteResult"];
+                };
+            };
+            /** @description `invalid_shape` (a field the shape needs is missing), `out_of_bounds`, `empty_polygon` (nothing left after repair and clip), `point_needs_defect_type`, `too_many_annotations` (5,000 per image), `unknown_type`, or `validation_error` for a malformed body */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
@@ -9418,11 +9667,20 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Box"];
+                    "application/json": components["schemas"]["BoxWriteResult"];
                 };
             };
             /** @description the reclass would delete the box's finding (`code` is `finding_would_be_deleted`, details `{finding_id}`) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `invalid_shape` (`points` on a shape that is not a polygon, or rectangle fields on a polygon or point), `out_of_bounds`, `empty_polygon`, `point_needs_defect_type` (retyping a point to an object type), `unknown_type`, or `validation_error` for a malformed body */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9455,6 +9713,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BoxReviewResult"];
+                };
+            };
+            /** @description an unreview would delete a finding that has a note, photos, comments, a changed severity or a status other than `reviewed` (`code` is `finding_has_content`, details `{finding_id, finding_ids}`: the first blocking finding and all of them) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             default: components["responses"]["Error"];
