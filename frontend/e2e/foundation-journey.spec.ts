@@ -279,6 +279,7 @@ async function serveBackend(page: Page): Promise<World> {
         world.finding = { ...world.finding, ...body(), updated_at: "2026-09-27T09:05:00Z" };
       return reply(detail());
     }
+    // The finding's GET sub-resources the inspector reads, /comments and /attachments: both empty.
     if (sub.startsWith(`/findings/${FINDING}/`) && method === "GET" && !sub.endsWith("/thumbnail"))
       return reply(EMPTY_PAGE);
     if (sub === "/activity") return reply(EMPTY_PAGE);
@@ -543,9 +544,12 @@ test("one project from creation to a training run: every Foundation unit reads w
   await page.getByRole("button", { name: "Label next" }).click();
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));
   await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
-  const accepted = page.waitForRequest((r) => r.method() === "POST" && r.url().endsWith("/boxes/review"));
+  // The response, not the request: the handler has run (and made the finding) once it answered.
+  const accepted = page.waitForResponse(
+    (r) => r.request().method() === "POST" && r.url().endsWith("/boxes/review"),
+  );
   await page.keyboard.press("a");
-  expect((await accepted).postDataJSON()).toEqual({ box_ids: [BOX], action: "accept" });
+  expect((await accepted).request().postDataJSON()).toEqual({ box_ids: [BOX], action: "accept" });
   expect(world.finding).not.toBeNull();
 
   // 5. Set its severity in the Findings tab's inspector, and count the reads that edit costs.
