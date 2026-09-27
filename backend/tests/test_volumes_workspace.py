@@ -115,4 +115,4 @@ def test_both_or_neither_polygon_is_invalid_geometry(client, project_id, handle,
     for extra in ({"polygon_native": ring, "polygon_site": ring}, {}):
         r = client.post(f"{BASE}/{project_id}/volumes", json={**base, **extra})
         assert r.status_code == 422, r.text
-        assert r.json()["error"]["code"] in ("invalid_geometry", "validation_error")
+        assert r.json()["error"]["code"] == "invalid_geometry"

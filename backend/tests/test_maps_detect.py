@@ -3,11 +3,14 @@
 import cv2
 import numpy as np
 import pytest
+from catalogue_fake import create_type
 from geotiffs import make_squares_geotiff
+from library_helpers import add_library_model
 from pyproj import CRS
 from workspace_rows import set_site_frame
 
 from app.db.models import GeoMap, Job, MapDetection, MapRun
+from app.detect import runs
 from app.maps.region import windows_in
 from app.maps.windows import plan_windows
 from app.providers.base import Detection, ProviderError, TileResult
@@ -324,3 +327,87 @@ def test_a_region_must_match_its_one_map_and_the_site_frame(
     bow_tie = _region_body(handle, map_id, [(100, 100), (400, 400), (400, 100), (100, 400)])
     r = client.post(f"{BASE}/{project_id}/runs", json=bow_tie)
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry", r.text
+
+
+def test_a_region_run_never_counts_site_areas(
+    client, project_id, handle, wait_job, squares_map, use_provider, with_key
+):
+    """A region run is area-free: its job, its reviews and its recount never fill `area_counts`,
+    so a later zone change (whose recount skips region runs) cannot leave them drifting."""
+    map_id = squares_map()
+    set_site_frame(handle, UTM33)
+    area = {"name": "Yard", "map_id": map_id, "polygon_px": [list(p) for p in SQUARE_1]}
+    assert client.post(f"{BASE}/{project_id}/site-areas", json=area).status_code == 201
+    page = client.get(f"{BASE}/{project_id}/jobs", params={"type": "area_recount"}).json()
+    assert wait_job(project_id, page["items"][0]["id"])["state"] == "succeeded"
+    use_provider(SquareProvider())
+    r = client.post(f"{BASE}/{project_id}/runs", json=_region_body(handle, map_id, SQUARE_1))
+    item = r.json()["runs"][0]
+    assert wait_job(project_id, item["job"]["id"])["state"] == "succeeded"
+    run_id = item["run_id"]
+    with handle.session() as s:
+        run = s.get(MapRun, run_id)
+        assert sum(run.counts.values()) == 1 and run.area_counts == {}
+        [det] = s.query(MapDetection).filter(MapDetection.run_id == run_id).all()
+    body = {"detection_ids": [det.id], "action": "accept"}
+    assert client.post(f"{BASE}/{project_id}/map-runs/{run_id}/review", json=body).status_code == 200
+    with handle.session() as s:
+        run = s.get(MapRun, run_id)
+        stored = (dict(run.counts), dict(run.verified_counts), dict(run.area_counts))
+    assert stored[2] == {} and stored[1] == {det.class_id: 1}
+    runs.recount(handle, run_id)
+    with handle.session() as s:
+        run = s.get(MapRun, run_id)
+        assert (dict(run.counts), dict(run.verified_counts), dict(run.area_counts)) == stored
+
+
+def test_a_region_on_a_map_without_georeference_is_refused(
+    client, project_id, handle, squares_map, use_provider, with_key
+):
+    map_id = squares_map()
+    set_site_frame(handle, UTM33)
+    body = _region_body(handle, map_id, SQUARE_1)
+    with handle.session() as s:
+        gmap = s.get(GeoMap, map_id)
+        gmap.geotransform, gmap.crs_wkt = None, None
+    provider = use_provider(SquareProvider())
+    r = client.post(f"{BASE}/{project_id}/runs", json=body)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry", r.text
+    with handle.session() as s:
+        assert s.query(MapRun).count() == 0 and s.query(Job).filter(Job.type == "map_detect").count() == 0
+    assert provider.calls == []
+
+
+def test_an_empty_region_adds_no_type_on_the_library_model_path(
+    client, app, tmp_path, project_id, handle, squares_map
+):
+    map_id = squares_map(nodata_left=1500)
+    set_site_frame(handle, UTM33)
+    car = create_type(client, "Car")
+    model = add_library_model(app, tmp_path, class_names=["car"])
+    body = _region_body(handle, map_id, SQUARE_1, model_id=model.id)
+    del body["provider"], body["query"]
+    r = client.post(f"{BASE}/{project_id}/runs", json=body)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "empty_region", r.text
+    classes = {c["id"] for c in client.get(f"{BASE}/{project_id}").json()["classes"]}
+    assert car["id"] not in classes
+    with handle.session() as s:
+        assert s.query(MapRun).count() == 0
+
+
+def test_a_region_partly_off_the_map_looks_only_at_windows_on_it(
+    client, project_id, handle, wait_job, squares_map, use_provider, with_key
+):
+    map_id = squares_map()
+    set_site_frame(handle, UTM33)
+    provider = use_provider(SquareProvider())
+    partly_off = [(2550, 250), (3400, 250), (3400, 450), (2550, 450)]  # the map is 3000 px wide
+    r = client.post(f"{BASE}/{project_id}/runs", json=_region_body(handle, map_id, partly_off))
+    assert r.status_code == 202, r.text
+    item = r.json()["runs"][0]
+    assert wait_job(project_id, item["job"]["id"])["state"] == "succeeded"
+    expected = windows_in(plan_windows(3000, 1500, 1280, 0.2, 1.0), [list(p) for p in partly_off])
+    assert expected and all(w.x + w.w <= 3000 and w.y + w.h <= 1500 for w in expected)
+    assert sorted(provider.calls) == sorted(w.index for w in expected)
+    run = client.get(f"{BASE}/{project_id}/map-runs/{item['run_id']}").json()
+    assert run["detection_count"] == 1  # the square at (2600, 300)

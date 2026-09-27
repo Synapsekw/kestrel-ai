@@ -250,8 +250,11 @@ def run_map_detect(ctx: JobContext) -> dict:
             )
         totals["detections"] += _insert(ctx, run.id, keep(merger.finish()), by_name)
     with ctx.project.session() as s:
-        # counts, verified_counts and area_counts from the rows just written (app/detect/counts.py)
-        recount_map_run(s, s.get(MapRun, run.id), areas_for_map(s, s.get(GeoMap, gmap.id)))
+        # counts, verified_counts and area_counts from the rows just written (app/detect/counts.py);
+        # a region run is area-free, as the area recount that skips it needs (spec §9.3)
+        row = s.get(MapRun, run.id)
+        areas = areas_for_map(s, s.get(GeoMap, gmap.id)) if timeline.is_survey_run(row) else []
+        recount_map_run(s, row, areas)
     ctx.publish("map_runs.changed", {"map_id": gmap.id, "run_ids": [run.id]})
     _masks_changed(ctx, run.id)
     if run.kind == "local_model" and not totals["failed_windows"]:

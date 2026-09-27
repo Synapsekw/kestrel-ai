@@ -26,6 +26,7 @@ from app.errors import AppError, not_found
 from app.findings import trash
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.maps import timeline
 from app.projects.service import ProjectHandle
 
 ACCEPT_BATCH = 1000
@@ -52,7 +53,9 @@ class _RunCounts:
     def __init__(self, s: Session, run: MapRun):
         self.run = run
         gmap = s.get(GeoMap, run.map_id)
-        self.areas: list[ProjectedArea] = areas_for_map(s, gmap) if gmap is not None else []
+        # A region run is area-free (spec §9.3): the area recount skips it, so it never gains any.
+        survey = timeline.is_survey_run(run)
+        self.areas: list[ProjectedArea] = areas_for_map(s, gmap) if gmap is not None and survey else []
         self.counts = dict(run.counts or {})
         self.verified = dict(run.verified_counts or {})
         self.area_counts = copy.deepcopy(run.area_counts or {})

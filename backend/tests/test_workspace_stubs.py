@@ -1,8 +1,8 @@
 """M-C0: the map-workspace operations are routed as 501 stubs until their unit lands.
 
 A unit that builds an operation deletes its tuple from `app/workspace/stubs.py` (and its route
-goes live), and these tests follow because they read the lists. M-B5 deletes the option-guard
-tests at the end of this file together with the guards in `app/workspace/pending.py`.
+goes live), and these tests follow because they read the lists. The option-guard tests that
+remain cover M-B2's `guard_surface_patch` in `app/workspace/pending.py`; M-B2 deletes them with it.
 """
 
 import re
@@ -82,7 +82,7 @@ def test_frame_site_is_ignored_until_m_b1(client, project_id):
     assert "polygon_site" not in area
 
 
-def _option(r, unit: str = "M-B5") -> str:
+def _option(r, unit: str) -> str:
     assert r.status_code == 501, r.text
     error = r.json()["error"]
     assert error["code"] == "not_implemented"
@@ -95,7 +95,7 @@ def test_option_stubs_name_real_operations():
     spec = yaml.safe_load(SPEC.read_text("utf-8"))
     ids = {op["operationId"] for ops in spec["paths"].values() for m, op in ops.items() if m in METHODS}
     assert set(OPTION_STUBS) <= ids
-    assert set(OPTION_STUBS.values()) <= {"M-B2", "M-B5"}
+    assert set(OPTION_STUBS.values()) <= {"M-B2"}
     assert not set(OPTION_STUBS) & EXPECTED_STUBS
 
 
@@ -106,7 +106,7 @@ def test_a_surface_date_or_role_patch_answers_501_until_m_b2(client, project_id)
     assert _option(client.patch(url, json={"elevation_role": "dtm"}), "M-B2") == "elevation_role"
 
 
-# ----------------------------------------------------- M-B5 deletes everything below with its guards
+# ------------------------------------------- volumes: a request without any polygon (M-C0 contract)
 
 
 def test_a_volume_without_a_polygon_is_invalid_geometry(client, project_id):

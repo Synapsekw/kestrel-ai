@@ -391,7 +391,8 @@ def recount(handle: ProjectHandle, run_id: str) -> dict:
         if kind == "images":
             recount_query_run(s, row)
         else:
-            recount_map_run(s, row, areas_for_map(s, s.get(GeoMap, row.map_id)))
+            areas = areas_for_map(s, s.get(GeoMap, row.map_id)) if timeline.is_survey_run(row) else []
+            recount_map_run(s, row, areas)  # a region run is area-free (spec §9.3)
         return {"run_id": run_id, "kind": kind, "counts": dict(row.counts or {})}
 
 

@@ -2,9 +2,9 @@
 
 Each guard answers 501 `not_implemented` with details `{option, unit}` when a request uses an
 option its unit has not built yet, before any lookup; `tests/test_contract.py::OPTION_STUBS` lets
-the contract test accept exactly those answers. `guard_surface_patch` belongs to M-B2; the other
-guards belong to M-B5. Each unit deletes its own guards with their call sites and their
-OPTION_STUBS entries as it builds the option; this module is deleted once every guard is gone.
+the contract test accept exactly those answers. The one guard left, `guard_surface_patch`, belongs
+to M-B2 (M-B5 has built and removed its own); M-B2 deletes it with its call site and its
+OPTION_STUBS entry, and this module with it.
 """
 
 from app.errors import AppError
