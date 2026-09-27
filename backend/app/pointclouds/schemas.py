@@ -12,8 +12,8 @@ from app.jobs.schemas import JobOut
 
 CloudMeasurementKind = Literal["point", "distance", "height", "vertical", "area", "profile"]
 # The kinds `createCloudMeasurement` builds today. C-B1 adds "area" (and `params.method = "rings"`),
-# C-B2 adds "profile"; until both land, `tests/test_contract.py::BACKEND_PENDING` names the create.
-CreatableCloudMeasurementKind = Literal["point", "distance", "height", "vertical"]
+# C-B2 added "profile"; until C-B1 lands too, `tests/test_contract.py::BACKEND_PENDING` names the create.
+CreatableCloudMeasurementKind = Literal["point", "distance", "height", "vertical", "profile"]
 CloudMeasurementStatus = Literal["ready", "computing", "failed"]
 CloudViewSubjectKind = Literal["finding", "cloud_measurement"]
 Vec3 = Annotated[list[float], Field(min_length=3, max_length=3)]
@@ -143,6 +143,7 @@ class CloudMeasurementCreate(BaseModel):
     points: list[CloudMeasurementPoint] = Field(min_length=1, max_length=2)
     name: str | None = Field(default=None, min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=2000)
+    params: CloudMeasurementParams | None = None
 
 
 class CloudMeasurementUpdate(BaseModel):
