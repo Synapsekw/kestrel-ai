@@ -109,11 +109,6 @@ EXPECTED_STUBS |= {
     "getCloudProfile",  # C-B2
     "getCloudCameras",  # C-B3
     "setCloudCameraOffset",  # C-B3
-    "putFindingView3d",  # C-B4
-    "getFindingView3d",  # C-B4
-    "putCloudMeasurementView3d",  # C-B4
-    "getCloudMeasurementView3d",  # C-B4
-    "listCloudViews",  # C-B4
 }
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
@@ -222,6 +217,11 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "backfillCatalogueType": {422},
     # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
     "acquireAssistModel": {409},
+    # C-B4 (spec 2026-09-26-point-cloud-workspace section 11.4): a schema-valid multipart whose image
+    # is not a 1600 x 1000 PNG/JPEG (`bad_view_image`), or a finding anchored on an image or a map
+    # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
+    "putFindingView3d": {409, 422},
+    "putCloudMeasurementView3d": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
