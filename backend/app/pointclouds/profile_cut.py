@@ -71,7 +71,35 @@ def thin_to(
     return s, z, c, cell
 
 
-def width_max(s: np.ndarray, z: np.ndarray) -> float | None:
+def _counted(lo, hi, lo2, hi2) -> np.ndarray:
+    """Which clusters (lo, hi) of one bin a cluster of the neighbouring bin (lo2, hi2) confirms.
+
+    Clusters in a bin are sorted by s and disjoint, so the neighbours that can overlap (lo, hi) --
+    hi2 >= lo and lo2 <= hi, which a positive overlap needs -- are one contiguous range, found by
+    binary search; only those pairs are tested (plan Ruling 8's test, unchanged)."""
+    j0 = np.searchsorted(hi2, lo, side="left")
+    j1 = np.searchsorted(lo2, hi, side="right")
+    n = np.maximum(j1 - j0, 0)
+    hit = np.zeros(lo.size, dtype=bool)
+    if not n.any():
+        return hit
+    ci = np.repeat(np.arange(lo.size), n)
+    nj = np.repeat(j0, n) + (np.arange(ci.size) - np.repeat(np.cumsum(n) - n, n))
+    e, e2 = hi[ci] - lo[ci], hi2[nj] - lo2[nj]
+    small = np.minimum(e, e2)
+    ok = (np.maximum(e, e2) <= 2 * small) & (
+        np.minimum(hi[ci], hi2[nj]) - np.maximum(lo[ci], lo2[nj]) >= 0.5 * small
+    )
+    hit[ci[ok]] = True
+    return hit
+
+
+WIDTH_CANCEL_EVERY = 64  # bins between cancel checks
+
+
+def width_max(
+    s: np.ndarray, z: np.ndarray, *, check_cancelled: Callable[[], None] | None = None
+) -> float | None:
     """The largest horizontal extent of a wall-like cluster at one height (plan Ruling 8)."""
     n = s.size
     if n == 0:
@@ -84,20 +112,24 @@ def width_max(s: np.ndarray, z: np.ndarray) -> float | None:
     brk[1:] = (bb[1:] != bb[:-1]) | (np.diff(ss) > WIDTH_GAP_M)
     starts = np.flatnonzero(brk)
     ends = np.append(starts[1:], n) - 1
-    by_bin: dict[int, list[tuple[float, float]]] = {}
-    for b, lo, hi in zip(bb[starts].tolist(), ss[starts].tolist(), ss[ends].tolist(), strict=True):
-        by_bin.setdefault(b, []).append((lo, hi))
+    cb, clo, chi = bb[starts], ss[starts], ss[ends]
+    bins, first = np.unique(cb, return_index=True)  # cb is sorted: each bin is one slice
+    last = np.append(first[1:], cb.size)
+    where = {int(b): (int(i), int(j)) for b, i, j in zip(bins, first, last, strict=True)}
     best: float | None = None
-    for b, clusters in by_bin.items():
-        neighbours = by_bin.get(b - 1, []) + by_bin.get(b + 1, [])
-        for lo, hi in clusters:
-            e = hi - lo
-            for lo2, hi2 in neighbours:
-                e2 = hi2 - lo2
-                small = min(e, e2)
-                if max(e, e2) <= 2 * small and min(hi, hi2) - max(lo, lo2) >= 0.5 * small:
-                    best = e if best is None else max(best, e)
-                    break
+    for k, b in enumerate(bins.tolist()):
+        if check_cancelled is not None and k % WIDTH_CANCEL_EVERY == 0:
+            check_cancelled()
+        i, j = where[b]
+        lo, hi = clo[i:j], chi[i:j]
+        hit = np.zeros(lo.size, dtype=bool)
+        for nb in (b - 1, b + 1):
+            if nb in where:
+                i2, j2 = where[nb]
+                hit |= _counted(lo, hi, clo[i2:j2], chi[i2:j2])
+        if hit.any():
+            e = float((hi[hit] - lo[hit]).max())
+            best = e if best is None else max(best, e)
     return best
 
 
@@ -170,7 +202,7 @@ def cut(
             progress(scanned, total)
     s_all, z_all = _merge(s_parts, np.float32), _merge(z_parts, np.float32)
     c_all = _merge(c_parts, np.uint16, 3) if has_rgb else None
-    width = width_max(s_all, z_all)
+    width = width_max(s_all, z_all, check_cancelled=check_cancelled)
     if s_all.size > max_points:
         s_all, z_all, c_all, cell = thin_to(s_all, z_all, c_all, max_points, cell)
         thinned = True

@@ -1,5 +1,7 @@
 """C-B2 Task 1: the streaming cut (spec 2026-09-26-point-cloud-workspace sections 8.2 and 8.4, 15)."""
 
+import time
+
 import numpy as np
 import pytest
 from pointclouds import make_las
@@ -133,3 +135,78 @@ def test_width_of_a_chimney_section_is_its_thicker_shell():
 def test_to_uint8_keeps_8_bit_colour_and_shifts_16_bit():
     assert profile_cut.to_uint8(np.array([[10, 20, 255]], dtype=np.uint16)).tolist() == [[10, 20, 255]]
     assert profile_cut.to_uint8(np.array([[65535, 256, 0]], dtype=np.uint16)).tolist() == [[255, 1, 0]]
+
+
+def _width_reference(s, z):
+    """The pre-F1 all-pairs width_max, kept as the oracle for the definition (plan Ruling 8)."""
+    if s.size == 0:
+        return None
+    s64 = s.astype(np.float64)
+    zb = np.floor(z.astype(np.float64) / profile_cut.WIDTH_BIN_M).astype(np.int64)
+    order = np.lexsort((s64, zb))
+    ss, bb = s64[order], zb[order]
+    brk = np.ones(s.size, dtype=bool)
+    brk[1:] = (bb[1:] != bb[:-1]) | (np.diff(ss) > profile_cut.WIDTH_GAP_M)
+    starts = np.flatnonzero(brk)
+    ends = np.append(starts[1:], s.size) - 1
+    by_bin = {}
+    for b, lo, hi in zip(bb[starts].tolist(), ss[starts].tolist(), ss[ends].tolist(), strict=True):
+        by_bin.setdefault(b, []).append((lo, hi))
+    best = None
+    for b, clusters in by_bin.items():
+        neighbours = by_bin.get(b - 1, []) + by_bin.get(b + 1, [])
+        for lo, hi in clusters:
+            e = hi - lo
+            for lo2, hi2 in neighbours:
+                e2 = hi2 - lo2
+                small = min(e, e2)
+                if max(e, e2) <= 2 * small and min(hi, hi2) - max(lo, lo2) >= 0.5 * small:
+                    best = e if best is None else max(best, e)
+                    break
+    return best
+
+
+@pytest.mark.parametrize("seed", range(8))
+def test_width_matches_the_all_pairs_definition(seed):
+    rng = np.random.default_rng(seed)
+    n = 3000
+    s = np.round(rng.uniform(0, 60, n) / 0.25) * 0.25  # coarse steps: clusters, touches, equal extents
+    z = rng.uniform(0, 3, n)
+    s, z = s.astype(np.float32), z.astype(np.float32)
+    assert profile_cut.width_max(s, z) == _width_reference(s, z)
+
+
+def test_width_of_a_large_scattered_input_is_fast():
+    rng = np.random.default_rng(7)
+    s = rng.uniform(0, 2000, 300_000).astype(np.float32)
+    z = rng.uniform(0, 50, 300_000).astype(np.float32)
+    t0 = time.perf_counter()
+    profile_cut.width_max(s, z)
+    assert time.perf_counter() - t0 < 5.0
+
+
+def test_a_cancel_inside_width_max_propagates():
+    rng = np.random.default_rng(3)
+    s = rng.uniform(0, 200, 20_000).astype(np.float32)
+    z = rng.uniform(0, 50, 20_000).astype(np.float32)
+
+    def cancel():
+        raise JobCancelled()
+
+    with pytest.raises(JobCancelled):
+        profile_cut.width_max(s, z, check_cancelled=cancel)
+
+
+def test_cut_passes_its_cancel_check_to_the_width_measure(tmp_path):
+    src = make_las(tmp_path / "wall.las", 0, points=wall_section())
+    streamed = {"done": False}
+
+    def progress(done, total):
+        streamed["done"] = done == total
+
+    def cancel_after_the_stream():
+        if streamed["done"]:
+            raise JobCancelled()
+
+    with pytest.raises(JobCancelled):
+        _cut(src, progress=progress, check=cancel_after_the_stream)
