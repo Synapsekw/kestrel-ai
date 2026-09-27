@@ -39,3 +39,26 @@ describe("data and findings revisions", () => {
     expect(useChangesStore.getState()).toMatchObject({ dataRevision: 1, findingsRevision: 1 });
   });
 });
+
+describe("images.changed and boxes.changed scoped to the open project", () => {
+  beforeEach(() => useChangesStore.setState({ imagesRevision: 0, boxesRevision: {}, openProjectId: null }));
+
+  it.each([
+    { type: "images.changed" as const, payload: {} },
+    { type: "boxes.changed" as const, payload: { image_ids: ["a"] } },
+  ])("$type: other project ignored, same project applied, no open project applied", ({ type, payload }) => {
+    const at = (project_id: string): AppEvent => ({ ...ev(type, payload), project_id });
+    const s = useChangesStore.getState();
+
+    s.setOpenProject("A");
+    s.applyEvent(at("B"));
+    expect(useChangesStore.getState().imagesRevision).toBe(0);
+
+    s.applyEvent(at("A"));
+    expect(useChangesStore.getState().imagesRevision).toBe(1);
+
+    s.setOpenProject(null);
+    s.applyEvent(at("B"));
+    expect(useChangesStore.getState().imagesRevision).toBe(2);
+  });
+});
