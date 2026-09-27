@@ -61,19 +61,23 @@ export function FailedCloud({
   projectId,
   cloud,
   onChanged,
+  onOpened,
+  onDeleted,
 }: {
   projectId: string;
   cloud: PointCloud;
   onChanged(): void;
+  /** "Import again" started: open the new cloud (listed first). */
+  onOpened(fresh: PointCloud): void;
+  onDeleted(): void;
 }) {
   const api = useApi();
-  const navigate = useNavigate();
   const [confirm, setConfirm] = useState(false);
   return (
     <CentreCard testId="cloud-failed" title={`${cloud.name} could not be imported`}>
       <p className="text-sm text-muted">{cloud.error ?? "The job log says why."}</p>
       <div className="flex gap-2">
-        <Button icon="refresh" onClick={() => importAgain(api, projectId, cloud, navigate, onChanged)}>
+        <Button icon="refresh" onClick={() => importAgain(api, projectId, cloud, onOpened, onChanged)}>
           Import again
         </Button>
         <Button variant="danger" icon="trash" onClick={() => setConfirm(true)}>
@@ -87,8 +91,7 @@ export function FailedCloud({
         onClose={() => setConfirm(false)}
         onDeleted={() => {
           setConfirm(false);
-          onChanged();
-          navigate(`/p/${projectId}/clouds`);
+          onDeleted();
         }}
       />
     </CentreCard>

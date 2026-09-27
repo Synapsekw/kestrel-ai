@@ -1,11 +1,11 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Job } from "@contract/client";
+import { createApiClient, type Job } from "@contract/client";
 import { useJobsStore } from "@/store/jobs";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { callsTo, emitViewState, resetFake } from "@/test/fakeCloudViewer";
-import { exampleGeoMap, fakeClient, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
+import { exampleGeoMap, fakeClient, fakeFetch, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useToastStore } from "@/ui";
 import { clipKey } from "./clip";
@@ -27,20 +27,96 @@ const routes = (items: object[]) => [
   },
 ];
 
+const importInfo = {
+  path: "D:\clouds\site.las",
+  size: 737_902_645,
+  compressed: false,
+  las_version: "1.2",
+  point_format: 3,
+  point_count: 21_697_184,
+  has_rgb: true,
+  header_bounds: [0, 0, 0, 1, 1, 1],
+  crs_wkt: "x",
+  epsg: 32639,
+  captured_on: null,
+  admission: {
+    ok: true,
+    ram_needed_bytes: 1,
+    ram_available_bytes: 2,
+    disk_needed_bytes: 1,
+    disk_available_bytes: 2,
+    reason: null,
+  },
+};
+
+/** While set, the project's cloud-list reads wait for it: a real list reload takes time. */
+let listGate: Promise<void> | null = null;
+
 function open(
   items: object[],
   route = `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`,
   extra: Parameters<typeof fakeClient>[0] = [],
 ) {
-  const client = fakeClient([...extra, ...routes(items)]);
+  const { fetch: answer, requests } = fakeFetch([...extra, ...routes(items)]);
+  const gated = (async (input: Request | string | URL, init?: RequestInit) => {
+    const gate = listGate;
+    if (
+      gate &&
+      input instanceof Request &&
+      input.method === "GET" &&
+      /\/pointclouds$/.test(new URL(input.url).pathname)
+    )
+      await gate;
+    return answer(input, init);
+  }) as typeof fetch;
+  const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: gated });
   renderWithProviders(
     <>
       <CloudWorkspace />
       <LocationProbe />
     </>,
-    { api: client.api, route, path: "/p/:projectId/clouds/:cloudId?" },
+    { api, route, path: "/p/:projectId/clouds/:cloudId?" },
   );
-  return client;
+  return { api, requests };
+}
+
+/** Holds every cloud-list read from now on until the returned release is called. */
+function holdListReads(): () => void {
+  let release!: () => void;
+  listGate = new Promise<void>((r) => {
+    release = r;
+  });
+  return () => {
+    listGate = null;
+    release();
+  };
+}
+
+/** Whether `text` was ever put in the DOM from now on, even for one commit (a flash). */
+function watchFor(text: string) {
+  let seen = false;
+  const scan = (records: MutationRecord[]) => {
+    for (const r of records) for (const n of r.addedNodes) if (n.textContent?.includes(text)) seen = true;
+  };
+  const mo = new MutationObserver(scan);
+  mo.observe(document.body, { subtree: true, childList: true, characterData: true });
+  return () => {
+    scan(mo.takeRecords());
+    mo.disconnect();
+    return seen;
+  };
+}
+
+const MISSING = "This point cloud is not in the project";
+
+async function deleteFromDetails(name: string) {
+  await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
+  await userEvent.click(screen.getByRole("button", { name: "Details…" }));
+  await userEvent.click(
+    within(await screen.findByTestId("cloud-details")).getByRole("button", { name: "Delete" }),
+  );
+  const confirm = await screen.findByRole("dialog", { name: `Delete ${name}?` });
+  await userEvent.click(within(confirm).getByRole("button", { name: "Delete" }));
 }
 
 const toolbar = () => screen.getByRole("toolbar", { name: "Point cloud tools" });
@@ -48,6 +124,7 @@ const pressed = (name: string) =>
   toolbar().querySelector(`[aria-label="${name}"]`)!.getAttribute("aria-pressed");
 
 beforeEach(() => {
+  listGate = null;
   resetFake();
   localStorage.clear();
 });
@@ -304,6 +381,107 @@ describe("CloudWorkspace (spec §6)", () => {
     expect(screen.getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
   });
 
+  it("deleting the open cloud from Details lands on the other ready cloud, never on the deleted one", async () => {
+    const other = { ...exampleCloud, id: "c-2", name: "Tower" };
+    let deleted = false;
+    open([], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, [
+      {
+        method: "DELETE",
+        path: new RegExp(`/pointclouds/${CLOUD_ID}$`),
+        status: 204,
+        body: () => ((deleted = true), null),
+      },
+      {
+        method: "GET",
+        path: /\/pointclouds$/,
+        body: () => ({ items: deleted ? [other] : [exampleCloud, other] }),
+      },
+    ]);
+    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    const missingSeen = watchFor(MISSING);
+    const release = holdListReads(); // the reload after the delete has not answered yet
+    await deleteFromDetails(exampleCloud.name);
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`),
+    );
+    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    act(() => release());
+    await new Promise((r) => setTimeout(r, 50)); // the list reload lands
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-2`);
+    expect(missingSeen()).toBe(false);
+  });
+
+  it("deleting the last cloud lands on the page-layout empty state at /clouds", async () => {
+    let deleted = false;
+    open([], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, [
+      {
+        method: "DELETE",
+        path: new RegExp(`/pointclouds/${CLOUD_ID}$`),
+        status: 204,
+        body: () => ((deleted = true), null),
+      },
+      { method: "GET", path: /\/pointclouds$/, body: () => ({ items: deleted ? [] : [exampleCloud] }) },
+    ]);
+    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    const missingSeen = watchFor(MISSING);
+    const release = holdListReads();
+    await deleteFromDetails(exampleCloud.name);
+    expect(await screen.findByText("Import a LAS or LAZ point cloud")).toBeInTheDocument();
+    act(() => release());
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByTestId("location").textContent).toMatch(new RegExp(`/p/${PROJECT_ID}/clouds$`));
+    expect(missingSeen()).toBe(false);
+  });
+
+  it("a cloud id in an empty project goes to /clouds (the page layout, tabs reachable)", async () => {
+    open([], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`);
+    expect(await screen.findByText("Import a LAS or LAZ point cloud")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toMatch(new RegExp(`/p/${PROJECT_ID}/clouds$`)),
+    );
+  });
+
+  it("starting an import opens the new cloud without a not-in-the-project flash", async () => {
+    const fresh = {
+      ...exampleCloud,
+      id: "c-new",
+      name: "Chimney",
+      status: "importing",
+      z_stats: null,
+      has_rgb: null,
+    };
+    const importJob: Job = { ...runningJob, id: "j-import-5", type: "pointcloud_import", state: "running" };
+    let started = false;
+    open([], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, [
+      { method: "POST", path: /\/pointclouds\/inspect$/, body: importInfo },
+      {
+        method: "POST",
+        path: /\/pointclouds$/,
+        status: 202,
+        body: () => ((started = true), { cloud: fresh, job: importJob }),
+      },
+      {
+        method: "GET",
+        path: /\/pointclouds$/,
+        body: () => ({ items: started ? [exampleCloud, fresh] : [exampleCloud] }),
+      },
+      { method: "GET", path: /\/jobs\/j-import-5$/, body: importJob },
+    ]);
+    await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
+    await userEvent.click(screen.getByRole("button", { name: "Import point cloud…" }));
+    const missingSeen = watchFor(MISSING);
+    await userEvent.type(screen.getByLabelText("LAS or LAZ file"), "D:\clouds\site.las");
+    await screen.findByText("21.7 M points");
+    await userEvent.click(
+      within(screen.getByRole("dialog", { name: "Import point cloud" })).getByRole("button", {
+        name: "Import",
+      }),
+    );
+    expect(await screen.findByTestId("cloud-importing")).toBeInTheDocument();
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-new`);
+    expect(missingSeen()).toBe(false);
+  });
+
   it("names a cloud that is not in the project", async () => {
     open([exampleCloud], `/p/${PROJECT_ID}/clouds/nope`);
     expect(await screen.findByText("This point cloud is not in the project")).toBeInTheDocument();
@@ -330,6 +508,7 @@ describe("CloudWorkspace (spec §6)", () => {
     expect(await screen.findByTestId("cloud-failed")).toHaveTextContent("interrupted");
     await userEvent.click(screen.getByRole("button", { name: "Import again" }));
     await waitFor(() => expect(requests.some((r) => r.method === "DELETE")).toBe(true));
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/clouds/c-new`);
     expect(requests.find((r) => r.method === "POST")?.body).toEqual({
       path: failed.source_path,
       name: failed.name,

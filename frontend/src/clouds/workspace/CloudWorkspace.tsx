@@ -293,11 +293,24 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
 export function CloudWorkspace() {
   const { projectId = "", cloudId } = useParams();
   const navigate = useNavigate();
-  const { clouds, maps, error, reload, replace } = useCloudList(projectId);
+  const { clouds, maps, error, reload, replace, add, remove } = useCloudList(projectId);
   const exports = useCloudExports(projectId);
   const [importing, setImporting] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const cloud = clouds?.find((c) => c.id === cloudId) ?? null;
+  // The list learns of a new or deleted cloud before the navigation that depends on it; the reload
+  // only confirms it later. A delete replaces the history entry: Back never returns to the dead id.
+  const opened = (fresh: PointCloud) => {
+    add(fresh);
+    reload();
+    navigate(`/p/${projectId}/clouds/${fresh.id}`);
+  };
+  const deleted = (id: string) => {
+    const rest = (clouds ?? []).filter((c) => c.id !== id);
+    remove(id);
+    reload();
+    navigate(`/p/${projectId}/clouds${rest.length ? `/${defaultCloud(rest).id}` : ""}`, { replace: true });
+  };
 
   const dialogs = (
     <>
@@ -308,8 +321,7 @@ export function CloudWorkspace() {
           onClose={() => setImporting(false)}
           onStarted={(c) => {
             setImporting(false);
-            reload();
-            navigate(`/p/${projectId}/clouds/${c.id}`);
+            opened(c);
           }}
         />
       )}
@@ -323,8 +335,7 @@ export function CloudWorkspace() {
           onChanged={replace}
           onDeleted={() => {
             setDetailsOpen(false);
-            reload();
-            navigate(`/p/${projectId}/clouds`);
+            deleted(cloud.id);
           }}
           onClose={() => setDetailsOpen(false)}
         />
@@ -351,6 +362,8 @@ export function CloudWorkspace() {
         {dialogs}
       </div>
     );
+  // An empty project lives on the page layout at /clouds (plan Ruling 2), never at a dead cloud id.
+  if (clouds.length === 0 && cloudId) return <Navigate replace to={`/p/${projectId}/clouds`} />;
   if (clouds.length === 0) return <NoClouds onImport={() => setImporting(true)}>{dialogs}</NoClouds>;
   if (!cloudId) return <Navigate replace to={`/p/${projectId}/clouds/${defaultCloud(clouds).id}`} />;
 
@@ -384,7 +397,13 @@ export function CloudWorkspace() {
             {cloud.status === "importing" ? (
               <ImportingCloud projectId={projectId} cloud={cloud} />
             ) : (
-              <FailedCloud projectId={projectId} cloud={cloud} onChanged={reload} />
+              <FailedCloud
+                projectId={projectId}
+                cloud={cloud}
+                onChanged={reload}
+                onOpened={opened}
+                onDeleted={() => deleted(cloud.id)}
+              />
             )}
           </>
         )}

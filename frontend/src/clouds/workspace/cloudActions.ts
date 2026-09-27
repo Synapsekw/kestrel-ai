@@ -1,4 +1,3 @@
-import type { NavigateFunction } from "react-router-dom";
 import type { ApiClient } from "@contract/client";
 import { createPointCloud, deletePointCloud, patchPointCloud, type PointCloud } from "@/api/clouds";
 import { messageOf } from "@/api/errors";
@@ -26,7 +25,8 @@ export function importAgain(
   api: ApiClient,
   projectId: string,
   c: PointCloud,
-  navigate: NavigateFunction,
+  /** Opens the new cloud; the caller adds it to its list first (no "not in the project" flash). */
+  opened: (fresh: PointCloud) => void,
   reload: () => void,
 ): void {
   void createPointCloud(api, projectId, {
@@ -37,7 +37,7 @@ export function importAgain(
     .then(
       async (r) => {
         useJobsStore.getState().upsert(r.job);
-        navigate(`/p/${projectId}/clouds/${r.cloud.id}`);
+        opened(r.cloud);
         if (c.captured_on)
           await patchPointCloud(api, projectId, r.cloud.id, { captured_on: c.captured_on }).catch(
             (e: unknown) => void report("keep the capture date", e),
