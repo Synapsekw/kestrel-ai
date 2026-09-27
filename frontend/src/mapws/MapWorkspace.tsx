@@ -207,10 +207,26 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
   // settles instead, so the stage is never left blank (at once if the view is up, else on its mount).
   const fitted = useRef(false);
   const uncentredArrival = useRef(false);
+  // A frame switch (M-W2): the saved view is in the old frame's coordinates and the old view API is
+  // going away with its SiteMap, so fit the new frame's site once the new view API lands.
+  const code = siteCode(frame);
+  const fitCode = useRef(code);
+  const switched = useRef(false);
   useLayoutEffect(() => {
-    if (fitted.current || !viewApi) return;
+    if (fitCode.current === code) return;
+    fitCode.current = code;
+    workspace.setState({ initialView: null, viewApi: null });
+    fitted.current = false;
+    switched.current = true;
+  }, [workspace, code]);
+  useLayoutEffect(() => {
+    if (fitted.current || !viewApi || !workspace.getState().viewApi) return;
     fitted.current = true;
     if (workspace.getState().initialView) return;
+    if (switched.current) {
+      onFit();
+      return;
+    }
     if (asksToCentre(arrivalRequest(new URLSearchParams(location.search))) && !uncentredArrival.current)
       return;
     onFit();
@@ -299,7 +315,7 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
     >
       {ready && (
         <SiteMap
-          key={siteCode(frame)}
+          key={code}
           frame={frame}
           mode={mode}
           placements={placed}
