@@ -1,5 +1,5 @@
-"""`PUT /projects/{projectId}/types` (spec 2026-09-26-foundation section 7.3); replaces
-`PUT /projects/{projectId}/classes`."""
+"""`PUT /projects/{projectId}/types`: sets a project's chosen catalogue types and their hotkeys
+(spec 2026-09-26-foundation section 7.3)."""
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
