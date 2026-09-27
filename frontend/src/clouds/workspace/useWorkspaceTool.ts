@@ -19,15 +19,19 @@ const byId = (tools: readonly WorkspaceTool[], id: CloudToolId) => tools.find((t
 const inOverlay = (t: EventTarget | null) =>
   t instanceof Element && t.closest('[role="dialog"],[role="menu"],[role="listbox"]') !== null;
 
+/** Controls that activate on Space themselves (the panels all sit inside `cloud-centre`). */
+const INTERACTIVE =
+  'button,a[href],input,select,textarea,[role="button"],[role="switch"],[role="tab"],[role="radio"],[role="slider"],[role="menuitem"],[role="checkbox"],[role="option"]';
+
 /**
  * Space belongs to the viewer only when nothing else has focus (the body) or focus is inside the
- * viewport; a focused button, switch or tab keeps Space for itself (mirrors the images workspace's
- * `canvasOwnsSpace`).
+ * viewer itself and not on one of its controls; a focused button, switch, tab or slider anywhere
+ * (the glass panels included) keeps Space for itself (mirrors the images workspace's `canvasOwnsSpace`).
  */
 const viewerOwnsSpace = (t: EventTarget | null) =>
   !(t instanceof Element) ||
   t === document.body ||
-  t.closest('[data-testid="cloud-centre"],[data-testid="cloud-viewer"]') !== null;
+  (t.closest('[data-testid="cloud-viewer"]') !== null && t.closest(INTERACTIVE) === null);
 
 /**
  * The armed tool and the workspace's keys, resolved through the one keymap (C-X1's resolveCloudKey).
@@ -69,7 +73,13 @@ export function useWorkspaceTool(o: {
 
   useEffect(() => {
     if (!o.enabled) return;
-    let held = false;
+    // The key that started the pan hold (its keyup ends it); null while no hold is on.
+    let held: string | null = null;
+    const release = () => {
+      if (held === null) return;
+      held = null;
+      viewer.current?.setNavMode(navOf(latest.current.active));
+    };
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented || isTypingTarget(e.target) || inOverlay(e.target)) return;
       const now = latest.current;
@@ -80,8 +90,8 @@ export function useWorkspaceTool(o: {
       if (key.action === "pan-hold") {
         if (!viewerOwnsSpace(e.target)) return;
         e.preventDefault();
-        if (!held && nav !== "fly") {
-          held = true;
+        if (held === null && nav !== "fly") {
+          held = e.code || e.key;
           viewer.current?.setNavMode("pan");
         }
         return;
@@ -124,9 +134,7 @@ export function useWorkspaceTool(o: {
       if (tool?.onAction?.(key.action)) e.preventDefault();
     };
     const onUp = (e: KeyboardEvent) => {
-      if (e.key !== " " || !held) return;
-      held = false;
-      viewer.current?.setNavMode(navOf(latest.current.active));
+      if (held !== null && (e.code || e.key) === held) release();
     };
     // Esc in pointer lock is the browser's: leaving the lock while flying returns to Orbit.
     const onLock = () => {
@@ -134,10 +142,13 @@ export function useWorkspaceTool(o: {
     };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
+    // Alt+Tab mid-hold: the keyup goes to another window, so the hold ends with the focus.
+    window.addEventListener("blur", release);
     document.addEventListener("pointerlockchange", onLock);
     return () => {
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", release);
       document.removeEventListener("pointerlockchange", onLock);
     };
   }, [o.enabled, viewer, arm, escape]);

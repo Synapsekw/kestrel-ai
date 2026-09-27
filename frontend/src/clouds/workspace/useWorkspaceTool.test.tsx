@@ -117,6 +117,17 @@ describe("the workspace's tools and keys (spec §6 Keyboard, plan Ruling 3)", ()
     expect(handle.setNavMode).toHaveBeenLastCalledWith("orbit");
   });
 
+  it("releases the Space hold when the window loses focus (the keyup never arrives)", () => {
+    render(<Harness tools={[{ id: "distance", picks: true }]} />);
+    fireEvent.keyDown(window, { key: " " });
+    expect(handle.setNavMode).toHaveBeenLastCalledWith("pan");
+    fireEvent.blur(window);
+    expect(handle.setNavMode).toHaveBeenLastCalledWith("orbit");
+    handle.setNavMode.mockClear();
+    fireEvent.keyUp(window, { key: " " });
+    expect(handle.setNavMode).not.toHaveBeenCalled();
+  });
+
   it("leaves Space to a focused button (keyboard activation)", () => {
     render(<Harness tools={[]} />);
     const button = screen

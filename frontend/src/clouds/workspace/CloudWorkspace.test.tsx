@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Job } from "@contract/client";
@@ -143,6 +143,31 @@ describe("CloudWorkspace (spec §6)", () => {
     budget.focus();
     await userEvent.keyboard("{End}");
     expect(localStorage.getItem("kestrel.clouds.pointBudget")).toBe("8000000");
+  });
+
+  it("leaves Space to a focused panel control: the EDL switch toggles and the view never pans", async () => {
+    open([exampleCloud]);
+    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    const edl = screen.getByRole("switch", { name: "EDL shading" });
+    const before = edl.getAttribute("aria-checked");
+    edl.focus();
+    await userEvent.keyboard(" ");
+    expect(edl.getAttribute("aria-checked")).not.toBe(before);
+    expect(callsTo("setNavMode").some(([m]) => m === "pan")).toBe(false);
+  });
+
+  it("holds Space to pan from the body or the viewport itself, never from its controls", async () => {
+    open([exampleCloud]);
+    await screen.findByRole("toolbar", { name: "Point cloud tools" });
+    const pans = () => callsTo("setNavMode").filter(([m]) => m === "pan").length;
+    fireEvent.keyDown(document.body, { key: " " });
+    expect(pans()).toBe(1);
+    fireEvent.keyUp(document.body, { key: " " });
+    fireEvent.keyDown(screen.getByTestId("cloud-viewer"), { key: " " });
+    expect(pans()).toBe(2);
+    fireEvent.keyUp(document.body, { key: " " });
+    fireEvent.keyDown(screen.getByRole("button", { name: "fake pick" }), { key: " " });
+    expect(pans()).toBe(2);
   });
 
   it("re-applies the EDL switch whenever the view (re)starts", async () => {
