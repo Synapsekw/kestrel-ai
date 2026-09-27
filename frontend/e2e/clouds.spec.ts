@@ -25,6 +25,9 @@ async function viewerSettled(page: Page) {
     .poll(async () => (await viewerStats(page))?.settledMs ?? null, { timeout: 20_000 })
     .not.toBeNull();
   await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
+  // Spec §18: EDL moves the cloud to layer 1; the S1 picks must still work with it on. SwiftShader
+  // makes F's Auto effects reduced, so it is forced on here (plan Ruling 14).
+  await page.evaluate(() => window.__kestrelCloudViewer?.setEdl(true));
 }
 
 /** The fixture cloud, and a list holding only it: the mock's example cloud has other bounds. */
@@ -75,6 +78,11 @@ test("the viewer renders the cloud and its canvas fills the centre", async ({ pa
     .poll(async () => (await viewerStats(page))?.numVisiblePoints ?? 0, { timeout: 20_000 })
     .toBeGreaterThan(0);
   await expect.poll(async () => (await viewerStats(page))?.nodesLoading ?? 1).toBe(0);
+  await page.evaluate(() => window.__kestrelCloudViewer!.setEdl(true));
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.edl())).toEqual({
+    on: true,
+    rendersToTarget: false,
+  });
   expect(served).toContain("hierarchy.bin bytes=0-21");
   const centre = await page.getByTestId("cloud-centre").boundingBox();
   const canvas = await page.getByTestId("cloud-canvas").boundingBox();
