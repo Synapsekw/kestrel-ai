@@ -152,7 +152,7 @@ def test_count_per_provider(handle):
     add_map(handle)
     with handle.session() as s:
         counts = {t: p.count(s) for t, p in PROVIDERS.items()}
-    assert counts == {"image_set": 1, "map": 1, "elevation": 0, "point_cloud": 0}
+    assert counts == {"image_set": 1, "map": 1, "elevation": 0, "point_cloud": 0, "drawing": 0}
 
 
 @pytest.mark.parametrize("rows", [1, 25])
@@ -177,4 +177,4 @@ def test_a_page_costs_one_statement_per_provider(client, handle, project_id, row
         one = len(statements)
     finally:
         event.remove(handle.engine, "before_cursor_execute", record)
-    assert (full, one) == (4, 1)
+    assert (full, one) == (5, 1)

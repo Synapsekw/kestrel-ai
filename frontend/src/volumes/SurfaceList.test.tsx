@@ -27,6 +27,15 @@ function renderList(surfaces: Surface[], onDelete = vi.fn()) {
 }
 
 describe("SurfaceList", () => {
+  it('labels a dem surface "Imported elevation", not "From cloud"', () => {
+    const dem: Surface = { ...exampleSurface, id: "s-dem", name: "Aug DSM", kind: "dem" };
+    renderList([exampleSurface, dem]);
+    const rows = within(screen.getByRole("list", { name: "Surfaces" })).getAllByRole("listitem");
+    expect(within(rows[0]).getByText("From cloud")).toBeInTheDocument();
+    expect(within(rows[1]).getByText("Imported elevation")).toBeInTheDocument();
+    expect(within(rows[1]).queryByText("From cloud")).not.toBeInTheDocument();
+  });
+
   it("offers Delete on a ready design surface, after a confirmation", () => {
     const onDelete = renderList([exampleSurface, design]);
     const rows = within(screen.getByRole("list", { name: "Surfaces" })).getAllByRole("listitem");

@@ -98,6 +98,21 @@ describe("Icon", () => {
       "camera",
     ])
       expect(ICON_NAMES).toContain(name);
+    // The map workspace (M-W1).
+    for (const name of [
+      "cursor",
+      "hand",
+      "area",
+      "profile",
+      "polygon",
+      "zone",
+      "align",
+      "north",
+      "eye-off",
+      "grip",
+      "more",
+    ])
+      expect(ICON_NAMES).toContain(name);
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 });

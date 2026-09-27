@@ -41,3 +41,6 @@ shapely==2.1.2
 psutil==7.2.2
 openpyxl==3.1.5
 ezdxf==1.4.4
+# drawings (spec 2026-09-26-map-workspace M9): PDF pages rendered in strips. Apache-2.0/BSD;
+# the wheel bundles PDFium (pypdfium2_raw), no other dependency.
+pypdfium2==5.13.0

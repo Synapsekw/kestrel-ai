@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 
 from app.events_util import publish_pointclouds_changed
-from app.pointclouds import measurements, views
+from app.pointclouds import measurements, profile, views
 from app.pointclouds.schemas import (
     CloudMeasurementCreate,
     CloudMeasurementList,
@@ -35,9 +36,15 @@ def create_cloud_measurement(
     body: CloudMeasurementCreate,
     request: Request,
     handle: ProjectHandle = Depends(get_project),
-) -> CloudMeasurementOut:
+) -> CloudMeasurementOut | JSONResponse:
     # C-B1: `finding_id` is checked for every kind first; C-B2's profile branch follows this line.
     measurements.require_finding(handle, cloudId, body.finding_id)
+    if body.kind == "profile":
+        created = profile.create_profile_measurement(
+            handle, request.app.state.jobs, cloudId, body, finding_id=body.finding_id
+        )
+        publish_pointclouds_changed(request, handle, [cloudId])
+        return JSONResponse(created.model_dump(mode="json"), status_code=202)
     row = measurements.create(handle, cloudId, body)
     publish_pointclouds_changed(request, handle, [cloudId])
     return CloudMeasurementOut.from_row(row)

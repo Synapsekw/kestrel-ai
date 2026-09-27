@@ -52,7 +52,7 @@ def run_acquire_starter(ctx: JobContext) -> dict:
     """`ctx.project` is the library handle: the job and the model both live in the library."""
     key = ctx.params["key"]
     if key not in starter.STARTER_KEYS:
-        raise JobFailure("Choose a supported detection starter model.")
+        raise JobFailure("Choose a supported starter model.")
     bundle, cache = Path(ctx.params["bundle_dir"]), Path(ctx.params["cache_dir"])
     ctx.progress(0, f"Preparing {key}")
     # At most one model is downloaded/loaded at once, bounding RAM and avoiding cache races.

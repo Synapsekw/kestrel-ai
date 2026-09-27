@@ -23,51 +23,16 @@ Stub = tuple[str, str, str]
 
 # M-B1: the site frame, the workspace state, surveys, layers, site tiles, anchors, findings in view
 # and the readout sample (spec §5.2, §6, §9.4).
-B1_STUBS: list[Stub] = [
-    ("GET", "/map-workspace", "getMapWorkspace"),
-    ("PUT", "/map-workspace", "putMapWorkspace"),
-    ("PUT", "/map-workspace/frame", "setSiteFrame"),
-    ("GET", "/map-workspace/surveys", "listWorkspaceSurveys"),
-    ("GET", "/map-workspace/layers", "listWorkspaceLayers"),
-    ("POST", "/map-workspace/anchor", "convertAnchor"),
-    ("GET", "/map-workspace/findings", "listMapFindingsInView"),
-    ("POST", "/map-workspace/sample", "sampleInFrame"),
-    ("GET", "/site-tiles/{kind}/{layerId}/{z}/{x}/{y}", "getSiteTile"),
-]
-
-# M-B2: the plain DSM/DTM import (spec §7).
-B2_STUBS: list[Stub] = [
-    ("POST", "/elevations", "importElevation"),
-]
+B1_STUBS: list[Stub] = []
 
 # M-B3: drawings - inspect, build, georeference, tiles (spec §8).
-B3_STUBS: list[Stub] = [
-    ("POST", "/drawing-inspections", "createDrawingInspection"),
-    ("GET", "/drawing-inspections/{inspectionId}", "getDrawingInspection"),
-    ("GET", "/drawing-inspections/{inspectionId}/pages/{page}/thumbnail", "getDrawingPageThumbnail"),
-    ("GET", "/drawings", "listDrawings"),
-    ("POST", "/drawings", "createDrawing"),
-    ("POST", "/drawings/georef-fit", "fitDrawingGeoref"),
-    ("GET", "/drawings/{drawingId}", "getDrawing"),
-    ("PATCH", "/drawings/{drawingId}", "patchDrawing"),
-    ("DELETE", "/drawings/{drawingId}", "deleteDrawing"),
-    ("PUT", "/drawings/{drawingId}/georef", "putDrawingGeoref"),
-    ("DELETE", "/drawings/{drawingId}/georef", "clearDrawingGeoref"),
-    ("GET", "/drawings/{drawingId}/vtiles/{z}/{x}/{y}", "getDrawingVectorTile"),
-    ("GET", "/drawings/{drawingId}/thumbnail", "getDrawingThumbnail"),
-]
+B3_STUBS: list[Stub] = []
 
 # M-B4: map measurements and the project-wide measurements union (spec §9.1, §9.2, §4 item 8).
-B4_STUBS: list[Stub] = [
-    ("GET", "/measurements", "listMeasurements"),
-    ("GET", "/map-measurements", "listMapMeasurements"),
-    ("POST", "/map-measurements", "createMapMeasurement"),
-    ("GET", "/map-measurements/{mapMeasurementId}", "getMapMeasurement"),
-    ("PATCH", "/map-measurements/{mapMeasurementId}", "patchMapMeasurement"),
-    ("DELETE", "/map-measurements/{mapMeasurementId}", "deleteMapMeasurement"),
-]
+# All six operations are routed for real now (app/mapmeasure/router.py, app/measurements/union.py).
+B4_STUBS: list[Stub] = []
 
-STUBS: list[Stub] = [*B1_STUBS, *B2_STUBS, *B3_STUBS, *B4_STUBS]
+STUBS: list[Stub] = [*B1_STUBS, *B3_STUBS, *B4_STUBS]
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["workspace"])
 add_stubs(router, STUBS)

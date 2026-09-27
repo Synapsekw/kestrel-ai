@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, MapDetection, MapRun, PointCloud, Surface, VolumeMeasurement
 from app.errors import AppError, not_found
+from app.maps import site_crs
 from app.projects.service import ProjectHandle
 from app.surfaces.grid import MAX_CELLS, _same_crs
 from app.surfaces.tiles import DIFF_TILES
@@ -113,6 +114,19 @@ def normalise_base(base: dict) -> dict:
     }
 
 
+def _site_polygon(s: Session, ring: list, top_id: str) -> list:
+    """A ring drawn in the workspace's site frame, in the top surface's CRS (map spec §10, M5)."""
+    top = s.get(Surface, top_id)
+    if top is None:
+        raise not_found("top surface", top_id)
+    return site_crs.site_to_crs(s, ring, top.crs_wkt)
+
+
+def _one_polygon(native: list | None, site: list | None) -> None:
+    if (native is None) == (site is None):
+        raise _invalid("send exactly one of polygon_native and polygon_site")
+
+
 def _check_inputs(
     s: Session, polygon: list, top_id: str, base: dict, masks: dict, alignment: dict
 ) -> Surface:
@@ -174,14 +188,17 @@ def create(handle: ProjectHandle, body: VolumeMeasurementCreate) -> VolumeMeasur
     alignment = _alignment(None, body.alignment.model_dump(exclude_unset=True) if body.alignment else None)
     base = normalise_base(body.base.model_dump())
     with handle.session() as s:
-        _check_inputs(s, body.polygon_native, body.top_surface_id, base, masks, alignment)
+        _one_polygon(body.polygon_native, body.polygon_site)
+        polygon = body.polygon_native or _site_polygon(s, body.polygon_site, body.top_surface_id)
+        _check_inputs(s, polygon, body.top_surface_id, base, masks, alignment)
         row = VolumeMeasurement(
             name=body.name,
-            polygon_native=body.polygon_native,
+            polygon_native=polygon,
             top_surface_id=body.top_surface_id,
             base=base,
             masks=masks,
             alignment=alignment,
+            material=body.material.model_dump() if body.material else None,
             status="calculating",
         )
         s.add(row)
@@ -371,8 +388,16 @@ def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPat
     sent = body.model_dump(exclude_unset=True)
     with handle.session() as s:
         row = _get(s, measurement_id)
+        if sent.get("polygon_site") is not None:
+            if sent.get("polygon_native") is not None:
+                _one_polygon(sent["polygon_native"], sent["polygon_site"])
+            top_for_site = sent.get("top_surface_id") or row.top_surface_id
+            sent["polygon_native"] = _site_polygon(s, sent.pop("polygon_site"), top_for_site)
+        sent.pop("polygon_site", None)
         if sent.get("name"):
             row.name = sent["name"]
+        if "material" in sent:
+            row.material = sent["material"]  # a dict or None; not an input, so the status stays as it is
         changes = {k: v for k, v in sent.items() if k in INPUT_FIELDS}  # the schema refuses nulls
         if changes:
             if row.status == "calculating":
@@ -467,13 +492,14 @@ def delete(handle: ProjectHandle, measurement_id: str) -> None:
 
 def surface_ref(s: Session, surface: Surface) -> dict:
     cloud = s.get(PointCloud, surface.point_cloud_id) if surface.point_cloud_id else None
+    day = surface.captured_on or (cloud.captured_on if cloud else None)
     return {
         "id": surface.id,
         "name": surface.name,
         "kind": surface.kind,
         "method": surface.method,
         "cell_size_m": surface.cell_size_m,
-        "captured_on": cloud.captured_on.isoformat() if cloud and cloud.captured_on else None,
+        "captured_on": day.isoformat() if day else None,
         "cloud_file": PureWindowsPath(cloud.source_path).name if cloud else None,
         "cloud_sha256": cloud.source_sha256 if cloud else None,
     }

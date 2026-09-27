@@ -62,3 +62,27 @@ describe("images.changed and boxes.changed scoped to the open project", () => {
     expect(useChangesStore.getState().imagesRevision).toBe(2);
   });
 });
+
+describe("map workspace events (M-W1)", () => {
+  it("bumps the workspace revision on workspace, drawing and map changes, and the measurement revision", () => {
+    const s = useChangesStore.getState();
+    s.setOpenProject("p1");
+    const ev = (type: string) =>
+      ({
+        type,
+        project_id: "p1",
+        job_id: null,
+        progress: null,
+        message: "",
+        payload: {},
+      }) as Parameters<typeof s.applyEvent>[0];
+    const w0 = useChangesStore.getState().mapWorkspaceRevision;
+    for (const t of ["map_workspace.changed", "drawings.changed", "maps.changed"]) s.applyEvent(ev(t));
+    expect(useChangesStore.getState().mapWorkspaceRevision).toBe(w0 + 3);
+    const m0 = useChangesStore.getState().mapMeasurementsRevision;
+    s.applyEvent(ev("map_measurements.changed"));
+    expect(useChangesStore.getState().mapMeasurementsRevision).toBe(m0 + 1);
+    s.applyEvent({ ...ev("drawings.changed"), project_id: "other" });
+    expect(useChangesStore.getState().mapWorkspaceRevision).toBe(w0 + 3);
+  });
+});

@@ -386,3 +386,18 @@ def test_patch_failure_on_the_base_also_warns(tmp_path):
     assert "patch_failed" in _codes(res)
     assert any(w["code"] == "patch_failed" and w["severity"] == "warn" for w in res["warnings"])
     assert any(w["code"] == "patch_failed" and w["severity"] == "warn" for w in res["warnings"])
+
+
+def test_toe_lowest_on_a_cone_on_a_tilted_plane_is_the_lowest_edge_height(tmp_path):
+    res = _run(
+        tmp_path, 0.1, lambda x, y: plane(x, y) + cone(x, y), circle(CX, CY, 12.0), base_kind="toe_lowest"
+    )
+    centre = float(plane(np.array([CX]), np.array([CY]))[0])
+    lowest = centre - 12.0 * math.hypot(0.02, 0.013)  # the ring's downhill point on the plane
+    fit = res["base_fit"]
+    assert fit["kind"] == "toe_lowest" and fit["plane"][:2] == [0.0, 0.0]
+    assert fit["plane"][2] == pytest.approx(lowest, abs=2e-3)
+    # above a flat base: the cone plus the plane's wedge over the polygon (its mean is the centre value)
+    want = CONE + res["polygon_area_m2"] * (centre - fit["plane"][2])
+    assert res["fill_m3"] == pytest.approx(want, rel=0.003)
+    assert res["uncertainty"]["base_m3"] == 0.0 and "base_fit_poor" not in _codes(res)

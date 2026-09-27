@@ -70,6 +70,12 @@ if ($LASTEXITCODE -ne 0 -or $design -notmatch "design ok 10") { throw "design se
 Write-Host ($design.Trim().Split("`n")[-1])
 Complete-Step "design"
 
+# PDFium + the drawing readers inside the bundle (plan 2026-09-27-maps-b3 Task 15): one PDF page, one DXF.
+$drawings = & $exe drawings-selftest 2>&1 | Out-String
+if ($LASTEXITCODE -ne 0 -or $drawings -notmatch "drawings ok 200x100 2") { throw "drawings selftest failed: $drawings" }
+Write-Host ($drawings.Trim().Split("`n")[-1])
+Complete-Step "drawings"
+
 # Volume exports (plan 2026-09-24-volumes Task 13): reportlab, openpyxl and scipy's qhull.
 $vol = & $exe volumes-selftest 2>&1 | Out-String
 if ($LASTEXITCODE -ne 0 -or $vol -notmatch "volumes ok") { throw "volumes selftest failed: $vol" }

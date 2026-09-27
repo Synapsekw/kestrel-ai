@@ -11,7 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.catalogue import service as catalogue_service
-from app.db.models import GeoMap, PointCloud, Source, Surface, VolumeMeasurement
+from app.db.models import Drawing, GeoMap, PointCloud, Source, Surface, VolumeMeasurement
 from app.findings import counts, query
 
 LATEST_VOLUME_WINDOW = 21  # the newest ready measurement and the 20 before it, looking for its polygon
@@ -42,9 +42,10 @@ def data_counts(s: Session) -> dict:
             select(func.count()).select_from(GeoMap).scalar_subquery().label("maps"),
             select(func.count()).select_from(Surface).scalar_subquery().label("elevations"),
             select(func.count()).select_from(PointCloud).scalar_subquery().label("point_clouds"),
+            select(func.count()).select_from(Drawing).scalar_subquery().label("drawings"),
         )
     ).one()
-    return {**row._asdict(), "drawings": 0}  # M adds the drawing table and its count
+    return row._asdict()
 
 
 def hero_map_id(s: Session) -> str | None:

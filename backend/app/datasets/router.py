@@ -18,7 +18,6 @@ from app.datasets.schemas import (
     ImageOut,
     ImagePage,
     ImageSort,
-    ImageUpdate,
     SortOrder,
     SourceCreate,
     SourceOut,
@@ -222,24 +221,6 @@ def bulk_mark_empty_images(
     publish_image_ids_event(request, handle, "images.changed", body.image_ids)
     publish_image_ids_event(request, handle, "boxes.changed", rejected_ids)
     return BulkMarkEmptyResult(updated=updated, skipped=skipped)
-
-
-@router.get("/images/{imageId}", response_model=ImageOut)
-def get_image(imageId: str, handle: ProjectHandle = Depends(get_project)) -> ImageOut:  # noqa: N803
-    return ImageOut.from_row(*images.get_image(handle, imageId))
-
-
-@router.patch("/images/{imageId}", response_model=ImageOut)
-def update_image(
-    imageId: str,  # noqa: N803
-    body: ImageUpdate,
-    request: Request,
-    handle: ProjectHandle = Depends(get_project),
-) -> ImageOut:
-    row, rejected_ids = empties.set_marked_empty(handle, imageId, body.marked_empty)
-    publish_image_ids_event(request, handle, "images.changed", [imageId])
-    publish_image_ids_event(request, handle, "boxes.changed", rejected_ids)
-    return ImageOut.from_row(*row)
 
 
 @router.get("/images/{imageId}/file", response_class=FileResponse)

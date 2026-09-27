@@ -10,7 +10,23 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import date
 
+from sqlalchemy import or_
+
 from app.db.models import GeoMap, MapRun
+
+REGION = "region"
+
+
+def is_survey_run(run) -> bool:
+    """A region run counts part of one map, so it never speaks for a survey, never sets the basis and
+    is never recounted per area (map workspace spec §9.3, M14). A run from before `0012` has no
+    scope: it covers its whole map."""
+    return (getattr(run, "scope", None) or "map") != REGION
+
+
+def survey_run_clause():
+    """The same rule as an SQL filter on `map_run`."""
+    return or_(MapRun.scope.is_(None), MapRun.scope != REGION)
 
 
 @dataclass(frozen=True)
@@ -41,6 +57,7 @@ class Survey:
 
 def choose_basis(runs: list[MapRun]) -> Basis | None:
     """The newest run's model and confidence, until the operator chooses another."""
+    runs = [r for r in runs if is_survey_run(r)]
     newest = max(runs, key=lambda r: r.created_at, default=None)
     if newest is None:
         return None
@@ -99,7 +116,8 @@ def build_timeline(
     previous: dict[str, int] | None = None
     for m in ordered:
         when, from_import = _survey_date(m)
-        run, reason = _pick(runs_by_map.get(m.id, []), basis) if basis else (None, None)
+        candidates = [r for r in runs_by_map.get(m.id, []) if is_survey_run(r)]
+        run, reason = _pick(candidates, basis) if basis else (None, None)
         verified = _as_counts(run.verified_counts) if run else {}
         counts = verified if verified_only else (_as_counts(run.counts) if run else {})
         state = "not_counted" if run is None else ("not_comparable" if reason else "ok")

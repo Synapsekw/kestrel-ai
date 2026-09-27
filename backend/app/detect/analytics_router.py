@@ -9,14 +9,13 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.datasets.schemas import SourceOut
 from app.db.models import SiteArea
 from app.detect import analytics, site_areas
 from app.errors import AppError
 from app.projects.service import ProjectHandle, get_project
-from app.workspace.pending import guard_site_area_category
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["detect"])
 
@@ -35,6 +34,7 @@ class SiteAreaOut(BaseModel):
     polygon_wgs84: list[list[float]]
     category: SiteAreaCategory
     created_at: datetime
+    polygon_site: list[list[float]] | None = None  # frame=site (M-B1)
 
     @classmethod
     def from_row(cls, row: SiteArea) -> SiteAreaOut:
@@ -52,7 +52,7 @@ class SiteAreaCreate(BaseModel):
     polygon_wgs84: list[LonLat] | None = Field(default=None, min_length=3)
     map_id: str | None = None
     polygon_px: list[PixelPoint] | None = Field(default=None, min_length=3)
-    category: SiteAreaCategory | None = None
+    category: SiteAreaCategory = "general"
 
 
 class SiteAreaPatch(BaseModel):
@@ -61,6 +61,14 @@ class SiteAreaPatch(BaseModel):
     map_id: str | None = None
     polygon_px: list[PixelPoint] | None = Field(default=None, min_length=3)
     category: SiteAreaCategory | None = None
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def _category_not_null(cls, v: object) -> object:
+        """Absent means unchanged; an explicit null is refused (this only runs on a sent value)."""
+        if v is None:
+            raise ValueError("category cannot be null")
+        return v
 
 
 class SiteAreaList(BaseModel):
@@ -182,21 +190,28 @@ def _recount(request: Request, handle: ProjectHandle) -> None:
 
 
 @router.get("/site-areas", response_model=SiteAreaList)
-def list_site_areas(handle: ProjectHandle = Depends(get_project)) -> SiteAreaList:
-    return SiteAreaList(items=[SiteAreaOut.from_row(r) for r in site_areas.list_areas(handle)])
+def list_site_areas(
+    frame: str | None = Query(None, pattern="^site$"),
+    handle: ProjectHandle = Depends(get_project),
+) -> SiteAreaList:
+    items = [SiteAreaOut.from_row(r) for r in site_areas.list_areas(handle)]
+    if frame == "site":
+        from app.workspace.views import site_areas_in_site
+
+        items = site_areas_in_site(handle, items)
+    return SiteAreaList(items=items)
 
 
 @router.post("/site-areas", response_model=SiteAreaOut, status_code=201)
 def create_site_area(
     body: SiteAreaCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> SiteAreaOut:
-    guard_site_area_category(body)
     outline = site_areas.outline_wgs84(handle, body.polygon_wgs84, body.map_id, body.polygon_px)
     if outline is None:
         raise AppError(
             "invalid_outline", "a site area needs an outline: polygon_wgs84, or map_id and polygon_px", 422
         )
-    row = site_areas.create_area(handle, body.name, outline)
+    row = site_areas.create_area(handle, body.name, outline, body.category)
     _recount(request, handle)
     return SiteAreaOut.from_row(row)
 
@@ -208,9 +223,8 @@ def update_site_area(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> SiteAreaOut:
-    guard_site_area_category(body)
     outline = site_areas.outline_wgs84(handle, body.polygon_wgs84, body.map_id, body.polygon_px)
-    row = site_areas.update_area(handle, areaId, body.name, outline)
+    row = site_areas.update_area(handle, areaId, body.name, outline, body.category)
     if outline is not None:
         _recount(request, handle)
     return SiteAreaOut.from_row(row)

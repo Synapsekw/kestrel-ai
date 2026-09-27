@@ -87,10 +87,10 @@ export interface RouteInfo {
 
 /**
  * How the shell frames a project page. The one place a workspace unit changes when its surface
- * lands: M makes `maps` full-bleed at its list too, C makes `clouds` full-bleed.
+ * lands: `maps` is full-bleed at its list (the map workspace, M-W1); C makes `clouds` full-bleed.
  */
 export function layoutOf(tab: string, detail: boolean): Layout {
-  if (tab === "maps" && detail) return "fullbleed";
+  if (tab === "maps") return "fullbleed";
   if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
   if (tab === "images" && detail) return "workspace";
   return "page";

@@ -26,3 +26,14 @@ def test_message_without_loss_or_eta_is_unchanged():
 def test_loss_names_are_shortened_from_ultralytics_keys():
     event = {"epoch": 1, "epochs": 3, "loss": {"train/box_loss": 0.5, "seg_loss": 0.25}}
     assert epoch_message(event) == "epoch 1/3 loss box 0.500 seg 0.250"
+
+
+def test_message_shows_mask_map_after_box_map():
+    event = {
+        "epoch": 2,
+        "epochs": 10,
+        "metrics": {"metrics/mAP50(B)": 0.5, "metrics/mAP50(M)": 0.4123},
+        "loss": {"box_loss": 1.0, "seg_loss": 2.0},
+        "eta_s": 10,
+    }
+    assert epoch_message(event) == "epoch 2/10 mAP50 0.500 mask mAP50 0.412 loss box 1.000 seg 2.000 ETA 10s"

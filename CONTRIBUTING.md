@@ -113,6 +113,20 @@ the standard-font metric modules come in through pyinstaller-hooks-contrib's
 next packaging run must check that a `detect_export` with `format: pdf` succeeds in the frozen
 build (not just in `pytest`).
 
+**pypdfium2 (PDF drawings).** `pypdfium2==5.13.0` (Apache-2.0/BSD; the wheel bundles PDFium in
+`pypdfium2_raw`, no other dependency) renders PDF drawings for the map workspace (unit M-B3). It is
+pinned in `backend/requirements.txt` and the lock, and `tests/test_dependency_pins.py` names it. It
+lands in the shared venv through the overlay-venv rule
+(`vault/decisions/2026-09-24-worktree-overlay-venv-for-new-dependencies.md`): the unit develops
+against an overlay `backend/.venv` built with `uv pip install --no-deps pypdfium2==5.13.0`, and at
+landing the same install runs additively against the shared interpreter, with a `uv pip list` diff
+before and after showing only `pypdfium2` added:
+`uv pip install --python backend\.venv\Scripts\python.exe --no-deps pypdfium2==5.13.0`. A shared
+venv built before M-B3 landed needs that install run once before `pytest` passes.
+`kestrel_backend.spec` collects `pypdfium2`/`pypdfium2_raw` data and `pdfium.dll`, and
+`smoke_frozen.ps1` runs `drawings-selftest` ("drawings ok 200x100 2"). When PDFium cannot load, PDF
+import answers 422 `pdf_unavailable`, and DXF and raster drawings still work.
+
 ## Dev memory
 
 This repo keeps a tracked Obsidian vault at `vault/`: `00-north-star.md` (the homepage), `sessions/`

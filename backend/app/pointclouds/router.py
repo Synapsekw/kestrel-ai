@@ -14,6 +14,7 @@ from app.pointclouds.routes_clouds import sub as cloud_routes
 from app.pointclouds.routes_export import sub as export_routes
 from app.pointclouds.routes_measurements import sub as measurement_routes
 from app.pointclouds.routes_octree import sub as octree_routes
+from app.pointclouds.routes_profile import sub as profile_routes
 from app.pointclouds.routes_views import sub as view_routes
 from app.stubs import add_stubs
 
@@ -21,11 +22,7 @@ router = APIRouter(prefix="/projects/{projectId}", tags=["pointclouds"])
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0. Each C unit
 # deletes its own tuples here and in tests/test_contract.py::EXPECTED_STUBS.
-STUBS: list[tuple[str, str, str]] = [
-    # C-B2: the profile job's routes
-    ("POST", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry", "retryCloudProfile"),
-    ("GET", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile", "getCloudProfile"),
-]
+STUBS: list[tuple[str, str, str]] = []
 
 add_stubs(router, STUBS)
 
@@ -39,6 +36,7 @@ SUB_ROUTERS: tuple[APIRouter, ...] = (
     export_routes,
     camera_routes,
     view_routes,
+    profile_routes,
 )
 
 for _sub in SUB_ROUTERS:

@@ -1,7 +1,7 @@
 """Process entry point: `python -m app` serves the API, `python -m app worker ...` trains,
-`python -m app geo-selftest` checks GDAL/PROJ, `pointcloud-selftest`, `design-selftest` and
-`volumes-selftest` check the point-cloud, design-surface and volume-export stacks (placeholders until
-S1 K2, S3 U3 and S2 V6 build them).
+`python -m app geo-selftest` checks GDAL/PROJ, `pointcloud-selftest`, `design-selftest`,
+`volumes-selftest` and `drawings-selftest` check the point-cloud, design-surface, volume-export and
+drawings stacks (placeholders until S1 K2, S3 U3, S2 V6 and M-B3 build them).
 """
 
 import multiprocessing
@@ -42,6 +42,10 @@ def run(argv: list[str], freeze_support: Callable[[], None] = multiprocessing.fr
         from app.volumes.selftest import main as volumes_selftest
 
         return volumes_selftest(argv[2:])
+    if len(argv) > 1 and argv[1] == "drawings-selftest":
+        from app.drawings.selftest import main as drawings_selftest
+
+        return drawings_selftest(argv[2:])
     from app.main import main
 
     main()

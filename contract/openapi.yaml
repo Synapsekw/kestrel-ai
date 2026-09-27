@@ -11686,7 +11686,7 @@ components:
           }
         placement: { $ref: "#/components/schemas/DrawingPlacementInput" }
         captured_on:
-          { type: [string, "null"], format: date, description: a revision date }
+          { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: a revision date }
       example:
         {
           inspection_id: "i0000000-1313-4000-8000-000000000001",
@@ -11944,7 +11944,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
         layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
         captured_on:
-          { type: [string, "null"], format: date, description: null clears it }
+          { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: null clears it }
     DrawingGeorefPut:
       type: object
       required: [model, points, dst_frame]
@@ -12179,14 +12179,14 @@ components:
             type: array,
             maxItems: 2000,
             items: { type: number },
-            description: chainage of each station,
+            description: "chainage of each station; empty in listMapMeasurements rows (placeholders), GET the measurement for the data",
           }
         series:
           {
             type: array,
-            minItems: 1,
             maxItems: 3,
             items: { $ref: "#/components/schemas/ProfileSeries" },
+            description: "one series per surface; empty in listMapMeasurements rows (placeholders), GET the measurement for the data",
           }
         z_min: { type: [number, "null"] }
         z_max: { type: [number, "null"] }

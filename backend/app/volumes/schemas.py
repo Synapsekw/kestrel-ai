@@ -179,6 +179,7 @@ class VolumeMeasurementOut(BaseModel):
     job_id: str | None
     created_at: datetime
     updated_at: datetime
+    polygon_site: VolumeRing | None = None  # frame=site (M-B1); output only
 
 
 class VolumeMeasurementList(BaseModel):
@@ -187,7 +188,8 @@ class VolumeMeasurementList(BaseModel):
 
 class VolumeMeasurementCreate(BaseModel):
     name: str = Field(min_length=1)
-    # Exactly one of the two (map-workspace spec §10); `polygon_site` answers 501 until M-B5.
+    # Exactly one of the two (map-workspace spec §10): send polygon_native, or polygon_site to
+    # draw in the workspace's site frame (converted into the top surface's CRS).
     polygon_native: VolumeRing | None = None
     polygon_site: VolumeRing | None = None
     top_surface_id: str
@@ -229,6 +231,7 @@ class VolumeFootprint(BaseModel):
     detection_id: str
     class_id: str
     ring: VolumeRing
+    ring_site: VolumeRing | None = None  # frame=site (M-B1)
 
 
 class VolumeFootprints(BaseModel):

@@ -14,6 +14,7 @@ from migration_helpers import (
     arm,
     at_revision,
     catalogue_types,
+    db,
     env_for,
     needs_classification,
     open_handle,
@@ -100,6 +101,15 @@ def test_two_projects_upgrade_at_startup_into_one_catalogue(app, settings, tmp_p
             assert [s["name"] for s in report["steps"]] == [s.name for s in steps.PIPELINE]
             assert revision_of(latest_backup(folder)) == "0009"
     for folder in (a, b):
+        # C0 (image-inspection): opening a project whose images predate migration 0011 queues one
+        # `image_metadata` job (spec §7.3 "Backfill") as part of the on-open sweeps that follow the
+        # upgrade, because a hand-inserted image's `metadata_version` starts at the column's
+        # default, 0. That housekeeping job has no real files to read (see the warnings above) and
+        # is not part of what this migration invariant checks, so its one-off row is scrubbed and
+        # the images are stamped processed before comparing against `before`.
+        with db(folder) as con:
+            con.execute("DELETE FROM job WHERE type = 'image_metadata'")
+            con.execute("UPDATE image SET metadata_version = 1")
         assert compare(before[folder], snapshot(folder / "project.db")) == []
 
 

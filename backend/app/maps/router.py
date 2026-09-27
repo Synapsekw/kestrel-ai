@@ -204,8 +204,13 @@ def list_map_detections(
     bbox: str | None = Query(None, pattern=r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$"),
     min_conf: float | None = Query(None, ge=0, le=1),
     class_id: str | None = None,
+    frame: str | None = Query(None, pattern="^site$"),
     handle: ProjectHandle = Depends(get_project),
 ) -> MapDetectionPage:
+    if frame == "site":
+        from app.workspace.views import detections_in_site  # lazy: the workspace loads after this router
+
+        return detections_in_site(handle, runId, bbox, min_conf, class_id)
     rows, truncated = service.detections_in(handle, runId, bbox, min_conf, class_id)
     return MapDetectionPage(items=[MapDetectionOut.from_row(r) for r in rows], truncated=truncated)
 
@@ -215,8 +220,13 @@ def get_map_density(
     runId: str,  # noqa: N803
     cells: int = Query(128, ge=1, le=256),
     min_conf: float | None = Query(None, ge=0, le=1),
+    frame: str | None = Query(None, pattern="^site$"),
     handle: ProjectHandle = Depends(get_project),
 ) -> MapDensity:
+    if frame == "site":
+        from app.workspace.views import density_in_site
+
+        return density_in_site(handle, runId, cells, min_conf)
     cell, rows = service.density(handle, runId, cells, min_conf)
     return MapDensity(cell_size=cell, cells=[MapDensityCell(**r) for r in rows])
 

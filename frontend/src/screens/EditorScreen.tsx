@@ -9,7 +9,7 @@ import { BoxLayer } from "@/editor/BoxLayer";
 import { EditorInspector } from "@/editor/EditorInspector";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { BackLink } from "@/editor/BackLink";
-import { ConfidenceFloor } from "@/editor/ConfidenceFloor";
+import { ConfidenceFloor } from "@/images/ai/ConfidenceFloor";
 import { EditorToolbar } from "@/editor/EditorToolbar";
 import { EmptyToggle } from "@/editor/EmptyToggle";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";

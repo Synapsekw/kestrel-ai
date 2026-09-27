@@ -40,7 +40,7 @@ describe("useDatasetPreview", () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <TestApiProvider api={api}>{children}</TestApiProvider>
     );
-    const { rerender } = renderHook(({ f }) => useDatasetPreview(f), {
+    const { rerender } = renderHook(({ f }) => useDatasetPreview(f, "detect"), {
       wrapper,
       initialProps: { f: filter(["a", "b"]) },
     });
@@ -55,7 +55,7 @@ describe("useDatasetPreview", () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <TestApiProvider api={api}>{children}</TestApiProvider>
     );
-    const { result, rerender } = renderHook(({ f }) => useDatasetPreview(f), {
+    const { result, rerender } = renderHook(({ f }) => useDatasetPreview(f, "detect"), {
       wrapper,
       initialProps: { f: filter(["a"]) },
     });
@@ -74,7 +74,37 @@ describe("useDatasetPreview", () => {
     const wrapper = ({ children }: { children: ReactNode }) => (
       <TestApiProvider api={api}>{children}</TestApiProvider>
     );
-    const { result } = renderHook(() => useDatasetPreview(null), { wrapper });
+    const { result } = renderHook(() => useDatasetPreview(null, "detect"), { wrapper });
     expect(result.current).toEqual({ preview: null, loading: false, error: null });
+  });
+
+  it("includes the task in the debounce key and the request", async () => {
+    const requests: string[] = [];
+    const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
+      const req = input instanceof Request ? input : new Request(input, init);
+      requests.push(req.url);
+      return new Response(JSON.stringify(examplePreview), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }) as typeof fetch;
+    const api = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={api}>{children}</TestApiProvider>
+    );
+    const { rerender } = renderHook(
+      ({ f, task }: { f: DatasetFilter; task: "detect" | "obb" | "segment" }) => useDatasetPreview(f, task),
+      {
+        wrapper,
+        initialProps: { f: filter(["a"]), task: "segment" },
+      },
+    );
+    await act(() => vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS));
+    expect(requests.some((u) => u.includes("task=segment"))).toBe(true);
+
+    rerender({ f: filter(["a"]), task: "obb" });
+    await act(() => vi.advanceTimersByTimeAsync(PREVIEW_DEBOUNCE_MS));
+    expect(requests.some((u) => u.includes("task=obb"))).toBe(true);
+    expect(requests).toHaveLength(2);
   });
 });

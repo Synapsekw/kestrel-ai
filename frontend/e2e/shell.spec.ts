@@ -111,16 +111,11 @@ test("the map viewer is full-bleed: no tabs, and the breadcrumb names the tab", 
   await expect(page.getByRole("tablist")).toHaveCount(0);
 });
 
-test("the Maps tab lists the project's maps from the data list", async ({ page }) => {
-  const data = await fromMock<{ items: { label: string }[] }>(
-    page,
-    `/api/v1/projects/${P}/data?type=map&type=elevation&type=drawing&limit=100`,
-  );
+test("the Maps tab is the full-bleed map workspace", async ({ page }) => {
   await page.goto(`/p/${P}/maps`);
-  await expect(page.getByRole("heading", { name: "Maps", exact: true })).toBeVisible();
-  if (data.items.length > 0)
-    await expect(page.getByRole("rowheader", { name: data.items[0].label, exact: true })).toBeVisible();
-  else await expect(page.getByText("No maps yet")).toBeVisible();
+  await expect(page.getByRole("toolbar", { name: "Map tools" })).toBeVisible();
+  await expect(page.getByRole("banner")).toContainText("Maps");
+  await expect(page.getByRole("tablist")).toHaveCount(0);
 });
 
 test("secondary pages open from More", async ({ page }) => {

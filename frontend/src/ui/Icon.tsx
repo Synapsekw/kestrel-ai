@@ -60,10 +60,21 @@ export type IconName =
   | "distance"
   | "height"
   | "lean"
-  | "area"
   | "section"
   | "clip-box"
-  | "camera";
+  | "camera"
+  // The map workspace (sub-project M): tools, layer rows and the north arrow.
+  | "cursor"
+  | "hand"
+  | "area"
+  | "profile"
+  | "polygon"
+  | "zone"
+  | "align"
+  | "north"
+  | "eye-off"
+  | "grip"
+  | "more";
 
 /** 24-unit line icons, one path each, drawn with the current colour. */
 const PATHS: Record<IconName, string> = {
@@ -144,11 +155,23 @@ const PATHS: Record<IconName, string> = {
   height: "M12 3v18M8 7l4-4 4 4M8 17l4 4 4-4M4 21h16",
   // Verticality: a leaning line over a plumb line.
   lean: "M5 21h14M9 21l5-18M9 21V6M9 11a4 4 0 0 1 2.6 1",
-  area: "M4 18 7 5l11 3 2 10z",
   // Cross-section: a frame with a profile through it.
   section: "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM3 15c4-5 6 2 9-2s6-2 9 0",
   "clip-box": "M12 2l9 5v10l-9 5-9-5V7zM12 12l9-5M12 12v10M12 12 3 7",
   camera: "M3 8h4l2-3h6l2 3h4v11H3zM8.5 13a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0z",
+  // Map workspace tools (spec 2026-09-26-map-workspace §5.1).
+  cursor: "M5 3l14 7-6 2-2 6z",
+  hand: "M8 13V5a1.5 1.5 0 0 1 3 0v6M11 11V4a1.5 1.5 0 0 1 3 0v7M14 11V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L3 13a1.5 1.5 0 0 1 2.5-1.6L8 14",
+  area: "M4 18 7 5l11 3 2 10zM4 18h.01M7 5h.01M18 8h.01M20 18h.01",
+  profile: "M3 20h18M3 16l4-5 4 3 4-7 6 5",
+  polygon: "M12 3l8 6-3 11H7L4 9z",
+  zone: "M4 4h16v16H4zM4 12l8-8M4 20 20 4M12 20l8-8",
+  align: "M4 4h6v6H4zM14 14h6v6h-6zM10 7h4a3 3 0 0 1 3 3v4",
+  north: "M12 3l5 18-5-4-5 4z",
+  "eye-off":
+    "M3 3l18 18M10.6 5.1A10 10 0 0 1 12 5c6 0 10 7 10 7a17 17 0 0 1-3 3.8M6.6 6.6C3.8 8.4 2 12 2 12s4 7 10 7a9.6 9.6 0 0 0 4.4-1.1",
+  grip: "M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01",
+  more: "M6 12h.01M12 12h.01M18 12h.01",
 };
 
 // eslint-disable-next-line react-refresh/only-export-components -- a list for the gallery, not a component

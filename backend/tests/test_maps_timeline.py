@@ -119,3 +119,15 @@ def test_two_surveys_on_the_same_day_keep_their_import_order():
     out = build_timeline(maps, runs, Basis("mod-a", "v1", 0.25))
     assert [s.map_name for s in out] == ["first", "second"]
     assert out[1].deltas == {"c1": 3}
+
+
+def test_a_region_run_is_never_the_basis_nor_a_surveys_run():
+    region = _run("m-a", model_id="new", counts={"c1": 1}, created=9)
+    region.scope, region.pinned = "region", True
+    whole = _run("m-a", counts={"c1": 5}, created=1)
+    assert choose_basis([whole, region]) == Basis("mod-a", "v1", 0.25)
+    out = build_timeline([_map("a")], {"m-a": [whole, region]}, Basis("mod-a", "v1", 0.25))
+    assert out[0].run_id == whole.id and out[0].counts == {"c1": 5}
+    only = build_timeline([_map("a")], {"m-a": [region]}, Basis("new", "v1", 0.25))
+    assert only[0].state == "not_counted" and only[0].run_id is None
+    assert choose_basis([region]) is None

@@ -13,6 +13,7 @@ from shapely.geometry import Polygon
 BASE_KIND_TEXT = {
     "toe_plane": "Stockpile toe — plane",
     "toe_surface": "Stockpile toe — fitted surface",
+    "toe_lowest": "Stockpile toe — lowest point",
     "flat": "Flat level",
     "surface": "Another surface",
 }
@@ -52,6 +53,7 @@ class ExportItem:
     crs_wkt: str | None
     plan_png: bytes | None = None
     clutter_rings: list[list[list[float]]] = field(default_factory=list)
+    material: dict | None = None
 
     @property
     def labels(self) -> Labels:

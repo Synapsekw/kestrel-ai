@@ -1,4 +1,5 @@
-"""Surfaces (spec 2026-09-23-volumes §8, §11.1 paths 1-8).
+"""Surfaces (spec 2026-09-23-volumes §8, §11.1 paths 1-8) and plain elevation imports (map workspace
+spec §7).
 
 Design-surface imports (S3) have their own router in `app/surfaces/design/router.py`.
 """
@@ -13,11 +14,13 @@ from app.events_util import publish_surfaces_changed
 from app.jobs.schemas import JobOut
 from app.maps.startup import map_raster_path
 from app.projects.service import ProjectHandle, get_project
-from app.surfaces import service
+from app.surfaces import elevation, service
 from app.surfaces.grid import open_surface
 from app.surfaces.jobs_build import run_surface_build  # noqa: F401 - registers `surface_build`
+from app.surfaces.jobs_elevation import run_elevation_import  # noqa: F401 - registers elevation_import
 from app.surfaces.paths import surface_path
 from app.surfaces.schemas import (
+    ElevationImportRequest,
     SurfaceBuildRequest,
     SurfaceList,
     SurfaceOut,
@@ -26,7 +29,6 @@ from app.surfaces.schemas import (
     SurfaceWithJob,
 )
 from app.surfaces.tiles import SURFACE_TILES, render_hillshade_tile, render_ortho_tile
-from app.workspace.pending import guard_surface_patch
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["surfaces"])
 IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}
@@ -53,6 +55,22 @@ def create_surface(
     return SurfaceWithJob(surface=out, job=JobOut.from_row(job, handle.id))
 
 
+@router.post("/elevations", response_model=SurfaceWithJob, status_code=202)
+def import_elevation(
+    body: ElevationImportRequest, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> SurfaceWithJob:
+    row, params = elevation.create_elevation(handle, body)
+    try:
+        job = request.app.state.jobs.submit(handle, "elevation_import", params)
+    except Exception as e:
+        service.submit_failed(handle, row.id, e)
+        publish_surfaces_changed(request, handle, [row.id])
+        raise
+    out = service.set_job(handle, row.id, job.id, created=row)
+    publish_surfaces_changed(request, handle, [row.id])
+    return SurfaceWithJob(surface=out, job=JobOut.from_row(job, handle.id))
+
+
 @router.get("/surfaces/{surfaceId}", response_model=SurfaceOut)
 def get_surface(surfaceId: str, handle: ProjectHandle = Depends(get_project)) -> SurfaceOut:  # noqa: N803
     return service.get_surface(handle, surfaceId)
@@ -65,8 +83,7 @@ def patch_surface(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> SurfaceOut:
-    guard_surface_patch(body)
-    out = service.rename(handle, surfaceId, body.name)
+    out = service.patch_surface(handle, surfaceId, body)
     publish_surfaces_changed(request, handle, [surfaceId])
     return out
 

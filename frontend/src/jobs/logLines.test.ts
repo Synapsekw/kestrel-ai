@@ -13,6 +13,16 @@ describe("readableLogLine", () => {
     );
   });
 
+  it("shows the mask mAP of a segmentation epoch", () => {
+    const line = JSON.stringify({
+      kind: "epoch",
+      epoch: 1,
+      epochs: 2,
+      metrics: { "metrics/mAP50(M)": 0.5 },
+    });
+    expect(readableLogLine(line)).toContain("mask mAP50 50.0%");
+  });
+
   it("leaves ordinary lines, unknown records and broken JSON alone", () => {
     const plain = "2026-09-19 08:12:00,986 INFO training v1 on dataset v1 for 3 epochs";
     expect(readableLogLine(plain)).toBe(plain);

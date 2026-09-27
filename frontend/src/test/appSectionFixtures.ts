@@ -246,5 +246,6 @@ export const exampleTrainable: TrainableDataset = {
   val_count: 6,
   class_count: 1,
   split_method: "by_group",
+  task: "detect",
   exportBusy: false,
 };

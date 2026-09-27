@@ -84,6 +84,13 @@ def test_full_export_succeeds_with_every_format(client, project_id, with_boxes, 
     assert "data:image/jpeg;base64," in report  # a real thumbnail, drawn from the real jpeg on disk
 
 
+def test_a_yolo_seg_export_writes_the_polygon_label_tree(client, project_id, with_boxes, wait_job):
+    r = client.post(f"{BASE}/{project_id}/exports", json={"formats": ["yolo_seg"]})
+    job = wait_job(project_id, r.json()["job"]["id"])
+    assert job["state"] == "succeeded", job.get("error")
+    assert "labels_yolo_seg" in job["result"]["files"]
+
+
 def test_empty_formats_is_422(client, project_id):
     r = client.post(f"{BASE}/{project_id}/exports", json={"formats": []})
     assert r.status_code == 422, r.text

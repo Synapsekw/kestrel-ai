@@ -260,3 +260,57 @@ def test_a_review_write_during_the_recount_is_not_lost(
     assert not writers[0].is_alive()
     with handle.session() as s:
         assert s.get(MapRun, "run-1").counts == {"c1": 3, "c2": 1}
+
+
+def test_an_area_has_a_category_that_defaults_to_general(client, project_id):
+    poly = _wgs(_square(100, 100, 200, 200))
+    plain = client.post(
+        f"{BASE}/{project_id}/site-areas", json={"name": "Yard", "polygon_wgs84": poly}
+    ).json()
+    assert plain["category"] == "general"
+    r = client.post(
+        f"{BASE}/{project_id}/site-areas",
+        json={"name": "Crane", "polygon_wgs84": poly, "category": "exclusion"},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["category"] == "exclusion"
+    listed = {a["name"]: a["category"] for a in client.get(f"{BASE}/{project_id}/site-areas").json()["items"]}
+    assert listed == {"Yard": "general", "Crane": "exclusion"}
+
+
+def test_a_category_change_does_not_recount(client, project_id, wait_job):
+    poly = _wgs(_square(100, 100, 200, 200))
+    area = client.post(f"{BASE}/{project_id}/site-areas", json={"name": "Pit", "polygon_wgs84": poly}).json()
+    _latest_recount(client, project_id, wait_job)
+    r = client.patch(f"{BASE}/{project_id}/site-areas/{area['id']}", json={"category": "excavation"})
+    assert r.status_code == 200, r.text
+    assert r.json()["category"] == "excavation" and r.json()["polygon_wgs84"] == area["polygon_wgs84"]
+    assert _recount_jobs(client, project_id) == 1
+
+
+def test_an_unknown_category_is_refused(client, project_id):
+    body = {"name": "X", "polygon_wgs84": _wgs(_square(1, 1, 2, 2)), "category": "parking"}
+    assert client.post(f"{BASE}/{project_id}/site-areas", json=body).status_code == 422
+
+
+def test_an_explicit_null_category_patch_is_refused(client, project_id):
+    poly = _wgs(_square(100, 100, 200, 200))
+    area = client.post(f"{BASE}/{project_id}/site-areas", json={"name": "Yard", "polygon_wgs84": poly}).json()
+    r = client.patch(f"{BASE}/{project_id}/site-areas/{area['id']}", json={"category": None})
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == "validation_error"
+    items = client.get(f"{BASE}/{project_id}/site-areas").json()["items"]
+    assert next(a for a in items if a["id"] == area["id"])["category"] == "general"
+
+
+def test_the_area_recount_skips_region_runs(client, project_id, handle, two_maps, wait_job):
+    with handle.session() as s:
+        _add_run(s, "run-region", "map-1", [("c1", 150, 150, "accepted")])
+        s.flush()
+        s.get(MapRun, "run-region").scope = "region"
+    body = {"name": "A", "polygon_wgs84": _wgs(_square(100, 100, 200, 200))}
+    assert client.post(f"{BASE}/{project_id}/site-areas", json=body).status_code == 201
+    job = _latest_recount(client, project_id, wait_job)
+    assert job["state"] == "succeeded" and job["result"]["runs"] == 2, job
+    with handle.session() as s:
+        assert s.get(MapRun, "run-region").area_counts == {}

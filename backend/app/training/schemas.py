@@ -24,6 +24,9 @@ class ModelMetrics(BaseModel):
     precision: float
     recall: float
     per_class: list[ClassMetrics] = Field(default_factory=list)
+    # Mask mAP of a segmentation model (Ultralytics `(M)` metrics); null for boxes (image spec §11.5).
+    mask_map50: float | None = None
+    mask_map50_95: float | None = None
 
 
 class TrainRequest(BaseModel):
@@ -41,7 +44,7 @@ class TrainRequest(BaseModel):
 class StarterModelOut(BaseModel):
     key: str
     family: str
-    task: Literal["detect"] = "detect"
+    task: Literal["detect", "obb", "segment"] = "detect"
     name: str
     description: str
     size_mb: float

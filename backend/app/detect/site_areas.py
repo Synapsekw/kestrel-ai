@@ -19,6 +19,7 @@ from app.detect.counts import recount_map_run
 from app.errors import AppError, not_found
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.maps import timeline
 from app.maps.georef import Georef
 from app.projects.service import ProjectHandle
 
@@ -97,15 +98,21 @@ def list_areas(handle: ProjectHandle) -> list[SiteArea]:
     return rows
 
 
-def create_area(handle: ProjectHandle, name: str, polygon_wgs84: list[list[float]]) -> SiteArea:
+def create_area(
+    handle: ProjectHandle, name: str, polygon_wgs84: list[list[float]], category: str = "general"
+) -> SiteArea:
     with handle.session() as s:
-        row = SiteArea(name=name, polygon_wgs84=polygon_wgs84)
+        row = SiteArea(name=name, polygon_wgs84=polygon_wgs84, category=category)
         s.add(row)
         return _detached(s, row)
 
 
 def update_area(
-    handle: ProjectHandle, area_id: str, name: str | None, polygon_wgs84: list[list[float]] | None
+    handle: ProjectHandle,
+    area_id: str,
+    name: str | None,
+    polygon_wgs84: list[list[float]] | None,
+    category: str | None = None,
 ) -> SiteArea:
     with handle.session() as s:
         row = s.get(SiteArea, area_id)
@@ -115,6 +122,8 @@ def update_area(
             row.name = name
         if polygon_wgs84 is not None:
             row.polygon_wgs84 = polygon_wgs84
+        if category is not None:
+            row.category = category
         return _detached(s, row)
 
 
@@ -134,7 +143,11 @@ def run_area_recount(ctx: JobContext) -> dict:
     site areas are projected once per map."""
     with ctx.project.session() as s:
         run_ids = list(
-            s.execute(select(MapRun.id, MapRun.map_id).order_by(MapRun.map_id, MapRun.created_at)).all()
+            s.execute(
+                select(MapRun.id, MapRun.map_id)
+                .where(timeline.survey_run_clause())
+                .order_by(MapRun.map_id, MapRun.created_at)
+            ).all()
         )
     total = len(run_ids)
     ctx.progress(0.0, f"Recounting {total} map runs")

@@ -28,6 +28,14 @@ function hook(): CloudViewerDiagnostics {
     edl: () => ({ on: false, rendersToTarget: false }),
     setEdl: () => {},
     topSnapshotSample: () => Promise.resolve(null),
+    setClipBox: () => {},
+    lookThrough: () => ({ centre: { x: 0, y: 0 }, frame: { left: 0, top: 0, width: 0, height: 0 } }),
+    restoreLook: () => {},
+    sampleSlab: () => Promise.resolve({ count: 0, total: 0, s: [], z: [] }),
+    goToPose: () => {},
+    occlusion: () => ({ result: null, ms: 0 }),
+    captureSample: () => Promise.reject(new Error("unused")),
+    pickCenterWithNormal: () => null,
   };
 }
 
