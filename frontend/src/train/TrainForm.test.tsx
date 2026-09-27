@@ -225,6 +225,11 @@ describe("TrainForm", () => {
       />,
       { api },
     );
+    // The "no model of this task" notice would misleadingly imply an empty library; the
+    // "library could not be opened" warning already covers this state.
+    expect(
+      screen.queryByText(/No .* model in the library yet\. Add a? .*starter under Library\./),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
   });
 
