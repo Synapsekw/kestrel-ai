@@ -24,6 +24,14 @@ from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 
 REBUILD_JOB = "summary_rebuild"
+# The marker is a row in `migration_step`, a table MG owns (final review Minor-4). Coupling:
+# `app.migration.pipeline.backup_before_steps` reads "any row in migration_step" as "the v1 upgrade
+# steps already ran" and would then skip its pre-step backup. Safe today because this row can only
+# be written for a project that is already at head: `project_opened` returns before running
+# `check_on_open` while a v1 upgrade is still needed, and the manual rebuild route's `get_project`
+# answers 409 `project_upgrading` (`migration.gate.require_ready`) until the upgrade is done.
+# Anyone changing that order, or making `backup_before_steps` look at other rows, must filter this
+# name out (or move the marker to its own table).
 REBUILD_MARKER = "image_summary_rebuild_v1"
 BATCH = 1000
 LIVE_STATES = ("queued", "running")
