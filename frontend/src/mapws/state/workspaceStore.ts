@@ -1,9 +1,13 @@
 import { createStore, type StoreApi } from "zustand/vanilla";
 import type { PointCloud } from "@/api/clouds";
+import type { MapWorkspace } from "../api";
 import { GROUP_ORDER, type LayerGroup } from "../layers/layerRegistry";
 import type { CompareMode, Coord, Selection, Survey, WorkspaceLayer } from "../types";
 import type { SiteExtent } from "../view/siteGrid";
 import { SURVEY_DATE_RE, canCompare, flownDates, stepSurvey } from "./surveys";
+
+/** How many maps and surfaces each frame can show (M-C0 `FrameItemCounts`). */
+export type FrameItemCounts = MapWorkspace["frame_items"];
 
 export const COMPARE_MODES: readonly CompareMode[] = ["single", "swipe", "side", "blend"];
 /** Spec §5.1: P plays through the surveys at 900 ms per step. */
@@ -86,9 +90,12 @@ export interface WorkspaceState {
   layersLoading: boolean;
   /** The project's point clouds (for the 3D jump). */
   clouds: PointCloud[];
+  /** `MapWorkspace.frame_items`: maps and surfaces each frame can show; null before the first read. */
+  frameItems: FrameItemCounts | null;
   stageMenu: StageMenuState | null;
   setLayers: (layers: WorkspaceLayer[], loading: boolean) => void;
   setClouds: (clouds: PointCloud[]) => void;
+  setFrameItems: (items: FrameItemCounts) => void;
   openStageMenu: (menu: StageMenuState) => void;
   closeStageMenu: () => void;
 
@@ -237,9 +244,11 @@ export function createWorkspaceStore(): StoreApi<WorkspaceState> {
     layers: [],
     layersLoading: true,
     clouds: [],
+    frameItems: null,
     stageMenu: null,
     setLayers: (layers, layersLoading) => set({ layers, layersLoading }),
     setClouds: (clouds) => set({ clouds }),
+    setFrameItems: (frameItems) => set({ frameItems }),
     openStageMenu: (stageMenu) => set({ stageMenu }),
     closeStageMenu: () => set({ stageMenu: null }),
 

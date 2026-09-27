@@ -138,7 +138,8 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
   useEffect(() => {
     workspace.getState().setLayers(data.layers, loading);
     workspace.getState().setClouds(data.clouds);
-  }, [workspace, data.layers, data.clouds, loading]);
+    workspace.getState().setFrameItems(data.frameItems);
+  }, [workspace, data.layers, data.clouds, data.frameItems, loading]);
   useSiteMapProbe();
 
   const playing = useWorkspace((s) => s.playing);

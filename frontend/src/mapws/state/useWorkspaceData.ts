@@ -4,7 +4,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
 import { useChangesStore } from "@/store/changes";
-import { fetchWorkspace, listWorkspaceLayers, listWorkspaceSurveys } from "../api";
+import { fetchWorkspace, listWorkspaceLayers, listWorkspaceSurveys, type MapWorkspace } from "../api";
 import type { SiteFrame, Survey, WorkspaceLayer } from "../types";
 import { parsePersisted, type PersistedState } from "./workspaceStore";
 
@@ -14,6 +14,8 @@ export interface WorkspaceData {
   layers: WorkspaceLayer[];
   surveys: Survey[];
   clouds: PointCloud[];
+  /** Maps and surfaces each frame can show (the frame switch, M-W2). */
+  frameItems: MapWorkspace["frame_items"];
 }
 
 /**
@@ -64,6 +66,7 @@ export function useWorkspaceData(projectId: string): {
             layers,
             surveys,
             clouds,
+            frameItems: ws.frame_items,
           },
         });
       })
