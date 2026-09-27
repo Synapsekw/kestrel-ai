@@ -235,3 +235,18 @@ def test_the_images_job_types(spec):
     job_types = _schemas(spec)["JobType"]["enum"]
     for job_type in ("image_metadata", "summary_rebuild", "assist_acquire"):
         assert job_type in job_types
+
+
+def test_the_segmentation_fields_on_foundation_schemas(spec):
+    s = _schemas(spec)
+    assert {"yolo11n-seg", "yolo11s-seg", "yolo11m-seg"} <= set(s["StarterModelKey"]["enum"])
+    assert s["StarterModel"]["properties"]["task"] == {"$ref": "#/components/schemas/ModelTask"}
+    metrics = s["ModelMetrics"]
+    assert {"mask_map50", "mask_map50_95"} <= set(metrics["properties"])
+    assert not {"mask_map50", "mask_map50_95"} & set(metrics["required"])  # absent on box models
+    assert "yolo_seg" in s["ResultsExportFormat"]["enum"]
+    assert "boxes_as_polygons" in s["DatasetFilter"]["properties"]
+    assert "default" not in s["DatasetFilter"]["properties"]["boxes_as_polygons"]
+    assert "skipped_by_task" in s["DatasetPreview"]["required"]
+    params = {p["name"] for p in _operations(spec)["previewLibraryDataset"][2].get("parameters", [])}
+    assert "task" in params

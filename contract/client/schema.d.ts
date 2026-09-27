@@ -2352,7 +2352,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Write the project's detections to `exports/<timestamp>/` in the chosen formats (a `results_export` job). Accepted and edited boxes; unreviewed proposals only on request; rejected boxes never. */
+        /** Write the project's detections to `exports/<timestamp>/` in the chosen formats (a `results_export` job). Accepted and edited boxes; unreviewed proposals only on request; rejected boxes never. `yolo_seg` writes polygon labels; COCO writes polygon `segmentation` (image inspection spec §11.1). */
         post: operations["createResultsExport"];
         delete?: never;
         options?: never;
@@ -3212,8 +3212,8 @@ export interface paths {
         /**
          * Build the YOLO export (`images/`, `labels/`, `data.yaml`) under `library\datasets\<slug>-<id8>\`
          *     through a `dataset` library job, hard-linking images on the same volume and copying
-         *     otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; `segment` answers 422
-         *     `task_not_supported` until image inspection adds YOLO-seg. A missing source project fails
+         *     otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; a task this build cannot
+         *     write or train answers 422 (`code` is `task_not_supported`). A missing source project fails
          *     the job with the list of missing projects.
          */
         post: operations["exportLibraryDataset"];
@@ -3333,9 +3333,9 @@ export interface components {
                  *     is not allowed), finding_would_be_deleted (409: reclassing the box to an object
                  *     type deletes its finding; retry with `confirm_finding_delete=true`),
                  *     attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
-                 *     `{reason}`), task_not_supported (422: a segment dataset cannot be exported yet, or
-                 *     a run's library model classifies segmentation), task_mismatch (422: the base
-                 *     model's task differs from the dataset's), class_in_use (409: also counts findings;
+                 *     `{reason}`), task_not_supported (422: a task this build cannot write or train),
+                 *     task_mismatch (422: the base model's task differs from the dataset's), class_in_use
+                 *     (409: also counts findings;
                  *     details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
                  *     run has neither a library `model_id` nor a cloud `provider`), query_required (422:
                  *     a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
@@ -4795,6 +4795,10 @@ export interface components {
             precision: number;
             recall: number;
             per_class: components["schemas"]["ClassMetrics"][];
+            /** @description mask mAP50 (`metrics/mAP50(M)`) of a segmentation model; absent or null otherwise */
+            mask_map50?: number | null;
+            /** @description mask mAP50-95 (`metrics/mAP50-95(M)`) of a segmentation model; absent or null otherwise */
+            mask_map50_95?: number | null;
         };
         /**
          * @description A snapshot taken when the model was registered, never a live link: the project, dataset or base model it names may have been renamed, moved or deleted since. Every field is optional and nullable.
@@ -5217,7 +5221,7 @@ export interface components {
             job_id: string | null;
         };
         /** @enum {string} */
-        StarterModelKey: "yolo26n" | "yolo26s" | "yolo26m" | "yolo26l" | "yolo26x" | "yolo12n" | "yolo12s" | "yolo12m" | "yolo12l" | "yolo12x" | "yolo11n" | "yolo11s" | "yolo11m" | "yolo11l" | "yolo11x" | "yolov10n" | "yolov10s" | "yolov10m" | "yolov10b" | "yolov10l" | "yolov10x" | "yolov9t" | "yolov9s" | "yolov9m" | "yolov9c" | "yolov9e" | "yolov8n" | "yolov8s" | "yolov8m" | "yolov8l" | "yolov8x" | "yolov5nu" | "yolov5su" | "yolov5mu" | "yolov5lu" | "yolov5xu" | "yolov5n6u" | "yolov5s6u" | "yolov5m6u" | "yolov5l6u" | "yolov5x6u" | "yolov3u" | "yolov3-tinyu" | "yolov3-sppu";
+        StarterModelKey: "yolo26n" | "yolo26s" | "yolo26m" | "yolo26l" | "yolo26x" | "yolo12n" | "yolo12s" | "yolo12m" | "yolo12l" | "yolo12x" | "yolo11n" | "yolo11s" | "yolo11m" | "yolo11l" | "yolo11x" | "yolov10n" | "yolov10s" | "yolov10m" | "yolov10b" | "yolov10l" | "yolov10x" | "yolov9t" | "yolov9s" | "yolov9m" | "yolov9c" | "yolov9e" | "yolov8n" | "yolov8s" | "yolov8m" | "yolov8l" | "yolov8x" | "yolov5nu" | "yolov5su" | "yolov5mu" | "yolov5lu" | "yolov5xu" | "yolov5n6u" | "yolov5s6u" | "yolov5m6u" | "yolov5l6u" | "yolov5x6u" | "yolov3u" | "yolov3-tinyu" | "yolov3-sppu" | "yolo11n-seg" | "yolo11s-seg" | "yolo11m-seg";
         /**
          * @example {
          *       "key": "yolo11n",
@@ -5237,11 +5241,7 @@ export interface components {
             available: boolean;
             /** @description YOLO generation displayed in the model selector */
             family?: string;
-            /**
-             * @description axis-aligned box detection supported by the current training pipeline
-             * @enum {string}
-             */
-            task?: "detect";
+            task?: components["schemas"]["ModelTask"];
         };
         StarterModelPage: {
             items: components["schemas"]["StarterModel"][];
@@ -6848,7 +6848,7 @@ export interface components {
             reverted: number;
         };
         /** @enum {string} */
-        ResultsExportFormat: "csv" | "yolo" | "coco" | "html";
+        ResultsExportFormat: "csv" | "yolo" | "coco" | "html" | "yolo_seg";
         /**
          * @example {
          *       "formats": [
@@ -8990,6 +8990,8 @@ export interface components {
             captured_to?: string | null;
             /** @description only ground truth (accepted, edited or person-drawn annotations); false when absent */
             reviewed_only?: boolean;
+            /** @description write boxes and rotated boxes as 4-point polygons in a segment dataset; false when absent */
+            boxes_as_polygons?: boolean;
         };
         DatasetSource: {
             project_id: string;
@@ -9209,7 +9211,8 @@ export interface components {
          *           "boxes": 750,
          *           "state": "ok"
          *         }
-         *       ]
+         *       ],
+         *       "skipped_by_task": 0
          *     }
          */
         DatasetPreview: {
@@ -9230,6 +9233,8 @@ export interface components {
                  */
                 state: "ok" | "missing" | "unavailable" | "timed_out";
             }[];
+            /** @description images left out because an annotation of a selected type cannot be expressed in the task (image inspection spec I-D10) */
+            skipped_by_task: number;
         };
         LibraryDatasetItem: {
             project_id: string;
@@ -16215,7 +16220,10 @@ export interface operations {
     };
     previewLibraryDataset: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description the dataset's task, for `skipped_by_task`; detect when absent */
+                task?: components["schemas"]["ModelTask"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -16326,7 +16334,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a `segment` dataset (`code` is `task_not_supported`) */
+            /** @description a task this build cannot write or train (`code` is `task_not_supported`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -16438,7 +16446,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a `segment` dataset (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`) */
+            /** @description a task this build cannot write or train (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`) */
             422: {
                 headers: {
                     [name: string]: unknown;

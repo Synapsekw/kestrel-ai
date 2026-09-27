@@ -135,6 +135,7 @@ export const examplePreview: S["DatasetPreview"] = {
   images: 30,
   boxes_per_type: { [TYPE_ID(1)]: 40, [TYPE_ID(2)]: 72 },
   projects: [{ project_id: PROJECT_ID, project_name: "Ahmadia", images: 30, boxes: 112, state: "ok" }],
+  skipped_by_task: 0,
 };
 
 export const TRAINING_RUN_ID = "t0000000-8888-4000-8000-000000000001";

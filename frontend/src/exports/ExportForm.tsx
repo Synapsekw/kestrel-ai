@@ -51,6 +51,7 @@ const DEFAULT_SELECTED: Record<ResultsExportFormat, boolean> = {
   yolo: false,
   coco: false,
   html: true,
+  yolo_seg: false,
 };
 
 /** "1 image" / "3 images" — the app's usual inline pluralisation (see e.g. data/importNotice.ts). */

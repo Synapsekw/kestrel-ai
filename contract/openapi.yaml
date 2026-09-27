@@ -3294,7 +3294,7 @@ paths:
     post:
       tags: [exports]
       operationId: createResultsExport
-      summary: Write the project's detections to `exports/<timestamp>/` in the chosen formats (a `results_export` job). Accepted and edited boxes; unreviewed proposals only on request; rejected boxes never.
+      summary: Write the project's detections to `exports/<timestamp>/` in the chosen formats (a `results_export` job). Accepted and edited boxes; unreviewed proposals only on request; rejected boxes never. `yolo_seg` writes polygon labels; COCO writes polygon `segmentation` (image inspection spec §11.1).
       requestBody:
         required: true
         content:
@@ -4368,6 +4368,8 @@ paths:
         What a filter would hold, from COUNT queries only (images with ground truth, boxes per type)
         with a 2-second timeout per project; a project that timed out or could not be opened is
         flagged, never fatal. The builder calls it as the filter changes.
+      parameters:
+        - { name: task, in: query, required: false, schema: { $ref: "#/components/schemas/ModelTask" }, description: "the dataset's task, for `skipped_by_task`; detect when absent" }
       requestBody:
         required: true
         content:
@@ -4420,8 +4422,8 @@ paths:
       summary: |
         Build the YOLO export (`images/`, `labels/`, `data.yaml`) under `library\datasets\<slug>-<id8>\`
         through a `dataset` library job, hard-linking images on the same volume and copying
-        otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; `segment` answers 422
-        `task_not_supported` until image inspection adds YOLO-seg. A missing source project fails
+        otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; a task this build cannot
+        write or train answers 422 (`code` is `task_not_supported`). A missing source project fails
         the job with the list of missing projects.
       responses:
         "202":
@@ -4436,7 +4438,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: "a `segment` dataset (`code` is `task_not_supported`)"
+          description: "a task this build cannot write or train (`code` is `task_not_supported`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4512,7 +4514,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: "a `segment` dataset (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`)"
+          description: "a task this build cannot write or train (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4841,9 +4843,9 @@ components:
                 is not allowed), finding_would_be_deleted (409: reclassing the box to an object
                 type deletes its finding; retry with `confirm_finding_delete=true`),
                 attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
-                `{reason}`), task_not_supported (422: a segment dataset cannot be exported yet, or
-                a run's library model classifies segmentation), task_mismatch (422: the base
-                model's task differs from the dataset's), class_in_use (409: also counts findings;
+                `{reason}`), task_not_supported (422: a task this build cannot write or train),
+                task_mismatch (422: the base model's task differs from the dataset's), class_in_use
+                (409: also counts findings;
                 details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
                 run has neither a library `model_id` nor a cloud `provider`), query_required (422:
                 a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
@@ -5939,6 +5941,8 @@ components:
         per_class:
           type: array
           items: { $ref: "#/components/schemas/ClassMetrics" }
+        mask_map50: { type: [number, "null"], description: "mask mAP50 (`metrics/mAP50(M)`) of a segmentation model; absent or null otherwise" }
+        mask_map50_95: { type: [number, "null"], description: "mask mAP50-95 (`metrics/mAP50-95(M)`) of a segmentation model; absent or null otherwise" }
       example:
         map50: 0.71
         map50_95: 0.44
@@ -6240,7 +6244,7 @@ components:
         job_id: null
     StarterModelKey:
       type: string
-      enum: [yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, yolo12n, yolo12s, yolo12m, yolo12l, yolo12x, yolo11n, yolo11s, yolo11m, yolo11l, yolo11x, yolov10n, yolov10s, yolov10m, yolov10b, yolov10l, yolov10x, yolov9t, yolov9s, yolov9m, yolov9c, yolov9e, yolov8n, yolov8s, yolov8m, yolov8l, yolov8x, yolov5nu, yolov5su, yolov5mu, yolov5lu, yolov5xu, yolov5n6u, yolov5s6u, yolov5m6u, yolov5l6u, yolov5x6u, yolov3u, yolov3-tinyu, yolov3-sppu]
+      enum: [yolo26n, yolo26s, yolo26m, yolo26l, yolo26x, yolo12n, yolo12s, yolo12m, yolo12l, yolo12x, yolo11n, yolo11s, yolo11m, yolo11l, yolo11x, yolov10n, yolov10s, yolov10m, yolov10b, yolov10l, yolov10x, yolov9t, yolov9s, yolov9m, yolov9c, yolov9e, yolov8n, yolov8s, yolov8m, yolov8l, yolov8x, yolov5nu, yolov5su, yolov5mu, yolov5lu, yolov5xu, yolov5n6u, yolov5s6u, yolov5m6u, yolov5l6u, yolov5x6u, yolov3u, yolov3-tinyu, yolov3-sppu, yolo11n-seg, yolo11s-seg, yolo11m-seg]
     StarterModel:
       type: object
       required: [key, name, description, size_mb, available]
@@ -6251,7 +6255,7 @@ components:
         size_mb: { type: number, description: size of the bundled file, 0 when it is not available }
         available: { type: boolean }
         family: { type: string, description: YOLO generation displayed in the model selector }
-        task: { type: string, enum: [detect], description: axis-aligned box detection supported by the current training pipeline }
+        task: { $ref: "#/components/schemas/ModelTask" }
       example:
         key: yolo11n
         name: YOLO11 nano
@@ -7557,7 +7561,7 @@ components:
 
     ResultsExportFormat:
       type: string
-      enum: [csv, yolo, coco, html]
+      enum: [csv, yolo, coco, html, yolo_seg]
     ResultsExportRequest:
       type: object
       required: [formats]
@@ -9261,6 +9265,7 @@ components:
         captured_from: { type: [string, "null"], format: date, description: null when absent }
         captured_to: { type: [string, "null"], format: date, description: null when absent }
         reviewed_only: { type: boolean, description: "only ground truth (accepted, edited or person-drawn annotations); false when absent" }
+        boxes_as_polygons: { type: boolean, description: "write boxes and rotated boxes as 4-point polygons in a segment dataset; false when absent" }
       example: { project_ids: ["7f1c2e3a-1111-4000-8000-000000000001", "7f1c2e3a-1111-4000-8000-000000000002"], type_ids: ["c1a2b3c4-0000-4000-8000-000000000001", "c1a2b3c4-0000-4000-8000-000000000004"], captured_from: null, captured_to: "2026-06-30", reviewed_only: true }
     DatasetSource:
       type: object
@@ -9379,7 +9384,7 @@ components:
         job: { $ref: "#/components/schemas/Job" }
     DatasetPreview:
       type: object
-      required: [images, boxes_per_type, projects]
+      required: [images, boxes_per_type, projects, skipped_by_task]
       properties:
         images: { type: integer, minimum: 0, description: images with ground truth of the chosen types }
         boxes_per_type: { type: object, description: type id to its box count, additionalProperties: { type: integer, minimum: 0 } }
@@ -9394,10 +9399,12 @@ components:
               images: { type: integer, minimum: 0 }
               boxes: { type: integer, minimum: 0 }
               state: { type: string, enum: [ok, missing, unavailable, timed_out], description: "`timed_out` after 2 s, `missing` when not on the recent list, `unavailable` when it cannot be opened; its counts are 0" }
+        skipped_by_task: { type: integer, minimum: 0, description: "images left out because an annotation of a selected type cannot be expressed in the task (image inspection spec I-D10)" }
       example:
         images: 300
         boxes_per_type: { "c1a2b3c4-0000-4000-8000-000000000001": 750 }
         projects: [{ project_id: "7f1c2e3a-1111-4000-8000-000000000001", project_name: Ahmadia, images: 300, boxes: 750, state: ok }]
+        skipped_by_task: 0
     LibraryDatasetItem:
       type: object
       required: [project_id, image_id, split, label_count]

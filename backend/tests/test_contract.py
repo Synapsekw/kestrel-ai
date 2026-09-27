@@ -123,6 +123,13 @@ BACKEND_PENDING: dict[str, str] = {
     "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
     "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
+    # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
+    "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
+    "previewLibraryDataset": "I-BT",  # DatasetPreview.skipped_by_task, the task parameter
+    "acquireStarterModel": "I-BT",  # StarterModelKey gains the -seg starters
+    # chatWithSetupAgent validates plan.starter_model_key against training/starter.py's
+    # STARTER_KEYS, which has no -seg entries yet; I-BT adds them.
+    "chatWithSetupAgent": "I-BT",
 }
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
