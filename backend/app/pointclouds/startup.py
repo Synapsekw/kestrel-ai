@@ -76,7 +76,7 @@ def sweep_profiles(handle: ProjectHandle, runner) -> list[str]:
 
 def sweep_views(handle: ProjectHandle) -> int:
     """Report-view files with no `cloud_view` row, and `views/.partial-*` a crash left (section 11.2).
+    Returns the number of files removed (`app/pointclouds/views.py::sweep_all`)."""
+    from app.pointclouds import views
 
-    Unit C-B4 removes them through `app/pointclouds/views.py`. Returns the number of files removed.
-    A no-op until C-B4."""
-    return 0
+    return views.sweep_all(handle)
