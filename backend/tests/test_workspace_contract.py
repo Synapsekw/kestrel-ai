@@ -274,3 +274,42 @@ def test_reviewing_an_accepted_defect_asks_for_confirmation(spec):
     op = spec["paths"][P + "/map-runs/{runId}/review"]["post"]
     assert "confirm_finding_delete" in {p.get("name") for p in op["parameters"]}
     assert "finding_would_be_deleted" in op["responses"]["409"]["description"]
+
+
+MAP_EVENTS = ("drawings.changed", "map_measurements.changed", "map_workspace.changed")
+MAP_CODES = (
+    "state_too_large",
+    "local_frame",
+    "too_few_points",
+    "reflection",
+    "collinear",
+    "not_placed",
+    "not_vector",
+    "no_surface_under_line",
+    "empty_region",
+    "pdf_unavailable",
+    "invalid_placement",
+    "outside_map",
+    "no_site_frame",
+    "not_in_site_frame",
+    "invalid_surfaces",
+    "surface_not_in_frame",
+    "degenerate",
+    "invalid_preview",
+    "not_elevation",
+    "geographic_output",
+    "non_metric_output",
+    "invalid_patch",
+)
+
+
+def test_the_new_job_types_events_and_error_codes(spec):
+    s = _schemas(spec)
+    assert {"elevation_import", "drawing_import"} <= set(s["JobType"]["enum"])
+    assert set(MAP_EVENTS) <= set(s["Event"]["properties"]["type"]["enum"])
+    for event in MAP_EVENTS:
+        assert f"`{event}`" in spec["x-websocket"]["description"], event
+    codes = s["Error"]["properties"]["error"]["properties"]["code"]["description"]
+    for code in MAP_CODES:
+        assert code in codes, code
+    assert "drawing_import" in s["Job"]["properties"]["result"]["description"]

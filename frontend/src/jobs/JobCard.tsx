@@ -50,6 +50,8 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   image_metadata: "images",
   summary_rebuild: "refresh",
   assist_acquire: "sparkle",
+  elevation_import: "elevation",
+  drawing_import: "drawing",
 };
 
 const STATE_TONE: Record<Job["state"], PillTone> = {

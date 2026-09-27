@@ -42,6 +42,8 @@ const JOB_NAME: Record<Job["type"], string> = {
   image_metadata: "Camera metadata",
   summary_rebuild: "Image summary rebuild",
   assist_acquire: "Smart polygon model",
+  elevation_import: "Elevation import",
+  drawing_import: "Drawing import",
 };
 
 /** An icon for the kind of work, by the tool name's leading verb or subject. */

@@ -3840,7 +3840,27 @@ export interface components {
                  *     details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
                  *     run has neither a library `model_id` nor a cloud `provider`), query_required (422:
                  *     a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
-                 *     outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule)
+                 *     outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule),
+                 *     state_too_large (422: the map workspace state is over 64 KB), local_frame (422: the
+                 *     operation needs a georeferenced site frame, e.g. a finding anchor in a local-metres
+                 *     project), too_few_points, reflection and collinear (422: a drawing georeference with
+                 *     fewer points than its model needs, mirrored points, or affine points on one line),
+                 *     not_placed (409: the drawing has no georeference yet), not_vector (422: a raster
+                 *     drawing has no vector tiles), no_surface_under_line (422: a profile with no
+                 *     elevation under it), empty_region (422: a region run with no unmasked window),
+                 *     pdf_unavailable (422: PDF import is off because PDFium did not load),
+                 *     invalid_placement (422: a drawing placement its file cannot take), outside_map
+                 *     (422: an anchor outside its map's footprint), no_site_frame (409: the project has no
+                 *     site frame yet; open Maps first), not_in_site_frame (409: a map measurement drawn in
+                 *     the other frame), invalid_surfaces and surface_not_in_frame (422: a map
+                 *     measurement's surfaces are wrong for its kind, or a profile surface is outside the
+                 *     site frame), degenerate (422: coincident control points or a zero scale),
+                 *     invalid_preview (422: a malformed or degenerate preview placement `t`),
+                 *     not_elevation, geographic_output and non_metric_output (422: an elevation import
+                 *     that is not a single-band elevation raster, or would be written in a geographic or
+                 *     non-metric CRS), invalid_patch (422: a date or role patch on a surface that is not a
+                 *     dem). A 501 not_implemented for an option of an existing operation carries details
+                 *     `{option, unit}`.
                  */
                 code: string;
                 message: string;
@@ -8171,7 +8191,7 @@ export interface components {
             accepted_warnings: string[];
         };
         /** @enum {string} */
-        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire";
+        JobType: "import" | "dataset" | "train" | "infer" | "export" | "results_export" | "map_import" | "map_detect" | "map_export" | "library_import" | "library_export" | "library_starter" | "library_adopt" | "map_move" | "accept_above" | "recount" | "area_recount" | "detect_export" | "pointcloud_import" | "pointcloud_export" | "surface_build" | "volume_calc" | "volume_export" | "design_import" | "project_migrate" | "findings_backfill" | "findings_recount" | "dataset_build" | "image_metadata" | "summary_rebuild" | "assist_acquire" | "elevation_import" | "drawing_import";
         /** @enum {string} */
         JobState: "queued" | "running" | "succeeded" | "failed" | "cancelled";
         /**
@@ -8206,7 +8226,7 @@ export interface components {
             params: {
                 [key: string]: unknown;
             };
-            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key} */
+            /** @description type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build) */
             result: {
                 [key: string]: unknown;
             } | null;
@@ -8248,7 +8268,7 @@ export interface components {
          */
         Event: {
             /** @enum {string} */
-            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed";
+            type: "job.progress" | "job.state" | "images.changed" | "boxes.changed" | "agent.changed" | "maps.changed" | "map_runs.changed" | "map_labels.changed" | "pointclouds.changed" | "surfaces.changed" | "volumes.changed" | "findings.changed" | "data.changed" | "catalogue.changed" | "migration.changed" | "drawings.changed" | "map_measurements.changed" | "map_workspace.changed";
             /** @description the project id, or `library` for library jobs and `catalogue.changed` */
             project_id: string;
             job_id: string | null;

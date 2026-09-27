@@ -32,6 +32,8 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   image_metadata: "Camera metadata",
   summary_rebuild: "Image summary rebuild",
   assist_acquire: "Smart polygon model",
+  elevation_import: "Elevation import",
+  drawing_import: "Drawing import",
 };
 
 const STATE_LABEL: Record<JobState, string> = {
@@ -148,6 +150,9 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "volume_export":
     case "design_import":
       return { label: "Open measurements", to: `${p}/measurements` };
+    case "elevation_import":
+    case "drawing_import":
+      return { label: "Open maps", to: `${p}/maps` };
   }
 }
 

@@ -33,4 +33,6 @@ export const JOB_VERB: Record<Job["type"], string> = {
   image_metadata: "Reading camera metadata",
   summary_rebuild: "Rebuilding image summaries",
   assist_acquire: "Getting the smart polygon model",
+  elevation_import: "Importing elevation",
+  drawing_import: "Importing a drawing",
 };

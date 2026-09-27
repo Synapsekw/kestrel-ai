@@ -248,3 +248,57 @@ export function volumeDiffTileUrl(
   if (v) q.set("v", v);
   return `${base}/api/v1/projects/${projectId}/volumes/${measurementId}/diff-tiles/{z}/{x}/{y}?${q}`;
 }
+
+/**
+ * OpenLayers tile URL template for one layer in the project's site tile grid (map-workspace spec §6):
+ * `v` is the layer's `version` from `listWorkspaceLayers`; `extra` carries `style`, `interval` or
+ * `knockout`.
+ */
+export function siteTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  kind: SiteTileKind,
+  layerId: string,
+  v: string,
+  extra: Record<string, string> = {},
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token, v, ...extra });
+  return `${base}/api/v1/projects/${projectId}/site-tiles/${kind}/${layerId}/{z}/{x}/{y}?${q}`;
+}
+
+/** URL template for a DXF or LandXML drawing's vector tiles on the site tile grid; `v` is its `georef_version`. */
+export function drawingVectorTileUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  drawingId: string,
+  v: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token, v });
+  return `${base}/api/v1/projects/${projectId}/drawings/${drawingId}/vtiles/{z}/{x}/{y}?${q}`;
+}
+
+export function drawingThumbnailUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  drawingId: string,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  return `${base}/api/v1/projects/${projectId}/drawings/${drawingId}/thumbnail?${new URLSearchParams({ token })}`;
+}
+
+export function drawingPageThumbnailUrl(
+  baseUrl: string,
+  token: string,
+  projectId: string,
+  inspectionId: string,
+  page: number,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const q = new URLSearchParams({ token });
+  return `${base}/api/v1/projects/${projectId}/drawing-inspections/${inspectionId}/pages/${page}/thumbnail?${q}`;
+}
