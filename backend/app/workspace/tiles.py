@@ -174,7 +174,7 @@ def paint_hillshade(
         rgb = np.repeat(grey, 3, axis=-1)
     rgba = np.zeros((*shade.shape, 4), dtype=np.uint8)
     rgba[..., :3] = np.clip(np.rint(rgb), 0, 255).astype(np.uint8)
-    rgba[..., 3] = np.where(shade > 0, 255, 0)
+    rgba[..., 3] = np.where(shade > 0, 255, 0)  # valid shade is 1..255, so 0 only marks NaN
     return rgba
 
 
@@ -411,6 +411,9 @@ def _diff_source(handle: ProjectHandle, measurement_id: str, style: TileStyle) -
     out = peek(handle, measurement_id)  # 404 when absent
     if out.status == "failed":
         raise not_found("volume measurement", measurement_id)  # ruling R-B1-10 (controller F15)
+    if out.status == "calculating":
+        # a recalculation keeps the previous results and diff.tif until the job swaps them (R-B1-10)
+        raise _not_ready("volume measurement", out.name, out.status)
     path = diff_path(handle, measurement_id)
     if out.results is None or not path.is_file():
         raise AppError("not_ready", f"{out.name} has no results yet; calculate it first", 409)

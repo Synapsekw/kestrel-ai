@@ -208,6 +208,7 @@ def test_frame_change_never_serves_the_old_frames_tile(client, project_id, handl
     assert first.status_code == 200
     set_frame(client, project_id, 32638)
     second = client.get(url)
+    assert second.status_code in (200, 204)
     assert second.status_code == 204 or second.content != first.content
 
 
@@ -273,3 +274,7 @@ def test_volume_diff_tile(client, project_id, handle, wait_job):
     assert (r.status_code, r.json()["error"]["code"]) == (409, "not_ready")
     r = client.get(f"{BASE}/{project_id}/site-tiles/volume_diff/{ids['failed']}/13/{x}/{y}")
     assert r.status_code == 404
+    with handle.session() as s:  # a recalculation keeps the old results and diff.tif until it swaps
+        s.get(VolumeMeasurement, mid).status = "calculating"
+    r = client.get(f"{BASE}/{project_id}/site-tiles/volume_diff/{mid}/13/{x}/{y}")
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "not_ready")  # R-B1-10, never the old diff
