@@ -101,9 +101,24 @@ def test_set_frame_and_put_state(handle):
     assert ws.state == {"mode": "swipe"} and ws.planned_surveys == [{"date": "2026-10-14", "note": "Oct"}]
     ws = service.put_state(handle, state={"mode": "blend"}, planned_surveys=None)  # planned kept
     assert ws.planned_surveys == [{"date": "2026-10-14", "note": "Oct"}] and ws.frame.epsg == 32639
+
+
+def test_set_frame_crs_without_epsg_picks_the_m3_frame(handle):
+    """The frame switch back from local metres (M-W2 Task 11a): the server's own rule M3."""
+    add_local_surface(handle, fixture_spec(0.5, crs_wkt=None, epsg=None), plane)
+    assert service.get_frame(handle) == LOCAL  # the row is created local, and stays local
+    add_map(handle, crs_wkt=WGS84, geotransform=[48.01, 1e-6, 0, 29.5, 0, -1e-6], width=400, height=400)
+    assert service.get_frame(handle) == LOCAL
+    assert service.set_frame(handle, kind="crs", epsg=None).frame.epsg == 32639
+    assert service.get_frame(handle).epsg == 32639
+
+
+def test_set_frame_crs_without_epsg_and_nothing_georeferenced_is_refused(handle):
+    add_local_surface(handle, fixture_spec(0.5, crs_wkt=None, epsg=None), plane)
     with pytest.raises(AppError) as e:
         service.set_frame(handle, kind="crs", epsg=None)
     assert (e.value.status, e.value.code) == (422, "invalid_epsg")
+    assert service.get_frame(handle) == LOCAL
 
 
 def test_state_over_64_kb_is_refused_and_unchanged(handle):
@@ -176,7 +191,7 @@ def test_set_frame_error_codes(client, project_id):
     for body, code in (
         ({"kind": "crs", "epsg": 4326}, "needs_projected_crs"),
         ({"kind": "crs", "epsg": 999999}, "invalid_epsg"),
-        ({"kind": "crs"}, "invalid_epsg"),
+        ({"kind": "crs"}, "invalid_epsg"),  # nothing has coordinates yet
     ):
         r = client.put(url, json=body)
         assert (r.status_code, r.json()["error"]["code"]) == (422, code), body

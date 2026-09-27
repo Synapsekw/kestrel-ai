@@ -35,7 +35,7 @@ interface ChangesState {
   projectsRevision: number;
   /** Bumped on `pointclouds.changed` (a cloud, its measurements, a camera offset or a report view changed). */
   pointcloudsRevision: number;
-  /** Bumped on `map_workspace.changed`, `drawings.changed` and `maps.changed` (M-W1): the map workspace re-reads its frame, layers and surveys. */
+  /** Bumped on `map_workspace.changed` (except a state-only self-save echo), `drawings.changed` and `maps.changed` (M-W1): the map workspace re-reads its frame, layers and surveys. */
   mapWorkspaceRevision: number;
   /** Bumped on `map_measurements.changed` (M-W1, read by M-W3). */
   mapMeasurementsRevision: number;
@@ -114,7 +114,14 @@ export const useChangesStore = create<ChangesState>((set) => ({
       }
       if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
       if (ev.type === "catalogue.changed") return { catalogueRevision: s.catalogueRevision + 1 };
-      if (ev.type === "map_workspace.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
+      if (ev.type === "map_workspace.changed") {
+        // The workspace self-saves its view state (every pan/zoom, debounced) and hydrates that state
+        // once per mount, so a state-only echo would re-run its reads for nothing (M-B1 hand-off 4).
+        // Its load may also re-derive a stale local frame; the surfaces.changed that emptied it re-reads.
+        const fields = (ev.payload as { fields?: unknown }).fields;
+        if (Array.isArray(fields) && fields.length > 0 && fields.every((f) => f === "state")) return s;
+        return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
+      }
       if (ev.type === "drawings.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
       if (ev.type === "maps.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
       if (ev.type === "map_measurements.changed")

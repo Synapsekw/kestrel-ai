@@ -3497,8 +3497,9 @@ export interface paths {
         get?: never;
         /**
          * Change the site CRS (`{kind: crs, epsg}`, a projected CRS in metres) or switch to local
-         *     metres (`{kind: local}`). Stored geometry never changes; the client re-reads every tile and
-         *     vector in the new frame. Publishes `map_workspace.changed`.
+         *     metres (`{kind: local}`). `{kind: crs}` without `epsg` picks the site CRS by rule M3 (the
+         *     switch back from local metres). Stored geometry never changes; the client re-reads every
+         *     tile and vector in the new frame. Publishes `map_workspace.changed`.
          */
         put: operations["setSiteFrame"];
         post?: never;
@@ -10537,7 +10538,7 @@ export interface components {
          */
         SiteFrameSet: {
             kind: components["schemas"]["SiteFrameKind"];
-            /** @description required for crs: a projected CRS in metres */
+            /** @description for crs: a projected CRS in metres; omitted, the server picks the site CRS by rule M3 (422 invalid_epsg while nothing has coordinates) */
             epsg?: number;
         };
         /**
@@ -19253,7 +19254,7 @@ export interface operations {
                     "application/json": components["schemas"]["MapWorkspace"];
                 };
             };
-            /** @description `epsg` is missing for `crs` or unknown to pyproj (`code` is `invalid_epsg`), or it is not a projected CRS in metres (`needs_projected_crs`) */
+            /** @description `epsg` is unknown to pyproj, or omitted for `crs` while nothing has coordinates yet (`code` is `invalid_epsg`), or it is not a projected CRS in metres (`needs_projected_crs`) */
             422: {
                 headers: {
                     [name: string]: unknown;
