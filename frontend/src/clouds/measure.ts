@@ -316,6 +316,143 @@ export function isNonCoplanar(r: Pick<AllResults, "plane_rms_m" | "area_surface_
   return r.plane_rms_m > Math.max(0.05, 0.05 * Math.sqrt(r.area_surface_m2));
 }
 
+/** A vertical check's method: `points` (two picks, S1) unless the params say `rings`. */
+export function methodOf(params: CloudMeasurementParams | null): "points" | "rings" {
+  return params?.method || "points";
+}
+
+export interface RingFit {
+  x: number;
+  y: number;
+  /** The mean z of the ring's picks. */
+  z: number;
+  radius_m: number;
+  rms_m: number;
+  uncertainty_m: number;
+}
+
+/** Kåsa least-squares circle in XY on centred coordinates (measure.py `fit_ring`). */
+export function fitRing(points: readonly MPoint[]): RingFit {
+  const k = points.length;
+  let mx = 0;
+  let my = 0;
+  for (const p of points) mx += p.x;
+  mx /= k;
+  for (const p of points) my += p.y;
+  my /= k;
+  const u = points.map((p) => p.x - mx);
+  const v = points.map((p) => p.y - my);
+  let suu = 0;
+  let svv = 0;
+  let suv = 0;
+  for (const a of u) suu += a * a;
+  for (const b of v) svv += b * b;
+  for (let i = 0; i < k; i++) suv += u[i] * v[i];
+  const trace = suu + svv;
+  const det = suu * svv - suv * suv;
+  const disc = Math.sqrt(Math.max((trace * trace) / 4 - det, 0));
+  const lmax = trace / 2 + disc;
+  const lmin = trace / 2 - disc;
+  if (lmin <= 0 || lmax / lmin > RING_COND_MAX)
+    throw new MeasureRefusal(
+      "collinear_ring",
+      "the picks on a ring lie in a line; pick points spread around the ring",
+    );
+  const w = u.map((a, i) => a * a + v[i] * v[i]);
+  let bu = 0;
+  let bv = 0;
+  let sw = 0;
+  for (let i = 0; i < k; i++) bu += u[i] * w[i];
+  for (let i = 0; i < k; i++) bv += v[i] * w[i];
+  for (const c of w) sw += c;
+  const d = -(svv * bu - suv * bv) / det;
+  const e = -(suu * bv - suv * bu) / det;
+  const f = -sw / k;
+  const cx = mx - d / 2;
+  const cy = my - e / 2;
+  const r = Math.sqrt(Math.max((d * d) / 4 + (e * e) / 4 - f, 0));
+  let rr = 0;
+  for (const p of points) rr += (Math.hypot(p.x - cx, p.y - cy) - r) ** 2;
+  const rms = Math.sqrt(rr / k);
+  let mu = 0;
+  for (const p of points) mu += p.uncertainty_m ** 2;
+  mu /= k;
+  let z = 0;
+  for (const p of points) z += p.z;
+  return { x: cx, y: cy, z: z / k, radius_m: r, rms_m: rms, uncertainty_m: Math.sqrt(rms * rms + mu / k) };
+}
+
+/** The two fitted rings, lower first by z, whatever their `group` numbers say (measure.py `ring_axis`). */
+export function ringAxis(points: readonly GPoint[]): [RingFit, RingFit] {
+  if (points.some((p) => p.group !== 0 && p.group !== 1))
+    throw new MeasureRefusal(
+      "ring_needs_three_points",
+      "every ring pick needs its ring: group 0 (lower) or 1 (upper)",
+    );
+  const g0 = points.filter((p) => p.group === 0);
+  const g1 = points.filter((p) => p.group === 1);
+  if (Math.min(g0.length, g1.length) < RING_MIN_PICKS)
+    throw new MeasureRefusal(
+      "ring_needs_three_points",
+      "each ring needs at least three picks (press N to start the upper ring)",
+    );
+  if (points.length > RINGS_MAX_PICKS)
+    throw new MeasureRefusal("wrong_point_count", "a rings vertical check takes 6 to 64 picks");
+  const a = fitRing(g0);
+  const b = fitRing(g1);
+  return b.z < a.z ? [b, a] : [a, b];
+}
+
+/** The S1 vertical formulas between the two fitted centres, plus each ring's radius and RMS. */
+export function ringsResults(points: readonly GPoint[]): AllResults {
+  const [lower, upper] = ringAxis(points);
+  if (upper.z - lower.z < MIN_VERTICAL_SPAN_M)
+    throw new MeasureRefusal(
+      "vertical_span_too_small",
+      "pick points further apart vertically (at least 0.5 m)",
+    );
+  return {
+    ...nullResults(),
+    ...finite(
+      {
+        ...results("vertical", [lower, upper]),
+        ring_radius_lower_m: lower.radius_m,
+        ring_radius_upper_m: upper.radius_m,
+        ring_rms_lower_m: lower.rms_m,
+        ring_rms_upper_m: upper.rms_m,
+      },
+      "collinear_ring",
+    ),
+  };
+}
+
+/** Every computable kind as the server computes it; throws `MeasureRefusal` like measure.py. */
+export function measureResults(
+  kind: ComputableKind,
+  points: readonly GPoint[],
+  params: CloudMeasurementParams | null,
+): AllResults {
+  if (kind === "area") return areaResults(points, params);
+  if (kind === "vertical" && methodOf(params) === "rings") return ringsResults(points);
+  return { ...nullResults(), ...results(kind, [...points]) };
+}
+
+/** The server's refusal said before Save (area and rings; S1 kinds keep `refusal`). */
+export function measureRefusal(
+  kind: ComputableKind,
+  points: readonly GPoint[],
+  params: CloudMeasurementParams | null,
+): MeasureRefusal | null {
+  if (kind !== "area" && !(kind === "vertical" && methodOf(params) === "rings")) return null;
+  try {
+    measureResults(kind, points, params);
+    return null;
+  } catch (e) {
+    if (e instanceof MeasureRefusal) return e;
+    throw e;
+  }
+}
+
 const xyz = (p: Vec3): Vec3 => ({ x: p.x, y: p.y, z: p.z });
 
 /** The 3D overlay: picks, the segment, and for a vertical check the plumb line through the lower
