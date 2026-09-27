@@ -6,6 +6,7 @@ import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import type { Bounds6 } from "@/clouds/viewer/camera";
 import { GlassPanel, stagger } from "@/ui";
 import { clipFootprint } from "./clip";
+import { MINIMAP_HEIGHT, MINIMAP_WIDTH } from "./layout";
 import {
   fromMini,
   horizontalFov,
@@ -17,8 +18,8 @@ import {
 } from "./minimap";
 import type { MinimapMark } from "./types";
 
-const W = 330;
-const H = 178;
+const W = MINIMAP_WIDTH;
+const H = MINIMAP_HEIGHT;
 const PAD = 14;
 const SNAPSHOT_PX = 512;
 
@@ -112,8 +113,8 @@ export function Minimap({
       variant="float"
       radius="panel"
       data-testid="cloud-minimap"
-      style={stagger(5)}
-      className="stagger absolute bottom-3.5 right-3.5 z-10 h-[178px] w-[330px] overflow-hidden animate-slide-in reduce-motion:animate-none"
+      style={{ ...stagger(5), width: W, height: H }}
+      className="stagger absolute bottom-3.5 right-3.5 z-10 overflow-hidden animate-slide-in reduce-motion:animate-none"
     >
       {!corners && (
         <canvas

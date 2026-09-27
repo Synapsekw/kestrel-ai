@@ -3,6 +3,7 @@ import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import type { ViewName } from "@/clouds/viewer/types";
 import { Button, GlassPanel, Tooltip, cx, stagger } from "@/ui";
 import { ISO_DIRECTION, VIEW_OF_AXIS, gizmoAxes } from "./gizmo";
+import { GIZMO_LEFT, GIZMO_WIDTH } from "./layout";
 
 const SIZE = 64;
 const C = SIZE / 2;
@@ -23,7 +24,7 @@ const VIEWS: [ViewName, string, string][] = [
 ];
 
 /**
- * The view gizmo (spec §6: left 72, bottom 14, 64 px). Redrawn in the frame hook by attribute
+ * The view gizmo (spec §6: left 72, bottom 14, 64 px axes; the panel is `GIZMO_WIDTH` wide). Redrawn in the frame hook by attribute
  * writes (never a React render per frame); idle when the render loop is.
  */
 export function Gizmo({ viewer, running }: { viewer: RefObject<CloudViewerHandle>; running: boolean }) {
@@ -54,8 +55,8 @@ export function Gizmo({ viewer, running }: { viewer: RefObject<CloudViewerHandle
       variant="float"
       radius="panel"
       data-testid="cloud-gizmo"
-      style={stagger(3)}
-      className="stagger absolute bottom-3.5 left-[72px] z-10 flex items-center gap-2 p-2 animate-reveal reduce-motion:animate-none"
+      style={{ ...stagger(3), left: GIZMO_LEFT, width: GIZMO_WIDTH }}
+      className="stagger absolute bottom-3.5 z-10 flex items-center gap-2 p-2 animate-reveal reduce-motion:animate-none"
     >
       <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} aria-label="View axes" role="group">
         {AXES.map((ax) => (
@@ -102,7 +103,7 @@ export function Gizmo({ viewer, running }: { viewer: RefObject<CloudViewerHandle
           </g>
         ))}
       </svg>
-      <div className="grid grid-cols-2 gap-1">
+      <div className="grid flex-1 grid-cols-2 gap-1">
         {VIEWS.map(([view, label, chord]) => (
           <Tooltip key={view} label={`${label} view`} shortcut={chord} side="top">
             <Button size="sm" variant="secondary" onClick={() => go(view)}>

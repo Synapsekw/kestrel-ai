@@ -11,9 +11,39 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem("kestrel.diagnostics", "1"));
 });
 
-async function openSettled(page: Page) {
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
-  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
+const MAP = "a0000000-6666-4000-8000-000000000009";
+/** A ready map linked to the fixture cloud (same CRS), so the readout offers "Show on map". */
+const linkedMap = {
+  id: MAP,
+  name: "Site ortho",
+  status: "ready",
+  error: null,
+  source_path: "D:/orthos/site.tif",
+  source_size: 1,
+  width: 2000,
+  height: 2000,
+  band_count: 3,
+  dtype: "uint8",
+  crs_wkt: 'PROJCRS["WGS 84 / UTM zone 39N"]',
+  epsg: 32639,
+  proj4: "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs",
+  geotransform: [243500, 0.05, 0, 3178100, 0, -0.05],
+  bounds_native: [243500, 3178000, 243600, 3178100],
+  bounds_wgs84: [48.3744, 28.7038, 48.3755, 28.7048],
+  gsd_cm: 5,
+  tile_grid: { tile_size: 256, max_zoom: 3 },
+  labels_version: 0,
+  job_id: null,
+  created_at: "2026-09-24T09:00:00Z",
+  captured_on: "2026-05-04",
+};
+
+async function openSettled(page: Page, cloud: Record<string, unknown> = {}) {
+  // Reduced motion: the panels skip their entrance (reduce-motion:animate-none), so their boxes are
+  // final as soon as they render.
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson(cloud)] });
+  await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson(cloud));
   await routeOctree(
     page,
     CLOUD,
@@ -25,8 +55,11 @@ async function openSettled(page: Page) {
       timeout: 20_000,
     })
     .not.toBeNull();
-  await page.waitForTimeout(600); // the panels' entrance (≤ 400 ms) has finished
 }
+
+type Box = { x: number; y: number; width: number; height: number };
+const intersects = (a: Box, b: Box) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
 
 test("layout: every panel sits at its mockup position and the canvas fills the viewport (spec §15 e2e 1)", async ({
   page,
@@ -57,8 +90,8 @@ test("layout: every panel sits at its mockup position and the canvas fills the v
   near(giz.x - vp.x, 72, "gizmo left");
   near(bottom(giz), 14, "gizmo bottom");
   const ro = await box(page.getByTestId("cloud-readout"));
-  // Centred in the band between the gizmo (72 + 64) and the minimap (14 + 330), not the full width.
-  near(ro.x + ro.width / 2, vp.x + (150 + vp.width - 358) / 2, "readout centre");
+  // Centred on the viewport when the row has room (it moves aside only on narrow windows).
+  near(ro.x + ro.width / 2, vp.x + vp.width / 2, "readout centre");
   near(bottom(ro), 14, "readout bottom");
   const mini = await box(page.getByTestId("cloud-minimap"));
   near(right(mini), 14, "minimap right");
@@ -70,18 +103,30 @@ test("layout: every panel sits at its mockup position and the canvas fills the v
   near(hint.x + hint.width / 2, vp.x + vp.width / 2, "hint bar centre");
   // Full-bleed: the project tabs are hidden on the workspace (F §5.2).
   await expect(page.getByRole("tab", { name: /^Point clouds/ })).toHaveCount(0);
+});
 
-  // At the default 1280 × 720 the readout (and its "Show on map") never runs under the minimap.
+test("at 1280 x 720 the readout, with a pick and Show on map, stays on one line clear of the gizmo and the minimap", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 1280, height: 720 });
-  await expect
-    .poll(async () => {
-      const r = await box(page.getByTestId("cloud-readout"));
-      const m = await box(page.getByTestId("cloud-minimap"));
-      const apart =
-        r.x + r.width <= m.x || m.x + m.width <= r.x || r.y + r.height <= m.y || m.y + m.height <= r.y;
-      return apart;
-    })
-    .toBe(true);
+  await jsonRoute(page, `/api/v1/projects/${P}/maps`, { items: [linkedMap] });
+  await openSettled(page, { map_id: MAP });
+  const canvas = (await page.getByTestId("cloud-canvas").boundingBox())!;
+  await page.mouse.click(canvas.x + canvas.width / 2, canvas.y + canvas.height / 2);
+  const readout = page.getByTestId("cloud-readout");
+  await expect(readout.getByRole("button", { name: "Show on map" })).toBeVisible();
+  await expect(readout).not.toContainText("—");
+  const ro = (await readout.boundingBox())!;
+  const giz = (await page.getByTestId("cloud-gizmo").boundingBox())!;
+  const mini = (await page.getByTestId("cloud-minimap").boundingBox())!;
+  expect(intersects(ro, giz), `readout ${JSON.stringify(ro)} vs gizmo ${JSON.stringify(giz)}`).toBe(false);
+  expect(intersects(ro, mini), `readout ${JSON.stringify(ro)} vs minimap ${JSON.stringify(mini)}`).toBe(
+    false,
+  );
+  // one line is 46 px (py-2 around the 28 px icon button); a wrapped pill is 70 px or more
+  expect(ro.height, "one line").toBeLessThanOrEqual(48);
+  // and the button takes the click (nothing above it)
+  await readout.getByRole("button", { name: "Show on map" }).click({ trial: true });
 });
 
 test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orbit (spec §15 e2e 2)", async ({
@@ -106,12 +151,17 @@ test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orb
   await page.keyboard.press("h");
   await expect(toolbar.getByRole("button", { name: "Pan" })).toHaveAttribute("aria-pressed", "true");
   expect(await page.evaluate(() => window.__kestrelCloudViewer!.navMode())).toBe("pan");
-  // Alt+2 is the Front view: after the 350 ms tween the camera is south of its target.
+  // The arrival view is already from the south (40° oblique), so Top goes first: Alt+1 puts the
+  // camera straight above the target, then Alt+2 (Front) must bring it level and south of it.
+  const pose = () => page.evaluate(() => window.__kestrelCloudViewer!.cameraPose());
+  const shape = (p: Awaited<ReturnType<typeof pose>>) => {
+    if (!p) return null;
+    const [dx, dy, dz] = [0, 1, 2].map((i) => p.position[i] - p.target[i]);
+    const d = Math.hypot(dx, dy, dz);
+    return { above: dz / d > 0.99, level: Math.abs(dz) / d < 0.01, south: dy < 0 };
+  };
+  await page.keyboard.press("Alt+1");
+  await expect.poll(async () => shape(await pose())?.above).toBe(true);
   await page.keyboard.press("Alt+2");
-  await expect
-    .poll(async () => {
-      const pose = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose());
-      return pose ? pose.position[1] < pose.target[1] : false;
-    })
-    .toBe(true);
+  await expect.poll(async () => shape(await pose())).toEqual({ above: false, level: true, south: true });
 });
