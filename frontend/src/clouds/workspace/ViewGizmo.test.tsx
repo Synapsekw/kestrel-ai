@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
 import { callsTo, emitFrame, fake, FakeCloudViewer, resetFake } from "@/test/fakeCloudViewer";
-import { Gizmo } from "./Gizmo.tsx";
+import { Gizmo } from "./ViewGizmo";
 
 function Harness() {
   const viewer = useRef<CloudViewerHandle>(null);

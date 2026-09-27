@@ -6,7 +6,7 @@ import { exampleCloud } from "@/test/cloudFixtures";
 import { callsTo, emitFrame, fake, FakeCloudViewer, resetFake } from "@/test/fakeCloudViewer";
 import { exampleGeoMap, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { renderWithProviders } from "@/test/render";
-import { Minimap } from "./Minimap.tsx";
+import { Minimap } from "./SiteMinimap";
 
 function Harness({
   map = null,
