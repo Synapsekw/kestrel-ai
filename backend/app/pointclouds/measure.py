@@ -1,7 +1,10 @@
-"""Measurement formulas (spec §9.3), identical to frontend/src/clouds/measure.ts.
+"""Measurement formulas (S1 spec §9.3; workspace spec 2026-09-26 §8.2), identical to
+frontend/src/clouds/measure.ts.
 
-Both are pinned by contract/fixtures/cloud-measure-vectors.json to 1e-9. For picks A and B:
-d = B - A, u = sqrt(uA^2 + uB^2). A vertical check sorts its picks by Z (A lower, B upper).
+Both are pinned by contract/fixtures/cloud-measure-vectors.json to 1e-9: the S1 kinds by `fields`/
+`cases`, areas by `area_fields`/`area_cases`, rings by `ring_fields`/`ring_cases`, and the refusals
+by `refusal_cases`. For picks A and B: d = B - A, u = sqrt(uA^2 + uB^2). A vertical check sorts its
+picks by Z (A lower, B upper). Pure `math` only, so the TypeScript mirror stays line for line.
 """
 
 from __future__ import annotations
@@ -63,3 +66,173 @@ def results(kind: str, points: list[dict]) -> dict[str, float | None]:
             angle_uncertainty_deg=math.degrees(math.atan(u / span)),
         )
     return out
+
+
+# ------------------------------------------------ area and rings (2026-09-26 workspace spec §8.2)
+# Pinned by the `area_*`, `ring_*` and `refusal_cases` keys of the same vectors file.
+
+AREA_FIELDS = [
+    "area_m2",
+    "area_surface_m2",
+    "area_plan_m2",
+    "perimeter_m",
+    "plane_rms_m",
+    "plane_tilt_deg",
+    "plane_azimuth_deg",
+    "uncertainty_m2",
+]
+RING_FIELDS = ["ring_radius_lower_m", "ring_radius_upper_m", "ring_rms_lower_m", "ring_rms_upper_m"]
+PROFILE_FIELDS = [
+    "profile_length_m",
+    "profile_z_min",
+    "profile_z_max",
+    "profile_width_max_m",
+    "profile_point_count",
+]
+MIN_AREA_M2 = 1e-4
+MAX_AREA_VERTICES = 200
+SAME_POINT_M = 1e-6
+
+Vec = tuple[float, float, float]
+
+
+class Refusal(Exception):
+    """A geometry the server refuses with 422 `code`; measurements.py turns it into an AppError."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _xyz(p: dict) -> Vec:
+    return (float(p["x"]), float(p["y"]), float(p["z"]))
+
+
+def _sub(a: Vec, b: Vec) -> Vec:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _cross(a: Vec, b: Vec) -> Vec:
+    return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0])
+
+
+def _dot(a: Vec, b: Vec) -> float:
+    return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+
+
+def _norm(a: Vec) -> float:
+    return math.sqrt(_dot(a, a))
+
+
+def _finite(out: dict[str, float | None], code: str) -> dict[str, float | None]:
+    """Coordinates so large that the products overflow give inf/nan: refused, never a 500."""
+    if all(v is None or math.isfinite(v) for v in out.values()):
+        return out
+    raise Refusal(code, "these coordinates are too large to measure")
+
+
+def area_vertices(points: list[dict]) -> list[dict]:
+    """The outline as stored: closed implicitly, so trailing repeats of the first vertex are dropped."""
+    pts = list(points)
+    while len(pts) >= 2 and _norm(_sub(_xyz(pts[-1]), _xyz(pts[0]))) <= SAME_POINT_M:
+        pts.pop()
+    return pts
+
+
+def _orient(a: tuple[float, float], b: tuple[float, float], c: tuple[float, float]) -> float:
+    return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+
+
+def _within(a: tuple[float, float], b: tuple[float, float], c: tuple[float, float]) -> bool:
+    return min(a[0], b[0]) <= c[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= c[1] <= max(a[1], b[1])
+
+
+def _segments_touch(p1, p2, p3, p4, eps: float) -> bool:
+    d1, d2 = _orient(p3, p4, p1), _orient(p3, p4, p2)
+    d3, d4 = _orient(p1, p2, p3), _orient(p1, p2, p4)
+    if ((d1 > eps and d2 < -eps) or (d1 < -eps and d2 > eps)) and (
+        (d3 > eps and d4 < -eps) or (d3 < -eps and d4 > eps)
+    ):
+        return True
+    return (
+        (abs(d1) <= eps and _within(p3, p4, p1))
+        or (abs(d2) <= eps and _within(p3, p4, p2))
+        or (abs(d3) <= eps and _within(p1, p2, p3))
+        or (abs(d4) <= eps and _within(p1, p2, p4))
+    )
+
+
+def _self_intersects(q: list[tuple[float, float]]) -> bool:
+    """Two non-adjacent edges touching, or an edge folding back over the previous one (a spike)."""
+    n = len(q)
+    eps = 1e-12 * max(1.0, max(max(abs(x), abs(y)) for x, y in q)) ** 2
+    for i in range(n):
+        a, b, c = q[i], q[(i + 1) % n], q[(i + 2) % n]
+        if abs(_orient(a, b, c)) <= eps and (c[0] - b[0]) * (a[0] - b[0]) + (c[1] - b[1]) * (a[1] - b[1]) > 0:
+            return True
+        for j in range(i + 2, n):
+            if i == 0 and j == n - 1:
+                continue  # edges n-1 and 0 share vertex 0
+            if _segments_touch(a, b, q[j], q[(j + 1) % n], eps):
+                return True
+    return False
+
+
+def area_results(points: list[dict], params: dict | None) -> dict[str, float | None]:
+    """Newell area of the outline, translated to its centroid first (float cancellation at UTM)."""
+    pts = area_vertices(points)
+    n = len(pts)
+    if not 3 <= n <= MAX_AREA_VERTICES:
+        raise Refusal("wrong_point_count", "an area needs 3 to 200 vertices")
+    p = [_xyz(v) for v in pts]
+    c = (sum(v[0] for v in p) / n, sum(v[1] for v in p) / n, sum(v[2] for v in p) / n)
+    q = [_sub(v, c) for v in p]
+    if any(_norm(_sub(q[(i + 1) % n], q[i])) <= SAME_POINT_M for i in range(n)):
+        raise Refusal("degenerate_polygon", "two consecutive vertices are the same point")
+    sx = sy = sz = perimeter = 0.0
+    for i in range(n):
+        a, b = q[i], q[(i + 1) % n]
+        cx, cy, cz = _cross(a, b)
+        sx, sy, sz = sx + cx, sy + cy, sz + cz
+        perimeter += _norm(_sub(b, a))
+    big_n = (sx / 2, sy / 2, sz / 2)
+    surface = _norm(big_n)
+    if surface < MIN_AREA_M2:
+        raise Refusal(
+            "degenerate_polygon", "the outline has no area (less than 1 cm²); pick vertices around a surface"
+        )
+    nhat = (big_n[0] / surface, big_n[1] / surface, big_n[2] / surface)
+    helper = (1.0, 0.0, 0.0) if abs(nhat[0]) < 0.9 else (0.0, 1.0, 0.0)
+    e1 = _cross(helper, nhat)
+    e1 = (e1[0] / _norm(e1), e1[1] / _norm(e1), e1[2] / _norm(e1))
+    e2 = _cross(nhat, e1)
+    if _self_intersects([(_dot(v, e1), _dot(v, e2)) for v in q]):
+        raise Refusal(
+            "self_intersecting", "the outline crosses itself; pick the vertices in order around the area"
+        )
+    view = (params or {}).get("view_dir")
+    facing = nhat
+    if view is not None and _norm(tuple(view)) > 0:
+        if _dot(nhat, tuple(view)) > 0:  # the normal points away from the camera: turn it towards it
+            facing = (-nhat[0], -nhat[1], -nhat[2])
+    elif nhat[2] < 0:  # no camera: the upward normal; a wall (n_z == 0) keeps the outline's winding
+        facing = (-nhat[0], -nhat[1], -nhat[2])
+    horizontal = math.hypot(facing[0], facing[1])
+    azimuth = None if horizontal < 1e-12 else (math.degrees(math.atan2(facing[0], facing[1])) + 360) % 360
+    plan = abs(big_n[2])
+    u_rms = math.sqrt(sum(float(v["uncertainty_m"]) ** 2 for v in pts) / n)
+    mode = (params or {}).get("mode") or "surface"
+    return _finite(
+        {
+            "area_m2": plan if mode == "plan" else surface,
+            "area_surface_m2": surface,
+            "area_plan_m2": plan,
+            "perimeter_m": perimeter,
+            "plane_rms_m": math.sqrt(sum(_dot(v, nhat) ** 2 for v in q) / n),
+            "plane_tilt_deg": math.degrees(math.acos(min(1.0, abs(nhat[2])))),
+            "plane_azimuth_deg": azimuth,
+            "uncertainty_m2": perimeter * u_rms,
+        },
+        "degenerate_polygon",
+    )
