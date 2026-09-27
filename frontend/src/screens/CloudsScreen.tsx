@@ -25,6 +25,7 @@ import { useMeasureTool } from "@/clouds/useMeasureTool";
 import { ViewPanel, type ViewSettings } from "@/clouds/ViewPanel";
 import { readBudget, writeBudget } from "@/clouds/viewer/budget";
 import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOptions";
+import type { ColourAvailability } from "@/clouds/viewer/types";
 import { isTypingTarget } from "@/ui/keymap";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
@@ -148,6 +149,9 @@ export function CloudsScreen() {
   const shownTab: Tab = ready ? tab : "details";
   useJumpArrival(viewer, cloud, location.search);
   const [lastPick, setLastPick] = useState<CloudPick | null>(null);
+  // Which colour modes the loaded octree can show, for the cloud it came from only.
+  const [attrs, setAttrs] = useState<{ cloudId: string; a: ColourAvailability } | null>(null);
+  const availability = cloud && attrs?.cloudId === cloud.id ? attrs.a : null;
   const defaultRange = useMemo<[number, number]>(
     () => (cloud ? defaultElevationRange(cloud) : [0, 1]),
     [cloud],
@@ -292,6 +296,7 @@ export function CloudsScreen() {
               if (tab === "measure") measure.add(p);
             }}
             onHover={measure.setHover}
+            onAttributes={(a) => setAttrs({ cloudId: cloud.id, a })}
           />
         ) : (
           <EmptyState className="m-auto" icon="cloud" title={centreTitle(cloud)}>
@@ -354,6 +359,7 @@ export function CloudsScreen() {
               <ViewPanel
                 settings={settings}
                 hasRgb={!!cloud.has_rgb}
+                availability={availability}
                 defaultRange={defaultRange}
                 onChange={(s) => {
                   if (s.budget !== settings.budget) writeBudget(s.budget);
