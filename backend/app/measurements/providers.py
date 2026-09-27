@@ -26,6 +26,7 @@ from app.db.models import CloudMeasurement, MapMeasurement, VolumeMeasurement
 from app.errors import AppError
 from app.measurements.schemas import MeasurementItem
 from app.pagination import decode_cursor, encode_cursor
+from app.pointclouds.headline import headline_for
 
 EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
@@ -65,6 +66,8 @@ CLOUD_HEADLINES: dict[str, Callable[[CloudMeasurement], Headline]] = {
     "height": lambda m: _headline(_result(m, "height_difference"), "m"),
     "vertical": lambda m: _headline(_result(m, "lean_mm_per_m"), "mm_per_m"),
     # C-B1: add "area" and "profile" entries here
+    "area": lambda m: _headline(*headline_for("area", m.params, m.results, m.points)),
+    "profile": lambda m: _headline(*headline_for("profile", m.params, m.results, m.points)),
 }
 
 # `cloud_measurement.status` (C-C0, C §12 row 7) -> the union status; missing or unknown is ready.

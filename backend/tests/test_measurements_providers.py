@@ -83,3 +83,11 @@ def test_a_disjoint_sub_kind_filter_skips_the_query(handle):
     add_volume(handle, add_surface(handle), net=1.0, created_at=at(1))
     assert _one(handle, "volume", ["distance"]) == []
     assert len(_one(handle, "volume", ["volume"])) == 1
+
+
+def test_c_b1_area_and_profile_rows_use_c_s_headline(handle):
+    cloud = add_cloud(handle)
+    add_cloud_measurement(handle, cloud, kind="area", results={"area_m2": 2.0}, created_at=at(1))
+    add_cloud_measurement(handle, cloud, kind="profile", results={}, created_at=at(2))
+    items = _one(handle, "cloud")
+    assert [(i.sub_kind, i.headline, i.unit) for i in items] == [("profile", None, None), ("area", 2.0, "m2")]
