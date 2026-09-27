@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.projects.service import ProjectHandle
 from app.workspace import service
@@ -116,3 +116,55 @@ class WorkspaceSurveyOut(BaseModel):
 
 class WorkspaceSurveyList(BaseModel):
     items: list[WorkspaceSurveyOut]
+
+
+class AnchorIn(BaseModel):
+    map_id: str
+    geometry_site: dict[str, Any]
+
+
+class AnchorOut(BaseModel):
+    map_id: str
+    geometry: dict[str, Any]
+    lon: float
+    lat: float
+
+
+class SampleIn(BaseModel):
+    x: float = Field(allow_inf_nan=False)
+    y: float = Field(allow_inf_nan=False)
+    surface_ids: list[str] = Field(min_length=1, max_length=8)
+
+    @field_validator("surface_ids")
+    @classmethod
+    def _unique(cls, v: list[str]) -> list[str]:
+        if len(set(v)) != len(v):
+            raise ValueError("surface_ids must not repeat")
+        return v
+
+
+class SurfaceZOut(BaseModel):
+    surface_id: str
+    z: float | None
+
+
+class FrameSampleOut(BaseModel):
+    x: float
+    y: float
+    samples: list[SurfaceZOut]
+
+
+class MapFindingPinOut(BaseModel):
+    id: str
+    number: int
+    type_id: str
+    severity: int | None
+    status: Literal["open", "reviewed", "closed"]
+    created_by: str
+    map_id: str
+    geometry_site: dict[str, Any]
+
+
+class MapFindingsInViewOut(BaseModel):
+    items: list[MapFindingPinOut]
+    truncated: bool

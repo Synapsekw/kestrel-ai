@@ -23,11 +23,7 @@ Stub = tuple[str, str, str]
 
 # M-B1: the site frame, the workspace state, surveys, layers, site tiles, anchors, findings in view
 # and the readout sample (spec §5.2, §6, §9.4).
-B1_STUBS: list[Stub] = [
-    ("POST", "/map-workspace/anchor", "convertAnchor"),
-    ("GET", "/map-workspace/findings", "listMapFindingsInView"),
-    ("POST", "/map-workspace/sample", "sampleInFrame"),
-]
+B1_STUBS: list[Stub] = []
 
 # M-B2: the plain DSM/DTM import (spec §7).
 B2_STUBS: list[Stub] = [

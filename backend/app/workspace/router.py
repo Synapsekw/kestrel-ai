@@ -11,10 +11,15 @@ from fastapi.responses import JSONResponse
 from app.errors import AppError, envelope
 from app.events_util import publish_map_workspace_changed
 from app.projects.service import ProjectHandle, get_project
-from app.workspace import layers, service, surveys, tiles
+from app.workspace import layers, service, surveys, tiles, views
 from app.workspace.schemas import (
+    AnchorIn,
+    AnchorOut,
+    FrameSampleOut,
+    MapFindingsInViewOut,
     MapWorkspaceOut,
     MapWorkspacePut,
+    SampleIn,
     SiteFrameSet,
     WorkspaceLayerList,
     WorkspaceSurveyList,
@@ -95,3 +100,27 @@ def list_workspace_surveys(handle: ProjectHandle = Depends(get_project)) -> Work
 def list_workspace_layers(handle: ProjectHandle = Depends(get_project)) -> WorkspaceLayerList:
     frame, items = layers.list_layers(handle)
     return WorkspaceLayerList(frame=frame_out(frame), items=items)
+
+
+BBOX = r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$"
+
+
+@router.post("/map-workspace/anchor", response_model=AnchorOut)
+def convert_anchor(body: AnchorIn, handle: ProjectHandle = Depends(get_project)) -> AnchorOut:
+    return views.convert_anchor(handle, body.map_id, body.geometry_site)
+
+
+@router.post("/map-workspace/sample", response_model=FrameSampleOut)
+def sample_in_frame(body: SampleIn, handle: ProjectHandle = Depends(get_project)) -> FrameSampleOut:
+    return FrameSampleOut(x=body.x, y=body.y, samples=views.sample(handle, body.x, body.y, body.surface_ids))
+
+
+@router.get("/map-workspace/findings", response_model=MapFindingsInViewOut)
+def list_map_findings_in_view(
+    bbox: str = Query(..., pattern=BBOX),
+    map_ids: list[str] | None = Query(None, max_length=50),
+    frame: str | None = Query(None, pattern="^site$"),
+    handle: ProjectHandle = Depends(get_project),
+) -> MapFindingsInViewOut:
+    items, truncated = views.findings_in_view(handle, views.parse_bbox(bbox), map_ids)
+    return MapFindingsInViewOut(items=items, truncated=truncated)
