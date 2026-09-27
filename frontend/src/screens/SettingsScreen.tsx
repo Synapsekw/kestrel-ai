@@ -29,9 +29,11 @@ export function SettingsScreen() {
       )}
       {project && (
         <div className="divide-y divide-line">
-          <ProjectTypesSection project={project} onSaved={setProject} />
+          {/* Keyed by project: a switch to another project starts these sections' status, error and
+              drafts afresh, while a save within one project keeps its status. */}
+          <ProjectTypesSection key={`types-${project.id}`} project={project} onSaved={setProject} />
           <PreannotationSection project={project} onSaved={setProject} />
-          <ImportDefaultsSection project={project} onSaved={setProject} />
+          <ImportDefaultsSection key={`import-${project.id}`} project={project} onSaved={setProject} />
           <SourcesSection projectId={projectId} />
           <ProvidersSection />
         </div>
