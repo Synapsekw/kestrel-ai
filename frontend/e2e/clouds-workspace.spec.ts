@@ -165,3 +165,28 @@ test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orb
   await page.keyboard.press("Alt+2");
   await expect.poll(async () => shape(await pose())).toEqual({ above: false, level: true, south: true });
 });
+
+test("at 1280 x 720 a lost context's Reload view sits clear of every panel and takes the click", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await openSettled(page);
+  // Lose the viewer's own context (getContext answers the one three created).
+  await page.evaluate(() => {
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-testid="cloud-canvas"]')!;
+    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+  });
+  const reload = page.getByRole("button", { name: "Reload view" });
+  await expect(reload).toBeVisible();
+  // nothing paints above the button: Playwright's hit test must land on it
+  await reload.click({ trial: true, timeout: 5_000 });
+  const notice = (await page.getByTestId("cloud-viewer-notice").boundingBox())!;
+  for (const id of ["cloud-panel", "cloud-inspector", "cloud-hintbar"]) {
+    const other = (await page.getByTestId(id).boundingBox())!;
+    expect(
+      intersects(notice, other),
+      `notice ${JSON.stringify(notice)} vs ${id} ${JSON.stringify(other)}`,
+    ).toBe(false);
+  }
+});

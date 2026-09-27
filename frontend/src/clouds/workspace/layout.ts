@@ -16,3 +16,19 @@ export const READOUT_BAND = {
   left: GIZMO_LEFT + GIZMO_WIDTH + READOUT_GAP,
   right: EDGE + MINIMAP_WIDTH + READOUT_GAP,
 } as const;
+
+/** Cloud panel: left 72, top 14, width 282. Inspector: right 14, top 14, width 330 (spec §6). */
+export const CLOUD_PANEL_LEFT = GIZMO_LEFT;
+export const CLOUD_PANEL_WIDTH = 282;
+export const INSPECTOR_WIDTH = 330;
+/** The hint bar's height (one line of `sm` buttons in a py-2 pill), rounded up. */
+export const HINT_BAR_HEIGHT = 48;
+/**
+ * Where the viewer's notices (no WebGL, load error, lost context with "Reload view") go: the free
+ * centre band between the cloud panel and the inspector, below the hint bar, so no panel covers them.
+ */
+export const NOTICE_INSET = {
+  left: CLOUD_PANEL_LEFT + CLOUD_PANEL_WIDTH + EDGE,
+  right: EDGE + INSPECTOR_WIDTH + EDGE,
+  top: EDGE + HINT_BAR_HEIGHT + READOUT_GAP,
+} as const;

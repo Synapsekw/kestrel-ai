@@ -88,11 +88,16 @@ export interface CloudViewerProps {
   onViewState?(state: ViewState): void;
   /** Points shown and nodes loading, at the engine's ≤ 4 Hz bar cadence (the old status bar's numbers). */
   onPointsShown?(s: { pts: number; loading: number }): void;
+  /** Where the notices sit, in px from the viewer's edges (the workspace keeps them clear of its panels). */
+  noticeInset?: { left: number; right: number; top: number };
 }
+
+const DEFAULT_NOTICE_INSET = { left: 16, right: 16, top: 16 } as const;
 
 /** The React shell around `viewer/engine.ts` (spec §5 Viewer row): alerts, status bar, handle, hook. */
 export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(function CloudViewer(props, ref) {
   const { cloud, octreeUrl, token, budget, colour, elevationRange, pointSize, armed = false } = props;
+  const noticeInset = props.noticeInset ?? DEFAULT_NOTICE_INSET;
   const box = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engine = useRef<CloudEngine | null>(null);
@@ -301,34 +306,35 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         className="absolute inset-0 h-full w-full bg-bg"
         style={{ cursor: armed ? "crosshair" : "grab" }}
       />
-      {/* The notices sit on the opaque glass-solid backing: the tones alone are 15% tints, unreadable over the points. */}
-      {noWebGlKey === sceneKey && (
-        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
-          <Alert tone="danger" title="The 3D view could not start">
-            This computer&apos;s graphics could not start WebGL, which the 3D view draws with. Updating the
-            graphics driver usually fixes this; the cloud&apos;s details and export still work.
-          </Alert>
-        </div>
-      )}
-      {loadError?.key === sceneKey && (
-        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
-          <Alert tone="danger" title="The 3D view could not be shown">
-            {loadError.message}
-          </Alert>
-        </div>
-      )}
-      {lostKey === sceneKey && (
-        <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">
-          <Alert
-            tone="warn"
-            actions={
-              <Button size="sm" icon="refresh" onClick={() => setGeneration((g) => g + 1)}>
-                Reload view
-              </Button>
-            }
-          >
-            The 3D view lost its graphics context
-          </Alert>
+      {/* The notices sit on the opaque glass-solid backing: the tones alone are 15% tints, unreadable
+          over the points. z 15: above the glass panels (z 10), below the hint bar (z 20). */}
+      {(noWebGlKey === sceneKey || loadError?.key === sceneKey || lostKey === sceneKey) && (
+        <div
+          data-testid="cloud-viewer-notice"
+          className="absolute z-[15] rounded-control bg-glass-solid shadow-elev-2"
+          style={noticeInset}
+        >
+          {noWebGlKey === sceneKey ? (
+            <Alert tone="danger" title="The 3D view could not start">
+              This computer&apos;s graphics could not start WebGL, which the 3D view draws with. Updating the
+              graphics driver usually fixes this; the cloud&apos;s details and export still work.
+            </Alert>
+          ) : loadError?.key === sceneKey ? (
+            <Alert tone="danger" title="The 3D view could not be shown">
+              {loadError.message}
+            </Alert>
+          ) : (
+            <Alert
+              tone="warn"
+              actions={
+                <Button size="sm" icon="refresh" onClick={() => setGeneration((g) => g + 1)}>
+                  Reload view
+                </Button>
+              }
+            >
+              The 3D view lost its graphics context
+            </Alert>
+          )}
         </div>
       )}
     </div>

@@ -24,6 +24,7 @@ import { useReportViewsFeature } from "./features/reportViews";
 import { Gizmo } from "./ViewGizmo";
 import { HintBar } from "./HintBar";
 import { Inspector } from "./Inspector";
+import { NOTICE_INSET } from "./layout";
 import { Minimap } from "./SiteMinimap";
 import { Palette } from "./Palette";
 import { Readout } from "./Readout";
@@ -198,6 +199,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
         onAttributes={setAvailability}
         onViewState={onViewState}
         onPointsShown={(s) => setPointsShown(s.pts)}
+        noticeInset={NOTICE_INSET}
       />
       {running && features.layers.length > 0 && (
         <div className="pointer-events-none absolute inset-0 z-[5]">

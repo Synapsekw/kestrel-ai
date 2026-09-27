@@ -46,6 +46,29 @@ describe("CloudViewer without WebGL", () => {
   });
 });
 
+describe("CloudViewer notices (no WebGL, load error, lost context)", () => {
+  it("sit above the workspace's glass panels, in the band the workspace leaves free", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    render(
+      <CloudViewer
+        cloud={exampleCloud}
+        octreeUrl="http://127.0.0.1:1/octree/"
+        token="t"
+        budget={3_000_000}
+        colour="rgb"
+        elevationRange={[0, 1]}
+        pointSize={1}
+        noticeInset={{ left: 368, right: 358, top: 66 }}
+      />,
+    );
+    const host = screen.getByTestId("cloud-viewer-notice");
+    expect(host).toContainElement(screen.getByRole("alert"));
+    // Panels are z 10 and the hint bar z 20 (spec §6 stack); the notice sits between them.
+    expect(host).toHaveClass("z-[15]");
+    expect(host).toHaveStyle({ left: "368px", right: "358px", top: "66px" });
+  });
+});
+
 describe("CloudViewer handle without an engine", () => {
   it("answers every handle member without WebGL, and nothing throws", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
