@@ -249,6 +249,7 @@ describe("TrainForm", () => {
       { api },
     );
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/model in the library yet/)).not.toBeInTheDocument();
   });
 
   it("explains the parameters and warns about a dataset too small to learn from", () => {

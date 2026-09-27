@@ -261,7 +261,7 @@ export function TrainForm({
           <Alert tone="info">Datasets are not available yet (they arrive with the dataset backend).</Alert>
         </div>
       )}
-      {dataset && usableModels.length === 0 && !modelsLoading && !modelsUnavailable && (
+      {dataset && usableModels.length === 0 && !modelsLoading && !modelsUnavailable && !modelsError && (
         <Alert tone="info">
           {`No ${TASK_NOUN[dataset.task]} model in the library yet. Add ${
             dataset.task === "segment" ? "a segmentation starter" : "a starter"
