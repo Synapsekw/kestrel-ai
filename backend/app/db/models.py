@@ -344,7 +344,12 @@ class MapDetection(Base):
     __table_args__ = (
         Index("ix_map_detection_run_xy", "run_id", "x", "y"),
         Index("ix_map_detection_run_state", "run_id", "review_state"),
-        Index("ux_map_detection_finding", "finding_id", unique=True),
+        Index(
+            "ux_map_detection_finding",
+            "finding_id",
+            unique=True,
+            sqlite_where=sa.text("finding_id IS NOT NULL"),
+        ),
     )
 
 

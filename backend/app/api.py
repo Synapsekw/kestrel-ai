@@ -138,7 +138,10 @@ for _module in (
 # broken GDAL costs these endpoints, never the app, and no "map" path is left half-served
 # (tests/test_api_maps_guard.py). Each M unit inserts one line, its router module, before
 # "app.workspace.stubs" and deletes its tuples from app/workspace/stubs.py.
-for _module in ("app.workspace.stubs",):
+for _module in (
+    # each M unit inserts its router module on its own line above this one
+    "app.workspace.stubs",
+):
     try:
         if "maps_router" not in globals():
             raise ImportError("the maps router did not load")

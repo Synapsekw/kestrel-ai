@@ -129,11 +129,14 @@ def test_upgrade_adds_the_tables_columns_and_indexes_the_models_name(tmp_path):
                 "map_measurement",
                 "drawing",
             )
-            indexes = {t: {r[1]: r[2] for r in c.exec_driver_sql(f"PRAGMA index_list({t})")} for t in tables}
+            # PRAGMA index_list columns: seq, name, unique, origin, partial.
+            indexes = {
+                t: {r[1]: (r[2], r[4]) for r in c.exec_driver_sql(f"PRAGMA index_list({t})")} for t in tables
+            }
             fks = {(r[3], r[2], r[6]) for r in c.exec_driver_sql("PRAGMA foreign_key_list(map_measurement)")}
     finally:
         engine.dispose()
-    assert indexes["map_detection"]["ux_map_detection_finding"] == 1  # unique
+    assert indexes["map_detection"]["ux_map_detection_finding"] == (1, 1)  # unique, partial
     assert "ix_volume_measurement_created" in indexes["volume_measurement"]
     assert "ix_cloud_measurement_created" in indexes["cloud_measurement"]
     assert "ix_map_measurement_created" in indexes["map_measurement"]

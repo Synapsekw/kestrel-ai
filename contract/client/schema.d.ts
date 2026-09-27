@@ -7203,7 +7203,7 @@ export interface components {
             polygon_wgs84?: components["schemas"]["LonLat"][];
             map_id?: string;
             polygon_px?: components["schemas"]["PixelPoint"][];
-            /** @description general when absent on create */
+            /** @description unchanged when absent */
             category?: components["schemas"]["SiteAreaCategory"];
         };
         SiteAreaList: {
@@ -16213,7 +16213,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error` */
+            /** @description a polygon the rules refuse (`invalid_geometry`: self-crossing, too small, too large or off the surface, or neither (or both) of `polygon_native` and `polygon_site` given) or a base that does not fit (`invalid_base`: a flat base without `z`, a surface base without `surface_id`, or a base surface with local coordinates under a georeferenced top or the reverse; a base in any other georeferenced CRS is accepted and reprojected); a malformed body is `validation_error` */
             422: {
                 headers: {
                     [name: string]: unknown;

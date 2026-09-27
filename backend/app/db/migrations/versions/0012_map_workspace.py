@@ -49,7 +49,13 @@ def upgrade() -> None:
     op.add_column("map_run", sa.Column("region_px", sa.JSON(), nullable=True))
     op.add_column("map_detection", sa.Column("finding_id", sa.String(36), nullable=True))
     op.add_column("site_area", sa.Column("category", sa.String(), nullable=False, server_default="general"))
-    op.create_index("ux_map_detection_finding", "map_detection", ["finding_id"], unique=True)
+    op.create_index(
+        "ux_map_detection_finding",
+        "map_detection",
+        ["finding_id"],
+        unique=True,
+        sqlite_where=sa.text("finding_id IS NOT NULL"),
+    )
     op.create_index("ix_volume_measurement_created", "volume_measurement", ["created_at", "id"])
     op.create_index("ix_cloud_measurement_created", "cloud_measurement", ["created_at", "id"])
     op.create_table(
