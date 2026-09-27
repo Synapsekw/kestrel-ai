@@ -84,8 +84,10 @@ def test_bowtie_keeps_largest_part():
     poly = Polygon(f.points)
     assert poly.is_valid and poly.exterior.is_ccw
     assert (f.x, f.y, f.x + f.w, f.y + f.h) == pytest.approx(poly.bounds)
-    other_lobe = Polygon([[0, 0], [100, 100], [0, 60]])
-    assert f.area_px >= other_lobe.area
+    # The bowtie self-intersects at (37.5, 37.5), splitting it into two triangular lobes:
+    # (0,60)-(37.5,37.5)-(0,0) with area 1125, and (100,100)-(100,0)-(37.5,37.5) with area
+    # 3125 (the larger one, kept). Assert the exact kept area rather than a loose bound.
+    assert f.area_px == pytest.approx(3125.0, abs=0.5)
 
 
 def test_polygon_is_clipped_to_the_image():
