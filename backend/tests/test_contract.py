@@ -93,9 +93,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "listImageMeasurements",  # I-BA
-    "createImageMeasurement",  # I-BA
-    "deleteImageMeasurement",  # I-BA
     "refreshImageMetadata",  # I-BK
     "getImageIndex",  # I-BX
     "rebuildImageSummary",  # I-BX

@@ -129,3 +129,49 @@ class BoxReview(BaseModel):
 
 class BoxReviewResult(BaseModel):
     updated: int
+
+
+class ImageMeasurementOut(BaseModel):
+    id: str
+    image_id: str
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    label: str
+    created_at: datetime
+    length_px: float
+    length_mm: float | None
+    sigma_mm: float | None
+
+    @classmethod
+    def from_row(cls, row, scale) -> "ImageMeasurementOut":
+        from app.imagery.measurements import headline, length_px
+
+        px = length_px(row)
+        mm, sigma = headline(px, scale)
+        return cls(
+            id=row.id,
+            image_id=row.image_id,
+            x1=row.x1,
+            y1=row.y1,
+            x2=row.x2,
+            y2=row.y2,
+            label=row.label,
+            created_at=row.created_at,
+            length_px=round(px, 3),
+            length_mm=mm,
+            sigma_mm=sigma,
+        )
+
+
+class ImageMeasurementList(BaseModel):
+    items: list[ImageMeasurementOut]
+
+
+class ImageMeasurementCreate(BaseModel):
+    x1: float
+    y1: float
+    x2: float
+    y2: float
+    label: str = Field(default="", max_length=200)

@@ -3,7 +3,7 @@ kept box routes here from `app/datasets/router.py` and replaces the measurement 
 
 from fastapi import APIRouter, Depends, Query
 
-from app.imagery import annotations
+from app.imagery import annotations, measurements
 from app.imagery.schemas import (
     BoxCreate,
     BoxList,
@@ -12,19 +12,13 @@ from app.imagery.schemas import (
     BoxReviewResult,
     BoxUpdate,
     BoxWriteResult,
+    ImageMeasurementCreate,
+    ImageMeasurementList,
+    ImageMeasurementOut,
 )
 from app.projects.service import ProjectHandle, get_project
-from app.stubs import add_stubs
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["images"])
-
-STUBS: list[tuple[str, str, str]] = [
-    ("GET", "/images/{imageId}/measurements", "listImageMeasurements"),
-    ("POST", "/images/{imageId}/measurements", "createImageMeasurement"),
-    ("DELETE", "/image-measurements/{imageMeasurementId}", "deleteImageMeasurement"),
-]
-
-add_stubs(router, STUBS)
 
 
 @router.get("/images/{imageId}/boxes", response_model=BoxList)
@@ -75,3 +69,28 @@ def delete_box(boxId: str, handle: ProjectHandle = Depends(get_project)) -> None
 @router.post("/boxes/review", response_model=BoxReviewResult)
 def review_boxes(body: BoxReview, handle: ProjectHandle = Depends(get_project)) -> BoxReviewResult:
     return BoxReviewResult(updated=annotations.review_boxes(handle, body.box_ids, body.action))
+
+
+@router.get("/images/{imageId}/measurements", response_model=ImageMeasurementList)
+def list_image_measurements(  # noqa: N803
+    imageId: str, handle: ProjectHandle = Depends(get_project)
+) -> ImageMeasurementList:
+    rows, scale = measurements.list_measurements(handle, imageId)
+    return ImageMeasurementList(items=[ImageMeasurementOut.from_row(m, scale) for m in rows])
+
+
+@router.post("/images/{imageId}/measurements", response_model=ImageMeasurementOut, status_code=201)
+def create_image_measurement(
+    imageId: str,  # noqa: N803
+    body: ImageMeasurementCreate,
+    handle: ProjectHandle = Depends(get_project),
+) -> ImageMeasurementOut:
+    row, scale = measurements.create_measurement(
+        handle, imageId, body.x1, body.y1, body.x2, body.y2, body.label
+    )
+    return ImageMeasurementOut.from_row(row, scale)
+
+
+@router.delete("/image-measurements/{imageMeasurementId}", status_code=204)
+def delete_image_measurement(imageMeasurementId: str, handle: ProjectHandle = Depends(get_project)) -> None:  # noqa: N803
+    measurements.delete_measurement(handle, imageMeasurementId)
