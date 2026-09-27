@@ -132,7 +132,6 @@ EXPECTED_STUBS |= {
 BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
-    "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
     "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at

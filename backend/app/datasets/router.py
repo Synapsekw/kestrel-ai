@@ -35,6 +35,7 @@ from app.datasets.schemas import (
 from app.db.models import GeoMap, Source
 from app.errors import AppError, not_found
 from app.events_util import publish_image_ids_event
+from app.imagery.filters import SEVERITY_PATTERN, STATUS_PATTERN, ImageFilters, parse_csv
 from app.jobs.schemas import JobOut
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.schemas import ImportSettings, Stats
@@ -175,19 +176,36 @@ def list_images(
     labeled: bool | None = None,
     has_pending: bool | None = None,
     search: str | None = None,
+    has_findings: bool | None = None,
+    severity: str | None = Query(None, pattern=SEVERITY_PATTERN, description="csv of levels 1-9"),
+    finding_status: str | None = Query(None, pattern=STATUS_PATTERN, description="csv of finding statuses"),
+    type_ids: str | None = Query(None, min_length=1, description="csv of catalogue type ids"),
+    has_suggestions: bool | None = None,
+    reviewed: bool | None = None,
+    unlabeled: bool | None = None,
     ids: str | None = Query(None, description="comma-separated image ids; overrides the other filters"),
     sort: ImageSort = "path",
     order: SortOrder = "asc",
     limit: int | None = Query(None, ge=1, le=1000),
     cursor: str | None = None,
 ) -> ImagePage:
-    rows, next_cursor, total = images.list_images(
-        handle,
+    f = ImageFilters(
         source_id=source_id,
         group_key=group_key,
         labeled=labeled,
         has_pending=has_pending,
         search=search,
+        has_findings=has_findings,
+        severity=parse_csv(severity),
+        finding_status=parse_csv(finding_status),
+        type_ids=parse_csv(type_ids),
+        has_suggestions=has_suggestions,
+        reviewed=reviewed,
+        unlabeled=unlabeled,
+    )
+    rows, next_cursor, total = images.list_images(
+        handle,
+        filters=f,
         ids=[i for i in ids.split(",") if i] if ids is not None else None,
         sort=sort,
         order=order,
