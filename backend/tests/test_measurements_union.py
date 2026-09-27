@@ -80,6 +80,16 @@ def test_an_edit_does_not_move_a_row(client, handle, project_id):
     assert [i["id"] for i in first["items"] + rest["items"]] == [new, old]
 
 
+def test_a_same_provider_tie_breaks_by_id_ascending(client, project_id, handle):
+    """Two rows of the *same* provider (map) sharing a `created_at` settle by `id` ascending, the
+    union order's last tiebreak key (`kind` alone does not separate them), walked one at a time so
+    the id-asc branch of `_after` and the per-provider `order_by` both fire."""
+    a = add_map_measurement(handle, kind="area", created_at=at(1))
+    b = add_map_measurement(handle, kind="distance", created_at=at(1))
+    want = sorted([a, b])
+    assert [i["id"] for i in _all(client, project_id, limit=1)] == want
+
+
 def test_kind_filter(client, project_id, mixed):
     assert [i["id"] for i in _all(client, project_id, kind="volume")] == [mixed["v5"], mixed["v2"]]
     both = _all(client, project_id, kind=["cloud", "map"], limit=2)

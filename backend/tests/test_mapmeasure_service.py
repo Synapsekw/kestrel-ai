@@ -15,7 +15,7 @@ listed profile row's `results` carries `stations_m`/`series` as empty arrays, no
 
 import pytest
 from mapmeasure_rows import set_site_frame
-from pyproj import Transformer
+from pyproj import CRS, Transformer
 from surfaces import EPSG, X0, Y1, fixture_spec, plane
 from volume_rows import add_surface
 
@@ -128,6 +128,25 @@ def test_patch_recomputes_only_when_vertices_or_surfaces_change(handle, dsm):
     assert moved.results.grid_length_m == pytest.approx(50.0)
     with_dsm = _patch(handle, out.id, surface_ids=[dsm])
     assert with_dsm.results.length_3d_m is not None and with_dsm.vertices == moved.vertices
+
+
+def test_patch_vertices_restamps_the_rows_frame(handle, dsm):
+    """A PATCH of `vertices` takes them in the *current* site frame (ruling 1) and re-stamps the
+    row's `crs_wkt`/`epsg` to it, not the frame it was created in; the results are recomputed in
+    the new frame too."""
+    out = _create(handle, kind="distance", vertices=LINE)
+    assert (out.epsg, out.crs_wkt) == (EPSG, CRS.from_epsg(EPSG).to_wkt())
+    set_site_frame(handle, 32638)  # the operator switched the site CRS to the neighbouring zone
+    moved = [[X0 + 5, Y1 - 5], [X0 + 65, Y1 - 5]]  # given in the new (32638) site frame
+    patched = _patch(handle, out.id, vertices=moved)
+    assert (patched.epsg, patched.crs_wkt) == (32638, CRS.from_epsg(32638).to_wkt())
+    assert patched.vertices == moved
+    assert patched.results.grid_length_m == pytest.approx(60.0)
+    assert patched.results != out.results  # recomputed in the new frame, not carried over
+    with handle.session() as s:
+        row = s.get(MapMeasurement, out.id)
+        assert (row.epsg, row.crs_wkt) == (32638, CRS.from_epsg(32638).to_wkt())
+        assert row.geometry == moved
 
 
 def test_patch_against_a_missing_or_building_surface_changes_nothing(handle, dsm):

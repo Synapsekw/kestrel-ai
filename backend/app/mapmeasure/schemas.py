@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer
+from pydantic import BaseModel, Field, SerializerFunctionWrapHandler, model_serializer, model_validator
 
 MapMeasurementKind = Literal["distance", "area", "profile"]
 Coord = Annotated[list[Annotated[float, Field(allow_inf_nan=False)]], Field(min_length=2, max_length=2)]
@@ -35,12 +35,36 @@ class MapMeasurementCreate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=2000)
 
+    @model_validator(mode="before")
+    @classmethod
+    def _note_has_no_null_branch(cls, data):
+        """Contract: `MapMeasurementCreate.note` is `type: string` (no `null` branch) - omit it to
+        leave it unset, but an explicit `null` is a schema violation, not a no-op."""
+        if isinstance(data, dict) and "note" in data and data["note"] is None:
+            raise ValueError("note cannot be null; omit it to leave it unset")
+        return data
+
 
 class MapMeasurementPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=2000)
     vertices: Vertices | None = None
     surface_ids: list[str] | None = Field(default=None, max_length=3)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _reject_empty_body_and_null_fields(cls, data):
+        """Contract: `minProperties: 1`, and only `note` carries a `null` branch ("null clears
+        it"); `name`, `vertices` and `surface_ids` do not, so an explicit `null` for them is a
+        schema violation, not a 200 no-op."""
+        if not isinstance(data, dict):
+            return data
+        if not data:
+            raise ValueError("at least one field is required")
+        nulled = [f for f in ("name", "vertices", "surface_ids") if f in data and data[f] is None]
+        if nulled:
+            raise ValueError(f"{', '.join(nulled)} cannot be null")
+        return data
 
 
 class ProfileSeries(BaseModel):
@@ -62,8 +86,8 @@ class MapMeasurementResults(BaseModel):
     grid_area_m2: float | None = None
     grid_perimeter_m: float | None = None
     areal_scale_factor: float | None = None
-    stations_m: list[float] | None = None  # null in the list
-    series: list[ProfileSeries] | None = None  # null in the list
+    stations_m: list[float] | None = None  # listed profile rows carry [] placeholders
+    series: list[ProfileSeries] | None = None  # listed profile rows carry [] placeholders
     z_min: float | None = None
     z_max: float | None = None
     cut_area_m2: float | None = None
