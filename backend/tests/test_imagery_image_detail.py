@@ -52,6 +52,20 @@ def test_patch_marked_empty_still_works_and_leaves_distance(client, project_id, 
     assert body["marked_empty"] is True and body["camera"]["subject_distance_m"] == 9.0
 
 
+def test_patch_marked_empty_409_leaves_subject_distance_unchanged(client, project, project_id, image_id):
+    """`marked_empty` is applied first (routes_camera.py), so a PATCH sending both fields where
+    `marked_empty` 409s (ground truth on the image, `empties.set_marked_empty`) must save nothing:
+    `subject_distance_m` stays at its old value."""
+    url = f"{API.format(pid=project_id)}/{image_id}"
+    assert client.patch(url, json={"subject_distance_m": 9.0}).status_code == 200
+    class_id = project["classes"][0]["id"]
+    box = client.post(f"{url}/boxes", json={"class_id": class_id, "x": 1, "y": 2, "w": 3, "h": 4})
+    assert box.status_code == 201, box.text  # ground truth: set_marked_empty now 409s
+    r = client.patch(url, json={"marked_empty": True, "subject_distance_m": 42.0})
+    assert r.status_code == 409, r.text
+    assert client.get(url).json()["camera"]["subject_distance_m"] == 9.0
+
+
 @pytest.mark.parametrize("bad", [0, -1, 20000])
 def test_patch_rejects_out_of_range_distance(client, project_id, image_id, bad):
     r = client.patch(f"{API.format(pid=project_id)}/{image_id}", json={"subject_distance_m": bad})
