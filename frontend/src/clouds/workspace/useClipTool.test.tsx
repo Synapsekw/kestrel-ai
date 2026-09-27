@@ -59,6 +59,18 @@ describe("the clip-box tool (plan Ruling 4)", () => {
     expect(localStorage.getItem(clipKey(exampleCloud.id))).toBeNull();
   });
 
+  it("places a box centred on the pick after the box was cleared", async () => {
+    render(<Harness />);
+    await userEvent.click(screen.getByRole("button", { name: "arm" }));
+    await userEvent.click(screen.getByRole("button", { name: "Clear box" }));
+    expect(screen.getByRole("status")).toHaveTextContent("none");
+    expect(screen.getByTestId("hint")).toHaveTextContent("No box: click the cloud to place one");
+    await userEvent.click(screen.getByRole("button", { name: "pick" }));
+    const centre = [FAKE_PICK.x, FAKE_PICK.y, FAKE_PICK.z];
+    expect(screen.getByRole("status")).toHaveTextContent(centre.join(","));
+    expect(setClipBox).toHaveBeenLastCalledWith(expect.objectContaining({ centre }), "show_inside");
+  });
+
   it("re-applies a remembered box once the view runs", () => {
     localStorage.setItem(
       clipKey(exampleCloud.id),

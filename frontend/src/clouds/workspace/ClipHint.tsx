@@ -11,12 +11,20 @@ const AXES = [
 /** The clip-box tool's hint-bar controls (plan Ruling 4): mode, size, yaw and "Clear box". */
 export function ClipHint({
   box,
+  hasBounds,
   onChange,
 }: {
   box: CloudClipBox | null;
+  /** False when the cloud has no bounds, so no box can be placed. */
+  hasBounds: boolean;
   onChange(b: CloudClipBox | null): void;
 }) {
-  if (!box) return <span className="text-muted">No box: this cloud has no bounds</span>;
+  if (!box)
+    return (
+      <span className="text-muted">
+        {hasBounds ? "No box: click the cloud to place one" : "No box: this cloud has no bounds"}
+      </span>
+    );
   return (
     <>
       <Segmented

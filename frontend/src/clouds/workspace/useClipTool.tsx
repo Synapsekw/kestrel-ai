@@ -40,8 +40,10 @@ export function useClipTool({
       id: "clip",
       picks: true,
       onArm: () => setBox((b) => b ?? (bounds ? defaultClipBox(bounds) : null)),
-      onPick: (p) => setBox((b) => (b ? recentreClip(b, p) : b)),
-      hint: <ClipHint box={box} onChange={setBox} />,
+      // After "Clear box" a click places a new box there (the hint says so).
+      onPick: (p) =>
+        setBox((b) => (b ? recentreClip(b, p) : bounds ? recentreClip(defaultClipBox(bounds), p) : b)),
+      hint: <ClipHint box={box} hasBounds={bounds !== null} onChange={setBox} />,
     }),
     [box, bounds],
   );
