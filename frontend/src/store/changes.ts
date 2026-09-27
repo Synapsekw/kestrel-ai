@@ -33,6 +33,8 @@ interface ChangesState {
   renewFindingEchoes: (ids: readonly string[]) => void;
   /** Bumped on `migration.changed`: the Projects list re-reads (F §11.3). */
   projectsRevision: number;
+  /** Bumped on `pointclouds.changed` (a cloud, its measurements, a camera offset or a report view changed). */
+  pointcloudsRevision: number;
   /** The project the route has open (set by the Shell), or null. The events socket is app-wide, so
    * `findings.changed`, `data.changed`, `images.changed`, `boxes.changed`, `surfaces.changed` and
    * `volumes.changed` of another project (a job running in B while A is open) are ignored rather
@@ -54,6 +56,7 @@ const PROJECT_SCOPED_EVENTS: ReadonlySet<string> = new Set([
   "boxes.changed",
   "surfaces.changed",
   "volumes.changed",
+  "pointclouds.changed",
 ]);
 
 export const useChangesStore = create<ChangesState>((set) => ({
@@ -70,6 +73,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   releaseFindingEchoes: (ids) => set((s) => ({ findingEchoes: releaseEchoes(s.findingEchoes, ids) })),
   renewFindingEchoes: (ids) => set((s) => ({ findingEchoes: renewEchoes(s.findingEchoes, ids, Date.now()) })),
   projectsRevision: 0,
+  pointcloudsRevision: 0,
   openProjectId: null,
   setOpenProject: (openProjectId) => set({ openProjectId }),
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
@@ -89,6 +93,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
       }
       if (ev.type === "surfaces.changed") return { surfacesRevision: s.surfacesRevision + 1 };
       if (ev.type === "volumes.changed") return { volumesRevision: s.volumesRevision + 1 };
+      if (ev.type === "pointclouds.changed") return { pointcloudsRevision: s.pointcloudsRevision + 1 };
       if (ev.type === "data.changed") return { dataRevision: s.dataRevision + 1 };
       if (ev.type === "findings.changed") {
         // This client's own write already bumped once; its echo would re-read every view again.

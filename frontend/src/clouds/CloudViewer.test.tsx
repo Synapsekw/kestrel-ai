@@ -25,6 +25,25 @@ describe("CloudViewer without WebGL", () => {
     expect(alert).toHaveTextContent("WebGL");
     expect(screen.getByTestId("cloud-canvas")).toBeInTheDocument();
   });
+
+  it("reports that the view cannot start, so the workspace hides the panels that need it", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const states: string[] = [];
+    render(
+      <CloudViewer
+        cloud={exampleCloud}
+        octreeUrl="http://127.0.0.1:1/octree/"
+        token="t"
+        budget={3_000_000}
+        colour="rgb"
+        elevationRange={[0, 1]}
+        pointSize={1}
+        onViewState={(s) => states.push(s)}
+      />,
+    );
+    expect(states).toEqual(["no-webgl"]);
+    expect(screen.queryByTestId("cloud-points-shown")).toBeNull(); // the S1 status bar is gone
+  });
 });
 
 describe("CloudViewer handle without an engine", () => {
@@ -52,6 +71,8 @@ describe("CloudViewer handle without an engine", () => {
       h.goToPose({ position: [0, 0, 10], target: [0, 1, 0], up: [0, 0, 1], fov_deg: 60 });
       h.fit();
       h.topView();
+      h.setEdl(false);
+      h.requestRender();
     }).not.toThrow();
     expect(h.navMode()).toBe("pan"); // the shell keeps it for the next engine
     expect(h.frameTimes()).toEqual([]);

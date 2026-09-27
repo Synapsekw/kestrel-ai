@@ -61,7 +61,13 @@ export interface CloudViewerHandle {
   topSnapshot(px?: number): Promise<ImageBitmap | null>;
   frameTimes(): number[];
   edl(): EdlState | null;
+  setEdl(on: boolean): void;
+  /** Draws one frame now (e.g. after the panels around the canvas changed its layout). */
+  requestRender(): void;
 }
+
+/** What the 3D view is doing, for the workspace (plan Ruling 16). */
+export type ViewState = "running" | "no-webgl" | "lost" | "load-error";
 
 export interface CloudViewerProps {
   cloud: PointCloud;
@@ -78,10 +84,11 @@ export interface CloudViewerProps {
   onDoublePick?(p: CloudPick): void;
   /** The octree loaded: which colour modes this cloud can show (spec §7 Colour). */
   onAttributes?(a: ColourAvailability): void;
+  /** The view started, could not start (no WebGL), failed to load, or lost its context. */
+  onViewState?(state: ViewState): void;
+  /** Points shown and nodes loading, at the engine's ≤ 4 Hz bar cadence (the old status bar's numbers). */
+  onPointsShown?(s: { pts: number; loading: number }): void;
 }
-
-const fmt = (v: number) => v.toFixed(3);
-const points = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1 });
 
 /** The React shell around `viewer/engine.ts` (spec §5 Viewer row): alerts, status bar, handle, hook. */
 export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(function CloudViewer(props, ref) {
@@ -95,6 +102,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     onHover: props.onHover,
     onDoublePick: props.onDoublePick,
     onAttributes: props.onAttributes,
+    onViewState: props.onViewState,
+    onPointsShown: props.onPointsShown,
     armed,
   });
   const [generation, setGeneration] = useState(0);
@@ -104,11 +113,6 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
   const [lostKey, setLostKey] = useState<string | null>(null);
   const [noWebGlKey, setNoWebGlKey] = useState<string | null>(null);
-  const [bar, setBar] = useState<{ pts: number; loading: number; pick: CloudPick | null }>({
-    pts: 0,
-    loading: 0,
-    pick: null,
-  });
   const bounds = cloud.bounds_native as Bounds6 | null;
   // Read when the engine is built, so a colour/size/budget change never rebuilds the scene.
   const materialRef = useRef({ colour, elevationRange, pointSize });
@@ -125,6 +129,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       onHover: props.onHover,
       onDoublePick: props.onDoublePick,
       onAttributes: props.onAttributes,
+      onViewState: props.onViewState,
+      onPointsShown: props.onPointsShown,
       armed,
     };
   });
@@ -148,16 +154,19 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         edl: !reducedEffects(),
         events: {
           isArmed: () => callbacks.current.armed,
-          onPick: (p) => {
-            setBar((b) => ({ ...b, pick: p }));
-            callbacks.current.onPick?.(p);
-          },
+          onPick: (p) => callbacks.current.onPick?.(p),
           onHover: (p) => callbacks.current.onHover?.(p),
           onDoublePick: (p) => callbacks.current.onDoublePick?.(p),
-          onBar: (s) => setBar((b) => ({ ...b, pts: s.pts, loading: s.loading })),
+          onBar: (s) => callbacks.current.onPointsShown?.({ pts: s.pts, loading: s.loading }),
           onLoaded: (a) => callbacks.current.onAttributes?.(a),
-          onLoadError: (message) => setLoadError({ key, message }),
-          onContextLost: () => setLostKey(key),
+          onLoadError: (message) => {
+            setLoadError({ key, message });
+            callbacks.current.onViewState?.("load-error");
+          },
+          onContextLost: () => {
+            setLostKey(key);
+            callbacks.current.onViewState?.("lost");
+          },
         },
       });
     } catch (err) {
@@ -165,11 +174,13 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       // the throw take the whole screen down to the router's error page.
       if (err instanceof NoWebGlError) {
         setNoWebGlKey(key);
+        callbacks.current.onViewState?.("no-webgl");
         return;
       }
       throw err;
     }
     engine.current = e;
+    callbacks.current.onViewState?.("running");
     if (navRef.current !== "orbit") e.setNavMode(navRef.current);
     if (hiddenRef.current.size > 0) e.setClassVisibility(hiddenRef.current);
     bridge.attach(e);
@@ -275,6 +286,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       topSnapshot: (px) => engine.current?.topSnapshot(px) ?? Promise.resolve(null),
       frameTimes: () => engine.current?.frameTimes() ?? [],
       edl: () => engine.current?.edl() ?? null,
+      setEdl: (on) => engine.current?.setEdl(on),
+      requestRender: () => engine.current?.requestRender(),
     }),
     [bridge],
   );
@@ -318,16 +331,6 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           </Alert>
         </div>
       )}
-      {/* S1's status bar: C-W1 deletes it (the readout pill replaces it). */}
-      <div className="absolute inset-x-0 bottom-0 flex items-center gap-4 border-t border-line bg-glass px-3 py-1.5 text-xs tabular-nums text-muted">
-        <span data-testid="cloud-points-shown">{points.format(bar.pts / 1e6)} M points shown</span>
-        {bar.loading > 0 && <span>loading {bar.loading} nodes</span>}
-        {bar.pick && (
-          <span className="ml-auto text-ink">
-            E {fmt(bar.pick.x)} · N {fmt(bar.pick.y)} · Z {fmt(bar.pick.z)}
-          </span>
-        )}
-      </div>
     </div>
   );
 });

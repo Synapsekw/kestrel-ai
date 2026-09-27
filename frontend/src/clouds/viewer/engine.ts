@@ -115,7 +115,8 @@ export interface CloudEngine {
     px?: number,
   ): { width: number; height: number; data: Uint8ClampedArray<ArrayBuffer> } | null;
   topSnapshotSample(px?: number): SnapshotSample | null;
-  renderToTarget(target: THREE.WebGLRenderTarget, cam: THREE.Camera): void;
+  /** `overlays: false` leaves the overlay scene (pins, labels, markers) out, e.g. for the minimap's top snapshot. */
+  renderToTarget(target: THREE.WebGLRenderTarget, cam: THREE.Camera, overlays?: boolean): void;
   pickAtClient(clientX: number, clientY: number): CloudPick | null;
   pickDown(x: number, y: number, radius: number): CloudPick | null;
   project(p: XYZ): { x: number; y: number } | null;
@@ -548,7 +549,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       if (!disposed) events.onLoadError?.(message);
     });
 
-  function renderToTarget(target: THREE.WebGLRenderTarget, cam: THREE.Camera): void {
+  function renderToTarget(target: THREE.WebGLRenderTarget, cam: THREE.Camera, overlays = true): void {
     const prev = renderer.getRenderTarget();
     const edlWas = edlOn && !EDL_RENDERS_TO_TARGET;
     try {
@@ -556,10 +557,12 @@ export function createEngine(o: EngineOptions): CloudEngine {
       renderer.setRenderTarget(target);
       renderer.clear();
       potreeRenderer.render({ renderer, scene, camera: cam, pointClouds: pco ? [pco] : [] });
-      const auto = renderer.autoClear;
-      renderer.autoClear = false;
-      renderer.render(overlayScene, cam);
-      renderer.autoClear = auto;
+      if (overlays) {
+        const auto = renderer.autoClear;
+        renderer.autoClear = false;
+        renderer.render(overlayScene, cam);
+        renderer.autoClear = auto;
+      }
     } finally {
       renderer.setRenderTarget(prev);
       if (edlWas) potreeRenderer.setEDL({ enabled: true, ...EDL_OPTIONS });
@@ -586,8 +589,9 @@ export function createEngine(o: EngineOptions): CloudEngine {
     cam.updateMatrixWorld(true);
     const target = new THREE.WebGLRenderTarget(t.width, t.height);
     try {
-      // the nodes already loaded and visible, no LOD update for this camera (plan Ruling 7)
-      renderToTarget(target, cam);
+      // the nodes already loaded and visible, no LOD update for this camera (plan Ruling 7); no
+      // overlays, so a pin or a measurement never bakes into the minimap (C-V1 hand-off M4)
+      renderToTarget(target, cam, false);
       const buf = new Uint8Array(t.width * t.height * 4);
       renderer.readRenderTargetPixels(target, 0, 0, t.width, t.height, buf);
       return { width: t.width, height: t.height, data: flipRows(buf, t.width, t.height) };
