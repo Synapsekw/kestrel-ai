@@ -68,3 +68,15 @@ def inspect_ready(client, project_id, wait_job, path) -> dict:
     job = wait_job(project_id, body["job"]["id"])
     assert job["state"] == "succeeded", job
     return client.get(f"{BASE}/{project_id}/drawing-inspections/{body['inspection']['id']}").json()
+
+
+def write_landxml(path: Path, body: str, *, units: str = 'linearUnit="meter"', ns: bool = True) -> Path:
+    """A LandXML 1.2 file around `body` (Surfaces, Alignments, PlanFeatures ...). P/Start/End text is
+    northing first, as LandXML has it."""
+    xmlns = ' xmlns="http://www.landxml.org/schema/LandXML-1.2"' if ns else ""
+    path.write_text(
+        f'<?xml version="1.0"?><LandXML{xmlns} version="1.2"><Units><Metric {units}/></Units>'
+        f'<CoordinateSystem epsgCode="32633"/>{body}</LandXML>',
+        "utf-8",
+    )
+    return path

@@ -19,6 +19,8 @@ FORMATS: dict[str, str] = {
     ".tif": "tif",
     ".tiff": "tif",
     ".dxf": "dxf",
+    ".xml": "landxml",
+    ".landxml": "landxml",
 }
 
 
