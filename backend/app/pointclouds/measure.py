@@ -236,3 +236,83 @@ def area_results(points: list[dict], params: dict | None) -> dict[str, float | N
         },
         "degenerate_polygon",
     )
+
+
+RING_MIN_PICKS = 3
+RINGS_MAX_PICKS = 64
+RING_COND_MAX = 1e8
+
+
+def method_of(params: dict | None) -> str:
+    """A vertical check's method: `points` (two picks, S1) unless the params say `rings`."""
+    return (params or {}).get("method") or "points"
+
+
+def fit_ring(points: list[dict]) -> dict[str, float]:
+    """Kasa least-squares circle in XY on centred coordinates; z is the mean z of the picks."""
+    k = len(points)
+    mx = sum(float(p["x"]) for p in points) / k
+    my = sum(float(p["y"]) for p in points) / k
+    u = [float(p["x"]) - mx for p in points]
+    v = [float(p["y"]) - my for p in points]
+    suu = sum(a * a for a in u)
+    svv = sum(b * b for b in v)
+    suv = sum(a * b for a, b in zip(u, v, strict=True))
+    trace, det = suu + svv, suu * svv - suv * suv
+    disc = math.sqrt(max(trace * trace / 4 - det, 0.0))
+    lmax, lmin = trace / 2 + disc, trace / 2 - disc
+    if lmin <= 0 or lmax / lmin > RING_COND_MAX:
+        raise Refusal(
+            "collinear_ring", "the picks on a ring lie in a line; pick points spread around the ring"
+        )
+    w = [a * a + b * b for a, b in zip(u, v, strict=True)]
+    bu = sum(a * c for a, c in zip(u, w, strict=True))
+    bv = sum(b * c for b, c in zip(v, w, strict=True))
+    d = -(svv * bu - suv * bv) / det
+    e = -(suu * bv - suv * bu) / det
+    f = -sum(w) / k
+    cx, cy = mx - d / 2, my - e / 2
+    r = math.sqrt(max(d * d / 4 + e * e / 4 - f, 0.0))
+    rms = math.sqrt(sum((math.hypot(float(p["x"]) - cx, float(p["y"]) - cy) - r) ** 2 for p in points) / k)
+    mean_u2 = sum(float(p["uncertainty_m"]) ** 2 for p in points) / k
+    return {
+        "x": cx,
+        "y": cy,
+        "z": sum(float(p["z"]) for p in points) / k,
+        "radius_m": r,
+        "rms_m": rms,
+        "uncertainty_m": math.sqrt(rms * rms + mean_u2 / k),
+    }
+
+
+def ring_axis(points: list[dict]) -> tuple[dict[str, float], dict[str, float]]:
+    """The two fitted rings, lower first by z (whatever their `group` numbers say)."""
+    if any(p.get("group") not in (0, 1) for p in points):
+        raise Refusal(
+            "ring_needs_three_points", "every ring pick needs its ring: group 0 (lower) or 1 (upper)"
+        )
+    groups = [[p for p in points if p["group"] == g] for g in (0, 1)]
+    if min(len(g) for g in groups) < RING_MIN_PICKS:
+        raise Refusal(
+            "ring_needs_three_points",
+            "each ring needs at least three picks (press N to start the upper ring)",
+        )
+    if len(points) > RINGS_MAX_PICKS:
+        raise Refusal("wrong_point_count", "a rings vertical check takes 6 to 64 picks")
+    lower, upper = sorted((fit_ring(g) for g in groups), key=lambda ring: ring["z"])
+    return lower, upper
+
+
+def rings_results(points: list[dict]) -> dict[str, float | None]:
+    """The S1 vertical formulas between the two fitted centres, plus each ring's radius and RMS."""
+    lower, upper = ring_axis(points)
+    if upper["z"] - lower["z"] < MIN_VERTICAL_SPAN_M:
+        raise Refusal("vertical_span_too_small", "pick points further apart vertically (at least 0.5 m)")
+    out = results("vertical", [lower, upper])
+    out.update(
+        ring_radius_lower_m=lower["radius_m"],
+        ring_radius_upper_m=upper["radius_m"],
+        ring_rms_lower_m=lower["rms_m"],
+        ring_rms_upper_m=upper["rms_m"],
+    )
+    return _finite(out, "collinear_ring")

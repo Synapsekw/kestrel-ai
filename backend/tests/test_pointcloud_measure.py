@@ -118,3 +118,91 @@ def test_huge_coordinates_are_refused(big):
     with pytest.raises(measure.Refusal) as e:
         measure.area_results(pts, None)
     assert e.value.code == "degenerate_polygon"
+
+
+# ------------------------------------------------ rings (workspace spec 2026-09-26 §8.2, C-B1)
+
+
+@pytest.mark.parametrize("case", VECTORS["ring_cases"], ids=lambda c: c["name"])
+def test_ring_vectors(case):
+    got = measure.rings_results(case["points"])
+    fields = VECTORS["fields"] + VECTORS["ring_fields"]
+    assert list(got) == fields and VECTORS["ring_fields"] == measure.RING_FIELDS
+    for field in fields:
+        want = case["results"].get(field)
+        if want is None:
+            assert got[field] is None, field
+        else:
+            assert got[field] == pytest.approx(want, abs=VECTORS["tolerance"]), field
+
+
+@pytest.mark.parametrize(
+    "case", [c for c in VECTORS["refusal_cases"] if c["kind"] == "vertical"], ids=lambda c: c["name"]
+)
+def test_ring_refusal_vectors(case):
+    assert measure.method_of(case["params"]) == "rings"
+    with pytest.raises(measure.Refusal) as e:
+        measure.rings_results(case["points"])
+    assert e.value.code == case["code"] and e.value.message
+
+
+def _noisy_ring(cx, cy, z, radius, k, group):
+    """k picks round a circle with a deterministic ±5 mm radial and ±1 cm vertical scatter."""
+    out = []
+    for i in range(k):
+        a = 2 * math.pi * i / k
+        r = radius + 0.005 * math.sin(7 * i + group)
+        out.append(_p(cx + r * math.cos(a), cy + r * math.sin(a), z + 0.01 * math.cos(3 * i), 0.01, group))
+    return out
+
+
+def test_success_criterion_4_a_noisy_cylinder_leaning_one_degree_east():
+    """Spec §16 item 4: the ring method reports 1.00 ± 0.01 deg towards 90 ± 0.5 deg."""
+    top = 50 * math.tan(math.radians(1.0))
+    r = measure.rings_results(
+        _noisy_ring(0.0, 0.0, 0.0, 3.0, 16, 0) + _noisy_ring(top, 0.0, 50.0, 2.5, 16, 1)
+    )
+    assert r["lean_angle_deg"] == pytest.approx(1.0, abs=0.01)
+    assert r["lean_azimuth_deg"] == pytest.approx(90.0, abs=0.5)
+    assert r["ring_radius_lower_m"] == pytest.approx(3.0, abs=0.002)
+    assert r["ring_radius_upper_m"] == pytest.approx(2.5, abs=0.002)
+    assert 0.001 < r["ring_rms_lower_m"] < 0.005 and 0.001 < r["ring_rms_upper_m"] < 0.005
+
+
+def _compass(cx, cy, z, radius, group):
+    return [
+        _p(cx, cy + radius, z, 0.01, group),
+        _p(cx + radius, cy, z, 0.01, group),
+        _p(cx, cy - radius, z, 0.01, group),
+        _p(cx - radius, cy, z, 0.01, group),
+    ]
+
+
+def test_lower_and_upper_follow_height_not_group_numbers():
+    """Review Focus 3: group 0 here is the upper ring."""
+    r = measure.rings_results(_compass(10.0, 20.0, 50.0, 2.0, 0) + _compass(10.5, 20.0, 0.0, 3.0, 1))
+    assert (r["ring_radius_lower_m"], r["ring_radius_upper_m"]) == (pytest.approx(3.0), pytest.approx(2.0))
+    assert r["dz"] == pytest.approx(50.0) and r["lean_azimuth_deg"] == pytest.approx(270.0)
+
+
+def test_a_ring_centre_carries_its_fit_and_pick_uncertainty():
+    ring = measure.fit_ring(_compass(10.0, 20.0, 0.0, 3.0, 0))
+    assert (ring["x"], ring["y"], ring["z"], ring["radius_m"]) == (10.0, 20.0, 0.0, 3.0)
+    assert ring["rms_m"] == pytest.approx(0.0, abs=1e-12)
+    assert ring["uncertainty_m"] == pytest.approx(0.01 / 2)  # sqrt(0 + 0.01^2 / 4)
+
+
+def test_method_of():
+    assert measure.method_of(None) == "points"
+    assert measure.method_of({"method": None}) == "points"
+    assert measure.method_of({"method": "rings"}) == "rings"
+
+
+@pytest.mark.parametrize("big", [1e200, 1e308])
+def test_huge_ring_coordinates_are_refused(big):
+    """Review Focus 2."""
+    pts = [_p(big, 0, 0, 0, 0), _p(0, big, 0, 0, 0), _p(-big, 0, 0, 0, 0)]
+    pts += [_p(big, 0, big, 0, 1), _p(0, big, big, 0, 1), _p(-big, 0, big, 0, 1)]
+    with pytest.raises(measure.Refusal) as e:
+        measure.rings_results(pts)
+    assert e.value.code == "collinear_ring"
