@@ -172,14 +172,7 @@ def test_the_new_job_types_and_events(spec):
 def test_the_replaced_operations_are_deprecated_with_the_unit_that_removes_them(spec):
     ops = _operations(spec).items()
     retired = {op_id: op.get("x-retire-with") for op_id, (_, _, op) in ops if op.get("deprecated")}
-    assert retired == {
-        "listDatasets": "F-S2",
-        "createDataset": "F-S2",
-        "getDataset": "F-S2",
-        "deleteDataset": "F-S2",
-        "getDatasetStats": "F-S2",
-        "trainModel": "F-S2",
-    }
+    assert retired == {}
 
 
 # ------------------------------------------------------------------------------ every task

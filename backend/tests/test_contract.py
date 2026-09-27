@@ -105,14 +105,7 @@ BACKEND_PENDING: dict[str, str] = {}
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
 # §6.1, §12): `test_every_spec_path_is_routed` does not require it. The unit that deletes the path
 # from openapi.yaml deletes the entry.
-RETIRING: dict[str, str] = {
-    "listDatasets": "F-S2",
-    "createDataset": "F-S2",
-    "getDataset": "F-S2",
-    "deleteDataset": "F-S2",
-    "getDatasetStats": "F-S2",
-    "trainModel": "F-S2",
-}
+RETIRING: dict[str, str] = {}
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
 # the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an
