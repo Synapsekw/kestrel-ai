@@ -4,12 +4,18 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { useChangesStore } from "@/store/changes";
 import { errorBody, fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { TestApiProvider } from "@/test/render";
+import type { ImageIndexQuery } from "./api";
 import { DEFAULT_BROWSER_FILTERS, type BrowserFilterState } from "./filters";
 import { indexNeighbours } from "./navigation";
 import { idAt, makeIndexResponse } from "./testing";
 import { useImageIndex } from "./useImageIndex";
 
 const INDEX = /\/images\/index$/;
+type IndexPath = "/api/v1/projects/{projectId}/images/index";
+/** The init shape `fetchImageIndex` actually passes to `api.GET` for `IndexPath` (see api.ts). */
+interface IndexGetInit {
+  params: { path: { projectId: string }; query: ImageIndexQuery };
+}
 
 function setup(routes: FakeRoute[]) {
   const { api, requests } = fakeClient(routes);
@@ -72,13 +78,15 @@ describe("useImageIndex", () => {
         body: (r) => (params(r.url).get("has_findings") ? makeIndexResponse(2) : makeIndexResponse(9)),
       },
     ]);
-    // Delay only the unfiltered answer, so it lands after the filtered one.
+    // Delay only the unfiltered answer, so it lands after the filtered one. Typed against the
+    // one endpoint this test drives (INDEX_PATH / IndexGetInit) rather than `Parameters<typeof
+    // api.GET>`, whose generic, conditional-rest signature does not resolve to a spreadable tuple
+    // once its type parameters are erased (tsc -b: TS2556 / TS2488).
     const delayed = {
       ...api,
-      GET: (async (...args: Parameters<typeof api.GET>) => {
-        const q = (args[1] as { params?: { query?: { has_findings?: boolean } } }).params?.query;
-        if (!q?.has_findings) await slow;
-        return api.GET(...args);
+      GET: (async (path: IndexPath, init: IndexGetInit) => {
+        if (!init.params.query.has_findings) await slow;
+        return api.GET(path, { ...init });
       }) as typeof api.GET,
     };
     const wrapper = ({ children }: { children: ReactNode }) => (
