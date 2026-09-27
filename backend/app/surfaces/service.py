@@ -89,6 +89,7 @@ def to_out(s: Session, row: Surface) -> SurfaceOut:
         build_params=row.build_params,
         stats=row.stats,
         captured_on=cloud.captured_on if cloud else None,
+        elevation_role=row.elevation_role,
         map_id=cloud.map_id if cloud else None,
         tile_grid=TileGrid(max_zoom=max_zoom(row.width, row.height)) if ready else None,
         measurement_count=measurement_count(s, row.id),

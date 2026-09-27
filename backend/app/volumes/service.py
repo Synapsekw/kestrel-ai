@@ -334,6 +334,7 @@ def to_out(row: VolumeMeasurement, reasons: list[str]) -> VolumeMeasurementOut:
         base=row.base,
         masks=_masks(row.masks, None),
         alignment=_alignment(row.alignment, None),
+        material=row.material,
         results=row.results,
         stale_reasons=reasons,
         job_id=row.job_id,

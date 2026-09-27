@@ -220,3 +220,57 @@ def test_map_measurements_are_bounded(spec):
         assert code in create["422"]["description"], code
     assert "no_site_frame" in create["409"]["description"]
     assert "not_in_site_frame" in spec["paths"][MM]["get"]["responses"]["409"]["description"]
+
+
+def test_the_additive_edits_on_existing_schemas(spec):
+    s = _schemas(spec)
+    assert s["SurfaceKind"]["enum"] == ["cloud_dsm", "design", "dem"]
+    assert "elevation_role" in s["Surface"]["required"]
+    assert s["VolumeBaseKind"]["enum"] == ["toe_plane", "toe_surface", "flat", "surface", "toe_lowest"]
+    assert "z" in s["BaseFit"]["properties"] and "z" not in s["BaseFit"]["required"]
+    assert "material" in s["VolumeMeasurement"]["required"]
+    create = s["VolumeMeasurementCreate"]
+    assert create["required"] == ["name", "top_surface_id", "base"]
+    assert {"polygon_native", "polygon_site", "material"} <= set(create["properties"])
+    assert {"polygon_site", "material"} <= set(s["VolumeMeasurementPatch"]["properties"])
+    assert s["RunCreate"]["properties"]["region"] == {"$ref": "#/components/schemas/RunRegion"}
+    assert {"scope", "region_px"} <= set(s["MapRun"]["required"])
+    assert s["MapRunScope"]["enum"] == ["map", "region"]
+    assert "scope" in s["RunSummary"]["properties"] and "scope" not in s["RunSummary"]["required"]
+    assert "category" in s["SiteArea"]["required"]
+    assert s["SiteAreaCategory"]["enum"] == ["general", "laydown", "exclusion", "excavation", "other"]
+    for name in ("SiteAreaCreate", "SiteAreaPatch"):
+        assert "category" in s[name]["properties"]
+    assert {"elevation_role", "format", "placed", "rmse_m"} <= set(s["DataItemSummary"]["properties"])
+    assert "corners_site" in s["MapDetection"]["properties"]
+    assert "center_site" in s["MapDensityCell"]["properties"]
+    assert "ring_site" in s["VolumeFootprint"]["properties"]
+    assert "polygon_site" in s["SiteArea"]["properties"]
+    assert "polygon_site" in s["VolumeMeasurement"]["properties"]
+    assert {"name", "captured_on", "elevation_role"} == set(s["SurfacePatch"]["properties"])
+    patch_surface = spec["paths"][P + "/surfaces/{surfaceId}"]["patch"]
+    assert "invalid_patch" in patch_surface["responses"]["422"]["description"]
+
+
+FRAME_SITE = {
+    "listMapDetections": ("get", P + "/map-runs/{runId}/detections"),
+    "getMapDensity": ("get", P + "/map-runs/{runId}/density"),
+    "listSiteAreas": ("get", P + "/site-areas"),
+    "getVolumeFootprints": ("get", P + "/volumes/{measurementId}/footprints"),
+    "getVolumeMeasurement": ("get", P + "/volumes/{measurementId}"),
+    "nextUnreviewedMapDetection": ("get", P + "/map-runs/{runId}/next-unreviewed"),
+}
+
+
+@pytest.mark.parametrize("op_id", sorted(FRAME_SITE))
+def test_the_vector_reads_take_frame_site(spec, op_id):
+    method, path = FRAME_SITE[op_id]
+    op = spec["paths"][path][method]
+    assert op["operationId"] == op_id
+    assert {"$ref": "#/components/parameters/siteFrame"} in op["parameters"]
+
+
+def test_reviewing_an_accepted_defect_asks_for_confirmation(spec):
+    op = spec["paths"][P + "/map-runs/{runId}/review"]["post"]
+    assert "confirm_finding_delete" in {p.get("name") for p in op["parameters"]}
+    assert "finding_would_be_deleted" in op["responses"]["409"]["description"]

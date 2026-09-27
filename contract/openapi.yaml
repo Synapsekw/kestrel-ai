@@ -1760,6 +1760,7 @@ paths:
         - { name: bbox, in: query, required: false, schema: { type: string, pattern: "^-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?,-?\\d+(\\.\\d+)?$" }, description: "x0,y0,x1,y1" }
         - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
         - { name: class_id, in: query, required: false, schema: { type: string } }
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: boxes
@@ -1795,6 +1796,7 @@ paths:
       parameters:
         - { name: cells, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 256, default: 128 } }
         - { name: min_conf, in: query, required: false, schema: { type: number, minimum: 0, maximum: 1 } }
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: grid counts
@@ -2228,7 +2230,18 @@ paths:
       operationId: reviewMapDetections
       summary: |
         Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
-        state `edited`. The run's counts change in the same transaction.
+        state `edited`. The run's counts change in the same transaction. Accepting a detection of a
+        defect type also creates its finding (status `reviewed`) in that transaction; rejecting,
+        unaccepting or reclassing it to an object type deletes that finding, and only with
+        `confirm_finding_delete=true`.
+      parameters:
+        - {
+            name: confirm_finding_delete,
+            in: query,
+            required: false,
+            schema: { type: boolean },
+            description: "false when absent; true lets the review delete the findings accepted defect detections created",
+          }
       requestBody:
         required: true
         content:
@@ -2241,6 +2254,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/MapDetectionReviewResult" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the review would delete findings and `confirm_finding_delete` is not true (`code` is `finding_would_be_deleted`; details `{finding_ids}`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
   /api/v1/projects/{projectId}/map-runs/{runId}/next-unreviewed:
     parameters:
@@ -2252,6 +2270,7 @@ paths:
       summary: The next unreviewed detection in reading order (`y`, then `x`) after `after_id`, and how many remain.
       parameters:
         - { name: after_id, in: query, required: false, schema: { type: string }, description: the detection the viewer is on; omitted starts from the top }
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: the next detection, or null when none is left
@@ -2266,6 +2285,8 @@ paths:
     get:
       tags: [detect]
       operationId: listSiteAreas
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: site areas, oldest first
@@ -2276,10 +2297,12 @@ paths:
                 items:
                   - id: "5a000000-aaaa-4000-8000-000000000001"
                     name: "North laydown yard"
+                    category: laydown
                     polygon_wgs84: [[47.7610, 29.4960], [47.7640, 29.4960], [47.7640, 29.4980], [47.7610, 29.4980]]
                     created_at: "2026-09-23T09:00:00Z"
                   - id: "5a000000-aaaa-4000-8000-000000000002"
                     name: "Batching plant"
+                    category: general
                     polygon_wgs84: [[47.7650, 29.4930], [47.7680, 29.4930], [47.7680, 29.4950]]
                     created_at: "2026-09-23T09:05:00Z"
         default: { $ref: "#/components/responses/Error" }
@@ -2840,7 +2863,7 @@ paths:
     patch:
       tags: [surfaces]
       operationId: patchSurface
-      summary: Rename a surface.
+      summary: Rename a surface, or set a dem's survey date and elevation role.
       requestBody:
         required: true
         content:
@@ -2852,6 +2875,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Surface" }
+        "422":
+          description: "`captured_on` or `elevation_role` on a surface that is not a dem (`code` is `invalid_patch`); a malformed body is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [surfaces]
@@ -3154,6 +3182,8 @@ paths:
     get:
       tags: [volumes]
       operationId: getVolumeMeasurement
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: the measurement
@@ -3256,6 +3286,8 @@ paths:
       tags: [volumes]
       operationId: getVolumeFootprints
       summary: The buffered detection footprints the measurement masks, in the surface CRS; at most 5 000.
+      parameters:
+        - $ref: "#/components/parameters/siteFrame"
       responses:
         "200":
           description: footprints
@@ -5578,7 +5610,7 @@ components:
           example:
             error: { code: not_found, message: "run r0000000… not found", details: {} }
     UnmappedClasses:
-      description: "`createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a malformed body (`validation_error`)."
+      description: "`createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a region with no unmasked window (`empty_region`); a malformed body (`validation_error`)."
       content:
         application/json:
           schema: { $ref: "#/components/schemas/UnmappedClassesError" }
@@ -7590,7 +7622,7 @@ components:
       example: { map_id: "a0000000-6666-4000-8000-000000000001", kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", tile_size: 1280, overlap: 0.2, nms_iou: 0.5, conf: 0.25, target_gsd_cm: 2.0 }
     MapRun:
       type: object
-      required: [id, map_id, source_id, kind, model_id, provider, model_name, model_snapshot, class_map, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, pinned, counts, verified_counts, area_counts, detection_count, created_at]
+      required: [id, map_id, source_id, kind, model_id, provider, model_name, model_snapshot, class_map, query, tile_size, overlap, nms_iou, conf, target_gsd_cm, job_id, state, pinned, counts, verified_counts, area_counts, detection_count, created_at, scope, region_px]
       properties:
         id: { type: string }
         map_id: { type: string }
@@ -7626,6 +7658,13 @@ components:
           description: "detections per class id in every review state except rejected (the total); filled when the run finishes and kept current by review"
           additionalProperties: { type: integer }
         detection_count: { type: integer }
+        scope: { $ref: "#/components/schemas/MapRunScope" }
+        region_px:
+          {
+            type: [array, "null"],
+            items: { $ref: "#/components/schemas/PixelPoint" },
+            description: "a region run's outline in map pixels; null for a whole-map run",
+          }
         created_at: { type: string, format: date-time }
       example:
         id: "r0000000-7777-4000-8000-000000000001"
@@ -7652,6 +7691,8 @@ components:
           "5a000000-aaaa-4000-8000-000000000001":
             "c1a2b3c4-0000-4000-8000-000000000001": { total: 12, verified: 9 }
         detection_count: 59
+        scope: map
+        region_px: null
         created_at: "2026-09-22T11:00:00Z"
     MapRunWithJob:
       type: object
@@ -7691,6 +7732,7 @@ components:
         w: { type: number }
         h: { type: number }
         angle: { type: [number, "null"] }
+        corners_site: { type: [array, "null"], minItems: 4, maxItems: 4, items: { $ref: "#/components/schemas/SiteVertex" }, description: "only with frame=site: the box's four corners in the site frame" }
     MapDetectionPage:
       type: object
       required: [items, truncated]
@@ -7710,6 +7752,7 @@ components:
         gy: { type: integer }
         class_id: { type: string }
         count: { type: integer }
+        center_site: { oneOf: [{ $ref: "#/components/schemas/SiteVertex" }, { type: "null" }], description: "only with frame=site: the cell centre in the site frame; absent or null otherwise" }
     MapDensity:
       type: object
       required: [cell_size, cells]
@@ -7958,6 +8001,7 @@ components:
         verified_counts: { type: object, additionalProperties: { type: integer }, description: per project class id; accepted, edited or drawn by a person }
         review: { $ref: "#/components/schemas/ReviewProgress" }
         created_at: { type: string, format: date-time }
+        scope: { $ref: "#/components/schemas/MapRunScope", description: "map runs; absent for photo runs" }
       example:
         id: "r0000000-7777-4000-8000-000000000001"
         kind: map
@@ -7999,6 +8043,7 @@ components:
           type: [number, "null"]
           exclusiveMinimum: 0
           description: "map runs: resample windows to this GSD; defaults to the model's training GSD"
+        region: { $ref: "#/components/schemas/RunRegion" }
       example: { source_ids: ["50000000-3333-4000-8000-000000000001", "50000000-3333-4000-8000-000000000002"], model_id: "m0000000-2222-4000-8000-000000000001", conf: 0.25 }
     RunCreatedItem:
       type: object
@@ -8154,7 +8199,7 @@ components:
       items: { type: number }
     SiteArea:
       type: object
-      required: [id, name, polygon_wgs84, created_at]
+      required: [id, name, polygon_wgs84, category, created_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -8163,10 +8208,13 @@ components:
           minItems: 3
           description: the outline, not closed (the first point is not repeated)
           items: { $ref: "#/components/schemas/LonLat" }
+        category: { $ref: "#/components/schemas/SiteAreaCategory" }
+        polygon_site: { type: [array, "null"], items: { $ref: "#/components/schemas/SiteVertex" }, description: "only with frame=site: the outline in the site frame" }
         created_at: { type: string, format: date-time }
       example:
         id: "5a000000-aaaa-4000-8000-000000000001"
         name: "North laydown yard"
+        category: laydown
         polygon_wgs84: [[47.7610, 29.4960], [47.7640, 29.4960], [47.7640, 29.4980], [47.7610, 29.4980]]
         created_at: "2026-09-23T09:00:00Z"
     SiteAreaCreate:
@@ -8184,6 +8232,11 @@ components:
           type: array
           minItems: 3
           items: { $ref: "#/components/schemas/PixelPoint" }
+        category:
+          {
+            $ref: "#/components/schemas/SiteAreaCategory",
+            description: "general when absent on create",
+          }
       example: { name: "North laydown yard", map_id: "a0000000-6666-4000-8000-000000000001", polygon_px: [[1000, 800], [4000, 800], [4000, 3000], [1000, 3000]] }
     SiteAreaPatch:
       type: object
@@ -8199,6 +8252,11 @@ components:
           type: array
           minItems: 3
           items: { $ref: "#/components/schemas/PixelPoint" }
+        category:
+          {
+            $ref: "#/components/schemas/SiteAreaCategory",
+            description: "general when absent on create",
+          }
       example: { name: "North yard" }
     SiteAreaList:
       type: object
@@ -8637,7 +8695,8 @@ components:
     # ------------------------------------------------------------ surfaces and volumes (S2)
     SurfaceKind:
       type: string
-      enum: [cloud_dsm, design]
+      description: "dem is a DSM or DTM GeoTIFF imported as elevation (map workspace)"
+      enum: [cloud_dsm, design, dem]
     SurfaceStatus:
       type: string
       enum: [building, ready, failed]
@@ -8692,7 +8751,7 @@ components:
         build_s: { type: number }
     Surface:
       type: object
-      required: [id, name, kind, status, error, point_cloud_id, design_source, crs_wkt, epsg, proj4, cell_size_m, width, height, geotransform, bounds_native, z_min, z_max, coverage_fraction, method, build_params, stats, captured_on, map_id, tile_grid, measurement_count, job_id, created_at]
+      required: [id, name, kind, status, error, point_cloud_id, design_source, crs_wkt, epsg, proj4, cell_size_m, width, height, geotransform, bounds_native, z_min, z_max, coverage_fraction, method, build_params, stats, captured_on, elevation_role, map_id, tile_grid, measurement_count, job_id, created_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -8725,7 +8784,17 @@ components:
         method: { oneOf: [{ $ref: "#/components/schemas/SurfaceMethod" }, { type: "null" }], description: null while building }
         build_params: { oneOf: [{ $ref: "#/components/schemas/SurfaceBuildParams" }, { type: "null" }], description: null for design }
         stats: { oneOf: [{ $ref: "#/components/schemas/SurfaceBuildStats" }, { type: "null" }], description: null for design }
-        captured_on: { type: [string, "null"], format: date, description: read through from the cloud }
+        captured_on:
+          {
+            type: [string, "null"],
+            format: date,
+            description: "the survey date; a cloud DSM's comes from its cloud, a dem's from its import; null for a design",
+          }
+        elevation_role:
+          {
+            oneOf: [{ $ref: "#/components/schemas/ElevationRole" }, { type: "null" }],
+            description: "dem only; null for cloud_dsm and design",
+          }
         map_id: { type: [string, "null"], description: read through from the cloud; the ortho of the same flight }
         tile_grid: { oneOf: [{ $ref: "#/components/schemas/TileGrid" }, { type: "null" }] }
         measurement_count: { type: integer }
@@ -8759,6 +8828,15 @@ components:
       type: object
       properties:
         name: { type: string, minLength: 1 }
+        captured_on:
+          {
+            type: [string, "null"],
+            format: date,
+            minLength: 10,
+            maxLength: 10,
+            description: "the survey date of a dem (the workspace's set date); null clears it",
+          }
+        elevation_role: { $ref: "#/components/schemas/ElevationRole" }
     SurfaceWithJob:
       type: object
       required: [surface, job]
@@ -8777,7 +8855,7 @@ components:
       enum: [calculating, ready, failed, stale]
     VolumeBaseKind:
       type: string
-      enum: [toe_plane, toe_surface, flat, surface]
+      enum: [toe_plane, toe_surface, flat, surface, toe_lowest]
     VolumeBase:
       type: object
       required: [kind]
@@ -8875,6 +8953,7 @@ components:
           items: { type: number }
           minItems: 3
           maxItems: 3
+        z: { type: [number, "null"], description: "toe_lowest: the level of the flat base (the lowest kept edge sample)" }
     VolumeUncertainty:
       type: object
       required: [total_m3, base_m3, alignment_m3, cell_size_m3, nodata_m3, patch_m3, complete]
@@ -8933,7 +9012,7 @@ components:
         computed_at: { type: string, format: date-time }
     VolumeMeasurement:
       type: object
-      required: [id, name, status, error, polygon_native, top_surface_id, base, masks, alignment, results, stale_reasons, job_id, created_at, updated_at]
+      required: [id, name, status, error, polygon_native, top_surface_id, base, masks, alignment, material, results, stale_reasons, job_id, created_at, updated_at]
       properties:
         id: { type: string }
         name: { type: string }
@@ -8944,6 +9023,16 @@ components:
         base: { $ref: "#/components/schemas/VolumeBase" }
         masks: { $ref: "#/components/schemas/VolumeMasks" }
         alignment: { $ref: "#/components/schemas/VolumeAlignment" }
+        material:
+          {
+            oneOf: [{ $ref: "#/components/schemas/VolumeMaterial" }, { type: "null" }],
+            description: "not a calculation input; changing it never makes the result stale",
+          }
+        polygon_site:
+          {
+            oneOf: [{ $ref: "#/components/schemas/SiteRing" }, { type: "null" }],
+            description: "only with frame=site: the polygon in the site frame; absent or null otherwise",
+          }
         results: { oneOf: [{ $ref: "#/components/schemas/VolumeResults" }, { type: "null" }] }
         stale_reasons: { type: array, items: { type: string }, description: "response only: the inputs that changed, e.g. \"masks: detection run deleted\"" }
         job_id: { type: [string, "null"] }
@@ -8958,10 +9047,17 @@ components:
           items: { $ref: "#/components/schemas/VolumeMeasurement" }
     VolumeMeasurementCreate:
       type: object
-      required: [name, polygon_native, top_surface_id, base]
+      description: "exactly one of polygon_native and polygon_site; both or neither is 422 invalid_geometry"
+      required: [name, top_surface_id, base]
       properties:
         name: { type: string, minLength: 1 }
         polygon_native: { $ref: "#/components/schemas/VolumeRing" }
+        polygon_site:
+          {
+            $ref: "#/components/schemas/SiteRing",
+            description: "the polygon in the site frame; the server converts it into the top surface's CRS",
+          }
+        material: { $ref: "#/components/schemas/VolumeMaterial" }
         top_surface_id: { type: string }
         base: { $ref: "#/components/schemas/VolumeBase" }
         masks: { $ref: "#/components/schemas/VolumeMasksInput" }
@@ -8976,6 +9072,12 @@ components:
         base: { $ref: "#/components/schemas/VolumeBase" }
         masks: { $ref: "#/components/schemas/VolumeMasksInput" }
         alignment: { $ref: "#/components/schemas/VolumeAlignmentInput" }
+        polygon_site: { $ref: "#/components/schemas/SiteRing" }
+        material:
+          {
+            oneOf: [{ $ref: "#/components/schemas/VolumeMaterial" }, { type: "null" }],
+            description: null clears it,
+          }
     VolumeMeasurementWithJob:
       type: object
       required: [measurement, job]
@@ -8990,6 +9092,11 @@ components:
         detection_id: { type: string }
         class_id: { type: string }
         ring: { $ref: "#/components/schemas/VolumeRing" }
+        ring_site:
+          {
+            oneOf: [{ $ref: "#/components/schemas/SiteRing" }, { type: "null" }],
+            description: "only with frame=site; absent or null otherwise",
+          }
     VolumeFootprints:
       type: object
       required: [items, truncated]
@@ -9906,7 +10013,8 @@ components:
       description: >-
         The type's headline figures; each type fills its own fields. `image_set`: image_count,
         duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min,
-        z_max. `point_cloud`: point_count, has_rgb, epsg. `drawing`: defined by the map workspace.
+        z_max, elevation_role. `point_cloud`: point_count, has_rgb, epsg. `drawing`: format, placed,
+        rmse_m.
       properties:
         image_count: { type: integer, minimum: 0 }
         duplicate_count: { type: integer, minimum: 0 }
@@ -9920,6 +10028,11 @@ components:
         z_max: { type: [number, "null"] }
         point_count: { type: [integer, "null"] }
         has_rgb: { type: [boolean, "null"] }
+        elevation_role:
+          { oneOf: [{ $ref: "#/components/schemas/ElevationRole" }, { type: "null" }] }
+        format: { $ref: "#/components/schemas/DrawingFormat" }
+        placed: { type: boolean }
+        rmse_m: { type: [number, "null"] }
     DataItem:
       type: object
       description: one thing imported into the project, a view over its own table (foundation §6.3)
@@ -10483,7 +10596,7 @@ components:
                   {
                     id: "s0000000-9999-4000-8000-000000000001",
                     name: "August DSM",
-                    kind: cloud_dsm,
+                    kind: dem,
                     elevation_role: dsm,
                   },
                 ],
@@ -10661,7 +10774,7 @@ components:
               footprint_site: [583000.0, 3265000.0, 583900.0, 3265800.0],
               max_zoom: 15,
               meta: "598.1 – 624.8 m",
-              surface_kind: cloud_dsm,
+              surface_kind: dem,
               elevation_role: dsm,
               drawing_format: null,
               placed: null,
@@ -11815,3 +11928,36 @@ components:
               updated_at: "2026-09-25T11:00:00Z",
             }
         next_cursor: null
+    SiteRing:
+      type: array
+      description: "x, y vertices in the site frame; not closed"
+      minItems: 3
+      maxItems: 5000
+      items: { $ref: "#/components/schemas/SiteVertex" }
+    VolumeMaterial:
+      type: object
+      required: [name, density_t_m3]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        density_t_m3:
+          {
+            type: number,
+            exclusiveMinimum: 0,
+            maximum: 30,
+            description: "tonnes per cubic metre; tonnage is the net volume times this",
+          }
+      example: { name: "Gravel", density_t_m3: 1.8 }
+    MapRunScope:
+      type: string
+      description: "a region run covers part of one map and never represents a survey (timeline, analytics and recounts skip it)"
+      enum: [map, region]
+    RunRegion:
+      type: object
+      description: "run a map source's model over part of one map only"
+      required: [map_id, polygon_site]
+      properties:
+        map_id: { type: string }
+        polygon_site: { $ref: "#/components/schemas/SiteRing" }
+    SiteAreaCategory:
+      type: string
+      enum: [general, laydown, exclusion, excavation, other]

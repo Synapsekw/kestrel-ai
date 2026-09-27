@@ -20,7 +20,7 @@ import {
   Switch,
   toast,
 } from "@/ui";
-import { BASE_KIND_TEXT, groupRuns, type BaseKind } from "./model";
+import { BASE_KIND_TEXT, PANEL_BASE_KINDS, groupRuns, type BaseKind } from "./model";
 
 /**
  * The Measure tab (spec section 9): name, top surface, base, clutter masks and Calculate. Every
@@ -137,7 +137,7 @@ export function MeasurePanel({
       </Field>
       <Field label="Base" htmlFor="volume-base">
         <Select id="volume-base" value={m.base.kind} onChange={(e) => setBase(e.target.value as BaseKind)}>
-          {(Object.keys(BASE_KIND_TEXT) as BaseKind[]).map((k) => (
+          {PANEL_BASE_KINDS.map((k) => (
             <option key={k} value={k} disabled={k === "surface" && bases.length === 0}>
               {BASE_KIND_TEXT[k]}
             </option>

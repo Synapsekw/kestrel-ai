@@ -1641,7 +1641,10 @@ export interface paths {
         put?: never;
         /**
          * Accept, reject, reset or reclass detections of a map run. Reclass sets the class and the
-         *     state `edited`. The run's counts change in the same transaction.
+         *     state `edited`. The run's counts change in the same transaction. Accepting a detection of a
+         *     defect type also creates its finding (status `reviewed`) in that transaction; rejecting,
+         *     unaccepting or reclassing it to an object type deletes that finding, and only with
+         *     `confirm_finding_delete=true`.
          */
         post: operations["reviewMapDetections"];
         delete?: never;
@@ -1995,7 +1998,7 @@ export interface paths {
         delete: operations["deleteSurface"];
         options?: never;
         head?: never;
-        /** Rename a surface. */
+        /** Rename a surface, or set a dem's survey date and elevation role. */
         patch: operations["patchSurface"];
         trace?: never;
     };
@@ -6421,6 +6424,8 @@ export interface components {
          *         }
          *       },
          *       "detection_count": 59,
+         *       "scope": "map",
+         *       "region_px": null,
          *       "created_at": "2026-09-22T11:00:00Z"
          *     }
          */
@@ -6461,6 +6466,9 @@ export interface components {
                 [key: string]: number;
             };
             detection_count: number;
+            scope: components["schemas"]["MapRunScope"];
+            /** @description a region run's outline in map pixels; null for a whole-map run */
+            region_px: components["schemas"]["PixelPoint"][] | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -6503,6 +6511,8 @@ export interface components {
             w: number;
             h: number;
             angle: number | null;
+            /** @description only with frame=site: the box's four corners in the site frame */
+            corners_site?: components["schemas"]["SiteVertex"][] | null;
         };
         /**
          * @example {
@@ -6533,6 +6543,8 @@ export interface components {
             gy: number;
             class_id: string;
             count: number;
+            /** @description only with frame=site: the cell centre in the site frame; absent or null otherwise */
+            center_site?: components["schemas"]["SiteVertex"] | null;
         };
         MapDensity: {
             /** @description cell edge in map pixels; cell (gx */
@@ -6880,6 +6892,8 @@ export interface components {
             review: components["schemas"]["ReviewProgress"];
             /** Format: date-time */
             created_at: string;
+            /** @description map runs; absent for photo runs */
+            scope?: components["schemas"]["MapRunScope"];
         };
         RunSummaryPage: {
             items: components["schemas"]["RunSummary"][];
@@ -6908,6 +6922,7 @@ export interface components {
             tiling?: components["schemas"]["Tiling"];
             /** @description map runs: resample windows to this GSD; defaults to the model's training GSD */
             target_gsd_cm?: number | null;
+            region?: components["schemas"]["RunRegion"];
         };
         RunCreatedItem: {
             run_id: string;
@@ -7091,6 +7106,7 @@ export interface components {
          * @example {
          *       "id": "5a000000-aaaa-4000-8000-000000000001",
          *       "name": "North laydown yard",
+         *       "category": "laydown",
          *       "polygon_wgs84": [
          *         [
          *           47.761,
@@ -7117,6 +7133,9 @@ export interface components {
             name: string;
             /** @description the outline, not closed (the first point is not repeated) */
             polygon_wgs84: components["schemas"]["LonLat"][];
+            category: components["schemas"]["SiteAreaCategory"];
+            /** @description only with frame=site: the outline in the site frame */
+            polygon_site?: components["schemas"]["SiteVertex"][] | null;
             /** Format: date-time */
             created_at: string;
         };
@@ -7150,6 +7169,8 @@ export interface components {
             polygon_wgs84?: components["schemas"]["LonLat"][];
             map_id?: string;
             polygon_px?: components["schemas"]["PixelPoint"][];
+            /** @description general when absent on create */
+            category?: components["schemas"]["SiteAreaCategory"];
         };
         /**
          * @description a new outline is either `polygon_wgs84`, or `map_id` with `polygon_px`
@@ -7162,6 +7183,8 @@ export interface components {
             polygon_wgs84?: components["schemas"]["LonLat"][];
             map_id?: string;
             polygon_px?: components["schemas"]["PixelPoint"][];
+            /** @description general when absent on create */
+            category?: components["schemas"]["SiteAreaCategory"];
         };
         SiteAreaList: {
             items: components["schemas"]["SiteArea"][];
@@ -7642,8 +7665,11 @@ export interface components {
             /** @description true when absent: write measurements.csv when the cloud has measurements */
             include_measurements?: boolean;
         };
-        /** @enum {string} */
-        SurfaceKind: "cloud_dsm" | "design";
+        /**
+         * @description dem is a DSM or DTM GeoTIFF imported as elevation (map workspace)
+         * @enum {string}
+         */
+        SurfaceKind: "cloud_dsm" | "design" | "dem";
         /** @enum {string} */
         SurfaceStatus: "building" | "ready" | "failed";
         /**
@@ -7719,9 +7745,11 @@ export interface components {
             stats: components["schemas"]["SurfaceBuildStats"] | null;
             /**
              * Format: date
-             * @description read through from the cloud
+             * @description the survey date; a cloud DSM's comes from its cloud, a dem's from its import; null for a design
              */
             captured_on: string | null;
+            /** @description dem only; null for cloud_dsm and design */
+            elevation_role: components["schemas"]["ElevationRole"] | null;
             /** @description read through from the cloud; the ortho of the same flight */
             map_id: string | null;
             tile_grid: components["schemas"]["TileGrid"] | null;
@@ -7751,6 +7779,12 @@ export interface components {
         };
         SurfacePatch: {
             name?: string;
+            /**
+             * Format: date
+             * @description the survey date of a dem (the workspace's set date); null clears it
+             */
+            captured_on?: string | null;
+            elevation_role?: components["schemas"]["ElevationRole"];
         };
         SurfaceWithJob: {
             surface: components["schemas"]["Surface"];
@@ -7765,7 +7799,7 @@ export interface components {
         /** @enum {string} */
         VolumeStatus: "calculating" | "ready" | "failed" | "stale";
         /** @enum {string} */
-        VolumeBaseKind: "toe_plane" | "toe_surface" | "flat" | "surface";
+        VolumeBaseKind: "toe_plane" | "toe_surface" | "flat" | "surface" | "toe_lowest";
         /** @description z is required for flat and surface_id for surface; the server answers 422 otherwise */
         VolumeBase: {
             kind: components["schemas"]["VolumeBaseKind"];
@@ -7839,6 +7873,8 @@ export interface components {
             usable_edge_fraction: number;
             rms_m: number;
             plane: number[] | null;
+            /** @description toe_lowest: the level of the flat base (the lowest kept edge sample) */
+            z?: number | null;
         };
         VolumeUncertainty: {
             total_m3: number | null;
@@ -7905,6 +7941,10 @@ export interface components {
             base: components["schemas"]["VolumeBase"];
             masks: components["schemas"]["VolumeMasks"];
             alignment: components["schemas"]["VolumeAlignment"];
+            /** @description not a calculation input; changing it never makes the result stale */
+            material: components["schemas"]["VolumeMaterial"] | null;
+            /** @description only with frame=site: the polygon in the site frame; absent or null otherwise */
+            polygon_site?: components["schemas"]["SiteRing"] | null;
             results: components["schemas"]["VolumeResults"] | null;
             /** @description response only: the inputs that changed, e.g. "masks: detection run deleted" */
             stale_reasons: string[];
@@ -7917,9 +7957,13 @@ export interface components {
         VolumeMeasurementList: {
             items: components["schemas"]["VolumeMeasurement"][];
         };
+        /** @description exactly one of polygon_native and polygon_site; both or neither is 422 invalid_geometry */
         VolumeMeasurementCreate: {
             name: string;
-            polygon_native: components["schemas"]["VolumeRing"];
+            polygon_native?: components["schemas"]["VolumeRing"];
+            /** @description the polygon in the site frame; the server converts it into the top surface's CRS */
+            polygon_site?: components["schemas"]["SiteRing"];
+            material?: components["schemas"]["VolumeMaterial"];
             top_surface_id: string;
             base: components["schemas"]["VolumeBase"];
             masks?: components["schemas"]["VolumeMasksInput"];
@@ -7932,6 +7976,9 @@ export interface components {
             base?: components["schemas"]["VolumeBase"];
             masks?: components["schemas"]["VolumeMasksInput"];
             alignment?: components["schemas"]["VolumeAlignmentInput"];
+            polygon_site?: components["schemas"]["SiteRing"];
+            /** @description null clears it */
+            material?: components["schemas"]["VolumeMaterial"] | null;
         };
         VolumeMeasurementWithJob: {
             measurement: components["schemas"]["VolumeMeasurement"];
@@ -7942,6 +7989,8 @@ export interface components {
             detection_id: string;
             class_id: string;
             ring: components["schemas"]["VolumeRing"];
+            /** @description only with frame=site; absent or null otherwise */
+            ring_site?: components["schemas"]["SiteRing"] | null;
         };
         VolumeFootprints: {
             items: components["schemas"]["VolumeFootprint"][];
@@ -9142,7 +9191,7 @@ export interface components {
             items: components["schemas"]["AppJob"][];
             next_cursor: string | null;
         };
-        /** @description The type's headline figures; each type fills its own fields. `image_set`: image_count, duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min, z_max. `point_cloud`: point_count, has_rgb, epsg. `drawing`: defined by the map workspace. */
+        /** @description The type's headline figures; each type fills its own fields. `image_set`: image_count, duplicate_count. `map`: gsd_cm, epsg, width, height. `elevation`: kind, cell_size_m, z_min, z_max, elevation_role. `point_cloud`: point_count, has_rgb, epsg. `drawing`: format, placed, rmse_m. */
         DataItemSummary: {
             image_count?: number;
             duplicate_count?: number;
@@ -9156,6 +9205,10 @@ export interface components {
             z_max?: number | null;
             point_count?: number | null;
             has_rgb?: boolean | null;
+            elevation_role?: components["schemas"]["ElevationRole"] | null;
+            format?: components["schemas"]["DrawingFormat"];
+            placed?: boolean;
+            rmse_m?: number | null;
         };
         /**
          * @description one thing imported into the project, a view over its own table (foundation §6.3)
@@ -9995,7 +10048,7 @@ export interface components {
          *             {
          *               "id": "s0000000-9999-4000-8000-000000000001",
          *               "name": "August DSM",
-         *               "kind": "cloud_dsm",
+         *               "kind": "dem",
          *               "elevation_role": "dsm"
          *             }
          *           ]
@@ -10124,7 +10177,7 @@ export interface components {
          *           ],
          *           "max_zoom": 15,
          *           "meta": "598.1 – 624.8 m",
-         *           "surface_kind": "cloud_dsm",
+         *           "surface_kind": "dem",
          *           "elevation_role": "dsm",
          *           "drawing_format": null,
          *           "placed": null
@@ -11012,6 +11065,31 @@ export interface components {
             items: components["schemas"]["MeasurementItem"][];
             next_cursor: string | null;
         };
+        /** @description x, y vertices in the site frame; not closed */
+        SiteRing: components["schemas"]["SiteVertex"][];
+        /**
+         * @example {
+         *       "name": "Gravel",
+         *       "density_t_m3": 1.8
+         *     }
+         */
+        VolumeMaterial: {
+            name: string;
+            /** @description tonnes per cubic metre; tonnage is the net volume times this */
+            density_t_m3: number;
+        };
+        /**
+         * @description a region run covers part of one map and never represents a survey (timeline, analytics and recounts skip it)
+         * @enum {string}
+         */
+        MapRunScope: "map" | "region";
+        /** @description run a map source's model over part of one map only */
+        RunRegion: {
+            map_id: string;
+            polygon_site: components["schemas"]["SiteRing"];
+        };
+        /** @enum {string} */
+        SiteAreaCategory: "general" | "laydown" | "exclusion" | "excavation" | "other";
     };
     responses: {
         /** @description error envelope */
@@ -11059,7 +11137,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a malformed body (`validation_error`). */
+        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a region with no unmasked window (`empty_region`); a malformed body (`validation_error`). */
         UnmappedClasses: {
             headers: {
                 [name: string]: unknown;
@@ -13775,6 +13853,8 @@ export interface operations {
                 bbox?: string;
                 min_conf?: number;
                 class_id?: string;
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
             };
             header?: never;
             path: {
@@ -13831,6 +13911,8 @@ export interface operations {
             query?: {
                 cells?: number;
                 min_conf?: number;
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
             };
             header?: never;
             path: {
@@ -14530,7 +14612,10 @@ export interface operations {
     };
     reviewMapDetections: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description false when absent; true lets the review delete the findings accepted defect detections created */
+                confirm_finding_delete?: boolean;
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -14554,6 +14639,15 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            /** @description the review would delete findings and `confirm_finding_delete` is not true (`code` is `finding_would_be_deleted`; details `{finding_ids}`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -14562,6 +14656,8 @@ export interface operations {
             query?: {
                 /** @description the detection the viewer is on; omitted starts from the top */
                 after_id?: string;
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
             };
             header?: never;
             path: {
@@ -14587,7 +14683,10 @@ export interface operations {
     };
     listSiteAreas: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -14608,6 +14707,7 @@ export interface operations {
                      *         {
                      *           "id": "5a000000-aaaa-4000-8000-000000000001",
                      *           "name": "North laydown yard",
+                     *           "category": "laydown",
                      *           "polygon_wgs84": [
                      *             [
                      *               47.761,
@@ -14631,6 +14731,7 @@ export interface operations {
                      *         {
                      *           "id": "5a000000-aaaa-4000-8000-000000000002",
                      *           "name": "Batching plant",
+                     *           "category": "general",
                      *           "polygon_wgs84": [
                      *             [
                      *               47.765,
@@ -15648,6 +15749,15 @@ export interface operations {
                     "application/json": components["schemas"]["Surface"];
                 };
             };
+            /** @description `captured_on` or `elevation_role` on a surface that is not a dem (`code` is `invalid_patch`); a malformed body is `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             default: components["responses"]["Error"];
         };
     };
@@ -16097,7 +16207,10 @@ export interface operations {
     };
     getVolumeMeasurement: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
@@ -16282,7 +16395,10 @@ export interface operations {
     };
     getVolumeFootprints: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description `site` adds the `*_site` coordinates in the project's site frame; absent gives the entity's own coordinates only */
+                frame?: components["parameters"]["siteFrame"];
+            };
             header?: never;
             path: {
                 projectId: components["parameters"]["projectId"];
