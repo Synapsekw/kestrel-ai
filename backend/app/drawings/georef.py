@@ -25,6 +25,7 @@ SHEAR_ANGLE_DEG = 1.0
 DEGENERATE_EPS = 1e-18
 COLLINEAR_RATIO = 1e-12
 MIN_SCALE = 1e-12
+MIRROR_RMSE_RATIO = 0.5
 MIRRORED = "Points picked in mirrored order"
 
 
@@ -150,6 +151,16 @@ def _degenerate(what: str) -> GeorefRefused:
     return GeorefRefused("degenerate", f"The {what} points are all in one place; pick points far apart")
 
 
+def _rmse_of(la: float, lb: float, c: float, ld: float, le: float, f: float, src, dst) -> float:
+    """Plain (unscaled) RMSE of a linear+translation fit; used only to compare two candidate
+    fits, so the destination unit cancels and is left out."""
+    residuals = [
+        math.hypot(la * x + lb * y + c - big_e, ld * x + le * y + f - big_n)
+        for (x, y), (big_e, big_n) in zip(src, dst, strict=True)
+    ]
+    return math.sqrt(sum(r * r for r in residuals) / len(residuals))
+
+
 def fit(
     model: str,
     src: Sequence[Sequence[float]],
@@ -179,14 +190,26 @@ def fit(
     sxx = sum(p * p + q * q for p, q in u)
     if sxx <= DEGENERATE_EPS * n:
         raise _degenerate("drawing")
-    aff = _affine(u, v)
     if model == "similarity":
         alpha = sum(p * r + q * s for (p, q), (r, s) in zip(u, v, strict=True)) / sxx
         beta = sum(p * s - q * r for (p, q), (r, s) in zip(u, v, strict=True)) / sxx
         la, lb, ld, le = alpha, -beta, beta, alpha
-        if aff is not None and aff[0] * aff[3] - aff[1] * aff[2] < 0:
-            raise GeorefRefused("reflection", MIRRORED)
+        # n == MIN_POINTS["similarity"] (2) can never show a mirror; skip the check (fix round 1).
+        if n >= 3:
+            # The orientation-reversing counterpart: fit z -> a*conj(z) + c in the complex plane
+            # (same closed form with the source y negated), and compare RMSE instead of the sign
+            # of the unconstrained affine determinant, which noise flips on near-collinear picks.
+            alpha_m = sum(p * r - q * s for (p, q), (r, s) in zip(u, v, strict=True)) / sxx
+            beta_m = sum(p * s + q * r for (p, q), (r, s) in zip(u, v, strict=True)) / sxx
+            la_m, lb_m, ld_m, le_m = alpha_m, beta_m, beta_m, -alpha_m
+            c_direct, f_direct = ex - la * mx - lb * my, ey - ld * mx - le * my
+            c_mirror, f_mirror = ex - la_m * mx - lb_m * my, ey - ld_m * mx - le_m * my
+            rmse_direct = _rmse_of(la, lb, c_direct, ld, le, f_direct, src, dst)
+            rmse_mirror = _rmse_of(la_m, lb_m, c_mirror, ld_m, le_m, f_mirror, src, dst)
+            if rmse_mirror < MIRROR_RMSE_RATIO * rmse_direct:
+                raise GeorefRefused("reflection", MIRRORED)
     else:
+        aff = _affine(u, v)
         if aff is None:
             raise GeorefRefused(
                 "collinear", "The points lie on one line; Affine needs points that span an area"

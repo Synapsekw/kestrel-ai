@@ -85,6 +85,41 @@ def test_non_finite_and_overflow_are_degenerate():
         assert e.value.code == "degenerate"
 
 
+def test_the_near_collinear_noise_probe_never_refuses_as_a_reflection():
+    """Fix round 1: 4 points along a 3000-unit line, one 3 units off, a true scale of 0.02 and 2 cm
+    Gaussian dst noise, seeded. The old det-sign-of-the-unconstrained-affine rule refused this ~1% of
+    the time though nothing is mirrored (and far more at a 1-unit offset, per the finding); the
+    RMSE-ratio rule (MIRROR_RMSE_RATIO) must never refuse a genuine near-collinear noisy pick."""
+    theta = math.radians(7.0)
+    alpha0, beta0 = 0.02 * math.cos(theta), 0.02 * math.sin(theta)
+    true_t = (alpha0, -beta0, 500000.0, beta0, alpha0, 4983000.0)
+    src = [(0.0, 0.0), (1000.0, 0.0), (2000.0, 3.0), (3000.0, 0.0)]
+    ideal = [georef.apply(true_t, x, y) for x, y in src]
+    rng = np.random.default_rng(20260927)
+    refused_as_reflection = 0
+    for _ in range(200):
+        noise = rng.normal(0.0, 0.02, size=(len(src), 2))
+        dst = [(e + dx, n + dy) for (e, n), (dx, dy) in zip(ideal, noise, strict=True)]
+        try:
+            georef.fit("similarity", src, dst)
+        except georef.GeorefRefused as exc:
+            if exc.code == "reflection":
+                refused_as_reflection += 1
+    assert refused_as_reflection == 0
+
+
+def test_a_genuinely_mirrored_well_spread_similarity_is_refused():
+    """A well-spread (non-collinear) point set that is truly a mirror (z -> a*conj(z) + c, not
+    z -> a*z + c) must still be refused: the RMSE-ratio rule is not a license to accept anything."""
+    src = [(0.0, 0.0), (1000.0, 0.0), (0.0, 1000.0), (1000.0, 1000.0)]
+    theta = math.radians(12.0)
+    a, b = 0.03 * math.cos(theta), 0.03 * math.sin(theta)
+    dst = [(a * x + b * y + 500000.0, b * x - a * y + 4983000.0) for x, y in src]
+    with pytest.raises(georef.GeorefRefused) as e:
+        georef.fit("similarity", src, dst)
+    assert e.value.code == "reflection"
+
+
 def test_invert_and_compose_round_trip():
     t = (0.9, -0.3, 10.0, 0.3, 0.9, -5.0)
     for got, want in zip(georef.compose(georef.invert(t), t), (1, 0, 0, 0, 1, 0), strict=True):
