@@ -83,6 +83,21 @@ describe("Icon", () => {
 
   it("lists every name for the gallery", () => {
     expect(ICON_NAMES).toContain("elevation");
+    // The point cloud palette (C-W1, mockup ws-clouds.html TOOLS).
+    for (const name of [
+      "orbit",
+      "pan",
+      "fly",
+      "crosshair",
+      "distance",
+      "height",
+      "lean",
+      "area",
+      "section",
+      "clip-box",
+      "camera",
+    ])
+      expect(ICON_NAMES).toContain(name);
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 });
