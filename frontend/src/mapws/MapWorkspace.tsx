@@ -5,7 +5,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { useCommands } from "@/app/commands";
 import { Alert, Button, Dialog, GlassPanel, Skeleton, cx, toast, type Command } from "@/ui";
-import { arrivalRequest } from "./arrival/arrival";
+import { arrivalRequest, asksToCentre } from "./arrival/arrival";
 import { CoordinatesPanel } from "./chrome/CoordinatesPanel";
 import { LayersPanel } from "./chrome/LayersPanel";
 import { NavControls } from "./chrome/NavControls";
@@ -33,7 +33,7 @@ import { useUrlState } from "./state/useUrlState";
 import { useWorkspaceData, type WorkspaceData } from "./state/useWorkspaceData";
 import { createWorkspaceStore, PLAY_STEP_MS } from "./state/workspaceStore";
 import { createToolStore, shortcutFor, toolRegistry } from "./tools/toolStore";
-import { useWorkspaceKeys } from "./tools/useWorkspaceKeys";
+import { useWorkspaceKeys, workspaceKeyOf } from "./tools/useWorkspaceKeys";
 import type { Selection } from "./types";
 import { SiteMap } from "./view/SiteMap";
 import { siteCode } from "./view/siteFrame";
@@ -132,7 +132,6 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
     }
   }, [workspace, data.surveys, data.persisted]);
 
-  useUrlState(ready);
   usePersist(ready);
 
   // One layer and cloud read, shared with every plugin (useWorkspaceLayers, useOpenIn3d).
@@ -203,25 +202,41 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
   }, [siteExtent, workspace]);
 
   // Fit the site once when there is no saved view and the link does not ask to centre somewhere.
+  // An arrival that asked to centre but could not (gone, local frame, no location) fits when it
+  // settles instead, so the stage is never left blank (at once if the view is up, else on its mount).
   const fitted = useRef(false);
+  const uncentredArrival = useRef(false);
   useLayoutEffect(() => {
     if (fitted.current || !viewApi) return;
     fitted.current = true;
     if (workspace.getState().initialView) return;
-    const req = arrivalRequest(new URLSearchParams(location.search));
-    if (req.kind === "finding" || (req.kind === "map" && req.at)) return;
+    if (asksToCentre(arrivalRequest(new URLSearchParams(location.search))) && !uncentredArrival.current)
+      return;
     onFit();
   }, [viewApi, workspace, location.search, onFit]);
+  const onUncentredArrival = useCallback(() => {
+    const s = workspace.getState();
+    if (s.initialView) return;
+    if (fitted.current && s.viewApi) onFit();
+    else uncentredArrival.current = true;
+  }, [workspace, onFit]);
+  useUrlState(ready, onUncentredArrival);
 
   const [confirm, setConfirm] = useState<{
     sel: Selection;
+    title: string;
     text: string;
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
   const onDelete = useCallback(() => {
     const sel = workspace.getState().selection;
-    const remove = sel ? inspectorRegistry.get(sel.kind)?.remove : undefined;
-    if (sel && remove) setConfirm({ sel, text: remove.confirm(sel) });
+    const kind = sel ? inspectorRegistry.get(sel.kind) : undefined;
+    if (sel && kind?.remove)
+      setConfirm({
+        sel,
+        title: `Delete this ${kind.label.toLowerCase()}?`,
+        text: kind.remove.confirm(sel),
+      });
   }, [workspace]);
   const runDelete = async () => {
     if (!confirm) return;
@@ -255,7 +270,7 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
         id: "maps.fit",
         title: "Fit the site",
         icon: "fit" as const,
-        shortcut: "F",
+        shortcut: workspaceKeyOf("fit"),
         run: onFit,
       },
     ],
@@ -306,7 +321,7 @@ function WorkspaceBody({ data, loading }: { data: WorkspaceData; loading: boolea
       <PanelSlotHost slot="bottom-right" projectId={projectId} frame={frame} />
       <Dialog
         open={confirm !== null}
-        title="Delete?"
+        title={confirm?.title ?? "Delete?"}
         onClose={() => setConfirm(null)}
         footer={
           <>

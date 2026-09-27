@@ -31,6 +31,10 @@ export function parseAt(p: URLSearchParams): Coord | null {
   return xy ? [xy.x, xy.y] : null;
 }
 
+/** An arrival that asks to centre somewhere (a finding, or a map with `at`): the site fit waits for it. */
+export const asksToCentre = (req: ArrivalRequest): boolean =>
+  req.kind === "finding" || (req.kind === "map" && req.at !== null);
+
 export function arrivalRequest(p: URLSearchParams): ArrivalRequest {
   const finding = p.get("finding");
   const map = p.get("map");

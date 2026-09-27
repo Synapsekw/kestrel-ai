@@ -4,11 +4,17 @@ import { useTools, useWorkspace, useWorkspaceStores } from "../context";
 import { inspectorRegistry } from "../inspect/inspectorRegistry";
 
 const KEYS = [...GLOBAL_KEYS, ...WORKSPACE_KEYS.maps];
-const keyOf = (action: string): string => {
+/** The first key F's keymap gives a global or maps action (e.g. "fit" → "F"); throws on an unknown action. */
+export function workspaceKeyOf(action: string): string {
   const entry = KEYS.find((e) => e.action === action);
   if (!entry) throw new Error(`no key for ${action}`);
   return entry.keys[0];
-};
+}
+const keyOf = workspaceKeyOf;
+
+/** Space presses these when focused, so it must not start a pan there (the stage itself is none of them). */
+const SPACE_OWNERS =
+  'button,[role="button"],[role="slider"],[role="checkbox"],[role="switch"],[role="dialog"],[role="menu"],input';
 
 /**
  * The global keys as the map means them (spec §5.1) and M's workspace keys ([ ] P C Shift+N). A key
@@ -99,7 +105,10 @@ export function useWorkspaceKeys({ onDelete, onFit }: { onDelete: () => void; on
   useSpacePan();
 }
 
-/** Hold Space to pan from any tool (spec §5.1); not in text fields, dialogs or menus. */
+/**
+ * Hold Space to pan from any tool (spec §5.1); not in text fields, dialogs or menus, and not on a
+ * focused button, slider or checkbox, so Space still presses it.
+ */
 export function useSpacePan(): void {
   const { tools } = useWorkspaceStores();
   useEffect(() => {
@@ -109,7 +118,7 @@ export function useSpacePan(): void {
       e.altKey ||
       e.metaKey ||
       isTypingTarget(e.target) ||
-      (e.target instanceof Element && e.target.closest('[role="dialog"],[role="menu"]') !== null);
+      (e.target instanceof Element && e.target.closest(SPACE_OWNERS) !== null);
     const down = (e: KeyboardEvent) => {
       if (skip(e)) return;
       e.preventDefault();

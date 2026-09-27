@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { GlassPanel, Icon, IconButton, MenuButton, cx, stagger, type MenuItem } from "@/ui";
+import { GlassPanel, Icon, IconButton, MenuButton, cx, focusRing, stagger, type MenuItem } from "@/ui";
 import { ADD_DATA_LOADING, openAddData, useAddDataReady } from "@/data/addDataTiles";
 import { useShallow } from "zustand/react/shallow";
 import { useWorkspace } from "../context";
@@ -127,7 +127,10 @@ export function LayersPanel({ rows, notInCompare, projectId }: LayersPanelProps)
                       type="button"
                       disabled={!ready}
                       onClick={() => openAddData()}
-                      className="text-2xs text-accent-ink hover:underline disabled:opacity-45"
+                      className={cx(
+                        "rounded-chip text-2xs text-accent-ink hover:underline disabled:opacity-45",
+                        focusRing,
+                      )}
                     >
                       + Import
                     </button>

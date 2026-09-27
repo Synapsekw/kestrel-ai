@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { MAP_ID, PROJECT_ID, fakeClient } from "@/test/fixtures";
 import { LocationProbe, renderWithProviders } from "@/test/render";
 import { MapWorkspace } from "./MapWorkspace";
+import { registerInspector } from "./inspect/inspectorRegistry";
 import { UTM33, layer } from "./test/fixtures";
 import { WS, fakeView, workspaceRoutes } from "./test/workspaceScreen";
 
@@ -18,10 +19,7 @@ const LAYER = layer("map", MAP_ID, {
 const LAYERS = { frame: UTM33, items: [LAYER] };
 
 function renderWorkspace(
-  api = fakeClient([
-    ...workspaceRoutes({ layers: LAYERS }),
-    { method: "GET", path: /\/pointclouds$/, body: { items: [] } },
-  ]).api,
+  api = fakeClient(workspaceRoutes({ layers: LAYERS })).api,
   route = `/p/${PROJECT_ID}/maps`,
 ) {
   return renderWithProviders(
@@ -150,6 +148,29 @@ describe("MapWorkspace", () => {
     expect(location()).toHaveTextContent("sel=zone%3Az1");
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(location()).not.toHaveTextContent("sel="));
+  });
+
+  it("asks before deleting the selection, naming its kind (Del)", async () => {
+    const run = vi.fn(() => Promise.resolve());
+    const unregister = registerInspector({
+      id: "zone",
+      label: "Zone",
+      framed: true,
+      Body: () => <p>zone body</p>,
+      remove: { confirm: () => "It goes for good.", run },
+    });
+    try {
+      renderWorkspace(undefined, `/p/${PROJECT_ID}/maps?sel=zone:z1`);
+      await screen.findByTestId("site-map");
+      fireEvent.keyDown(window, { key: "Delete" });
+      const dialog = await screen.findByRole("dialog", { name: "Delete this zone?" });
+      expect(dialog).toHaveTextContent("It goes for good.");
+      fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+      await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(location()).not.toHaveTextContent("sel="));
+    } finally {
+      unregister();
+    }
   });
 
   it("publishes the loaded layers to plugins and marks its frame", async () => {

@@ -57,7 +57,7 @@ export const SURVEYS = {
   ),
 };
 
-/** The workspace's own reads (frame + state, its PUT, layers, surveys); `over` replaces a body. */
+/** The workspace's own reads (frame + state, its PUT, layers, surveys, clouds); `over` replaces a body. */
 export function workspaceRoutes(
   over: Partial<Record<"ws" | "layers" | "surveys", FakeRoute["body"]>> = {},
 ): FakeRoute[] {
@@ -74,5 +74,6 @@ export function workspaceRoutes(
       path: /\/map-workspace\/surveys$/,
       body: over.surveys ?? SURVEYS,
     },
+    { method: "GET", path: /\/pointclouds$/, body: { items: [] } },
   ];
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { toast } from "@/ui";
-import { arrivalRequest, stripArrival } from "../arrival/arrival";
+import { arrivalRequest, asksToCentre, stripArrival } from "../arrival/arrival";
 import { resolveArrival } from "../arrival/resolveArrival";
 import { useWorkspaceStores } from "../context";
 import { toolRegistry } from "../tools/toolStore";
@@ -12,9 +12,10 @@ import { parseViewParams, writeViewParams } from "./viewParams";
  * Keeps `?l=&r=&mode=&sel=` and the store in step (spec §5), and runs arrivals (`finding`, `map`, `at`,
  * `tool`; R-W1-6): URL → store on load and on any navigation that is not our own write; store → URL
  * (replace) on every view change. While an arrival resolves, store changes are not written, so the
- * arrival params are dropped in one write at its end.
+ * arrival params are dropped in one write at its end. `onUncentredArrival` runs when an arrival that
+ * asked to centre (a finding, a map with `at`) settles without a centre, so the caller can fit the site.
  */
-export function useUrlState(ready: boolean): void {
+export function useUrlState(ready: boolean, onUncentredArrival?: () => void): void {
   const { workspace, tools, projectId, frame } = useWorkspaceStores();
   const api = useApi();
   const navigate = useNavigate();
@@ -22,8 +23,10 @@ export function useUrlState(ready: boolean): void {
   const paramsRef = useRef(params);
   const own = useRef<string | null>(null);
   const arriving = useRef(false);
+  const uncentredRef = useRef(onUncentredArrival);
   useEffect(() => {
     paramsRef.current = params;
+    uncentredRef.current = onUncentredArrival;
   });
 
   const writeFrom = useCallback(
@@ -87,9 +90,11 @@ export function useUrlState(ready: boolean): void {
         return;
       }
       const st = workspace.getState();
-      if (out.r) st.hydrate({ r: out.r });
+      // Single, so fixDates cannot move r off the map's date to keep l < r (M2).
+      if (out.r) st.hydrate({ mode: "single", r: out.r });
       if (out.selection) st.select(out.selection);
       if (out.centre) st.viewApi?.centreOn(out.centre, out.resolution ?? undefined);
+      else if (asksToCentre(req)) uncentredRef.current?.();
       if (out.notice) toast("info", out.notice);
       if (out.error) toast("danger", out.error);
       writeFrom(stripArrival(params));
