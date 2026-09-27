@@ -9,6 +9,7 @@ from fastapi import APIRouter
 from app.pointclouds.jobs_export import run_pointcloud_export  # noqa: F401 - registers `pointcloud_export`
 from app.pointclouds.jobs_import import run_pointcloud_import  # noqa: F401 - registers `pointcloud_import`
 from app.pointclouds.jobs_profile import run_pointcloud_profile  # noqa: F401 - registers `pointcloud_profile`
+from app.pointclouds.routes_cameras import sub as camera_routes
 from app.pointclouds.routes_clouds import sub as cloud_routes
 from app.pointclouds.routes_export import sub as export_routes
 from app.pointclouds.routes_measurements import sub as measurement_routes
@@ -24,9 +25,6 @@ STUBS: list[tuple[str, str, str]] = [
     # C-B2: the profile job's routes
     ("POST", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry", "retryCloudProfile"),
     ("GET", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile", "getCloudProfile"),
-    # C-B3: the cameras
-    ("GET", "/pointclouds/{cloudId}/cameras", "getCloudCameras"),
-    ("PUT", "/pointclouds/{cloudId}/cameras/offsets/{sourceId}", "setCloudCameraOffset"),
 ]
 
 add_stubs(router, STUBS)
@@ -39,6 +37,7 @@ SUB_ROUTERS: tuple[APIRouter, ...] = (
     octree_routes,
     measurement_routes,
     export_routes,
+    camera_routes,
     view_routes,
 )
 
