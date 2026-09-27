@@ -44,6 +44,26 @@ describe("projectPin (spec §9.2 per-frame pass)", () => {
   it("hides a pin behind the camera even when its mirrored projection lands on the canvas", () => {
     // Directly behind the camera along its view axis: x/w and y/w are ~0, only w says "behind".
     expect(projectPin(at(0, -200, 60), null, cam).state).toBe("hidden");
+
+    // Hand-built viewProj that isolates the `w > 0` guard: the depth (z) row is all zero, so
+    // nz ≡ 0 for every point and the depth-range check can never hide anything by itself. The w
+    // row is the constant -1, negative for every point including this pin. The x/y rows send the
+    // pin to the exact canvas center (nx = ny = 0), so its mirrored projection unambiguously lands
+    // on the canvas. Only the `w > 0` guard can hide it here.
+    // prettier-ignore
+    const behindOnly: PinCamera = {
+      viewProj: [
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 0, 0,
+        0, 0, 0, -1,
+      ],
+      width: 800,
+      height: 500,
+      position: at(0, -100, 30),
+      origin: ORIGIN,
+    };
+    expect(projectPin(at(0, 0, 0), null, behindOnly).state).toBe("hidden");
   });
 
   it("hides a pin off the canvas or past the far plane", () => {
