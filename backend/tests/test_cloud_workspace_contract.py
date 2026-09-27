@@ -7,6 +7,7 @@ import jsonschema_rs
 import pytest
 import yaml
 from pointclouds import insert_cloud
+from pydantic import ValidationError
 
 from app.db.models import CloudMeasurement
 from app.pointclouds import schemas
@@ -306,12 +307,38 @@ def test_a_view_is_served_as_png_or_jpeg_with_its_etag(spec, op_id):
 def test_the_bounded_payloads_state_their_caps(spec):
     s = _schemas(spec)
     assert s["CloudProfile"]["properties"]["s"]["maxItems"] == 500000
+    assert s["CloudProfile"]["properties"]["z"]["maxItems"] == 500000
     assert s["CloudProfile"]["properties"]["rgb"]["maxItems"] == 1500000
-    for name in ("image_id", "x", "y", "z", "yaw", "pitch", "roll", "hfov", "vfov", "fov_assumed", "sigma_m"):
+    for name in (
+        "image_id",
+        "source_idx",
+        "x",
+        "y",
+        "z",
+        "yaw",
+        "pitch",
+        "roll",
+        "hfov",
+        "vfov",
+        "fov_assumed",
+        "width",
+        "height",
+        "sigma_m",
+    ):
         assert s["CloudCameraSet"]["properties"][name]["maxItems"] == 20000, name
     assert s["CloudViewList"]["properties"]["items"]["maxItems"] == 1500
     offset = s["CloudCameraOffsetPut"]["properties"]["height_offset_m"]
     assert (offset["minimum"], offset["maximum"]) == (-500, 500)
+
+
+def test_a_clip_box_rejects_a_zero_or_negative_size_component():
+    base = {"centre": [0.0, 0.0, 0.0], "yaw_deg": 0.0, "mode": "show_inside"}
+    with pytest.raises(ValidationError):
+        schemas.CloudClipBox(size=[1.0, 0.0, 1.0], **base)
+    with pytest.raises(ValidationError):
+        schemas.CloudClipBox(size=[1.0, -1.0, 1.0], **base)
+    box = schemas.CloudClipBox(size=[1.0, 2.0, 3.0], **base)
+    assert box.size == [1.0, 2.0, 3.0]
 
 
 def test_the_router_stubs_are_c_operations():

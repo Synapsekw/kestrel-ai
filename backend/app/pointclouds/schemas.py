@@ -200,7 +200,7 @@ class CloudClipBox(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     centre: Vec3
-    size: Vec3
+    size: Annotated[list[Annotated[float, Field(gt=0)]], Field(min_length=3, max_length=3)]
     yaw_deg: float
     mode: Literal["show_inside", "highlight_inside"]
 
