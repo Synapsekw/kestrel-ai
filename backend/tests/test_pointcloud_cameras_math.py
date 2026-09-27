@@ -202,6 +202,14 @@ def test_grid_yaw_wraps_into_0_360():
     assert got[0] == pytest.approx(359.5 + bearing - 360.0, abs=1e-4)
 
 
+def test_grid_yaw_rounds_before_the_final_wrap(monkeypatch):
+    """359.99997 rounds up to 360.0 at 4 decimals, which is out of [0, 360); the wrap must run again
+    after rounding (C-B3 final-review fix 1)."""
+    monkeypatch.setattr(cameras, "convergence", lambda crs, lons, lats: np.array([0.00003]))
+    got = grid_yaw(UTM39, np.array([0.0]), np.array([0.0]), np.array([0.0]))
+    assert got[0] == 0.0
+
+
 # ---------------------------------------------------------------------------------- search box
 
 BOX_WGS84 = [48.3744, 28.7038, 48.3755, 28.7048]

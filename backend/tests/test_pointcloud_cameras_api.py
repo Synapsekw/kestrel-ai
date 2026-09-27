@@ -230,6 +230,49 @@ def test_sources_are_listed_in_first_appearance_with_their_labels(client, projec
     assert body["source_idx"] == [0, 1, 0, 2]
 
 
+def test_a_source_with_no_surviving_camera_is_not_listed(client, project_id, cloud_id, handle, monkeypatch):
+    """A camera whose reprojection is non-finite is skipped; if that was a set's only camera, the set
+    must not appear in `sources` with count 0 (C-B3 Ruling 9 / final-review fix 2)."""
+    dropped = add_set(handle, site="Dropped")
+    kept = add_set(handle, site="Kept")
+    add_photo(handle, dropped, minutes=0)
+    add_photo(handle, kept, minutes=1)
+
+    real_from_crs = cameras.Transformer.from_crs
+
+    class FakeTransformer:
+        def __init__(self, real):
+            self._real = real
+
+        def transform(self, lons, lats):
+            xs, ys = self._real.transform(lons, lats)
+            xs = list(xs)
+            xs[0] = float("nan")  # the first camera (dropped's only photo) is outside the CRS's domain
+            return xs, ys
+
+    def fake_from_crs(*args, **kwargs):
+        return FakeTransformer(real_from_crs(*args, **kwargs))
+
+    monkeypatch.setattr(cameras, "Transformer", type("T", (), {"from_crs": staticmethod(fake_from_crs)}))
+    body = client.get(url(project_id, cloud_id)).json()
+    assert [s["id"] for s in body["sources"]] == [kept]
+    assert body["source_idx"] == [0]
+    assert len(body["image_id"]) == 1  # only the kept set's camera survives
+
+
+def test_non_positive_width_or_height_is_skipped(client, project_id, cloud_id, handle):
+    """fov_deg divides by the frame's dimensions; a junk width or height of 0 must not 500 (C-B3
+    final-review fix 3)."""
+    src = add_set(handle)
+    bad = add_photo(handle, src, width=0, height=0, minutes=0)
+    good = add_photo(handle, src, minutes=1)
+    r = client.get(url(project_id, cloud_id))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["image_id"] == [good]
+    assert bad not in body["image_id"]
+
+
 def test_no_photos_near_the_cloud_is_an_empty_set(client, project_id, cloud_id):
     body = client.get(url(project_id, cloud_id)).json()
     assert body["image_id"] == [] and body["sources"] == [] and body["truncated"] is False

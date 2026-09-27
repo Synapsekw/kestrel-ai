@@ -157,9 +157,16 @@ def convergence(crs: CRS, lons: np.ndarray, lats: np.ndarray) -> np.ndarray:
     return np.asarray(factors.meridian_convergence, dtype=float).reshape(-1)
 
 
+def _wrap_deg(value):
+    """Round to 4 decimals, then wrap into [0, 360). Rounding a value like 359.99997 can tip it up to
+    360.0, which is out of range, so the wrap runs again after rounding (C-B3 final-review fix 1)."""
+    return np.round(value, 4) % 360.0
+
+
 def grid_yaw(crs: CRS, lons: np.ndarray, lats: np.ndarray, yaws: np.ndarray) -> np.ndarray:
-    """True yaw -> grid yaw in [0, 360)."""
-    return np.mod(np.asarray(yaws, dtype=float) - convergence(crs, lons, lats), 360.0)
+    """True yaw -> grid yaw in [0, 360), rounded to 4 decimals."""
+    wrapped = np.mod(np.asarray(yaws, dtype=float) - convergence(crs, lons, lats), 360.0)
+    return _wrap_deg(wrapped)
 
 
 def search_box(
@@ -303,36 +310,54 @@ def camera_set(handle: ProjectHandle, cloud_id: str) -> CloudCameraSet:
             "sigma_m",
         )
     }
-    index = {sid: i for i, sid in enumerate(source_ids)}
-    counts = [0] * len(source_ids)
-    posed_counts = [0] * len(source_ids)
+    # Assigned lazily, on a set's first surviving camera, so `sources` never lists a set with count 0
+    # (C-B3 Ruling 9 / final-review fix 2).
+    index: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    posed_counts: dict[str, int] = {}
     for i, m in enumerate(found):
-        if not (math.isfinite(xs[i]) and math.isfinite(ys[i]) and math.isfinite(gamma[i])):
-            continue  # outside the CRS's domain: never a NaN in the JSON
-        k = index[m["source_id"]]
+        width, height = m["width"], m["height"]
+        if not (
+            math.isfinite(xs[i])
+            and math.isfinite(ys[i])
+            and math.isfinite(gamma[i])
+            and width is not None
+            and height is not None
+            and width > 0
+            and height > 0
+        ):
+            # outside the CRS's domain, or a junk stored size that would divide by zero in fov_deg:
+            # never a NaN or a 500 (final-review fixes 1 and 3)
+            continue
+        sid = m["source_id"]
+        if sid not in index:
+            index[sid] = len(index)
+            counts[sid] = 0
+            posed_counts[sid] = 0
+        k = index[sid]
         pose = _pose_columns(m)
         alt = _num(m["alt"])
-        hfov, vfov, assumed = fov_deg(int(m["width"]), int(m["height"]), pose)
+        hfov, vfov, assumed = fov_deg(int(width), int(height), pose)
         if pose.posed:
-            yaw = (pose.yaw - float(gamma[i])) % 360.0
+            yaw = float(_wrap_deg((pose.yaw - float(gamma[i])) % 360.0))
             pitch, roll = pose.pitch, pose.roll if pose.roll is not None else 0.0
-            posed_counts[k] += 1
+            posed_counts[sid] += 1
         else:
             yaw = pitch = roll = None
-        counts[k] += 1
+        counts[sid] += 1
         out["image_id"].append(m["id"])
         out["source_idx"].append(k)
         out["x"].append(round(float(xs[i]), 3))
         out["y"].append(round(float(ys[i]), 3))
-        out["z"].append(None if alt is None else round(alt + offsets.get(m["source_id"], 0.0), 3))
-        out["yaw"].append(_round(yaw, 4))
+        out["z"].append(None if alt is None else round(alt + offsets.get(sid, 0.0), 3))
+        out["yaw"].append(yaw)
         out["pitch"].append(_round(pitch, 4))
         out["roll"].append(_round(roll, 4))
         out["hfov"].append(round(hfov, 4))
         out["vfov"].append(round(vfov, 4))
         out["fov_assumed"].append(assumed)
-        out["width"].append(int(m["width"]))
-        out["height"].append(int(m["height"]))
+        out["width"].append(int(width))
+        out["height"].append(int(height))
         out["sigma_m"].append(SIGMA_M)
 
     z_stats = cloud.z_stats or {}
@@ -342,11 +367,11 @@ def camera_set(handle: ProjectHandle, cloud_id: str) -> CloudCameraSet:
             CloudCameraSource(
                 id=sid,
                 label=labels.get(sid, sid),
-                count=counts[k],
+                count=counts[sid],
                 height_offset_m=offsets.get(sid, 0.0),
-                posed_count=posed_counts[k],
+                posed_count=posed_counts[sid],
             )
-            for sid, k in index.items()
+            for sid in index
         ],
         truncated=truncated,
         z_p1=_num(z_stats.get("p1")),
