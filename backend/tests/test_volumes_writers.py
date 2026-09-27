@@ -1,6 +1,7 @@
 """The export writers (spec 2026-09-23-volumes §10): labels, CSV, XLSX, QML, plan image, PDF."""
 
 import csv
+import dataclasses
 import io
 import xml.etree.ElementTree as ET
 from datetime import UTC, datetime
@@ -85,6 +86,12 @@ def _item(name="Pile & 1", **over) -> ExportItem:
         epsg=32639,
         crs_wkt=WKT,
     )
+
+
+def test_a_lowest_point_base_is_labelled_as_a_stockpile():
+    item = dataclasses.replace(_item(), base={"kind": "toe_lowest"})
+    assert item.base_detail == "Stockpile toe — lowest point"
+    assert labels("toe_lowest").headline == "fill"
 
 
 def test_labels_follow_the_base_kind():

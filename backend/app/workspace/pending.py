@@ -20,14 +20,11 @@ def option_pending(option: str, unit: str) -> AppError:
 
 
 def guard_volume_options(body) -> None:
-    """`polygon_site`, `material` and the `toe_lowest` base (spec §10), on create and on patch."""
+    """`polygon_site` and `material` (spec §10), on create and on patch."""
     if getattr(body, "polygon_site", None) is not None:
         raise option_pending("polygon_site", "M-B5")
     if "material" in body.model_fields_set:
         raise option_pending("material", "M-B5")
-    base = getattr(body, "base", None)
-    if base is not None and base.kind == "toe_lowest":
-        raise option_pending("toe_lowest", "M-B5")
 
 
 def guard_run_region(body) -> None:

@@ -13,6 +13,7 @@ from shapely.geometry import Polygon
 BASE_KIND_TEXT = {
     "toe_plane": "Stockpile toe — plane",
     "toe_surface": "Stockpile toe — fitted surface",
+    "toe_lowest": "Stockpile toe — lowest point",
     "flat": "Flat level",
     "surface": "Another surface",
 }

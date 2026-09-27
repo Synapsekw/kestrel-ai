@@ -149,8 +149,8 @@ RETIRING: dict[str, str] = {
 # (app/workspace/pending.py). Only a request that uses such an option gets the 501; every other
 # request to these operations is checked as usual. The unit deletes its entries with its guards.
 OPTION_STUBS: dict[str, str] = {
-    "createVolumeMeasurement": "M-B5",  # polygon_site, material, base toe_lowest
-    "patchVolumeMeasurement": "M-B5",  # polygon_site, material, base toe_lowest
+    "createVolumeMeasurement": "M-B5",  # polygon_site, material
+    "patchVolumeMeasurement": "M-B5",  # polygon_site, material
     "createRuns": "M-B5",  # region
     "createSiteArea": "M-B5",  # category
     "updateSiteArea": "M-B5",  # category

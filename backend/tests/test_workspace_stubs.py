@@ -117,11 +117,8 @@ def test_volume_options_answer_501_until_m_b5(client, project_id):
     assert _option(client.post(url, json={**body, "polygon_site": RING})) == "polygon_site"
     with_material = {**body, "polygon_native": RING, "material": material}
     assert _option(client.post(url, json=with_material)) == "material"
-    lowest = {**body, "polygon_native": RING, "base": {"kind": "toe_lowest"}}
-    assert _option(client.post(url, json=lowest)) == "toe_lowest"
     assert _option(client.patch(f"{url}/any", json={"material": None})) == "material"
     assert _option(client.patch(f"{url}/any", json={"polygon_site": RING})) == "polygon_site"
-    assert _option(client.patch(f"{url}/any", json={"base": {"kind": "toe_lowest"}})) == "toe_lowest"
 
 
 def test_a_volume_without_a_polygon_is_invalid_geometry(client, project_id):
