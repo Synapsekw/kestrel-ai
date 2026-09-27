@@ -101,8 +101,11 @@ at least 60 frames in each 2 s window and that the page is at Full.
 
 ## Build and smoke
 
-Measured 2026-09-27 on `task/f-x`, commit built `04fdc5e` (parent `main` 7477e3c plus the F-X index
-tasks). Disk free at the time: worktree drive E: 2251.5 GB, `%TEMP%` drive C: 1208.48 GB (both well
+Measured 2026-09-27 on `task/f-x`. The passing build/smoke/cargo-test/installer run below was made
+from commit built `eca3d28` (the packaging fix; parent `04fdc5e`, which is `main` 7477e3c plus the
+F-X index tasks). The first build, at `04fdc5e` itself (before the fix), built clean but **failed
+smoke** on the missing catalogue migrations — see "Smoke found a packaging bug" below; `eca3d28` is
+that fix. Disk free at the time: worktree drive E: 2251.5 GB, `%TEMP%` drive C: 1208.48 GB (both well
 over the ~20 GB needed).
 
 **Build.** `backend\scripts\build.ps1 -Venv E:\Dev\Yolo\app\backend\.venv` (the worktree has no
@@ -131,16 +134,20 @@ geo ok 32633 15.000325 45.000216
 design ok 10 185 surface 64x64
 volumes ok pdf 2038 xlsx 523.6 delaunay 2
 pointcloud ok 50000 32639 BROTLI laz 50000
+startup ok port 55028 pid 64520
 health ok
 cuda True NVIDIA GeForce RTX 5070 Ti
 starter ok 3
-library ok
+library ok C:\Users\D\AppData\Local\Temp\kestrel-smoke-29d64b78\appdata\library
 import ok 3 images
 cloud ok 50000 206
+model ok yolo11n-coco 80 classes
+alias ok
 predict ok 0 boxes
 dataset ok train 2 val 1
 worker ok mAP50 0.0
-export ok ... weights.onnx 10.1 MB
+font ok C:\Users\D\AppData\Local\Temp\kestrel-smoke-29d64b78\appdata\ultralytics\Arial.ttf
+export ok C:\Users\D\AppData\Local\Temp\kestrel-smoke-29d64b78\appdata\library\models\smoke-d3fc7efa\exports\weights.onnx 10.1 MB
 keyring skip (a key is already stored for anthropic; not touching it)
 smoke ok
 ```
@@ -155,7 +162,9 @@ present): `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtere
 **Installer.** `pnpm -C frontend build:installer` — Tauri release build (1m 28s) then the Inno Setup
 6 compiler packing `frontend/src-tauri/binaries/` (not the Tauri output) — **502.3 s** end to end.
 Warned `no MicrosoftEdgeWebview2Setup.exe found` (expected: none was staged for this run; the
-installer simply won't carry the WebView2 bootstrapper).
+installer simply won't carry the WebView2 bootstrapper). Coordinator ruling (binding): no WebView2
+bootstrapper was staged, and that is acceptable because the operator's machine already has WebView2
+(today's installed app runs on it).
 
 | Field | Value |
 | --- | --- |
