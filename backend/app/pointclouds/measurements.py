@@ -1,4 +1,8 @@
-"""Measurement rows (spec §3 `cloud_measurement`, §9): the server computes and stores the results."""
+"""Measurement rows (S1 spec §3 `cloud_measurement`, §9; workspace spec 2026-09-26 §8): the server
+computes and stores the results, and refuses geometry it cannot measure with a 422 that names the fix.
+
+`insert` adds a row under the 1 000 cap with a "Label n" name; profiles are inserted by C-B2's
+`profile.create_profile_measurement`."""
 
 from __future__ import annotations
 
@@ -7,8 +11,9 @@ from datetime import UTC, datetime
 
 from pyproj import CRS, Transformer
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from app.db.models import CloudMeasurement
+from app.db.models import CloudMeasurement, Finding, PointCloud
 from app.errors import AppError, not_found
 from app.pointclouds import measure, rows, views
 from app.pointclouds.schemas import CloudMeasurementCreate, CloudMeasurementUpdate
@@ -20,6 +25,8 @@ LABELS = {
     "distance": "Distance",
     "height": "Height difference",
     "vertical": "Vertical check",
+    "area": "Area",
+    "profile": "Cross-section",
 }
 
 
@@ -57,30 +64,92 @@ def _next_name(s, cloud_id: str, kind: str) -> str:
     return f"{label} {max(numbers, default=0) + 1}"
 
 
-def create(handle: ProjectHandle, cloud_id: str, body: CloudMeasurementCreate) -> CloudMeasurement:
-    cloud = rows.require_ready(handle, cloud_id)
-    points = [p.model_dump() for p in body.points]
-    expected = 1 if body.kind == "point" else 2
-    if len(points) != expected:
-        raise AppError(
-            "wrong_point_count",
-            f"a {LABELS[body.kind].lower()} needs {expected} point{'s' if expected > 1 else ''}",
-            422,
-        )
-    if body.kind != "point" and cloud.crs_wkt and CRS.from_wkt(cloud.crs_wkt).is_geographic:
+def check_crs(cloud: PointCloud, kind: str) -> None:
+    """Everything but a single point needs metres: a cloud in degrees is refused (S1 rule)."""
+    if kind != "point" and cloud.crs_wkt and CRS.from_wkt(cloud.crs_wkt).is_geographic:
         raise AppError(
             "needs_projected_crs",
             "distances need a projected coordinate system; this cloud is in degrees",
             422,
         )
-    points = measure.ordered(body.kind, points)
-    if body.kind == "vertical" and abs(points[1]["z"] - points[0]["z"]) < measure.MIN_VERTICAL_SPAN_M:
+
+
+def _plain(points: list[dict]) -> list[dict]:
+    """`group` only means something in a rings vertical check; every other kind stores points without it."""
+    return [{k: v for k, v in p.items() if k != "group"} for p in points]
+
+
+def measure_points(kind: str, points: list[dict], params: dict | None) -> tuple[list[dict], dict]:
+    """The points as stored and the server's results, or the 422 that refuses them (spec §8.2)."""
+    try:
+        if kind == "area":
+            return _plain(measure.area_vertices(points)), measure.area_results(points, params)
+        if kind == "vertical" and measure.method_of(params) == "rings":
+            return points, measure.rings_results(points)
+    except measure.Refusal as e:
+        raise AppError(e.code, e.message, 422) from None
+    except ArithmeticError:  # OverflowError, ZeroDivisionError the guards missed: a 422, never a 500
+        code = "degenerate_polygon" if kind == "area" else "collinear_ring"
+        raise AppError(code, measure.TOO_LARGE, 422) from None
+    points = _plain(points)
+    expected = 1 if kind == "point" else 2
+    if len(points) != expected:
+        raise AppError(
+            "wrong_point_count",
+            f"a {LABELS[kind].lower()} needs {expected} point{'s' if expected > 1 else ''}",
+            422,
+        )
+    points = measure.ordered(kind, points)
+    if kind == "vertical" and abs(points[1]["z"] - points[0]["z"]) < measure.MIN_VERTICAL_SPAN_M:
         raise AppError(
             "vertical_span_too_small", "pick points further apart vertically (at least 0.5 m)", 422
         )
-    results = measure.results(body.kind, points)
-    if body.kind == "point" and cloud.crs_wkt:
-        results["lon"], results["lat"] = lonlat(cloud.crs_wkt, points[0]["x"], points[0]["y"])
+    return points, measure.results(kind, points)
+
+
+def _params(body: CloudMeasurementCreate) -> dict | None:
+    """Stored as sent, minus null keys; an empty object is stored as null."""
+    if body.params is None:
+        return None
+    return body.params.model_dump(exclude_none=True) or None
+
+
+def check_finding(s: Session, cloud_id: str, finding_id: str | None) -> None:
+    """A measurement attaches only to a finding pinned on the same cloud (spec §8.5 "Attach to finding")."""
+    if finding_id is None:
+        return
+    finding = s.get(Finding, finding_id)
+    if finding is None or finding.anchor_kind != "cloud" or finding.cloud_id != cloud_id:
+        raise AppError(
+            "invalid_finding", "attach the measurement to a finding pinned on this point cloud", 422
+        )
+
+
+def require_finding(handle: ProjectHandle, cloud_id: str, finding_id: str | None) -> None:
+    """The create route's first check, for every kind (the profile included): 404 for an unknown
+    cloud, then 422 `invalid_finding`. `insert` checks again inside its transaction."""
+    if finding_id is None:
+        return
+    rows.get_cloud(handle, cloud_id)
+    with handle.session() as s:
+        check_finding(s, cloud_id, finding_id)
+
+
+def insert(
+    handle: ProjectHandle,
+    cloud_id: str,
+    *,
+    kind: str,
+    points: list[dict],
+    results: dict,
+    params: dict | None = None,
+    name: str | None = None,
+    note: str | None = None,
+    status: str = "ready",
+    job_id: str | None = None,
+    finding_id: str | None = None,
+) -> CloudMeasurement:
+    """One new row under the 1 000 cap, named "<Label> n" when unnamed, in one transaction."""
     with handle.session() as s:
         count = s.execute(
             select(func.count())
@@ -91,18 +160,45 @@ def create(handle: ProjectHandle, cloud_id: str, body: CloudMeasurementCreate) -
             raise AppError(
                 "measurement_limit", "this cloud already has 1 000 measurements; delete some first", 422
             )
+        check_finding(s, cloud_id, finding_id)
         row = CloudMeasurement(
             point_cloud_id=cloud_id,
-            kind=body.kind,
-            name=body.name or _next_name(s, cloud_id, body.kind),
-            note=body.note,
+            kind=kind,
+            name=name or _next_name(s, cloud_id, kind),
+            note=note,
             points=points,
             results=results,
+            params=params,
+            status=status,
+            job_id=job_id,
+            finding_id=finding_id,
         )
         s.add(row)
         s.flush()
         s.expunge(row)
     return row
+
+
+def create(handle: ProjectHandle, cloud_id: str, body: CloudMeasurementCreate) -> CloudMeasurement:
+    cloud = rows.require_ready(handle, cloud_id)
+    check_crs(cloud, body.kind)
+    params = _params(body)
+    points, results = measure_points(
+        body.kind, [p.model_dump(exclude_none=True) for p in body.points], params
+    )
+    if body.kind == "point" and cloud.crs_wkt:
+        results["lon"], results["lat"] = lonlat(cloud.crs_wkt, points[0]["x"], points[0]["y"])
+    return insert(
+        handle,
+        cloud_id,
+        kind=body.kind,
+        points=points,
+        results=results,
+        params=params,
+        name=body.name,
+        note=body.note,
+        finding_id=body.finding_id,
+    )
 
 
 def _get(s, cloud_id: str, measurement_id: str) -> CloudMeasurement:
@@ -122,6 +218,9 @@ def update(
             row.name = body.name
         if "note" in body.model_fields_set:
             row.note = body.note
+        if "finding_id" in body.model_fields_set:
+            check_finding(s, cloud_id, body.finding_id)
+            row.finding_id = body.finding_id
         row.updated_at = datetime.now(UTC)
         s.flush()
         s.expunge(row)

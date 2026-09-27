@@ -180,6 +180,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "getPointCloudOctreeFile": {416},  # a Range the file cannot satisfy
     "createCloudMeasurement": {422},
+    "updateCloudMeasurement": {422},  # C-B1: a generated finding_id is never a finding on that cloud
     "createPointCloud": {422},  # a readable path that is not LAS/LAZ, or refused by admission
     "inspectPointCloudFile": {422},  # a readable path that is not LAS/LAZ
     "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
