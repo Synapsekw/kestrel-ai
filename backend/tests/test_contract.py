@@ -98,7 +98,6 @@ EXPECTED_STUBS: set[str] = {
     "createImageMeasurement",  # I-BA
     "deleteImageMeasurement",  # I-BA
     "refreshImageMetadata",  # I-BK
-    "getImageIndex",  # I-BX
     "prepareImageSegment",  # I-BS
     "segmentImage",  # I-BS
     "listAssistModels",  # I-BS
