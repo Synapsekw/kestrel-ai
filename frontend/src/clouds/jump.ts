@@ -36,6 +36,73 @@ export function jumpQuery(at: XY, fp?: XY[]): string {
   return fp?.length ? `${base}&fp=${fp.map((p) => `${f3(p.x)},${f3(p.y)}`).join(";")}` : base;
 }
 
+/** Spec §10.4 / C9: the image, finding and photo-link arrivals. Malformed parameters are ignored. */
+const ID = /^[A-Za-z0-9_-]{1,128}$/;
+const id = (v: string | null): string | null => (v && ID.test(v) ? v : null);
+
+export interface FromImage {
+  imageId: string;
+  /** A pixel in the stored image (`image.width/height` space). */
+  u: number;
+  v: number;
+}
+
+export function parseFromImage(q: URLSearchParams): FromImage | null {
+  const imageId = id(q.get("from_image"));
+  const px = pair(q.get("px") ?? "");
+  if (!imageId || !px || px.x < 0 || px.y < 0) return null;
+  return { imageId, u: px.x, v: px.y };
+}
+
+export function parseFinding(q: URLSearchParams): string | null {
+  return id(q.get("finding"));
+}
+
+export type CloudArrival =
+  | { kind: "finding"; findingId: string }
+  | ({ kind: "from_image" } & FromImage)
+  | { kind: "at"; at: XY; fp: XY[] | null };
+
+/** The first valid arrival, in the order finding, from_image, at (plan x1 Ruling 8). */
+export function parseCloudArrival(q: URLSearchParams): CloudArrival | null {
+  const findingId = parseFinding(q);
+  if (findingId) return { kind: "finding", findingId };
+  const fromImage = parseFromImage(q);
+  if (fromImage) return { kind: "from_image", ...fromImage };
+  const at = parseAt(q);
+  return at ? { kind: "at", at, fp: parseFootprint(q) } : null;
+}
+
+const f1 = (v: number) => v.toFixed(1);
+
+/** The image -> cloud query (`/p/:pid/clouds/:cid` + this). */
+export function fromImageQuery(imageId: string, u: number, v: number): string {
+  return `?from_image=${encodeURIComponent(imageId)}&px=${f1(u)},${f1(v)}`;
+}
+
+export interface ImageSpot {
+  px: number;
+  py: number;
+  rpx: number;
+}
+
+/**
+ * The cloud -> image link, I §6.5's arrival: `?at=px,py&r=rpx&from=cloud:<cloudId>` in stored-image
+ * pixels. Without a spot (a "by distance" photo) the image opens with only the Back to 3D chip.
+ */
+export function imageJumpHref(
+  projectId: string,
+  imageId: string,
+  cloudId: string,
+  spot: ImageSpot | null,
+): string {
+  const base = `/p/${projectId}/images/${encodeURIComponent(imageId)}`;
+  const from = `from=cloud:${encodeURIComponent(cloudId)}`;
+  if (!spot) return `${base}?${from}`;
+  const r = Math.max(1, Math.round(spot.rpx));
+  return `${base}?at=${f1(spot.px)},${f1(spot.py)}&r=${r}&${from}`;
+}
+
 /** The inverse of the GDAL geotransform, rotation terms included. */
 export function nativeToPixel(gt: number[], x: number, y: number): [number, number] {
   const det = gt[1] * gt[5] - gt[2] * gt[4];
