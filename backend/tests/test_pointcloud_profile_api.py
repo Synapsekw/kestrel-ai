@@ -1,0 +1,134 @@
+"""C-B2 Task 4: the profile routes (spec 2026-09-26-point-cloud-workspace section 12 rows 8-10)."""
+
+import threading
+
+import pytest
+from pointclouds import insert_cloud, make_las
+from profile_helpers import cloud_from_las, insert_profile, line_points, wall_section
+
+from app.jobs.cancellation import JobFailure
+from app.pointclouds import router, schemas
+
+BASE = "/api/v1/projects"
+
+
+def _meas(project_id, cloud_id, suffix=""):
+    return f"{BASE}/{project_id}/pointclouds/{cloud_id}/measurements{suffix}"
+
+
+def _post_profile(client, project_id, cloud_id, **params):
+    body = {"kind": "profile", "points": line_points(), **({"params": params} if params else {})}
+    return client.post(_meas(project_id, cloud_id), json=body)
+
+
+def test_the_two_profile_operations_are_no_longer_stubs():
+    stubbed = {op for _, _, op in router.STUBS}
+    assert not {"retryCloudProfile", "getCloudProfile"} & stubbed
+
+
+def test_create_answers_202_then_the_profile_is_served(client, project_id, handle, wait_job, tmp_path):
+    cloud_id = cloud_from_las(handle, make_las(tmp_path / "wall.las", 0, points=wall_section(step=0.02)))
+    r = _post_profile(client, project_id, cloud_id)
+    assert r.status_code == 202, r.text
+    created = schemas.CloudMeasurementWithJob.model_validate(r.json())
+    assert created.measurement.status == "computing" and created.job.type == "pointcloud_profile"
+    assert wait_job(project_id, created.job.id)["state"] == "succeeded"
+    listed = client.get(_meas(project_id, cloud_id)).json()["items"]
+    assert [m["status"] for m in listed if m["id"] == created.measurement.id] == ["ready"]
+    got = client.get(_meas(project_id, cloud_id, f"/{created.measurement.id}/profile"))
+    assert got.status_code == 200
+    assert got.headers["content-encoding"] == "gzip" and "accept-encoding" in got.headers["vary"].lower()
+    body = schemas.CloudProfile.model_validate(got.json())
+    assert set(got.json()) == {"s", "z", "rgb", "count", "thickness_m", "length_m"}
+    assert body.count == len(wall_section(step=0.02)) and body.length_m == pytest.approx(10.0)
+
+
+def test_no_gzip_without_accept_encoding_or_for_a_small_body(client, project_id, handle, wait_job, tmp_path):
+    cloud_id = cloud_from_las(handle, make_las(tmp_path / "wall.las", 0, points=wall_section(step=0.02)))
+    mid = _post_profile(client, project_id, cloud_id).json()["measurement"]["id"]
+    wait_job(project_id, client.get(_meas(project_id, cloud_id)).json()["items"][0]["job_id"])
+    plain = client.get(
+        _meas(project_id, cloud_id, f"/{mid}/profile"), headers={"Accept-Encoding": "identity"}
+    )
+    assert plain.status_code == 200 and "content-encoding" not in plain.headers
+    small_id = _post_profile(client, project_id, cloud_id, max_points=1000).json()["measurement"]["id"]
+    items = {m["id"]: m for m in client.get(_meas(project_id, cloud_id)).json()["items"]}
+    wait_job(project_id, items[small_id]["job_id"])
+    small = client.get(_meas(project_id, cloud_id, f"/{small_id}/profile"))
+    assert small.status_code == 200 and len(small.content) < 64 * 1024
+    assert "content-encoding" not in small.headers
+
+
+@pytest.mark.parametrize(("status", "fragment"), [("computing", "still being cut"), ("failed", "boom")])
+def test_a_profile_that_is_not_ready_is_409(client, project_id, handle, status, fragment):
+    cloud_id = insert_cloud(handle)
+    mid = insert_profile(handle, cloud_id, status=status)
+    r = client.get(_meas(project_id, cloud_id, f"/{mid}/profile"))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+    assert fragment in r.json()["error"]["message"]
+
+
+def test_another_kind_or_a_missing_file_is_404(client, project_id, handle):
+    cloud_id = insert_cloud(handle)
+    other = insert_profile(handle, cloud_id, status="ready", kind="distance")
+    ready_without_file = insert_profile(handle, cloud_id, status="ready")
+    for mid in (other, ready_without_file, "nope"):
+        r = client.get(_meas(project_id, cloud_id, f"/{mid}/profile"))
+        assert r.status_code == 404 and r.json()["error"]["code"] == "not_found", mid
+
+
+def test_retry_answers_202_and_the_profile_becomes_ready(client, project_id, handle, wait_job, tmp_path):
+    cloud_id = cloud_from_las(handle, make_las(tmp_path / "wall.las", 0, points=wall_section()))
+    mid = insert_profile(handle, cloud_id, status="failed")
+    r = client.post(_meas(project_id, cloud_id, f"/{mid}/retry"))
+    assert r.status_code == 202, r.text
+    assert wait_job(project_id, r.json()["job"]["id"])["state"] == "succeeded"
+    assert client.get(_meas(project_id, cloud_id, f"/{mid}/profile")).status_code == 200
+
+
+def test_retry_twice_starts_one_job(client, project_id, handle, wait_job, monkeypatch):
+    gate = threading.Event()
+
+    def held(cloud):  # keeps the first job running until both requests are answered
+        gate.wait(10)
+        raise JobFailure("stopped by the test")
+
+    monkeypatch.setattr("app.pointclouds.export.check_source", held)
+    cloud_id = insert_cloud(handle)
+    mid = insert_profile(handle, cloud_id, status="failed")
+    first = client.post(_meas(project_id, cloud_id, f"/{mid}/retry"))
+    second = client.post(_meas(project_id, cloud_id, f"/{mid}/retry"))
+    gate.set()
+    assert first.status_code == 202
+    assert second.status_code == 409 and second.json()["error"]["code"] == "not_retryable"
+    assert wait_job(project_id, first.json()["job"]["id"])["error"] == "stopped by the test"
+
+
+def test_retry_refusals(client, project_id, handle):
+    cloud_id = insert_cloud(handle)
+    ready = insert_profile(handle, cloud_id, status="ready")
+    r = client.post(_meas(project_id, cloud_id, f"/{ready}/retry"))
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_retryable"
+    assert client.post(_meas(project_id, cloud_id, "/nope/retry")).status_code == 404
+
+
+def test_create_refusals_carry_their_codes(client, project_id, handle):
+    cloud_id = insert_cloud(handle)
+    body = {"kind": "profile", "points": line_points(length=0.05)}
+    r = client.post(_meas(project_id, cloud_id), json=body)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "profile_out_of_range"
+    importing = insert_cloud(handle, status="importing")
+    r = client.post(_meas(project_id, importing), json={"kind": "profile", "points": line_points()})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
+    bad = {"kind": "profile", "points": line_points(), "params": {"thickness_m": 9}}
+    assert client.post(_meas(project_id, cloud_id), json=bad).status_code == 422
+
+
+def test_the_other_kinds_still_answer_201(client, project_id, handle):
+    cloud_id = insert_cloud(handle)
+    pts = [
+        {"x": 243550.0, "y": 3178050.0, "z": 10.0, "uncertainty_m": 0.01},
+        {"x": 243553.0, "y": 3178054.0, "z": 10.0, "uncertainty_m": 0.01},
+    ]
+    r = client.post(_meas(project_id, cloud_id), json={"kind": "distance", "points": pts})
+    assert r.status_code == 201 and r.json()["status"] == "ready"

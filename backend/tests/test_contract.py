@@ -114,8 +114,6 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 # app/pointclouds/router.py::STUBS. Each C unit deletes its own names here and there; the last of
 # C-B2, C-B3 and C-B4 deletes this block.
 EXPECTED_STUBS |= {
-    "retryCloudProfile",  # C-B2
-    "getCloudProfile",  # C-B2
     "getCloudCameras",  # C-B3
     "setCloudCameraOffset",  # C-B3
     "putFindingView3d",  # C-B4

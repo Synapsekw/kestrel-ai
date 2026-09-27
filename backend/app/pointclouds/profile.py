@@ -238,3 +238,24 @@ def mark_failed(handle: ProjectHandle, measurement_id: str, job_id: str, message
         row.status, row.error = "failed", message
         row.updated_at = datetime.now(UTC)
     return True
+
+
+def read_profile_body(handle: ProjectHandle, cloud_id: str, measurement_id: str) -> bytes:
+    """The stored `CloudProfile` JSON (section 12 row 10): 404 for another kind or a missing file,
+    409 `not_ready` while computing or after a failure (plan Ruling 16)."""
+    rows.get_cloud(handle, cloud_id)
+    with handle.session() as s:
+        row = measurements._get(s, cloud_id, measurement_id)
+        s.expunge(row)
+    if row.kind != "profile":
+        raise AppError("not_found", f"measurement {measurement_id} has no profile", 404)
+    if row.status == "computing":
+        raise AppError("not_ready", "the profile is still being cut", 409)
+    if row.status == "failed":
+        raise AppError("not_ready", f"the profile failed: {row.error}", 409)
+    try:
+        data = json.loads(profile_path(handle, cloud_id, measurement_id).read_text("utf-8"))
+        body = data["profile"]
+    except (OSError, ValueError, KeyError):
+        raise AppError("not_found", f"profile file {measurement_id} not found", 404) from None
+    return json.dumps(body, separators=(",", ":")).encode("utf-8")

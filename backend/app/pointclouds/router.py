@@ -14,6 +14,7 @@ from app.pointclouds.routes_clouds import sub as cloud_routes
 from app.pointclouds.routes_export import sub as export_routes
 from app.pointclouds.routes_measurements import sub as measurement_routes
 from app.pointclouds.routes_octree import sub as octree_routes
+from app.pointclouds.routes_profile import sub as profile_routes
 from app.projects.service import ProjectHandle, get_project
 from app.stubs import add_stubs
 
@@ -22,9 +23,6 @@ router = APIRouter(prefix="/projects/{projectId}", tags=["pointclouds"])
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0. Each C unit
 # deletes its own tuples here and in tests/test_contract.py::EXPECTED_STUBS.
 STUBS: list[tuple[str, str, str]] = [
-    # C-B2: the profile job's routes
-    ("POST", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry", "retryCloudProfile"),
-    ("GET", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile", "getCloudProfile"),
     # C-B3: the cameras
     ("GET", "/pointclouds/{cloudId}/cameras", "getCloudCameras"),
     ("PUT", "/pointclouds/{cloudId}/cameras/offsets/{sourceId}", "setCloudCameraOffset"),
@@ -58,7 +56,13 @@ for _method, _path, _name in STUBS:
 # S1 units land their operations as sub-routers (plan 2026-09-24-point-clouds): each one removes
 # its tuples from STUBS above and adds its router here. They inherit this router's prefix, tag and
 # project-kind guard.
-SUB_ROUTERS: tuple[APIRouter, ...] = (cloud_routes, octree_routes, measurement_routes, export_routes)
+SUB_ROUTERS: tuple[APIRouter, ...] = (
+    cloud_routes,
+    octree_routes,
+    measurement_routes,
+    export_routes,
+    profile_routes,
+)
 
 for _sub in SUB_ROUTERS:
     router.include_router(_sub)

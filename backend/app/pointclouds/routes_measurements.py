@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 
 from app.events_util import publish_pointclouds_changed
-from app.pointclouds import measurements
+from app.pointclouds import measurements, profile
 from app.pointclouds.schemas import (
     CloudMeasurementCreate,
     CloudMeasurementList,
@@ -32,7 +33,11 @@ def create_cloud_measurement(
     body: CloudMeasurementCreate,
     request: Request,
     handle: ProjectHandle = Depends(get_project),
-) -> CloudMeasurementOut:
+) -> CloudMeasurementOut | JSONResponse:
+    if body.kind == "profile":
+        created = profile.create_profile_measurement(handle, request.app.state.jobs, cloudId, body)
+        publish_pointclouds_changed(request, handle, [cloudId])
+        return JSONResponse(created.model_dump(mode="json"), status_code=202)
     row = measurements.create(handle, cloudId, body)
     publish_pointclouds_changed(request, handle, [cloudId])
     return CloudMeasurementOut.from_row(row)
