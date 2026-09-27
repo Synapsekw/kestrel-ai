@@ -6,6 +6,8 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
+import numpy as np
+
 from app.db.base import utcnow
 from app.db.models import Drawing
 from app.drawings import footprint, raster_io, store
@@ -89,12 +91,45 @@ def _build_pdf(ctx, insp: dict, idir: Path, src: Path, folder: Path) -> dict:
     }
 
 
-# Format -> builder. Task 12 adds "dxf" and "landxml".
+def _build_vector(ctx, insp: dict, idir: Path, src: Path, folder: Path) -> dict:
+    from app.drawings import runs
+
+    names = [layer["name"] for layer in insp["layers"]]
+    chosen = ctx.params.get("layers")
+    keep = names if chosen is None else [n for n in names if n in set(chosen)]
+    remap = np.full(len(names), -1, np.int32)
+    for new, n in enumerate(keep):
+        remap[names.index(n)] = new
+    source = store.lines_dir(idir)
+    meta = runs.copy_runs(source, folder, remap, check_cancelled=ctx.check_cancelled, layers=keep)
+    ctx.progress(0.5, MESSAGE)
+    labels = [label for label in store.read_json(source / "labels.json") if label["layer"] in set(keep)]
+    store.write_json(folder / "labels.json", labels)
+    if meta["runs"] == 0 and not labels:
+        raise JobFailure("the chosen layers have no lines or text")
+    runs.build_index(folder, check_cancelled=ctx.check_cancelled)
+    ctx.progress(0.85, MESSAGE)
+    if meta["runs"]:
+        runs.runs_thumbnail(folder, folder / "thumb.png")
+    by_name = {layer["name"]: layer for layer in insp["layers"]}
+    return {
+        "width": None,
+        "height": None,
+        "dpi": None,
+        "extent_src": runs.extent_with_labels(meta["extent"], labels),
+        "layers": [by_name[n] for n in keep],
+        "units": ctx.params["placement"].get("units") or insp.get("units"),
+    }
+
+
+# Format -> builder.
 BUILDERS: dict[str, Callable] = {
     "png": _build_raster,
     "jpg": _build_raster,
     "tif": _build_raster,
     "pdf": _build_pdf,
+    "dxf": _build_vector,
+    "landxml": _build_vector,
 }
 
 
