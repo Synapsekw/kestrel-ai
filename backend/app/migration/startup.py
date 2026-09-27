@@ -6,6 +6,7 @@ failure is logged per folder, and startup carries on (AGENTS.md).
 
 import logging
 import sqlite3
+import threading
 from pathlib import Path
 
 from app.migration.backup import ro_uri
@@ -13,6 +14,9 @@ from app.migration.job import armed, blocked_reason, states_for, submit
 from app.migration.pipeline import TARGET_SCHEMA_VERSION
 
 log = logging.getLogger(__name__)
+# How long start-up waits for `submit_pending` (seconds). The normal probe of the recent list takes
+# milliseconds; a slow or hung folder (a network drive, a locked file) must not delay the app.
+SUBMIT_PENDING_TIMEOUT = 2.0
 
 
 def probe_schema_version(folder: Path) -> int | None:
@@ -56,3 +60,24 @@ def submit_pending(app) -> list[str]:
         except Exception:
             log.exception("could not queue the upgrade of %s", folder)
     return submitted
+
+
+def submit_pending_bounded(app, timeout: float | None = None) -> bool:
+    """`submit_pending` in a daemon thread, waited for at most `timeout` (default
+    `SUBMIT_PENDING_TIMEOUT`) seconds. True when it finished in time. A failure inside is logged,
+    never raised: the app must start even when startup work fails (AGENTS.md)."""
+
+    def run() -> None:
+        try:
+            submit_pending(app)  # the module attribute, looked up at call time
+        except Exception:
+            log.exception("queuing project upgrades failed")
+
+    timeout = SUBMIT_PENDING_TIMEOUT if timeout is None else timeout
+    thread = threading.Thread(target=run, name="migration-startup-probe", daemon=True)
+    thread.start()
+    thread.join(timeout)
+    if thread.is_alive():
+        log.warning("queuing project upgrades is still running after %.1fs; start-up carries on", timeout)
+        return False
+    return True

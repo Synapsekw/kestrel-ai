@@ -24,6 +24,9 @@ def project_opened(handle, runner) -> None:
     left running, and start moving the project's old models into the library. Each step on
     its own, so one failing never skips the others.
 
+    A project below the foundation schema only queues its upgrade here; `migrate_project` calls
+    this hook again once the upgrade succeeds, and the sweeps run then.
+
     The point-cloud, surface, volume and design-inspection sweeps (foundation F0) are imported
     inside their own step: a module that fails to import costs only that step."""
     import importlib
@@ -42,9 +45,17 @@ def project_opened(handle, runner) -> None:
     def sweep(module: str):
         return lambda: importlib.import_module(module).sweep_interrupted(handle, runner)
 
-    for step, run in (
+    try:
         # A project below the foundation schema queues its upgrade (foundation spec §11.3).
-        ("project upgrade", lambda: migration_gate.ensure_submitted(handle, runner)),
+        migration_gate.ensure_submitted(handle, runner)
+    except Exception:
+        log.exception("project upgrade failed for project %s", handle.id)
+    if migration_gate.needs_upgrade(handle):
+        # The sweeps below write the project DB and read pre-upgrade data (adoption rewrites model
+        # ids that step 4 moves), so they wait for the upgrade: `migrate_project` runs this hook
+        # again once it succeeds. A failed upgrade keeps them waiting until a Retry succeeds.
+        return
+    for step, run in (
         ("orphan job sweep", lambda: startup.sweep_orphans(handle, runner)),
         (
             "findings counts check",
@@ -154,7 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             from app.migration import startup as migration_startup
 
-            migration_startup.submit_pending(app)
+            migration_startup.submit_pending_bounded(app)
         except Exception:
             logging.getLogger(__name__).exception("queuing project upgrades failed")
         try:

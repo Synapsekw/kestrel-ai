@@ -158,6 +158,19 @@ def _cancelled_before_start(ctx) -> None:
     _fail(runner, states_for(runner.projects), folder, code="cancelled", step=None, error=CANCELLED)
 
 
+def _run_open_hooks(registry, handle) -> None:
+    """The on-open sweeps skipped while the project was below the target schema
+    (`app.main.project_opened`) run now, once: the handle stays cached, so no later open would run
+    them. A failure there is logged; the upgrade itself has succeeded."""
+    hook = getattr(registry, "on_open", None)
+    if hook is None:
+        return
+    try:
+        hook(handle)
+    except Exception:
+        log.exception("the on-open sweeps failed after upgrading project %s", handle.id)
+
+
 @register_job_type(JOB_TYPE, on_cancelled_before_start=_cancelled_before_start)
 def migrate_project(ctx) -> dict:
     runner = ctx.runner
@@ -182,6 +195,7 @@ def migrate_project(ctx) -> dict:
         _fail(runner, states, folder, code="open_failed", step=None, error=message)
         raise JobFailure(f"The project could not be opened: {message}") from e
     report: dict = {"steps": [], "warnings": [], "report_path": None}
+    upgraded = False
     if armed() and handle.schema_version < TARGET_SCHEMA_VERSION:
         env = MigrationEnv(
             library=runner.library,
@@ -228,6 +242,7 @@ def migrate_project(ctx) -> dict:
             )
             raise JobFailure(f"The upgrade could not finish: {message}") from e
         handle.schema_version = TARGET_SCHEMA_VERSION
+        upgraded = True
     try:
         entry = states.set(
             folder,
@@ -254,6 +269,8 @@ def migrate_project(ctx) -> dict:
         )
         raise JobFailure(f"The upgrade result could not be recorded: {message}") from e
     publish(runner, folder, entry)
+    if upgraded:
+        _run_open_hooks(registry, handle)
     return {
         "project_id": handle.id,
         "folder": str(folder),

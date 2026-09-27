@@ -355,6 +355,17 @@ def test_real_project_copy(app, client, tmp_path, wait_job, monkeypatch):
     folder = tmp_path / "Old Ahmadia"
     weights = b"weights trained before the library existed"
     ids = _project_at_0005(folder, weights)
+    # Adoption rewrites model ids, so it waits for the upgrade (hand-off 5): record the schema
+    # version each on-open call to it sees, and whether it queued a job.
+    calls = []
+    real_submit = adoption.submit_if_pending
+
+    def spy(handle, runner):
+        job = real_submit(handle, runner)
+        calls.append((handle.schema_version, job is not None))
+        return job
+
+    monkeypatch.setattr(adoption, "submit_if_pending", spy)
 
     r = client.post(f"{BASE}/open", json={"folder": str(folder)})
     assert r.status_code == 200, r.text
@@ -363,6 +374,8 @@ def test_real_project_copy(app, client, tmp_path, wait_job, monkeypatch):
     # A version-1 project is upgraded by a library job before its routes answer (foundation §11.3).
     assert project["migration"]["state"] in ("pending", "running"), project["migration"]
     assert wait_library_job(client, project["migration"]["job_id"])["state"] == "succeeded"
+    # Adoption was considered exactly once, after the upgrade finished, and it queued its job.
+    assert calls == [(2, True)]
 
     jobs = client.get(f"{BASE}/{ids['project']}/jobs").json()["items"]
     adopt = [j for j in jobs if j["type"] == adoption.ADOPT_JOB]
