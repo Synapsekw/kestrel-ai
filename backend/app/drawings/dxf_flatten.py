@@ -1,8 +1,10 @@
 """DXF drawings (spec §8.2 DXF): ezdxf `recover` (S3 §8.1 rules), INSERTs exploded through
-virtual_entities() with layer-0 inheritance, every linear entity flattened by `ezdxf.path` at a sagitta
-of 1 cm in metres, HATCH boundaries as outlines, TEXT/MTEXT as label points. Everything is in WCS
-drawing coordinates, streamed into runs.RunWriter. The document is held in memory only between
-readfile() and the end of the walk, and that load is admitted first (S3's DXF_RAM_FACTOR x file size).
+virtual_entities() with layer-0 inheritance, linear entities flattened at a sagitta of 1 cm in metres:
+ARC, CIRCLE and bulged polyline segments are chorded on the true circle, everything else (LINE,
+SPLINE, ELLIPSE, straight polylines, HATCH boundaries as outlines) through `ezdxf.path`; TEXT/MTEXT
+become label points. Everything is in WCS drawing coordinates, streamed into runs.RunWriter. The
+document is held in memory only between readfile() and the end of the walk, and that load is admitted
+first (S3's DXF_RAM_FACTOR x file size).
 """
 
 from __future__ import annotations
