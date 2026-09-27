@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleCloud } from "@/test/cloudFixtures";
 import { CloudViewer, type CloudViewerHandle, type CloudViewerProps } from "./CloudViewer";
 import type { EngineOptions } from "./viewer/engine";
-import { resolveNavMode, type AppliedNavMode } from "./viewer/navMode";
 import type { NavMode } from "./viewer/types";
 
 // A fake engine per createEngine call, recording what the shell applies to it: the shell's state
@@ -23,7 +22,7 @@ vi.mock("./viewer/engine", async (importOriginal) => {
     createEngine: (options: EngineOptions) => {
       const fake: FakeEngine = { options, calls: [] };
       engines.push(fake);
-      let nav: AppliedNavMode = "orbit";
+      let nav: NavMode = "orbit";
       const record =
         (name: string) =>
         (arg?: unknown): void => {
@@ -38,10 +37,14 @@ vi.mock("./viewer/engine", async (importOriginal) => {
         goToPose: record("goToPose"),
         setNavMode(mode: NavMode) {
           fake.calls.push(["setNavMode", mode]);
-          nav = resolveNavMode(mode, nav);
+          nav = mode;
         },
         navMode: () => nav,
+        setClipBox(box: unknown, mode: unknown) {
+          fake.calls.push(["setClipBox", { box, mode }]);
+        },
         onFrame: () => () => {},
+        onSettle: () => () => {},
         dispose: record("dispose"),
       };
     },
@@ -102,7 +105,6 @@ describe("CloudViewer shell state across an engine rebuild", () => {
     const ref = createRef<CloudViewerHandle>();
     const { rerender } = render(<CloudViewer ref={ref} {...base} />);
     ref.current!.setNavMode("pan");
-    ref.current!.setNavMode("fly"); // ignored until V2 (Ruling 2): pan stays
     ref.current!.setClassVisibility(new Set([2, 6]));
     ref.current!.setColourMode("intensity");
     rerender(<CloudViewer ref={ref} {...base} octreeUrl="http://127.0.0.1:1/other/" />);
@@ -115,6 +117,27 @@ describe("CloudViewer shell state across an engine rebuild", () => {
     expect(ref.current!.navMode()).toBe("pan");
   });
 
+  it("re-applies fly and the clip box to a new engine (C-V2)", () => {
+    const ref = createRef<CloudViewerHandle>();
+    const { rerender } = render(<CloudViewer ref={ref} {...base} />);
+    const box = {
+      centre: [1, 2, 3] as [number, number, number],
+      size: [4, 5, 6] as [number, number, number],
+      yawDeg: 30,
+    };
+    ref.current!.setNavMode("fly");
+    ref.current!.setClipBox(box, "highlight_inside");
+    rerender(<CloudViewer ref={ref} {...base} octreeUrl="http://127.0.0.1:1/other/" />);
+    expect(engines).toHaveLength(2);
+    const e = engines[1];
+    expect(e.calls).toContainEqual(["setNavMode", "fly"]);
+    expect(e.calls).toContainEqual(["setClipBox", { box, mode: "highlight_inside" }]);
+    expect(ref.current!.navMode()).toBe("fly");
+    ref.current!.setClipBox(null);
+    rerender(<CloudViewer ref={ref} {...base} octreeUrl="http://127.0.0.1:1/third/" />);
+    expect(engines[2].calls.some(([n]) => n === "setClipBox")).toBe(false);
+  });
+
   it("answers the shell's navigation mode when no engine exists", () => {
     const ref = createRef<CloudViewerHandle>();
     const { unmount } = render(<CloudViewer ref={ref} {...base} />);
@@ -124,7 +147,7 @@ describe("CloudViewer shell state across an engine rebuild", () => {
     h.setNavMode("pan");
     expect(h.navMode()).toBe("pan");
     h.setNavMode("fly");
-    expect(h.navMode()).toBe("pan");
+    expect(h.navMode()).toBe("fly");
   });
 });
 

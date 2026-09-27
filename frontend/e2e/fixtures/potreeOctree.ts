@@ -179,6 +179,29 @@ export function hollowStack(o: { centre: [number, number]; top: number; floor: n
   return out;
 }
 
+/**
+ * A hollow box seen from the south (the clip-box picker check, C-V2): a red south wall at
+ * y = cy − half and a green north wall at y = cy + half, each 2·half × 2·half in x and z at `step`.
+ */
+export function hollowBox(o: {
+  centre: [number, number, number];
+  half: number;
+  step: number;
+}): FixturePoint[] {
+  const [cx, cy, cz] = o.centre;
+  const out: FixturePoint[] = [];
+  const n = Math.round(o.half / o.step);
+  for (let i = -n; i <= n; i += 1) {
+    for (let k = -n; k <= n; k += 1) {
+      const x = cx + i * o.step;
+      const z = cz + k * o.step;
+      out.push({ x, y: cy - o.half, z, r: 220, g: 20, b: 20 });
+      out.push({ x, y: cy + o.half, z, r: 20, g: 200, b: 20 });
+    }
+  }
+  return out;
+}
+
 const CORS = {
   "access-control-allow-origin": "*",
   "access-control-expose-headers": "Content-Range, Accept-Ranges, Content-Length",

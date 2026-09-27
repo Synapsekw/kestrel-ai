@@ -1,4 +1,4 @@
-import type { CameraPose, EdlState, NavMode, ViewName } from "./types";
+import type { CameraPose, CameraPoseInput, EdlState, NavMode, ViewName } from "./types";
 
 /** The read-only diagnostics hook (spec §8): the packaged check and the acceptance read it. */
 export const DIAGNOSTICS_KEY = "kestrel.diagnostics";
@@ -64,6 +64,32 @@ export interface CloudViewerDiagnostics {
   /** e2e only: SwiftShader resolves Auto effects to reduced, so EDL must be forced on (plan Ruling 14). */
   setEdl(on: boolean): void;
   topSnapshotSample(px?: number): Promise<SnapshotSample | null>;
+  /** C-V2: the clip box (null clears it); picks respect it in show_inside mode. */
+  setClipBox(
+    box: { centre: [number, number, number]; size: [number, number, number]; yawDeg: number } | null,
+    mode?: "show_inside" | "highlight_inside",
+  ): void;
+  /** C-V2: looks through a photo pose; answers the photo centre's client point and the frame. */
+  lookThrough(pose: {
+    position: [number, number, number];
+    forward: [number, number, number];
+    up: [number, number, number];
+    hfovDeg: number;
+    vfovDeg: number;
+    width: number;
+    height: number;
+  }): {
+    centre: { x: number; y: number };
+    frame: { left: number; top: number; width: number; height: number };
+  };
+  /** C-V2: a slab sample, bounded for page.evaluate: count, total, and the first ≤ 5000 `s` and `z`. */
+  sampleSlab(
+    a: [number, number, number],
+    b: [number, number, number],
+    thicknessM: number,
+  ): Promise<{ count: number; total: number; s: number[]; z: number[] }>;
+  /** C-V2: V1's goToPose (the FOV hand-off check). */
+  goToPose(pose: CameraPoseInput): void;
 }
 
 declare global {

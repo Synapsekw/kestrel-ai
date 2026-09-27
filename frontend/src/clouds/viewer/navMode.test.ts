@@ -18,10 +18,9 @@ describe("navigation modes", () => {
     expect(mouseButtonsFor("pan")).toEqual({ LEFT: MOUSE.PAN, MIDDLE: MOUSE.DOLLY, RIGHT: MOUSE.ROTATE });
   });
 
-  it("applies orbit and pan, and ignores fly until V2 (the mode stays what it was)", () => {
-    expect(resolveNavMode("pan", "orbit")).toBe("pan");
-    expect(resolveNavMode("orbit", "pan")).toBe("orbit");
-    expect(resolveNavMode("fly", "orbit")).toBe("orbit");
-    expect(resolveNavMode("fly", "pan")).toBe("pan");
+  it("applies every mode, fly included (C-V2)", () => {
+    expect(resolveNavMode("pan")).toBe("pan");
+    expect(resolveNavMode("orbit")).toBe("orbit");
+    expect(resolveNavMode("fly")).toBe("fly");
   });
 });

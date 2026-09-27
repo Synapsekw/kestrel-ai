@@ -99,7 +99,7 @@ test("setView tweens to the named view in about 350 ms; a drag stops it; reduced
   expect(Math.abs(side.position[2] - side.target[2])).toBeLessThan(1e-3);
 });
 
-test("orbit keeps the target on a left drag; pan moves it; fly is ignored until V2", async ({ page }) => {
+test("orbit keeps the target on a left drag; pan moves it; fly applies", async ({ page }) => {
   await openGrid(page);
   await edlOn(page);
   expect(await page.evaluate(() => window.__kestrelCloudViewer!.navMode())).toBe("orbit");
@@ -116,6 +116,8 @@ test("orbit keeps the target on a left drag; pan moves it; fly is ignored until 
   expect(Math.hypot(...panned.target.map((v, i) => v - orbited.target[i]))).toBeGreaterThan(0.1);
 
   await page.evaluate(() => window.__kestrelCloudViewer!.setNavMode("fly"));
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.navMode())).toBe("fly"); // C-V2
+  await page.evaluate(() => window.__kestrelCloudViewer!.setNavMode("pan"));
   expect(await page.evaluate(() => window.__kestrelCloudViewer!.navMode())).toBe("pan");
 });
 

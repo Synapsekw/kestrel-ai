@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "re
 import type { PointCloud } from "@/api/clouds";
 import { Alert, Button } from "@/ui";
 import type { Bounds6, Vec3 as XYZ } from "./viewer/camera";
+import type { ClipBox, ClipBoxMode, ClipState } from "./viewer/clipBox";
 import {
   diagnosticsEnabled,
   installHook,
@@ -12,9 +13,11 @@ import {
 import { reducedEffects, watchEffects } from "./viewer/edl";
 import { createEngine, emptyStats, NoWebGlError, type CloudEngine, type CloudPick } from "./viewer/engine";
 import { FrameBridge } from "./viewer/frameBridge";
+import type { LookPose, LookThrough } from "./viewer/lookThrough";
 import type { ColourMode } from "./viewer/materialOptions";
-import { resolveNavMode, type AppliedNavMode } from "./viewer/navMode";
+import { resolveNavMode } from "./viewer/navMode";
 import type { OverlayShape } from "./viewer/overlay";
+import type { SlabSample } from "./viewer/slab";
 import type {
   CameraPose,
   CameraPoseInput,
@@ -22,6 +25,7 @@ import type {
   EdlState,
   FrameCallback,
   NavMode,
+  Vec3,
   ViewName,
 } from "./viewer/types";
 
@@ -45,7 +49,7 @@ export interface CloudViewerHandle {
   canvasRect(): { left: number; top: number; right: number; bottom: number } | null;
   setOverlay(key: string, shapes: OverlayShape[]): void;
   stats(): ViewerStats;
-  /** Spec §7 (C-V1). "fly" is ignored until C-V2. */
+  /** Spec §7: orbit, pan, and fly (C-V2). */
   setNavMode(mode: NavMode): void;
   navMode(): NavMode;
   /** A 350 ms tween; instant under reduced motion. */
@@ -61,6 +65,14 @@ export interface CloudViewerHandle {
   topSnapshot(px?: number): Promise<ImageBitmap | null>;
   frameTimes(): number[];
   edl(): EdlState | null;
+  /** C-V2 (spec §7): see `CloudEngine`. The clip box survives an engine rebuild, like the nav mode. */
+  setClipBox(box: ClipBox | null, mode?: ClipBoxMode): void;
+  clipBox(): ClipState | null;
+  /** Null without a running engine. */
+  lookThrough(pose: LookPose): LookThrough | null;
+  sampleSlab(a: Vec3, b: Vec3, thicknessM: number, maxPoints?: number): Promise<SlabSample>;
+  /** Fires once each time the view settles; survives a cloud switch. Returns the unsubscribe. */
+  onSettle(cb: () => void): () => void;
 }
 
 export interface CloudViewerProps {
@@ -90,6 +102,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engine = useRef<CloudEngine | null>(null);
   const [bridge] = useState(() => new FrameBridge()); // lazy: one bridge for the shell's life
+  const [settle] = useState(() => new Set<() => void>()); // the handle's settle listeners, across engines
   const callbacks = useRef({
     onPick: props.onPick,
     onHover: props.onHover,
@@ -116,8 +129,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   // The colour prop last applied, so the material effect below never reverts a handle colour (Ruling 12).
   const colourProp = useRef(colour);
   // Handle state that outlives an engine ("Reload view", a new cloud), re-applied to each new one.
-  const navRef = useRef<AppliedNavMode>("orbit");
+  const navRef = useRef<NavMode>("orbit");
   const hiddenRef = useRef<ReadonlySet<number>>(new Set());
+  const clipRef = useRef<ClipState | null>(null);
 
   useEffect(() => {
     callbacks.current = {
@@ -172,8 +186,12 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     engine.current = e;
     if (navRef.current !== "orbit") e.setNavMode(navRef.current);
     if (hiddenRef.current.size > 0) e.setClassVisibility(hiddenRef.current);
+    if (clipRef.current) e.setClipBox(clipRef.current.box, clipRef.current.mode);
     bridge.attach(e);
     const stopEffects = watchEffects((reduced) => e.setEdl(!reduced));
+    const stopSettle = e.onSettle(() => {
+      for (const cb of [...settle]) cb();
+    });
 
     let releaseHook = () => {};
     if (diagnosticsEnabled()) {
@@ -205,6 +223,23 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         edl: () => e.edl(),
         setEdl: (on) => e.setEdl(on),
         topSnapshotSample: (px) => Promise.resolve(e.topSnapshotSample(px)),
+        setClipBox: (box, mode) => e.setClipBox(box, mode),
+        lookThrough: (pose) => {
+          const lt = e.lookThrough(pose);
+          return { centre: lt.toCanvas(pose.width / 2, pose.height / 2), frame: lt.frame() };
+        },
+        sampleSlab: async (a, b, thicknessM) => {
+          const r = await e.sampleSlab(a, b, thicknessM);
+          // bounded for page.evaluate: the spec computes its checks from the first 5000
+          const n = Math.min(r.count, 5000);
+          return {
+            count: r.count,
+            total: r.total,
+            s: Array.from(r.s.subarray(0, n)),
+            z: Array.from(r.z.subarray(0, n)),
+          };
+        },
+        goToPose: (pose) => e.goToPose(pose),
       });
       releaseHook = () => {
         stopRecording();
@@ -215,7 +250,9 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     return () => {
       releaseHook();
       stopEffects();
+      stopSettle();
       bridge.detach();
+      navRef.current = e.navMode(); // the engine may have left fly itself (lookThrough)
       e.dispose();
       engine.current = null;
     };
@@ -255,7 +292,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       setOverlay: (key, shapes) => engine.current?.setOverlay(key, shapes),
       stats: () => engine.current?.stats() ?? emptyStats(),
       setNavMode(mode) {
-        navRef.current = resolveNavMode(mode, navRef.current); // "fly" keeps the mode (Ruling 2)
+        navRef.current = resolveNavMode(mode);
         engine.current?.setNavMode(mode);
       },
       navMode: () => engine.current?.navMode() ?? navRef.current,
@@ -275,8 +312,24 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       topSnapshot: (px) => engine.current?.topSnapshot(px) ?? Promise.resolve(null),
       frameTimes: () => engine.current?.frameTimes() ?? [],
       edl: () => engine.current?.edl() ?? null,
+      setClipBox(box, mode = "show_inside") {
+        clipRef.current = box ? { box, mode } : null;
+        engine.current?.setClipBox(box, mode);
+      },
+      clipBox: () => engine.current?.clipBox() ?? clipRef.current,
+      lookThrough: (pose) => engine.current?.lookThrough(pose) ?? null,
+      sampleSlab: (a, b, thicknessM, maxPoints) =>
+        engine.current
+          ? engine.current.sampleSlab(a, b, thicknessM, maxPoints)
+          : Promise.reject(new Error("the 3D view is not running")),
+      onSettle(cb) {
+        settle.add(cb);
+        return () => {
+          settle.delete(cb);
+        };
+      },
     }),
-    [bridge],
+    [bridge, settle],
   );
 
   return (

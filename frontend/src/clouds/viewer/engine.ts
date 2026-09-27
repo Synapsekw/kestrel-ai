@@ -17,6 +17,14 @@ import {
   type Vec3 as XYZ,
 } from "./camera";
 import { classificationLut, type ClassLut } from "./classes";
+import {
+  applyClipToMaterial,
+  pickClipParams,
+  respectClip,
+  type ClipBox,
+  type ClipBoxMode,
+  type ClipState,
+} from "./clipBox";
 import { attributeNames, colourAvailability, effectiveColour, intensityRange } from "./colour";
 import {
   classifyPixels,
@@ -27,14 +35,17 @@ import {
 } from "./diagnostics";
 import { disposeChildren, disposePointsGeometries } from "./dispose";
 import { EDL_OPTIONS, EDL_RENDERS_TO_TARGET } from "./edl";
+import { FLY_EXIT_AHEAD_M, FlyControls } from "./flyControls";
 import { FrameRing, frameInterval } from "./frameRing";
 import { shouldKeepRendering } from "./idle";
+import { letterbox, photoFrame, photoToCanvas, type LookPose, type LookThrough } from "./lookThrough";
 import { makeMaterialOptions, type ColourMode } from "./materialOptions";
-import { mouseButtonsFor, resolveNavMode, type AppliedNavMode } from "./navMode";
+import { mouseButtonsFor, resolveNavMode } from "./navMode";
 import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
 import { pickAllPoints } from "./pickAll";
 import { flipRows, splitHalves } from "./pixels";
 import { makeRequestManager, metadataUrl } from "./requestManager";
+import { SLAB_MAX_POINTS, sliceSlab, slabNodes, throttleLatest, type SlabSample } from "./slab";
 import { nearestToCentre, topmostWithin } from "./topmost";
 import { startTween, tweenAt, type Tween } from "./tween";
 import type {
@@ -45,6 +56,7 @@ import type {
   FrameCallback,
   FrameCamera,
   NavMode,
+  Vec3,
   ViewName,
 } from "./types";
 import { deepestLevelAt, pickUncertainty, type NodeBox } from "./uncertainty";
@@ -126,6 +138,15 @@ export interface CloudEngine {
   sampleColours(): ColourSample;
   requestRender(): void;
   dispose(): void;
+  /** C-V2: the clip box (null clears it). Picks respect it in show_inside mode. */
+  setClipBox(box: ClipBox | null, mode?: ClipBoxMode): void;
+  clipBox(): ClipState | null;
+  /** C-V2: the camera at a drone photo's pose, letterboxed; `restore()` goes back. */
+  lookThrough(pose: LookPose): LookThrough;
+  /** C-V2: the displayed points in a vertical slab along a→b (≤ maxPoints, ≤ 5 Hz). */
+  sampleSlab(a: Vec3, b: Vec3, thicknessM: number, maxPoints?: number): Promise<SlabSample>;
+  /** C-V2: fires once each time the render loop goes idle. Returns the unsubscribe. */
+  onSettle(cb: () => void): () => void;
   /** For C-V2 (clip box, fly, capture): the live objects. Read them; do not replace them. */
   readonly three: {
     renderer: THREE.WebGLRenderer;
@@ -145,6 +166,8 @@ export class NoWebGlError extends Error {}
 const HOVER_MS = 100;
 const CLICK_SLOP_PX = 4;
 const PICK_WINDOW = 15;
+/** The on-screen vertical FOV: Fit, top, lookAt and the named views always frame with it (C-V1 hand-off). */
+export const DEFAULT_FOV_DEG = 60;
 /** How far above the cloud's top (and below its bottom) the straight-down pick camera reaches. */
 const DOWN_MARGIN_M = 10;
 const BAR_MS = 250;
@@ -188,7 +211,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   const overlay = new THREE.Group();
   overlay.renderOrder = 10;
   overlayScene.add(overlay);
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.05, 1e6);
+  const camera = new THREE.PerspectiveCamera(DEFAULT_FOV_DEG, 1, 0.05, 1e6);
   camera.up.set(0, 0, 1);
   const controls = new OrbitControls(camera, canvas);
   controls.zoomToCursor = true;
@@ -206,7 +229,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   let availability: ColourAvailability | null = null;
   let intensity: [number, number] | null = null;
   let hiddenClasses: ReadonlySet<number> = new Set();
-  let nav: AppliedNavMode = "orbit";
+  let nav: NavMode = "orbit";
   let tween: Tween | null = null;
   let orbitScript: { until: number; radPerMs: number; resolve: () => void } | null = null;
   let pco: PointCloudOctree | null = null;
@@ -222,6 +245,47 @@ export function createEngine(o: EngineOptions): CloudEngine {
     target.addEventListener(type, fn);
     unlisten.push(() => target.removeEventListener(type, fn));
   };
+
+  // ---- C-V2 state ---------------------------------------------------------------------------
+  let clip: ClipState | null = null;
+  let clipParams = pickClipParams(null);
+  /** A pick survives the clip box (plan Ruling 1: show_inside drops what is outside). */
+  const inClip = (p: { x: number; y: number; z: number }): boolean => respectClip([p], clip).length > 0;
+  /** Set by lookThrough: the FOV to restore on the next navigation (plan Ruling 9). */
+  let posed: { fov: number } | null = null;
+  const settleListeners = new Set<() => void>();
+  let renderedSinceSettle = false;
+  const fly = new FlyControls({
+    camera,
+    element: canvas,
+    siteDiagonal: diagonal,
+    requestRender: () => requestRender(),
+  });
+  function leavePose(): void {
+    if (!posed) return;
+    camera.up.set(0, 0, 1);
+    camera.fov = posed.fov;
+    camera.updateProjectionMatrix();
+    posed = null;
+  }
+  /** Leaves a photo pose, and puts back the default FOV a stored pose (goToPose) or a photo may have set. */
+  function frameDefault(): void {
+    leavePose();
+    if (camera.fov !== DEFAULT_FOV_DEG) {
+      camera.fov = DEFAULT_FOV_DEG;
+      camera.updateProjectionMatrix();
+    }
+  }
+  /** The camera was placed from outside fly (the load, a jump, a finished tween): fly looks on from there. */
+  function reseatFly(): void {
+    if (!fly.isEnabled) return;
+    fly.disable();
+    fly.enable(tuple(controls.target));
+  }
+  const throttledSlab = throttleLatest(
+    (a: Vec3, b: Vec3, thicknessM: number, maxPoints: number): SlabSample =>
+      sliceSlab(pco && !disposed ? slabNodes(pco) : [], a, b, thicknessM, maxPoints),
+  );
 
   function drawFrame(cam: THREE.Camera = camera): void {
     potreeRenderer.render({ renderer, scene, camera: cam, pointClouds: pco ? [pco] : [] });
@@ -265,7 +329,9 @@ export function createEngine(o: EngineOptions): CloudEngine {
   /** Instant (S1 fit/topView/lookAt, plan Ruling 5). */
   function jump(v: View): void {
     tween = null;
+    frameDefault();
     applyView(v);
+    reseatFly();
     requestRender();
   }
 
@@ -275,6 +341,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
     if (tween.ms === 0) {
       applyView(to);
       tween = null;
+      reseatFly();
     }
     requestRender();
   }
@@ -324,7 +391,10 @@ export function createEngine(o: EngineOptions): CloudEngine {
     if (tween) {
       const s = tweenAt(tween, now);
       applyView(s.view);
-      if (s.done) tween = null;
+      if (s.done) {
+        tween = null;
+        reseatFly();
+      }
       lastInputAt = now;
     }
     if (orbitScript) {
@@ -338,7 +408,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
         done();
       }
     }
-    const distance = camera.position.distanceTo(controls.target);
+    if (fly.update(now)) lastInputAt = now; // a held fly key keeps the loop alive (spec §7)
+    const distance = fly.isEnabled ? FLY_EXIT_AHEAD_M : camera.position.distanceTo(controls.target);
     const nf = nearFar(distance, diagonal);
     camera.near = nf.near;
     camera.far = nf.far;
@@ -366,6 +437,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
     }
     drawFrame();
     emitFrame();
+    renderedSinceSettle = true;
     if (now - lastBarAt > BAR_MS) {
       lastBarAt = now;
       events.onBar?.({ pts: stats.numVisiblePoints, loading: stats.nodesLoading });
@@ -379,8 +451,19 @@ export function createEngine(o: EngineOptions): CloudEngine {
     });
     // A requestRender() during this tick (controls' "change", a tween or orbit step) has already
     // scheduled the next frame: never schedule a second one, or two ticks run per frame.
-    if (!raf && keep) raf = requestAnimationFrame(tick);
+    const again = keep || fly.active(); // a held fly key keeps the loop alive
+    if (!raf && again) raf = requestAnimationFrame(tick);
     chained = raf !== 0;
+    if (raf === 0 && renderedSinceSettle) {
+      renderedSinceSettle = false;
+      for (const cb of [...settleListeners]) {
+        try {
+          cb(); // once per settle (P1's occlusion pass)
+        } catch (err) {
+          pushErrorOnce(stats.errors, `onSettle: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
   };
 
   function requestRender(): void {
@@ -405,6 +488,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   controls.addEventListener("change", requestRender);
   const onControlsStart = () => {
     tween = null; // a drag wins over a running tween (Review Focus 4)
+    leavePose(); // after lookThrough, the first drag restores Z-up and the FOV (plan Ruling 9)
     requestRender();
   };
   controls.addEventListener("start", onControlsStart);
@@ -436,14 +520,20 @@ export function createEngine(o: EngineOptions): CloudEngine {
       ((clientX - rect.left) / rect.width) * 2 - 1,
       -((clientY - rect.top) / rect.height) * 2 + 1,
     );
+    // a jump (setView under reduced motion, goToPose) only turned the camera: its world matrix is the
+    // last frame's until the next render, and a pick before that frame would cast the old pose's ray
+    camera.updateMatrixWorld();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, camera);
     // potree's rule (the drawn point nearest the window centre), over the valid hits only: its own
     // pick answered null on the chimney with 18 points drawn in the window (see pickAllPoints)
-    const all = pickAllPoints(pco, renderer, camera, ray.ray, PICK_WINDOW);
-    const p = all
-      ? nearestToCentre(all)
-      : (pco.pick(renderer, camera, ray.ray, { pickWindowSize: PICK_WINDOW })?.position ?? null);
+    const all = pickAllPoints(pco, renderer, camera, ray.ray, PICK_WINDOW, clipParams);
+    const plain = all
+      ? null
+      : (pco.pick(renderer, camera, ray.ray, { ...clipParams, pickWindowSize: PICK_WINDOW })?.position ??
+        null);
+    // picks respect the clip box in show_inside mode (plan Ruling 1)
+    const p = all ? nearestToCentre(respectClip(all, clip)) : plain && inClip(plain) ? plain : null;
     return p ? toCloudPick(new THREE.Vector3(p.x, p.y, p.z)) : null;
   }
 
@@ -467,16 +557,24 @@ export function createEngine(o: EngineOptions): CloudEngine {
     down.updateProjectionMatrix();
     down.updateMatrixWorld(true);
     const ray = new THREE.Ray(down.position.clone(), new THREE.Vector3(0, 0, -1));
-    const all = pickAllPoints(pco, renderer, down, ray, Math.min(w, h));
+    const all = pickAllPoints(pco, renderer, down, ray, Math.min(w, h), clipParams);
     const spacing = rootSpacing();
+    const plain = all
+      ? null
+      : (pco.pick(renderer, down, ray, { ...clipParams, pickWindowSize: Math.min(w, h) })?.position ?? null);
     const p = all
       ? topmostWithin(
-          all.map((hit) => ({ ...hit, reach: pickUncertainty(spacing, hit.level) })),
+          respectClip(
+            all.map((hit) => ({ ...hit, reach: pickUncertainty(spacing, hit.level) })),
+            clip,
+          ),
           x,
           y,
           radius,
         )
-      : (pco.pick(renderer, down, ray, { pickWindowSize: Math.min(w, h) })?.position ?? null);
+      : plain && inClip(plain)
+        ? plain
+        : null;
     if (!p || Math.hypot(p.x - x, p.y - y) > radius) return null;
     return toCloudPick(new THREE.Vector3(p.x, p.y, p.z));
   }
@@ -493,11 +591,13 @@ export function createEngine(o: EngineOptions): CloudEngine {
     const e = ev as PointerEvent;
     const d = down;
     down = null;
+    if (fly.isEnabled) return; // fly mode never picks (plan Ruling 12)
     if (!d || e.button !== 0 || Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_SLOP_PX) return;
     const p = pickAtClient(e.clientX, e.clientY);
     if (p) events.onPick?.(p);
   });
   listen(canvas, "pointermove", (ev) => {
+    if (fly.isEnabled) return; // fly mode never picks (plan Ruling 12)
     const e = ev as PointerEvent;
     if (!events.isArmed() || down) return;
     const now = performance.now();
@@ -506,6 +606,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
     events.onHover?.(pickAtClient(e.clientX, e.clientY));
   });
   listen(canvas, "dblclick", (ev) => {
+    if (fly.isEnabled) return; // fly mode never picks (plan Ruling 12)
     const e = ev as MouseEvent;
     const p = pickAtClient(e.clientX, e.clientY);
     if (!p) return;
@@ -538,7 +639,9 @@ export function createEngine(o: EngineOptions): CloudEngine {
       pco = loaded;
       availability = colourAvailability(attributeNames(loaded.pcoGeometry));
       if (bounds) applyView(wholeSiteView(bounds));
+      reseatFly(); // a rebuild restores fly before the octree loads: look on from the loaded view
       applyMaterial();
+      applyClipToMaterial(loaded.material, clip);
       events.onLoaded?.(availability);
       requestRender();
     })
@@ -609,9 +712,11 @@ export function createEngine(o: EngineOptions): CloudEngine {
       jump({ target, position: { x: target.x, y: target.y - k, z: target.z + k } });
     },
     setView(name) {
+      frameDefault();
       if (bounds) go(namedView(name, bounds));
     },
     goToPose(pose) {
+      leavePose();
       const v = poseView(pose);
       if (!v) return;
       camera.fov = v.fovDeg;
@@ -620,18 +725,34 @@ export function createEngine(o: EngineOptions): CloudEngine {
     },
     currentPose: () => ({
       position: tuple(camera.position),
-      target: tuple(controls.target),
+      // in fly mode the orbit target is stale: the pose looks 10 m ahead (plan Ruling 13)
+      target: fly.isEnabled ? fly.ahead() : tuple(controls.target),
       up: tuple(camera.up),
       fov_deg: camera.fov,
     }),
     setNavMode(mode) {
-      nav = resolveNavMode(mode, nav);
-      const b = mouseButtonsFor(nav);
-      controls.mouseButtons = {
-        LEFT: b.LEFT as THREE.MOUSE,
-        MIDDLE: b.MIDDLE as THREE.MOUSE,
-        RIGHT: b.RIGHT as THREE.MOUSE,
-      };
+      const next = resolveNavMode(mode);
+      if (next === nav) return;
+      if (nav === "fly") {
+        controls.target.set(...fly.disable()); // 10 m ahead (spec §7)
+        controls.enabled = true;
+        controls.update();
+      }
+      nav = next;
+      if (nav === "fly") {
+        tween = null;
+        leavePose();
+        controls.enabled = false;
+        fly.enable(tuple(controls.target));
+      } else {
+        const b = mouseButtonsFor(nav);
+        controls.mouseButtons = {
+          LEFT: b.LEFT as THREE.MOUSE,
+          MIDDLE: b.MIDDLE as THREE.MOUSE,
+          RIGHT: b.RIGHT as THREE.MOUSE,
+        };
+      }
+      requestRender();
     },
     navMode: () => nav,
     setColourMode(mode) {
@@ -753,6 +874,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
       controls.removeEventListener("start", onControlsStart);
       controls.dispose();
       frameCallbacks.clear();
+      if (fly.isEnabled) fly.disable();
+      settleListeners.clear();
       // the canvas is keyed by the shell's `generation` only: a new cloud reuses this WebGL context,
       // so every buffer this scene made is released here, not left to the context's end
       disposeChildren(overlay);
@@ -762,6 +885,57 @@ export function createEngine(o: EngineOptions): CloudEngine {
       }
       potreeRenderer.dispose();
       renderer.dispose();
+    },
+    setClipBox(box, mode = "show_inside") {
+      clip = box ? { box, mode } : null;
+      clipParams = pickClipParams(clip);
+      if (pco) applyClipToMaterial(pco.material, clip);
+      requestRender();
+    },
+    clipBox: () => (clip ? { box: clip.box, mode: clip.mode } : null),
+    lookThrough(pose) {
+      tween = null;
+      if (nav === "fly") engine.setNavMode("orbit");
+      const before = {
+        position: camera.position.clone(),
+        target: controls.target.clone(),
+        up: camera.up.clone(),
+        fov: posed ? posed.fov : camera.fov,
+      };
+      const rect = () => canvas.getBoundingClientRect();
+      const first = rect();
+      camera.fov = letterbox(pose, first.width, first.height).vfovDeg;
+      camera.position.set(...pose.position);
+      camera.up.set(...pose.up);
+      const target = new THREE.Vector3(...pose.forward).normalize().multiplyScalar(10).add(camera.position);
+      camera.lookAt(target);
+      controls.target.copy(target); // not controls.update(): it would re-derive the orientation
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld(true);
+      posed = { fov: before.fov };
+      requestRender();
+      const k = () => letterbox(pose, rect().width, rect().height).k;
+      return {
+        toCanvas: (u, v) => photoToCanvas(pose, rect(), k(), u, v),
+        frame: () => photoFrame(pose, rect(), k()),
+        restore: () => {
+          camera.position.copy(before.position);
+          controls.target.copy(before.target);
+          camera.up.copy(before.up);
+          camera.fov = before.fov;
+          camera.updateProjectionMatrix();
+          camera.lookAt(controls.target);
+          posed = null;
+          requestRender();
+        },
+      };
+    },
+    sampleSlab: (a, b, thicknessM, maxPoints = SLAB_MAX_POINTS) => throttledSlab(a, b, thicknessM, maxPoints),
+    onSettle(cb) {
+      settleListeners.add(cb);
+      return () => {
+        settleListeners.delete(cb);
+      };
     },
     three: { renderer, scene, overlayScene, camera, controls, potree, potreeRenderer, pco: () => pco },
   };
