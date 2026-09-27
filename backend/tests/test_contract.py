@@ -93,8 +93,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "detectImage",  # I-BP
-    "detectImageBatch",  # I-BP
 }
 EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
 
@@ -110,7 +108,9 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
-    "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
+    # The route is gone (I-BP); the deprecated path stays until I-FW deletes it with its last
+    # frontend helper, so the operation only has to answer < 500 (a 404) until then.
+    "preannotateImage": "I-FW",
 }
 
 
@@ -215,6 +215,13 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "putMapWorkspace": {422},
     "convertAnchor": {422},
     "getSiteTile": {422},
+    # I-BP: a generated model id may exist but have no weights (`model_unavailable` 409) or no class
+    # that reaches a catalogue type (`unmapped_classes` 422).
+    "detectImage": {409, 422},
+    # I-BP: a scope matching no image (`no_images`), a kind without its model/provider
+    # (`model_or_provider_required`), a blank cloud query (`query_required`), no class mapped
+    # (`unmapped_classes`), no stored key (`conflict` 409) or missing weights (`model_unavailable`).
+    "detectImageBatch": {409, 422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

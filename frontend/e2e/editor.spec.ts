@@ -274,65 +274,22 @@ test("N marks the image empty, rejects visible proposals locally, and N again un
   await expect(page.getByRole("status").filter({ hasText: "No longer marked empty." })).toBeVisible();
 });
 
-test("pre-annotates on open when no proposal is pending and tolerates 501", async ({ page }) => {
-  await page.route(`**/api/v1/projects/${P}/images/${IMG}/boxes`, (route) =>
-    route.request().method() === "GET"
-      ? route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          headers: { "Access-Control-Allow-Origin": "*" },
-          body: JSON.stringify({
-            items: [
-              {
-                id: "b0000000-6666-4000-8000-000000000001",
-                image_id: IMG,
-                class_id: "c1a2b3c4-0000-4000-8000-000000000001",
-                x: 512,
-                y: 300,
-                w: 140,
-                h: 90,
-                confidence: null,
-                provenance: {
-                  kind: "person",
-                  model_id: null,
-                  provider: null,
-                  model_name: null,
-                  query_run_id: null,
-                },
-                review_state: "accepted",
-                reviewed_at: "2026-09-17T10:45:00Z",
-                created_at: "2026-09-17T10:45:00Z",
-              },
-            ],
-          }),
-        })
-      : route.continue(),
-  );
-  const preannotate = page.waitForRequest(
-    (r) => r.method() === "POST" && r.url().endsWith(`/images/${IMG}/preannotate`),
+test("does not pre-annotate or detect on open", async ({ page }) => {
+  // Pre-annotation on open is gone (image inspection spec §11.2, removed in d5826a8): detection is
+  // the Images workspace's POST /images/{id}/detect, which this interim editor does not call.
+  const apiRequests: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() === "POST" && r.url().includes("/api/v1/")) apiRequests.push(r.url());
+  });
+  const boxesRequest = page.waitForRequest(
+    (r) => r.method() === "GET" && r.url().endsWith(`/images/${IMG}/boxes`),
   );
   await openEditor(page);
-  await preannotate;
-  await expect(page.getByTestId("proposal-count")).toHaveText("1 suggestion");
-  await expect(
-    page.getByRole("status").filter({ hasText: "1 suggestion from the pre-annotation model" }),
-  ).toBeVisible();
+  await boxesRequest;
 
-  await page.route(`**/api/v1/projects/${P}/images/${IMG}/preannotate`, (route) =>
-    route.fulfill({
-      status: 501,
-      contentType: "application/json",
-      headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({
-        error: { code: "not_implemented", message: "pre-annotation arrives with S4", details: {} },
-      }),
-    }),
-  );
-  await openEditor(page);
-  await expect(
-    page.getByRole("status").filter({ hasText: "Pre-annotation is not available yet" }),
-  ).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(apiRequests.some((u) => u.includes("/preannotate"))).toBe(false);
+  expect(apiRequests.some((u) => u.includes("/detect"))).toBe(false);
+  await expect(page.getByRole("status").filter({ hasText: /Pre-annotat/ })).toHaveCount(0);
 });
 
 const IMG2 = "10000000-5555-4000-8000-000000000002";

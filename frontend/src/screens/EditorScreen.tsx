@@ -77,7 +77,7 @@ function EditorBody({
   project: Project;
 }) {
   const { baseUrl, token } = useBackend();
-  const { loading } = useEditorImage(projectId, imageId, project.preannotation_model_id);
+  const { loading } = useEditorImage(projectId, imageId);
   const image = useEditorStore((s) => s.image);
   const error = useEditorStore((s) => s.error);
   const notice = useEditorStore((s) => s.notice);

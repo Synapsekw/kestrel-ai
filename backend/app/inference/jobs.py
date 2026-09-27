@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -23,6 +23,7 @@ from app.db.models import Box, Image, QueryRun
 from app.detect.class_maps import label_map, model_snapshot
 from app.detect.counts import recount_query_run
 from app.errors import not_found
+from app.imagery import detections, summary
 from app.inference.ratelimit import bucket_for
 from app.inference.service import class_ids_by_name, class_names, tiles_dir
 from app.jobs.registry import register_job_type
@@ -88,7 +89,8 @@ def _call_with_retries(
 
 
 def _reviewed(s, run: QueryRun, image_id: str, names: dict[str, str]) -> list[Detection]:
-    """This run's already-reviewed boxes on the image, as detections to keep away from."""
+    """This run's already-reviewed shapes on the image, as detections to keep away from. NMS and
+    `not_covered_by` compare envelopes, so an rbox keeps its angle and a point is skipped."""
     rows = s.execute(
         select(Box).where(
             Box.query_run_id == run.id,
@@ -104,22 +106,31 @@ def _reviewed(s, run: QueryRun, image_id: str, names: dict[str, str]) -> list[De
             w=r.w,
             h=r.h,
             confidence=r.confidence or 0.0,
+            angle=r.angle or 0.0,
         )
         for r in rows
-        if r.class_id in names
+        if r.class_id in names and (r.shape or "box") != "point"
     ]
 
 
-def _write_boxes(ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detection], nms_iou: float) -> int:
-    """Replace this image's *unreviewed* boxes for the run, without re-proposing reviewed ones.
+def _write_shapes(
+    ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detection], nms_iou: float
+) -> int:
+    """Replace this image's *unreviewed* suggestions for the run, as shapes, without re-proposing
+    reviewed ones.
 
     Replacing rather than appending keeps a re-run from doubling proposals, and leaving reviewed
     boxes alone keeps a resume from throwing away work the user has already done. Those two rules
     collide on a resume: the detections come from the whole tile cache, so an object the user has
     already accepted, edited or rejected would come back as a fresh proposal next to their decision.
-    Anything a surviving reviewed box already covers is therefore dropped.
+    Anything a surviving reviewed box already covers is therefore dropped. Each shape goes through
+    `imagery.detections` (I-BA's shape rules), and the image's summary is recomputed in the same
+    transaction (image inspection spec §11.3).
     """
     with ctx.project.session() as s:
+        image = s.get(Image, image_id)
+        if image is None:
+            raise not_found("image", image_id)
         by_name = class_ids_by_name(ctx.project, s)
         by_id = {v: k for k, v in by_name.items()}
         keepers = _reviewed(s, run, image_id, by_id)
@@ -139,26 +150,30 @@ def _write_boxes(ctx: JobContext, run: QueryRun, image_id: str, dets: list[Detec
                 Box.review_state == "unreviewed",
             )
         )
-        rows = [
-            Box(
-                image_id=image_id,
-                class_id=by_name[d.label],
-                x=d.x,
-                y=d.y,
-                w=d.w,
-                h=d.h,
-                confidence=d.confidence,
-                provenance_kind=run.kind,
-                model_id=run.model_id,
-                provider=run.provider,
-                model_name=run.model_name,
-                query_run_id=run.id,
-                review_state="unreviewed",
+        rows = []
+        for d in dets:
+            if d.label not in by_name:
+                continue
+            fields = detections.to_fields(d, image.width, image.height)
+            if fields is None:
+                continue
+            rows.append(
+                detections.suggestion(
+                    fields,
+                    image_id=image_id,
+                    class_id=by_name[d.label],
+                    confidence=d.confidence,
+                    provenance_kind=run.kind,
+                    model_id=run.model_id,
+                    provider=run.provider,
+                    model_name=run.model_name,
+                    query_run_id=run.id,
+                )
             )
-            for d in dets
-            if d.label in by_name
-        ]
+        rows = detections.within_cap(s, image_id, rows)
         s.add_all(rows)
+        s.flush()
+        summary.touch(s, image_id)
     return len(rows)
 
 
@@ -226,17 +241,34 @@ def _recount(ctx: JobContext, run: QueryRun) -> None:
             recount_query_run(s, row)
 
 
+def _model_task(ctx: JobContext, run: QueryRun) -> str:
+    """detect | obb | segment: the run's snapshot, else the library model; cloud runs detect."""
+    task = (run.model_snapshot or {}).get("task")
+    if task or run.kind != "local_model":
+        return task or "detect"
+    return library.model_for_job(ctx.runner.library, run.model_id)[1].task
+
+
+def _image_spec(spec: TilingSpec, task: str, width: int, height: int) -> TilingSpec:
+    """A segmentation model sees the whole frame when its long side is at most twice the tile, so
+    a crack is not cut in two at a seam (image inspection spec §16, ruling R-BP8)."""
+    if task == "segment" and spec.enabled and max(width, height) <= 2 * spec.tile_size:
+        return replace(spec, enabled=False)
+    return spec
+
+
 @register_job_type("infer")
 def run_infer(ctx: JobContext) -> dict:
     run, names = _load_run(ctx)
     spec = TilingSpec(**(run.tiling or {}))
     provider = _build_provider(ctx, run, names)
     fill_snapshot(ctx, QueryRun, run)
+    task = _model_task(ctx, run)
 
     totals = {"tiles": 0, "boxes": 0, "cached_images": 0, "failed_tiles": 0, "refusals": 0}
     image_ids = list(run.image_ids or [])
     try:
-        _run_images(ctx, run, provider, spec, names, image_ids, totals)
+        _run_images(ctx, run, provider, spec, names, image_ids, totals, task)
     finally:
         # counts follow the boxes that were written, even when the run was cancelled half way
         _recount(ctx, run)
@@ -245,9 +277,9 @@ def run_infer(ctx: JobContext) -> dict:
     return {"query_run_id": run.id, "images": len(image_ids), **totals}
 
 
-def _run_images(ctx, run, provider, spec, names, image_ids, totals) -> None:
+def _run_images(ctx, run, provider, spec, names, image_ids, totals, task="detect") -> None:
     for done, image_id in enumerate(image_ids, start=1):
-        dets, all_cached = _run_image(ctx, run, provider, spec, names, image_id, totals)
+        dets, all_cached = _run_image(ctx, run, provider, spec, names, image_id, totals, task)
         # A complete tile cache only means the boxes are right if they are actually there: tiles are
         # written per tile and boxes per image, so a killed process can leave the cache full and the
         # image empty. Rewriting from the cache costs nothing and closes that window.
@@ -255,7 +287,7 @@ def _run_images(ctx, run, provider, spec, names, image_ids, totals) -> None:
             totals["cached_images"] += 1
             ctx.log.info("image %s served entirely from the run's tile cache", image_id)
         else:
-            totals["boxes"] += _write_boxes(ctx, run, image_id, dets, spec.nms_iou)
+            totals["boxes"] += _write_shapes(ctx, run, image_id, dets, spec.nms_iou)
             ctx.publish("boxes.changed", {"image_ids": [image_id]})
         ctx.progress(done / len(image_ids), f"{done} / {len(image_ids)} images, {totals['boxes']} boxes")
 
@@ -288,12 +320,15 @@ def _rate_limiter(ctx: JobContext, run: QueryRun):
     return bucket_for(run.provider, rpm)
 
 
-def _run_image(ctx, run, provider, spec, names, image_id, totals) -> tuple[list[Detection], bool]:
+def _run_image(
+    ctx, run, provider, spec, names, image_id, totals, task="detect"
+) -> tuple[list[Detection], bool]:
     with ctx.project.session() as s:
         image_row = s.get(Image, image_id)
         if image_row is None:
             raise not_found("image", image_id)
         path, width, height = ctx.project.folder / image_row.path, image_row.width, image_row.height
+    spec = _image_spec(spec, task, width, height)
 
     with PILImage.open(path) as opened:
         image = opened.convert("RGB")

@@ -328,9 +328,11 @@ def test_promoting_a_run_makes_its_defect_detections_findings(client, handle, ct
     assert len(rows) == 1 and rows[0].payload["count"] == 2
 
 
-def test_unpromoting_a_run_removes_its_findings_and_bins_their_photos(
+def test_unpromoting_a_run_with_a_photo_on_its_finding_is_refused_and_bins_nothing(
     client, handle, ctx, tmp_path, make_jpeg
 ):
+    """R-BA2: an undo never takes a note, comment or photo with it (image spec §8.3), which
+    supersedes foundation §8.5's bin-the-photos behaviour for this case."""
     run_id, _ = _run_with_proposals(handle, ctx)
     client.post(f"{ctx['base']}/query-runs/{run_id}/promote", json={})
     f = _findings(client, ctx)[0]
@@ -340,7 +342,16 @@ def test_unpromoting_a_run_removes_its_findings_and_bins_their_photos(
         == 201
     )
     r = client.post(f"{ctx['base']}/query-runs/{run_id}/unpromote")
+    assert r.status_code == 409, r.text
+    assert r.json()["error"]["code"] == "finding_has_content"
+    assert f["id"] in {x["id"] for x in _findings(client, ctx)}
+    assert _open_count(handle) == 2
+    assert not list((handle.folder / "findings" / "_trash").glob(f"{f['id']}-*"))
+
+
+def test_unpromoting_an_untouched_run_removes_its_findings(client, handle, ctx):
+    run_id, _ = _run_with_proposals(handle, ctx)
+    client.post(f"{ctx['base']}/query-runs/{run_id}/promote", json={})
+    r = client.post(f"{ctx['base']}/query-runs/{run_id}/unpromote")
     assert r.status_code == 200 and r.json()["reverted"] == 2, r.text
     assert _findings(client, ctx) == []
-    assert _open_count(handle) == 0
-    assert list((handle.folder / "findings" / "_trash").glob(f"{f['id']}-*"))

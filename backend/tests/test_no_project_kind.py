@@ -88,7 +88,7 @@ def test_no_source_file_names_the_retired_guard():
 
 WRITES = [
     # (method, path, body factory, status, error code): the project's own answer, never the guard's.
-    ("post", "/images/nope/preannotate", lambda tmp: {}, 404, "not_found"),  # was training-only
+    ("post", "/images/nope/detect", lambda tmp: {"model_id": "x"}, 404, "not_found"),  # was training-only
     ("post", "/maps", lambda tmp: {"path": str(tmp / "missing.tif")}, 404, "not_found"),  # detection
     ("patch", "/sources/nope", lambda tmp: {"label": "x"}, 404, "not_found"),  # was detection-only
 ]

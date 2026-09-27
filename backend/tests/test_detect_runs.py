@@ -118,17 +118,24 @@ def test_mapped_types_join_the_project_list_when_the_run_starts(
     assert again.json()["added_type_ids"] == []
 
 
-def test_a_segmentation_model_is_refused_before_any_job(
-    client,
-    app,
-    tmp_path,
-    project_id,
-    images_source,
+def test_a_segmentation_model_runs_on_photos(
+    client, app, tmp_path, project_id, images_source, wait_job, model_provider
 ):
     m = add_library_model(app, tmp_path, task="segment", class_names=["excavator"])
     r = _post(client, project_id, source_ids=[images_source], model_id=m.id)
+    assert r.status_code == 202, r.text
+    assert wait_job(project_id, r.json()["runs"][0]["job"]["id"])["state"] == "succeeded"
+
+
+@pytest.mark.parametrize("task", ["segment", "obb"])
+def test_a_segmentation_or_obb_model_is_refused_on_a_map_before_any_job(
+    client, app, tmp_path, project_id, map_source, task
+):
+    jobs_before = len(_jobs(client, project_id))
+    m = add_library_model(app, tmp_path, task=task, class_names=["excavator"])
+    r = _post(client, project_id, source_ids=[map_source], model_id=m.id)
     assert r.status_code == 422 and r.json()["error"]["code"] == "task_not_supported"
-    assert _jobs(client, project_id) == []
+    assert len(_jobs(client, project_id)) == jobs_before  # the map import's job only
 
 
 def test_unmapped_classes_are_refused_before_any_job(

@@ -562,6 +562,36 @@ def test_unpromote_returns_the_promoted_boxes_to_unreviewed_and_spares_the_perso
     assert client.post(f"{BASE}/{project_id}/query-runs/nope/unpromote").status_code == 404
 
 
+def test_unpromote_refuses_the_whole_request_when_a_promoted_finding_has_content(
+    client, wait_job, project_id, frames, handle, with_key, use_provider, no_sleep, crack
+):
+    """R-BA2: unpromote is an undo, so it never takes a touched finding's note or photos with it.
+    Promoted boxes are model rows in `accepted`, so `refuse_unreview_with_content` checks them."""
+    use_provider(FakeProvider(label="crack"))
+    run_id = run_and_wait(client, wait_job, project_id, frames)["run"]["id"]
+    r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/promote", json={"min_confidence": 0.5})
+    assert r.status_code == 200, r.text
+    assert r.json()["accepted"] == 2
+
+    finding_id = client.get(f"{BASE}/{project_id}/findings").json()["items"][0]["id"]
+    assert (
+        client.patch(f"{BASE}/{project_id}/findings/{finding_id}", json={"note": "seen on site"}).status_code
+        == 200
+    )
+
+    r = client.post(f"{BASE}/{project_id}/query-runs/{run_id}/unpromote")
+    assert r.status_code == 409, r.text
+    err = r.json()["error"]
+    assert err["code"] == "finding_has_content"
+    assert err["details"]["finding_id"] == finding_id
+    assert finding_id in err["details"]["finding_ids"]
+
+    # Nothing changed: the boxes are still accepted and the finding still exists.
+    assert {b.review_state for b in boxes_of(handle) if round(b.confidence, 1) == 0.9} == {"accepted"}
+    assert client.get(f"{BASE}/{project_id}/query-runs/{run_id}").json()["promoted_at"] is not None
+    assert client.get(f"{BASE}/{project_id}/findings/{finding_id}").status_code == 200
+
+
 # ----------------------------------------------------------------- rate limits
 
 

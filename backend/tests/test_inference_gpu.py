@@ -94,7 +94,7 @@ def test_untiled_inference_at_2560_is_quick(imported, frame):
     assert elapsed < FULL_FRAME_BUDGET_S, f"full-frame inference took {elapsed:.1f} s"
 
 
-def test_preannotate_runs_yolo11m_on_a_real_frame_through_the_api(
+def test_detect_runs_yolo11m_on_a_real_frame_through_the_api(
     client, project_id, handle, project_dir, imported_row, frame
 ):
     from app.db.models import Image, Source
@@ -108,21 +108,19 @@ def test_preannotate_runs_yolo11m_on_a_real_frame_through_the_api(
         s.add(row)
         s.flush()
         image_id = row.id
-    body = {"preannotation_model_id": imported_row.id}
-    assert client.patch(f"/api/v1/projects/{project_id}", json=body).status_code == 200
 
     started = time.monotonic()
     r = client.post(
-        f"/api/v1/projects/{project_id}/images/{image_id}/preannotate", json={"imgsz": 2560, "conf": 0.25}
+        f"/api/v1/projects/{project_id}/images/{image_id}/detect",
+        json={"model_id": imported_row.id, "imgsz": 2560, "conf": 0.25},
     )
     elapsed = time.monotonic() - started
 
     assert r.status_code == 200, r.text
     result = r.json()
-    assert result["skipped"] is False
     assert result["model_id"] == imported_row.id
-    assert isinstance(result["items"], list)
-    assert elapsed < FULL_FRAME_BUDGET_S, f"pre-annotation took {elapsed:.1f} s"
-    for item in result["items"]:
+    assert result["device"] == "cuda"  # 4000 <= 2 x 2560: one whole-frame prediction
+    assert elapsed < FULL_FRAME_BUDGET_S, f"detection took {elapsed:.1f} s"
+    for item in result["suggestions"]:
         assert item["provenance"]["kind"] == "local_model"
         assert item["review_state"] == "unreviewed"
