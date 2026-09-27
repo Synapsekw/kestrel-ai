@@ -25,12 +25,6 @@ def guard_run_region(body) -> None:
         raise option_pending("region", "M-B5")
 
 
-def guard_site_area_category(body) -> None:
-    """`category` on a site-area create or patch (spec §9.4)."""
-    if body.category is not None:
-        raise option_pending("category", "M-B5")
-
-
 def guard_surface_patch(body) -> None:
     """`captured_on` and `elevation_role` on a surface patch (spec §5.2 row menu, §7): M-B2."""
     for option in ("captured_on", "elevation_role"):

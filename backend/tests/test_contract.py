@@ -150,8 +150,6 @@ RETIRING: dict[str, str] = {
 # request to these operations is checked as usual. The unit deletes its entries with its guards.
 OPTION_STUBS: dict[str, str] = {
     "createRuns": "M-B5",  # region
-    "createSiteArea": "M-B5",  # category
-    "updateSiteArea": "M-B5",  # category
     "patchSurface": "M-B2",  # captured_on, elevation_role
 }
 

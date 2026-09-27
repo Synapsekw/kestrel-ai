@@ -97,15 +97,21 @@ def list_areas(handle: ProjectHandle) -> list[SiteArea]:
     return rows
 
 
-def create_area(handle: ProjectHandle, name: str, polygon_wgs84: list[list[float]]) -> SiteArea:
+def create_area(
+    handle: ProjectHandle, name: str, polygon_wgs84: list[list[float]], category: str = "general"
+) -> SiteArea:
     with handle.session() as s:
-        row = SiteArea(name=name, polygon_wgs84=polygon_wgs84)
+        row = SiteArea(name=name, polygon_wgs84=polygon_wgs84, category=category)
         s.add(row)
         return _detached(s, row)
 
 
 def update_area(
-    handle: ProjectHandle, area_id: str, name: str | None, polygon_wgs84: list[list[float]] | None
+    handle: ProjectHandle,
+    area_id: str,
+    name: str | None,
+    polygon_wgs84: list[list[float]] | None,
+    category: str | None = None,
 ) -> SiteArea:
     with handle.session() as s:
         row = s.get(SiteArea, area_id)
@@ -115,6 +121,8 @@ def update_area(
             row.name = name
         if polygon_wgs84 is not None:
             row.polygon_wgs84 = polygon_wgs84
+        if category is not None:
+            row.category = category
         return _detached(s, row)
 
 

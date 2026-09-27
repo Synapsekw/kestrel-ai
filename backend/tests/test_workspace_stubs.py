@@ -119,10 +119,3 @@ def test_a_volume_without_a_polygon_is_invalid_geometry(client, project_id):
 def test_a_region_run_answers_501_until_m_b5(client, project_id):
     body = {"source_ids": ["s1"], "model_id": "m1", "region": {"map_id": "m1", "polygon_site": RING}}
     assert _option(client.post(f"/api/v1/projects/{project_id}/runs", json=body)) == "region"
-
-
-def test_a_site_area_category_answers_501_until_m_b5(client, project_id):
-    url = f"/api/v1/projects/{project_id}/site-areas"
-    body = {"name": "Yard", "polygon_wgs84": WGS, "category": "laydown"}
-    assert _option(client.post(url, json=body)) == "category"
-    assert _option(client.patch(f"{url}/any", json={"category": "exclusion"})) == "category"
