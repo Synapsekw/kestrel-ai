@@ -184,6 +184,15 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "addFindingAttachment": {422},
     # BC: a generated type that exists but is an object type (`not_a_defect`).
     "backfillCatalogueType": {422},
+    # M-B4: a fresh contract-test project has no `map_workspace` row (`no_site_frame`, 409); schema-
+    # valid vertices can still be degenerate (`invalid_geometry`); a surface list can break the
+    # per-kind count (`invalid_surfaces`) or sit in the other frame (`surface_not_in_frame`); a line
+    # can miss every surface (`no_surface_under_line`); a local row read in a CRS frame is
+    # `not_in_site_frame` (409).
+    "listMapMeasurements": {409},
+    "getMapMeasurement": {409},
+    "createMapMeasurement": {409, 422},
+    "patchMapMeasurement": {409, 422},
     # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
     "acquireAssistModel": {409},
     # C-B4 (spec 2026-09-26-point-cloud-workspace section 11.4): a schema-valid multipart whose image

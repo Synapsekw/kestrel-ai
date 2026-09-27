@@ -1,4 +1,6 @@
 import logging
+import math
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -25,6 +27,20 @@ def envelope(code: str, message: str, details: dict | None = None) -> dict:
     return {"error": {"code": code, "message": message, "details": details or {}}}
 
 
+def _json_safe(value: Any) -> Any:
+    """`RequestValidationError.errors()` echoes back the raw offending `input`, and a schema field
+    with `allow_inf_nan=False` rejecting NaN or +/-Infinity leaves a bare non-finite float there,
+    which crashes `JSONResponse.render` (`allow_nan=False`). Stringify it instead of dropping it,
+    so the detail stays useful."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return str(value)
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 log = logging.getLogger(__name__)
 
 _HTTP_CODES = {401: "unauthorized", 404: "not_found", 405: "method_not_allowed"}
@@ -37,7 +53,7 @@ def install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_: Request, exc: RequestValidationError):
-        details = {"errors": jsonable_encoder(exc.errors())}
+        details = {"errors": jsonable_encoder(_json_safe(exc.errors()))}
         return JSONResponse(envelope("validation_error", "request validation failed", details), 422)
 
     @app.exception_handler(StarletteHTTPException)

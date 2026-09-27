@@ -12179,14 +12179,14 @@ components:
             type: array,
             maxItems: 2000,
             items: { type: number },
-            description: chainage of each station,
+            description: "chainage of each station; empty in listMapMeasurements rows (placeholders), GET the measurement for the data",
           }
         series:
           {
             type: array,
-            minItems: 1,
             maxItems: 3,
             items: { $ref: "#/components/schemas/ProfileSeries" },
+            description: "one series per surface; empty in listMapMeasurements rows (placeholders), GET the measurement for the data",
           }
         z_min: { type: [number, "null"] }
         z_max: { type: [number, "null"] }

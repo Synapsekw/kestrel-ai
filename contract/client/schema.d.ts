@@ -11411,8 +11411,9 @@ export interface components {
         MapProfileResults: {
             length_m: number | null;
             grid_length_m: number;
-            /** @description chainage of each station */
+            /** @description chainage of each station; empty in listMapMeasurements rows (placeholders), GET the measurement for the data */
             stations_m: number[];
+            /** @description one series per surface; empty in listMapMeasurements rows (placeholders), GET the measurement for the data */
             series: components["schemas"]["ProfileSeries"][];
             z_min: number | null;
             z_max: number | null;
