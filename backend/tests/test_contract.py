@@ -221,6 +221,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # M-B3 drawings: `pdf_unavailable`; DWG/extension refusals are `validation_error` and only
     # reachable with a real file.
     "createDrawingInspection": {422},
+    "putDrawingGeoref": {422},  # generated points can be mirrored, collinear or coincident
+    "fitDrawingGeoref": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

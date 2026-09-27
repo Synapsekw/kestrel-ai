@@ -17,11 +17,14 @@ from sqlalchemy import select
 
 from app.db.base import utcnow
 from app.db.models import Drawing
-from app.drawings import detect, footprint, service, store
+from app.drawings import detect, footprint, service, site, store
+from app.drawings import georef as fitting
 from app.drawings import jobs as _jobs  # noqa: F401 - registers `drawing_import`
 from app.drawings import placement as placing
+from app.drawings.placement import VECTOR
 from app.drawings.schemas import (
     DrawingCreate,
+    DrawingGeorefPut,
     DrawingInspectionCreate,
     DrawingInspectionOut,
     DrawingInspectionWithJob,
@@ -29,11 +32,14 @@ from app.drawings.schemas import (
     DrawingOut,
     DrawingPatch,
     DrawingWithJob,
+    GeorefFitOut,
+    GeorefFitRequest,
 )
 from app.errors import AppError, not_found
 from app.events_util import publish_drawings_changed
 from app.jobs.schemas import JobOut
 from app.projects.service import ProjectHandle, get_project
+from app.surfaces.design.units import unit_to_m
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["workspace"])
 
@@ -219,3 +225,89 @@ def get_drawing_thumbnail(drawingId: str, handle: ProjectHandle = Depends(get_pr
     return Response(
         thumb.read_bytes(), media_type="image/png", headers={"Cache-Control": "private, max-age=3600"}
     )
+
+
+def _fit(model: str, points, *, dst_unit_m: float, units_scale: float | None) -> fitting.Fit:
+    try:
+        return fitting.fit(
+            model,
+            [p.src for p in points],
+            [p.dst for p in points],
+            dst_unit_m=dst_unit_m,
+            units_scale=units_scale,
+        )
+    except fitting.GeorefRefused as e:
+        raise AppError(e.code, e.message, 422) from None
+
+
+@router.post("/drawings/georef-fit", response_model=GeorefFitOut)
+def fit_drawing_georef(body: GeorefFitRequest, handle: ProjectHandle = Depends(get_project)) -> GeorefFitOut:
+    """The same maths, nothing stored; dst is "any metric plane" (M-C0), so residuals are its units."""
+    units_scale = unit_to_m(body.units) if body.units else None
+    return GeorefFitOut(**_fit(body.model, body.points, dst_unit_m=1.0, units_scale=units_scale).to_json())
+
+
+@router.put("/drawings/{drawingId}/georef", response_model=DrawingOut)
+def put_drawing_georef(
+    drawingId: str,  # noqa: N803
+    body: DrawingGeorefPut,
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> DrawingOut:
+    with handle.session() as s:
+        service.require(s, drawingId)
+    frame = site.current_frame(handle)
+    with handle.session() as s:
+        row = service.require(s, drawingId)
+        if row.status != "ready":
+            raise AppError("not_ready", "the drawing is still importing or failed", 409)
+        units_scale = unit_to_m(row.units) if row.format in VECTOR and row.units else None
+        f = _fit(body.model, body.points, dst_unit_m=site.frame_unit_m(frame), units_scale=units_scale)
+        fit_json = f.to_json()
+        row.georef = {
+            "method": "control_points",
+            "crs_wkt": None,
+            "epsg": None,
+            "model": body.model,
+            "points": [
+                {"id": p.id or f"p{i + 1}", "src": p.src, "dst": p.dst} for i, p in enumerate(body.points)
+            ],
+            "dst_crs_wkt": frame.crs_wkt,
+            "transform": fit_json["transform"],
+            "rmse_m": fit_json["rmse_m"],
+            "residuals_m": fit_json["residuals_m"],
+            "warnings": fit_json["warnings"],
+        }
+        row.georef_version = (row.georef_version or 0) + 1
+        row.bounds_site = footprint.bounds_site_value(row, frame)
+        row.updated_at = utcnow()
+        if row.format not in VECTOR:
+            from app.drawings import raster_io
+
+            raster_io.write_plan_georef(store.plan_path(handle, drawingId), f.transform, frame.crs_wkt)
+        out = service.to_out(row, frame)
+    service.drop_caches(drawingId)
+    publish_drawings_changed(request, handle, [drawingId])
+    return out
+
+
+@router.delete("/drawings/{drawingId}/georef", response_model=DrawingOut)
+def clear_drawing_georef(
+    drawingId: str,  # noqa: N803
+    request: Request,
+    handle: ProjectHandle = Depends(get_project),
+) -> DrawingOut:
+    frame = footprint.frame_or_none(handle)
+    with handle.session() as s:
+        row = service.require(s, drawingId)
+        if row.status == "ready" and row.georef is not None and row.format not in VECTOR:
+            from app.drawings import raster_io
+
+            raster_io.clear_plan_georef(store.plan_path(handle, drawingId))
+        row.georef, row.bounds_site = None, None
+        row.georef_version = (row.georef_version or 0) + 1
+        row.updated_at = utcnow()
+        out = service.to_out(row, frame)
+    service.drop_caches(drawingId)
+    publish_drawings_changed(request, handle, [drawingId])
+    return out
