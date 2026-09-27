@@ -161,6 +161,15 @@ def test_detect_touches_the_image_summary(client, project_id, image_id, model, u
     assert touched == [image_id]
 
 
+def test_detect_publishes_boxes_changed(client, app, project_id, image_id, model, use_yolo):
+    use_yolo()
+    seen = []
+    app.state.events.publish = lambda event: seen.append(event)
+    assert detect(client, project_id, image_id, model_id=model.id).status_code == 200
+    boxes_changed = [e for e in seen if e["type"] == "boxes.changed"]
+    assert boxes_changed and boxes_changed[0]["payload"]["image_ids"] == [image_id]
+
+
 def test_a_held_gpu_runs_the_frame_on_the_cpu(client, project_id, image_id, model, use_yolo):
     fake = use_yolo()
     gpu_lock.acquire()

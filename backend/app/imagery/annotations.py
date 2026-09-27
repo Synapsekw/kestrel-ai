@@ -357,8 +357,9 @@ def _has_content(s, f: Finding) -> bool:
 
 
 def refuse_unreview_with_content(s, rows: list[Box]) -> None:
-    """An unreview is an undo: it never takes a note, comment or photo with it (spec 8.3, R-BA2).
-    Any touched finding refuses the whole request before anything changes."""
+    """Guards every undo of a model box's acceptance — unreview and unpromote alike: it's never
+    taken with a note, comment or photo attached (spec 8.3, R-BA2). Any touched finding refuses the
+    whole request before anything changes."""
     touched = []
     for row in rows:
         if row.provenance_kind == "person" or row.review_state not in GROUND_TRUTH:

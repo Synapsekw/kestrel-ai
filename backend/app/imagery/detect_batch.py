@@ -16,7 +16,7 @@ from app.detect import class_maps
 from app.errors import AppError, not_found
 from app.imagery import index
 from app.imagery.detect_models import resolve_model
-from app.imagery.detect_schemas import DetectBatchRequest, DetectBatchScope
+from app.imagery.detect_schemas import DetectBatchRequest, DetectBatchScope, ImageFilter
 from app.imagery.filters import ImageFilters
 from app.inference import service as inference
 from app.library.catalogue_port import CataloguePort
@@ -38,8 +38,10 @@ def _existing(handle: ProjectHandle, ids: list[str]) -> None:
                 raise not_found("image", missing[0])
 
 
-def _filters(f) -> ImageFilters:
-    """The contract's body filter as BX's `ImageFilters` (severity levels are text there)."""
+def _filters(f: ImageFilter) -> ImageFilters:
+    """The contract's body filter as BX's `ImageFilters` (severity levels are text there). A filter
+    with an unknown `source_id` is a query that matches nothing, so it answers 422 `no_images`, not
+    404."""
     values = f.model_dump(exclude_none=True)
     if "severity" in values:
         values["severity"] = [str(v) for v in values["severity"]]
