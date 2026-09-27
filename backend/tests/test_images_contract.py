@@ -123,3 +123,34 @@ def test_no_request_property_of_ours_carries_a_default(spec):
     for name in ("BoxCreate", "BoxUpdate", "ImageUpdate"):
         for prop, schema in _schemas(spec)[name]["properties"].items():
             assert "default" not in schema, (name, prop)
+
+
+# Schemas this unit (or a later images unit building on it) owns; walked below for the YAML
+# flow-mapping comma bug. Extended as later images tasks add schemas of their own.
+I_SCHEMA_NAMES = {
+    "Image", "ImageCamera", "ImageFootprintKind", "ImageDetail", "ImageUpdate",
+    "BoxShape", "BoxWriteResult", "BoxReviewResult", "BoxCreate", "BoxUpdate",
+}  # fmt: skip
+
+
+def _phantom_keys(node, path):
+    """A YAML flow mapping `{ ..., description: a, b }` with an unquoted comma inside the
+    description text splits into a phantom key `b` with value None (yaml.safe_load gives
+    `{"description": "a", "b": None}`); every real OpenAPI/JSON Schema key is a single token
+    without spaces, so a None-valued key containing a space is always this bug."""
+    found = []
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if v is None and isinstance(k, str) and " " in k:
+                found.append((path, k))
+            found += _phantom_keys(v, path + [k])
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            found += _phantom_keys(v, path + [i])
+    return found
+
+
+def test_no_flow_mapping_comma_truncates_a_description(spec):
+    schemas = {name: _schemas(spec)[name] for name in I_SCHEMA_NAMES}
+    found = _phantom_keys(schemas, [])
+    assert found == [], found

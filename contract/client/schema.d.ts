@@ -3590,7 +3590,7 @@ export interface components {
          */
         Image: {
             id: string;
-            /** @description relative to the project folder */
+            /** @description relative to the project folder, forward slashes */
             path: string;
             file_name: string;
             width: number;
@@ -3609,7 +3609,7 @@ export interface components {
             pending_count: number;
             /** @description highest confidence among unreviewed proposals (review queue sort key) */
             max_pending_confidence: number | null;
-            /** @description has an accepted or edited box */
+            /** @description has an accepted or edited box, or is marked empty */
             labeled: boolean;
             /** @description a person said there is no machinery on this image; it counts as labeled and enters datasets as a negative example */
             marked_empty: boolean;
@@ -3619,7 +3619,7 @@ export interface components {
             finding_count: number;
             /** @description highest severity among the image's findings that are not `closed`; null when none has one */
             worst_severity: number | null;
-            /** @description no unreviewed proposal is left */
+            /** @description no unreviewed proposal is left, and the image has ground truth or is marked empty */
             reviewed: boolean;
         };
         /**
@@ -3748,7 +3748,7 @@ export interface components {
             /** @description calibrated focal length in pixels of the original frame */
             focal_px: number | null;
             sensor_w_mm: number | null;
-            /** @description the laser range finder distance */
+            /** @description the laser range finder distance, kept only when its status was Normal */
             lrf_distance_m: number | null;
             /** @description the operator's value */
             subject_distance_m: number | null;

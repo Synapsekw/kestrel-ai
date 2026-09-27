@@ -4840,7 +4840,7 @@ components:
       required: [id, path, file_name, width, height, source_id, group_key, capture_time, lat, lon, alt, phash, box_count, pending_count, max_pending_confidence, labeled, marked_empty, created_at, finding_count, worst_severity, reviewed]
       properties:
         id: { type: string }
-        path: { type: string, description: relative to the project folder, forward slashes }
+        path: { type: string, description: "relative to the project folder, forward slashes" }
         file_name: { type: string }
         width: { type: integer }
         height: { type: integer }
@@ -4854,12 +4854,12 @@ components:
         box_count: { type: integer, description: accepted and edited boxes }
         pending_count: { type: integer, description: unreviewed proposals }
         max_pending_confidence: { type: [number, "null"], description: highest confidence among unreviewed proposals (review queue sort key) }
-        labeled: { type: boolean, description: has an accepted or edited box, or is marked empty }
+        labeled: { type: boolean, description: "has an accepted or edited box, or is marked empty" }
         marked_empty: { type: boolean, description: "a person said there is no machinery on this image; it counts as labeled and enters datasets as a negative example" }
         created_at: { type: string, format: date-time }
         finding_count: { type: integer, minimum: 0, description: "the image's findings that are not `closed`" }
         worst_severity: { type: [integer, "null"], minimum: 1, maximum: 9, description: "highest severity among the image's findings that are not `closed`; null when none has one" }
-        reviewed: { type: boolean, description: no unreviewed proposal is left, and the image has ground truth or is marked empty }
+        reviewed: { type: boolean, description: "no unreviewed proposal is left, and the image has ground truth or is marked empty" }
       example:
         id: "10000000-5555-4000-8000-000000000001"
         path: "images/ahmadia/IX-12-02491_0031_0001.jpg"
@@ -4995,7 +4995,7 @@ components:
         focal_mm: { type: [number, "null"] }
         focal_px: { type: [number, "null"], description: calibrated focal length in pixels of the original frame }
         sensor_w_mm: { type: [number, "null"] }
-        lrf_distance_m: { type: [number, "null"], description: the laser range finder distance, kept only when its status was Normal }
+        lrf_distance_m: { type: [number, "null"], description: "the laser range finder distance, kept only when its status was Normal" }
         subject_distance_m: { type: [number, "null"], description: the operator's value }
         distance_m: { type: [number, "null"] }
         distance_sigma_m: { type: [number, "null"] }
