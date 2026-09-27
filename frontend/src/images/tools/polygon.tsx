@@ -1,5 +1,12 @@
 import { Circle, Line } from "react-konva";
-import { distance, flatten, fromPoints, toDisplay, type Point, type ViewTransform } from "@/images/canvas/geometry";
+import {
+  distance,
+  flatten,
+  fromPoints,
+  toDisplay,
+  type Point,
+  type ViewTransform,
+} from "@/images/canvas/geometry";
 import type { Draft } from "@/store/imagesWorkspace";
 import type { ToolDefinition } from "./types";
 
@@ -32,17 +39,31 @@ export function polygonDown(
   screen: Point,
   view: ViewTransform,
 ): { draft: PolygonDraft; close: boolean } {
-  const base: PolygonDraft = d ?? { kind: "polygon", points: [], cursor: image, pressed: false, lastScreen: null };
+  const base: PolygonDraft = d ?? {
+    kind: "polygon",
+    points: [],
+    cursor: image,
+    pressed: false,
+    lastScreen: null,
+  };
   const first = base.points[0];
   if (first && polygonClosable(base) && distance(toDisplay(first, view), screen) <= CLOSE_RADIUS_PX) {
     return { draft: { ...base, pressed: false }, close: true };
   }
-  return { draft: { ...append(base, image, screen, view), pressed: true, cursor: image, lastScreen: screen }, close: false };
+  return {
+    draft: { ...append(base, image, screen, view), pressed: true, cursor: image, lastScreen: screen },
+    close: false,
+  };
 }
 
 /** Move: the rubber band follows; while pressed, a vertex every STREAM_STEP_PX screen px. */
 export function polygonMove(d: PolygonDraft, image: Point, screen: Point): PolygonDraft {
-  if (!d.pressed || !d.lastScreen || distance(d.lastScreen, screen) < STREAM_STEP_PX || d.points.length >= MAX_VERTICES) {
+  if (
+    !d.pressed ||
+    !d.lastScreen ||
+    distance(d.lastScreen, screen) < STREAM_STEP_PX ||
+    d.points.length >= MAX_VERTICES
+  ) {
     return { ...d, cursor: image };
   }
   return { ...d, points: [...d.points, image], cursor: image, lastScreen: screen };
@@ -78,7 +99,8 @@ export const POLYGON_TOOL: ToolDefinition = {
     if (p.button !== 0) return;
     const s = api.store.getState();
     const d = s.draft?.kind === "polygon" ? s.draft : null;
-    if (d && d.points.length >= MAX_VERTICES) api.notify(`A polygon holds at most ${MAX_VERTICES} points. Press Enter to close it.`);
+    if (d && d.points.length >= MAX_VERTICES)
+      api.notify(`A polygon holds at most ${MAX_VERTICES} points. Press Enter to close it.`);
     const r = polygonDown(d, p.image, p.screen, s.view);
     if (r.close) commit(r.draft, api);
     else s.setDraft(r.draft);
@@ -121,7 +143,15 @@ export const POLYGON_TOOL: ToolDefinition = {
           listening={false}
           perfectDrawEnabled={false}
         />
-        <Circle x={d.points[0].x} y={d.points[0].y} radius={r * 1.5} stroke={ctx.colour} strokeWidth={2} strokeScaleEnabled={false} listening={false} />
+        <Circle
+          x={d.points[0].x}
+          y={d.points[0].y}
+          radius={r * 1.5}
+          stroke={ctx.colour}
+          strokeWidth={2}
+          strokeScaleEnabled={false}
+          listening={false}
+        />
       </>
     );
   },

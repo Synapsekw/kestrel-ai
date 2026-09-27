@@ -9,7 +9,8 @@ const tools = new Map<ToolId, ToolDefinition>();
 export function registerTool(def: ToolDefinition): void {
   if (tools.has(def.id)) throw new Error(`tool "${def.id}" is already registered`);
   for (const t of tools.values()) {
-    if (t.action === def.action) throw new Error(`tools "${t.id}" and "${def.id}" share the action "${def.action}"`);
+    if (t.action === def.action)
+      throw new Error(`tools "${t.id}" and "${def.id}" share the action "${def.action}"`);
   }
   tools.set(def.id, def);
 }
@@ -35,7 +36,9 @@ export function resetToolsForTests(): void {
 function restoreType(api: ToolApi, def: ToolDefinition): void {
   const s = api.store.getState();
   const accepts = (t: ClassDef | undefined): t is ClassDef => !!t && (!def.typeFilter || def.typeFilter(t));
-  const remembered = s.projectId ? s.types.find((t) => t.id === rememberedType(s.projectId!, def.id)) : undefined;
+  const remembered = s.projectId
+    ? s.types.find((t) => t.id === rememberedType(s.projectId!, def.id))
+    : undefined;
   const current = s.types.find((t) => t.id === s.activeTypeId);
   const pick = accepts(remembered) ? remembered : accepts(current) ? current : s.types.find(accepts);
   s.setActiveType(pick?.id ?? null);

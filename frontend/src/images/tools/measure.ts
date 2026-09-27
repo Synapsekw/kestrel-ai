@@ -22,7 +22,12 @@ export function scaleFromCamera(camera: CameraLike | null | undefined): CameraSc
   const gsd = camera.gsd_mm ?? null;
   const d = camera.distance_m ?? null;
   if (camera.distance_source === "none" || gsd === null || d === null || !(gsd > 0) || !(d > 0)) return null;
-  return { gsdMm: gsd, distanceM: d, sigmaM: camera.distance_sigma_m ?? 0, source: camera.distance_source ?? "manual" };
+  return {
+    gsdMm: gsd,
+    distanceM: d,
+    sigmaM: camera.distance_sigma_m ?? 0,
+    source: camera.distance_source ?? "manual",
+  };
 }
 
 export function polygonArea(points: readonly Point[]): number {
@@ -64,7 +69,8 @@ export function feret(points: readonly Point[]): { max: number; min: number } {
   const hull = convexHull(points);
   if (hull.length < 2) return { max: 0, min: 0 };
   let max = 0;
-  for (let i = 0; i < hull.length; i++) for (let j = i + 1; j < hull.length; j++) max = Math.max(max, distance(hull[i], hull[j]));
+  for (let i = 0; i < hull.length; i++)
+    for (let j = i + 1; j < hull.length; j++) max = Math.max(max, distance(hull[i], hull[j]));
   if (hull.length < 3) return { max, min: 0 };
   let min = Infinity;
   for (let i = 0; i < hull.length; i++) {
@@ -129,7 +135,10 @@ function areaValue(px2: number, s: CameraScale | null): MeasuredValue {
 }
 
 /** Spec §9.3's table, for FW's MeasuredSize. */
-export function measureShape(shape: Pick<Box, "shape" | "w" | "h" | "points">, s: CameraScale | null): MeasuredTiles {
+export function measureShape(
+  shape: Pick<Box, "shape" | "w" | "h" | "points">,
+  s: CameraScale | null,
+): MeasuredTiles {
   if (shape.shape === "point") return { primary: null, secondary: [], basis: null, pointMarker: true };
   let areaPx: number;
   let longPx: number;

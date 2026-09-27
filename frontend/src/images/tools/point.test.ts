@@ -12,7 +12,13 @@ let api: ToolApi;
 beforeEach(() => {
   useImagesWorkspace.getState().reset();
   useImagesWorkspace.setState({ types: [defect, object] });
-  api = { store: useImagesWorkspace, createShape: vi.fn(), createMeasurement: vi.fn(), openPicker: vi.fn(), notify: vi.fn() };
+  api = {
+    store: useImagesWorkspace,
+    createShape: vi.fn(),
+    createMeasurement: vi.fn(),
+    openPicker: vi.fn(),
+    notify: vi.fn(),
+  };
 });
 
 describe("point marker (FC-R6)", () => {

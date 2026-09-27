@@ -25,7 +25,8 @@ export function rboxDown(
   _view: ViewTransform,
 ): { draft: RboxDraft | null; commit: OrientedRect | null } {
   void _view; // kept for a symmetric signature with rboxUp; unused until a view-relative check is needed
-  if (!d || d.stage === "edge") return { draft: { kind: "rbox", stage: "edge", a: p, b: p, c: null }, commit: null };
+  if (!d || d.stage === "edge")
+    return { draft: { kind: "rbox", stage: "edge", a: p, b: p, c: null }, commit: null };
   const rect = rboxFromThreePoints(d.a, d.b, p);
   return rect ? { draft: null, commit: rect } : { draft: { ...d, c: p }, commit: null };
 }
@@ -58,7 +59,8 @@ export const RBOX_TOOL: ToolDefinition = {
     const d = s.draft?.kind === "rbox" ? s.draft : null;
     const { draft, commit } = rboxDown(d, p.image, s.view);
     s.setDraft(draft);
-    if (commit && s.image) void api.createShape({ shape: "rbox", ...roundOriented(clampOriented(commit, s.image)) });
+    if (commit && s.image)
+      void api.createShape({ shape: "rbox", ...roundOriented(clampOriented(commit, s.image)) });
   },
   onMove: (p, api) => {
     const s = api.store.getState();

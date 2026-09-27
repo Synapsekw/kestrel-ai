@@ -6,7 +6,10 @@ describe("length machine", () => {
     const first = lengthDown(null, { x: 0, y: 0 }, false);
     expect(first.commit).toBeNull();
     const second = lengthDown(first.draft, { x: 30, y: 40 }, false);
-    expect(second.commit).toEqual([{ x: 0, y: 0 }, { x: 30, y: 40 }]);
+    expect(second.commit).toEqual([
+      { x: 0, y: 0 },
+      { x: 30, y: 40 },
+    ]);
     expect(second.draft).toBeNull();
   });
 

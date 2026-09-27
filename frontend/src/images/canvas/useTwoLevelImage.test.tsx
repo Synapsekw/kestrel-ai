@@ -5,8 +5,7 @@ import { FULL_AFTER_MS, PREVIEW_SIDE, useTwoLevelImage, wantsFull } from "./useT
 
 type Pending = { url: string; resolve: (b: ImageBitmap) => void };
 let pending: Pending[];
-const decode: Decode = (url) =>
-  new Promise<ImageBitmap>((resolve) => pending.push({ url, resolve }));
+const decode: Decode = (url) => new Promise<ImageBitmap>((resolve) => pending.push({ url, resolve }));
 const bmp = (url: string) => ({ url, close: vi.fn() }) as unknown as ImageBitmap;
 const url = (id: string, max: number | null) => `/${id}${max ? `?max_side=${max}` : ""}`;
 const settle = async (match: string) => {
@@ -64,9 +63,12 @@ describe("useTwoLevelImage", () => {
 
   it("a late full decode for a previous image is cached, not shown", async () => {
     const cache = new BitmapCache({ preview: 4, full: 1 }, decode);
-    const { result, rerender } = renderHook((p: { id: string }) => useTwoLevelImage({ ...base, imageId: p.id, scale: 1, cache }), {
-      initialProps: { id: "i1" },
-    });
+    const { result, rerender } = renderHook(
+      (p: { id: string }) => useTwoLevelImage({ ...base, imageId: p.id, scale: 1, cache }),
+      {
+        initialProps: { id: "i1" },
+      },
+    );
     rerender({ id: "i2" });
     await settle("/i1");
     expect(result.current.imageId).toBe("i2");
@@ -76,7 +78,9 @@ describe("useTwoLevelImage", () => {
 
   it("prefetches at most two neighbour previews after the current one", async () => {
     const cache = new BitmapCache({ preview: 4, full: 1 }, decode);
-    renderHook(() => useTwoLevelImage({ ...base, imageId: "i1", scale: 0.2, cache, neighbourIds: ["i0", "i2", "i3"] }));
+    renderHook(() =>
+      useTwoLevelImage({ ...base, imageId: "i1", scale: 0.2, cache, neighbourIds: ["i0", "i2", "i3"] }),
+    );
     expect(pending.map((p) => p.url)).toEqual(["/i1?max_side=2048"]);
     await settle("/i1?max_side=2048");
     expect(pending.map((p) => p.url)).toEqual(["/i0?max_side=2048", "/i2?max_side=2048"]);

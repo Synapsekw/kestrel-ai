@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { bucketOf, bucketScale, lodPoints, simplify } from "./lod";
 
 const circle = (n: number, r: number): number[][] =>
-  Array.from({ length: n }, (_, i) => [500 + r * Math.cos((2 * Math.PI * i) / n), 500 + r * Math.sin((2 * Math.PI * i) / n)]);
+  Array.from({ length: n }, (_, i) => [
+    500 + r * Math.cos((2 * Math.PI * i) / n),
+    500 + r * Math.sin((2 * Math.PI * i) / n),
+  ]);
 
 describe("zoom buckets (powers of √2)", () => {
   it.each([

@@ -21,6 +21,10 @@ export const POINT_TOOL: ToolDefinition = {
       api.notify("Point markers need a defect type. Pick one.");
       return;
     }
-    void api.createShape({ shape: "point", x: Math.round(p.image.x * 10) / 10, y: Math.round(p.image.y * 10) / 10 });
+    void api.createShape({
+      shape: "point",
+      x: Math.round(p.image.x * 10) / 10,
+      y: Math.round(p.image.y * 10) / 10,
+    });
   },
 };

@@ -14,7 +14,10 @@ import {
 } from "./measure";
 
 const hexagon = (r: number) =>
-  Array.from({ length: 6 }, (_, i) => ({ x: r * Math.cos((Math.PI / 3) * i), y: r * Math.sin((Math.PI / 3) * i) }));
+  Array.from({ length: 6 }, (_, i) => ({
+    x: r * Math.cos((Math.PI / 3) * i),
+    y: r * Math.sin((Math.PI / 3) * i),
+  }));
 const scale: CameraScale = { gsdMm: 2, distanceM: 40, sigmaM: 1, source: "rel_alt" };
 
 describe("Feret diameters (rotating calipers on the hull)", () => {
@@ -33,8 +36,14 @@ describe("Feret diameters (rotating calipers on the hull)", () => {
 
 describe("areas and uncertainty", () => {
   it("computes the shoelace area", () => {
-    expect(polygonArea(hexagon(10))).toBeCloseTo((3 * Math.sqrt(3) / 2) * 100);
-    expect(polygonArea([{ x: 0, y: 0 }, { x: 4, y: 0 }, { x: 4, y: 3 }])).toBeCloseTo(6);
+    expect(polygonArea(hexagon(10))).toBeCloseTo(((3 * Math.sqrt(3)) / 2) * 100);
+    expect(
+      polygonArea([
+        { x: 0, y: 0 },
+        { x: 4, y: 0 },
+        { x: 4, y: 3 },
+      ]),
+    ).toBeCloseTo(6);
   });
 
   it("σ_L = L·σ_D/D + √2·gsd and σ_A = 2A·σ_D/D", () => {
@@ -46,9 +55,15 @@ describe("areas and uncertainty", () => {
 describe("camera scale", () => {
   it("is null without a GSD or a distance, so the UI shows px", () => {
     expect(scaleFromCamera(null)).toBeNull();
-    expect(scaleFromCamera({ gsd_mm: null, distance_m: 40, distance_sigma_m: 1, distance_source: "rel_alt" })).toBeNull();
-    expect(scaleFromCamera({ gsd_mm: 2, distance_m: null, distance_sigma_m: null, distance_source: null })).toBeNull();
-    expect(scaleFromCamera({ gsd_mm: 2, distance_m: 40, distance_sigma_m: 1, distance_source: "lrf" })).toEqual({
+    expect(
+      scaleFromCamera({ gsd_mm: null, distance_m: 40, distance_sigma_m: 1, distance_source: "rel_alt" }),
+    ).toBeNull();
+    expect(
+      scaleFromCamera({ gsd_mm: 2, distance_m: null, distance_sigma_m: null, distance_source: null }),
+    ).toBeNull();
+    expect(
+      scaleFromCamera({ gsd_mm: 2, distance_m: 40, distance_sigma_m: 1, distance_source: "lrf" }),
+    ).toEqual({
       gsdMm: 2,
       distanceM: 40,
       sigmaM: 1,

@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { BitmapCache, type Decode } from "./imageCache";
 
-const bitmap = (name: string) => ({ name, close: vi.fn(), width: 10, height: 10 }) as unknown as ImageBitmap & { close: ReturnType<typeof vi.fn> };
+const bitmap = (name: string) =>
+  ({ name, close: vi.fn(), width: 10, height: 10 }) as unknown as ImageBitmap & {
+    close: ReturnType<typeof vi.fn>;
+  };
 
 function decoder() {
   const made = new Map<string, ReturnType<typeof bitmap>>();
@@ -17,7 +20,10 @@ describe("BitmapCache", () => {
   it("dedupes a load that is already in flight and hits afterwards", async () => {
     const { decode } = decoder();
     const cache = new BitmapCache({ preview: 4, full: 1 }, decode);
-    const [a, b] = await Promise.all([cache.load("i1:preview", "u1", "preview"), cache.load("i1:preview", "u1", "preview")]);
+    const [a, b] = await Promise.all([
+      cache.load("i1:preview", "u1", "preview"),
+      cache.load("i1:preview", "u1", "preview"),
+    ]);
     expect(a).toBe(b);
     await cache.load("i1:preview", "u1", "preview");
     expect(decode).toHaveBeenCalledTimes(1);

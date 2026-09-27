@@ -55,7 +55,13 @@ export const LENGTH_TOOL: ToolDefinition = {
     const px = 1 / ctx.scale;
     return (
       <>
-        <Line points={flatten([d.a, d.b])} stroke={ctx.colour} strokeWidth={2} strokeScaleEnabled={false} listening={false} />
+        <Line
+          points={flatten([d.a, d.b])}
+          stroke={ctx.colour}
+          strokeWidth={2}
+          strokeScaleEnabled={false}
+          listening={false}
+        />
         <Text
           x={d.b.x + 8 * px}
           y={d.b.y + 8 * px}

@@ -285,7 +285,15 @@ describe("polygon helpers", () => {
   ];
 
   it("round-trips API points and flattens for Konva", () => {
-    expect(toPoints([[1, 2], [3, 4]])).toEqual([{ x: 1, y: 2 }, { x: 3, y: 4 }]);
+    expect(
+      toPoints([
+        [1, 2],
+        [3, 4],
+      ]),
+    ).toEqual([
+      { x: 1, y: 2 },
+      { x: 3, y: 4 },
+    ]);
     expect(fromPoints([{ x: 1.04, y: 2.06 }])).toEqual([[1, 2.1]]);
     expect(flatten(square)).toEqual([10, 10, 50, 10, 50, 30, 10, 30]);
   });

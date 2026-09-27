@@ -31,7 +31,15 @@ beforeEach(() => {
 
 describe("tool registry", () => {
   it("lists the built-in tools in palette order", () => {
-    expect(listTools().map((t) => t.id)).toEqual(["select", "pan", "box", "rbox", "polygon", "point", "length"]);
+    expect(listTools().map((t) => t.id)).toEqual([
+      "select",
+      "pan",
+      "box",
+      "rbox",
+      "polygon",
+      "point",
+      "length",
+    ]);
   });
 
   it("refuses a duplicate id or action", () => {
@@ -41,7 +49,11 @@ describe("tool registry", () => {
 
   it("slots a new tool by order (FA's S at 55)", () => {
     registerTool({ ...getTool("polygon")!, id: "smart", action: "smart-polygon", order: 55 });
-    expect(listTools().map((t) => t.id).indexOf("smart")).toBe(5);
+    expect(
+      listTools()
+        .map((t) => t.id)
+        .indexOf("smart"),
+    ).toBe(5);
   });
 
   it("restores the last type used with a tool", () => {
@@ -57,7 +69,13 @@ describe("tool registry", () => {
   });
 
   it("does not switch to an unavailable tool and says why", () => {
-    registerTool({ ...getTool("polygon")!, id: "smart", action: "smart-polygon", order: 55, available: () => "Get the model first" });
+    registerTool({
+      ...getTool("polygon")!,
+      id: "smart",
+      action: "smart-polygon",
+      order: 55,
+      available: () => "Get the model first",
+    });
     const a = api();
     activateTool("smart", a);
     expect(useImagesWorkspace.getState().tool).toBe("select");
@@ -67,7 +85,14 @@ describe("tool registry", () => {
   it("runs the deactivate and activate hooks", () => {
     const onDeactivate = vi.fn();
     const onActivate = vi.fn();
-    registerTool({ ...getTool("polygon")!, id: "smart", action: "smart-polygon", order: 55, onActivate, onDeactivate });
+    registerTool({
+      ...getTool("polygon")!,
+      id: "smart",
+      action: "smart-polygon",
+      order: 55,
+      onActivate,
+      onDeactivate,
+    });
     const a = api();
     activateTool("smart", a);
     activateTool("box", a);

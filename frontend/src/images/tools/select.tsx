@@ -8,7 +8,8 @@ export const SELECT_TOOL: ToolDefinition = {
   icon: "fit",
   label: "Select",
   hint: "Click, Shift+click to add",
-  statusHints: "Click select · Shift+click add · Drag move · Alt+click edge add vertex · Alt+click vertex remove",
+  statusHints:
+    "Click select · Shift+click add · Drag move · Alt+click edge add vertex · Alt+click vertex remove",
   cursor: "default",
   drawsShapes: false,
   onDown: (p, api) => {

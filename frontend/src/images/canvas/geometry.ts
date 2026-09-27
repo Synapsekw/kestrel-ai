@@ -247,7 +247,13 @@ export function rboxFromThreePoints(a: Point, b: Point, c: Point): OrientedRect 
   const cx = (a.x + b.x) / 2 + (nx * d) / 2;
   const cy = (a.y + b.y) / 2 + (ny * d) / 2;
   const h = Math.abs(d);
-  return { x: cx - len / 2, y: cy - h / 2, w: len, h, angle: normaliseAngle((Math.atan2(dy, dx) * 180) / Math.PI) };
+  return {
+    x: cx - len / 2,
+    y: cy - h / 2,
+    w: len,
+    h,
+    angle: normaliseAngle((Math.atan2(dy, dx) * 180) / Math.PI),
+  };
 }
 
 export function envelopeOf(points: readonly Point[]): Rect {

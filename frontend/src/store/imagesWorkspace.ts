@@ -179,7 +179,11 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
         const map = keyed(boxes);
         const canFit = s.viewport.width > 0 && s.viewport.height > 0;
         const keep =
-          s.keepZoom && s.fitted && s.image !== null && s.image.width === image.width && s.image.height === image.height;
+          s.keepZoom &&
+          s.fitted &&
+          s.image !== null &&
+          s.image.width === image.width &&
+          s.image.height === image.height;
         cancelTween?.();
         return {
           ...PER_IMAGE,
@@ -203,7 +207,8 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
           boxes: map,
           order: sortedIds(map),
           selectedIds: s.selectedIds.filter((id) => map[id]),
-          focusedSuggestionId: s.focusedSuggestionId && map[s.focusedSuggestionId] ? s.focusedSuggestionId : null,
+          focusedSuggestionId:
+            s.focusedSuggestionId && map[s.focusedSuggestionId] ? s.focusedSuggestionId : null,
         };
       }),
     upsertBox: (box) =>
@@ -229,16 +234,24 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
       set((s) => {
         const reviewedAt = state === "unreviewed" ? null : new Date().toISOString();
         const boxes = { ...s.boxes };
-        for (const id of ids) if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
+        for (const id of ids)
+          if (boxes[id]) boxes[id] = { ...boxes[id], review_state: state, reviewed_at: reviewedAt };
         return { boxes };
       }),
     upsertMeasurement: (m) =>
-      set((s) => (s.imageId !== null && m.image_id !== s.imageId ? s : { measurements: { ...s.measurements, [m.id]: m } })),
+      set((s) =>
+        s.imageId !== null && m.image_id !== s.imageId
+          ? s
+          : { measurements: { ...s.measurements, [m.id]: m } },
+      ),
     removeMeasurement: (id) =>
       set((s) => {
         const measurements = { ...s.measurements };
         delete measurements[id];
-        return { measurements, selectedMeasurementId: s.selectedMeasurementId === id ? null : s.selectedMeasurementId };
+        return {
+          measurements,
+          selectedMeasurementId: s.selectedMeasurementId === id ? null : s.selectedMeasurementId,
+        };
       }),
     select: (ids, mode = "replace") =>
       set((s) => {
@@ -251,7 +264,11 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
         return { selectedIds: next, selectedMeasurementId: next.length ? null : s.selectedMeasurementId };
       }),
     selectMeasurement: (id) =>
-      set((s) => (id !== null && !s.measurements[id] ? s : { selectedMeasurementId: id, selectedIds: id ? [] : s.selectedIds })),
+      set((s) =>
+        id !== null && !s.measurements[id]
+          ? s
+          : { selectedMeasurementId: id, selectedIds: id ? [] : s.selectedIds },
+      ),
     hover: (id) => set((s) => (s.hoveredId === id ? s : { hoveredId: id })),
     focusSuggestion: (id) => set({ focusedSuggestionId: id }),
     setTool: (tool) => set((s) => (s.tool === tool ? s : { tool, draft: null })),
@@ -293,7 +310,10 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
         opts.radiusPx === undefined
           ? view.scale
           : clampScale(Math.min(viewport.width, viewport.height) / 3 / (2 * Math.max(1, opts.radiusPx)));
-      moveTo({ scale, x: viewport.width / 2 - point.x * scale, y: viewport.height / 2 - point.y * scale }, opts.animate);
+      moveTo(
+        { scale, x: viewport.width / 2 - point.x * scale, y: viewport.height / 2 - point.y * scale },
+        opts.animate,
+      );
     },
     panIntoView: (rect, opts = {}) => {
       const s = get();
@@ -305,11 +325,17 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
         rect.x + rect.w <= visible.x + visible.w &&
         rect.y + rect.h <= visible.y + visible.h;
       if (inside) return;
-      const fits = Math.min((s.viewport.width * 0.8) / Math.max(1, rect.w), (s.viewport.height * 0.8) / Math.max(1, rect.h));
+      const fits = Math.min(
+        (s.viewport.width * 0.8) / Math.max(1, rect.w),
+        (s.viewport.height * 0.8) / Math.max(1, rect.h),
+      );
       const scale = clampScale(Math.min(s.view.scale, fits));
       const cx = rect.x + rect.w / 2;
       const cy = rect.y + rect.h / 2;
-      moveTo({ scale, x: s.viewport.width / 2 - cx * scale, y: s.viewport.height / 2 - cy * scale }, opts.animate);
+      moveTo(
+        { scale, x: s.viewport.width / 2 - cx * scale, y: s.viewport.height / 2 - cy * scale },
+        opts.animate,
+      );
     },
     setKeepZoom: (on) => set({ keepZoom: on }),
     setInteracting: (on) => set((s) => (s.interacting === on ? s : { interacting: on })),
@@ -423,7 +449,10 @@ export function isDrawing(s: Pick<S, "draft">): boolean {
 export { ZOOM_STEP };
 
 /** Resolves once no API call is in flight (auto-save before navigation). */
-export function waitForIdle(store: ImagesWorkspaceStore = useImagesWorkspace, timeoutMs = 10_000): Promise<void> {
+export function waitForIdle(
+  store: ImagesWorkspaceStore = useImagesWorkspace,
+  timeoutMs = 10_000,
+): Promise<void> {
   return new Promise((resolve) => {
     if (store.getState().pending === 0) return resolve();
     const timer = setTimeout(() => {

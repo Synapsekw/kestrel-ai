@@ -35,7 +35,11 @@ interface Shown {
  * current preview. What is shown is pinned in the cache; a result for an image the canvas has left
  * is cached but never shown.
  */
-export function useTwoLevelImage(args: Args): { bitmap: ImageBitmap | null; level: Level | null; imageId: string | null } {
+export function useTwoLevelImage(args: Args): {
+  bitmap: ImageBitmap | null;
+  level: Level | null;
+  imageId: string | null;
+} {
   const { imageId, width, height, scale, url, neighbourIds } = args;
   const cache = args.cache ?? bitmapCache;
   const longSide = Math.max(width, height);
@@ -53,7 +57,9 @@ export function useTwoLevelImage(args: Args): { bitmap: ImageBitmap | null; leve
       .then((bitmap) => {
         if (!live) return;
         setShown((cur) =>
-          cur && cur.imageId === imageId && cur.level === "full" ? cur : { imageId, key, level: single ? "full" : "preview", bitmap },
+          cur && cur.imageId === imageId && cur.level === "full"
+            ? cur
+            : { imageId, key, level: single ? "full" : "preview", bitmap },
         );
         for (const id of neighbours ? neighbours.split(",") : []) {
           cache.load(`${id}:preview`, url(id, PREVIEW_SIDE), "preview").catch(() => undefined);
