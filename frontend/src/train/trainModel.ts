@@ -11,8 +11,9 @@ export interface TrainableDataset {
   class_count: number;
   split_method: string;
   /**
-   * Another job is exporting this dataset, so a run started now fails at once (the backend refuses a
-   * second export of the same dataset). Start stays disabled until that export finishes.
+   * Another job is preparing this dataset: its export is building, or an active run will export it
+   * because it has not been exported yet. A run started now fails at once (the backend refuses a
+   * second export of the same dataset), so Start stays disabled until that job finishes.
    */
   exportBusy: boolean;
 }

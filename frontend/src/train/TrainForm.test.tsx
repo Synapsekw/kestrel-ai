@@ -289,7 +289,7 @@ describe("TrainForm", () => {
     expect(screen.getByLabelText("Base model")).toHaveValue(exampleTrainedModel.id);
   });
 
-  it("disables Start while the chosen dataset is being exported by another run, and says why", () => {
+  it("disables Start while another run is preparing the chosen dataset, and says why", () => {
     const { api } = fakeClient([]);
     const onStart = vi.fn();
     renderWithProviders(
@@ -308,7 +308,7 @@ describe("TrainForm", () => {
     const start = screen.getByRole("button", { name: "Start training" });
     expect(start).toBeDisabled();
     expect(start).toHaveAccessibleDescription(
-      "Dataset is being exported by another run; start when it has finished.",
+      "Another run is preparing this dataset; start when it has finished.",
     );
     fireEvent.submit(start.closest("form")!);
     expect(onStart).not.toHaveBeenCalled();

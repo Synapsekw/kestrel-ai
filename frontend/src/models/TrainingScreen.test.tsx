@@ -167,7 +167,7 @@ describe("TrainingScreen (F §12.4)", () => {
   });
 
   describe("a dataset another job is exporting (H8)", () => {
-    const BUSY_NOTE = "Dataset is being exported by another run; start when it has finished.";
+    const BUSY_NOTE = "Another run is preparing this dataset; start when it has finished.";
     const activeRun = {
       ...exampleTrainingRun,
       id: "t-active",

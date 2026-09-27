@@ -358,7 +358,7 @@ export function TrainForm({
         </Button>
         {exportBusy && (
           <p id={`${id}-export-busy`} className="text-xs text-muted">
-            Dataset is being exported by another run; start when it has finished.
+            Another run is preparing this dataset; start when it has finished.
           </p>
         )}
       </div>

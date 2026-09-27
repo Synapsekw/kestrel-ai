@@ -24,10 +24,10 @@ plan: docs/superpowers/plans/2026-09-26-foundation-s2-app-screens.md
    address `/models/datasets?new=1`, and from a project's old Datasets link (with that project
    already ticked).
 7. On the dataset, choose **Build export**, then **Train on this dataset**. The New training run
-   drawer opens with the dataset chosen. While that dataset's export is still being built by
-   another run, **Start training** is held back with "Dataset is being exported by another run;
-   start when it has finished." Once the export is ready, start a short run (Epochs 3 under
-   More options).
+   drawer opens with the dataset chosen. While another run is still preparing that dataset
+   (building its export, or active on a dataset that has not been exported yet), **Start
+   training** is held back with "Another run is preparing this dataset; start when it has
+   finished." Once the export is ready, start a short run (Epochs 3 under More options).
 8. The run opens with live epoch, mAP50 and loss. When it finishes, its curve appears and the model
    is in **Models → Library**.
 9. In **Library**, open the new model, then **Class mapping**. Classes that match a type say "by

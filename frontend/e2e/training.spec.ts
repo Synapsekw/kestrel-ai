@@ -46,6 +46,6 @@ test("Models > Training holds Start back while a running run exports the same da
   await expect(page.getByLabel("Dataset")).toHaveValue("d-lib-1");
   await expect(page.getByRole("button", { name: "Start training" })).toBeDisabled();
   await expect(
-    page.getByText("Dataset is being exported by another run; start when it has finished."),
+    page.getByText("Another run is preparing this dataset; start when it has finished."),
   ).toBeVisible();
 });
