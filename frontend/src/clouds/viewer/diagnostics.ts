@@ -1,4 +1,4 @@
-import type { CameraPose, EdlState, NavMode, ViewName } from "./types";
+import type { CameraPose, CameraPoseInput, EdlState, NavMode, ViewName } from "./types";
 
 /** The read-only diagnostics hook (spec §8): the packaged check and the acceptance read it. */
 export const DIAGNOSTICS_KEY = "kestrel.diagnostics";
@@ -64,6 +64,55 @@ export interface CloudViewerDiagnostics {
   /** e2e only: SwiftShader resolves Auto effects to reduced, so EDL must be forced on (plan Ruling 14). */
   setEdl(on: boolean): void;
   topSnapshotSample(px?: number): Promise<SnapshotSample | null>;
+  /** C-V2: the clip box (null clears it); picks respect it in show_inside mode. */
+  setClipBox(
+    box: { centre: [number, number, number]; size: [number, number, number]; yawDeg: number } | null,
+    mode?: "show_inside" | "highlight_inside",
+  ): void;
+  /** C-V2: looks through a photo pose; answers the photo centre's client point and the frame. */
+  lookThrough(pose: {
+    position: [number, number, number];
+    forward: [number, number, number];
+    up: [number, number, number];
+    hfovDeg: number;
+    vfovDeg: number;
+    width: number;
+    height: number;
+  }): {
+    centre: { x: number; y: number };
+    frame: { left: number; top: number; width: number; height: number };
+  };
+  /** C-V2: `restore()` of the last `lookThrough` (none: nothing happens). */
+  restoreLook(): void;
+  /** C-V2: a slab sample, bounded for page.evaluate: count, total, and the first ≤ 5000 `s` and `z`. */
+  sampleSlab(
+    a: [number, number, number],
+    b: [number, number, number],
+    thicknessM: number,
+  ): Promise<{ count: number; total: number; s: number[]; z: number[] }>;
+  /** C-V2: V1's goToPose (the FOV hand-off check). */
+  goToPose(pose: CameraPoseInput): void;
+  /** C-V2: the occlusion pass and its duration; `result` is null while the view is not settled. */
+  occlusion(
+    points: Array<[number, number, number]>,
+    tolM: number[],
+  ): { result: boolean[] | null; ms: number };
+  /** C-V2: captures the current view (with finding marks), decodes the image and samples its colours. */
+  captureSample(marks: Array<{ kind: "finding"; at: [number, number, number] }>): Promise<{
+    width: number;
+    height: number;
+    type: string;
+    complete: boolean;
+    edl: boolean;
+    ms: number;
+    colours: ColourSample;
+  }>;
+  /** C-V2: the centre pick with its u and surface normal (spec §9.1). */
+  pickCenterWithNormal(): {
+    point: [number, number, number];
+    u: number;
+    normal: [number, number, number] | null;
+  } | null;
 }
 
 declare global {
