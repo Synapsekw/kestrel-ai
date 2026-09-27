@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 
 from app.db.models import CloudMeasurement
 from app.errors import AppError, not_found
-from app.pointclouds import measure, rows
+from app.pointclouds import measure, rows, views
 from app.pointclouds.schemas import CloudMeasurementCreate, CloudMeasurementUpdate
 from app.projects.service import ProjectHandle
 
@@ -132,3 +132,4 @@ def delete(handle: ProjectHandle, cloud_id: str, measurement_id: str) -> None:
     rows.get_cloud(handle, cloud_id)
     with handle.session() as s:
         s.delete(_get(s, cloud_id, measurement_id))
+    views.remove_files(handle, cloud_id, "cloud_measurement", measurement_id)
