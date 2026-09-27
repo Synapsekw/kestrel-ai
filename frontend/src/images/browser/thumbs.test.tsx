@@ -81,6 +81,47 @@ describe("ThumbLoader", () => {
   });
 });
 
+describe("ThumbLoader: one fetch per url", () => {
+  it("two tiles asking for the same url share one fetch and one object url", async () => {
+    const { loader, started, fetchBlob, revokeUrl } = deferredFetch();
+    const grid = new AbortController();
+    const strip = new AbortController();
+    const a = loader.load("u", grid.signal);
+    const b = loader.load("u", strip.signal);
+    expect(fetchBlob).toHaveBeenCalledTimes(1);
+    started[0].resolve();
+    await expect(a).resolves.toBe("blob:1");
+    await expect(b).resolves.toBe("blob:1");
+    expect(revokeUrl).not.toHaveBeenCalled();
+    expect(loader.peek("u")).toBe("blob:1");
+  });
+
+  it("aborts the shared fetch only when every tile gave up", async () => {
+    const { loader, started } = deferredFetch();
+    const grid = new AbortController();
+    const strip = new AbortController();
+    const a = loader.load("u", grid.signal);
+    const b = loader.load("u", strip.signal);
+    grid.abort();
+    await expect(a).rejects.toThrow();
+    expect(started[0].signal.aborted).toBe(false);
+    strip.abort();
+    await expect(b).rejects.toThrow();
+    expect(started[0].signal.aborted).toBe(true);
+  });
+
+  it("a tile asking again after everyone gave up gets a fresh fetch", async () => {
+    const { loader, started, fetchBlob } = deferredFetch();
+    const gone = new AbortController();
+    void quiet(loader.load("u", gone.signal));
+    gone.abort();
+    const again = loader.load("u", new AbortController().signal);
+    expect(fetchBlob).toHaveBeenCalledTimes(2);
+    started[1].resolve();
+    await expect(again).resolves.toBe("blob:1");
+  });
+});
+
 describe("useThumb", () => {
   it("loads, and aborts when the tile unmounts", async () => {
     const { loader, started } = deferredFetch();

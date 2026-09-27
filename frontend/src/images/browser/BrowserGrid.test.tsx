@@ -113,6 +113,34 @@ describe("BrowserGrid", () => {
     expect(screen.getByRole("alert")).toHaveTextContent("Pick a flight");
   });
 
+  it("says 1 finding, not 1 findings", () => {
+    const index = makeIndexState(30);
+    renderGrid(30, { index: { ...index, count: index.count.map((c) => (c > 0 ? 1 : 0)) } });
+    const tile5 = document.querySelector('[data-ordinal="5"] button')!;
+    expect(tile5.getAttribute("aria-label")).toMatch(/, 1 finding$/);
+    expect(tile5.querySelector('[data-part="badge"]')!.getAttribute("title")).toMatch(/^1 finding,/);
+  });
+
+  it("shows a failed read as a sentence with a Try again button that reloads", () => {
+    const reload = vi.fn();
+    renderGrid(0, {
+      index: makeIndexState(0, {
+        status: "error",
+        errorCode: "internal",
+        error: "could not load the images",
+        reload,
+      }),
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Could not load the images.");
+    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("says it is loading, not 0 images, before the first answer", () => {
+    renderGrid(0, { index: makeIndexState(0, { status: "loading" }) });
+    expect(screen.getByTestId("grid-caption")).toHaveTextContent("Loading images…");
+  });
+
   it("says when nothing matches", () => {
     renderGrid(0);
     expect(screen.getByText("No images match these filters.")).toBeInTheDocument();

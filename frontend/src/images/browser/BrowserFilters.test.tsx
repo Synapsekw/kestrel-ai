@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { useState } from "react";
 import { act, cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { exampleSource, fakeClient, PROJECT_ID, SOURCE_ID } from "@/test/fixtures";
 import { typedProject } from "@/test/findingFixtures";
@@ -117,5 +118,65 @@ describe("BrowserFilters", () => {
     classes = descButton.className.split(/\s+/);
     expect(classes).toContain("rotate-90");
     expect(classes).not.toContain("-rotate-90");
+  });
+
+  describe("search", () => {
+    /** A parent that holds the filters, as the browser does. */
+    function renderHosted(initial: BrowserFilterState = DEFAULT_BROWSER_FILTERS) {
+      const { api } = fakeClient([
+        { method: "GET", path: /\/sources$/, body: { items: [], next_cursor: null } },
+        { method: "GET", path: /\/projects\/[^/]+$/, body: typedProject },
+      ]);
+      const seen: { value: BrowserFilterState; set: (f: BrowserFilterState) => void } = {
+        value: initial,
+        set: () => {},
+      };
+      function Host() {
+        const [value, setValue] = useState(initial);
+        seen.value = value;
+        seen.set = setValue;
+        return (
+          <BrowserFilters
+            projectId={PROJECT_ID}
+            value={value}
+            onChange={setValue}
+            index={{ sev: [], total: 0 }}
+          />
+        );
+      }
+      renderWithProviders(<Host />, { api });
+      fireEvent.click(screen.getByRole("button", { name: /More/ }));
+      return seen;
+    }
+
+    it("a switch flipped while the search is pending is kept when the search commits", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const seen = renderHosted();
+      fireEvent.change(await screen.findByRole("searchbox", { name: "Search file names" }), {
+        target: { value: "0031" },
+      });
+      fireEvent.click(screen.getByRole("switch", { name: "Has findings" }));
+      expect(seen.value.hasFindings).toBe(true);
+      await act(async () => {
+        vi.advanceTimersByTime(SEARCH_COMMIT_MS + 10);
+      });
+      expect(seen.value).toEqual({ ...DEFAULT_BROWSER_FILTERS, hasFindings: true, search: "0031" });
+    });
+
+    it("follows a search set from outside, and that change wins over a pending commit", async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const seen = renderHosted({ ...DEFAULT_BROWSER_FILTERS, search: "DJI" });
+      const box = await screen.findByRole("searchbox", { name: "Search file names" });
+      expect(box).toHaveValue("DJI");
+      act(() => seen.set({ ...seen.value, search: "0042" }));
+      expect(box).toHaveValue("0042");
+      fireEvent.change(box, { target: { value: "0042x" } });
+      act(() => seen.set(DEFAULT_BROWSER_FILTERS));
+      expect(box).toHaveValue("");
+      await act(async () => {
+        vi.advanceTimersByTime(SEARCH_COMMIT_MS + 10);
+      });
+      expect(seen.value.search).toBe("");
+    });
   });
 });

@@ -157,7 +157,11 @@ export function createCaptureMap(o: CaptureMapOptions): CaptureMapHandle {
   map.on("pointermove", (e) => {
     if (!e.dragging) hover(e.pixel);
   });
-  const leave = () => o.onHover(null, null);
+  // A trailing throttled hover would otherwise land after the leave and bring the tooltip back.
+  const leave = () => {
+    hover.cancel();
+    o.onHover(null, null);
+  };
   map.getViewport().addEventListener("mouseleave", leave);
   map.on("singleclick", (e) => {
     const ordinal = pick(e.pixel);

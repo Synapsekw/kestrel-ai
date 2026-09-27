@@ -70,7 +70,14 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
   const handle = useRef<CaptureMapHandle | null>(null);
   /** The `fitKey` the map was last fit to; a re-fit only happens when this changes (Ruling). */
   const fitKeyRef = useRef<string | null>(null);
-  const [hovered, setHovered] = useState<{ ordinal: number; pixel: number[] } | null>(null);
+  // Keyed by the index arrays and the map build it came from: an ordinal means nothing once the
+  // index answer or the map changes, so a stale hover is simply not shown (no reset effect).
+  const [hover, setHover] = useState<{
+    ordinal: number;
+    pixel: number[];
+    ids: readonly string[];
+    build: string;
+  } | null>(null);
   const webgl = useMemo(() => rendererName() !== null, []);
   const maps = useMaps(input.projectId);
   const { index } = input;
@@ -122,6 +129,11 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
   const path = useMemo(() => (input.sort ? flightPath(coords, input.sort) : null), [coords, input.sort]);
 
   const projectionKey = background ? `ortho:${background.id}` : "mercator";
+  const build = `${webgl}|${projectionKey}|${tileUrl}|${input.interactive}|${Boolean(input.onLasso)}`;
+  const hovered =
+    hover && hover.ids === index.ids && hover.build === build
+      ? { ordinal: hover.ordinal, pixel: hover.pixel }
+      : null;
   /**
    * Ruling: re-fit only when the projection or the *set* of placed ids changes — not on every
    * index answer, or the operator's zoom/pan would snap back after every finding/detection update
@@ -133,9 +145,20 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
   );
 
   // Everything the builder needs, read by the creation effect without making it a dependency.
-  const latest = useRef({ input, placed, currentCoord, footprint, path, style, points, coords, fitKey });
+  const latest = useRef({
+    input,
+    placed,
+    currentCoord,
+    footprint,
+    path,
+    style,
+    points,
+    coords,
+    fitKey,
+    build,
+  });
   useEffect(() => {
-    latest.current = { input, placed, currentCoord, footprint, path, style, points, coords, fitKey };
+    latest.current = { input, placed, currentCoord, footprint, path, style, points, coords, fitKey, build };
   });
 
   useEffect(() => {
@@ -149,7 +172,17 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
         tileUrl,
         interactive: input.interactive,
         pointStyle: latest.current.style,
-        onHover: (ordinal, pixel) => setHovered(ordinal === null || !pixel ? null : { ordinal, pixel }),
+        onHover: (ordinal, pixel) =>
+          setHover(
+            ordinal === null || !pixel
+              ? null
+              : {
+                  ordinal,
+                  pixel,
+                  ids: latest.current.input.index.ids,
+                  build: latest.current.build,
+                },
+          ),
         onClick: (ordinal) => {
           const id = latest.current.input.index.ids[ordinal];
           if (id) latest.current.input.onOpen(id);

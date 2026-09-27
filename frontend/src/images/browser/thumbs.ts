@@ -23,6 +23,14 @@ interface Job {
   onAbort: () => void;
 }
 
+/** One fetch per url, shared by every tile that asks for it while it is queued or in flight. */
+interface Pending {
+  promise: Promise<string>;
+  /** Callers still waiting; the fetch is aborted only when the last of them gives up. */
+  subscribers: number;
+  controller: AbortController;
+}
+
 const abortError = () => new DOMException("thumbnail request aborted", "AbortError");
 
 async function defaultFetchBlob(url: string, signal: AbortSignal): Promise<Blob> {
@@ -40,6 +48,7 @@ export class ThumbLoader {
   private readonly queue: Job[] = [];
   private active = 0;
   private readonly cache = new Map<string, string>();
+  private readonly pending = new Map<string, Pending>();
 
   constructor(deps: ThumbLoaderDeps = {}) {
     this.fetchBlob = deps.fetchBlob ?? defaultFetchBlob;
@@ -70,7 +79,46 @@ export class ThumbLoader {
       return Promise.resolve(hit);
     }
     if (signal.aborted) return Promise.reject(abortError());
+    let shared = this.pending.get(url);
+    if (!shared) shared = this.start(url);
+    const entry = shared;
+    entry.subscribers += 1;
     return new Promise<string>((resolve, reject) => {
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        reject(abortError());
+        entry.subscribers -= 1;
+        if (entry.subscribers === 0) {
+          // Nobody waits any more: a later ask for this url starts afresh rather than joining this.
+          if (this.pending.get(url) === entry) this.pending.delete(url);
+          entry.controller.abort();
+        }
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      entry.promise.then(
+        (src) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve(src);
+        },
+        (e: unknown) => {
+          if (settled) return;
+          settled = true;
+          signal.removeEventListener("abort", onAbort);
+          reject(e);
+        },
+      );
+    });
+  }
+
+  /** Queues the one fetch of `url`; its own controller aborts it once nobody waits for it. */
+  private start(url: string): Pending {
+    const controller = new AbortController();
+    const signal = controller.signal;
+    const promise = new Promise<string>((resolve, reject) => {
       const job: Job = {
         url,
         signal,
@@ -86,8 +134,16 @@ export class ThumbLoader {
       };
       signal.addEventListener("abort", job.onAbort, { once: true });
       this.queue.push(job);
-      this.pump();
     });
+    const entry: Pending = { promise, subscribers: 0, controller };
+    this.pending.set(url, entry);
+    const done = () => {
+      if (this.pending.get(url) === entry) this.pending.delete(url);
+    };
+    // Settles once, whichever way; every subscriber sees the outcome through `promise` itself.
+    promise.then(done, done);
+    this.pump();
+    return entry;
   }
 
   private pump(): void {
@@ -113,8 +169,12 @@ export class ThumbLoader {
   }
 
   private remember(url: string, src: string): string {
+    // A tile may still show the url already cached for this key: keep it, drop the newcomer.
     const old = this.cache.get(url);
-    if (old && old !== src) this.revokeUrl(old);
+    if (old && old !== src) {
+      this.revokeUrl(src);
+      src = old;
+    }
     this.cache.delete(url);
     this.cache.set(url, src);
     while (this.cache.size > this.cacheMax) {

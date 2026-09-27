@@ -5,6 +5,7 @@ import { deleteImages, markImagesEmpty } from "@/data/bulkActions";
 import { EMPTY_SELECTION, type SelectionState } from "@/data/selection";
 import { useChangesStore } from "@/store/changes";
 import { Button, Dialog, GlassPanel, toast } from "@/ui";
+import { plural } from "./format";
 
 export interface BrowserSelectionBarProps {
   projectId: string;
@@ -13,8 +14,6 @@ export interface BrowserSelectionBarProps {
   /** Batch detection on the selection (FA/FW own the job); hidden when absent. */
   onDetect?: (ids: string[]) => void;
 }
-
-const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
 
 /** Spec §7.2: with a multi-selection the bar offers Detect on selection, Nothing to report, Delete. */
 export function BrowserSelectionBar({

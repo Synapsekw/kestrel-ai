@@ -83,13 +83,17 @@ describe("CaptureMap", () => {
     await waitFor(() => expect(last("setPoints")).toBeDefined());
     const [ordinals] = last("setPoints") as [number[]];
     expect(ordinals).toHaveLength(10); // every 3rd of 30
-    expect(screen.getByText("Capture points · 10")).toBeInTheDocument();
+    expect(screen.getByTestId("capture-map")).toHaveTextContent("Capture points · 10");
+    expect(screen.getByText("10")).toHaveClass("font-mono");
     expect(ol.created[0].projection.kind).toBe("mercator");
   });
 
   it("says how many images have no location", async () => {
     renderMap(30);
-    expect(await screen.findByText("20 of 30 without location")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByTestId("capture-map")).toHaveTextContent("20 of 30 without location"),
+    );
+    expect(screen.getByText("20")).toHaveClass("font-mono");
   });
 
   it("uses a covering ortho as the background", async () => {
@@ -128,7 +132,10 @@ describe("CaptureMap", () => {
     });
     await waitFor(() => expect(last("setCurrent")?.[0]).not.toBeNull());
     expect((last("setFootprint")?.[0] as { kind: string }).kind).toBe("polygon");
-    fireEvent.click(screen.getByRole("button", { name: "Footprint on" }));
+    const chip = screen.getByRole("button", { name: "Footprint" });
+    expect(chip).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(chip);
+    expect(chip).toHaveAttribute("aria-pressed", "false");
     expect(last("setFootprint")?.[0]).toBeNull();
     expect(last("setFlightPath")?.[0]).not.toBeNull();
   });
@@ -140,6 +147,38 @@ describe("CaptureMap", () => {
     expect(await screen.findByRole("tooltip")).toHaveTextContent("DJI_0015");
     expect(screen.getByRole("tooltip")).toHaveTextContent("2 findings · Major");
     act(() => ol.created[0].onHover(null, null));
+    expect(screen.queryByRole("tooltip")).toBeNull();
+  });
+
+  it("says 1 finding, not 1 findings", async () => {
+    const index = makeIndexState(30);
+    renderMap(30, { index: { ...index, count: index.count.map(() => 1) } });
+    await waitFor(() => expect(ol.created).toHaveLength(1));
+    act(() => ol.created[0].onHover(15, [40, 40]));
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(/1 finding ·/);
+  });
+
+  it("drops the hover when the index answer changes under it", async () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/maps$/, body: { items: [], next_cursor: null } }]);
+    const tree = (index: ReturnType<typeof makeIndexState>) => (
+      <TestApiProvider api={api}>
+        <MemoryRouter>
+          <CaptureMap
+            projectId={PROJECT_ID}
+            index={index}
+            currentId={null}
+            sort="capture_time"
+            footprint={null}
+            onOpen={() => {}}
+          />
+        </MemoryRouter>
+      </TestApiProvider>
+    );
+    const { rerender } = render(tree(makeIndexState(30)));
+    await waitFor(() => expect(ol.created).toHaveLength(1));
+    act(() => ol.created[0].onHover(15, [40, 40]));
+    expect(await screen.findByRole("tooltip")).toBeInTheDocument();
+    rerender(tree(makeIndexState(15)));
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 

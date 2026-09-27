@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import type { Source } from "@contract/client";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
@@ -66,9 +66,26 @@ function useSources(projectId: string): Source[] {
   return loaded?.projectId === projectId ? loaded.items : [];
 }
 
-/** Search commits after a pause, so typing does not re-read the index per keystroke. */
+/**
+ * Search commits after a pause, so typing does not re-read the index per keystroke. The text
+ * follows `value` when it changes from outside (a preset, a reset), which also drops a pending
+ * commit; `onCommit` is whatever the parent holds when the timer fires.
+ */
 function SearchField({ value, onCommit }: { value: string; onCommit: (v: string) => void }) {
   const [text, setText] = useState(value);
+  // The `value` the text was last synced with, and the text this field last committed.
+  const [synced, setSynced] = useState(value);
+  const [committed, setCommitted] = useState(value);
+  // Counts the changes from outside; each one drops a commit still pending (the effect below).
+  const [outside, setOutside] = useState(0);
+  if (value !== synced) {
+    setSynced(value);
+    if (value !== committed) {
+      setText(value);
+      setCommitted(value);
+      setOutside((n) => n + 1);
+    }
+  }
   const timer = useRef<number | null>(null);
   useEffect(
     () => () => {
@@ -76,6 +93,13 @@ function SearchField({ value, onCommit }: { value: string; onCommit: (v: string)
     },
     [],
   );
+  // A change from outside wins over a commit still pending.
+  useEffect(() => {
+    if (outside > 0 && timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  }, [outside]);
   return (
     <Input
       type="search"
@@ -87,7 +111,11 @@ function SearchField({ value, onCommit }: { value: string; onCommit: (v: string)
         const v = e.target.value;
         setText(v);
         if (timer.current !== null) window.clearTimeout(timer.current);
-        timer.current = window.setTimeout(() => onCommit(v), SEARCH_COMMIT_MS);
+        timer.current = window.setTimeout(() => {
+          timer.current = null;
+          setCommitted(v);
+          onCommit(v);
+        }, SEARCH_COMMIT_MS);
       }}
     />
   );
@@ -102,6 +130,16 @@ export function BrowserFilters({ projectId, value, onChange, index }: BrowserFil
   const set = (patch: Partial<BrowserFilterState>) => onChange({ ...value, ...patch });
   const filtering = value.severities.length > 0;
   const more = moreFilterCount(value);
+  // The search commits on a timer: it must merge into the filters as they are when it fires, not
+  // as they were when the typing started (a switch flipped meanwhile would be reverted).
+  const latest = useRef({ value, onChange });
+  useEffect(() => {
+    latest.current = { value, onChange };
+  });
+  const commitSearch = useCallback((search: string) => {
+    const l = latest.current;
+    l.onChange({ ...l.value, search });
+  }, []);
 
   return (
     <div className="flex flex-col gap-2">
@@ -170,7 +208,7 @@ export function BrowserFilters({ projectId, value, onChange, index }: BrowserFil
 
       <Disclosure label="More" summary={more > 0 ? `${more} on` : undefined}>
         <div className="flex flex-col gap-2">
-          <SearchField value={value.search} onCommit={(v) => set({ search: v })} />
+          <SearchField value={value.search} onCommit={commitSearch} />
           <Switch
             label="Has suggestions"
             checked={value.hasSuggestions}

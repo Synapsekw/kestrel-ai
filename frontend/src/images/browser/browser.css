@@ -9,7 +9,7 @@
   border: 1px solid rgb(var(--ink) / 0.6);
   border-top: none;
   color: rgb(var(--ink));
-  font-family: var(--font-mono, monospace);
+  @apply font-mono;
   font-size: 10.5px;
   text-align: center;
 }

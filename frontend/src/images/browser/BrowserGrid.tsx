@@ -4,6 +4,7 @@ import { useBackend } from "@/api/client";
 import { clickSelect, type SelectionState } from "@/data/selection";
 import {
   Alert,
+  Button,
   cx,
   EmptyState,
   focusRing,
@@ -15,7 +16,7 @@ import {
 } from "@/ui";
 import { computeWindow, useVirtualRows } from "@/ui/useVirtualRows";
 import { SORT_LABEL, type BrowserSort } from "./filters";
-import { stemOf } from "./format";
+import { plural, sentence, stemOf } from "./format";
 import { GRID_GAP, GRID_OVERSCAN, gridGeometry, scrollTargetFor, visibleRange } from "./gridGeometry";
 import { useImageDetails } from "./useImageDetails";
 import { FLAG_GPS, FLAG_REVIEWED, type ImageIndexState } from "./useImageIndex";
@@ -58,7 +59,7 @@ function Tile(p: TileProps) {
         type="button"
         aria-current={p.current ? "true" : undefined}
         aria-pressed={p.selected}
-        aria-label={p.count > 0 ? `${name}, ${p.count} findings` : name}
+        aria-label={p.count > 0 ? `${name}, ${plural(p.count, "finding")}` : name}
         onClick={p.onClick}
         className={cx(
           "group relative block h-full w-full overflow-hidden rounded-sm border bg-surface-2",
@@ -82,7 +83,7 @@ function Tile(p: TileProps) {
             data-part="badge"
             className="absolute right-1 top-1 rounded-chip bg-[color:var(--c)] px-1.5 font-mono text-2xs leading-4 text-bg"
             style={{ "--c": level?.colour ?? "rgb(var(--muted))" } as CSSProperties}
-            title={`${p.count} findings${level ? `, worst ${level.name}` : ""}`}
+            title={`${plural(p.count, "finding")}${level ? `, worst ${level.name}` : ""}`}
           >
             {p.count}
           </span>
@@ -149,10 +150,13 @@ export function BrowserGrid(p: BrowserGridProps) {
   };
 
   const range = visibleRange(scrollTop, height, rowH, cols, total);
+  // Before the first answer there is nothing to count yet: "0 images" would be a false claim.
   const caption =
-    total === 0
-      ? "0 images"
-      : `${range.from}–${range.to} of ${total} · by ${SORT_LABEL[p.sort]} ${p.order === "asc" ? "↑" : "↓"}`;
+    p.index.status === "loading" && total === 0
+      ? "Loading images…"
+      : total === 0
+        ? "0 images"
+        : `${range.from}–${range.to} of ${total} · by ${SORT_LABEL[p.sort]} ${p.order === "asc" ? "↑" : "↓"}`;
 
   if (p.index.status === "error") {
     return p.index.errorCode === "too_many_images" ? (
@@ -160,8 +164,17 @@ export function BrowserGrid(p: BrowserGridProps) {
         More than 100,000 images match. Pick a flight to narrow the list.
       </Alert>
     ) : (
-      <Alert tone="danger" role="alert" title="The images could not be listed">
-        {p.index.error} Try again from the filters.
+      <Alert
+        tone="danger"
+        role="alert"
+        title="The images could not be listed"
+        actions={
+          <Button size="sm" onClick={p.index.reload}>
+            Try again
+          </Button>
+        }
+      >
+        {sentence(p.index.error ?? "")}
       </Alert>
     );
   }

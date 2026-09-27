@@ -1,8 +1,8 @@
 import { useState, type CSSProperties } from "react";
-import { EmptyState, GlassPanel, Pill, severityOf, useSeverityScale } from "@/ui";
+import { cx, EmptyState, focusRing, GlassPanel, Pill, severityOf, useSeverityScale } from "@/ui";
 import type { BrowserSort } from "./filters";
 import type { FootprintInput } from "./captureModel";
-import { stemOf } from "./format";
+import { plural, stemOf } from "./format";
 import { useCaptureMap } from "./useCaptureMap";
 import { useImageDetails } from "./useImageDetails";
 import type { ImageIndexState } from "./useImageIndex";
@@ -47,7 +47,7 @@ function HoverTip({
         {row ? stemOf(row.file_name) : `Image ${hovered.ordinal + 1}`}
       </span>
       <span className="text-muted">
-        {count > 0 ? `${count} findings · ${level?.name ?? "No severity"}` : "No findings"}
+        {count > 0 ? `${plural(count, "finding")} · ${level?.name ?? "No severity"}` : "No findings"}
       </span>
     </GlassPanel>
   );
@@ -100,19 +100,24 @@ export function CaptureMap(p: CaptureMapProps) {
     <div className="relative min-h-0 flex-1 overflow-hidden rounded-panel bg-bg" data-testid="capture-map">
       <div ref={targetRef} className="absolute inset-0" />
       <div className="absolute left-2 right-2 top-2 z-[2] flex flex-wrap gap-1.5">
-        <Pill size="sm">{`Capture points · ${points.length}`}</Pill>
+        <Pill size="sm">
+          Capture points · <span className="font-mono">{points.length}</span>
+        </Pill>
         <button
           type="button"
           aria-pressed={showFootprint}
           onClick={() => setShowFootprint((v) => !v)}
-          className="rounded-chip"
+          className={cx("rounded-chip", focusRing)}
         >
           <Pill size="sm" tone={showFootprint ? "accent" : "neutral"}>
-            {showFootprint ? "Footprint on" : "Footprint off"}
+            Footprint
           </Pill>
         </button>
         {missing > 0 && (
-          <Pill size="sm" tone="warn">{`${missing} of ${p.index.total} without location`}</Pill>
+          <Pill size="sm" tone="warn">
+            <span className="font-mono">{missing}</span> of <span className="font-mono">{p.index.total}</span>{" "}
+            without location
+          </Pill>
         )}
       </div>
       {hovered && <HoverTip projectId={p.projectId} index={p.index} hovered={hovered} />}
