@@ -53,6 +53,7 @@ class ExportItem:
     crs_wkt: str | None
     plan_png: bytes | None = None
     clutter_rings: list[list[list[float]]] = field(default_factory=list)
+    material: dict | None = None
 
     @property
     def labels(self) -> Labels:

@@ -175,3 +175,18 @@ def test_pdf_names_every_measurement_and_its_numbers(tmp_path):
 def test_scale_factor_prints_the_percentage():
     assert report_pdf.scale_factor(1.00031) == "1.00031 (+0.031 %)"
     assert report_pdf.scale_factor(0.99962) == "0.99962 (-0.038 %)"
+
+
+def test_csv_and_xlsx_carry_material_density_and_tonnage(tmp_path):
+    gravel = dataclasses.replace(_item(), material={"name": "Gravel", "density_t_m3": 1.6})
+    bare = _item(name="bare")
+    tables.write_csv(tmp_path / "v.csv", [gravel, bare])
+    rows = list(csv.DictReader((tmp_path / "v.csv").open(encoding="utf-8")))
+    assert tables.CSV_COLUMNS[-3:] == ["material", "density_t_m3", "tonnage_t"]
+    assert rows[0]["material"] == "Gravel" and float(rows[0]["density_t_m3"]) == 1.6
+    assert float(rows[0]["tonnage_t"]) == pytest.approx(523.57 * 1.6)
+    assert rows[1]["material"] == rows[1]["density_t_m3"] == rows[1]["tonnage_t"] == ""
+    tables.write_xlsx(tmp_path / "v.xlsx", [gravel])
+    ws = load_workbook(tmp_path / "v.xlsx")["Volumes"]
+    cell = ws.cell(row=2, column=tables.CSV_COLUMNS.index("tonnage_t") + 1)
+    assert cell.value == pytest.approx(523.57 * 1.6) and cell.number_format == "#,##0.0"

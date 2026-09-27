@@ -20,11 +20,9 @@ def option_pending(option: str, unit: str) -> AppError:
 
 
 def guard_volume_options(body) -> None:
-    """`polygon_site` and `material` (spec §10), on create and on patch."""
+    """`polygon_site` (spec §10), on create and on patch."""
     if getattr(body, "polygon_site", None) is not None:
         raise option_pending("polygon_site", "M-B5")
-    if "material" in body.model_fields_set:
-        raise option_pending("material", "M-B5")
 
 
 def guard_run_region(body) -> None:

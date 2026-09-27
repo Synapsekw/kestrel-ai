@@ -113,11 +113,7 @@ def test_a_surface_date_or_role_patch_answers_501_until_m_b2(client, project_id)
 def test_volume_options_answer_501_until_m_b5(client, project_id):
     url = f"/api/v1/projects/{project_id}/volumes"
     body = {"name": "Pile", "top_surface_id": "s1", "base": {"kind": "toe_plane"}}
-    material = {"name": "Gravel", "density_t_m3": 1.8}
     assert _option(client.post(url, json={**body, "polygon_site": RING})) == "polygon_site"
-    with_material = {**body, "polygon_native": RING, "material": material}
-    assert _option(client.post(url, json=with_material)) == "material"
-    assert _option(client.patch(f"{url}/any", json={"material": None})) == "material"
     assert _option(client.patch(f"{url}/any", json={"polygon_site": RING})) == "polygon_site"
 
 

@@ -182,6 +182,7 @@ def create(handle: ProjectHandle, body: VolumeMeasurementCreate) -> VolumeMeasur
             base=base,
             masks=masks,
             alignment=alignment,
+            material=body.material.model_dump() if body.material else None,
             status="calculating",
         )
         s.add(row)
@@ -373,6 +374,8 @@ def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPat
         row = _get(s, measurement_id)
         if sent.get("name"):
             row.name = sent["name"]
+        if "material" in sent:
+            row.material = sent["material"]  # a dict or None; not an input, so the status stays as it is
         changes = {k: v for k, v in sent.items() if k in INPUT_FIELDS}  # the schema refuses nulls
         if changes:
             if row.status == "calculating":

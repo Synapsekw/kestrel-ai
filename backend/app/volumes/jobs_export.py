@@ -63,6 +63,7 @@ def _load(ctx: JobContext, measurement_ids: list[str]) -> list[ExportItem]:
             epsg, crs_wkt = top.epsg, top.crs_wkt
             row = s.get(VolumeMeasurement, measurement_id)
             masks, alignment = dict(row.masks), dict(row.alignment or {})
+            material = dict(row.material) if row.material else None
         items.append(
             ExportItem(
                 id=out.id,
@@ -75,6 +76,7 @@ def _load(ctx: JobContext, measurement_ids: list[str]) -> list[ExportItem]:
                 results=out.results.model_dump(mode="json"),
                 epsg=epsg,
                 crs_wkt=crs_wkt,
+                material=material,
             )
         )
     return items
