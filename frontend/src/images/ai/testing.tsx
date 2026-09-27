@@ -6,6 +6,7 @@ import { makeDetail, makeShape } from "@/images/canvas/testing"; // I-FC's helpe
 import { useChangesStore } from "@/store/changes";
 import { useToastStore } from "@/ui";
 import { useAiStore } from "./aiStore";
+import { useBatchRuns } from "./BatchDetectDialog";
 import { useImagesWorkspace, wsGet } from "./bridge";
 import { INITIAL_SAM } from "./sam/session";
 import { useSamStore } from "./sam/useSmartPolygon";
@@ -56,6 +57,7 @@ export function seedWorkspace(boxes: Box[], detail: ImageDetail = makeDetail()):
 export function resetAll(): void {
   useAiStore.getState().reset();
   useSamStore.setState({ state: INITIAL_SAM, handle: null });
+  useBatchRuns.setState({ ids: [] });
   useToastStore.getState().clear();
   useChangesStore.setState({ findingsRevision: 0 });
   localStorage.clear();
