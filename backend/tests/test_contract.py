@@ -91,9 +91,8 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-EXPECTED_STUBS: set[str] = {
-    # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-}
+# Images (plan 2026-09-27-images-c0): every I unit has landed its stubs, so none are left.
+EXPECTED_STUBS: set[str] = set()
 EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
 
 # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
