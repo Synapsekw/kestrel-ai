@@ -52,15 +52,13 @@ export async function cmdReviewSuggestions(
   }
   if (!result) return undefined; // FC's `tracked` recorded the failure: "Save failed · Retry"
   const s = wsGet();
-  useAiStore
-    .getState()
-    .addLeaving(
-      before.map((box) => ({
-        box,
-        kind: action,
-        colour: action === "accept" ? (typeOf(s, box.class_id)?.colour ?? null) : null,
-      })),
-    );
+  useAiStore.getState().addLeaving(
+    before.map((box) => ({
+      box,
+      kind: action,
+      colour: action === "accept" ? (typeOf(s, box.class_id)?.colour ?? null) : null,
+    })),
+  );
   const created = result.finding_ids_created;
   if (action === "accept") {
     // R-FA2: one id ↔ one finding is certain only for a single accept; FW links the rest from the
