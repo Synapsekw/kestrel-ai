@@ -1,8 +1,18 @@
+import type { FindingDetail } from "@/api/findings";
 import { formatFindingNumber } from "@/findings/format";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import { Button, Dialog } from "@/ui";
 import { confirmDelete, confirmRetype } from "./actions";
 import type { CommandContext } from "./commands";
+
+/** FC-R5's wording, naming the finding(s) the change deletes when they could be read. */
+function retypeText(findings: readonly Pick<FindingDetail, "number">[]): string {
+  const numbers = findings.map((f) => formatFindingNumber(f.number));
+  if (numbers.length === 0)
+    return "Objects are counted, not reported, so the finding on this shape is deleted with its note, photos and comments.";
+  if (numbers.length === 1) return `The finding ${numbers[0]} is deleted with its note, photos and comments.`;
+  return `The findings ${numbers.join(", ")} are deleted with their notes, photos and comments.`;
+}
 
 /** The delete (FC-R4) and retype (FC-R5) confirmations. */
 export function CanvasDialogs({ ctx }: { ctx: CommandContext }) {
@@ -54,10 +64,7 @@ export function CanvasDialogs({ ctx }: { ctx: CommandContext }) {
         </>
       }
     >
-      <p className="text-sm text-muted">
-        Objects are counted, not reported, so the finding on this shape is deleted with its note, photos and
-        comments.
-      </p>
+      <p className="text-sm text-muted">{retypeText(confirm.findings ?? [])}</p>
     </Dialog>
   );
 }

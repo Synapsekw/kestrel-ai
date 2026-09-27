@@ -81,6 +81,18 @@ describe("the images key table (spec §13)", () => {
     expect(whenMatches("selection", st())).toBe(false);
     expect(whenMatches("drawing", st())).toBe(true);
   });
+
+  it("matches only `cancel` while a dialog or the picker is open (m4)", () => {
+    st().setConfirm({ kind: "delete", ids: ["b"], findings: [] });
+    expect(whenMatches("always", st(), "box")).toBe(false);
+    expect(whenMatches("always", st(), "cancel")).toBe(true);
+    st().setConfirm(null);
+    st().openPicker({ x: 0, y: 0 }, "active");
+    expect(whenMatches("always", st(), "undo")).toBe(false);
+    expect(whenMatches("always", st(), "cancel")).toBe(true);
+    st().closePicker();
+    expect(whenMatches("always", st(), "box")).toBe(true);
+  });
 });
 
 describe("useImagesKeymap", () => {
@@ -146,5 +158,24 @@ describe("useHeldKeys", () => {
     expect(st().spaceHeld).toBe(false);
     fireEvent.blur(window);
     expect(st().shiftHeld).toBe(false);
+  });
+
+  it("leaves Space to a focused button, and takes it on the body or inside the canvas (m3)", () => {
+    renderHook(() => useHeldKeys());
+    const button = document.createElement("button");
+    const host = document.createElement("div");
+    host.dataset.testid = "image-canvas";
+    const inside = document.createElement("span");
+    host.append(inside);
+    document.body.append(button, host);
+    expect(fireEvent.keyDown(button, { key: " " })).toBe(true); // not prevented
+    expect(st().spaceHeld).toBe(false);
+    expect(fireEvent.keyDown(inside, { key: " " })).toBe(false);
+    expect(st().spaceHeld).toBe(true);
+    fireEvent.keyUp(window, { key: " " });
+    expect(fireEvent.keyDown(document.body, { key: " " })).toBe(false);
+    expect(st().spaceHeld).toBe(true);
+    button.remove();
+    host.remove();
   });
 });

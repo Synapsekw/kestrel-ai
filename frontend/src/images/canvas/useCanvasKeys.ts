@@ -31,6 +31,9 @@ export function useCanvasKeyHandlers(ctx: CommandContext): KeyHandlers {
       "measure-length": tool("length"),
       cancel: () => {
         const s = st();
+        // Dialog and Popover handle Esc themselves (and stop it) while focus is inside them; this
+        // covers focus left outside, closing just the open layer and nothing behind it.
+        if (s.confirm) return void s.setConfirm(null);
         if (s.picker) return void s.closePicker();
         if (s.draft) {
           if (!current()?.onCancel?.(api)) s.setDraft(null);
@@ -52,12 +55,10 @@ export function useCanvasKeyHandlers(ctx: CommandContext): KeyHandlers {
           if (!current()?.onRemoveVertex?.(api)) s.setDraft(null);
           return;
         }
-        // Undo only when nothing is saving: the compensating call must target settled state.
-        if (s.pending === 0) void cmdUndo(ctx);
+        // Queued behind any save in flight, so the compensating call targets settled state.
+        void cmdUndo(ctx);
       },
-      redo: () => {
-        if (st().pending === 0) void cmdRedo(ctx);
-      },
+      redo: () => void cmdRedo(ctx),
       fit: () => st().fit(),
       "zoom-in": () => st().zoomBy(ZOOM_STEP),
       "zoom-out": () => st().zoomBy(1 / ZOOM_STEP),

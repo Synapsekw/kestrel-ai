@@ -47,8 +47,9 @@ export function polygonDown(
     lastScreen: null,
   };
   const first = base.points[0];
-  if (first && polygonClosable(base) && distance(toDisplay(first, view), screen) <= CLOSE_RADIUS_PX) {
-    return { draft: { ...base, pressed: false }, close: true };
+  if (first && distance(toDisplay(first, view), screen) <= CLOSE_RADIUS_PX) {
+    // m6: too few points to close yet, so the click is ignored rather than adding a near-duplicate.
+    return { draft: { ...base, pressed: false }, close: polygonClosable(base) };
   }
   return {
     draft: { ...append(base, image, screen, view), pressed: true, cursor: image, lastScreen: screen },

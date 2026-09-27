@@ -5,7 +5,7 @@ import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import { ensureBuiltInTools } from "@/images/tools";
 import { useImagesKeymap } from "@/images/workspace/keymap";
 import { useCanvasKeyHandlers } from "./useCanvasKeys";
-import { makeDetail, makeShape } from "./testing";
+import { gatedClient, makeDetail, makeShape } from "./testing";
 import type { CommandContext } from "./commands";
 
 const st = () => useImagesWorkspace.getState();
@@ -88,6 +88,46 @@ describe("canvas keys", () => {
     expect(requests.at(-1)?.body).toMatchObject({ x: 110 });
     key("ArrowRight", { altKey: true });
     await waitFor(() => expect(st().boxes.b.x).toBe(111));
+  });
+
+  it("Ctrl+Z pressed while a nudge is saving undoes it once the save lands (I1)", async () => {
+    const { api, requests, gate } = gatedClient([
+      { method: "PATCH", path: /\/boxes\/b$/, body: (req) => ({ ...st().boxes.b, ...(req.body as object) }) },
+    ]);
+    const ctx: CommandContext = {
+      api,
+      projectId: PROJECT_ID,
+      store: useImagesWorkspace,
+      history: st().history,
+    };
+    renderHook(() => useImagesKeymap([useCanvasKeyHandlers(ctx)]));
+    st().select(["b"]);
+    key("ArrowRight", { altKey: true });
+    await waitFor(() => expect(gate.arrived).toBe(1));
+    key("z", { ctrlKey: true });
+    expect(st().pending).toBeGreaterThan(0);
+    gate.release();
+    await waitFor(() => expect(gate.arrived).toBe(2));
+    gate.release();
+    await waitFor(() => expect(st().pending).toBe(0));
+    expect(requests.map((r) => (r.body as { x: number }).x)).toEqual([101, 100]);
+    expect(st().boxes.b.x).toBe(100);
+  });
+
+  it("keys do nothing behind an open dialog or picker; Esc closes it (m4)", () => {
+    setup();
+    st().setConfirm({ kind: "delete", ids: ["b"], findings: [] });
+    key("b");
+    expect(st().tool).toBe("select");
+    key("Escape");
+    expect(st().confirm).toBeNull();
+    st().openPicker({ x: 0, y: 0 }, "active");
+    key("r");
+    expect(st().tool).toBe("select");
+    key("Escape");
+    expect(st().picker).toBeNull();
+    key("r");
+    expect(st().tool).toBe("rbox");
   });
 
   it("T opens the picker to retype a selection, or to choose the active type", () => {

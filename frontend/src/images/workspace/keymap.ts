@@ -110,10 +110,17 @@ export function registerKeyRows(rows: ImagesKeyRow[]): void {
   IMAGES_KEY_ROWS.push(...rows);
 }
 
+/**
+ * Whether a row applies now. While a confirmation dialog or the type picker is open, only
+ * `cancel` does (m4): the canvas keys must not act behind it.
+ */
 export function whenMatches(
   when: KeyWhen,
-  s: Pick<ImagesWorkspaceState, "draft" | "selectedIds" | "selectedMeasurementId">,
+  s: Pick<ImagesWorkspaceState, "draft" | "selectedIds" | "selectedMeasurementId"> &
+    Partial<Pick<ImagesWorkspaceState, "confirm" | "picker">>,
+  action?: string,
 ): boolean {
+  if ((s.confirm || s.picker) && action !== "cancel") return false;
   const drawing = s.draft !== null;
   if (when === "always") return true;
   if (when === "drawing") return drawing;
@@ -150,7 +157,7 @@ export function useImagesKeymap(
     action: candidates[0].action,
     onTrigger: () => {
       const s = useImagesWorkspace.getState();
-      const hit = candidates.find((r) => whenMatches(r.when, s));
+      const hit = candidates.find((r) => whenMatches(r.when, s, r.action));
       if (!hit) return;
       for (const layer of layers) {
         const handler = layer[hit.action];
@@ -159,6 +166,15 @@ export function useImagesKeymap(
     },
   }));
   useToolShortcuts(shortcuts, opts.enabled ?? true);
+}
+
+/**
+ * Space belongs to the canvas only when nothing else has focus (the body) or focus is inside the
+ * canvas host; a focused button or checkbox keeps Space for itself (m3).
+ */
+function canvasOwnsSpace(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return true; // window or document: nothing focused
+  return target === document.body || target.closest('[data-testid="image-canvas"]') !== null;
 }
 
 /**
@@ -171,6 +187,7 @@ export function useHeldKeys(): void {
     const down = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
       if (e.key === " ") {
+        if (!canvasOwnsSpace(e.target)) return;
         e.preventDefault();
         if (!st().spaceHeld) st().setHeld({ space: true });
       } else if (e.key === "Shift" && !st().shiftHeld) st().setHeld({ shift: true });

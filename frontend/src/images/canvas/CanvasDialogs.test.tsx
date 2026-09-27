@@ -31,6 +31,32 @@ describe("CanvasDialogs", () => {
     await waitFor(() => expect(st().boxes.b).toBeUndefined());
   });
 
+  it("names the finding(s) a retype to an object type deletes (m5)", () => {
+    const ctx: CommandContext = {
+      api: fakeClient([]).api,
+      projectId: PROJECT_ID,
+      store: useImagesWorkspace,
+      history: st().history,
+    };
+    st().setConfirm({ kind: "retype", ids: ["b"], typeId: "truck", findings: [{ number: 7 } as never] });
+    const { unmount } = render(<CanvasDialogs ctx={ctx} />);
+    expect(screen.getByRole("dialog", { name: "Change to an object type?" })).toBeInTheDocument();
+    expect(
+      screen.getByText("The finding F-0007 is deleted with its note, photos and comments."),
+    ).toBeInTheDocument();
+    unmount();
+    st().setConfirm({
+      kind: "retype",
+      ids: ["b", "c"],
+      typeId: "truck",
+      findings: [{ number: 7 }, { number: 9 }] as never,
+    });
+    render(<CanvasDialogs ctx={ctx} />);
+    expect(
+      screen.getByText("The findings F-0007, F-0009 are deleted with their notes, photos and comments."),
+    ).toBeInTheDocument();
+  });
+
   it("keeps everything on Keep", async () => {
     const ctx: CommandContext = {
       api: fakeClient([]).api,

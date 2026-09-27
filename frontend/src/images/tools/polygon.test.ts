@@ -47,6 +47,14 @@ describe("polygon machine", () => {
     expect(click(d, 0, 0).close).toBe(false);
   });
 
+  it("ignores a click near the first vertex while there are too few points to close (m6)", () => {
+    let d = click(null, 0, 0).draft;
+    d = click(d, 50, 0).draft;
+    const r = click(d, 1, 1); // within the close radius of (0, 0)
+    expect(r.close).toBe(false);
+    expect(r.draft.points).toHaveLength(2);
+  });
+
   it("streams a vertex every 4 screen px while dragging", () => {
     const start = at(0, 0);
     let d = polygonDown(null, start.image, start.screen, view).draft;
