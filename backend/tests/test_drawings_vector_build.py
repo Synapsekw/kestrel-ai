@@ -127,3 +127,30 @@ def test_a_layer_with_no_entities_is_unknown(client, project_id, wait_job, tmp_p
         json={"inspection_id": insp["id"], "name": "X", "layers": ["EMPTY"], "placement": {"method": "none"}},
     )
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+def test_a_cancel_during_indexing_removes_the_folder(
+    client, project_id, wait_job, handle, tmp_path, monkeypatch
+):
+    """Fix round 1: check_cancelled firing on its 2nd call inside build_index (runbbox.f64 mapped)."""
+    from app.jobs.cancellation import JobCancelled
+
+    real = runs.build_index
+    calls = []
+
+    def cancel_second(folder, *, check_cancelled, **kw):
+        def check():
+            calls.append(1)
+            if len(calls) == 2:
+                raise JobCancelled()
+            check_cancelled()
+
+        return real(folder, check_cancelled=check, **kw)
+
+    monkeypatch.setattr(runs, "build_index", cancel_second)
+    insp = inspect_ready(client, project_id, wait_job, _site_dxf(tmp_path))
+    created = build_drawing(client, project_id, wait_job, insp["id"], wait=False)
+    wait_job(project_id, created["job"]["id"])
+    d = client.get(f"{BASE}/{project_id}/drawings/{created['drawing']['id']}").json()
+    assert len(calls) == 2 and d["status"] == "failed"
+    assert not store.drawing_dir(handle, d["id"]).exists()

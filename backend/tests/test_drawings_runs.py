@@ -1,7 +1,10 @@
 """Run files and the 64 x 64 bucket index (spec §8.1 storage, §15 "the bucket index returns exactly
 the runs crossing a box (property test against brute force)"; plan Task 9)."""
 
+import shutil
+
 import numpy as np
+import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 from PIL import Image
@@ -96,8 +99,6 @@ def test_bucket_index_release_allows_windows_delete(tmp_path):
     """F9: offsets must be a real copy, not a memmap view; release() must drop every memmap so the
     folder can be deleted (shutil.rmtree) right after, which fails on Windows if any file is still
     mapped."""
-    import shutil
-
     folder = tmp_path / "w"
     _write(folder, [[(0, 0), (1, 1)], [(2, 2), (3, 3)]])
     runs.build_index(folder)
@@ -106,3 +107,67 @@ def test_bucket_index_release_allows_windows_delete(tmp_path):
     idx.release()
     assert idx.offsets is None
     shutil.rmtree(folder)
+
+
+class _Stop(Exception):
+    pass
+
+
+def _cancel_on(n):
+    calls = []
+
+    def check():
+        calls.append(1)
+        if len(calls) == n:
+            raise _Stop()
+
+    return check
+
+
+@pytest.mark.parametrize("call", [1, 2, 3])
+def test_a_cancelled_index_leaves_the_folder_deletable(tmp_path, call):
+    """Fix round 1: a cancel inside build_index must drop every memmap even while the exception (and
+    its traceback) is still alive, so the job's cleanup can remove the folder on Windows."""
+    folder = tmp_path / "c"
+    _write(folder, [[(0, 0), (1, 1)], [(2, 2), (3, 3)], [(0, 3), (3, 0)]])
+    with pytest.raises(_Stop) as caught:
+        runs.build_index(folder, check_cancelled=_cancel_on(call))
+    assert caught.value.__traceback__ is not None
+    shutil.rmtree(folder)
+    assert not folder.exists()
+
+
+def test_a_cancelled_copy_leaves_both_folders_deletable(tmp_path):
+    _write(tmp_path / "a", [[(0, 0), (1, 0)], [(0, 1), (1, 1)]], [0, 1])
+    with pytest.raises(_Stop) as caught:
+        runs.copy_runs(
+            tmp_path / "a", tmp_path / "b", np.array([0, 1], np.int32), check_cancelled=_cancel_on(1)
+        )
+    assert caught.value.__traceback__ is not None
+    shutil.rmtree(tmp_path / "a")
+    shutil.rmtree(tmp_path / "b")
+
+
+def test_copy_runs_releases_the_source_when_the_writer_cannot_start(tmp_path):
+    _write(tmp_path / "a", [[(0, 0), (1, 0)]])
+    with pytest.raises(FileNotFoundError):
+        runs.copy_runs(
+            tmp_path / "a", tmp_path / "missing" / "b", np.array([0], np.int32), check_cancelled=lambda: None
+        )
+    shutil.rmtree(tmp_path / "a")
+
+
+def test_copy_and_index_report_progress(tmp_path):
+    _write(tmp_path / "a", [[(0, 0), (1, 0)], [(0, 1), (1, 1)]], [0, 0])
+    seen = []
+    runs.copy_runs(
+        tmp_path / "a",
+        tmp_path / "b",
+        np.array([0], np.int32),
+        check_cancelled=lambda: None,
+        progress=seen.append,
+    )
+    assert seen and seen[-1] == 1.0
+    seen.clear()
+    runs.build_index(tmp_path / "b", progress=seen.append)
+    assert seen and seen == sorted(seen) and seen[-1] == 1.0

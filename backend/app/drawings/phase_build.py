@@ -101,14 +101,19 @@ def _build_vector(ctx, insp: dict, idir: Path, src: Path, folder: Path) -> dict:
     for new, n in enumerate(keep):
         remap[names.index(n)] = new
     source = store.lines_dir(idir)
-    meta = runs.copy_runs(source, folder, remap, check_cancelled=ctx.check_cancelled, layers=keep)
-    ctx.progress(0.5, MESSAGE)
+    meta = runs.copy_runs(
+        source,
+        folder,
+        remap,
+        check_cancelled=ctx.check_cancelled,
+        progress=_progress(ctx, 0.02, 0.5),
+        layers=keep,
+    )
     labels = [label for label in store.read_json(source / "labels.json") if label["layer"] in set(keep)]
     store.write_json(folder / "labels.json", labels)
     if meta["runs"] == 0 and not labels:
         raise JobFailure("the chosen layers have no lines or text")
-    runs.build_index(folder, check_cancelled=ctx.check_cancelled)
-    ctx.progress(0.85, MESSAGE)
+    runs.build_index(folder, check_cancelled=ctx.check_cancelled, progress=_progress(ctx, 0.5, 0.85))
     if meta["runs"]:
         runs.runs_thumbnail(folder, folder / "thumb.png")
     by_name = {layer["name"]: layer for layer in insp["layers"]}

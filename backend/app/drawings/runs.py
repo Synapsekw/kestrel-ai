@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import gc
 import math
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -29,11 +30,28 @@ THUMB_VERTICES = 200_000
 THUMB_COLOUR = (60, 200, 230, 255)
 
 
+def _noop(*_args) -> None:
+    return None
+
+
+def _drop_frames(exc: BaseException) -> None:
+    """Clear the locals of the finished frames an in-flight exception carries. A memmap view held by
+    one of them would keep its file open on Windows, and the job's cleanup could not remove the
+    folder while the exception is still being handled."""
+    traceback.clear_frames(exc.__traceback__)
+
+
 class RunWriter:
     def __init__(self, folder: Path):
         folder.mkdir(parents=False, exist_ok=True)  # never recreate a deleted parent
         self.folder = folder
-        self._files = [(folder / n).open("wb") for n in ("lines.f64", "runs.i64", "runlayer.i32")]
+        self._files = []
+        try:
+            for n in ("lines.f64", "runs.i64", "runlayer.i32"):
+                self._files.append((folder / n).open("wb"))
+        except BaseException:
+            self.abort()
+            raise
         self._lines, self._runs, self._layer = self._files
         self._runs.write(np.zeros(1, np.int64).tobytes())
         self.vertex_count = self.run_count = 0
@@ -115,22 +133,35 @@ def run_bboxes(rs: RunStore, a: int, b: int) -> np.ndarray:
     )
 
 
-def copy_runs(src: Path, dst: Path, remap: np.ndarray, *, check_cancelled, **meta_extra) -> dict:
-    rs, w = RunStore.open(src), RunWriter(dst)
+def _copy_chunk(rs: RunStore, w: RunWriter, remap: np.ndarray, a: int, b: int) -> None:
+    new = remap[np.asarray(rs.layer[a:b])]
+    keep = new >= 0
+    if not keep.any():
+        return
+    offs = np.asarray(rs.runs[a : b + 1])
+    lens = np.diff(offs)
+    pts = np.asarray(rs.lines[offs[0] : offs[-1]])
+    w.add_many(pts[np.repeat(keep, lens)], lens[keep], new[keep])
+
+
+def copy_runs(
+    src: Path, dst: Path, remap: np.ndarray, *, check_cancelled, progress=_noop, **meta_extra
+) -> dict:
+    """Stream the runs whose layer `remap`s to >= 0 into `dst`, in chunks of CHUNK_RUNS runs.
+    `progress(fraction)` after each chunk. Every memmap is dropped on the way out, success or not."""
+    rs, w = RunStore.open(src), None
     try:
-        for a in range(0, rs.run_count, CHUNK_RUNS):
+        w = RunWriter(dst)
+        k = rs.run_count
+        for a in range(0, k, CHUNK_RUNS):
             check_cancelled()
-            b = min(rs.run_count, a + CHUNK_RUNS)
-            new = remap[np.asarray(rs.layer[a:b])]
-            keep = new >= 0
-            if not keep.any():
-                continue
-            offs = np.asarray(rs.runs[a : b + 1])
-            lens = np.diff(offs)
-            pts = np.asarray(rs.lines[offs[0] : offs[-1]])
-            w.add_many(pts[np.repeat(keep, lens)], lens[keep], new[keep])
-    except BaseException:
-        w.abort()
+            b = min(k, a + CHUNK_RUNS)
+            _copy_chunk(rs, w, remap, a, b)
+            progress(b / k)
+    except BaseException as e:
+        if w is not None:
+            w.abort()
+        _drop_frames(e)
         raise
     finally:
         rs.release()
@@ -150,53 +181,78 @@ def _cell_size(extent) -> tuple[float, float]:
     return max(extent[2] - extent[0], 1e-9) / GRID, max(extent[3] - extent[1], 1e-9) / GRID
 
 
-def build_index(folder: Path, *, check_cancelled=lambda: None) -> None:
-    """runbbox.f64 and buckets.i64 in two passes over the memory-mapped runs (count, then fill)."""
-    rs = RunStore.open(folder)
-    k, extent = rs.run_count, rs.meta["extent"] or [0.0, 0.0, 0.0, 0.0]
-    cw, ch = _cell_size(extent)
+def build_index(folder: Path, *, check_cancelled=_noop, progress=_noop) -> None:
+    """runbbox.f64 and buckets.i64 in three passes over the memory-mapped runs (bboxes, count, fill),
+    in chunks of CHUNK_RUNS runs. `progress(fraction)` after each chunk. Every memmap is dropped on
+    the way out, success or not, so a cancelled build's folder can be removed on Windows."""
+    rs, bbox = RunStore.open(folder), None
     try:
+        k, extent = rs.run_count, rs.meta["extent"] or [0.0, 0.0, 0.0, 0.0]
+        cw, ch = _cell_size(extent)
+        chunks = [(a, min(k, a + CHUNK_RUNS)) for a in range(0, k, CHUNK_RUNS)]
+        steps, done = 3 * len(chunks), 0
         with (folder / "runbbox.f64").open("wb") as f:
-            for a in range(0, k, CHUNK_RUNS):
+            for a, b in chunks:
                 check_cancelled()
-                f.write(run_bboxes(rs, a, min(k, a + CHUNK_RUNS)).tobytes())
+                f.write(run_bboxes(rs, a, b).tobytes())
+                done += 1
+                progress(done / steps)
+        rs.release()
+        bbox = _map(folder / "runbbox.f64", np.float64, 4)
+        counts = np.zeros(GRID * GRID, np.int64)
+        for a, b in chunks:
+            check_cancelled()
+            _count_chunk(counts, np.asarray(bbox[a:b]), extent, cw, ch)
+            done += 1
+            progress(done / steps)
+        offsets = np.zeros(GRID * GRID + 1, np.int64)
+        np.cumsum(counts, out=offsets[1:])
+        ids = np.empty(int(offsets[-1]), np.int64)
+        cursor = offsets[:-1].copy()
+        for a, b in chunks:
+            check_cancelled()
+            _fill_chunk(ids, cursor, np.asarray(bbox[a:b]), a, extent, cw, ch)
+            done += 1
+            progress(done / steps)
+    except BaseException as e:
+        _drop_frames(e)
+        raise
     finally:
         rs.release()
-    bbox = _map(folder / "runbbox.f64", np.float64, 4)
-    counts = np.zeros(GRID * GRID, np.int64)
-    chunks = [(a, min(k, a + CHUNK_RUNS)) for a in range(0, k, CHUNK_RUNS)]
-    for a, b in chunks:
-        check_cancelled()
-        cx0, cy0, cx1, cy1 = _cells(np.asarray(bbox[a:b]), extent, cw, ch)
-        single = (cx0 == cx1) & (cy0 == cy1)
-        np.add.at(counts, cy0[single] * GRID + cx0[single], 1)
-        for i in np.flatnonzero(~single):
-            counts.reshape(GRID, GRID)[cy0[i] : cy1[i] + 1, cx0[i] : cx1[i] + 1] += 1
-    offsets = np.zeros(GRID * GRID + 1, np.int64)
-    np.cumsum(counts, out=offsets[1:])
-    ids = np.empty(int(offsets[-1]), np.int64)
-    cursor = offsets[:-1].copy()
-    for a, b in chunks:
-        check_cancelled()
-        cx0, cy0, cx1, cy1 = _cells(np.asarray(bbox[a:b]), extent, cw, ch)
-        single = (cx0 == cx1) & (cy0 == cy1)
-        cell, rid = cy0[single] * GRID + cx0[single], np.arange(a, b, dtype=np.int64)[single]
-        order = np.argsort(cell, kind="stable")
-        cs = cell[order]
-        rank = np.arange(len(cs)) - np.searchsorted(cs, cs, side="left")
-        ids[cursor[cs] + rank] = rid[order]
-        np.add.at(cursor, cs, 1)
-        for i in np.flatnonzero(~single):
-            for cy in range(cy0[i], cy1[i] + 1):
-                for cx in range(cx0[i], cx1[i] + 1):
-                    c = cy * GRID + cx
-                    ids[cursor[c]] = a + i
-                    cursor[c] += 1
-    del bbox
-    gc.collect()
+        bbox = None
+        gc.collect()
     with (folder / "buckets.i64").open("wb") as f:
         f.write(offsets.tobytes())
         f.write(ids.tobytes())
+    if not chunks:
+        progress(1.0)
+
+
+def _count_chunk(counts: np.ndarray, bb: np.ndarray, extent, cw: float, ch: float) -> None:
+    cx0, cy0, cx1, cy1 = _cells(bb, extent, cw, ch)
+    single = (cx0 == cx1) & (cy0 == cy1)
+    np.add.at(counts, cy0[single] * GRID + cx0[single], 1)
+    for i in np.flatnonzero(~single):
+        counts.reshape(GRID, GRID)[cy0[i] : cy1[i] + 1, cx0[i] : cx1[i] + 1] += 1
+
+
+def _fill_chunk(
+    ids: np.ndarray, cursor: np.ndarray, bb: np.ndarray, a: int, extent, cw: float, ch: float
+) -> None:
+    cx0, cy0, cx1, cy1 = _cells(bb, extent, cw, ch)
+    single = (cx0 == cx1) & (cy0 == cy1)
+    cell, rid = cy0[single] * GRID + cx0[single], np.arange(a, a + len(bb), dtype=np.int64)[single]
+    order = np.argsort(cell, kind="stable")
+    cs = cell[order]
+    rank = np.arange(len(cs)) - np.searchsorted(cs, cs, side="left")
+    ids[cursor[cs] + rank] = rid[order]
+    np.add.at(cursor, cs, 1)
+    for i in np.flatnonzero(~single):
+        for cy in range(cy0[i], cy1[i] + 1):
+            for cx in range(cx0[i], cx1[i] + 1):
+                c = cy * GRID + cx
+                ids[cursor[c]] = a + i
+                cursor[c] += 1
 
 
 class BucketIndex:
@@ -261,5 +317,8 @@ def runs_thumbnail(folder: Path, out: Path, size: int = 160) -> None:
             draw.line([tuple(p) for p in xy], fill=THUMB_COLOUR, width=1)
         out.parent.mkdir(parents=False, exist_ok=True)
         img.save(out)
+    except BaseException as e:
+        _drop_frames(e)
+        raise
     finally:
         rs.release()
