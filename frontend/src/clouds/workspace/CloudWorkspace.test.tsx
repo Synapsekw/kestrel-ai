@@ -263,9 +263,18 @@ describe("CloudWorkspace (spec §6)", () => {
     expect(screen.getByLabelText("Lowest")).toHaveValue(-44);
   }, 10_000);
 
-  it("says what an importing or a failed cloud is doing, with the picker still there", async () => {
+  it("says what an importing cloud is doing, with the picker still there", async () => {
     open([{ ...exampleCloud, status: "importing", z_stats: null, has_rgb: null }]);
     expect(await screen.findByTestId("cloud-importing")).toHaveTextContent("Building the 3D view copy…");
+    expect(screen.queryByRole("toolbar", { name: "Point cloud tools" })).toBeNull();
+    expect(screen.getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
+  });
+
+  it("says why a failed cloud could not be imported, with the picker still there", async () => {
+    open([{ ...exampleCloud, status: "failed", error: "the file has no points" }]);
+    const card = await screen.findByTestId("cloud-failed");
+    expect(card).toHaveTextContent(`${exampleCloud.name} could not be imported`);
+    expect(card).toHaveTextContent("the file has no points");
     expect(screen.queryByRole("toolbar", { name: "Point cloud tools" })).toBeNull();
     expect(screen.getByRole("button", { name: /^Point cloud: / })).toBeInTheDocument();
   });
@@ -346,13 +355,24 @@ describe("CloudWorkspace (spec §6)", () => {
     };
     useJobsStore.getState().upsert(exportJob);
     useToastStore.getState().clear();
+    let done = false;
     open([exampleCloud], `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, [
       {
         method: "GET",
         path: /\/jobs\/j-export-2$/,
-        body: { ...exportJob, state: "succeeded", progress: 1, result: { folder: "exports/y" } },
+        body: () =>
+          done
+            ? { ...exportJob, state: "succeeded", progress: 1, result: { folder: "exports/y" } }
+            : exportJob,
       },
     ]);
+    // Details knows the seeded export is still running: no second export can start.
+    await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
+    await userEvent.click(screen.getByRole("button", { name: "Details…" }));
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Export LAZ" })).toHaveAttribute("aria-busy", "true"),
+    );
+    done = true;
     await waitFor(
       () =>
         expect(useToastStore.getState().toasts.find((t) => t.text === "LAZ export finished")).toBeDefined(),
