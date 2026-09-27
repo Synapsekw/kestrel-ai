@@ -43,4 +43,15 @@ describe("the view gizmo (spec §6)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Iso" }));
     expect(callsTo("setView")).toEqual([["top"], ["iso"]]);
   });
+
+  it("shows a focus ring on a keyboard-focused axis head (the head itself has no outline)", () => {
+    render(<Harness />);
+    for (const name of [/Top view/, /Front view/, /Side view/]) {
+      const head = screen.getByRole("button", { name });
+      expect(head).toHaveClass("group");
+      const ring = head.querySelector("circle[data-focus-ring]");
+      expect(ring, String(name)).not.toBeNull();
+      expect(ring).toHaveClass("stroke-accent", "opacity-0", "group-focus-visible:opacity-100");
+    }
+  });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Button, GlassPanel, Kbd, KeyChord, cx } from "@/ui";
+import { cloudShortcut } from "@/clouds/keys";
+import { Button, GlassPanel, KeyChord, cx } from "@/ui";
 import { HINT_FADE_MS, NAV_TOOLS, type PaletteEntry } from "./tools";
 import type { WorkspaceTool } from "./types";
 
@@ -49,10 +50,10 @@ export function HintBar({
       {tool?.onCommit && (
         <span className="flex items-center gap-1.5 border-l border-line pl-2">
           <Button size="sm" variant="primary" disabled={tool.canCommit === false} onClick={tool.onCommit}>
-            {tool.commitLabel ?? "Save"} <Kbd>Enter</Kbd>
+            {tool.commitLabel ?? "Save"} <KeyChord chord={cloudShortcut("commit")} />
           </Button>
           <Button size="sm" variant="ghost" onClick={onCancel}>
-            Cancel <Kbd>Esc</Kbd>
+            Cancel <KeyChord chord={cloudShortcut("cancel")} />
           </Button>
         </span>
       )}

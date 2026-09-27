@@ -52,9 +52,13 @@ export function resolveCloudKey(e: KeyLike, nav: CloudNav): ResolvedKey | null {
   return hit ? { scope: hit.scope, action: hit.action } : null;
 }
 
-/** The chord of a clouds tool action, for `ToolButton shortcut`; throws on an action the keymap lacks. */
+/**
+ * The chord of a clouds action (then of a global one, e.g. "commit" / "cancel"), for `ToolButton
+ * shortcut` and key caps; throws on an action the keymap lacks.
+ */
 export function cloudShortcut(action: string): string {
-  const e = WORKSPACE_KEYS.clouds.find((k) => k.action === action);
+  const e =
+    WORKSPACE_KEYS.clouds.find((k) => k.action === action) ?? GLOBAL_KEYS.find((k) => k.action === action);
   if (!e) throw new Error(`no clouds key for "${action}"`);
   return e.keys[0];
 }

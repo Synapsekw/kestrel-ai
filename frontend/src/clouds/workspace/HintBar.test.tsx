@@ -31,3 +31,18 @@ describe("the hint bar's fade (spec §6: nav tools fade 2.4 s after arming)", ()
     expect(faded()).toBe(true);
   });
 });
+
+describe("the hint bar's Save and Cancel", () => {
+  it("show the keymap's commit and cancel keys", () => {
+    render(
+      <HintBar
+        entry={ENTRY.area}
+        tool={{ id: "area", picks: true, onCommit: () => {}, commitLabel: "Save area" }}
+        progress={null}
+        onCancel={() => {}}
+      />,
+    );
+    expect(screen.getByRole("button", { name: /Save area/ }).querySelector("kbd")).toHaveTextContent("Enter");
+    expect(screen.getByRole("button", { name: /Cancel/ }).querySelector("kbd")).toHaveTextContent("Esc");
+  });
+});

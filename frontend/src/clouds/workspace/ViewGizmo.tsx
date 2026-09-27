@@ -1,5 +1,6 @@
 import { useEffect, useRef, type RefObject } from "react";
 import type { CloudViewerHandle } from "@/clouds/CloudViewer";
+import { cloudShortcut } from "@/clouds/keys";
 import type { ViewName } from "@/clouds/viewer/types";
 import { Button, GlassPanel, Tooltip, cx, stagger } from "@/ui";
 import { ISO_DIRECTION, VIEW_OF_AXIS, gizmoAxes } from "./gizmo";
@@ -17,10 +18,10 @@ const NAME = {
   z: "Top view (look from above)",
 } as const;
 const VIEWS: [ViewName, string, string][] = [
-  ["top", "Top", "Alt+1"],
-  ["front", "Front", "Alt+2"],
-  ["side", "Side", "Alt+3"],
-  ["iso", "Iso", "Alt+4"],
+  ["top", "Top", cloudShortcut("view-top")],
+  ["front", "Front", cloudShortcut("view-front")],
+  ["side", "Side", cloudShortcut("view-side")],
+  ["iso", "Iso", cloudShortcut("view-iso")],
 ];
 
 /**
@@ -83,7 +84,7 @@ export function Gizmo({ viewer, running }: { viewer: RefObject<CloudViewerHandle
             role="button"
             tabIndex={0}
             aria-label={NAME[ax]}
-            className="cursor-pointer outline-none"
+            className="group cursor-pointer outline-none"
             onClick={() => go(VIEW_OF_AXIS[ax])}
             onKeyDown={(e) => {
               if (e.key === "Enter" || e.key === " ") {
@@ -92,6 +93,13 @@ export function Gizmo({ viewer, running }: { viewer: RefObject<CloudViewerHandle
               }
             }}
           >
+            {/* The keyboard focus indicator (the head's own outline is off: an SVG <g> draws none). */}
+            <circle
+              data-focus-ring
+              r={10}
+              strokeWidth={2}
+              className="fill-none stroke-accent opacity-0 group-focus-visible:opacity-100"
+            />
             <circle r={7} className={cx(TONE[ax], "stroke-0")} />
             <text
               textAnchor="middle"
