@@ -90,7 +90,7 @@ export interface RouteInfo {
  * lands: M makes `maps` full-bleed at its list too, C makes `clouds` full-bleed.
  */
 export function layoutOf(tab: string, detail: boolean): Layout {
-  if (tab === "maps" && detail) return "fullbleed";
+  if (tab === "maps") return "fullbleed";
   if (tab === "images" && detail) return "workspace";
   return "page";
 }

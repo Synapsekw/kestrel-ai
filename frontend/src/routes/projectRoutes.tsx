@@ -1,7 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { FindingsScreen } from "@/findings/FindingsScreen";
-import { MapDataList } from "@/maps/MapDataList";
+import { MapWorkspace } from "@/mapws/MapWorkspace";
 import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
@@ -25,8 +25,8 @@ export const projectRoutes: RouteObject[] = [
   // Images: interim host, today's screens (I replaces them).
   { path: "images", element: <DataManagerScreen /> },
   { path: "images/:imageId", element: <EditorScreen /> },
-  // Maps: interim Data-list host and today's viewer (M replaces them).
-  { path: "maps", element: <MapDataList /> },
+  // Maps: the map workspace (M-W1); `maps/:mapId` stays today's viewer until M-X redirects it.
+  { path: "maps", element: <MapWorkspace /> },
   { path: "maps/:mapId", element: <MapsScreen /> },
   // The 3D jump contract (spec 2026-09-23-point-clouds section 10), used unchanged by the
   // maps -> 3D jump, the 3D -> map jump and the Volumes screen's "View in 3D":
