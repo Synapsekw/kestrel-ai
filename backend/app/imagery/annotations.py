@@ -4,23 +4,39 @@ section 8), and the annotation <-> finding invariant (spec 2026-09-26-foundation
 Accepted and edited boxes are ground truth; unreviewed proposals are not. Editing a proposal is
 itself a review decision, so it becomes `edited` rather than staying pending. A ground-truth box on
 a defect type is a finding's geometry: every write below calls `app.findings.annotations` inside its
-own transaction, then moves the photos of findings it deleted to the trash after the commit.
+own transaction, then `app.imagery.summary.touch` for the image, then moves the photos of findings
+it deleted to the trash after the commit.
+
+Geometry (`shape`, `x, y, w, h, angle`, `points`, `area_px`) is always `imagery.shapes`' answer, on
+every write that changes it, so `area_px` and box/rbox never go stale.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from app.catalogue import service as catalogue_service
 from app.datasets.empties import clear_mark_for_ground_truth
-from app.db.models import Box, Image, QueryRun
+from app.db.models import Box, Image, ProjectType, QueryRun
 from app.detect.counts import Entry, apply_transition
 from app.errors import AppError, not_found
-from app.findings import annotations, trash
+from app.findings import annotations as hooks
+from app.findings import trash
 from app.findings.annotations import GROUND_TRUTH
-from app.geometry import centre_of, normalise_angle
+from app.imagery import shapes, summary
 from app.projects.service import ProjectHandle
+
+PER_IMAGE_CAP = 5000
+
+
+@dataclass(frozen=True)
+class Written:
+    box: Box
+    finding_id: str | None
+    repaired: bool
 
 
 def _entry(row: Box) -> Entry:
@@ -52,36 +68,35 @@ def _image(s, image_id: str) -> Image:
     return image
 
 
-def _check_class(handle: ProjectHandle, s, class_id: str) -> None:
+def _check_type(handle: ProjectHandle, s, class_id: str, shape: str) -> None:
+    """In the project list and not archived (spec 8.2; R-BA6), and a defect type for a point."""
+    details = {"type_ids": [class_id]}
     if class_id not in {c["id"] for c in handle.row(s).classes or []}:
-        raise AppError("validation_error", f"unknown class {class_id!r}", 422)
+        raise AppError("unknown_type", f"unknown type {class_id!r}", 422, details)
+    if handle.catalogue is not None:
+        ref = catalogue_service.resolve_types(handle.catalogue, [class_id]).get(class_id)
+        if ref is not None and ref.archived:
+            raise AppError("unknown_type", f"type {ref.name!r} is archived", 422, details)
+    if shape == "point":
+        pt = s.get(ProjectType, class_id)
+        if pt is None or pt.kind != "defect":
+            raise AppError("point_needs_defect_type", "A point marker needs a defect type.", 422)
 
 
-def _check_bounds(image: Image, x: float, y: float, w: float, h: float, angle: float = 0.0) -> None:
-    """Angle 0 must lie fully inside the image; a rotated box only needs its centre inside.
-
-    The asymmetry is deliberate (spec 3.3). Forcing a rotated box's corners inside the image would
-    shrink or shove it every time the annotator rotated near an edge, and an object half out of
-    frame is exactly the case aerial frames are full of. Angle 0 keeps today's rule untouched so
-    no box that already exists changes meaning.
-    """
-    if w <= 0 or h <= 0:
-        raise AppError("validation_error", f"box ({x}, {y}, {w}, {h}) has a non-positive side", 422)
-    if angle:
-        cx, cy = centre_of(x, y, w, h)
-        if not (0 <= cx <= image.width and 0 <= cy <= image.height):
-            raise AppError(
-                "validation_error",
-                f"rotated box centre ({cx}, {cy}) is outside the {image.width}x{image.height} image",
-                422,
-            )
-        return
-    if x < 0 or y < 0 or x + w > image.width or y + h > image.height:
+def check_cap(s, image_id: str, adding: int = 1) -> None:
+    n = s.scalar(select(func.count()).select_from(Box).where(Box.image_id == image_id)) or 0
+    if n + adding > PER_IMAGE_CAP:
         raise AppError(
-            "validation_error",
-            f"box ({x}, {y}, {w}, {h}) does not lie inside the {image.width}x{image.height} image",
+            "too_many_annotations",
+            f"An image holds at most {PER_IMAGE_CAP} annotations; this one has {n}.",
             422,
+            {"limit": PER_IMAGE_CAP, "count": n},
         )
+
+
+def _finding_id(s, box_id: str) -> str | None:
+    f = hooks.finding_of(s, box_id)
+    return f.id if f is not None else None
 
 
 def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:
@@ -93,6 +108,53 @@ def list_boxes(handle: ProjectHandle, image_id: str) -> list[Box]:
         for r in rows:
             s.expunge(r)
     return rows
+
+
+def create_shape_in_session(
+    s,
+    handle: ProjectHandle,
+    image_id: str,
+    class_id: str,
+    *,
+    shape: str = "box",
+    x: float | None = None,
+    y: float | None = None,
+    w: float | None = None,
+    h: float | None = None,
+    angle: float = 0.0,
+    points: list[list[float]] | None = None,
+    assist: str | None = None,
+    query_run_id: str | None = None,
+) -> tuple[Box, bool]:
+    """A person-drawn shape in the caller's transaction, without the finding hook (`POST /findings`
+    draws through here and creates the finding itself). Returns the row and `repaired`.
+
+    The caller runs its hooks and then `summary.touch(s, image_id)`: the summary is touched after
+    the row change and the hooks (controller ruling), so it is not touched here.
+    """
+    image = _image(s, image_id)
+    _check_type(handle, s, class_id, shape)
+    fields = shapes.shape_fields(
+        image.width, image.height, shape=shape, x=x, y=y, w=w, h=h, angle=angle, points=points
+    )
+    check_cap(s, image_id)
+    now = datetime.now(UTC)
+    row = Box(
+        image_id=image_id,
+        class_id=class_id,
+        **fields.columns(),
+        assist=assist,
+        provenance_kind="person",
+        review_state="accepted",
+        reviewed_at=now,
+        updated_at=now,
+        query_run_id=query_run_id,
+    )
+    s.add(row)
+    _count_transition(s, {}, query_run_id, None, _entry(row))
+    clear_mark_for_ground_truth(s, [image_id])
+    s.flush()
+    return row, fields.repaired
 
 
 def create_box_in_session(
@@ -107,29 +169,13 @@ def create_box_in_session(
     angle: float = 0.0,
     query_run_id: str | None = None,
 ) -> Box:
-    """A person-drawn box in the caller's transaction, without the finding hook: `POST /findings`
-    draws its box through here and creates the finding itself."""
-    image = _image(s, image_id)
-    _check_class(handle, s, class_id)
-    angle = normalise_angle(angle)
-    _check_bounds(image, x, y, w, h, angle)
-    row = Box(
-        image_id=image_id,
-        class_id=class_id,
-        x=x,
-        y=y,
-        w=w,
-        h=h,
-        angle=angle,
-        provenance_kind="person",
-        review_state="accepted",
-        reviewed_at=datetime.now(UTC),
-        query_run_id=query_run_id,
+    """F's `POST /findings` entry (signature unchanged): a rectangle, with its shape and area from
+    `shapes`. F runs no box hook on this path (it creates the finding itself), so the summary is
+    touched here, after the row change."""
+    row, _ = create_shape_in_session(
+        s, handle, image_id, class_id, x=x, y=y, w=w, h=h, angle=angle, query_run_id=query_run_id
     )
-    s.add(row)
-    _count_transition(s, {}, query_run_id, None, _entry(row))
-    clear_mark_for_ground_truth(s, [image_id])
-    s.flush()
+    summary.touch(s, image_id)
     return row
 
 
@@ -137,44 +183,93 @@ def create_box(
     handle: ProjectHandle,
     image_id: str,
     class_id: str,
-    x: float,
-    y: float,
-    w: float,
-    h: float,
+    x: float | None = None,
+    y: float | None = None,
+    w: float | None = None,
+    h: float | None = None,
     angle: float = 0.0,
     query_run_id: str | None = None,
-) -> Box:
-    """A person-drawn box; with `query_run_id` it is a missed object added to that photo run and
-    counts in it as verified. On a defect type it is also an open finding."""
+    *,
+    shape: str = "box",
+    points: list[list[float]] | None = None,
+    assist: str | None = None,
+) -> Written:
+    """A person-drawn shape; with `query_run_id` a missed object added to that photo run (counted as
+    verified). On a defect type it is also an open finding, whose id is returned."""
     with handle.session() as s:
-        row = create_box_in_session(s, handle, image_id, class_id, x, y, w, h, angle, query_run_id)
-        annotations.on_box_created(s, handle.id, handle.catalogue, row)
+        row, repaired = create_shape_in_session(
+            s,
+            handle,
+            image_id,
+            class_id,
+            shape=shape,
+            x=x,
+            y=y,
+            w=w,
+            h=h,
+            angle=angle,
+            points=points,
+            assist=assist,
+            query_run_id=query_run_id,
+        )
+        hooks.on_box_created(s, handle.id, handle.catalogue, row)
         s.flush()
+        summary.touch(s, image_id)
+        fid = _finding_id(s, row.id)
         s.expunge(row)
-    return row
+    return Written(row, fid, repaired)
 
 
-def update_box(handle: ProjectHandle, box_id: str, *, confirm_finding_delete: bool = False, **fields) -> Box:
+_RECT_KEYS = ("x", "y", "w", "h", "angle")
+
+
+def _new_geometry(image: Image, row: Box, fields: dict) -> shapes.ShapeFields | None:
+    """The row's new geometry from a PATCH (R-BA4), or None when the geometry is not touched.
+    Pops the geometry keys from `fields`; the shape itself never changes (box <-> rbox follows the
+    angle)."""
+    if row.shape == "polygon":
+        if any(k in fields for k in _RECT_KEYS):
+            raise shapes.invalid_shape("a polygon moves by its points")
+        if "points" not in fields:
+            return None
+        return shapes.polygon_fields(image.width, image.height, fields.pop("points"))
+    if "points" in fields:
+        raise shapes.invalid_shape(f"a {row.shape} takes no points")
+    if row.shape == "point":
+        if any(k in fields for k in ("w", "h", "angle")):
+            raise shapes.invalid_shape("a point takes x and y only")
+        if "x" not in fields and "y" not in fields:
+            return None
+        return shapes.point_fields(image.width, image.height, fields.pop("x", row.x), fields.pop("y", row.y))
+    moved = {k: fields.pop(k, getattr(row, k)) for k in _RECT_KEYS}
+    return shapes.rect_fields(image.width, image.height, **moved)  # always re-checked (today's rule)
+
+
+def update_box(
+    handle: ProjectHandle, box_id: str, *, confirm_finding_delete: bool = False, **fields
+) -> Written:
     with handle.session() as s:
         row = s.get(Box, box_id)
         if row is None:
             raise not_found("box", box_id)
-        if "class_id" in fields:
-            _check_class(handle, s, fields["class_id"])
-        if "angle" in fields:
-            fields["angle"] = normalise_angle(fields["angle"])
-        moved = {k: fields.get(k, getattr(row, k)) for k in ("x", "y", "w", "h", "angle")}
-        _check_bounds(_image(s, row.image_id), **moved)
+        # Only a real retype is judged: a box on a since-archived type must stay movable.
+        if "class_id" in fields and fields["class_id"] != row.class_id:
+            _check_type(handle, s, fields["class_id"], row.shape)
+        geometry = _new_geometry(_image(s, row.image_id), row, fields)
         old = _entry(row)
         old_class_id = row.class_id
-        for k, v in fields.items():
+        for k, v in fields.items():  # only class_id is left
             setattr(row, k, v)
+        if geometry is not None:
+            for k, v in geometry.columns().items():
+                setattr(row, k, v)
+        row.updated_at = datetime.now(UTC)
         if row.review_state not in GROUND_TRUTH:  # editing a proposal is a review decision
             row.review_state = "edited"
-            row.reviewed_at = datetime.now(UTC)
+            row.reviewed_at = row.updated_at
             clear_mark_for_ground_truth(s, [row.image_id])
         _count_transition(s, {}, row.query_run_id, old, _entry(row))
-        trashed = annotations.on_box_changed(
+        trashed = hooks.on_box_changed(
             s,
             handle.id,
             handle.catalogue,
@@ -183,9 +278,11 @@ def update_box(handle: ProjectHandle, box_id: str, *, confirm_finding_delete: bo
             previous_class_id=old_class_id,
         )
         s.flush()
+        summary.touch(s, row.image_id)
+        fid = _finding_id(s, row.id)
         s.expunge(row)
     trash.move(handle, trashed)
-    return row
+    return Written(row, fid, bool(geometry and geometry.repaired))
 
 
 def reclass_in_session(s, box_id: str, class_id: str) -> None:
@@ -196,14 +293,19 @@ def reclass_in_session(s, box_id: str, class_id: str) -> None:
         return
     old = _entry(row)
     row.class_id = class_id
+    row.updated_at = datetime.now(UTC)
     _count_transition(s, {}, row.query_run_id, old, _entry(row))
+    summary.touch(s, row.image_id)
 
 
 def delete_box_in_session(s, row: Box) -> None:
     """The box and its run count, without the finding hook: a finding delete calls this after it has
     removed itself."""
+    image_id = row.image_id
     _count_transition(s, {}, row.query_run_id, _entry(row), None)
     s.delete(row)
+    s.flush()
+    summary.touch(s, image_id)
 
 
 def delete_box(handle: ProjectHandle, box_id: str) -> None:
@@ -211,7 +313,7 @@ def delete_box(handle: ProjectHandle, box_id: str) -> None:
         row = s.get(Box, box_id)
         if row is None:
             raise not_found("box", box_id)
-        trashed = annotations.on_box_deleting(s, handle.id, row)
+        trashed = hooks.on_box_deleting(s, handle.id, row)
         delete_box_in_session(s, row)
     trash.move(handle, trashed)
 
@@ -249,9 +351,9 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
                 if action == "accept":
                     accepted_image_ids.add(row.image_id)
             _count_transition(s, runs, row.query_run_id, old, _entry(row))
-            trashed += annotations.on_box_changed(s, handle.id, handle.catalogue, row, accepted=new_findings)
+            trashed += hooks.on_box_changed(s, handle.id, handle.catalogue, row, accepted=new_findings)
             changed += 1
         clear_mark_for_ground_truth(s, accepted_image_ids)
-        annotations.record_accepted(s, new_findings)
+        hooks.record_accepted(s, new_findings)
     trash.move(handle, trashed)
     return changed

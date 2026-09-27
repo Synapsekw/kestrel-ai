@@ -4,7 +4,15 @@ kept box routes here from `app/datasets/router.py` and replaces the measurement 
 from fastapi import APIRouter, Depends, Query
 
 from app.imagery import annotations
-from app.imagery.schemas import BoxCreate, BoxList, BoxOut, BoxReview, BoxReviewResult, BoxUpdate
+from app.imagery.schemas import (
+    BoxCreate,
+    BoxList,
+    BoxOut,
+    BoxReview,
+    BoxReviewResult,
+    BoxUpdate,
+    BoxWriteResult,
+)
 from app.projects.service import ProjectHandle, get_project
 from app.stubs import add_stubs
 
@@ -24,31 +32,39 @@ def list_boxes(imageId: str, handle: ProjectHandle = Depends(get_project)) -> Bo
     return BoxList(items=[BoxOut.from_row(b) for b in annotations.list_boxes(handle, imageId)])
 
 
-@router.post("/images/{imageId}/boxes", response_model=BoxOut, status_code=201)
+@router.post("/images/{imageId}/boxes", response_model=BoxWriteResult, status_code=201)
 def create_box(
     imageId: str,  # noqa: N803
     body: BoxCreate,
     handle: ProjectHandle = Depends(get_project),
-) -> BoxOut:
-    row = annotations.create_box(handle, imageId, body.class_id, body.x, body.y, body.w, body.h, body.angle)
-    return BoxOut.from_row(row)
+) -> BoxWriteResult:
+    w = annotations.create_box(
+        handle,
+        imageId,
+        body.class_id,
+        body.x,
+        body.y,
+        body.w,
+        body.h,
+        body.angle,
+        shape=body.shape,
+        points=body.points,
+        assist=body.assist,
+    )
+    return BoxWriteResult.from_written(w)
 
 
-@router.patch("/boxes/{boxId}", response_model=BoxOut)
+@router.patch("/boxes/{boxId}", response_model=BoxWriteResult)
 def update_box(
     boxId: str,  # noqa: N803
     body: BoxUpdate,
     confirm_finding_delete: bool = Query(False),
     handle: ProjectHandle = Depends(get_project),
-) -> BoxOut:
-    return BoxOut.from_row(
-        annotations.update_box(
-            handle,
-            boxId,
-            confirm_finding_delete=confirm_finding_delete,
-            **body.model_dump(exclude_unset=True),
-        )
+) -> BoxWriteResult:
+    w = annotations.update_box(
+        handle, boxId, confirm_finding_delete=confirm_finding_delete, **body.model_dump(exclude_unset=True)
     )
+    return BoxWriteResult.from_written(w)
 
 
 @router.delete("/boxes/{boxId}", status_code=204)

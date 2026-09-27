@@ -345,7 +345,7 @@ def test_a_box_drawn_into_a_photo_run_counts_as_verified(handle, photo_run, cls)
 
 def test_boxes_outside_a_run_leave_run_counts_alone(handle, photo_run, cls):
     before = _query_counts(handle)[0]
-    box = boxes.create_box(handle, "i1", cls[0], 50, 50, 10, 10)
+    box = boxes.create_box(handle, "i1", cls[0], 50, 50, 10, 10).box
     boxes.update_box(handle, box.id, class_id=cls[1])
     boxes.delete_box(handle, box.id)
     assert _query_counts(handle)[0] == before

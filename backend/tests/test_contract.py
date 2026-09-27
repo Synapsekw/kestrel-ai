@@ -91,7 +91,6 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Images I-C0 stubs; each unit deletes its lines.
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
     "listImageMeasurements",  # I-BA
@@ -136,9 +135,6 @@ BACKEND_PENDING: dict[str, str] = {
     "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
-    "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at
-    "createBox": "I-BA",  # BoxWriteResult; BoxCreate shapes
-    "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
     "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.

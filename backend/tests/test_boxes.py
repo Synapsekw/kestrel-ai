@@ -66,7 +66,7 @@ def test_create_box_is_person_drawn_and_accepted(client, labelled):
 
 def test_create_box_rejects_out_of_bounds_and_unknown_class(client, labelled):
     outside = _create(client, labelled, x=300, y=10, w=40, h=10)  # 300 + 40 > 320
-    assert outside.status_code == 422 and outside.json()["error"]["code"] == "validation_error"
+    assert outside.status_code == 422 and outside.json()["error"]["code"] == "out_of_bounds"
     assert _create(client, labelled, y=200, h=100).status_code == 422  # 200 + 100 > 240
     assert _create(client, labelled, class_id="no-such-class").status_code == 422
     assert _create(client, labelled, x=-1).status_code == 422  # contract minimum
