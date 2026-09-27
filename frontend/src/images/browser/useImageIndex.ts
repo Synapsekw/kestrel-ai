@@ -80,23 +80,38 @@ export function useImageIndex(projectId: string, filters: BrowserFilterState): I
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [tick, setTick] = useState(0);
   const seq = useRef(0);
+  // The newest read issued, the newest answer applied, and the key whose answer is on screen. An
+  // answer applies when it is newer than the applied one and for the newest key: a same-key
+  // background re-read never discards a foreground answer still in flight, while a stale answer of
+  // another filter is still dropped. Failures never advance `appliedSeq`, so a slower success of
+  // the same key still lands.
+  const latestKey = useRef<string | null>(null);
+  const appliedSeq = useRef(0);
+  const shownKey = useRef<string | null>(null);
   const handledRevision = useRef(revision);
 
   const read = useCallback(
     (background: boolean) => {
       const mine = ++seq.current;
+      latestKey.current = key;
       const query = JSON.parse(queryJson) as ImageIndexQuery;
+      const live = () => mine > appliedSeq.current && latestKey.current === key;
       fetchImageIndex(api, projectId, query).then(
         (r) => {
-          if (mine === seq.current)
-            setLoaded({ key, projectId, data: toIndexData(r), error: null, errorCode: null });
+          if (!live()) return;
+          appliedSeq.current = mine;
+          shownKey.current = key;
+          setLoaded({ key, projectId, data: toIndexData(r), error: null, errorCode: null });
         },
         (e: unknown) => {
-          if (mine !== seq.current) return;
-          if (background) {
+          if (!live()) return;
+          // A failed refresh keeps the arrays on screen; with nothing shown for this key yet, it
+          // is the answer.
+          if (background && shownKey.current === key) {
             pushLog(`image index refresh failed: ${messageOf(e, String(e))}`);
             return;
           }
+          if (shownKey.current === key) shownKey.current = null;
           setLoaded({
             key,
             projectId,

@@ -123,6 +123,52 @@ describe("useImageIndex", () => {
     expect(indexCalls()).toHaveLength(2);
   });
 
+  /** The first index read waits for `gate.open()`; the second (the refresh) fails at once. */
+  function slowFirstThenFailingRefresh() {
+    const gate: { open?: () => void } = {};
+    const slow = new Promise<void>((r) => (gate.open = r));
+    let calls = 0;
+    const { api } = fakeClient([{ method: "GET", path: INDEX, body: makeIndexResponse(4) }]);
+    const { api: failing } = fakeClient([
+      { method: "GET", path: INDEX, status: 500, body: errorBody("internal", "boom") },
+    ]);
+    const delayed = {
+      ...api,
+      GET: (async (path: IndexPath, init: IndexGetInit) => {
+        calls += 1;
+        if (calls > 1) return failing.GET(path, { ...init });
+        await slow;
+        return api.GET(path, { ...init });
+      }) as typeof api.GET,
+    };
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <TestApiProvider api={delayed}>{children}</TestApiProvider>
+    );
+    return { wrapper, gate, calls: () => calls };
+  }
+
+  it("a failed same-key refresh does not discard the first answer still in flight", async () => {
+    const { wrapper, gate, calls } = slowFirstThenFailingRefresh();
+    const { result } = renderHook(() => useImageIndex(PROJECT_ID, DEFAULT_BROWSER_FILTERS), { wrapper });
+    act(() => useChangesStore.getState().bumpImages());
+    await waitFor(() => expect(calls()).toBe(2), { timeout: 2000 });
+    await act(async () => {
+      gate.open?.();
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    expect(result.current.total).toBe(4);
+  });
+
+  it("a failed refresh with nothing on screen for the filter is an error, not endless loading", async () => {
+    const { wrapper, calls } = slowFirstThenFailingRefresh();
+    const { result } = renderHook(() => useImageIndex(PROJECT_ID, DEFAULT_BROWSER_FILTERS), { wrapper });
+    act(() => useChangesStore.getState().bumpImages());
+    await waitFor(() => expect(calls()).toBe(2), { timeout: 2000 });
+    await waitFor(() => expect(result.current.status).toBe("error"));
+    expect(result.current.error).toBeTruthy();
+  });
+
   it("reports too_many_images with its code", async () => {
     const { wrapper } = setup([
       {
