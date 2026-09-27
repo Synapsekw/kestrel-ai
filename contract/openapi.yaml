@@ -65,6 +65,8 @@ tags:
   - name: sources
   - name: images
   - name: boxes
+  - name: image-detect
+  - name: assist
   - name: datasets
   - name: models
   - name: library
@@ -638,6 +640,261 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
 
+  # ------------------------------------------------------------ images (I-C0)
+  /api/v1/projects/{projectId}/images/index:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [images]
+      operationId: getImageIndex
+      summary: The browser's columnar index, one request per filter change (image inspection spec §7.1).
+      parameters:
+        - { name: source_id, in: query, schema: { type: string } }
+        - $ref: "#/components/parameters/imageHasFindings"
+        - $ref: "#/components/parameters/imageSeverity"
+        - $ref: "#/components/parameters/imageFindingStatus"
+        - $ref: "#/components/parameters/imageTypeIds"
+        - $ref: "#/components/parameters/imageHasSuggestions"
+        - $ref: "#/components/parameters/imageReviewed"
+        - $ref: "#/components/parameters/imageUnlabeled"
+        - { name: search, in: query, description: case-insensitive substring of the image path, schema: { type: string } }
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [path, source_id, group_key, labeled, box_count, pending_count, max_pending_confidence, capture_time, created_at, worst_severity]
+            default: path
+        - name: order
+          in: query
+          schema: { type: string, enum: [asc, desc], default: asc }
+        - { name: fields, in: query, description: "`geo` adds `lon` and `lat`", schema: { type: string, enum: [geo] } }
+      responses:
+        "200":
+          description: the index
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageIndex" }
+        "422":
+          description: "more than 100,000 images match (`code` is `too_many_images`); filter by source"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/metadata-refresh:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [images]
+      operationId: refreshImageMetadata
+      summary: |
+        Queue the `image_metadata` job: re-read camera metadata (XMP, EXIF intrinsics) from each
+        image's original and recompute its footprint (spec §7.3). Idempotent through the metadata
+        version; an image whose original is missing or ambiguous keeps its EXIF-only metadata.
+      responses:
+        "202":
+          description: "the job; when it succeeds its `result` is `{images, updated, skipped}`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "an `image_metadata` job is already queued or running (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/image-summary/rebuild:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [images]
+      operationId: rebuildImageSummary
+      summary: Queue the `summary_rebuild` repair job, which recomputes every image's annotation summary.
+      responses:
+        "202":
+          description: "the job; when it succeeds its `result` is `{images}`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "a `summary_rebuild` job is already queued or running (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/measurements:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    get:
+      tags: [images]
+      operationId: listImageMeasurements
+      summary: The image's length measurements (at most 500), each with its length computed now.
+      responses:
+        "200":
+          description: measurements
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageMeasurementList" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [images]
+      operationId: createImageMeasurement
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImageMeasurementCreate" }
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImageMeasurement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "an end outside the image (`out_of_bounds`) or the image already has 500 (`too_many_measurements`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/image-measurements/{imageMeasurementId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageMeasurementId"
+    delete:
+      tags: [images]
+      operationId: deleteImageMeasurement
+      responses:
+        "204":
+          description: deleted
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/detect:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    post:
+      tags: [image-detect]
+      operationId: detectImage
+      summary: |
+        Run one library model on one image synchronously (spec §11.2): tiled when the long side
+        exceeds twice the inference size (at most 64 tiles), on the GPU after at most a 2 s wait,
+        else on the CPU. Replaces the model's earlier unreviewed suggestions on the image.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DetectRequest" }
+      responses:
+        "200":
+          description: the suggestions now on the image
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DetectResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the model's weights file is missing (`code` is `model_unavailable`), checked before any work"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`unmapped_classes` (details `{model_id, unmapped}`), or `validation_error` for a malformed body"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnmappedClassesError" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/detect-batch:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [image-detect]
+      operationId: detectImageBatch
+      summary: Create a detection run over a scope of images and queue the `infer` job (spec §11.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DetectBatchRequest" }
+      responses:
+        "202":
+          description: the run and its job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QueryRunWithJob" }
+        "409":
+          description: "the model's weights file is missing (`code` is `model_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "`unmapped_classes`, `model_or_provider_required`, `query_required`, `no_images` (the scope matched none), `too_many_images`, or `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnmappedClassesError" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/segment/prepare:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    post:
+      tags: [assist]
+      operationId: prepareImageSegment
+      summary: Warm the smart-polygon embedding for a crop (spec §10), so the first click answers fast.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SegmentPrepareRequest" }
+      responses:
+        "200":
+          description: the embedding is resident
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SegmentPrepared" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the smart-polygon weights are missing or failed their check (`code` is `assist_model_missing`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/images/{imageId}/segment:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/imageId"
+    post:
+      tags: [assist]
+      operationId: segmentImage
+      summary: One smart-polygon prompt with every click so far (spec §10); the best mask's outline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SegmentRequest" }
+      responses:
+        "200":
+          description: the outline, or null when nothing was found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SegmentResult" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the smart-polygon weights are missing or failed their check (`code` is `assist_model_missing`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a click outside the crop (`code` is `points_outside_crop`), or `validation_error` for a malformed body"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+
   # ------------------------------------------------------------ model adoption
   /api/v1/projects/{projectId}/adoption:
     parameters:
@@ -924,6 +1181,64 @@ paths:
               schema: { $ref: "#/components/schemas/JobRef" }
         "404":
           description: no such starter model (`code` is `not_found`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/assist-models:
+    get:
+      tags: [assist]
+      operationId: listAssistModels
+      summary: The assist model catalogue (the smart-polygon model) and whether each is on this machine.
+      responses:
+        "200":
+          description: the catalogue
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AssistModelPage" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/assist-models/{key}/acquire:
+    parameters:
+      - $ref: "#/components/parameters/assistModelKey"
+    post:
+      tags: [assist]
+      operationId: acquireAssistModel
+      summary: Download the model's weights through an `assist_acquire` library job and check their sha256.
+      responses:
+        "202":
+          description: "the job; when it succeeds its `result` is `{key}`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "an `assist_acquire` job for this key is already queued or running (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503": { $ref: "#/components/responses/LibraryUnavailable" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/library/assist-models/{key}/import:
+    parameters:
+      - $ref: "#/components/parameters/assistModelKey"
+    post:
+      tags: [assist]
+      operationId: importAssistModel
+      summary: Import the weights from a local file (air-gapped machines) through an `assist_acquire` library job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AssistModelImport" }
+      responses:
+        "202":
+          description: "the job; when it succeeds its `result` is `{key}`; a file whose sha256 does not match fails the job"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "404":
+          description: "`path` is not absolute or does not exist (`code` is `not_found`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -4358,6 +4673,17 @@ components:
       in: query
       description: true = no ground truth and not marked empty (the same test as `labeled=false`)
       schema: { type: boolean }
+    imageMeasurementId:
+      name: imageMeasurementId
+      in: path
+      required: true
+      description: an image length measurement; `measurementId` is a volume measurement
+      schema: { type: string }
+    assistModelKey:
+      name: key
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/AssistModelKey" }
     octreeFile:
       name: octreeFile
       in: path
@@ -5326,6 +5652,269 @@ components:
         updated_at: "2026-09-17T10:45:00Z"
         repaired: false
         finding_id: null
+
+    # ------------------------------------------------------------ images (I-C0)
+    ImageIndex:
+      type: object
+      description: >-
+        One entry per image matching the filters, in sort order, as parallel arrays (image
+        inspection spec §7.1). At most 100,000 rows; above that the request answers 422
+        `too_many_images`. Cell details come from `listImages?ids=` for the visible window.
+      required: [total, ids, sev, count, flags]
+      properties:
+        total: { type: integer, minimum: 0 }
+        ids: { type: array, items: { type: string } }
+        sev: { type: array, items: { type: integer, minimum: 0, maximum: 9 }, description: "worst severity of the image's findings that are not `closed`; 0 when none" }
+        count: { type: array, items: { type: integer, minimum: 0 }, description: "the image's findings that are not `closed`" }
+        flags: { type: array, items: { type: integer, minimum: 0, maximum: 15 }, description: "bits: 1 reviewed, 2 pending suggestions, 4 has GPS, 8 marked empty" }
+        lon: { type: array, items: { type: [number, "null"] }, description: "only with `fields=geo`" }
+        lat: { type: array, items: { type: [number, "null"] }, description: "only with `fields=geo`" }
+      example:
+        total: 3
+        ids: ["10000000-5555-4000-8000-000000000001", "10000000-5555-4000-8000-000000000002", "10000000-5555-4000-8000-000000000003"]
+        sev: [4, 0, 2]
+        count: [5, 0, 1]
+        flags: [5, 8, 6]
+    ImageFilter:
+      type: object
+      description: the browser's filters as a body, with the same meaning as `getImageIndex`'s query parameters
+      properties:
+        source_id: { type: string }
+        has_findings: { type: boolean }
+        severity: { type: array, uniqueItems: true, items: { type: integer, minimum: 1, maximum: 9 } }
+        finding_status: { type: array, uniqueItems: true, items: { $ref: "#/components/schemas/FindingStatus" } }
+        type_ids: { type: array, items: { type: string } }
+        has_suggestions: { type: boolean }
+        reviewed: { type: boolean }
+        unlabeled: { type: boolean }
+        search: { type: string }
+      example: { source_id: "50000000-3333-4000-8000-000000000001", has_suggestions: true }
+    ImageMeasurement:
+      type: object
+      description: "a length drawn on an image; the length is computed on read, so it follows later distance changes (spec §9.3)"
+      required: [id, image_id, x1, y1, x2, y2, label, created_at, length_px, length_mm, sigma_mm]
+      properties:
+        id: { type: string }
+        image_id: { type: string }
+        x1: { type: number }
+        y1: { type: number }
+        x2: { type: number }
+        y2: { type: number }
+        label: { type: string }
+        created_at: { type: string, format: date-time }
+        length_px: { type: number, minimum: 0 }
+        length_mm: { type: [number, "null"], description: from the image's current GSD; null when no distance is known }
+        sigma_mm: { type: [number, "null"], description: "one standard deviation of `length_mm`" }
+      example:
+        id: "e0000000-1313-4000-8000-000000000001"
+        image_id: "10000000-5555-4000-8000-000000000001"
+        x1: 1200.0
+        y1: 800.0
+        x2: 1240.0
+        y2: 830.0
+        label: "crack width"
+        created_at: "2026-09-27T09:00:00Z"
+        length_px: 50.0
+        length_mm: 90.0
+        sigma_mm: 4.0
+    ImageMeasurementCreate:
+      type: object
+      required: [x1, y1, x2, y2]
+      description: "both ends inside the image (422 `out_of_bounds`); at most 500 per image (422 `too_many_measurements`)"
+      properties:
+        x1: { type: number }
+        y1: { type: number }
+        x2: { type: number }
+        y2: { type: number }
+        label: { type: string, maxLength: 200, description: empty when absent }
+      example: { x1: 1200, y1: 800, x2: 1240, y2: 830, label: "crack width" }
+    ImageMeasurementList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, maxItems: 500, items: { $ref: "#/components/schemas/ImageMeasurement" } }
+      example:
+        items:
+          - id: "e0000000-1313-4000-8000-000000000001"
+            image_id: "10000000-5555-4000-8000-000000000001"
+            x1: 1200.0
+            y1: 800.0
+            x2: 1240.0
+            y2: 830.0
+            label: "crack width"
+            created_at: "2026-09-27T09:00:00Z"
+            length_px: 50.0
+            length_mm: 90.0
+            sigma_mm: 4.0
+    ComputeDevice:
+      type: string
+      enum: [cuda, cpu]
+    DetectRequest:
+      type: object
+      required: [model_id]
+      properties:
+        model_id: { type: string, description: "a library model whose task is detect, obb or segment" }
+        conf: { type: number, minimum: 0, maximum: 1, description: confidence threshold; 0.25 when absent }
+        imgsz: { type: integer, minimum: 320, maximum: 6400, description: "inference size; the model's training size when absent" }
+      example: { model_id: "m0000000-2222-4000-8000-000000000001", conf: 0.25 }
+    DetectResult:
+      type: object
+      required: [model_id, suggestions, new, already_covered, device, elapsed_ms]
+      properties:
+        model_id: { type: string }
+        suggestions:
+          type: array
+          description: "this model's unreviewed suggestions now on the image; its earlier ones were replaced"
+          items: { $ref: "#/components/schemas/Box" }
+        new: { type: integer, minimum: 0 }
+        already_covered: { type: integer, minimum: 0, description: "dropped because an accepted annotation of the same type overlaps at IoU >= 0.5" }
+        device: { $ref: "#/components/schemas/ComputeDevice" }
+        elapsed_ms: { type: integer, minimum: 0 }
+      example:
+        model_id: "m0000000-2222-4000-8000-000000000001"
+        suggestions: []
+        new: 2
+        already_covered: 5
+        device: cuda
+        elapsed_ms: 840
+    DetectBatchScope:
+      description: which images; a filter is resolved to image ids when the run is created
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required: [image_ids]
+          properties:
+            image_ids: { type: array, minItems: 1, maxItems: 100000, items: { type: string } }
+        - type: object
+          additionalProperties: false
+          required: [source_id]
+          properties:
+            source_id: { type: string }
+        - type: object
+          additionalProperties: false
+          required: [filter]
+          properties:
+            filter: { $ref: "#/components/schemas/ImageFilter" }
+    DetectBatchRequest:
+      type: object
+      required: [kind, scope]
+      properties:
+        kind: { $ref: "#/components/schemas/QueryRunKind" }
+        model_id: { type: string, description: "a library model id; required for local_model" }
+        provider: { $ref: "#/components/schemas/ProviderName" }
+        query: { type: string, minLength: 1, description: required for cloud_provider }
+        conf: { type: number, minimum: 0, maximum: 1, description: 0.25 when absent }
+        tiling: { $ref: "#/components/schemas/Tiling" }
+        scope: { $ref: "#/components/schemas/DetectBatchScope" }
+      example: { kind: local_model, model_id: "m0000000-2222-4000-8000-000000000001", conf: 0.25, scope: { source_id: "50000000-3333-4000-8000-000000000001" } }
+    SegmentCrop:
+      type: object
+      description: "the viewport in stored-image pixels; the server enlarges it to at least 512 px a side, clips it to the image and snaps it to 64 px, and answers with the crop it used"
+      required: [x, y, w, h]
+      properties:
+        x: { type: integer, minimum: 0 }
+        y: { type: integer, minimum: 0 }
+        w: { type: integer, minimum: 1 }
+        h: { type: integer, minimum: 1 }
+      example: { x: 1024, y: 640, w: 1024, h: 768 }
+    SegmentPoint:
+      type: object
+      required: [x, y, positive]
+      properties:
+        x: { type: number, description: stored-image pixels }
+        y: { type: number }
+        positive: { type: boolean, description: false for a point that marks background }
+    SegmentPrepareRequest:
+      type: object
+      required: [crop]
+      properties:
+        crop: { $ref: "#/components/schemas/SegmentCrop" }
+      example: { crop: { x: 1024, y: 640, w: 1024, h: 768 } }
+    SegmentPrepared:
+      type: object
+      required: [crop, device, encode_ms, cached]
+      properties:
+        crop: { $ref: "#/components/schemas/SegmentCrop" }
+        device: { $ref: "#/components/schemas/ComputeDevice" }
+        encode_ms: { type: integer, minimum: 0 }
+        cached: { type: boolean, description: the embedding for this crop was already resident }
+      example: { crop: { x: 1024, y: 640, w: 1024, h: 768 }, device: cuda, encode_ms: 132, cached: false }
+    SegmentRequest:
+      type: object
+      required: [crop, points]
+      properties:
+        crop: { $ref: "#/components/schemas/SegmentCrop" }
+        points: { type: array, minItems: 1, maxItems: 64, description: every click so far, items: { $ref: "#/components/schemas/SegmentPoint" } }
+      example: { crop: { x: 1024, y: 640, w: 1024, h: 768 }, points: [{ x: 1400, y: 900, positive: true }] }
+    SegmentResult:
+      type: object
+      required: [polygon, score, device, encode_ms, decode_ms, crop]
+      properties:
+        polygon:
+          type: [array, "null"]
+          minItems: 3
+          maxItems: 256
+          description: "the best mask's outline in stored-image pixels; null when nothing was found"
+          items: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        score: { type: number }
+        device: { $ref: "#/components/schemas/ComputeDevice" }
+        encode_ms: { type: integer, minimum: 0, description: 0 when the embedding was cached }
+        decode_ms: { type: integer, minimum: 0 }
+        crop: { $ref: "#/components/schemas/SegmentCrop" }
+      example:
+        polygon: [[1380.0, 880.0], [1420.0, 880.0], [1420.0, 925.0], [1380.0, 925.0]]
+        score: 0.93
+        device: cuda
+        encode_ms: 0
+        decode_ms: 31
+        crop: { x: 1024, y: 640, w: 1024, h: 768 }
+    AssistModelKey:
+      type: string
+      enum: [sam2.1_t]
+    AssistModel:
+      type: object
+      required: [key, name, description, size_mb, sha256, state, reason, job_id]
+      properties:
+        key: { $ref: "#/components/schemas/AssistModelKey" }
+        name: { type: string }
+        description: { type: string }
+        size_mb: { type: number, minimum: 0 }
+        sha256: { type: string, pattern: "^[0-9a-f]{64}$" }
+        state: { type: string, enum: [missing, ready, invalid, unavailable], description: "`invalid`: the file failed its sha256 check; `unavailable`: the SAM modules failed to import in this build (spec §16), so the tool is off whatever the file" }
+        reason: { type: [string, "null"], description: "why the state is not `ready`, in words the UI shows; null when ready" }
+        job_id: { type: [string, "null"], description: the queued or running `assist_acquire` job }
+      example:
+        key: sam2.1_t
+        name: SAM 2.1 tiny
+        description: "Smart polygon: click an object and get its outline."
+        size_mb: 78.1
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+        state: missing
+        reason: "The smart-polygon model is not on this machine."
+        job_id: null
+    AssistModelPage:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/AssistModel" } }
+        next_cursor: { type: [string, "null"], description: "always null, the catalogue is one page" }
+      example:
+        items:
+          - key: sam2.1_t
+            name: SAM 2.1 tiny
+            description: "Smart polygon: click an object and get its outline."
+            size_mb: 78.1
+            sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+            state: missing
+            reason: "The smart-polygon model is not on this machine."
+            job_id: null
+        next_cursor: null
+    AssistModelImport:
+      type: object
+      required: [path]
+      properties:
+        path: { type: string, minLength: 1, description: "absolute path of a local weights file; it is hashed and copied into the library, never moved" }
+      example: { path: "D:\\offline\\sam2.1_t.pt" }
 
     SplitMethod:
       type: string

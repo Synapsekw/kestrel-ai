@@ -99,6 +99,34 @@ export type DatasetFilter = Schemas["DatasetFilter"];
 export type DatasetPreview = Schemas["DatasetPreview"];
 export type TrainingRun = Schemas["TrainingRun"];
 
+// Images (plan 2026-09-27-images-c0)
+export type ImageDetail = Schemas["ImageDetail"];
+export type ImageCamera = Schemas["ImageCamera"];
+export type ImageFootprintKind = Schemas["ImageFootprintKind"];
+export type ImageIndex = Schemas["ImageIndex"];
+export type ImageFilter = Schemas["ImageFilter"];
+export type BoxShape = Schemas["BoxShape"];
+export type BoxWriteResult = Schemas["BoxWriteResult"];
+export type BoxReviewResult = Schemas["BoxReviewResult"];
+export type ImageMeasurement = Schemas["ImageMeasurement"];
+export type ImageMeasurementCreate = Schemas["ImageMeasurementCreate"];
+export type ImageMeasurementList = Schemas["ImageMeasurementList"];
+export type ComputeDevice = Schemas["ComputeDevice"];
+export type DetectRequest = Schemas["DetectRequest"];
+export type DetectResult = Schemas["DetectResult"];
+export type DetectBatchRequest = Schemas["DetectBatchRequest"];
+export type DetectBatchScope = Schemas["DetectBatchScope"];
+export type SegmentCrop = Schemas["SegmentCrop"];
+export type SegmentPoint = Schemas["SegmentPoint"];
+export type SegmentPrepareRequest = Schemas["SegmentPrepareRequest"];
+export type SegmentPrepared = Schemas["SegmentPrepared"];
+export type SegmentRequest = Schemas["SegmentRequest"];
+export type SegmentResult = Schemas["SegmentResult"];
+export type AssistModel = Schemas["AssistModel"];
+export type AssistModelKey = Schemas["AssistModelKey"];
+export type AssistModelPage = Schemas["AssistModelPage"];
+export type AssistModelImport = Schemas["AssistModelImport"];
+
 export interface ApiClientOptions {
   /** Backend origin, e.g. http://127.0.0.1:8765 (no path). */
   baseUrl: string;

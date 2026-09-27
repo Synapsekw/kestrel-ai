@@ -387,6 +387,190 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/images/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** The browser's columnar index, one request per filter change (image inspection spec §7.1). */
+        get: operations["getImageIndex"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/metadata-refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Queue the `image_metadata` job: re-read camera metadata (XMP, EXIF intrinsics) from each
+         *     image's original and recompute its footprint (spec §7.3). Idempotent through the metadata
+         *     version; an image whose original is missing or ambiguous keeps its EXIF-only metadata.
+         */
+        post: operations["refreshImageMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/image-summary/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Queue the `summary_rebuild` repair job, which recomputes every image's annotation summary. */
+        post: operations["rebuildImageSummary"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/{imageId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        /** The image's length measurements (at most 500), each with its length computed now. */
+        get: operations["listImageMeasurements"];
+        put?: never;
+        post: operations["createImageMeasurement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/image-measurements/{imageMeasurementId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description an image length measurement; `measurementId` is a volume measurement */
+                imageMeasurementId: components["parameters"]["imageMeasurementId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteImageMeasurement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/{imageId}/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run one library model on one image synchronously (spec §11.2): tiled when the long side
+         *     exceeds twice the inference size (at most 64 tiles), on the GPU after at most a 2 s wait,
+         *     else on the CPU. Replaces the model's earlier unreviewed suggestions on the image.
+         */
+        post: operations["detectImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/detect-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a detection run over a scope of images and queue the `infer` job (spec §11.3). */
+        post: operations["detectImageBatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/{imageId}/segment/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Warm the smart-polygon embedding for a crop (spec §10), so the first click answers fast. */
+        post: operations["prepareImageSegment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/images/{imageId}/segment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** One smart-polygon prompt with every click so far (spec §10); the best mask's outline. */
+        post: operations["segmentImage"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/adoption": {
         parameters: {
             query?: never;
@@ -604,6 +788,61 @@ export interface paths {
          * @description Reuses bundled or cached weights; otherwise downloads the chosen asset. Progress and cancellation use the library jobs resource. The successful `job.result.model_id` identifies the library model.
          */
         post: operations["acquireStarterModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/assist-models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The assist model catalogue (the smart-polygon model) and whether each is on this machine. */
+        get: operations["listAssistModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/assist-models/{key}/acquire": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["parameters"]["assistModelKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Download the model's weights through an `assist_acquire` library job and check their sha256. */
+        post: operations["acquireAssistModel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/library/assist-models/{key}/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["parameters"]["assistModelKey"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Import the weights from a local file (air-gapped machines) through an `assist_acquire` library job. */
+        post: operations["importAssistModel"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4147,6 +4386,382 @@ export interface components {
             repaired: boolean;
             /** @description the annotation's finding (a person's annotation on a defect type creates one); null when it has none */
             finding_id: string | null;
+        };
+        /**
+         * @description One entry per image matching the filters, in sort order, as parallel arrays (image inspection spec §7.1). At most 100,000 rows; above that the request answers 422 `too_many_images`. Cell details come from `listImages?ids=` for the visible window.
+         * @example {
+         *       "total": 3,
+         *       "ids": [
+         *         "10000000-5555-4000-8000-000000000001",
+         *         "10000000-5555-4000-8000-000000000002",
+         *         "10000000-5555-4000-8000-000000000003"
+         *       ],
+         *       "sev": [
+         *         4,
+         *         0,
+         *         2
+         *       ],
+         *       "count": [
+         *         5,
+         *         0,
+         *         1
+         *       ],
+         *       "flags": [
+         *         5,
+         *         8,
+         *         6
+         *       ]
+         *     }
+         */
+        ImageIndex: {
+            total: number;
+            ids: string[];
+            /** @description worst severity of the image's findings that are not `closed`; 0 when none */
+            sev: number[];
+            /** @description the image's findings that are not `closed` */
+            count: number[];
+            /** @description bits: 1 reviewed, 2 pending suggestions, 4 has GPS, 8 marked empty */
+            flags: number[];
+            /** @description only with `fields=geo` */
+            lon?: (number | null)[];
+            /** @description only with `fields=geo` */
+            lat?: (number | null)[];
+        };
+        /**
+         * @description the browser's filters as a body, with the same meaning as `getImageIndex`'s query parameters
+         * @example {
+         *       "source_id": "50000000-3333-4000-8000-000000000001",
+         *       "has_suggestions": true
+         *     }
+         */
+        ImageFilter: {
+            source_id?: string;
+            has_findings?: boolean;
+            severity?: number[];
+            finding_status?: components["schemas"]["FindingStatus"][];
+            type_ids?: string[];
+            has_suggestions?: boolean;
+            reviewed?: boolean;
+            unlabeled?: boolean;
+            search?: string;
+        };
+        /**
+         * @description a length drawn on an image; the length is computed on read, so it follows later distance changes (spec §9.3)
+         * @example {
+         *       "id": "e0000000-1313-4000-8000-000000000001",
+         *       "image_id": "10000000-5555-4000-8000-000000000001",
+         *       "x1": 1200,
+         *       "y1": 800,
+         *       "x2": 1240,
+         *       "y2": 830,
+         *       "label": "crack width",
+         *       "created_at": "2026-09-27T09:00:00Z",
+         *       "length_px": 50,
+         *       "length_mm": 90,
+         *       "sigma_mm": 4
+         *     }
+         */
+        ImageMeasurement: {
+            id: string;
+            image_id: string;
+            x1: number;
+            y1: number;
+            x2: number;
+            y2: number;
+            label: string;
+            /** Format: date-time */
+            created_at: string;
+            length_px: number;
+            /** @description from the image's current GSD; null when no distance is known */
+            length_mm: number | null;
+            /** @description one standard deviation of `length_mm` */
+            sigma_mm: number | null;
+        };
+        /**
+         * @description both ends inside the image (422 `out_of_bounds`); at most 500 per image (422 `too_many_measurements`)
+         * @example {
+         *       "x1": 1200,
+         *       "y1": 800,
+         *       "x2": 1240,
+         *       "y2": 830,
+         *       "label": "crack width"
+         *     }
+         */
+        ImageMeasurementCreate: {
+            x1: number;
+            y1: number;
+            x2: number;
+            y2: number;
+            /** @description empty when absent */
+            label?: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "e0000000-1313-4000-8000-000000000001",
+         *           "image_id": "10000000-5555-4000-8000-000000000001",
+         *           "x1": 1200,
+         *           "y1": 800,
+         *           "x2": 1240,
+         *           "y2": 830,
+         *           "label": "crack width",
+         *           "created_at": "2026-09-27T09:00:00Z",
+         *           "length_px": 50,
+         *           "length_mm": 90,
+         *           "sigma_mm": 4
+         *         }
+         *       ]
+         *     }
+         */
+        ImageMeasurementList: {
+            items: components["schemas"]["ImageMeasurement"][];
+        };
+        /** @enum {string} */
+        ComputeDevice: "cuda" | "cpu";
+        /**
+         * @example {
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "conf": 0.25
+         *     }
+         */
+        DetectRequest: {
+            /** @description a library model whose task is detect, obb or segment */
+            model_id: string;
+            /** @description confidence threshold; 0.25 when absent */
+            conf?: number;
+            /** @description inference size; the model's training size when absent */
+            imgsz?: number;
+        };
+        /**
+         * @example {
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "suggestions": [],
+         *       "new": 2,
+         *       "already_covered": 5,
+         *       "device": "cuda",
+         *       "elapsed_ms": 840
+         *     }
+         */
+        DetectResult: {
+            model_id: string;
+            /** @description this model's unreviewed suggestions now on the image; its earlier ones were replaced */
+            suggestions: components["schemas"]["Box"][];
+            new: number;
+            /** @description dropped because an accepted annotation of the same type overlaps at IoU >= 0.5 */
+            already_covered: number;
+            device: components["schemas"]["ComputeDevice"];
+            elapsed_ms: number;
+        };
+        /** @description which images; a filter is resolved to image ids when the run is created */
+        DetectBatchScope: {
+            image_ids: string[];
+        } | {
+            source_id: string;
+        } | {
+            filter: components["schemas"]["ImageFilter"];
+        };
+        /**
+         * @example {
+         *       "kind": "local_model",
+         *       "model_id": "m0000000-2222-4000-8000-000000000001",
+         *       "conf": 0.25,
+         *       "scope": {
+         *         "source_id": "50000000-3333-4000-8000-000000000001"
+         *       }
+         *     }
+         */
+        DetectBatchRequest: {
+            kind: components["schemas"]["QueryRunKind"];
+            /** @description a library model id; required for local_model */
+            model_id?: string;
+            provider?: components["schemas"]["ProviderName"];
+            /** @description required for cloud_provider */
+            query?: string;
+            /** @description 0.25 when absent */
+            conf?: number;
+            tiling?: components["schemas"]["Tiling"];
+            scope: components["schemas"]["DetectBatchScope"];
+        };
+        /**
+         * @description the viewport in stored-image pixels; the server enlarges it to at least 512 px a side, clips it to the image and snaps it to 64 px, and answers with the crop it used
+         * @example {
+         *       "x": 1024,
+         *       "y": 640,
+         *       "w": 1024,
+         *       "h": 768
+         *     }
+         */
+        SegmentCrop: {
+            x: number;
+            y: number;
+            w: number;
+            h: number;
+        };
+        SegmentPoint: {
+            /** @description stored-image pixels */
+            x: number;
+            y: number;
+            /** @description false for a point that marks background */
+            positive: boolean;
+        };
+        /**
+         * @example {
+         *       "crop": {
+         *         "x": 1024,
+         *         "y": 640,
+         *         "w": 1024,
+         *         "h": 768
+         *       }
+         *     }
+         */
+        SegmentPrepareRequest: {
+            crop: components["schemas"]["SegmentCrop"];
+        };
+        /**
+         * @example {
+         *       "crop": {
+         *         "x": 1024,
+         *         "y": 640,
+         *         "w": 1024,
+         *         "h": 768
+         *       },
+         *       "device": "cuda",
+         *       "encode_ms": 132,
+         *       "cached": false
+         *     }
+         */
+        SegmentPrepared: {
+            crop: components["schemas"]["SegmentCrop"];
+            device: components["schemas"]["ComputeDevice"];
+            encode_ms: number;
+            /** @description the embedding for this crop was already resident */
+            cached: boolean;
+        };
+        /**
+         * @example {
+         *       "crop": {
+         *         "x": 1024,
+         *         "y": 640,
+         *         "w": 1024,
+         *         "h": 768
+         *       },
+         *       "points": [
+         *         {
+         *           "x": 1400,
+         *           "y": 900,
+         *           "positive": true
+         *         }
+         *       ]
+         *     }
+         */
+        SegmentRequest: {
+            crop: components["schemas"]["SegmentCrop"];
+            /** @description every click so far */
+            points: components["schemas"]["SegmentPoint"][];
+        };
+        /**
+         * @example {
+         *       "polygon": [
+         *         [
+         *           1380,
+         *           880
+         *         ],
+         *         [
+         *           1420,
+         *           880
+         *         ],
+         *         [
+         *           1420,
+         *           925
+         *         ],
+         *         [
+         *           1380,
+         *           925
+         *         ]
+         *       ],
+         *       "score": 0.93,
+         *       "device": "cuda",
+         *       "encode_ms": 0,
+         *       "decode_ms": 31,
+         *       "crop": {
+         *         "x": 1024,
+         *         "y": 640,
+         *         "w": 1024,
+         *         "h": 768
+         *       }
+         *     }
+         */
+        SegmentResult: {
+            /** @description the best mask's outline in stored-image pixels; null when nothing was found */
+            polygon: number[][] | null;
+            score: number;
+            device: components["schemas"]["ComputeDevice"];
+            /** @description 0 when the embedding was cached */
+            encode_ms: number;
+            decode_ms: number;
+            crop: components["schemas"]["SegmentCrop"];
+        };
+        /** @enum {string} */
+        AssistModelKey: "sam2.1_t";
+        /**
+         * @example {
+         *       "key": "sam2.1_t",
+         *       "name": "SAM 2.1 tiny",
+         *       "description": "Smart polygon: click an object and get its outline.",
+         *       "size_mb": 78.1,
+         *       "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+         *       "state": "missing",
+         *       "reason": "The smart-polygon model is not on this machine.",
+         *       "job_id": null
+         *     }
+         */
+        AssistModel: {
+            key: components["schemas"]["AssistModelKey"];
+            name: string;
+            description: string;
+            size_mb: number;
+            sha256: string;
+            /**
+             * @description `invalid`: the file failed its sha256 check; `unavailable`: the SAM modules failed to import in this build (spec §16), so the tool is off whatever the file
+             * @enum {string}
+             */
+            state: "missing" | "ready" | "invalid" | "unavailable";
+            /** @description why the state is not `ready`, in words the UI shows; null when ready */
+            reason: string | null;
+            /** @description the queued or running `assist_acquire` job */
+            job_id: string | null;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "key": "sam2.1_t",
+         *           "name": "SAM 2.1 tiny",
+         *           "description": "Smart polygon: click an object and get its outline.",
+         *           "size_mb": 78.1,
+         *           "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+         *           "state": "missing",
+         *           "reason": "The smart-polygon model is not on this machine.",
+         *           "job_id": null
+         *         }
+         *       ],
+         *       "next_cursor": null
+         *     }
+         */
+        AssistModelPage: {
+            items: components["schemas"]["AssistModel"][];
+            /** @description always null, the catalogue is one page */
+            next_cursor: string | null;
+        };
+        /**
+         * @example {
+         *       "path": "D:\\offline\\sam2.1_t.pt"
+         *     }
+         */
+        AssistModelImport: {
+            /** @description absolute path of a local weights file; it is hashed and copied into the library, never moved */
+            path: string;
         };
         /** @enum {string} */
         SplitMethod: "by_group" | "by_tile" | "random";
@@ -8875,6 +9490,9 @@ export interface components {
         imageReviewed: boolean;
         /** @description true = no ground truth and not marked empty (the same test as `labeled=false`) */
         imageUnlabeled: boolean;
+        /** @description an image length measurement; `measurementId` is a volume measurement */
+        imageMeasurementId: string;
+        assistModelKey: components["schemas"]["AssistModelKey"];
         octreeFile: "metadata.json" | "hierarchy.bin" | "octree.bin";
         surfaceId: string;
         /** @description a volume measurement */
@@ -9727,6 +10345,392 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
+    getImageIndex: {
+        parameters: {
+            query?: {
+                source_id?: string;
+                /** @description true = at least one finding that is not `closed`; false = none */
+                has_findings?: components["parameters"]["imageHasFindings"];
+                /** @description comma-separated severity levels; with `finding_status`, both must hold on the same finding (image inspection spec §7.1) */
+                severity?: components["parameters"]["imageSeverity"];
+                /** @description comma-separated finding statuses */
+                finding_status?: components["parameters"]["imageFindingStatus"];
+                /** @description comma-separated catalogue type ids; the image has an annotation of one of them */
+                type_ids?: components["parameters"]["imageTypeIds"];
+                /** @description true = has unreviewed proposals (the same test as `listImages`' `has_pending`) */
+                has_suggestions?: components["parameters"]["imageHasSuggestions"];
+                /** @description matches `Image.reviewed` */
+                reviewed?: components["parameters"]["imageReviewed"];
+                /** @description true = no ground truth and not marked empty (the same test as `labeled=false`) */
+                unlabeled?: components["parameters"]["imageUnlabeled"];
+                /** @description case-insensitive substring of the image path */
+                search?: string;
+                sort?: "path" | "source_id" | "group_key" | "labeled" | "box_count" | "pending_count" | "max_pending_confidence" | "capture_time" | "created_at" | "worst_severity";
+                order?: "asc" | "desc";
+                /** @description `geo` adds `lon` and `lat` */
+                fields?: "geo";
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the index */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageIndex"];
+                };
+            };
+            /** @description more than 100,000 images match (`code` is `too_many_images`); filter by source */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    refreshImageMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job; when it succeeds its `result` is `{images, updated, skipped}` */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description an `image_metadata` job is already queued or running (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    rebuildImageSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job; when it succeeds its `result` is `{images}` */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description a `summary_rebuild` job is already queued or running (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    listImageMeasurements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description measurements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageMeasurementList"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    createImageMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImageMeasurementCreate"];
+            };
+        };
+        responses: {
+            /** @description created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageMeasurement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description an end outside the image (`out_of_bounds`) or the image already has 500 (`too_many_measurements`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteImageMeasurement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                /** @description an image length measurement; `measurementId` is a volume measurement */
+                imageMeasurementId: components["parameters"]["imageMeasurementId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    detectImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetectRequest"];
+            };
+        };
+        responses: {
+            /** @description the suggestions now on the image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DetectResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the model's weights file is missing (`code` is `model_unavailable`), checked before any work */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unmapped_classes` (details `{model_id, unmapped}`), or `validation_error` for a malformed body */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnmappedClassesError"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    detectImageBatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DetectBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description the run and its job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryRunWithJob"];
+                };
+            };
+            /** @description the model's weights file is missing (`code` is `model_unavailable`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description `unmapped_classes`, `model_or_provider_required`, `query_required`, `no_images` (the scope matched none), `too_many_images`, or `validation_error` */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnmappedClassesError"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    prepareImageSegment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SegmentPrepareRequest"];
+            };
+        };
+        responses: {
+            /** @description the embedding is resident */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SegmentPrepared"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the smart-polygon weights are missing or failed their check (`code` is `assist_model_missing`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    segmentImage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                imageId: components["parameters"]["imageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SegmentRequest"];
+            };
+        };
+        responses: {
+            /** @description the outline, or null when nothing was found */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SegmentResult"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the smart-polygon weights are missing or failed their check (`code` is `assist_model_missing`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a click outside the crop (`code` is `points_outside_crop`), or `validation_error` for a malformed body */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
     getModelAdoption: {
         parameters: {
             query?: never;
@@ -10151,6 +11155,98 @@ export interface operations {
                 };
             };
             /** @description no such starter model (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listAssistModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the catalogue */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AssistModelPage"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    acquireAssistModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["parameters"]["assistModelKey"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the job; when it succeeds its `result` is `{key}` */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description an `assist_acquire` job for this key is already queued or running (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            503: components["responses"]["LibraryUnavailable"];
+            default: components["responses"]["Error"];
+        };
+    };
+    importAssistModel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: components["parameters"]["assistModelKey"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssistModelImport"];
+            };
+        };
+        responses: {
+            /** @description the job; when it succeeds its `result` is `{key}`; a file whose sha256 does not match fails the job */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobRef"];
+                };
+            };
+            /** @description `path` is not absolute or does not exist (`code` is `not_found`) */
             404: {
                 headers: {
                     [name: string]: unknown;

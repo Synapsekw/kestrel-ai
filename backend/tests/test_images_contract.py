@@ -125,11 +125,86 @@ def test_no_request_property_of_ours_carries_a_default(spec):
             assert "default" not in schema, (name, prop)
 
 
+P = "/api/v1/projects/{projectId}"
+LIB = "/api/v1/library/assist-models"
+
+# operationId -> (method, path) of every operation I-C0 adds.
+IMAGES_OPERATIONS: dict[str, tuple[str, str]] = {
+    "getImageIndex": ("get", P + "/images/index"),
+    "rebuildImageSummary": ("post", P + "/image-summary/rebuild"),
+    "refreshImageMetadata": ("post", P + "/images/metadata-refresh"),
+    "listImageMeasurements": ("get", P + "/images/{imageId}/measurements"),
+    "createImageMeasurement": ("post", P + "/images/{imageId}/measurements"),
+    "deleteImageMeasurement": ("delete", P + "/image-measurements/{imageMeasurementId}"),
+    "detectImage": ("post", P + "/images/{imageId}/detect"),
+    "detectImageBatch": ("post", P + "/images/detect-batch"),
+    "prepareImageSegment": ("post", P + "/images/{imageId}/segment/prepare"),
+    "segmentImage": ("post", P + "/images/{imageId}/segment"),
+    "listAssistModels": ("get", LIB),
+    "acquireAssistModel": ("post", LIB + "/{key}/acquire"),
+    "importAssistModel": ("post", LIB + "/{key}/import"),
+}
+
+# Response schemas the Prism mock serves; each carries its own example.
+EXAMPLED_SCHEMAS = [
+    "ImageDetail", "BoxWriteResult", "BoxReviewResult", "ImageIndex", "ImageMeasurement",
+    "ImageMeasurementList", "DetectResult", "SegmentPrepared", "SegmentResult", "AssistModel",
+    "AssistModelPage",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("op_id", sorted(IMAGES_OPERATIONS))
+def test_the_images_operation_exists(spec, op_id):
+    ops = _operations(spec)
+    assert op_id in ops, op_id
+    method, path, op = ops[op_id]
+    assert (method, path) == IMAGES_OPERATIONS[op_id]
+    assert "default" in op["responses"], "every operation answers errors in the envelope"
+    assert set(op["tags"]) <= I_TAGS
+
+
+@pytest.mark.parametrize("name", EXAMPLED_SCHEMAS)
+def test_the_mock_has_an_example(spec, name):
+    example = _schemas(spec)[name].get("example")
+    assert example is not None, name
+    if name.endswith("Page"):
+        assert example["next_cursor"] is None, name
+
+
+def test_the_index_is_parallel_arrays_with_optional_geo(spec):
+    index = _schemas(spec)["ImageIndex"]
+    assert set(index["required"]) == {"total", "ids", "sev", "count", "flags"}
+    assert {"lon", "lat"} <= set(index["properties"])
+    assert "422" in _operations(spec)["getImageIndex"][2]["responses"]
+
+
+def test_detect_batch_scope_is_exactly_one_of_three(spec):
+    variants = _schemas(spec)["DetectBatchScope"]["oneOf"]
+    assert [v["required"] for v in variants] == [["image_ids"], ["source_id"], ["filter"]]
+    assert all(v["additionalProperties"] is False for v in variants)
+    ok = _operations(spec)["detectImageBatch"][2]["responses"]["202"]
+    assert ok["content"]["application/json"]["schema"]["$ref"].endswith("/QueryRunWithJob")
+
+
+def test_no_new_request_schema_carries_a_default(spec):
+    for name in (
+        "DetectRequest", "DetectBatchRequest", "SegmentPrepareRequest", "SegmentRequest",
+        "ImageMeasurementCreate", "AssistModelImport", "ImageFilter",
+    ):  # fmt: skip
+        for prop, schema in _schemas(spec)[name]["properties"].items():
+            assert "default" not in schema, (name, prop)
+
+
 # Schemas this unit (or a later images unit building on it) owns; walked below for the YAML
 # flow-mapping comma bug. Extended as later images tasks add schemas of their own.
 I_SCHEMA_NAMES = {
     "Image", "ImageCamera", "ImageFootprintKind", "ImageDetail", "ImageUpdate",
     "BoxShape", "BoxWriteResult", "BoxReviewResult", "BoxCreate", "BoxUpdate",
+    "ImageIndex", "ImageFilter", "ImageMeasurement", "ImageMeasurementCreate",
+    "ImageMeasurementList", "ComputeDevice", "DetectRequest", "DetectResult",
+    "DetectBatchScope", "DetectBatchRequest", "SegmentCrop", "SegmentPoint",
+    "SegmentPrepareRequest", "SegmentPrepared", "SegmentRequest", "SegmentResult",
+    "AssistModelKey", "AssistModel", "AssistModelPage", "AssistModelImport",
 }  # fmt: skip
 
 

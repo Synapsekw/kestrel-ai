@@ -29,6 +29,16 @@ from app.training.starter_router import router as starter_router
 log = logging.getLogger(__name__)
 
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_token)])
+
+# Images and smart polygon (plan 2026-09-27-images-c0). Included before `datasets_router`, so
+# `/images/index` and `/images/metadata-refresh` never reach `/images/{imageId}`. Guarded: a module
+# that fails to import (SAM's native stack, say) costs its own endpoints, never the app.
+for _module in ("app.imagery.router", "app.assist.router"):
+    try:
+        api_router.include_router(importlib.import_module(_module).router)
+    except Exception:
+        log.exception("%s failed to load; its endpoints will be unavailable", _module)
+
 # A project has no kind (spec 2026-09-26-foundation section 6.1): every project may do everything,
 # so every router is included plainly.
 for r in (

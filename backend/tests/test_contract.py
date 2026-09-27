@@ -89,10 +89,23 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Operations still served by 501 stubs. Empty: every foundation operation (spec
-# 2026-09-26-foundation-design §13) is built, and app/foundation_stubs.py went with the last one;
-# any 501 fails `test_responses_conform`.
-EXPECTED_STUBS: set[str] = set()
+# Images I-C0 stubs; each unit deletes its lines.
+EXPECTED_STUBS: set[str] = {
+    # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
+    "listImageMeasurements",  # I-BA
+    "createImageMeasurement",  # I-BA
+    "deleteImageMeasurement",  # I-BA
+    "refreshImageMetadata",  # I-BK
+    "getImageIndex",  # I-BX
+    "rebuildImageSummary",  # I-BX
+    "prepareImageSegment",  # I-BS
+    "segmentImage",  # I-BS
+    "listAssistModels",  # I-BS
+    "acquireAssistModel",  # I-BS
+    "importAssistModel",  # I-BS
+    "detectImage",  # I-BP
+    "detectImageBatch",  # I-BP
+}
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
 # the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/
