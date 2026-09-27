@@ -28,10 +28,10 @@ def envelope(code: str, message: str, details: dict | None = None) -> dict:
 
 
 def _json_safe(value: Any) -> Any:
-    """`RequestValidationError.errors()` echoes back the raw offending `input` (M-B4's
-    `allow_inf_nan=False` vertices are the first body field to reject NaN/Infinity), and a bare
-    non-finite float crashes `JSONResponse.render` (`allow_nan=False`). Stringify it instead of
-    dropping it, so the detail stays useful."""
+    """`RequestValidationError.errors()` echoes back the raw offending `input`, and a schema field
+    with `allow_inf_nan=False` rejecting NaN or +/-Infinity leaves a bare non-finite float there,
+    which crashes `JSONResponse.render` (`allow_nan=False`). Stringify it instead of dropping it,
+    so the detail stays useful."""
     if isinstance(value, float) and not math.isfinite(value):
         return str(value)
     if isinstance(value, dict):
