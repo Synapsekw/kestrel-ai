@@ -7,7 +7,7 @@ is computed from user data, so it cannot fail on user data and cannot be the rea
 not open.
 
 Revision ID: 0013
-Revises: 0011
+Revises: 0012
 Create Date: 2026-09-27 00:00:00.000000
 """
 
@@ -19,7 +19,7 @@ from alembic import op
 CLOUD_VIEW_SUBJECT_CHECK = "(finding_id IS NULL) <> (cloud_measurement_id IS NULL)"
 
 revision = "0013"
-down_revision = "0011"  # TEMP: 0012 (M-C0) after rebase (R4)
+down_revision = "0012"  # M-C0's revision (R4); re-check `alembic heads` on main before merging
 branch_labels = None
 depends_on = None
 

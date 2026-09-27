@@ -175,7 +175,11 @@ def test_a_project_at_the_previous_head_upgrades_with_every_measurement_ready(tm
         assert (name, json.loads(stored)) == ("Distance 1", points)
         assert (status, params, error, job_id, finding_id) == ("ready", None, None, None, None)
         indexes = {r[1] for r in con.execute("PRAGMA index_list(cloud_measurement)")}
-        assert {"ix_cloud_measurement_cloud", "ix_cloud_measurement_finding"} <= indexes
+        assert {
+            "ix_cloud_measurement_cloud",
+            "ix_cloud_measurement_created",
+            "ix_cloud_measurement_finding",
+        } <= indexes
         assert {"cloud_camera_offset", "cloud_view"} <= _tables(con)
     finally:
         con.close()
@@ -190,6 +194,9 @@ def test_0013_downgrades_to_the_previous_head(tmp_path):
     try:
         assert not {"cloud_camera_offset", "cloud_view"} & _tables(con)
         assert not set(NEW_COLUMNS) & _columns(con, "cloud_measurement")
+        assert "ix_cloud_measurement_created" in {
+            r[1] for r in con.execute("PRAGMA index_list(cloud_measurement)")
+        }
     finally:
         con.close()
 
