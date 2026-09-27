@@ -47,6 +47,18 @@ function firstReady(models: LibraryModel[]): LibraryModel | undefined {
   return models.find((m) => m.state !== "unavailable");
 }
 
+/** R-BT13: a run trains the dataset's task, so only base models of that task are offered. */
+function modelsFor(models: LibraryModel[], dataset: TrainableDataset | undefined): LibraryModel[] {
+  return dataset ? models.filter((m) => m.task === dataset.task) : models;
+}
+
+/** Singular noun for the "no model of this task" notice; `taskLabel` in `library/modelLabels` is plural. */
+const TASK_NOUN: Record<TrainableDataset["task"], string> = {
+  detect: "box",
+  obb: "rotated box",
+  segment: "polygon",
+};
+
 /** Spec section 7 parameters. Preselects when the lists arrive (or change) without touching what the user typed. */
 export function TrainForm({
   datasets,
@@ -63,11 +75,12 @@ export function TrainForm({
   const [form, setForm] = useState<Form>(() => {
     const datasetId = initialDatasetId ?? datasets[0]?.id ?? "";
     const dataset = datasets.find((d) => d.id === datasetId) ?? datasets[0];
+    const usable = modelsFor(models, dataset);
     return {
       ...DEFAULT_TRAIN_FORM,
       datasetId,
-      baseModelId: firstReady(models)?.id ?? "",
-      name: suggestName(dataset, firstReady(models)),
+      baseModelId: firstReady(usable)?.id ?? "",
+      name: suggestName(dataset, firstReady(usable)),
     };
   });
   const [error, setError] = useState<string | null>(null);
@@ -95,10 +108,15 @@ export function TrainForm({
         f.datasetId && (datasets.length === 0 || datasets.some((d) => d.id === f.datasetId))
           ? f.datasetId
           : (datasets[0]?.id ?? "");
-      const baseModelId = f.baseModelId || (firstReady(models)?.id ?? "");
+      const chosen = datasets.find((d) => d.id === datasetId);
+      const usable = modelsFor(models, chosen);
+      const baseModelId =
+        f.baseModelId && usable.some((m) => m.id === f.baseModelId)
+          ? f.baseModelId
+          : (firstReady(usable)?.id ?? "");
       const suggested = suggestName(
-        datasets.find((d) => d.id === datasetId),
-        models.find((m) => m.id === baseModelId),
+        chosen,
+        usable.find((m) => m.id === baseModelId),
       );
       // Only a name still equal to the last suggestion follows the lists. A name the user cleared is
       // an edit too: refilling it on the next refetch hid the "Give the model a name." check.
@@ -111,22 +129,29 @@ export function TrainForm({
 
   const patch = (p: Partial<Form>) => setForm((f) => ({ ...f, ...p }));
 
-  /** Keeps the suggested name in step with the pickers until the user edits it. */
+  /** Keeps the suggested name in step with the pickers until the user edits it; re-picks the base
+   * model when the new dataset's task drops the current one (R-BT13). */
   function chooseDataset(datasetId: string) {
     setForm((f) => {
-      const base = models.find((m) => m.id === f.baseModelId);
+      const current = datasets.find((d) => d.id === f.datasetId);
+      const currentUsable = modelsFor(models, current);
       const suggested = suggestName(
-        datasets.find((d) => d.id === f.datasetId),
-        base,
+        current,
+        currentUsable.find((m) => m.id === f.baseModelId),
       );
+      const next = datasets.find((d) => d.id === datasetId);
+      const usable = modelsFor(models, next);
+      const baseModelId = usable.some((m) => m.id === f.baseModelId)
+        ? f.baseModelId
+        : (firstReady(usable)?.id ?? "");
       const name =
         f.name === suggested
           ? suggestName(
-              datasets.find((d) => d.id === datasetId),
-              base,
+              next,
+              usable.find((m) => m.id === baseModelId),
             )
           : f.name;
-      return { ...f, datasetId, name };
+      return { ...f, datasetId, baseModelId, name };
     });
   }
 
@@ -189,6 +214,9 @@ export function TrainForm({
           </>
         );
 
+  // R-BT13: a run trains the dataset's task, so only base models of that task are offered.
+  const usableModels = modelsFor(models, dataset);
+
   return (
     <form onSubmit={submit} className="flex max-w-3xl flex-col gap-5">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -216,7 +244,7 @@ export function TrainForm({
           >
             <option value="">Choose a base model</option>
             <optgroup label="Models in your library">
-              {models.map((m) => (
+              {usableModels.map((m) => (
                 <option key={m.id} value={m.id} disabled={m.state === "unavailable"}>
                   {m.name} ({originLabel(m.origin)}){m.state === "unavailable" ? " (file missing)" : ""}
                 </option>
@@ -232,6 +260,13 @@ export function TrainForm({
         <div role="note">
           <Alert tone="info">Datasets are not available yet (they arrive with the dataset backend).</Alert>
         </div>
+      )}
+      {dataset && usableModels.length === 0 && !modelsLoading && (
+        <Alert tone="info">
+          {`No ${TASK_NOUN[dataset.task]} model in the library yet. Add ${
+            dataset.task === "segment" ? "a segmentation starter" : "a starter"
+          } under Library.`}
+        </Alert>
       )}
       {modelsUnavailable && (
         <div role="note">

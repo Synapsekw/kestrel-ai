@@ -85,6 +85,12 @@ describe("ExportForm", () => {
     ).toBeInTheDocument();
   });
 
+  it("offers YOLO polygon labels, off by default", () => {
+    renderForm();
+    const box = screen.getByRole("checkbox", { name: /Polygon labels in YOLO-seg format/ });
+    expect(box).not.toBeChecked();
+  });
+
   it("refuses to submit with no format chosen", () => {
     renderForm();
     fireEvent.click(screen.getByRole("checkbox", { name: /Tables for Excel/ }));

@@ -275,6 +275,10 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
                   ["mAP50-95", metrics.map50_95],
                   ["Precision", metrics.precision],
                   ["Recall", metrics.recall],
+                  ...(metrics.mask_map50 != null ? ([["Mask mAP50", metrics.mask_map50]] as const) : []),
+                  ...(metrics.mask_map50_95 != null
+                    ? ([["Mask mAP50-95", metrics.mask_map50_95]] as const)
+                    : []),
                 ] as const
               ).map(([label, value]) => (
                 <div key={label} className="flex flex-col">

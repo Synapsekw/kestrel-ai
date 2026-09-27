@@ -150,6 +150,20 @@ describe("ModelDetail", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("library is down");
   });
 
+  it("shows the mask mAP50 of a segmentation model and not of a detect model", () => {
+    renderDetail({
+      ...exampleTrainedModel,
+      task: "segment",
+      metrics: { ...exampleTrainedModel.metrics!, mask_map50: 0.41 },
+    });
+    expect(screen.getByText("Mask mAP50")).toBeInTheDocument();
+  });
+
+  it("does not show the mask mAP50 term for a detect model", () => {
+    renderDetail(exampleTrainedModel);
+    expect(screen.queryByText("Mask mAP50")).not.toBeInTheDocument();
+  });
+
   it("opens the class mapping and loads the catalogue only then", async () => {
     const { api, requests } = fakeClient([
       { method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage },
