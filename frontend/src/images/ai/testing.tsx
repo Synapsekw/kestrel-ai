@@ -1,4 +1,3 @@
-/* eslint-disable react-refresh/only-export-components -- test helpers, not a fast-refresh boundary. */
 import type { ReactElement } from "react";
 import type { ApiClient, Box, ImageDetail } from "@contract/client";
 import { exampleClasses, PROJECT_ID, proposalBox } from "@/test/fixtures";
