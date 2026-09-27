@@ -26,14 +26,11 @@ from app.datasets.materialise import (
     materialised_name,
 )
 from app.db.models import Image, Job
-from app.geometry import corners_of
-from app.imagery.labels import clip01 as _clip01
-from app.imagery.labels import detect_boxes
-from app.imagery.labels import label_text as _label_text
+from app.imagery.labels import expressible, write_labels
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
-from app.library.datasets.service import LIVE, SEGMENT_NOT_SUPPORTED, folder_name
+from app.library.datasets.service import LIVE, folder_name
 from app.library.datasets.sources import open_source
 from app.library.db import LibraryDataset, LibraryDatasetItem, LibraryDatasetSource
 
@@ -52,38 +49,10 @@ SWEEP_BLOCKING_JOBS = ("dataset", "train")
 # to an export this very process is writing.
 _PROCESS_STARTED_AT = time.time()
 
-
-def obb_label_text(labels: list[dict], class_index: dict[str, int], width: int, height: int) -> str:
-    """YOLO-OBB lines: `index x1 y1 x2 y2 x3 y3 x4 y4`, each corner normalised and clipped to the
-    frame (Ultralytics refuses a whole label file when one value is outside 0..1)."""
-    lines = []
-    for b in labels:
-        index = class_index.get(b["type_id"])
-        if index is None:
-            continue
-        corners = corners_of(b["x"], b["y"], b["w"], b["h"], b.get("angle", 0.0))
-        coords = " ".join(f"{_clip01(px / width):.6f} {_clip01(py / height):.6f}" for px, py in corners)
-        lines.append(f"{index} {coords}")
-    return "\n".join(lines) + ("\n" if lines else "")
-
-
-def _label_text_for(
-    task: str, labels: list[dict], class_index: dict[str, int], width: int, height: int
-) -> str:
-    if task == "obb":
-        return obb_label_text(labels, class_index, width, height)
-    boxes = [
-        {
-            "class_id": b["type_id"],
-            "x": b["x"],
-            "y": b["y"],
-            "w": b["w"],
-            "h": b["h"],
-            "angle": b.get("angle", 0.0),
-        }
-        for b in labels
-    ]
-    return _label_text(detect_boxes(boxes), class_index, width, height)
+UNEXPRESSIBLE_EXPORT = (
+    "Rebuild this dataset: its labels are boxes, which a polygon dataset cannot use. Create it again "
+    "with “Boxes as polygons” ticked, or from types drawn as polygons."
+)
 
 
 def _item_pages(lib, dataset_id: str, project_id: str) -> Iterator[list[LibraryDatasetItem]]:
@@ -128,12 +97,11 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
             raise JobFailure("This dataset no longer exists.")
         if row.origin != "built":
             raise JobFailure("A legacy dataset trains from its own folder; it cannot be exported.")
-        if row.task == "segment":
-            raise JobFailure(SEGMENT_NOT_SUPPORTED)
         if row.state != "ready":
             raise JobFailure(f"Dataset {row.name} is not built yet.")
         row.export_state, row.export_job_id = "building", ctx.job_id
         task, classes, name = row.task, list(row.classes or []), folder_name(row)
+        boxes_as_polygons = bool((row.filter or {}).get("boxes_as_polygons"))
         total = int((row.counts or {}).get("images") or 0)
         sources = [
             (src.project_id, src.project_name, src.project_folder)
@@ -165,6 +133,7 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
         placements: dict[str, int] = {}
         counts = {"train": 0, "val": 0}
         skipped = done = 0
+        skipped_task = 0
         for project_id, _, _ in sources:
             handle = handles[project_id]
             for page in _item_pages(lib, dataset_id, project_id):
@@ -185,16 +154,29 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
                     if source is None or not source.is_file():
                         skipped += 1  # deleted from its project after the build (decision 17)
                         continue
+                    frozen = item.labels or []
+                    if not expressible(task, frozen, class_index, boxes_as_polygons=boxes_as_polygons):
+                        skipped_task += 1  # R-BT7: never write an object as background
+                        continue
                     file_name = f"{project_id[:8]}__{materialised_name(image.path)}"
                     how = _place(source, staging / "images" / item.split / file_name)
                     placements[how] = placements.get(how, 0) + 1
-                    label = _label_text_for(task, item.labels or [], class_index, image.width, image.height)
+                    label = write_labels(
+                        task,
+                        frozen,
+                        class_index,
+                        image.width,
+                        image.height,
+                        boxes_as_polygons=boxes_as_polygons,
+                    )
                     (staging / "labels" / item.split / f"{Path(file_name).stem}.txt").write_text(
                         label, "utf-8"
                     )
                     counts[item.split] += 1
                     if done % PROGRESS_EVERY == 0 or done == total:
                         progress(done / max(total, 1), f"{done} / {total} images")
+        if counts["train"] + counts["val"] == 0 and skipped_task:
+            raise JobFailure(UNEXPRESSIBLE_EXPORT)
         (staging / "data.yaml").write_text(data_yaml(final, [c["name"] for c in classes]), "utf-8")
         if final.is_dir() and not final.is_symlink():
             shutil.rmtree(final)
@@ -204,9 +186,21 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
         raise
     _set_export_state(lib, dataset_id, "ready", export_path=f"datasets/{name}")
     ctx.log.info(
-        "exported %s to %s: %s, files %s, skipped %s", dataset_id, final, counts, placements, skipped
+        "exported %s to %s: %s, files %s, skipped %s, skipped_task %s",
+        dataset_id,
+        final,
+        counts,
+        placements,
+        skipped,
+        skipped_task,
     )
-    return {"dataset_id": dataset_id, **counts, "skipped": skipped, "files": placements}
+    return {
+        "dataset_id": dataset_id,
+        **counts,
+        "skipped": skipped,
+        "skipped_task": skipped_task,
+        "files": placements,
+    }
 
 
 def _state_after_failure(lib, dataset_id: str) -> str:

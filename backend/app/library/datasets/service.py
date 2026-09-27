@@ -32,10 +32,6 @@ log = logging.getLogger(__name__)
 
 LIVE = ("queued", "running")
 TERMINAL = ("succeeded", "failed", "cancelled")
-SEGMENT_NOT_SUPPORTED = (
-    "YOLO segmentation datasets arrive with the Images workspace; this dataset cannot be exported "
-    "or trained yet."
-)
 
 
 def preview(registry, body: DatasetFilter, task: str = "detect") -> DatasetPreview:
@@ -333,21 +329,18 @@ def list_items(
 
 
 def check_exportable(lib: LibraryHandle, dataset_id: str) -> None:
-    """404 unknown; 422 `task_not_supported` for segment; 409 `conflict` for a legacy dataset,
-    `not_ready` for one not built, `job_running` while its export is being written or while a
-    queued or running job (a `train`) names it: a new export would replace the folder that job
-    reads (amendment A3)."""
+    """404 unknown; 409 `conflict` for a legacy dataset, `not_ready` for one not built,
+    `job_running` while its export is being written or while a queued or running job (a `train`)
+    names it: a new export would replace the folder that job reads (amendment A3)."""
     with lib.session() as s:
         row = s.get(LibraryDataset, dataset_id)
         if row is None:
             raise not_found("dataset", dataset_id)
         jobs = job_states(s, [row.job_id, row.export_job_id])
         state, export_state = effective_state(row, jobs), effective_export_state(lib, row, jobs)
-        task, origin, name = row.task, row.origin, row.name
+        origin, name = row.origin, row.name
         in_use = live_job_naming(s, dataset_id)
         in_use_type = in_use.type if in_use is not None else None
-    if task == "segment":
-        raise AppError("task_not_supported", SEGMENT_NOT_SUPPORTED, 422)
     if origin == "legacy":
         raise AppError("conflict", f"{name} is a legacy dataset; it trains from its own folder.", 409)
     if state != "ready":

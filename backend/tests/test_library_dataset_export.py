@@ -82,15 +82,6 @@ def test_an_obb_dataset_writes_the_rotated_corners(client, app, sites):
     assert line[1:] == pytest.approx([min(max(v, 0.0), 1.0) for v in expected], abs=1e-5)
 
 
-@pytest.mark.xfail(reason="replaced in I-BT Task 4")
-def test_a_segment_dataset_is_built_but_its_export_is_refused(client, sites):
-    a, _, exc, _ = sites
-    d = build_dataset(client, create_body("masks", [a.id], [exc.id], task="segment"))
-    r = client.post(f"{LIB}/datasets/{d['id']}/export")
-    assert r.status_code == 422 and r.json()["error"]["code"] == "task_not_supported"
-    assert client.get(f"{LIB}/jobs", params={"type": "dataset"}).json()["items"] == []
-
-
 def test_an_export_is_refused_when_not_ready_already_building_or_legacy(client, app, sites):
     """409 `not_ready`, 409 `job_running` and 409 `conflict`, and no job queued (amendment A3)."""
     a, _, exc, _ = sites

@@ -1,6 +1,8 @@
 """Segment datasets: shapes in frozen labels, inclusion by task, skipped counts (image spec §11.1,
 I-D10; plan I-BT Task 3)."""
 
+from pathlib import Path
+
 import pytest
 from catalogue_fake import catalogue  # noqa: F401 - fixture
 from library_datasets_helpers import (
@@ -12,7 +14,7 @@ from library_datasets_helpers import (
     create_body,
     make_project,
 )
-from library_helpers import wait_library_job
+from library_helpers import add_library_model, wait_library_job
 
 from app.library.db import LibraryDatasetItem
 
@@ -153,3 +155,49 @@ def test_a_detect_dataset_freezes_boxes_with_their_shape(client, app, mixed):
         "angle": 0.0,
         "shape": "box",
     }
+
+
+def _export(client, dataset_id):
+    r = client.post(f"{LIB}/datasets/{dataset_id}/export")
+    assert r.status_code == 202, r.text
+    return wait_library_job(client, r.json()["job"]["id"])
+
+
+def test_a_segment_dataset_exports_polygon_labels(client, app, mixed):
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("cracks", [p.id], [crack.id], task="segment"))
+    done = _export(client, d["id"])
+    assert done["state"] == "succeeded", done["error"]
+    folder = Path(client.get(f"{LIB}/datasets/{d['id']}").json()["export_path"])
+    texts = {f.stem: f.read_text("utf-8") for f in folder.glob("labels/*/*.txt")}
+    polygon = next(t for stem, t in texts.items() if stem.endswith("DJI_0001"))
+    values = polygon.split()
+    assert values[0] == "0" and len(values) == 7
+    got = sorted((round(float(values[i]) * 100, 3), round(float(values[i + 1]) * 80, 3)) for i in (1, 3, 5))
+    assert got == pytest.approx(sorted((x, y) for x, y in TRI), abs=1e-3)  # images are 100 x 80
+    negative = next(t for stem, t in texts.items() if stem.endswith("DJI_0004"))
+    assert negative == ""
+
+
+def test_a_pre_bt_segment_dataset_of_boxes_is_not_exported_as_background(client, app, mixed):
+    """F let a segment dataset of boxes be built; its items carry box labels without `shape`."""
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("old", [p.id], [crack.id], task="segment"))
+    with app.state.library.session() as s:  # rewrite the items as F froze them before BT
+        for item in s.query(LibraryDatasetItem).filter(LibraryDatasetItem.dataset_id == d["id"]):
+            item.labels = [{"type_id": crack.id, "x": 1, "y": 1, "w": 5, "h": 5, "angle": 0.0}]
+    done = _export(client, d["id"])
+    assert done["state"] == "failed"
+    assert "Rebuild this dataset" in done["error"]
+
+
+def test_training_a_segment_dataset_needs_a_segment_base(client, app, tmp_path, mixed):
+    p, crack, _ = mixed
+    d = build_dataset(client, create_body("cracks", [p.id], [crack.id], task="segment"))
+    det = add_library_model(app, tmp_path, name="det", task="detect")
+    seg = add_library_model(app, tmp_path, name="seg", task="segment")
+    body = {"name": "r", "dataset_id": d["id"], "epochs": 1}
+    r = client.post(f"{LIB}/training-runs", json={**body, "base_model_id": det.id})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "task_mismatch"
+    r = client.post(f"{LIB}/training-runs", json={**body, "base_model_id": seg.id})
+    assert r.status_code == 202, r.text  # no longer task_not_supported
