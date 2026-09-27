@@ -223,6 +223,7 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "createDrawingInspection": {422},
     "putDrawingGeoref": {422},  # generated points can be mirrored, collinear or coincident
     "fitDrawingGeoref": {422},
+    "getDrawingVectorTile": {422},  # a generated t is invalid_preview
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

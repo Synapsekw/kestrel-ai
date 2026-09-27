@@ -7,17 +7,18 @@ loads inside M-C0's maps-guarded block in app/api.py.
 
 from __future__ import annotations
 
+import json
 import shutil
 import threading
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi import Path as PathParam
 from sqlalchemy import select
 
 from app.db.base import utcnow
 from app.db.models import Drawing
-from app.drawings import detect, footprint, service, site, store
+from app.drawings import detect, footprint, service, site, store, vtiles
 from app.drawings import georef as fitting
 from app.drawings import jobs as _jobs  # noqa: F401 - registers `drawing_import`
 from app.drawings import placement as placing
@@ -311,3 +312,63 @@ def clear_drawing_georef(
     service.drop_caches(drawingId)
     publish_drawings_changed(request, handle, [drawingId])
     return out
+
+
+@router.get("/drawings/{drawingId}/vtiles/{z}/{x}/{y}", response_class=Response)
+def get_drawing_vector_tile(
+    drawingId: str,  # noqa: N803
+    x: int,
+    y: int,
+    z: int = PathParam(ge=0, le=site.Z_MAX),
+    v: str | None = Query(default=None),
+    t: str | None = Query(default=None),
+    handle: ProjectHandle = Depends(get_project),
+) -> Response:
+    """M-C0's statuses: 200 JSON, 204 nothing in the tile, 404 unknown/failed, 409 not_ready/not_placed,
+    422 not_vector / no_coordinates (not in this frame) / invalid_preview. `t` (plan Ruling 6) is a
+    drawing -> site affine used instead of the stored georef; its responses are never cached."""
+    with handle.session() as s:
+        d = service.require(s, drawingId)
+        if d.status == "failed":
+            raise not_found("drawing", drawingId)
+        if d.status != "ready":
+            raise AppError("not_ready", "the drawing is still importing", 409)
+        if d.format not in VECTOR:
+            raise AppError("not_vector", "a raster drawing is served as drawing_raster site tiles", 422)
+        layers, georef_json, version = list(d.layers or []), d.georef, d.georef_version or 0
+    frame = site.current_frame(handle)
+    try:
+        if t is not None:
+            transform = fitting.parse_preview(t)
+            conv = site.Conversion(frame.crs_wkt if frame.kind == "crs" else None, frame)
+        elif georef_json is None:
+            raise AppError("not_placed", "the drawing is not placed yet", 409)
+        else:
+            transform = tuple(georef_json["transform"])
+            conv = site.Conversion(georef_json.get("dst_crs_wkt"), frame)
+    except fitting.GeorefRefused as e:
+        raise AppError(e.code, e.message, 422) from None
+    except site.NotInFrame:
+        raise AppError("no_coordinates", "the drawing is not in this site frame", 422) from None
+    key = (handle.id, drawingId, version, frame.key, z, x, y)
+    body = None if t is not None else service.VTILES.get(key)
+    if body is None:
+        tile = vtiles.vector_tile(
+            store.drawing_dir(handle, drawingId), layers, transform, conv, site.frame_unit_m(frame), z, x, y
+        )
+        body = (
+            b""
+            if not tile["layers"] and not tile["labels"]
+            else json.dumps(tile, separators=(",", ":")).encode()
+        )
+        if t is None:
+            service.VTILES.put(key, body)
+    if t is not None:
+        cache = "no-store"
+    elif v == str(version):
+        cache = "public, max-age=31536000, immutable"
+    else:
+        cache = "no-cache"
+    if not body:
+        return Response(status_code=204, headers={"Cache-Control": cache})
+    return Response(body, media_type="application/json", headers={"Cache-Control": cache})
