@@ -229,6 +229,7 @@ class MapDetectionOut(BaseModel):
     angle: float | None
     review_state: Literal["unreviewed", "accepted", "rejected", "edited"]
     provenance_kind: Literal["person", "local_model", "cloud_provider"]
+    corners_site: list[list[float]] | None = None  # frame=site: the 4 box corners in site coordinates (M-B1)
 
     @classmethod
     def from_row(cls, r: MapDetection) -> MapDetectionOut:
@@ -256,6 +257,7 @@ class MapDensityCell(BaseModel):
     gy: int
     class_id: str
     count: int
+    center_site: list[float] | None = None  # frame=site: the cell centre in site coordinates (M-B1)
 
 
 class MapDensity(BaseModel):

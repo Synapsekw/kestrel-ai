@@ -3,26 +3,36 @@ import {
   aabbOf,
   centreOf,
   clampOriented,
+  clampPoint,
   clampRect,
   cornersOf,
   displayMaxSide,
+  distance,
   dragRect,
   duplicateOffset,
+  envelopeOf,
   fitView,
+  flatten,
+  fromPoints,
   isDrawable,
+  nearestEdge,
   normaliseAngle,
   normalizeRect,
   oneToOneView,
   orientedEquals,
+  rboxFromThreePoints,
   rectEquals,
   roundRect,
+  snapDirection,
   toDisplay,
   toImage,
+  toPoints,
+  translatePoints,
   zoomAround,
   MAX_SCALE,
   MIN_SCALE,
 } from "./geometry";
-import fixtures from "../../../contract/fixtures/oriented-boxes.json";
+import fixtures from "../../../../contract/fixtures/oriented-boxes.json";
 
 const image = { width: 4000, height: 2667 };
 const viewport = { width: 1000, height: 700 };
@@ -208,5 +218,101 @@ describe("shared corner fixtures", () => {
     expect(a.y).toBeCloseTo(c.aabb.y, 9);
     expect(a.w).toBeCloseTo(c.aabb.w, 9);
     expect(a.h).toBeCloseTo(c.aabb.h, 9);
+  });
+});
+
+describe("three-point rotated box (I-D8)", () => {
+  it("builds an axis-aligned box from an edge and a width point", () => {
+    expect(rboxFromThreePoints({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 40 })).toEqual({
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 40,
+      angle: 0,
+    });
+  });
+
+  it("puts the width on the side of the third point", () => {
+    const r = rboxFromThreePoints({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: -40 })!;
+    expect(r).toMatchObject({ x: 0, y: -40, w: 100, h: 40, angle: 0 });
+  });
+
+  it("keeps the drawn edge as a real edge at 90 degrees", () => {
+    const r = rboxFromThreePoints({ x: 0, y: 0 }, { x: 0, y: 100 }, { x: -30, y: 50 })!;
+    expect(r.angle).toBeCloseTo(90);
+    expect(r.w).toBeCloseTo(100);
+    expect(r.h).toBeCloseTo(30);
+    const corners = cornersOf(r);
+    expect(corners.some((c) => Math.abs(c.x) < 1e-9 && Math.abs(c.y) < 1e-9)).toBe(true);
+    expect(corners.some((c) => Math.abs(c.x) < 1e-9 && Math.abs(c.y - 100) < 1e-9)).toBe(true);
+  });
+
+  it("the reversed stroke gives the same rectangle", () => {
+    const a = { x: 10, y: 20 };
+    const b = { x: 110, y: 78 };
+    const c = { x: 80, y: 120 };
+    const forward = rboxFromThreePoints(a, b, c)!;
+    const reversed = rboxFromThreePoints(b, a, c)!;
+    expect(reversed.angle).toBeCloseTo(forward.angle);
+    expect(reversed.angle).toBeGreaterThanOrEqual(0);
+    expect(reversed.angle).toBeLessThan(180);
+    for (const k of ["x", "y", "w", "h"] as const) expect(reversed[k]).toBeCloseTo(forward[k]);
+    expect(forward.h).toBeGreaterThan(0);
+  });
+
+  it("refuses a degenerate edge or width", () => {
+    expect(rboxFromThreePoints({ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 30 })).toBeNull();
+    expect(rboxFromThreePoints({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 50, y: 1 })).toBeNull();
+  });
+});
+
+describe("snaps", () => {
+  it("snaps a direction to the step and keeps the length", () => {
+    const b = snapDirection({ x: 0, y: 0 }, { x: 100, y: 12 }, 15);
+    expect(b.y).toBeCloseTo(0);
+    expect(distance({ x: 0, y: 0 }, b)).toBeCloseTo(Math.hypot(100, 12));
+    const diag = snapDirection({ x: 0, y: 0 }, { x: 50, y: 47 }, 45);
+    expect(diag.x).toBeCloseTo(diag.y);
+  });
+});
+
+describe("polygon helpers", () => {
+  const square = [
+    { x: 10, y: 10 },
+    { x: 50, y: 10 },
+    { x: 50, y: 30 },
+    { x: 10, y: 30 },
+  ];
+
+  it("round-trips API points and flattens for Konva", () => {
+    expect(
+      toPoints([
+        [1, 2],
+        [3, 4],
+      ]),
+    ).toEqual([
+      { x: 1, y: 2 },
+      { x: 3, y: 4 },
+    ]);
+    expect(fromPoints([{ x: 1.04, y: 2.06 }])).toEqual([[1, 2.1]]);
+    expect(flatten(square)).toEqual([10, 10, 50, 10, 50, 30, 10, 30]);
+  });
+
+  it("gives the envelope", () => {
+    expect(envelopeOf(square)).toEqual({ x: 10, y: 10, w: 40, h: 20 });
+  });
+
+  it("finds the nearest edge and the foot point", () => {
+    const hit = nearestEdge(square, { x: 30, y: 12 })!;
+    expect(hit.index).toBe(0);
+    expect(hit.distance).toBeCloseTo(2);
+    expect(hit.at).toEqual({ x: 30, y: 10 });
+    const closing = nearestEdge(square, { x: 8, y: 20 })!;
+    expect(closing.index).toBe(3); // the edge from the last vertex back to the first
+  });
+
+  it("translates and clamps", () => {
+    expect(translatePoints(square, 5, -5)[0]).toEqual({ x: 15, y: 5 });
+    expect(clampPoint({ x: -3, y: 120 }, { width: 100, height: 100 })).toEqual({ x: 0, y: 100 });
   });
 });

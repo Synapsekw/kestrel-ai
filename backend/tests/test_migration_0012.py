@@ -184,7 +184,9 @@ def test_a_failing_backfill_leaves_captured_on_null_and_upgrades(tmp_path):
             assert s.get(Surface, "s1").captured_on is None
             assert s.query(MapWorkspace).count() == 0  # the rest of 0012 ran
         with engine.connect() as c:
-            assert c.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == REVISION
+            # the upgrade ran to the head (0013 and later sit on 0012), not stopped at the failed backfill
+            head = ScriptDirectory.from_config(_cfg()).get_current_head()
+            assert c.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one() == head
     finally:
         engine.dispose()
 

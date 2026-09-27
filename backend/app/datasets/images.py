@@ -7,65 +7,42 @@ of thousands of frames without OFFSET scans.
 from __future__ import annotations
 
 import os
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
+from typing import NamedTuple
 from uuid import uuid4
 
 from PIL import Image as PILImage
-from sqlalchemy import case, delete, func, or_, select, tuple_
+from sqlalchemy import delete, func, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.db.models import Box, DatasetImage, Image, QueryRun, Source
 from app.detect.counts import recount_query_run
 from app.errors import AppError, not_found
 from app.findings import annotations, trash
+from app.imagery import filters as image_filters
+from app.imagery.filters import ImageFilters
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
 
-ImageRow = tuple[Image, int, int, float | None]
-
-GROUND_TRUTH = ("accepted", "edited")
 THUMB_SIDE = 256
 DERIVED_QUALITY = 85
-EPOCH = datetime(1970, 1, 1, tzinfo=UTC)
 
 
-def _box_stats():
-    accepted = case((Box.review_state.in_(GROUND_TRUTH), 1), else_=0)
-    pending = case((Box.review_state == "unreviewed", 1), else_=0)
-    pending_conf = case((Box.review_state == "unreviewed", Box.confidence), else_=None)
-    return (
-        select(
-            Box.image_id.label("image_id"),
-            func.sum(accepted).label("box_count"),
-            func.sum(pending).label("pending_count"),
-            func.max(pending_conf).label("max_pending_confidence"),
-        )
-        .group_by(Box.image_id)
-        .subquery()
-    )
-
-
-def _sort_expression(name: str, stats):
-    box_count = func.coalesce(stats.c.box_count, 0)
-    return {
-        "path": Image.path,
-        "source_id": Image.source_id,
-        "group_key": Image.group_key,
-        "created_at": Image.created_at,
-        "capture_time": func.coalesce(Image.capture_time, EPOCH),
-        "labeled": case((or_(box_count > 0, Image.marked_empty), 1), else_=0),
-        "box_count": box_count,
-        "pending_count": func.coalesce(stats.c.pending_count, 0),
-        "max_pending_confidence": func.coalesce(stats.c.max_pending_confidence, -1.0),
-    }[name]
+class ImageRow(NamedTuple):
+    image: Image
+    box_count: int
+    pending_count: int
+    max_pending_confidence: float | None
+    finding_count: int = 0
+    worst_severity: int | None = None
 
 
 def _parse_cursor_value(name: str, value):
     try:
         if name in ("created_at", "capture_time"):
             return datetime.fromisoformat(str(value))
-        if name in ("labeled", "box_count", "pending_count"):
+        if name in ("labeled", "box_count", "pending_count", "worst_severity"):
             return int(value)
         if name == "max_pending_confidence":
             return float(value)
@@ -74,33 +51,10 @@ def _parse_cursor_value(name: str, value):
         raise AppError("validation_error", "invalid cursor", 422) from None
 
 
-def _filtered(stats, *, source_id, group_key, labeled, has_pending, search, ids):
-    q = select(Image).outerjoin(stats, stats.c.image_id == Image.id)
-    if ids is not None:  # an explicit selection overrides every other filter
-        return q.where(Image.id.in_(ids))
-    if source_id:
-        q = q.where(Image.source_id == source_id)
-    if group_key:
-        q = q.where(Image.group_key == group_key)
-    if search:
-        q = q.where(Image.path.icontains(search, autoescape=True))
-    if labeled is not None:
-        has_gt = or_(func.coalesce(stats.c.box_count, 0) > 0, Image.marked_empty)
-        q = q.where(has_gt if labeled else ~has_gt)
-    if has_pending is not None:
-        pending = func.coalesce(stats.c.pending_count, 0) > 0
-        q = q.where(pending if has_pending else ~pending)
-    return q
-
-
 def list_images(
     handle: ProjectHandle,
     *,
-    source_id: str | None = None,
-    group_key: str | None = None,
-    labeled: bool | None = None,
-    has_pending: bool | None = None,
-    search: str | None = None,
+    filters: ImageFilters | None = None,
     ids: list[str] | None = None,
     sort: str = "path",
     order: str = "asc",
@@ -108,21 +62,18 @@ def list_images(
     cursor: str | None = None,
 ) -> tuple[list[ImageRow], str | None, int]:
     n = clamp_limit(limit)
-    stats = _box_stats()
-    expr = _sort_expression(sort, stats)
-    base = _filtered(
-        stats,
-        source_id=source_id,
-        group_key=group_key,
-        labeled=labeled,
-        has_pending=has_pending,
-        search=search,
-        ids=ids,
-    )
+    f = filters or ImageFilters()
+    st = image_filters.stats(f)
+    expr = image_filters.sort_expression(sort, st)
+    base = image_filters.join_stats(select(Image), st)
+    # An explicit selection overrides every other filter (contract: `ids`).
+    base = base.where(Image.id.in_(ids)) if ids is not None else image_filters.where(base, f, st)
     q = base.add_columns(
-        func.coalesce(stats.c.box_count, 0),
-        func.coalesce(stats.c.pending_count, 0),
-        stats.c.max_pending_confidence,
+        st.annotation_count,
+        st.pending_count,
+        st.max_pending_conf,
+        st.finding_count,
+        st.worst_severity,
         expr.label("sort_value"),
     )
     ascending = order != "desc"
@@ -132,7 +83,6 @@ def list_images(
         value = _parse_cursor_value(sort, c["k"])
         pair = tuple_(expr, Image.id)
         q = q.where(pair > (value, str(c["id"])) if ascending else pair < (value, str(c["id"])))
-
     with handle.session() as s:
         total = s.execute(select(func.count()).select_from(base.subquery())).scalar_one()
         found = list(s.execute(q.limit(n + 1)).all())
@@ -142,8 +92,9 @@ def list_images(
     if len(found) > n:
         found = found[:n]
         last = found[-1]
-        next_cursor = encode_cursor(k=_cursor_value(last[4]), id=last[0].id)
-    return [(r[0], int(r[1]), int(r[2]), r[3]) for r in found], next_cursor, total
+        next_cursor = encode_cursor(k=_cursor_value(last[6]), id=last[0].id)
+    rows = [ImageRow(r[0], int(r[1]), int(r[2]), r[3], int(r[4]), r[5]) for r in found]
+    return rows, next_cursor, total
 
 
 def _cursor_value(value):

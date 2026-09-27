@@ -492,13 +492,14 @@ def delete(handle: ProjectHandle, measurement_id: str) -> None:
 
 def surface_ref(s: Session, surface: Surface) -> dict:
     cloud = s.get(PointCloud, surface.point_cloud_id) if surface.point_cloud_id else None
+    day = surface.captured_on or (cloud.captured_on if cloud else None)
     return {
         "id": surface.id,
         "name": surface.name,
         "kind": surface.kind,
         "method": surface.method,
         "cell_size_m": surface.cell_size_m,
-        "captured_on": cloud.captured_on.isoformat() if cloud and cloud.captured_on else None,
+        "captured_on": day.isoformat() if day else None,
         "cloud_file": PureWindowsPath(cloud.source_path).name if cloud else None,
         "cloud_sha256": cloud.source_sha256 if cloud else None,
     }

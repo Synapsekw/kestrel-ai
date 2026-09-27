@@ -34,6 +34,7 @@ class SiteAreaOut(BaseModel):
     polygon_wgs84: list[list[float]]
     category: SiteAreaCategory
     created_at: datetime
+    polygon_site: list[list[float]] | None = None  # frame=site (M-B1)
 
     @classmethod
     def from_row(cls, row: SiteArea) -> SiteAreaOut:
@@ -189,8 +190,16 @@ def _recount(request: Request, handle: ProjectHandle) -> None:
 
 
 @router.get("/site-areas", response_model=SiteAreaList)
-def list_site_areas(handle: ProjectHandle = Depends(get_project)) -> SiteAreaList:
-    return SiteAreaList(items=[SiteAreaOut.from_row(r) for r in site_areas.list_areas(handle)])
+def list_site_areas(
+    frame: str | None = Query(None, pattern="^site$"),
+    handle: ProjectHandle = Depends(get_project),
+) -> SiteAreaList:
+    items = [SiteAreaOut.from_row(r) for r in site_areas.list_areas(handle)]
+    if frame == "site":
+        from app.workspace.views import site_areas_in_site
+
+        items = site_areas_in_site(handle, items)
+    return SiteAreaList(items=items)
 
 
 @router.post("/site-areas", response_model=SiteAreaOut, status_code=201)

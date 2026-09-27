@@ -1,0 +1,126 @@
+"""The map workspace (spec 2026-09-26-map-workspace sections 6, 9.4 and 12): the site frame, the
+persisted view state, surveys, layers, site tiles, anchors, the readout sample and findings in view.
+It loads in M-C0's maps-guarded loop at the end of app/api.py."""
+
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import Path as PathParam
+from fastapi.responses import JSONResponse
+
+from app.errors import AppError, envelope
+from app.events_util import publish_map_workspace_changed
+from app.projects.service import ProjectHandle, get_project
+from app.workspace import layers, service, surveys, tiles, views
+from app.workspace.schemas import (
+    AnchorIn,
+    AnchorOut,
+    FrameSampleOut,
+    MapFindingsInViewOut,
+    MapWorkspaceOut,
+    MapWorkspacePut,
+    SampleIn,
+    SiteFrameSet,
+    WorkspaceLayerList,
+    WorkspaceSurveyList,
+    frame_out,
+    workspace_out,
+)
+
+router = APIRouter(prefix="/projects/{projectId}", tags=["workspace"])
+IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}
+NO_STORE = {"Cache-Control": "no-store"}
+
+
+@router.get("/map-workspace", response_model=MapWorkspaceOut)
+def get_map_workspace(handle: ProjectHandle = Depends(get_project)) -> MapWorkspaceOut:
+    return workspace_out(handle, service.load(handle))
+
+
+@router.put("/map-workspace", response_model=MapWorkspaceOut)
+def put_map_workspace(
+    body: MapWorkspacePut, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> MapWorkspaceOut:
+    planned = None
+    if body.planned_surveys is not None:
+        planned = [{"date": p.date.isoformat(), "note": p.note} for p in body.planned_surveys]
+    ws = service.put_state(handle, state=body.state, planned_surveys=planned)
+    publish_map_workspace_changed(
+        request, handle, ["state"] + (["planned_surveys"] if planned is not None else [])
+    )
+    return workspace_out(handle, ws)
+
+
+@router.put("/map-workspace/frame", response_model=MapWorkspaceOut)
+def set_site_frame(
+    body: SiteFrameSet, request: Request, handle: ProjectHandle = Depends(get_project)
+) -> MapWorkspaceOut:
+    ws = service.set_frame(handle, kind=body.kind, epsg=body.epsg)
+    publish_map_workspace_changed(request, handle, ["frame"])
+    return workspace_out(handle, ws)
+
+
+@router.get("/site-tiles/{kind}/{layerId}/{z}/{x}/{y}", response_class=Response)
+def get_site_tile(
+    kind: Literal["map", "surface", "volume_diff", "drawing_raster"],
+    layerId: str,  # noqa: N803
+    x: int,
+    y: int,
+    z: int = PathParam(ge=0, le=20),
+    v: str | None = None,
+    style: Literal["hillshade", "tint", "contours"] | None = None,
+    interval: float | None = Query(None, gt=0, le=1000),
+    knockout: bool = False,
+    t: str | None = Query(None, max_length=400),  # no pattern: a malformed `t` is invalid_preview
+    frame_key: str | None = Query(None, max_length=200),  # a client-side cache-buster, ignored here
+    handle: ProjectHandle = Depends(get_project),
+) -> Response:
+    try:
+        style = tiles.TileStyle(
+            style, interval, knockout, tiles.parse_preview(t)
+        )  # 422 invalid_preview first
+        body = tiles.serve_site_tile(handle, service.get_frame(handle), kind, layerId, z, x, y, style)
+    except AppError as e:
+        if t is None:
+            raise
+        # the contract (tilePreview): any response to a request with `t` is no-store, errors included
+        return JSONResponse(envelope(e.code, e.message, e.details), e.status, headers=NO_STORE)
+    headers = NO_STORE if tiles.is_preview(kind, style) else IMMUTABLE
+    if body is None:
+        return Response(status_code=204, headers=headers)
+    return Response(body, media_type="image/png", headers=headers)
+
+
+@router.get("/map-workspace/surveys", response_model=WorkspaceSurveyList)
+def list_workspace_surveys(handle: ProjectHandle = Depends(get_project)) -> WorkspaceSurveyList:
+    return WorkspaceSurveyList(items=surveys.list_surveys(handle))
+
+
+@router.get("/map-workspace/layers", response_model=WorkspaceLayerList)
+def list_workspace_layers(handle: ProjectHandle = Depends(get_project)) -> WorkspaceLayerList:
+    frame, items = layers.list_layers(handle)
+    return WorkspaceLayerList(frame=frame_out(frame), items=items)
+
+
+BBOX = r"^-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?$"
+
+
+@router.post("/map-workspace/anchor", response_model=AnchorOut)
+def convert_anchor(body: AnchorIn, handle: ProjectHandle = Depends(get_project)) -> AnchorOut:
+    return views.convert_anchor(handle, body.map_id, body.geometry_site)
+
+
+@router.post("/map-workspace/sample", response_model=FrameSampleOut)
+def sample_in_frame(body: SampleIn, handle: ProjectHandle = Depends(get_project)) -> FrameSampleOut:
+    return FrameSampleOut(x=body.x, y=body.y, samples=views.sample(handle, body.x, body.y, body.surface_ids))
+
+
+@router.get("/map-workspace/findings", response_model=MapFindingsInViewOut)
+def list_map_findings_in_view(
+    bbox: str = Query(..., pattern=BBOX),
+    map_ids: list[str] | None = Query(None, max_length=50),
+    frame: str | None = Query(None, pattern="^site$"),
+    handle: ProjectHandle = Depends(get_project),
+) -> MapFindingsInViewOut:
+    items, truncated = views.findings_in_view(handle, views.parse_bbox(bbox), map_ids)
+    return MapFindingsInViewOut(items=items, truncated=truncated)

@@ -24,6 +24,7 @@ const TYPE_NAME: Record<Job["type"], string> = {
   detect_export: "Detection export",
   pointcloud_import: "Point cloud import",
   pointcloud_export: "Point cloud export",
+  pointcloud_profile: "Cross-section profile",
   surface_build: "Build surface",
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
@@ -106,6 +107,8 @@ export function jobToastText(job: Job): string {
       return "Point cloud imported";
     case "pointcloud_export":
       return "Point cloud export finished";
+    case "pointcloud_profile":
+      return "Cross-section profile ready";
     case "surface_build":
       return "Surface built";
     case "volume_calc":

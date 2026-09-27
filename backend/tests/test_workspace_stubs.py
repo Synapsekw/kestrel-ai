@@ -1,21 +1,21 @@
 """M-C0: the map-workspace operations are routed as 501 stubs until their unit lands.
 
 A unit that builds an operation deletes its tuple from `app/workspace/stubs.py` (and its route
-goes live), and these tests follow because they read the lists. The option-guard tests that
-remain cover M-B2's `guard_surface_patch` in `app/workspace/pending.py`; M-B2 deletes them with it.
+goes live), and these tests follow because they read the lists. The option guards
+(`app/workspace/pending.py`) are gone: M-B2 and M-B5 built every option they refused.
 """
 
 import re
 
 import yaml
-from test_contract import EXPECTED_STUBS, METHODS, OPTION_STUBS, SPEC
+from test_contract import EXPECTED_STUBS, METHODS, SPEC
 from test_workspace_contract import WORKSPACE_OPERATIONS
 
 from app.workspace import stubs
 
 UNIT_LISTS = {
     "M-B1": stubs.B1_STUBS,
-    "M-B2": stubs.B2_STUBS,
+    # M-B2 landed importElevation; its stub list is gone from app/workspace/stubs.py.
     "M-B3": stubs.B3_STUBS,
     "M-B4": stubs.B4_STUBS,
 }
@@ -68,42 +68,6 @@ def test_an_unknown_project_is_404_before_any_stub(client):
         kwargs = {"json": {}} if method in ("POST", "PUT", "PATCH") else {}
         r = client.request(method, f"/api/v1/projects/nope{_concrete(path)}", **kwargs)
         assert r.status_code == 404, (op_id, r.text)
-
-
-WGS = [[15.0, 44.99], [15.01, 44.99], [15.01, 44.995]]
-
-
-def test_frame_site_is_ignored_until_m_b1(client, project_id):
-    """M-B1 turns this into a test that `polygon_site` is filled."""
-    url = f"/api/v1/projects/{project_id}/site-areas"
-    assert client.post(url, json={"name": "Yard", "polygon_wgs84": WGS}).status_code == 201
-    (area,) = client.get(url, params={"frame": "site"}).json()["items"]
-    assert area["category"] == "general"
-    assert "polygon_site" not in area
-
-
-def _option(r, unit: str) -> str:
-    assert r.status_code == 501, r.text
-    error = r.json()["error"]
-    assert error["code"] == "not_implemented"
-    assert error["details"]["unit"] == unit
-    return error["details"]["option"]
-
-
-def test_option_stubs_name_real_operations():
-    """The last unit to delete its guards deletes this test and `_option` with them."""
-    spec = yaml.safe_load(SPEC.read_text("utf-8"))
-    ids = {op["operationId"] for ops in spec["paths"].values() for m, op in ops.items() if m in METHODS}
-    assert set(OPTION_STUBS) <= ids
-    assert set(OPTION_STUBS.values()) <= {"M-B2"}
-    assert not set(OPTION_STUBS) & EXPECTED_STUBS
-
-
-def test_a_surface_date_or_role_patch_answers_501_until_m_b2(client, project_id):
-    """M-B2 deletes this test with `guard_surface_patch`."""
-    url = f"/api/v1/projects/{project_id}/surfaces/any"
-    assert _option(client.patch(url, json={"captured_on": "2026-09-14"}), "M-B2") == "captured_on"
-    assert _option(client.patch(url, json={"elevation_role": "dtm"}), "M-B2") == "elevation_role"
 
 
 # ------------------------------------------- volumes: a request without any polygon (M-C0 contract)

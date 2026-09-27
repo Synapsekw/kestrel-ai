@@ -17,13 +17,13 @@ from collections.abc import Callable
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.datasets import boxes
 from app.db.models import Box, GeoMap, MapDetection, MapRun, QueryRun
 from app.detect import map_findings
 from app.detect.areas import ProjectedArea, area_ids_for_point, areas_for_map
 from app.detect.counts import VERIFIED_STATES, Entry, apply_area_transition, apply_transition
 from app.errors import AppError, not_found
 from app.findings import trash
+from app.imagery import annotations as boxes
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.maps import timeline
@@ -304,7 +304,7 @@ def run_accept_above(ctx: JobContext) -> dict:
                 n, _ = _apply(s, ctx.project, _map_run(s, run_id), ids, _decide("accept", None))
                 accepted += n
         else:
-            accepted += boxes.review_boxes(ctx.project, ids, "accept")
+            accepted += boxes.review_boxes(ctx.project, ids, "accept").changed
         ctx.progress(accepted / total if total else 1.0, f"Accepted {accepted} of {total}")
     ctx.log.info("accept_above run %s at %.2f: %d accepted", run_id, min_conf, accepted)
     return {"run_id": run_id, "accepted": accepted}

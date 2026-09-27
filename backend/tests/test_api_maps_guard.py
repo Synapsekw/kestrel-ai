@@ -17,6 +17,8 @@ def test_maps_router_import_failure_leaves_the_rest_of_the_app_working(tmp_path,
     # `app.api` is only imported lazily, inside `create_app`'s body, so it must be evicted from the
     # module cache first or a second `create_app()` call would just reuse the already-built router
     # from earlier tests and never re-run the guarded import at all.
+    import app.api  # noqa: F401
+
     monkeypatch.delitem(sys.modules, "app.api", raising=False)
     # Poisoning `app.maps.router` itself (rather than something deep in its rasterio-importing
     # chain) is enough: `from app.maps.router import router` raises exactly the ImportError this

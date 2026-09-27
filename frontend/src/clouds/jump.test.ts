@@ -8,12 +8,17 @@ import {
   cloudToMapNative,
   cloudsForMap,
   footprintDiagonal,
+  fromImageQuery,
+  imageJumpHref,
   insideXY,
   jumpQuery,
   mapPixelToCloud,
   nativeToPixel,
   parseAt,
+  parseCloudArrival,
+  parseFinding,
   parseFootprint,
+  parseFromImage,
 } from "./jump";
 
 const UTM39 = "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs";
@@ -87,5 +92,79 @@ describe("3D jump URLs", () => {
         { x: 0, y: 4 },
       ]),
     ).toBe(5);
+  });
+});
+
+describe("image <-> cloud and finding jumps (spec §10.4, C9)", () => {
+  const q = (s: string) => new URLSearchParams(s);
+
+  it("parses from_image with its pixel, and ignores it when malformed", () => {
+    expect(parseFromImage(q("from_image=img-1&px=120.5,88"))).toEqual({ imageId: "img-1", u: 120.5, v: 88 });
+    for (const bad of [
+      "from_image=img-1",
+      "from_image=img-1&px=",
+      "from_image=img-1&px=-1,2",
+      "from_image=img-1&px=a,b",
+      "from_image=img-1&px=1,2,3",
+      "from_image=&px=1,2",
+      "from_image=../etc&px=1,2",
+      "px=1,2",
+    ])
+      expect(parseFromImage(q(bad)), bad).toBeNull();
+  });
+
+  it("parses a finding id and ignores a malformed one", () => {
+    expect(parseFinding(q("finding=f0000000-1111-4000-8000-000000000001"))).toBe(
+      "f0000000-1111-4000-8000-000000000001",
+    );
+    for (const bad of ["finding=", "finding=a%20b", "finding=" + "x".repeat(129), ""])
+      expect(parseFinding(q(bad)), bad).toBeNull();
+  });
+
+  it("orders the arrivals finding, from_image, at", () => {
+    expect(parseCloudArrival(q("finding=f1&from_image=i1&px=1,2&at=3,4"))).toEqual({
+      kind: "finding",
+      findingId: "f1",
+    });
+    expect(parseCloudArrival(q("from_image=i1&px=1,2&at=3,4"))).toEqual({
+      kind: "from_image",
+      imageId: "i1",
+      u: 1,
+      v: 2,
+    });
+    expect(parseCloudArrival(q("finding=a%20b&from_image=i1&px=x&at=3,4&fp=1,2;3,4"))).toEqual({
+      kind: "at",
+      at: { x: 3, y: 4 },
+      fp: [
+        { x: 1, y: 2 },
+        { x: 3, y: 4 },
+      ],
+    });
+    expect(parseCloudArrival(q(""))).toBeNull();
+    expect(parseCloudArrival(q("at=oops"))).toBeNull();
+  });
+
+  it("writes the image -> cloud query", () => {
+    expect(fromImageQuery("img-1", 120.456, 88)).toBe("?from_image=img-1&px=120.5,88.0");
+    expect(parseFromImage(q(fromImageQuery("img-1", 120.456, 88).slice(1)))).toEqual({
+      imageId: "img-1",
+      u: 120.5,
+      v: 88,
+    });
+  });
+
+  it("builds the cloud -> image link, with and without a spot", () => {
+    const href = imageJumpHref("p1", "img-7", "c1", { px: 1024, py: 768.00000001, rpx: 116.2 });
+    expect(href).toBe("/p/p1/images/img-7?at=1024.0,768.0&r=116&from=cloud:c1");
+    const back = new URLSearchParams(href.split("?")[1]);
+    expect(back.get("from")).toBe("cloud:c1");
+    expect(back.get("at")).toBe("1024.0,768.0");
+    expect(imageJumpHref("p1", "img-7", "c1", { px: 3, py: 4, rpx: 0.2 })).toContain("&r=1&");
+    expect(imageJumpHref("p1", "img-7", "c1", null)).toBe("/p/p1/images/img-7?from=cloud:c1");
+  });
+
+  it("leaves the S1 contract unchanged", () => {
+    expect(parseAt(q("at=1,2&from_image=i1&px=1,2"))).toEqual({ x: 1, y: 2 });
+    expect(jumpQuery({ x: 1, y: 2 })).toBe("?at=1.000,2.000");
   });
 });

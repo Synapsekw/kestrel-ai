@@ -512,16 +512,85 @@ class CloudMeasurement(Base):
     __tablename__ = "cloud_measurement"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     point_cloud_id: Mapped[str] = mapped_column(String(36), ForeignKey("point_cloud.id", ondelete="CASCADE"))
-    kind: Mapped[str] = mapped_column(String)  # point | distance | height | vertical
+    kind: Mapped[str] = mapped_column(String)  # point | distance | height | vertical | area | profile
     name: Mapped[str] = mapped_column(String)
     note: Mapped[str | None] = mapped_column(String, nullable=True)
-    points: Mapped[list] = mapped_column(JSON)  # [{x, y, z, uncertainty_m}] in the cloud's native CRS
+    points: Mapped[list] = mapped_column(JSON)  # [{x, y, z, uncertainty_m, group?}] in the cloud's native CRS
     results: Mapped[dict] = mapped_column(JSON, default=dict)  # computed by the server, never the client
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+    # Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 8.1, migration 0013).
+    # none_as_null: without it SQLAlchemy stores Python None as the JSON text 'null'.
+    params: Mapped[dict | None] = mapped_column(JSON(none_as_null=True), nullable=True)
+    status: Mapped[str] = mapped_column(
+        String, default="ready", server_default="ready"
+    )  # ready|computing|failed
+    error: Mapped[str | None] = mapped_column(String, nullable=True)  # why a profile failed
+    job_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # the profile's job
+    finding_id: Mapped[str | None] = mapped_column(
+        String(36),
+        ForeignKey("finding.id", ondelete="SET NULL", name="fk_cloud_measurement_finding"),
+        nullable=True,
+    )
     __table_args__ = (
         Index("ix_cloud_measurement_cloud", "point_cloud_id"),
         Index("ix_cloud_measurement_created", "created_at", "id"),  # the measurements union's page key
+        Index("ix_cloud_measurement_finding", "finding_id"),
+    )
+
+
+# Exactly one subject per report view (spec section 11.2). Frozen as text in migration 0013.
+CLOUD_VIEW_SUBJECT_CHECK = "(finding_id IS NULL) <> (cloud_measurement_id IS NULL)"
+
+
+class CloudCameraOffset(Base):
+    """The height offset added to an image set's EXIF altitudes for one cloud (spec section 10.1)."""
+
+    __tablename__ = "cloud_camera_offset"
+    point_cloud_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("point_cloud.id", ondelete="CASCADE"), primary_key=True
+    )
+    source_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("source.id", ondelete="CASCADE"), primary_key=True
+    )
+    height_offset_m: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+
+
+class CloudView(Base):
+    """The stored report view of one cloud finding or cloud measurement (spec section 11.2).
+
+    The API exposes the subject as `subject_kind` (`finding` | `cloud_measurement`) + `subject_id`."""
+
+    __tablename__ = "cloud_view"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    point_cloud_id: Mapped[str] = mapped_column(String(36), ForeignKey("point_cloud.id", ondelete="CASCADE"))
+    finding_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("finding.id", ondelete="CASCADE"), nullable=True
+    )
+    cloud_measurement_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("cloud_measurement.id", ondelete="CASCADE"), nullable=True
+    )
+    anchor_normal: Mapped[list | None] = mapped_column(
+        JSON(none_as_null=True), nullable=True
+    )  # findings only
+    pose: Mapped[dict] = mapped_column(JSON)  # {position, target, up, fov_deg}, native CRS
+    render: Mapped[dict] = mapped_column(
+        JSON
+    )  # {colour_mode, point_budget, point_size, edl, clip_box, complete}
+    path: Mapped[str] = mapped_column(
+        String
+    )  # pointclouds/<cloud>/views/<subject_kind>-<subject_id>.png|.jpg
+    sha256: Mapped[str] = mapped_column(String)
+    bytes: Mapped[int] = mapped_column(Integer)
+    width: Mapped[int] = mapped_column(Integer)
+    height: Mapped[int] = mapped_column(Integer)
+    anchor_hash: Mapped[str] = mapped_column(String)  # the subject's geometry at capture; stale on mismatch
+    captured_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
+    __table_args__ = (
+        CheckConstraint(CLOUD_VIEW_SUBJECT_CHECK, name="ck_cloud_view_subject"),
+        Index("ux_cloud_view_finding", "finding_id", unique=True),
+        Index("ux_cloud_view_measurement", "cloud_measurement_id", unique=True),
+        Index("ix_cloud_view_cloud", "point_cloud_id"),
     )
 
 

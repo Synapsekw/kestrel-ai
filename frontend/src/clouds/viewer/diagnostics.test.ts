@@ -18,6 +18,16 @@ function hook(): CloudViewerDiagnostics {
     pickCenter: () => null,
     pickDown: () => null,
     overlays: () => [],
+    frameTimes: () => [],
+    setNavMode: () => {},
+    navMode: () => "orbit",
+    setView: () => {},
+    scriptOrbit: () => Promise.resolve(),
+    cameraPose: () => null,
+    lastFrame: () => null,
+    edl: () => ({ on: false, rendersToTarget: false }),
+    setEdl: () => {},
+    topSnapshotSample: () => Promise.resolve(null),
   };
 }
 

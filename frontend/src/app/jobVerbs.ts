@@ -22,6 +22,7 @@ export const JOB_VERB: Record<Job["type"], string> = {
   detect_export: "Exporting counts",
   pointcloud_import: "Importing a point cloud",
   pointcloud_export: "Exporting a point cloud",
+  pointcloud_profile: "Cutting a cross-section profile",
   surface_build: "Building a surface",
   volume_calc: "Calculating a volume",
   volume_export: "Exporting volumes",

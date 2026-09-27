@@ -168,7 +168,11 @@ def test_deleting_the_finding_deletes_its_box(client, ctx):
     assert client.get(f"{ctx['base']}/images/{ctx['image_id']}/boxes").json()["items"] == []
 
 
-def test_unreviewing_an_accepted_defect_removes_its_finding(client, handle, ctx, tmp_path, make_jpeg):
+def test_unreviewing_an_accepted_defect_keeps_a_finding_with_content(
+    client, handle, ctx, tmp_path, make_jpeg
+):
+    """Image spec 8.3 supersedes foundation 8.5 here: undo of an accept never takes a note, comment
+    or photo with it."""
     bid = _proposal(handle, ctx, ctx["crack"])
     _review(client, ctx, [bid], "accept")
     [f] = _findings(client, ctx)
@@ -176,10 +180,16 @@ def test_unreviewing_an_accepted_defect_removes_its_finding(client, handle, ctx,
     photo = make_jpeg(tmp_path / "site.jpg", 64, 48)
     r = client.post(f"{ctx['base']}/findings/{f['id']}/attachments", json={"path": str(photo)})
     assert r.status_code == 201, r.text
+    r = client.post(f"{ctx['base']}/boxes/review", json={"box_ids": [bid], "action": "unreview"})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "finding_has_content"
+    assert [g["id"] for g in _findings(client, ctx)] == [f["id"]]
+
+
+def test_unreviewing_an_untouched_accepted_defect_removes_its_finding(client, handle, ctx):
+    bid = _proposal(handle, ctx, ctx["crack"])
+    _review(client, ctx, [bid], "accept")
     _review(client, ctx, [bid], "unreview")
     assert _findings(client, ctx) == []
-    [binned] = (handle.folder / "findings" / "_trash").glob(f"{f['id']}-*")
-    assert [p for p in binned.rglob("*") if p.is_file()]  # the photo is recoverable from the trash
     _review(client, ctx, [bid], "accept")
     assert [g["number"] for g in _findings(client, ctx)] == [2]
 

@@ -23,22 +23,7 @@ Stub = tuple[str, str, str]
 
 # M-B1: the site frame, the workspace state, surveys, layers, site tiles, anchors, findings in view
 # and the readout sample (spec §5.2, §6, §9.4).
-B1_STUBS: list[Stub] = [
-    ("GET", "/map-workspace", "getMapWorkspace"),
-    ("PUT", "/map-workspace", "putMapWorkspace"),
-    ("PUT", "/map-workspace/frame", "setSiteFrame"),
-    ("GET", "/map-workspace/surveys", "listWorkspaceSurveys"),
-    ("GET", "/map-workspace/layers", "listWorkspaceLayers"),
-    ("POST", "/map-workspace/anchor", "convertAnchor"),
-    ("GET", "/map-workspace/findings", "listMapFindingsInView"),
-    ("POST", "/map-workspace/sample", "sampleInFrame"),
-    ("GET", "/site-tiles/{kind}/{layerId}/{z}/{x}/{y}", "getSiteTile"),
-]
-
-# M-B2: the plain DSM/DTM import (spec §7).
-B2_STUBS: list[Stub] = [
-    ("POST", "/elevations", "importElevation"),
-]
+B1_STUBS: list[Stub] = []
 
 # M-B3: drawings - inspect, build, georeference, tiles (spec §8).
 B3_STUBS: list[Stub] = [
@@ -67,7 +52,7 @@ B4_STUBS: list[Stub] = [
     ("DELETE", "/map-measurements/{mapMeasurementId}", "deleteMapMeasurement"),
 ]
 
-STUBS: list[Stub] = [*B1_STUBS, *B2_STUBS, *B3_STUBS, *B4_STUBS]
+STUBS: list[Stub] = [*B1_STUBS, *B3_STUBS, *B4_STUBS]
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["workspace"])
 add_stubs(router, STUBS)
