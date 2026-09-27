@@ -33,7 +33,7 @@ export function resetToolsForTests(): void {
   tools.clear();
 }
 
-function restoreType(api: ToolApi, def: ToolDefinition): void {
+export function restoreType(api: ToolApi, def: ToolDefinition): void {
   const s = api.store.getState();
   const accepts = (t: ClassDef | undefined): t is ClassDef => !!t && (!def.typeFilter || def.typeFilter(t));
   const remembered = s.projectId
@@ -42,6 +42,15 @@ function restoreType(api: ToolApi, def: ToolDefinition): void {
   const current = s.types.find((t) => t.id === s.activeTypeId);
   const pick = accepts(remembered) ? remembered : accepts(current) ? current : s.types.find(accepts);
   s.setActiveType(pick?.id ?? null);
+}
+
+/**
+ * Re-picks the active type for the tool in use, e.g. after the type catalogue changed (another
+ * project): `activateTool` returns early when the tool is unchanged, so it would not (I5).
+ */
+export function restoreActiveType(api: ToolApi): void {
+  const def = tools.get(api.store.getState().tool);
+  if (def?.drawsShapes && def.id !== "pan") restoreType(api, def);
 }
 
 /** Switches tools: deactivates the old one, restores the type (ruling FC-R13), activates the new one. */

@@ -46,6 +46,15 @@ beforeEach(() => {
 });
 
 describe("ShapeLayer (layer 2)", () => {
+  it("stops listening at the layer during a gesture without re-rendering the nodes (m1)", () => {
+    render(<ShapeLayer ctx={ctx()} />);
+    const before = renders.rect ?? 0;
+    act(() => st().setInteracting(true));
+    expect(document.querySelector('[data-name="annotations"]')).toHaveAttribute("data-listening", "false");
+    act(() => st().setInteracting(false));
+    expect(renders.rect ?? 0).toBe(before);
+  });
+
   it("draws accepted shapes only: a centre-pivoted rect, a closed line, a circle", () => {
     render(<ShapeLayer ctx={ctx()} />);
     expect(document.querySelector('[data-id="shape-b"]')).toHaveAttribute("data-x", "120");

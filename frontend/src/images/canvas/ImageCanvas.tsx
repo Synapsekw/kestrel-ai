@@ -16,8 +16,8 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import type { ClassDef } from "@contract/client";
 import type { BoxWriteResult } from "@/api/shapes";
 import { ensureBuiltInTools } from "@/images/tools";
-import { getTool } from "@/images/tools/registry";
-import { lastPointer, makeToolApi } from "@/images/tools/toolApi";
+import { getTool, restoreActiveType } from "@/images/tools/registry";
+import { lastPointer, makeToolApi, onShapeCreated as listenForCreated } from "@/images/tools/toolApi";
 import { TypePicker } from "@/images/tools/TypePicker";
 import type { ToolApi, ToolPointer } from "@/images/tools/types";
 import { useImagesWorkspace, type ImagesWorkspaceStore } from "@/store/imagesWorkspace";
@@ -74,7 +74,11 @@ export function createIdleMarker(
       }, ms);
     },
     dispose() {
-      if (timer) clearTimeout(timer);
+      if (!timer) return;
+      clearTimeout(timer);
+      timer = null;
+      // T10: an unmount mid-gesture must not leave the layers deaf (interacting stuck on).
+      store.getState().setInteracting(false);
     },
   };
 }
@@ -112,17 +116,9 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
   useEffect(() => {
     created.current = onShapeCreated;
   });
-  const api = useMemo<ToolApi>(() => {
-    const base = makeToolApi(ctx);
-    return {
-      ...base,
-      createShape: async (body) => {
-        const box = await base.createShape(body);
-        if (box) created.current?.(box);
-        return box;
-      },
-    };
-  }, [ctx]);
+  // Every ToolApi's createShape reports here, the key handlers' too (Enter closing a polygon).
+  useEffect(() => listenForCreated((box) => created.current?.(box)), []);
+  const api = useMemo<ToolApi>(() => makeToolApi(ctx), [ctx]);
 
   const image = useImagesWorkspace((s) => s.image);
   const view = useImagesWorkspace((s) => s.view);
@@ -142,7 +138,8 @@ export const ImageCanvas = forwardRef<ImageCanvasHandle, ImageCanvasProps>(funct
     const s = useImagesWorkspace.getState();
     s.setProject(projectId);
     s.setTypes(types);
-  }, [projectId, types]);
+    restoreActiveType(api); // I5: the tool in use re-picks a type from this catalogue.
+  }, [projectId, types, api]);
 
   const { bitmap } = useTwoLevelImage({
     imageId: image?.id ?? null,

@@ -176,6 +176,14 @@ function ShapeLabels({ list, types }: { list: Box[]; types: ClassDef[] }) {
   );
 }
 
+/** One handler for every measurement line (m2): the id comes from the node's name. */
+function onMeasurementDown(e: KonvaEventObject<MouseEvent>): void {
+  if (e.evt.button !== 0) return;
+  e.cancelBubble = true;
+  const id = e.target.name().split(" ")[1];
+  if (id) useImagesWorkspace.getState().selectMeasurement(id);
+}
+
 function MeasurementNodes({ interactive }: { interactive: boolean }) {
   const measurements = useImagesWorkspace((s) => s.measurements);
   const selectedId = useImagesWorkspace((s) => s.selectedMeasurementId);
@@ -199,11 +207,7 @@ function MeasurementNodes({ interactive }: { interactive: boolean }) {
             hitStrokeWidth={12}
             listening={interactive}
             perfectDrawEnabled={false}
-            onMouseDown={(e: KonvaEventObject<MouseEvent>) => {
-              if (e.evt.button !== 0) return;
-              e.cancelBubble = true;
-              useImagesWorkspace.getState().selectMeasurement(m.id);
-            }}
+            onMouseDown={onMeasurementDown}
           />,
           <Text
             key={`ml-${m.id}`}
@@ -222,8 +226,11 @@ function MeasurementNodes({ interactive }: { interactive: boolean }) {
   );
 }
 
-/** Layer 2: accepted shapes, their labels, and the image's length measurements (spec §9.1). */
-export function ShapeLayer({ ctx }: { ctx: CommandContext }) {
+/**
+ * Layer 2: accepted shapes, their labels, and the image's length measurements (spec §9.1).
+ * Memoised (m2): ImageCanvas re-renders on every pan frame, this layer only on its own state.
+ */
+export const ShapeLayer = memo(function ShapeLayer({ ctx }: { ctx: CommandContext }) {
   const boxes = useImagesWorkspace((s) => s.boxes);
   const order = useImagesWorkspace((s) => s.order);
   const showAnnotations = useImagesWorkspace((s) => s.showAnnotations);
@@ -236,7 +243,10 @@ export function ShapeLayer({ ctx }: { ctx: CommandContext }) {
   const scale = useImagesWorkspace((s) => s.view.scale);
   const bucket = bucketOf(scale);
   const list = useMemo(() => acceptedShapes({ boxes, order, showAnnotations: true }), [boxes, order]);
-  const interactive = !(getTool(tool)?.drawsShapes ?? false) && !interacting && !spaceHeld;
+  // m1: the nodes do not take `interacting`; the layer's `listening` already covers a gesture, so
+  // its start and end do not re-render every node.
+  const nodesInteractive = !(getTool(tool)?.drawsShapes ?? false) && !spaceHeld;
+  const interactive = nodesInteractive && !interacting;
 
   const onPointerDown = useCallback((id: string, e: KonvaEventObject<MouseEvent>) => {
     // Left button only: a middle press is the pan gesture and must not select.
@@ -253,8 +263,10 @@ export function ShapeLayer({ ctx }: { ctx: CommandContext }) {
       const s = ctx.store.getState();
       const box = s.boxes[id];
       const node = e.target as Konva.Node & NodeLike;
-      if (!box || !s.image) return;
-      void cmdUpdateShape(ctx, id, dragPatch(box, node, s.image))
+      const image = s.image;
+      if (!box || !image) return;
+      // Read the box when the queued command runs: a polygon's drag offset applies to its points.
+      void cmdUpdateShape(ctx, id, (current) => dragPatch(current, node, image))
         .catch((err: unknown) => pushLog(`commit shape failed: ${String(err)}`))
         .then(() => resync(node, ctx.store.getState().boxes[id]));
     },
@@ -273,7 +285,7 @@ export function ShapeLayer({ ctx }: { ctx: CommandContext }) {
           hovered={hoveredId === b.id}
           bucket={bucket}
           scale={scale}
-          interactive={interactive}
+          interactive={nodesInteractive}
           onPointerDown={onPointerDown}
           onDragEnd={onDragEnd}
         />
@@ -282,4 +294,4 @@ export function ShapeLayer({ ctx }: { ctx: CommandContext }) {
       <MeasurementNodes interactive={interactive} />
     </Layer>
   );
-}
+});

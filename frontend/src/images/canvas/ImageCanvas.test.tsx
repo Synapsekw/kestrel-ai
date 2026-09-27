@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { createRef, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Box } from "@contract/client";
@@ -7,7 +7,10 @@ import { ApiContext } from "@/api/client";
 import { exampleClasses, fakeClient, PROJECT_ID } from "@/test/fixtures";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
 import { createIdleMarker, ImageCanvas, type ImageCanvasHandle } from "./ImageCanvas";
-import { fakeStage, stageProps } from "./testKonva";
+import { useImagesKeymap } from "@/images/workspace/keymap";
+import type { CommandContext } from "./commands";
+import { fakeStage, renders, stageProps } from "./testKonva";
+import { useCanvasKeyHandlers } from "./useCanvasKeys";
 import { makeDetail, makeShape, makeWritten } from "./testing";
 
 vi.mock("react-konva", () => import("./testKonva"));
@@ -101,6 +104,7 @@ describe("ImageCanvas", () => {
     act(() => (stageProps.current!.onMouseMove as (e: unknown) => void)(press()));
     await act(async () => (stageProps.current!.onMouseUp as (e: unknown) => void)(press()));
     await waitFor(() => expect(onShapeCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "new" })));
+    expect(onShapeCreated).toHaveBeenCalledTimes(1);
     expect(requests.at(-1)?.body).toMatchObject({
       class_id: "t1",
       shape: "box",
@@ -109,6 +113,60 @@ describe("ImageCanvas", () => {
       w: 200,
       h: 150,
     });
+  });
+
+  it("reports a polygon closed with Enter once (I2)", async () => {
+    const onShapeCreated = vi.fn();
+    const { requests } = mount({ onShapeCreated });
+    const { api } = fakeClient([
+      {
+        method: "POST",
+        path: /\/images\/[^/]+\/boxes$/,
+        status: 201,
+        body: (req) => makeWritten({ ...(req.body as Partial<Box>), id: "enter" }),
+      },
+    ]);
+    const ctx: CommandContext = {
+      api,
+      projectId: PROJECT_ID,
+      store: useImagesWorkspace,
+      history: st().history,
+    };
+    renderHook(() => useImagesKeymap([useCanvasKeyHandlers(ctx)]));
+    act(() => {
+      st().setTool("polygon");
+      st().setDraft({
+        kind: "polygon",
+        points: [
+          { x: 0, y: 0 },
+          { x: 50, y: 0 },
+          { x: 50, y: 50 },
+        ],
+        cursor: null,
+        pressed: false,
+        lastScreen: null,
+      });
+    });
+    act(() => void fireEvent.keyDown(window, { key: "Enter" }));
+    await waitFor(() =>
+      expect(onShapeCreated).toHaveBeenCalledWith(expect.objectContaining({ id: "enter" })),
+    );
+    expect(onShapeCreated).toHaveBeenCalledTimes(1);
+    expect(requests).toHaveLength(0); // the key handlers' own client made the request
+  });
+
+  it("re-picks the drawing tool's type when the catalogue changes (I5)", () => {
+    useImagesWorkspace.setState({ tool: "box", activeTypeId: "other-project-type" });
+    mount();
+    expect(st().activeTypeId).toBe("t1");
+  });
+
+  it("does not re-render the shape and interaction layers on a pan frame (m2)", () => {
+    mount();
+    const before = renders.layer ?? 0;
+    act(() => st().setView({ ...st().view, x: st().view.x + 10 }));
+    // Only the image and suggestion layers, which ImageCanvas renders itself.
+    expect((renders.layer ?? 0) - before).toBe(2);
   });
 
   it("ignores a press while Space pans", () => {
@@ -165,6 +223,14 @@ describe("createIdleMarker", () => {
     vi.advanceTimersByTime(100);
     expect(st().interacting).toBe(true);
     vi.advanceTimersByTime(20);
+    expect(st().interacting).toBe(false);
+  });
+
+  it("clears `interacting` when disposed with a timer pending (T10)", () => {
+    vi.useFakeTimers();
+    const idle = createIdleMarker(useImagesWorkspace);
+    idle.mark();
+    idle.dispose();
     expect(st().interacting).toBe(false);
   });
 });
