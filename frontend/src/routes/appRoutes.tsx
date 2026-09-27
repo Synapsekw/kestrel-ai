@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router-dom";
 import { SectionPlaceholder } from "@/app/InterimScreens";
 import { AboutScreen, CatalogueScreen, JobsScreen, Later } from "@/app/lazyScreens";
 import { LibraryScreen } from "@/library/LibraryScreen";
+import { ModelsLayout } from "@/models/ModelsLayout";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
 import { Redirect } from "./Redirect";
 
@@ -18,12 +19,18 @@ const training = (
 
 /** The app-level routes (spec 2026-09-26-foundation section 5.3). S2 adds or swaps entries here only. */
 export const appRoutes: RouteObject[] = [
-  { path: "models", element: <Redirect to={() => "/models/library"} /> },
-  { path: "models/library", element: <LibraryScreen /> },
-  { path: "models/datasets", element: datasets },
-  { path: "models/datasets/:datasetId", element: datasets },
-  { path: "models/training", element: training },
-  { path: "models/training/:runId", element: training },
+  {
+    path: "models",
+    element: <ModelsLayout />,
+    children: [
+      { index: true, element: <Redirect to={() => "/models/library"} /> },
+      { path: "library", element: <LibraryScreen /> },
+      { path: "datasets", element: datasets },
+      { path: "datasets/:datasetId", element: datasets },
+      { path: "training", element: training },
+      { path: "training/:runId", element: training },
+    ],
+  },
   {
     path: "catalogue",
     element: (

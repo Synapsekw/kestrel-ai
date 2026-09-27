@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { RouterProvider, createMemoryRouter, matchRoutes, type RouteObject } from "react-router-dom";
+import { Outlet, RouterProvider, createMemoryRouter, matchRoutes, type RouteObject } from "react-router-dom";
 import { PROJECT_TABS, SECONDARY_PAGES } from "@/app/routeModel";
 import { appRoutes } from "./appRoutes";
 import { legacyAppRedirects, legacyProjectRedirects } from "./legacyRedirects";
@@ -57,7 +57,19 @@ const rootIndex = shellChildren.find((r) => r.index)!;
 const projectIndex = shellChildren.find((r) => r.path === "p/:projectId")!.children!.find((r) => r.index)!;
 
 function land(start: string) {
-  const models = appRoutes.find((r) => r.path === "models");
+  // The real "models" entry is a ModelsLayout with real sub-screens (library, datasets,
+  // training); this router only cares where a redirect lands, so its non-index children are
+  // swapped for a "landed" leaf (the index child stays real: it's the redirect under test).
+  const modelsRoute = appRoutes.find((r) => r.path === "models");
+  const models: RouteObject | undefined =
+    modelsRoute &&
+    ({
+      ...modelsRoute,
+      element: <Outlet />,
+      children: modelsRoute.children?.map((child): RouteObject =>
+        child.index ? child : { ...child, element: <p>landed</p> },
+      ),
+    } as RouteObject);
   const router = createMemoryRouter(
     [
       {

@@ -38,7 +38,7 @@ test("/library lists the mock's models and opening one shows where it came from"
         body: CSV,
       }),
   );
-  await page.goto("/library");
+  await page.goto("/models/library");
   await expect(page.getByRole("heading", { name: "Library", exact: true })).toBeVisible();
   const table = page.getByTestId("model-table");
   await expect(table).toContainText("ahmadia-v1-n");
@@ -59,7 +59,7 @@ test("/library lists the mock's models and opening one shows where it came from"
 });
 
 test("import, export and delete send the library requests", async ({ page }) => {
-  await page.goto(`/library?model=${TRAINED}`);
+  await page.goto(`/models/library?model=${TRAINED}`);
   const exported = page.waitForRequest(
     (r) => r.method() === "POST" && r.url().endsWith(`/library/models/${TRAINED}/export`),
   );
@@ -103,7 +103,7 @@ test("an unopened library blocks the screen with the reason and the folder", asy
         }),
       ),
   );
-  await page.goto("/library");
+  await page.goto("/models/library");
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("The model library could not be opened");
   await expect(alert).toContainText("library.db is not a database");
@@ -174,7 +174,7 @@ test("an import runs as a job with progress, and the new model is selected when 
     (route) => route.fulfill(json(finished ? { ...listed, items: [imported, ...listed.items] } : listed)),
   );
 
-  await page.goto("/library");
+  await page.goto("/models/library");
   await expect(page.getByTestId("model-table")).toContainText("ahmadia-v1-n");
   await page.getByRole("button", { name: "Import a model file" }).click();
   const form = page.getByRole("form", { name: "Import a model file" });

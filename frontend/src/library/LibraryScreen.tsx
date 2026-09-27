@@ -5,6 +5,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { cancelLibraryJob, fetchLibraryStatus } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
+import { useProvideRouteActions, type RouteAction } from "@/app/routeActions";
 import { jobTitle } from "@/jobs/jobLabels";
 import { isActiveJob, useJobsStore } from "@/store/jobs";
 import { Alert, Button, Disclosure, EmptyState, Progress, Segmented, Skeleton, SkeletonRows } from "@/ui";
@@ -76,6 +77,19 @@ function LibraryContent() {
   const [params, setParams] = useSearchParams();
   const selectedId = params.get("model");
   const [adding, setAdding] = useState<Adding>(null);
+  const actions = useMemo<RouteAction[]>(
+    () => [
+      {
+        id: "import-model",
+        label: "Import model",
+        icon: "import",
+        variant: "primary",
+        run: () => setAdding("file"),
+      },
+    ],
+    [],
+  );
+  useProvideRouteActions(actions);
   const [task, setTask] = useState<TaskFilter>("all");
   const [origin, setOrigin] = useState<OriginFilter>("all");
   const [failed, setFailed] = useState<Job[]>([]);
@@ -122,7 +136,7 @@ function LibraryContent() {
     <>
       <div className="flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline gap-3">
-          <h1 className="text-xl font-semibold">Library</h1>
+          <h2 className="text-lg font-semibold">Library</h2>
           {library.loading ? (
             <Skeleton className="h-4 w-20 self-center" />
           ) : (
@@ -192,7 +206,7 @@ function LibraryContent() {
         <SkeletonRows rows={3} columns={4} />
       ) : models.length === 0 && !library.error && !library.unavailable ? (
         <EmptyState icon="models" title="No models in the library yet">
-          Train a model in a training project, import a model file, or add a starter model above.
+          Train one under Training, import a model file, or add a starter model above.
         </EmptyState>
       ) : (
         models.length > 0 && (
@@ -264,7 +278,7 @@ export function LibraryScreen() {
         </>
       ) : state.status && !state.status.available ? (
         <>
-          <h1 className="text-xl font-semibold">Library</h1>
+          <h2 className="text-lg font-semibold">Library</h2>
           <Alert tone="danger" title="The model library could not be opened">
             <p>{state.status.error ?? "The library folder cannot be read."}</p>
             <p className="mt-2 text-muted">
