@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import traceback
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, TypeVar
@@ -53,10 +54,10 @@ def _to(value, device):
 
 def _is_cuda_failure(e: BaseException) -> bool:
     """Out of memory, or a RuntimeError the CUDA runtime raised (torch reports those as
-    `RuntimeError`/`AcceleratorError` with "CUDA" in the message)."""
+    `RuntimeError`/`AcceleratorError` with "CUDA" or "cuDNN" in the message)."""
     if isinstance(e, torch.cuda.OutOfMemoryError):
         return True
-    return isinstance(e, RuntimeError) and "cuda" in str(e).lower()
+    return isinstance(e, RuntimeError) and any(k in str(e).lower() for k in ("cuda", "cudnn"))
 
 
 def _new_predictor(weights: Path, device: Device) -> SAM2Predictor:
@@ -85,13 +86,20 @@ class UltralyticsSam2Backend:
         if self._predictor is not None and self._device == device:
             return self._predictor
         self._release()
+        if device == "cpu" and torch.cuda.is_initialized():
+            # A failed GPU predictor may have become unreferenced only after its failure path
+            # emptied the cache; empty it again now that nothing holds it.
+            self._free_cuda()
         try:
             predictor = self._new_predictor(self._weights, device)
         except Exception as e:
+            message = f"SAM 2.1 could not load on {device}: {type(e).__name__}: {e}"
             if device == "cuda":
                 log.warning("SAM 2.1 could not load on cuda", exc_info=True)
+                # The traceback's frames hold the half-built predictor; drop them before freeing.
+                traceback.clear_frames(e.__traceback__)
                 self._free_cuda()
-            raise AssistUnavailable(f"SAM 2.1 could not load on {device}: {type(e).__name__}: {e}") from e
+            raise AssistUnavailable(message) from e
         if device == "cpu":
             _limit_cpu_threads()
         self._predictor, self._device = predictor, device
@@ -107,8 +115,12 @@ class UltralyticsSam2Backend:
             if not _is_cuda_failure(e):
                 raise
             log.warning("SAM 2.1 %s failed on cuda; dropping the GPU predictor", what, exc_info=True)
+            message = f"SAM 2.1 {what} failed on cuda: {type(e).__name__}: {e}"
+            # The traceback's frames (`work`, Ultralytics internals) still reference the predictor
+            # and its tensors; clear them so `empty_cache` in `_release` can actually free VRAM.
+            traceback.clear_frames(e.__traceback__)
             self._release()
-            raise AssistUnavailable(f"SAM 2.1 {what} failed on cuda: {type(e).__name__}: {e}") from e
+            raise AssistUnavailable(message) from e
 
     def encode(self, rgb: np.ndarray, device: Device) -> Any:
         def work():

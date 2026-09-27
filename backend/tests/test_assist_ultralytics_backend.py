@@ -4,6 +4,7 @@ A fake predictor stands in for `SAM2Predictor`, so this runs in the default suit
 exercised by `tests/test_assist_sam_real.py` (`-m gpu`).
 """
 
+import weakref
 from pathlib import Path
 
 import numpy as np
@@ -139,3 +140,66 @@ def test_the_service_falls_back_to_the_cpu_when_cuda_runs_out_of_memory(tmp_path
         svc.unload()
     assert out.device == "cpu" and loads == ["cuda", "cpu"]
     assert svc.unavailable_reason is None
+
+
+class _EmptyCacheSpy:
+    """Stands in for `torch.cuda.empty_cache`; records whether the failed predictor was still alive."""
+
+    def __init__(self):
+        self.refs: list[weakref.ref] = []
+        self.calls: list[bool] = []  # per call: were all tracked predictors already unreferenced?
+
+    def __call__(self):
+        self.calls.append(all(r() is None for r in self.refs))
+
+
+@pytest.mark.parametrize("step", ["encode", "decode"])
+def test_vram_is_emptied_after_the_failed_gpu_predictor_is_unreferenced(monkeypatch, step):
+    spy = _EmptyCacheSpy()
+    monkeypatch.setattr(torch.cuda, "empty_cache", spy)
+
+    def factory(weights, device):
+        predictor = FakePredictor(device, {("cuda", step): OOM})
+        if device == "cuda":
+            spy.refs.append(weakref.ref(predictor))
+        return predictor
+
+    backend = UltralyticsSam2Backend(WEIGHTS, predictor_factory=factory)
+    embedding = backend.encode(RGB, "cpu") if step == "decode" else None
+    with pytest.raises(AssistUnavailable):
+        if step == "decode":
+            backend.decode(embedding, [(15.0, 15.0)], [1], "cuda")
+        else:
+            backend.encode(RGB, "cuda")
+    assert spy.refs and spy.calls and spy.calls[-1] is True
+
+
+def test_vram_is_emptied_after_a_half_built_gpu_predictor_fails_to_load(monkeypatch):
+    spy = _EmptyCacheSpy()
+    monkeypatch.setattr(torch.cuda, "empty_cache", spy)
+
+    def factory(weights, device):
+        half_built = FakePredictor(device, {})
+        spy.refs.append(weakref.ref(half_built))
+        raise OOM
+
+    with pytest.raises(AssistUnavailable):
+        UltralyticsSam2Backend(WEIGHTS, predictor_factory=factory).encode(RGB, "cuda")
+    assert spy.calls == [True]
+
+
+def test_the_cpu_fallback_load_empties_the_cache_when_cuda_is_initialised(monkeypatch):
+    spy = _EmptyCacheSpy()
+    monkeypatch.setattr(torch.cuda, "empty_cache", spy)
+    monkeypatch.setattr(torch.cuda, "is_initialized", lambda: True)
+    _backend({}).encode(RGB, "cpu")
+    assert len(spy.calls) == 1
+    monkeypatch.setattr(torch.cuda, "is_initialized", lambda: False)
+    _backend({}).encode(RGB, "cpu")
+    assert len(spy.calls) == 1
+
+
+def test_a_cudnn_runtime_error_counts_as_a_cuda_failure():
+    backend = _backend({("cuda", "encode"): RuntimeError("cuDNN error: CUDNN_STATUS_EXECUTION_FAILED")})
+    with pytest.raises(AssistUnavailable):
+        backend.encode(RGB, "cuda")
