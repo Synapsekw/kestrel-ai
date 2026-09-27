@@ -82,15 +82,25 @@ def test_patch_sets_a_dems_date_and_role(client, project_id, handle):
     assert (r.json()["name"], r.json()["elevation_role"]) == ("Renamed", "dtm")
 
 
-def test_patch_dates_a_cloud_surface_over_its_cloud(client, project_id, handle, tmp_path):
-    sid = add_surface(handle, fixture_spec(0.5), plane, cloud_id=dated_cloud(handle, tmp_path))
-    r = client.patch(f"{BASE}/{project_id}/surfaces/{sid}", json={"captured_on": "2026-08-20"})
+def test_patching_the_clouds_date_updates_the_surfaces_frozen_column(client, project_id, handle, tmp_path):
+    """A cloud DSM's date is frozen into its surface's column at build time (spec §7), so
+    `PATCH /surfaces/{id}` now refuses to re-date it (R7); `PATCH /pointclouds/{id}` must correct
+    the already-built surface's column too, not just the cloud's."""
+    cloud = dated_cloud(handle, tmp_path)
+    sid = add_surface(handle, fixture_spec(0.5), plane, cloud_id=cloud)
+    set_columns(handle, sid, captured_on=date(2026, 8, 14))  # frozen at build, as dem_build leaves it
+    r = client.patch(f"{BASE}/{project_id}/pointclouds/{cloud}", json={"captured_on": "2026-08-20"})
     assert r.status_code == 200 and r.json()["captured_on"] == "2026-08-20"
+    assert client.get(f"{BASE}/{project_id}/surfaces/{sid}").json()["captured_on"] == "2026-08-20"
 
 
 @pytest.mark.parametrize(
     ("kind", "patch"),
-    [("design", {"captured_on": "2026-08-14"}), ("cloud_dsm", {"elevation_role": "dsm"})],
+    [
+        ("design", {"captured_on": "2026-08-14"}),
+        ("cloud_dsm", {"elevation_role": "dsm"}),
+        ("cloud_dsm", {"captured_on": "2026-08-20"}),
+    ],
 )
 def test_patch_refusals(client, project_id, handle, kind, patch):
     sid = add_surface(handle, fixture_spec(0.5), plane, kind=kind, method="median")

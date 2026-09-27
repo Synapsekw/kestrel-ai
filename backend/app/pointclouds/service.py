@@ -6,9 +6,9 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
-from app.db.models import GeoMap, Job, PointCloud
+from app.db.models import GeoMap, Job, PointCloud, Surface
 from app.errors import AppError, not_found
 from app.pointclouds import admission, converter_path, rows
 from app.pointclouds.crs import bounds_wgs84, crs_from_epsg
@@ -201,6 +201,14 @@ def patch_cloud(handle: ProjectHandle, cloud_id: str, body: PointCloudPatch) -> 
             row.name = body.name
         if "captured_on" in fields:
             row.captured_on = body.captured_on
+            # A cloud DSM's date is frozen into its surface's column at build time (M-B2 spec §7), so
+            # correcting the cloud's date here must also correct every surface built from it.
+            s.execute(
+                update(Surface)
+                .where(Surface.point_cloud_id == cloud_id, Surface.kind == "cloud_dsm")
+                .values(captured_on=body.captured_on)
+                .execution_options(synchronize_session=False)
+            )
         s.flush()
         s.expunge(row)
     return row

@@ -40,6 +40,10 @@ NOT_METRES = (
     "on a grid in metres"
 )
 NO_OVERLAP = "the file does not overlap the surface to align to; choose another surface, or none"
+NO_TRANSFORM = (
+    "the file's coordinates cannot be placed on the surface to align to; choose another surface, or none"
+)
+EXTENSION = "{name}: choose a .tif or .tiff DSM/DTM"
 BYTES_PER_OUT_CELL = 4  # the float32 output, uncompressed (an upper bound)
 BYTES_PER_SOURCE_CELL = 1  # the re-grid's uint8 validity band, uncompressed
 
@@ -47,9 +51,9 @@ BYTES_PER_SOURCE_CELL = 1  # the re-grid's uint8 validity band, uncompressed
 class ElevationRefused(Exception):
     """A file the import cannot use: a 422 in the request, a readable job failure later."""
 
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, details: dict | None = None):
         super().__init__(message)
-        self.code, self.message = code, message
+        self.code, self.message, self.details = code, message, details or {}
 
 
 @dataclass(frozen=True)
@@ -74,10 +78,14 @@ def read_header(path: Path) -> Header:
     import rasterio
     from rasterio.errors import NotGeoreferencedWarning, RasterioIOError
 
-    if not path.is_file():
+    if not path.is_absolute() or not path.is_file():
+        # A relative path would resolve against the sidecar's working folder, so it is treated as
+        # missing even when a file of that name happens to exist there (S3's `design/detect.classify`).
         raise ElevationRefused(
             "source_missing", f"file not found at {path} — reconnect the drive or choose the file again"
         )
+    if path.suffix.lower() not in (".tif", ".tiff"):
+        raise ElevationRefused("validation_error", EXTENSION.format(name=path.name), {"reason": "extension"})
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", NotGeoreferencedWarning)
@@ -131,8 +139,15 @@ def _overlaps(header: Header, target: grid.GridSpec) -> bool:
     from rasterio.warp import transform_bounds
 
     env = header.envelope
-    if not CRS.from_user_input(header.crs_wkt).equals(CRS.from_user_input(target.crs_wkt)):
-        env = transform_bounds(header.crs_wkt, target.crs_wkt, *env, densify_pts=21)
+    try:
+        same_crs = CRS.from_user_input(header.crs_wkt).equals(CRS.from_user_input(target.crs_wkt))
+        if not same_crs:
+            env = transform_bounds(header.crs_wkt, target.crs_wkt, *env, densify_pts=21)
+    except Exception as e:
+        # A local/engineering source (or target) CRS has no transformation to the other: GDAL and
+        # pyproj raise a mix of internal error types for this, none of them worth naming one by one.
+        # Keep it a readable 422, not a 500.
+        raise ElevationRefused("no_overlap", NO_TRANSFORM) from e
     x0, y0, x1, y1 = target.bounds
     return env[0] < x1 and env[2] > x0 and env[1] < y1 and env[3] > y0
 
@@ -176,7 +191,7 @@ def create_elevation(
     try:
         chosen = plan(path, body.cell_size_m, target)
     except ElevationRefused as e:
-        raise AppError(e.code, e.message, 422) from None
+        raise AppError(e.code, e.message, 422, e.details) from None
     need = (
         BYTES_PER_OUT_CELL * chosen.out.width * chosen.out.height
         + BYTES_PER_SOURCE_CELL * chosen.header.width * chosen.header.height

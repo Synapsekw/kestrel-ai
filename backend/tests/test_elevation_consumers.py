@@ -50,3 +50,4 @@ def test_a_dem_is_a_volume_top_and_base(client, wait_job, project_id, tmp_path):
     validate("VolumeMeasurement", m)
     r = client.post(f"{BASE}/{project_id}/volumes", json={**body, "base": {"kind": "toe_plane"}})
     assert r.status_code == 202, r.text
+    assert wait_job(project_id, r.json()["job"]["id"])["state"] == "succeeded"

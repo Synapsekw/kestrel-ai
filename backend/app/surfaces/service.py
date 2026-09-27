@@ -290,13 +290,14 @@ def submit_failed(handle: ProjectHandle, surface_id: str, error: BaseException) 
 
 
 def patch_surface(handle: ProjectHandle, surface_id: str, body: SurfacePatch) -> SurfaceOut:
-    """Name, survey date and DSM/DTM role (map workspace spec §5.2 row menu). A design is never
-    dated; only an imported elevation has a role, and it keeps one."""
+    """Name, survey date and DSM/DTM role (map workspace spec §5.2 row menu). Only an imported
+    elevation (a `dem`) can be dated or given a role; a cloud DSM's date is frozen into its column
+    at build time (spec §7) and corrected via `PATCH /pointclouds/{id}`, not here."""
     sent = body.model_fields_set
     with handle.session() as s:
         row = _get(s, surface_id)
-        if "captured_on" in sent and row.kind == "design":
-            raise AppError("invalid_patch", "a design surface has no survey date", 422)
+        if "captured_on" in sent and row.kind != "dem":
+            raise AppError("invalid_patch", "only an imported elevation (a dem) has a survey date", 422)
         if "elevation_role" in sent and row.kind != "dem":
             raise AppError("invalid_patch", "only an imported elevation has a DSM/DTM role", 422)
         if body.name:

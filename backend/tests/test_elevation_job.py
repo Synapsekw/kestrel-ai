@@ -85,7 +85,10 @@ def test_a_target_deleted_before_the_job_fails_readably(handle, tmp_path):
         s.delete(s.get(Surface, target))
     with pytest.raises(JobFailure):
         jobs_elevation.run_elevation_import(ctx)
-    assert row_of(handle, sid).error == jobs_elevation.TARGET_GONE
+    row = row_of(handle, sid)
+    assert row.error == jobs_elevation.TARGET_GONE
+    assert row.status == "failed"
+    assert not surface_dir(handle, sid).exists()
 
 
 def test_a_file_with_no_valid_height_fails(handle, tmp_path):

@@ -77,6 +77,36 @@ def test_file_refusals(tmp_path):
         assert (e.code, e.message) == ("no_coordinates", "this elevation file has no coordinates")
 
 
+def test_a_relative_path_is_refused_as_missing(tmp_path, monkeypatch):
+    """R8: a relative path would resolve against the sidecar's working folder; it is treated as
+    missing even when a file of that name happens to exist there (S3's `design/detect.classify`)."""
+    path = plain_dem(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    e = refused(elevation.read_header, Path(path.name))
+    assert e.code == "source_missing"
+
+
+def test_a_wrong_extension_is_refused_before_the_file_is_opened(tmp_path):
+    """R8: only after the file/path check passes does the extension get checked, so schemathesis's
+    random (nonexistent) paths never reach this branch (test_contract.py's positive-data check)."""
+    bad = tmp_path / "ortho.png"
+    bad.write_text("not a raster")
+    e = refused(elevation.read_header, bad)
+    assert (e.code, e.message) == ("validation_error", elevation.EXTENSION.format(name="ortho.png"))
+    assert e.details == {"reason": "extension"}
+
+
+def test_create_refuses_a_wrong_extension(handle, tmp_path):
+    """R8: the same refusal surfaces from `create_elevation` as an `AppError` with the contract's
+    `details.reason` (openapi.yaml importElevation 422: ".tif or .tiff")."""
+    bad = tmp_path / "ortho.png"
+    bad.write_text("not a raster")
+    with pytest.raises(AppError) as e:
+        elevation.create_elevation(handle, ElevationImportRequest(path=str(bad), role="dsm", name="x"))
+    assert (e.value.status, e.value.code) == (422, "validation_error")
+    assert e.value.details == {"reason": "extension"}
+
+
 def test_degrees_or_feet_need_a_surface_to_align_to(tmp_path):
     deg = write_dem(
         tmp_path / "deg.tif", np.ones((20, 20), np.float32), x0=51.0, y0=35.0, cell=1e-5, crs="EPSG:4326"
@@ -116,6 +146,15 @@ def test_a_target_elsewhere_is_no_overlap(tmp_path):
     far = target_spec((E0 + 10_000.0, N0, E0 + 10_200.0, N0 + 100.0))
     e = refused(elevation.plan, plain_dem(tmp_path), None, far)
     assert (e.code, e.message) == ("no_overlap", elevation.NO_OVERLAP)
+
+
+def test_an_untransformable_source_crs_is_no_overlap_not_a_500(tmp_path):
+    """R9: a local/engineering source CRS has no coordinate operation to the target's CRS; GDAL and
+    pyproj raise for that instead of returning a bool, and it must stay a readable 422."""
+    target = target_spec(cell=0.5)  # a real, projected EPSG:32639 target
+    local = plain_dem(tmp_path, crs='LOCAL_CS["site",UNIT["metre",1]]', name="local.tif")
+    e = refused(elevation.plan, local, None, target)
+    assert (e.code, e.message) == ("no_overlap", elevation.NO_TRANSFORM)
 
 
 def test_a_grid_over_the_cell_ceiling_is_refused(tmp_path, monkeypatch):
