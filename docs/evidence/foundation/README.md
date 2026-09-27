@@ -98,3 +98,73 @@ stays smooth."
 The p95 ≤ 20 ms assertion runs only with `E2E_FRAME_BUDGET=1`: the gate runs the whole suite
 headless in parallel, where a frame budget would measure the machine's load. The gate still asserts
 at least 60 frames in each 2 s window and that the page is at Full.
+
+## Build and smoke
+
+Measured 2026-09-27 on `task/f-x`, commit built `04fdc5e` (parent `main` 7477e3c plus the F-X index
+tasks). Disk free at the time: worktree drive E: 2251.5 GB, `%TEMP%` drive C: 1208.48 GB (both well
+over the ~20 GB needed).
+
+**Build.** `backend\scripts\build.ps1 -Venv E:\Dev\Yolo\app\backend\.venv` (the worktree has no
+`.venv` of its own). First attempt failed before PyInstaller ran: no PotreeConverter payload at
+`backend\third_party\potreeconverter` (git-ignored, fetched once per checkout like the venv); copied
+it from the main checkout's `backend/third_party/potreeconverter` (already fetched there) rather than
+re-downloading, same pattern as the shared venv. Rebuilt clean: **182.5 s**, `dist/kestrel-backend`
+3,623.7 MB in 14,522 files, sidecar copied to `frontend/src-tauri/binaries/` (3.6 GB there).
+
+**Smoke found a packaging bug, fixed in the build script.** `backend\scripts\smoke_frozen.ps1`
+(defaults) failed at `POST /catalogue/types excavator`: 503 `catalogue_unavailable`. Reproduced
+directly against the frozen exe; the traceback was `alembic.util.exc.CommandError: Path doesn't
+exist: ...\dist\kestrel-backend\_internal\app\catalogue\migrations`.
+`backend/kestrel_backend.spec`'s `datas` bundles `app/db/migrations` and `app/library/migrations`
+(each opened the same way, via `command.upgrade(cfg, "head")`) but never gained a matching line for
+`app/catalogue/migrations` when the catalogue subsystem was added (spec 2026-09-26-foundation). Added
+the missing line, matching the existing two exactly. This is a one-line build-script fix, not an
+application bug: the catalogue code itself is untouched. Rebuilt (warm PyInstaller cache): **46.7 s**,
+`dist/kestrel-backend` 3,623.7 MB in 14,528 files (+6 for the migrations folder). Committed as
+`backend/kestrel_backend.spec` only.
+
+Re-ran the smoke test clean; it passed in full, **37.1 s**:
+
+```
+geo ok 32633 15.000325 45.000216
+design ok 10 185 surface 64x64
+volumes ok pdf 2038 xlsx 523.6 delaunay 2
+pointcloud ok 50000 32639 BROTLI laz 50000
+health ok
+cuda True NVIDIA GeForce RTX 5070 Ti
+starter ok 3
+library ok
+import ok 3 images
+cloud ok 50000 206
+predict ok 0 boxes
+dataset ok train 2 val 1
+worker ok mAP50 0.0
+export ok ... weights.onnx 10.1 MB
+keyring skip (a key is already stored for anthropic; not touching it)
+smoke ok
+```
+
+`keyring skip` is the documented no-op path (a key was already stored on this machine; the script
+does not touch it). Verdict: **smoke ok**, exit 0.
+
+**cargo test.** `cargo test --manifest-path frontend/src-tauri/Cargo.toml` (frozen sidecar now
+present): `test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out` (plus two empty
+`0 passed` suites — the binary and doctests), in 78.4 s total.
+
+**Installer.** `pnpm -C frontend build:installer` — Tauri release build (1m 28s) then the Inno Setup
+6 compiler packing `frontend/src-tauri/binaries/` (not the Tauri output) — **502.3 s** end to end.
+Warned `no MicrosoftEdgeWebview2Setup.exe found` (expected: none was staged for this run; the
+installer simply won't carry the WebView2 bootstrapper).
+
+| Field | Value |
+| --- | --- |
+| Path | `frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe` |
+| Size | 1,973,227,855 bytes (1,881.8 MB) |
+| SHA-256 | `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d` |
+| Built | 2026-09-27 07:06:33 +03:00 |
+
+`git status` showed only `backend/kestrel_backend.spec` as a tracked change throughout; `dist/`,
+`frontend/src-tauri/target/` and `frontend/src-tauri/binaries/*` (except `.gitkeep`) are git-ignored.
+
+Not installed: the coordinator asks the operator before installing.
