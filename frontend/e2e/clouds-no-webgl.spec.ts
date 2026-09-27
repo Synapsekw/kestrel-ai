@@ -13,9 +13,13 @@ test("without WebGL the 3D view says it cannot start and the screen stays usable
   // the alert can only appear once the viewer's code has loaded: the same budget as clouds.spec.ts
   const alert = page.getByRole("alert").filter({ hasText: "The 3D view could not start" });
   await expect(alert).toContainText("WebGL", { timeout: 20_000 });
-  // the rest of the screen is still there (before the fix, the throw replaced it with the router's
-  // error page); text, not visibility: with no rasteriser at all this browser reports every box hidden
-  const panel = page.getByRole("complementary");
-  await expect(panel.getByRole("heading", { level: 2 })).toHaveText("Fixture cloud");
+  // The rest of the workspace is still there (spec §14): the picker, Details and the inspector's
+  // lists. Text and counts, not visibility: with no rasteriser this browser reports every box hidden.
+  const panel = page.getByTestId("cloud-panel");
+  await expect(panel).toContainText("Fixture cloud");
   await expect(panel).toContainText("10 201 points");
+  await expect(page.getByRole("tab", { name: /Findings/ })).toHaveCount(1);
+  await expect(page.getByRole("toolbar", { name: "Point cloud tools" })).toHaveCount(0);
+  await expect(page.getByTestId("cloud-readout")).toHaveCount(0);
+  await expect(page.getByTestId("cloud-minimap")).toHaveCount(0);
 });

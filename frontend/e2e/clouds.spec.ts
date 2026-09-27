@@ -235,10 +235,9 @@ test("import: inspect, a refusal, then an admissible file goes importing then re
   await dialog.getByLabel("LAS or LAZ file").fill("D:\\clouds\\site.laz");
   await expect(dialog).toContainText("10 201 points");
   await dialog.getByRole("button", { name: "Import" }).click();
-  const row = page.getByRole("list", { name: "Point clouds" });
-  await expect(row).toContainText("importing");
+  await expect(page.getByTestId("cloud-importing")).toContainText("Building the 3D view copy…");
   importingSeen = true;
-  await expect(row).toContainText("ready", { timeout: 15_000 });
+  await expect(page.getByRole("toolbar", { name: "Point cloud tools" })).toBeVisible({ timeout: 20_000 });
 });
 
 test("view: budget and colour switches", async ({ page }) => {
@@ -250,9 +249,12 @@ test("view: budget and colour switches", async ({ page }) => {
     buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
-  await page.getByRole("radio", { name: "View" }).click();
-  await page.getByLabel("Point budget").selectOption("8000000");
-  expect(await page.evaluate(() => localStorage.getItem("kestrel.clouds.pointBudget"))).toBe("8000000");
+  const budget = page.getByRole("slider", { name: "Point budget" });
+  await budget.focus();
+  await budget.press("End");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("kestrel.clouds.pointBudget")))
+    .toBe("8000000");
   await page.getByRole("radio", { name: "Elevation" }).click();
   await expect(page.getByLabel("Lowest")).toHaveValue("0.02");
   await page.getByRole("button", { name: "Reset" }).click();
@@ -291,6 +293,8 @@ test("export LAZ ends with a toast that reveals the folder", async ({ page }) =>
     (route) => route.fulfill({ contentType: "application/json", headers: CORS, body: JSON.stringify(done) }),
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await page.getByRole("button", { name: /^Point cloud: / }).click();
+  await page.getByRole("button", { name: "Details…" }).click();
   await page.getByRole("button", { name: "Export LAZ" }).click();
   await expect.poll(() => posts.length).toBe(1);
   expect(posts[0]).toEqual({ format: "laz", include_measurements: true });
@@ -341,8 +345,11 @@ test("measure a distance with two picks, save it, copy the CSV", async ({ page, 
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
-  await page.getByRole("radio", { name: "Measure" }).click();
-  await page.getByRole("button", { name: "Distance" }).click();
+  // The palette arms S1's Distance and opens the Measurements tab (plan Ruling 8).
+  await page
+    .getByRole("toolbar", { name: "Point cloud tools" })
+    .getByRole("button", { name: "Distance" })
+    .click();
   const box = (await page.getByTestId("cloud-canvas").boundingBox())!;
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.click(box.x + box.width / 2 + 80, box.y + box.height / 2);
@@ -448,6 +455,9 @@ async function mapRoutes(page: Page) {
 test("a detection on the map opens the same spot in 3D, and a pick goes back to the map", async ({
   page,
 }) => {
+  // At the default 1280 px the readout's right end (where "Show on map" sits) runs under the
+  // minimap; the mockup's 1600 px keeps them apart (C-W1 Task 11 report, concern 1).
+  await page.setViewportSize({ width: 1600, height: 900 });
   await mapRoutes(page);
   await page.goto(`/p/${P}/maps/${MAP}`);
   await page.getByRole("checkbox", { name: /Show machinery-v3/ }).check();
@@ -539,7 +549,6 @@ test("colour modes: Intensity and Class are off for a cloud without those attrib
   );
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
-  await page.getByRole("radio", { name: "View" }).click();
   await expect(page.getByRole("radio", { name: "RGB" })).toBeEnabled();
   await expect(page.getByRole("radio", { name: "Elevation" })).toBeEnabled();
   await expect(page.getByRole("radio", { name: "Intensity" })).toBeDisabled();
@@ -557,7 +566,6 @@ test("colour modes: a cloud with intensity and classification draws in both", as
   await routeOctree(page, CLOUD, buildOctree(grid, 0.001, { intensity: true, classification: true }));
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
-  await page.getByRole("radio", { name: "View" }).click();
   await expect(page.getByRole("radio", { name: "Intensity" })).toBeEnabled();
   await expect(page.getByRole("radio", { name: "Class" })).toBeEnabled();
   await expect(page.getByText(/This cloud has no/)).toHaveCount(0);

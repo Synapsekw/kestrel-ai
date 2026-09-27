@@ -6,18 +6,21 @@ const P = "7f1c2e3a-1111-4000-8000-000000000001";
 test("Point clouds and Measurements open from the project tabs", async ({ page }) => {
   await page.goto(`/p/${P}`);
 
+  // The mock's list decides between the empty page and a cloud's workspace (plan Ruling 2).
   await page.getByRole("tab", { name: /^Point clouds/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds$`));
-  await expect(page.getByRole("heading", { name: "Point clouds" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Import", exact: true })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/p/${P}/clouds(/[^/?]+)?$`));
+  await expect(page.getByRole("heading", { name: "Point clouds" })).toBeAttached();
+  await expect(
+    page.getByTestId("cloud-workspace").or(page.getByRole("button", { name: "Import", exact: true })),
+  ).toBeVisible();
 
-  await page.getByRole("tab", { name: /^Measurements/ }).click();
-  await expect(page).toHaveURL(new RegExp(`/p/${P}/measurements$`));
+  // The workspace is full-bleed (no tabs), so Measurements is reached by its address.
+  await page.goto(`/p/${P}/measurements`);
   await expect(page.getByRole("heading", { level: 1, name: "Measurements" })).toBeVisible();
 
   // A deep link with the 3D-jump parameters lands on the same screen.
   await page.goto(`/p/${P}/clouds/c1?at=553100.5,2847300.25`);
-  await expect(page.getByRole("heading", { name: "Point clouds" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Point clouds" })).toBeAttached();
 });
 
 test("App settings links to About Kestrel AI", async ({ page }) => {
