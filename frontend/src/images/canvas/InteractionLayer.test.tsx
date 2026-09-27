@@ -6,6 +6,7 @@ import { ensureBuiltInTools } from "@/images/tools";
 import { InteractionLayer, insertVertex, moveVertex, removeVertex } from "./InteractionLayer";
 import { makeDetail, makeShape } from "./testing";
 import type { CommandContext } from "./commands";
+import { lastProps } from "./testKonva";
 
 vi.mock("react-konva", () => import("./testKonva"));
 
@@ -45,6 +46,24 @@ describe("InteractionLayer (layer 4)", () => {
     expect(document.querySelector('[data-konva="transformer"]')).not.toBeNull();
     act(() => st().select(["b", "p"]));
     expect(document.querySelector('[data-konva="transformer"]')).toBeNull();
+  });
+
+  it("keeps a press on the Transformer's handles from reaching the stage (the select tool would deselect)", () => {
+    render(<InteractionLayer ctx={ctx()} />);
+    act(() => st().select(["b"]));
+    const onMouseDown = lastProps.transformer.onMouseDown as (e: { cancelBubble: boolean }) => void;
+    const e = { cancelBubble: false };
+    onMouseDown(e);
+    expect(e.cancelBubble).toBe(true);
+  });
+
+  it("lets the edge line catch presses only while Alt is held, so a plain press reaches the polygon", () => {
+    render(<InteractionLayer ctx={ctx()} />);
+    act(() => st().select(["p"]));
+    const edges = () => document.querySelector('[data-name="polygon-edges"]');
+    expect(edges()).toHaveAttribute("data-listening", "false");
+    act(() => st().setHeld({ alt: true }));
+    expect(edges()).toHaveAttribute("data-listening", "true");
   });
 
   it("shows one draggable handle per vertex of a selected polygon", () => {

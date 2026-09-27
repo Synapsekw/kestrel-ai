@@ -75,10 +75,14 @@ function SelectionGlow({
 function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; scale: number }) {
   const points = useMemo(() => toPoints(box.points ?? []), [box.points]);
   const save = (next: Point[]) => void cmdUpdateShape(ctx, box.id, { kind: "points", points: next });
+  // Only Alt+click uses the edges; otherwise a press must reach the polygon below (select, drag)
+  // instead of bubbling to the stage, where the select tool would clear the selection.
+  const altHeld = useImagesWorkspace((s) => s.altHeld);
   return (
     <>
       <Line
         name="polygon-edges"
+        listening={altHeld}
         points={flatten(points)}
         closed
         stroke={tokenColour("accent", 0)}
@@ -182,6 +186,11 @@ export function InteractionLayer({ ctx, overlay }: { ctx: CommandContext; overla
           ignoreStroke
           anchorSize={8}
           borderEnabled={false}
+          // A press on a handle would bubble to the stage, where the select tool clears the
+          // selection and unmounts this Transformer mid-gesture (the lab showed dead handles).
+          onMouseDown={(e: KonvaEventObject<MouseEvent>) => {
+            e.cancelBubble = true;
+          }}
           boundBoxFunc={(oldBox, newBox) =>
             newBox.width < MIN_BOX_SIDE * scale || newBox.height < MIN_BOX_SIDE * scale ? oldBox : newBox
           }

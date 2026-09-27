@@ -6,6 +6,8 @@ type P = Record<string, unknown> & { children?: ReactNode };
 export const stageProps: { current: P | null } = { current: null };
 /** Leaf node renders by tag (memo tests). */
 export const renders: Record<string, number> = {};
+/** The props the last-rendered node of each tag received; tests call its handlers directly. */
+export const lastProps: Record<string, P> = {};
 /** What `stageRef.current` is in tests. */
 export const fakeStage = {
   pointer: { x: 0, y: 0 },
@@ -56,6 +58,7 @@ function node(tag: string) {
       [],
     );
     renders[tag] = (renders[tag] ?? 0) + 1;
+    lastProps[tag] = p;
     return <div {...attrs(tag, p)}>{p.children as ReactNode}</div>;
   });
 }
