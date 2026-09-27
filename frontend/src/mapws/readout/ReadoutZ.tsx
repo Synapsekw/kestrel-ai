@@ -24,21 +24,12 @@ export function pickReadoutRow(
   const kind = RASTER_KINDS.get("surface");
   return (
     orderRows(rows, order).find(
-      (row) =>
-        row.date === r &&
-        !gone.has(row.key) &&
-        effectiveState(row, kind, state).visible,
+      (row) => row.date === r && !gone.has(row.key) && effectiveState(row, kind, state).visible,
     ) ?? null
   );
 }
 
-function ReadoutValue({
-  projectId,
-  row,
-}: {
-  projectId: string;
-  row: LayerRow;
-}) {
+function ReadoutValue({ projectId, row }: { projectId: string; row: LayerRow }) {
   const api = useApi();
   const pointer = useWorkspace((s) => s.pointer);
   const [z, setZ] = useState<number | null>(null);
@@ -47,12 +38,7 @@ function ReadoutValue({
       createThrottledSampler({
         intervalMs: SAMPLE_INTERVAL_MS,
         sample: async (x, y, signal) => {
-          const res = await sampleInFrame(
-            api,
-            projectId,
-            { x, y, surface_ids: [row.id] },
-            signal,
-          );
+          const res = await sampleInFrame(api, projectId, { x, y, surface_ids: [row.id] }, signal);
           return res.samples.find((s) => s.surface_id === row.id)?.z ?? null;
         },
         onResult: setZ,
@@ -63,8 +49,7 @@ function ReadoutValue({
   useEffect(() => {
     if (pointer) sampler.push(pointer[0], pointer[1]);
   }, [sampler, pointer]);
-  const shown =
-    pointer && z !== null && Number.isFinite(z) ? `${z.toFixed(2)} m` : "—";
+  const shown = pointer && z !== null && Number.isFinite(z) ? `${z.toFixed(2)} m` : "—";
   return (
     <span
       data-testid="readout-z"
@@ -84,14 +69,7 @@ export function ReadoutZ({ projectId }: PanelProps) {
   const r = useWorkspace((s) => s.r);
   const gone = useGoneLayers((s) => s.gone);
   const row = useMemo(
-    () =>
-      pickReadoutRow(
-        elevationRows({ layers: layers ?? [] }),
-        order,
-        state,
-        r,
-        gone,
-      ),
+    () => pickReadoutRow(elevationRows({ layers: layers ?? [] }), order, state, r, gone),
     [layers, order, state, r, gone],
   );
   if (!row) return null;

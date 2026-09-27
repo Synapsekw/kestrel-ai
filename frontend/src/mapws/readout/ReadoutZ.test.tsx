@@ -17,10 +17,7 @@ vi.mock("../data/useWorkspaceLayers", async (importOriginal) => {
 function setup() {
   Object.assign(layerFeed, {
     loading: false,
-    layers: [
-      surfaceLayer("dsm", "2026-09-14"),
-      surfaceLayer("design", null, "design"),
-    ],
+    layers: [surfaceLayer("dsm", "2026-09-14"), surfaceLayer("design", null, "design")],
   });
   const { api, requests } = fakeClient(
     [
@@ -37,9 +34,7 @@ function setup() {
   });
   act(() => {
     stores.workspace.getState().setLayerState("surface:dsm", { visible: true });
-    stores.workspace
-      .getState()
-      .setLayerState("surface:design", { visible: true });
+    stores.workspace.getState().setLayerState("surface:design", { visible: true });
   });
   renderInWorkspace(<ReadoutZ projectId={PROJECT_ID} frame={UTM33} />, {
     stores,

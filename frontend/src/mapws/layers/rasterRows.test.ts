@@ -38,11 +38,7 @@ describe("W2 layer rows (M §5.2, ruling W2-4)", () => {
 
   it("lists designs on top, then surfaces newest first, with role badges", () => {
     const rows = elevationRows({ layers });
-    expect(rows.map((r) => r.key)).toEqual([
-      "surface:design",
-      "surface:dsm",
-      "surface:dem",
-    ]);
+    expect(rows.map((r) => r.key)).toEqual(["surface:design", "surface:dsm", "surface:dem"]);
     expect(rows.map((r) => r.badge)).toEqual(["Design", "DSM", "DTM"]);
     expect(rows[0]).toMatchObject({
       group: "elevation",

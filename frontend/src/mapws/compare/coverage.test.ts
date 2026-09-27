@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { Placement } from "../layers/placement";
 import { hasDataIn, intersects, sideExtent, viewExtent } from "./coverage";
 
-const placed = (
-  side: Placement["side"],
-  footprint: number[] | null,
-  date: string | null = "2026-08-14",
-) => ({ side, row: { date, layer: { footprint_site: footprint } } }) as unknown as Placement;
+const placed = (side: Placement["side"], footprint: number[] | null, date: string | null = "2026-08-14") =>
+  ({ side, row: { date, layer: { footprint_site: footprint } } }) as unknown as Placement;
 
 describe("coverage (M §14 non-overlapping footprints)", () => {
   it("intersects boxes, touching edges excluded", () => {
@@ -15,16 +12,10 @@ describe("coverage (M §14 non-overlapping footprints)", () => {
   });
 
   it("derives the view's bounding extent from centre, resolution, rotation and size", () => {
-    expect(
-      viewExtent(
-        { center: [100, 50], resolution: 0.5, rotation: 0 },
-        [400, 200],
-      ),
-    ).toEqual([0, 0, 200, 100]);
-    const r = viewExtent(
-      { center: [0, 0], resolution: 1, rotation: Math.PI / 2 },
-      [400, 200],
-    );
+    expect(viewExtent({ center: [100, 50], resolution: 0.5, rotation: 0 }, [400, 200])).toEqual([
+      0, 0, 200, 100,
+    ]);
+    const r = viewExtent({ center: [0, 0], resolution: 1, rotation: Math.PI / 2 }, [400, 200]);
     expect(r.map((v) => Math.round(v))).toEqual([-100, -200, 100, 200]);
   });
 
@@ -41,8 +32,6 @@ describe("coverage (M §14 non-overlapping footprints)", () => {
     ];
     expect(hasDataIn([0, 0, 20, 20], ps, "left")).toBe(true);
     expect(hasDataIn([0, 0, 20, 20], ps, "right")).toBe(false);
-    expect(hasDataIn([0, 0, 20, 20], [placed("right", null)], "right")).toBe(
-      true,
-    );
+    expect(hasDataIn([0, 0, 20, 20], [placed("right", null)], "right")).toBe(true);
   });
 });

@@ -50,9 +50,7 @@ function badgeOf(l: WorkspaceLayer): string {
 }
 
 /** M §5.2 Elevation: one row per ready, in-frame surface (cloud_dsm, dem, design). */
-export function elevationRows(
-  ctx: Pick<LayerRowsContext, "layers">,
-): LayerRow[] {
+export function elevationRows(ctx: Pick<LayerRowsContext, "layers">): LayerRow[] {
   return ctx.layers
     .filter((l) => l.kind === "surface" && l.in_frame)
     .sort(byNewest)

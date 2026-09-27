@@ -42,7 +42,9 @@ export function FrameSwitch() {
           focusRing,
         )}
       >
-        {pending && <Icon name="spinner" size={12} className="shrink-0 animate-spin reduce-motion:animate-none" />}
+        {pending && (
+          <Icon name="spinner" size={12} className="shrink-0 animate-spin reduce-motion:animate-none" />
+        )}
         <span className="truncate">{label}</span>
       </button>
     </Tooltip>

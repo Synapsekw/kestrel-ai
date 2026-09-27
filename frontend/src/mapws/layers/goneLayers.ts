@@ -16,9 +16,6 @@ export const useGoneLayers = create<GoneLayers>((set, get) => ({
     if (get().gone.has(key)) return;
     set({ gone: new Set([...get().gone, key]) });
     if (opts?.silent) return;
-    toast(
-      "danger",
-      `${name} is no longer available, so it was removed from the map.`,
-    );
+    toast("danger", `${name} is no longer available, so it was removed from the map.`);
   },
 }));

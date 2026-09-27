@@ -18,7 +18,11 @@ export const OCT = "2026-10-14";
 export const FOOT: [number, number, number, number] = [500000, 4981200, 502400, 4983000];
 
 /** A ready, in-frame ortho row of listWorkspaceLayers (M-C0's `WorkspaceLayer`, snake_case). */
-export function mapLayer(id: string, date: string | null, extra: Partial<WorkspaceLayer> = {}): WorkspaceLayer {
+export function mapLayer(
+  id: string,
+  date: string | null,
+  extra: Partial<WorkspaceLayer> = {},
+): WorkspaceLayer {
   return layer("map", id, {
     name: `${id}.tif`,
     date,
@@ -83,10 +87,7 @@ export function fakeOlMap() {
  * the workspace stores. Unlike W1's `renderInWorkspace`, whose `rerender` drops the providers, a
  * wrapper survives `rerender` (Task 4's RasterMount and useRasterLayers tests rerender).
  */
-export function workspaceWrapper(
-  stores: WorkspaceStores,
-  opts: { api?: ApiClient; route?: string } = {},
-) {
+export function workspaceWrapper(stores: WorkspaceStores, opts: { api?: ApiClient; route?: string } = {}) {
   const api = opts.api ?? fakeClient([]).api;
   const route = opts.route ?? `/p/${PROJECT_ID}/maps`;
   return function Wrapper({ children }: { children: ReactNode }) {

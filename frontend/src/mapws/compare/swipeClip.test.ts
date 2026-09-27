@@ -1,10 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  attachSwipeClip,
-  clampSwipe,
-  swipeClipRect,
-  swipeFromPointer,
-} from "./swipeClip";
+import { attachSwipeClip, clampSwipe, swipeClipRect, swipeFromPointer } from "./swipeClip";
 
 describe("swipe maths (M §15)", () => {
   it("clamps the divider to 2–98 % and survives NaN", () => {
@@ -31,9 +26,7 @@ function fakeLayer() {
   const handlers: Record<string, (e: unknown) => void> = {};
   return {
     handlers,
-    on: vi.fn(
-      (type: string, f: (e: unknown) => void) => void (handlers[type] = f),
-    ),
+    on: vi.fn((type: string, f: (e: unknown) => void) => void (handlers[type] = f)),
     un: vi.fn((type: string) => void delete handlers[type]),
   };
 }

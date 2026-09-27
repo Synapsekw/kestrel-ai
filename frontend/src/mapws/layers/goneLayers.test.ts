@@ -9,8 +9,7 @@ describe("gone layers (M §14)", () => {
   });
 
   it("drops a layer and toasts once however many tiles fail", () => {
-    for (let i = 0; i < 12; i++)
-      useGoneLayers.getState().markGone("map:a", "Orthomosaic · 14 Sep 2026");
+    for (let i = 0; i < 12; i++) useGoneLayers.getState().markGone("map:a", "Orthomosaic · 14 Sep 2026");
     expect(useGoneLayers.getState().gone.has("map:a")).toBe(true);
     const toasts = useToastStore.getState().toasts;
     expect(toasts).toHaveLength(1);

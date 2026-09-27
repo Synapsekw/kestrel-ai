@@ -23,25 +23,15 @@ export function swipeClipRect(
   return side === "left" ? [0, 0, x, h] : [x, 0, w, h];
 }
 
-export function swipeFromPointer(
-  clientX: number,
-  left: number,
-  width: number,
-): number {
+export function swipeFromPointer(clientX: number, left: number, width: number): number {
   if (width <= 0) return 50;
   return clampSwipe(((clientX - left) / width) * 100);
 }
 
 /** The slice of `ol/layer/Layer` the clip needs (a fake in tests). */
 export interface ClipLayer {
-  on(
-    type: "prerender" | "postrender",
-    listener: (e: RenderEvent) => void,
-  ): unknown;
-  un(
-    type: "prerender" | "postrender",
-    listener: (e: RenderEvent) => void,
-  ): void;
+  on(type: "prerender" | "postrender", listener: (e: RenderEvent) => void): unknown;
+  un(type: "prerender" | "postrender", listener: (e: RenderEvent) => void): void;
 }
 
 /**
@@ -49,11 +39,7 @@ export interface ClipLayer {
  * render time through `getPct`, so a drag only needs `map.render()`, never a new layer.
  * `getRenderPixel` maps CSS pixels to canvas pixels, which covers the pixel ratio and view rotation.
  */
-export function attachSwipeClip(
-  layer: ClipLayer,
-  side: ClipSide,
-  getPct: () => number,
-): () => void {
+export function attachSwipeClip(layer: ClipLayer, side: ClipSide, getPct: () => number): () => void {
   // Tracks the exact context `save()` was called on, not a bare boolean: a render pass whose
   // `prerender` bails out early (no context/size) must never let `postrender` restore a save that
   // belongs to a *different*, still-pending render pass.

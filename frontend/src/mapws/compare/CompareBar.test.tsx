@@ -24,9 +24,7 @@ describe("CompareBar (M §5 Compare)", () => {
     setup([survey(SEP)]);
     expect(screen.getByRole("radio", { name: "Swipe" })).toBeDisabled();
     expect(screen.getByRole("radio", { name: "Single" })).toBeChecked();
-    await userEvent.hover(
-      screen.getByRole("radiogroup", { name: "Compare mode" }),
-    );
+    await userEvent.hover(screen.getByRole("radiogroup", { name: "Compare mode" }));
     expect(await screen.findByText("One survey so far")).toBeInTheDocument();
   });
 
@@ -34,9 +32,7 @@ describe("CompareBar (M §5 Compare)", () => {
     setup([]);
     expect(screen.getByRole("radio", { name: "Swipe" })).toBeDisabled();
     expect(screen.queryByRole("button", { name: /^Survey/ })).toBeNull();
-    await userEvent.hover(
-      screen.getByRole("radiogroup", { name: "Compare mode" }),
-    );
+    await userEvent.hover(screen.getByRole("radiogroup", { name: "Compare mode" }));
     expect(await screen.findByText("No surveys yet")).toBeInTheDocument();
     expect(screen.queryByText("One survey so far")).toBeNull();
   });
@@ -49,33 +45,21 @@ describe("CompareBar (M §5 Compare)", () => {
 
   it("Single shows one Survey chip; compare modes show Left and Right", () => {
     const ws = setup();
-    expect(
-      screen.getByRole("button", { name: "Survey: 14 Sep 2026" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Survey: 14 Sep 2026" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Left/ })).toBeNull();
     act(() => ws.getState().setMode("swipe"));
-    expect(
-      screen.getByRole("button", { name: "Left: 14 Aug 2026" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Right: 14 Sep 2026" }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Left: 14 Aug 2026" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Right: 14 Sep 2026" })).toBeInTheDocument();
   });
 
   it("offers flown dates only and refuses a Left pick with no later survey (W2-2)", async () => {
     const ws = setup();
     act(() => ws.getState().setMode("swipe"));
-    await userEvent.click(
-      screen.getByRole("button", { name: "Left: 14 Aug 2026" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "Left: 14 Aug 2026" }));
     expect(screen.queryByRole("menuitem", { name: /14 Oct 2026/ })).toBeNull();
-    await userEvent.click(
-      screen.getByRole("menuitem", { name: /14 Sep 2026/ }),
-    );
+    await userEvent.click(screen.getByRole("menuitem", { name: /14 Sep 2026/ }));
     expect(ws.getState()).toMatchObject({ l: AUG, r: SEP });
-    expect(useToastStore.getState().toasts[0].text).toBe(
-      "No later survey to compare with",
-    );
+    expect(useToastStore.getState().toasts[0].text).toBe("No later survey to compare with");
   });
 
   it("shows the blend slider in Blend and writes the blend", async () => {

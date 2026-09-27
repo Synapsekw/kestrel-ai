@@ -57,10 +57,7 @@ function DateChip({
       >
         <span
           aria-hidden="true"
-          className={cx(
-            "h-2 w-2 rounded-chip",
-            which === "l" ? "bg-info" : "bg-accent",
-          )}
+          className={cx("h-2 w-2 rounded-chip", which === "l" ? "bg-info" : "bg-accent")}
         />
         <span className="text-muted">{label}</span>
         <span className="tabular-nums">{formatSurveyDate(date, true)}</span>
@@ -86,19 +83,18 @@ function DateChip({
 
 /** M §5 Compare panel: the mode switch, the date chips and, in Blend, the slider. `C` is W1's. */
 export function CompareBar() {
-  const { surveys, mode, l, r, blend, setMode, setDates, setBlend } =
-    useWorkspace(
-      useShallow((s) => ({
-        surveys: s.surveys,
-        mode: s.mode,
-        l: s.l,
-        r: s.r,
-        blend: s.blend,
-        setMode: s.setMode,
-        setDates: s.setDates,
-        setBlend: s.setBlend,
-      })),
-    );
+  const { surveys, mode, l, r, blend, setMode, setDates, setBlend } = useWorkspace(
+    useShallow((s) => ({
+      surveys: s.surveys,
+      mode: s.mode,
+      l: s.l,
+      r: s.r,
+      blend: s.blend,
+      setMode: s.setMode,
+      setDates: s.setDates,
+      setBlend: s.setBlend,
+    })),
+  );
   const dates = useMemo(() => flownDates(surveys), [surveys]);
   const one = !canCompare(surveys);
   const comparing = mode !== "single";
@@ -107,12 +103,7 @@ export function CompareBar() {
     const next = pickDate({ l, r }, which, date, dates, comparing);
     if (next) setDates(next.l, next.r);
     else
-      toast(
-        "info",
-        which === "l"
-          ? "No later survey to compare with"
-          : "No earlier survey to compare with",
-      );
+      toast("info", which === "l" ? "No later survey to compare with" : "No earlier survey to compare with");
   };
 
   const seg = (
@@ -140,15 +131,7 @@ export function CompareBar() {
       ) : (
         seg
       )}
-      {comparing && (
-        <DateChip
-          which="l"
-          label="Left"
-          date={l}
-          dates={dates}
-          onPick={pick("l")}
-        />
-      )}
+      {comparing && <DateChip which="l" label="Left" date={l} dates={dates} onPick={pick("l")} />}
       {dates.length > 0 && (
         <DateChip
           which="r"

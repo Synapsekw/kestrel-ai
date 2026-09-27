@@ -24,20 +24,7 @@ const DAY_MS = 86_400_000;
  * varies by version and some builds render "Sept" instead of "Sep" for `month: "short"`, which
  * would make this drift by runtime (global constraints: dates show as `14 Sep 2026` / `14 Sep`).
  */
-const MONTHS = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const ms = (date: string): number => Date.parse(`${date}T00:00:00Z`);
 
@@ -69,9 +56,7 @@ export function buildTicks(surveys: readonly Survey[]): Tick[] {
     t.mapIds.push(...s.maps.map((m) => m.id));
     t.surfaceIds.push(...s.surfaces.map((x) => x.id));
   }
-  const sorted = [...byDate.values()].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
-  );
+  const sorted = [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   if (sorted.length === 0) return [];
   const t0 = ms(sorted[0].date);
   const span = ms(sorted[sorted.length - 1].date) - t0;
@@ -81,10 +66,8 @@ export function buildTicks(surveys: readonly Survey[]): Tick[] {
   }));
 }
 
-const before = (dates: readonly string[], d: string) =>
-  dates.filter((x) => x < d).at(-1) ?? null;
-const after = (dates: readonly string[], d: string) =>
-  dates.find((x) => x > d) ?? null;
+const before = (dates: readonly string[], d: string) => dates.filter((x) => x < d).at(-1) ?? null;
+const after = (dates: readonly string[], d: string) => dates.find((x) => x > d) ?? null;
 
 /** Ruling W2-2. Null when the pick is refused (planned, unknown, or no room on the other side). */
 export function pickDate(
@@ -120,12 +103,8 @@ export function clickTick(
   if (tick.planned) return null;
   const dates = ticks.filter((t) => !t.planned).map((t) => t.date);
   if (!compare) return pickDate(pair, "r", tick.date, dates, false);
-  const posOf = (d: string | null) =>
-    ticks.find((t) => t.date === d)?.pos ?? Number.POSITIVE_INFINITY;
-  const which =
-    Math.abs(tick.pos - posOf(pair.l)) < Math.abs(tick.pos - posOf(pair.r))
-      ? "l"
-      : "r";
+  const posOf = (d: string | null) => ticks.find((t) => t.date === d)?.pos ?? Number.POSITIVE_INFINITY;
+  const which = Math.abs(tick.pos - posOf(pair.l)) < Math.abs(tick.pos - posOf(pair.r)) ? "l" : "r";
   return pickDate(pair, which, tick.date, dates, true);
 }
 

@@ -25,9 +25,7 @@ describe("createThrottledSampler (M §13)", () => {
     let resolveFirst: (z: number) => void = () => {};
     const sample = vi.fn((_x: number, _y: number, signal: AbortSignal) => {
       signals.push(signal);
-      return signals.length === 1
-        ? new Promise<number>((res) => (resolveFirst = res))
-        : Promise.resolve(2);
+      return signals.length === 1 ? new Promise<number>((res) => (resolveFirst = res)) : Promise.resolve(2);
     });
     const onResult = vi.fn();
     const s = createThrottledSampler({ intervalMs: 150, sample, onResult });

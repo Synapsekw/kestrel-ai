@@ -16,10 +16,7 @@ export function classifyTileStatus(status: number): TileOutcome {
  * An OpenLayers `tileLoadFunction` that fetches the tile so it can see the status an `<img>` hides
  * (deviation 7): 204 is an empty tile outside the footprint; 404/410 means the layer is gone.
  */
-export function makeSiteTileLoader(
-  onGone: () => void,
-  fetchImpl: typeof fetch = fetch,
-) {
+export function makeSiteTileLoader(onGone: () => void, fetchImpl: typeof fetch = fetch) {
   return (tile: Tile, src: string): void => {
     const image = (tile as ImageTile).getImage() as HTMLImageElement;
     fetchImpl(src)

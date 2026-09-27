@@ -26,12 +26,11 @@ describe("raster style", () => {
       frame_key: "kestrel-local",
       style: "hillshade",
     });
-    expect(
-      tileExtras("surface", { render: "tint", interval: 2 }, UTM33),
-    ).toEqual({ frame_key: "EPSG:32633", style: "tint" });
-    expect(
-      tileExtras("surface", { render: "contours", interval: 0.5 }, UTM33),
-    ).toEqual({
+    expect(tileExtras("surface", { render: "tint", interval: 2 }, UTM33)).toEqual({
+      frame_key: "EPSG:32633",
+      style: "tint",
+    });
+    expect(tileExtras("surface", { render: "contours", interval: 0.5 }, UTM33)).toEqual({
       frame_key: "EPSG:32633",
       style: "contours",
       interval: "0.5",
