@@ -120,13 +120,13 @@ def get_frame(handle: ProjectHandle) -> SiteFrame:
 
 
 def set_frame(handle: ProjectHandle, *, kind: str, epsg: int | None) -> Workspace:
-    if kind == "local":
-        frame = LOCAL
-    elif epsg is None:
-        raise AppError("invalid_epsg", "a crs frame needs an epsg code", 422)
-    else:
-        frame = frame_for_epsg(epsg)
+    """`crs` without an epsg picks the site CRS by rule M3 (the frame switch back from local metres)."""
+    frame = LOCAL if kind == "local" else frame_for_epsg(epsg) if epsg is not None else None
     with _LOCK, handle.session() as s:
+        if frame is None:
+            frame = choose_frame(s)
+            if frame is None:
+                raise AppError("invalid_epsg", "nothing has coordinates yet to choose a site CRS from", 422)
         row = _ensure(s)
         _set(row, frame)
         row.updated_at = utcnow()
