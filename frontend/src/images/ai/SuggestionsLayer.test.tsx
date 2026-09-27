@@ -1,3 +1,4 @@
+import { forwardRef } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { fakeClient } from "@/test/fixtures";
@@ -30,15 +31,18 @@ vi.mock("@/images/canvas/ShapeLayer", () => ({
     />
   ),
 }));
+// Ghost forwards a ref to react-konva's Line (SuggestionsLayer.tsx); forwardRef here avoids a
+// "function components cannot be given refs" warning (the ref itself is unused by the mock).
 vi.mock("react-konva", () => ({
-  Line: (p: Record<string, unknown>) => (
+  Line: forwardRef<HTMLDivElement, Record<string, unknown>>((p, ref) => (
     <div
+      ref={ref}
       data-konva="line"
       data-name={String(p.name ?? "")}
       data-dash={JSON.stringify(p.dash ?? null)}
       data-stroke={String(p.stroke ?? "")}
     />
-  ),
+  )),
 }));
 
 beforeEach(() => {
