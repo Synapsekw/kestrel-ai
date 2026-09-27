@@ -12,6 +12,7 @@ import yaml
 SPEC = Path(__file__).resolve().parents[2] / "contract" / "openapi.yaml"
 METHODS = ("get", "post", "put", "patch", "delete")
 P = "/api/v1/projects/{projectId}"
+DR = P + "/drawings/{drawingId}"
 
 # operationId -> (method, path, the unit that replaces its 501 stub)
 WORKSPACE_OPERATIONS: dict[str, tuple[str, str, str]] = {
@@ -25,6 +26,26 @@ WORKSPACE_OPERATIONS: dict[str, tuple[str, str, str]] = {
     "listMapFindingsInView": ("get", P + "/map-workspace/findings", "M-B1"),
     "sampleInFrame": ("post", P + "/map-workspace/sample", "M-B1"),
     "getSiteTile": ("get", P + "/site-tiles/{kind}/{layerId}/{z}/{x}/{y}", "M-B1"),
+    # M-B2: plain DSM/DTM import (Task 3)
+    "importElevation": ("post", P + "/elevations", "M-B2"),
+    # M-B3: drawings (Task 3)
+    "createDrawingInspection": ("post", P + "/drawing-inspections", "M-B3"),
+    "getDrawingInspection": ("get", P + "/drawing-inspections/{inspectionId}", "M-B3"),
+    "getDrawingPageThumbnail": (
+        "get",
+        P + "/drawing-inspections/{inspectionId}/pages/{page}/thumbnail",
+        "M-B3",
+    ),
+    "listDrawings": ("get", P + "/drawings", "M-B3"),
+    "createDrawing": ("post", P + "/drawings", "M-B3"),
+    "fitDrawingGeoref": ("post", P + "/drawings/georef-fit", "M-B3"),
+    "getDrawing": ("get", DR, "M-B3"),
+    "patchDrawing": ("patch", DR, "M-B3"),
+    "deleteDrawing": ("delete", DR, "M-B3"),
+    "putDrawingGeoref": ("put", DR + "/georef", "M-B3"),
+    "clearDrawingGeoref": ("delete", DR + "/georef", "M-B3"),
+    "getDrawingVectorTile": ("get", DR + "/vtiles/{z}/{x}/{y}", "M-B3"),
+    "getDrawingThumbnail": ("get", DR + "/thumbnail", "M-B3"),
 }
 
 
@@ -89,3 +110,51 @@ def test_the_frame_and_the_findings_in_view_use_the_foundation_names(spec):
     assert s["MapFindingsInView"]["properties"]["items"]["maxItems"] == 5000
     assert s["ElevationRole"]["enum"] == ["dsm", "dtm"]
     assert s["DrawingFormat"]["enum"] == ["dxf", "pdf", "png", "jpg", "tif", "landxml"]
+
+
+def test_imports_are_background_jobs(spec):
+    for op_id, schema in (
+        ("importElevation", "SurfaceWithJob"),
+        ("createDrawingInspection", "DrawingInspectionWithJob"),
+        ("createDrawing", "DrawingWithJob"),
+    ):
+        method, path, _ = WORKSPACE_OPERATIONS[op_id]
+        answer = spec["paths"][path][method]["responses"]["202"]
+        assert answer["content"]["application/json"]["schema"] == {"$ref": f"#/components/schemas/{schema}"}
+    assert _schemas(spec)["ElevationImportRequest"]["required"] == ["path", "name", "role"]
+
+
+def test_a_georeference_carries_its_fit_and_its_quality(spec):
+    s = _schemas(spec)
+    georef = s["DrawingGeoref"]
+    assert set(georef["required"]) == {
+        "method",
+        "crs_wkt",
+        "epsg",
+        "model",
+        "points",
+        "dst_crs_wkt",
+        "transform",
+        "rmse_m",
+        "residuals_m",
+        "warnings",
+    }
+    assert georef["properties"]["transform"]["minItems"] == georef["properties"]["transform"]["maxItems"] == 6
+    points = s["DrawingGeorefPut"]["properties"]["points"]
+    assert (points["minItems"], points["maxItems"]) == (2, 12)
+    assert s["GeorefModel"]["enum"] == ["similarity", "affine"]
+    assert s["GeorefWarning"]["properties"]["code"]["enum"] == ["rmse_high", "scale_mismatch", "shear"]
+    assert s["DrawingPlacementInput"]["properties"]["method"]["enum"] == ["crs", "embedded", "none"]
+
+
+def test_a_vector_tile_is_bounded(spec):
+    tile = _schemas(spec)["DrawingVectorTile"]
+    assert set(tile["required"]) == {"layers", "labels", "truncated"}
+    assert "20 000" in tile["properties"]["truncated"]["description"]
+    label = _schemas(spec)["DrawingLabel"]
+    assert "layer" in label["properties"] and "layer" not in label["required"]
+    op = spec["paths"][DR + "/vtiles/{z}/{x}/{y}"]["get"]
+    assert {"$ref": "#/components/parameters/tilePreview"} in op["parameters"]
+    assert {"$ref": "#/components/parameters/frameKey"} in op["parameters"]
+    assert "no_coordinates" in op["responses"]["422"]["description"]
+    assert "invalid_preview" in op["responses"]["422"]["description"]

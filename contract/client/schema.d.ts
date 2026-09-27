@@ -3480,6 +3480,238 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectId}/elevations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import a plain DSM or DTM GeoTIFF as a `dem` surface (map-workspace spec §7). An
+         *     `elevation_import` job copies it when it already conforms, else re-grids it (onto the
+         *     `align_to_surface_id` surface's lattice when one is given). There is no preview step. A file
+         *     with no CRS, an RGB image, or a geographic or feet CRS without a target fails the job with a
+         *     readable message. Publishes `surfaces.changed`.
+         */
+        post: operations["importElevation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawing-inspections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read a drawing file (a `drawing_import` job, phase `inspect`, map-workspace spec §8.2): its
+         *     format, the DXF or LandXML layers and units, the PDF pages with 160 px thumbnails, the
+         *     raster size, and any world-file or GeoTIFF placement.
+         */
+        post: operations["createDrawingInspection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawing-inspections/{inspectionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDrawingInspection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawing-inspections/{inspectionId}/pages/{page}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
+                page: components["parameters"]["drawingPage"];
+            };
+            cookie?: never;
+        };
+        /** A 160 px thumbnail of one PDF page. */
+        get: operations["getDrawingPageThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        /** Every drawing, newest first (one row per drawing, tens). */
+        get: operations["listDrawings"];
+        put?: never;
+        /**
+         * Build a drawing from a ready inspection (a `drawing_import` job, phase `build`): flatten and
+         *     index DXF or LandXML linework, render a PDF page in strips, or copy a raster window by window,
+         *     then place it by CRS, by its embedded georeference, or not at all (placed later with control
+         *     points). Publishes `drawings.changed`.
+         */
+        post: operations["createDrawing"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/georef-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A dry-run control-point fit with the same maths as `putDrawingGeoref` (least squares,
+         *     similarity or affine, RMSE and residuals in metres, warnings); nothing is stored.
+         */
+        post: operations["fitDrawingGeoref"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        get: operations["getDrawing"];
+        put?: never;
+        post?: never;
+        /** Delete the drawing and its folder under `drawings/`; the source file is never touched. */
+        delete: operations["deleteDrawing"];
+        options?: never;
+        head?: never;
+        /** Rename, set the revision date, or change the layer state (DXF layer visibility, raster knockout). Publishes `drawings.changed`. */
+        patch: operations["patchDrawing"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}/georef": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save a control-point placement (map-workspace spec §8.3): the server refits authoritatively,
+         *     stores the points with the site CRS they were picked in, bumps `georef_version` and, for a
+         *     raster, rewrites its geotransform in place. Publishes `drawings.changed`.
+         */
+        put: operations["putDrawingGeoref"];
+        post?: never;
+        /** Remove the placement; the drawing returns to "not placed". Publishes `drawings.changed`. */
+        delete: operations["clearDrawingGeoref"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}/vtiles/{z}/{x}/{y}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        /**
+         * The DXF or LandXML linework of one site tile (map-workspace spec §8.4): a bucket lookup,
+         *     clipped to the tile plus 2 %, transformed into the site frame and simplified to res(z) / 2;
+         *     at most 20 000 vertices. Labels only when at least 6 px tall.
+         */
+        get: operations["getDrawingVectorTile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/drawings/{drawingId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        /** A 160 px thumbnail of the drawing. */
+        get: operations["getDrawingThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -9961,6 +10193,522 @@ export interface components {
             y: number;
             samples: components["schemas"]["SurfaceZ"][];
         };
+        /**
+         * @example {
+         *       "path": "C:/survey/2026-09-14/dsm.tif",
+         *       "name": "DSM 14 Sep 2026",
+         *       "role": "dsm",
+         *       "captured_on": "2026-09-14",
+         *       "align_to_surface_id": null
+         *     }
+         */
+        ElevationImportRequest: {
+            /** @description absolute path of a single-band .tif or .tiff with a CRS */
+            path: string;
+            name: string;
+            role: components["schemas"]["ElevationRole"];
+            /**
+             * Format: date
+             * @description the survey date; the file's TIFFTAG_DATETIME when absent or null
+             */
+            captured_on?: string | null;
+            /** @description a ready surface whose CRS and cell the output adopts (same lattice); null when absent */
+            align_to_surface_id?: string | null;
+            /** @description without a target: the output cell; the source cell snapped to the S2 ladder when absent or null */
+            cell_size_m?: number | null;
+        };
+        DrawingLayer: {
+            name: string;
+            /** @description ACI or true colour as hex */
+            colour: string;
+            entity_count: number;
+            visible_default: boolean;
+        };
+        DrawingPage: {
+            page: number;
+            width_pt: number;
+            height_pt: number;
+        };
+        DrawingWarning: {
+            /** @description geodata_unverified, world_file_needs_crs, dpi_lowered, labels_capped, unsupported_entities, no_linework */
+            code: string;
+            message: string;
+        };
+        /** @description a placement the file carries itself */
+        DrawingEmbedded: {
+            /** @enum {string} */
+            source: "world_file" | "geotiff";
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f, where x = col and y = -row */
+            transform: number[];
+            /** @description a world file carries no CRS, so the dialog asks for one */
+            needs_crs: boolean;
+        };
+        /**
+         * @example {
+         *       "path": "C:/site/plans/foundation-rev-c.pdf"
+         *     }
+         */
+        DrawingInspectionCreate: {
+            /** @description absolute path of a .dxf, .pdf, .png, .jpg or .jpeg, .tif or .tiff, or .xml or .landxml file */
+            path: string;
+        };
+        /**
+         * @example {
+         *       "id": "i0000000-1313-4000-8000-000000000001",
+         *       "state": "ready",
+         *       "error": null,
+         *       "job_id": "j0000000-4444-4000-8000-000000000059",
+         *       "path": "C:/site/plans/site-plan.dxf",
+         *       "format": "dxf",
+         *       "file_size": 18234567,
+         *       "sha256": "9f2c8a61d0e4b7c3a1f5e2d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9",
+         *       "units": "metre",
+         *       "units_source": "DXF $INSUNITS=6",
+         *       "crs_hint": null,
+         *       "extent_src": [
+         *         582950,
+         *         3264980,
+         *         583950,
+         *         3265850
+         *       ],
+         *       "layers": [
+         *         {
+         *           "name": "C-ROAD",
+         *           "colour": "#ffffff",
+         *           "entity_count": 1840,
+         *           "visible_default": true
+         *         },
+         *         {
+         *           "name": "C-TOPO",
+         *           "colour": "#00ff00",
+         *           "entity_count": 12020,
+         *           "visible_default": true
+         *         }
+         *       ],
+         *       "page_count": null,
+         *       "pages": [],
+         *       "width": null,
+         *       "height": null,
+         *       "embedded": null,
+         *       "warnings": [],
+         *       "created_at": "2026-09-20T08:59:00Z"
+         *     }
+         */
+        DrawingInspection: {
+            id: string;
+            /** @enum {string} */
+            state: "inspecting" | "ready" | "failed";
+            error: string | null;
+            job_id: string;
+            path: string;
+            format: components["schemas"]["DrawingFormat"];
+            file_size: number;
+            sha256: string | null;
+            /** @description DXF or LandXML only */
+            units: components["schemas"]["LinearUnit"] | null;
+            /** @description for example DXF $INSUNITS=6 */
+            units_source: string | null;
+            /** @description an unverified CRS name (DXF GEODATA) */
+            crs_hint: string | null;
+            /** @description minx, miny, maxx, maxy in drawing coordinates */
+            extent_src: number[] | null;
+            layers: components["schemas"]["DrawingLayer"][];
+            /** @description PDF only */
+            page_count: number | null;
+            /** @description PDF: the first 50 pages */
+            pages: components["schemas"]["DrawingPage"][];
+            /** @description raster pixels */
+            width: number | null;
+            height: number | null;
+            embedded: components["schemas"]["DrawingEmbedded"] | null;
+            warnings: components["schemas"]["DrawingWarning"][];
+            /** Format: date-time */
+            created_at: string;
+        };
+        DrawingInspectionWithJob: {
+            inspection: components["schemas"]["DrawingInspection"];
+            job: components["schemas"]["Job"];
+        };
+        DrawingPlacementInput: {
+            /**
+             * @description none places it later with control points (the K tool)
+             * @enum {string}
+             */
+            method: "crs" | "embedded" | "none";
+            /** @description EPSG:<code> or WKT; required for crs, and for embedded from a world file */
+            crs?: string;
+            units?: components["schemas"]["LinearUnit"];
+        };
+        /**
+         * @example {
+         *       "inspection_id": "i0000000-1313-4000-8000-000000000001",
+         *       "name": "Site plan",
+         *       "placement": {
+         *         "method": "crs",
+         *         "crs": "EPSG:32638",
+         *         "units": "metre"
+         *       }
+         *     }
+         */
+        DrawingCreate: {
+            inspection_id: string;
+            name: string;
+            /** @description PDF only; 1 when absent */
+            page?: number;
+            /**
+             * @description PDF only; 150 when absent; lowered to stay within 20 000 px and 300 MP
+             * @enum {integer}
+             */
+            dpi?: 100 | 150 | 200 | 300;
+            /** @description DXF or LandXML layers to import; every layer when absent */
+            layers?: string[];
+            placement: components["schemas"]["DrawingPlacementInput"];
+            /**
+             * Format: date
+             * @description a revision date
+             */
+            captured_on?: string | null;
+        };
+        /** @enum {string} */
+        GeorefModel: "similarity" | "affine";
+        GeorefPoint: {
+            id: string;
+            /** @description drawing coordinates; a raster uses col and -row */
+            src: number[];
+            /** @description E and N in the georef's dst_crs_wkt */
+            dst: number[];
+        };
+        GeorefPointInput: {
+            /** @description client-generated; assigned when absent */
+            id?: string;
+            src: number[];
+            /** @description in the site frame (putDrawingGeoref) or any metric plane (fitDrawingGeoref) */
+            dst: number[];
+        };
+        GeorefWarning: {
+            /** @enum {string} */
+            code: "rmse_high" | "scale_mismatch" | "shear";
+            message: string;
+        };
+        DrawingGeoref: {
+            /** @enum {string} */
+            method: "crs" | "control_points" | "embedded";
+            /** @description the drawing's own CRS (method crs or embedded) */
+            crs_wkt: string | null;
+            epsg: number | null;
+            /** @description control points only */
+            model: components["schemas"]["GeorefModel"] | null;
+            points: components["schemas"]["GeorefPoint"][];
+            /** @description the CRS the points' dst were picked in; null in a local frame */
+            dst_crs_wkt: string | null;
+            /** @description a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f (a similarity is a, -b', c, b', a, f) */
+            transform: number[];
+            /** @description 0 with exactly the model's minimum of points; null without points */
+            rmse_m: number | null;
+            /** @description one per point */
+            residuals_m: number[];
+            warnings: components["schemas"]["GeorefWarning"][];
+        };
+        DrawingLayerState: {
+            /** @description DXF or LandXML layers switched off */
+            hidden_layers: string[];
+            /** @description raster: white pixels transparent */
+            knockout_white: boolean;
+        };
+        Drawing: {
+            id: string;
+            name: string;
+            format: components["schemas"]["DrawingFormat"];
+            /**
+             * @description vector for DXF and LandXML
+             * @enum {string}
+             */
+            kind: "vector" | "raster";
+            /** @enum {string} */
+            status: "importing" | "ready" | "failed";
+            error: string | null;
+            job_id: string | null;
+            source_path: string;
+            source_size: number;
+            page: number | null;
+            units: components["schemas"]["LinearUnit"] | null;
+            width: number | null;
+            height: number | null;
+            dpi: number | null;
+            /** @description drawing coordinates; a raster is 0, -height, width, 0 */
+            extent_src: number[] | null;
+            layers: components["schemas"]["DrawingLayer"][];
+            /** @description null: not placed yet */
+            georef: components["schemas"]["DrawingGeoref"] | null;
+            /** @description bumped on every placement change; part of the tile cache key */
+            georef_version: number;
+            /** @description the footprint in the current site frame; null when not placed or not in the frame */
+            bounds_site: number[] | null;
+            layer_state: components["schemas"]["DrawingLayerState"];
+            /** Format: date */
+            captured_on: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        /**
+         * @example {
+         *       "items": [
+         *         {
+         *           "id": "w0000000-1212-4000-8000-000000000001",
+         *           "name": "Foundation plan rev C",
+         *           "format": "pdf",
+         *           "kind": "raster",
+         *           "status": "ready",
+         *           "error": null,
+         *           "job_id": "j0000000-4444-4000-8000-000000000060",
+         *           "source_path": "C:/site/plans/foundation-rev-c.pdf",
+         *           "source_size": 4812345,
+         *           "page": 1,
+         *           "units": null,
+         *           "width": 7016,
+         *           "height": 4961,
+         *           "dpi": 150,
+         *           "extent_src": [
+         *             0,
+         *             -4961,
+         *             7016,
+         *             0
+         *           ],
+         *           "layers": [],
+         *           "georef": {
+         *             "method": "control_points",
+         *             "crs_wkt": null,
+         *             "epsg": null,
+         *             "model": "similarity",
+         *             "points": [
+         *               {
+         *                 "id": "p1",
+         *                 "src": [
+         *                   812,
+         *                   -1204
+         *                 ],
+         *                 "dst": [
+         *                   583120.4,
+         *                   3265410.2
+         *                 ]
+         *               },
+         *               {
+         *                 "id": "p2",
+         *                 "src": [
+         *                   6120,
+         *                   -980
+         *                 ],
+         *                 "dst": [
+         *                   583402.9,
+         *                   3265421.7
+         *                 ]
+         *               },
+         *               {
+         *                 "id": "p3",
+         *                 "src": [
+         *                   3300,
+         *                   -4100
+         *                 ],
+         *                 "dst": [
+         *                   583255.1,
+         *                   3265246
+         *                 ]
+         *               }
+         *             ],
+         *             "dst_crs_wkt": "PROJCRS[\"WGS 84 / UTM zone 38N\"]",
+         *             "transform": [
+         *               0.0532,
+         *               0.0021,
+         *               583077,
+         *               -0.0021,
+         *               0.0532,
+         *               3265476.3
+         *             ],
+         *             "rmse_m": 0.06,
+         *             "residuals_m": [
+         *               0.05,
+         *               0.07,
+         *               0.06
+         *             ],
+         *             "warnings": []
+         *           },
+         *           "georef_version": 3,
+         *           "bounds_site": [
+         *             583077,
+         *             3265200,
+         *             583450,
+         *             3265480
+         *           ],
+         *           "layer_state": {
+         *             "hidden_layers": [],
+         *             "knockout_white": true
+         *           },
+         *           "captured_on": "2026-07-01",
+         *           "created_at": "2026-09-20T09:00:00Z",
+         *           "updated_at": "2026-09-20T09:30:00Z"
+         *         }
+         *       ]
+         *     }
+         */
+        DrawingList: {
+            items: components["schemas"]["Drawing"][];
+        };
+        DrawingWithJob: {
+            drawing: components["schemas"]["Drawing"];
+            job: components["schemas"]["Job"];
+        };
+        DrawingPatch: {
+            name?: string;
+            layer_state?: components["schemas"]["DrawingLayerState"];
+            /**
+             * Format: date
+             * @description null clears it
+             */
+            captured_on?: string | null;
+        };
+        /**
+         * @example {
+         *       "model": "similarity",
+         *       "dst_frame": "site",
+         *       "points": [
+         *         {
+         *           "src": [
+         *             812,
+         *             -1204
+         *           ],
+         *           "dst": [
+         *             583120.4,
+         *             3265410.2
+         *           ]
+         *         },
+         *         {
+         *           "src": [
+         *             6120,
+         *             -980
+         *           ],
+         *           "dst": [
+         *             583402.9,
+         *             3265421.7
+         *           ]
+         *         },
+         *         {
+         *           "src": [
+         *             3300,
+         *             -4100
+         *           ],
+         *           "dst": [
+         *             583255.1,
+         *             3265246
+         *           ]
+         *         }
+         *       ]
+         *     }
+         */
+        DrawingGeorefPut: {
+            model: components["schemas"]["GeorefModel"];
+            points: components["schemas"]["GeorefPointInput"][];
+            /**
+             * @description the frame the dst coordinates are in
+             * @enum {string}
+             */
+            dst_frame: "site";
+        };
+        GeorefFitRequest: {
+            model: components["schemas"]["GeorefModel"];
+            points: components["schemas"]["GeorefPointInput"][];
+            /** @description the drawing's units, for the scale_mismatch warning; null or absent for a raster */
+            units?: components["schemas"]["LinearUnit"] | null;
+        };
+        /**
+         * @example {
+         *       "model": "similarity",
+         *       "transform": [
+         *         0.0532,
+         *         0.0021,
+         *         583077,
+         *         -0.0021,
+         *         0.0532,
+         *         3265476.3
+         *       ],
+         *       "rmse_m": 0.06,
+         *       "residuals_m": [
+         *         0.05,
+         *         0.07,
+         *         0.06
+         *       ],
+         *       "warnings": [],
+         *       "scale": 0.05324,
+         *       "rotation_deg": -2.26
+         *     }
+         */
+        GeorefFit: {
+            model: components["schemas"]["GeorefModel"];
+            transform: number[];
+            rmse_m: number;
+            residuals_m: number[];
+            warnings: components["schemas"]["GeorefWarning"][];
+            /** @description metres per drawing unit (the mean of the two axes for affine) */
+            scale: number;
+            /** @description counter-clockwise from the drawing's x axis to east */
+            rotation_deg: number;
+        };
+        DrawingVectorLayer: {
+            name: string;
+            colour: string;
+            /** @description each a flat x0, y0, x1, y1, ... list in the site frame */
+            lines: number[][];
+        };
+        DrawingLabel: {
+            text: string;
+            x: number;
+            y: number;
+            height_m: number;
+            /** @description degrees counter-clockwise */
+            rotation: number;
+            /** @description the DXF or LandXML layer, so hidden layers hide their labels too */
+            layer?: string;
+        };
+        /**
+         * @example {
+         *       "layers": [
+         *         {
+         *           "name": "C-ROAD",
+         *           "colour": "#ffffff",
+         *           "lines": [
+         *             [
+         *               583100,
+         *               3265400,
+         *               583180,
+         *               3265402.5,
+         *               583240,
+         *               3265430
+         *             ]
+         *           ]
+         *         }
+         *       ],
+         *       "labels": [
+         *         {
+         *           "text": "ACCESS ROAD",
+         *           "x": 583150,
+         *           "y": 3265405,
+         *           "height_m": 1.5,
+         *           "rotation": 2,
+         *           "layer": "C-ROAD"
+         *         }
+         *       ],
+         *       "truncated": false
+         *     }
+         */
+        DrawingVectorTile: {
+            layers: components["schemas"]["DrawingVectorLayer"][];
+            labels: components["schemas"]["DrawingLabel"][];
+            /** @description over 20 000 vertices matched; the shortest runs were dropped first */
+            truncated: boolean;
+        };
     };
     responses: {
         /** @description error envelope */
@@ -10134,6 +10882,9 @@ export interface components {
         siteFrame: "site";
         /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
         tileVersion: string;
+        drawingId: string;
+        /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
+        drawingPage: number;
         /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
         tilePreview: string;
         /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
@@ -17413,6 +18164,514 @@ export interface operations {
                     "application/json": components["schemas"]["FrameSample"];
                 };
             };
+            default: components["responses"]["Error"];
+        };
+    };
+    importElevation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ElevationImportRequest"];
+            };
+        };
+        responses: {
+            /** @description surface created in `building` with kind `dem`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurfaceWithJob"];
+                };
+            };
+            /** @description the file or the `align_to_surface_id` surface does not exist (`code` is `not_found`) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the `align_to_surface_id` surface is not `ready` (`code` is `not_ready`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description the file is not a .tif or .tiff (`code` is `validation_error`, `details.reason` is `extension`); not a single-band elevation raster (`not_elevation`); gone or changed since it was chosen (`source_missing`); outside the `align_to_surface_id` surface (`no_overlap`); a geographic output CRS (`geographic_output`) or one not in metres (`non_metric_output`) without a target; a grid over the cell ceiling (`grid_too_large`); not enough free disk (`insufficient_disk`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDrawingInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingInspectionCreate"];
+            };
+        };
+        responses: {
+            /** @description inspection created in `inspecting`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingInspectionWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description a DWG (`code` is `validation_error`, `details.reason` is `dwg`), an unknown extension (`details.reason` is `extension`), or a PDF while PDFium did not load (`pdf_unavailable`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingInspection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the inspection */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingInspection"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingPageThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                inspectionId: components["parameters"]["inspectionId"];
+                /** @description a PDF page, 1-based; thumbnails exist for the first 50 */
+                page: components["parameters"]["drawingPage"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the page has no thumbnail (the inspection is not ready, or the page is past the file's end) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    listDrawings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description drawings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingList"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    createDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingCreate"];
+            };
+        };
+        responses: {
+            /** @description drawing created in `importing`, job queued */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingWithJob"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the inspection has not been read yet or reading it failed (`code` is `not_ready`), or a build from it is queued or running (`job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a placement the file cannot take, such as `crs` for a raster, `embedded` without an embedded georeference, or a world file without `crs` (`code` is `invalid_placement`); a page past the file's end or unknown layers (`validation_error`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    fitDrawingGeoref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeorefFitRequest"];
+            };
+        };
+        responses: {
+            /** @description the fit */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeorefFit"];
+                };
+            };
+            /** @description fewer points than the model needs, 2 for similarity and 3 for affine (`code` is `too_few_points`); points picked in mirrored order (`reflection`); affine points on one line (`collinear`); coincident points or a zero scale (`degenerate`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the drawing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    deleteDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description its import job is queued or running (`code` is `job_running`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    patchDrawing: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingPatch"];
+            };
+        };
+        responses: {
+            /** @description the updated drawing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    putDrawingGeoref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DrawingGeorefPut"];
+            };
+        };
+        responses: {
+            /** @description the placed drawing */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the drawing is still importing or failed (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description fewer points than the model needs (`code` is `too_few_points`), mirrored points (`reflection`), collinear affine points (`collinear`), or coincident points or a zero scale (`degenerate`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    clearDrawingGeoref: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the drawing, now with `georef` null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Drawing"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingVectorTile: {
+        parameters: {
+            query?: {
+                /** @description the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL) */
+                v?: components["parameters"]["tileVersion"];
+                /** @description a preview placement a,b,c,d,e,f (drawing coordinates to site frame, E = a·x + b·y + c, N = d·x + e·y + f) used instead of the stored georef while aligning; drawings only (drawing_raster site tiles and vector tiles); a response to a request with `t` is `Cache-Control: no-store`; a malformed value is 422 `invalid_preview` */
+                t?: components["parameters"]["tilePreview"];
+                /** @description the client's cache key for the current site frame (tiles of another frame never mix in its cache); ignored by the server */
+                frame_key?: components["parameters"]["frameKey"];
+            };
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+                /** @description site tile zoom: res(z) = 1024 / 2^z metres per pixel */
+                z: components["parameters"]["siteZ"];
+                /** @description site tile column, floor(E / (256 res)); negative west of the frame origin */
+                x: components["parameters"]["siteX"];
+                /** @description site tile row, floor(-N / (256 res)); negative north of the frame origin */
+                y: components["parameters"]["siteY"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description the tile's lines and labels */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DrawingVectorTile"];
+                };
+            };
+            /** @description nothing of the drawing is in this tile */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description the drawing is still importing (`code` is `not_ready`), not placed yet and no `t` sent (`not_placed`), or the project has no site frame yet (`no_site_frame`) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description a raster drawing has no vector tiles; it is a `drawing_raster` site tile (`code` is `not_vector`); the drawing's placement cannot reach the site frame (`no_coordinates`); `t` is malformed or degenerate (`invalid_preview`) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    getDrawingThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: components["parameters"]["projectId"];
+                drawingId: components["parameters"]["drawingId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description thumbnail */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description the drawing has no thumbnail yet */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
             default: components["responses"]["Error"];
         };
     };

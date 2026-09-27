@@ -4786,6 +4786,325 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/FrameSample" }
         default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/elevations:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: importElevation
+      summary: |
+        Import a plain DSM or DTM GeoTIFF as a `dem` surface (map-workspace spec §7). An
+        `elevation_import` job copies it when it already conforms, else re-grids it (onto the
+        `align_to_surface_id` surface's lattice when one is given). There is no preview step. A file
+        with no CRS, an RGB image, or a geographic or feet CRS without a target fails the job with a
+        readable message. Publishes `surfaces.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ElevationImportRequest" }
+      responses:
+        "202":
+          description: surface created in `building` with kind `dem`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SurfaceWithJob" }
+        "404":
+          description: "the file or the `align_to_surface_id` surface does not exist (`code` is `not_found`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: "the `align_to_surface_id` surface is not `ready` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the file is not a .tif or .tiff (`code` is `validation_error`, `details.reason` is `extension`); not a single-band elevation raster (`not_elevation`); gone or changed since it was chosen (`source_missing`); outside the `align_to_surface_id` surface (`no_overlap`); a geographic output CRS (`geographic_output`) or one not in metres (`non_metric_output`) without a target; a grid over the cell ceiling (`grid_too_large`); not enough free disk (`insufficient_disk`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawing-inspections:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: createDrawingInspection
+      summary: |
+        Read a drawing file (a `drawing_import` job, phase `inspect`, map-workspace spec §8.2): its
+        format, the DXF or LandXML layers and units, the PDF pages with 160 px thumbnails, the
+        raster size, and any world-file or GeoTIFF placement.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingInspectionCreate" }
+      responses:
+        "202":
+          description: inspection created in `inspecting`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingInspectionWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "a DWG (`code` is `validation_error`, `details.reason` is `dwg`), an unknown extension (`details.reason` is `extension`), or a PDF while PDFium did not load (`pdf_unavailable`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawing-inspections/{inspectionId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+    get:
+      tags: [workspace]
+      operationId: getDrawingInspection
+      responses:
+        "200":
+          description: the inspection
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingInspection" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawing-inspections/{inspectionId}/pages/{page}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/inspectionId"
+      - $ref: "#/components/parameters/drawingPage"
+    get:
+      tags: [workspace]
+      operationId: getDrawingPageThumbnail
+      summary: A 160 px thumbnail of one PDF page.
+      responses:
+        "200":
+          description: thumbnail
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204":
+          {
+            description: "the page has no thumbnail (the inspection is not ready, or the page is past the file's end)",
+          }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    get:
+      tags: [workspace]
+      operationId: listDrawings
+      summary: Every drawing, newest first (one row per drawing, tens).
+      responses:
+        "200":
+          description: drawings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingList" }
+        default: { $ref: "#/components/responses/Error" }
+    post:
+      tags: [workspace]
+      operationId: createDrawing
+      summary: |
+        Build a drawing from a ready inspection (a `drawing_import` job, phase `build`): flatten and
+        index DXF or LandXML linework, render a PDF page in strips, or copy a raster window by window,
+        then place it by CRS, by its embedded georeference, or not at all (placed later with control
+        points). Publishes `drawings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingCreate" }
+      responses:
+        "202":
+          description: drawing created in `importing`, job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the inspection has not been read yet or reading it failed (`code` is `not_ready`), or a build from it is queued or running (`job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a placement the file cannot take, such as `crs` for a raster, `embedded` without an embedded georeference, or a world file without `crs` (`code` is `invalid_placement`); a page past the file's end or unknown layers (`validation_error`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/georef-fit:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+    post:
+      tags: [workspace]
+      operationId: fitDrawingGeoref
+      summary: |
+        A dry-run control-point fit with the same maths as `putDrawingGeoref` (least squares,
+        similarity or affine, RMSE and residuals in metres, warnings); nothing is stored.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/GeorefFitRequest" }
+      responses:
+        "200":
+          description: the fit
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/GeorefFit" }
+        "422":
+          description: "fewer points than the model needs, 2 for similarity and 3 for affine (`code` is `too_few_points`); points picked in mirrored order (`reflection`); affine points on one line (`collinear`); coincident points or a zero scale (`degenerate`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+    get:
+      tags: [workspace]
+      operationId: getDrawing
+      responses:
+        "200":
+          description: the drawing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    patch:
+      tags: [workspace]
+      operationId: patchDrawing
+      summary: Rename, set the revision date, or change the layer state (DXF layer visibility, raster knockout). Publishes `drawings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingPatch" }
+      responses:
+        "200":
+          description: the updated drawing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [workspace]
+      operationId: deleteDrawing
+      summary: Delete the drawing and its folder under `drawings/`; the source file is never touched.
+      responses:
+        "204": { description: deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "its import job is queued or running (`code` is `job_running`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}/georef:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+    put:
+      tags: [workspace]
+      operationId: putDrawingGeoref
+      summary: |
+        Save a control-point placement (map-workspace spec §8.3): the server refits authoritatively,
+        stores the points with the site CRS they were picked in, bumps `georef_version` and, for a
+        raster, rewrites its geotransform in place. Publishes `drawings.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DrawingGeorefPut" }
+      responses:
+        "200":
+          description: the placed drawing
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the drawing is still importing or failed (`code` is `not_ready`), or the project has no site frame yet (`no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "fewer points than the model needs (`code` is `too_few_points`), mirrored points (`reflection`), collinear affine points (`collinear`), or coincident points or a zero scale (`degenerate`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    delete:
+      tags: [workspace]
+      operationId: clearDrawingGeoref
+      summary: Remove the placement; the drawing returns to "not placed". Publishes `drawings.changed`.
+      responses:
+        "200":
+          description: the drawing, now with `georef` null
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Drawing" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}/vtiles/{z}/{x}/{y}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+      - $ref: "#/components/parameters/siteZ"
+      - $ref: "#/components/parameters/siteX"
+      - $ref: "#/components/parameters/siteY"
+    get:
+      tags: [workspace]
+      operationId: getDrawingVectorTile
+      summary: |
+        The DXF or LandXML linework of one site tile (map-workspace spec §8.4): a bucket lookup,
+        clipped to the tile plus 2 %, transformed into the site frame and simplified to res(z) / 2;
+        at most 20 000 vertices. Labels only when at least 6 px tall.
+      parameters:
+        - $ref: "#/components/parameters/tileVersion"
+        - $ref: "#/components/parameters/tilePreview"
+        - $ref: "#/components/parameters/frameKey"
+      responses:
+        "200":
+          description: the tile's lines and labels
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DrawingVectorTile" }
+        "204": { description: nothing of the drawing is in this tile }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the drawing is still importing (`code` is `not_ready`), not placed yet and no `t` sent (`not_placed`), or the project has no site frame yet (`no_site_frame`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "a raster drawing has no vector tiles; it is a `drawing_raster` site tile (`code` is `not_vector`); the drawing's placement cannot reach the site frame (`no_coordinates`); `t` is malformed or degenerate (`invalid_preview`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/drawings/{drawingId}/thumbnail:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/drawingId"
+    get:
+      tags: [workspace]
+      operationId: getDrawingThumbnail
+      summary: A 160 px thumbnail of the drawing.
+      responses:
+        "200":
+          description: thumbnail
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+        "204": { description: the drawing has no thumbnail yet }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
 
 components:
   securitySchemes:
@@ -5034,6 +5353,17 @@ components:
       required: false
       description: "the layer's `version` from `listWorkspaceLayers`, for cache busting (the response is immutable per URL)"
       schema: { type: string }
+    drawingId:
+      name: drawingId
+      in: path
+      required: true
+      schema: { type: string }
+    drawingPage:
+      name: page
+      in: path
+      required: true
+      description: a PDF page, 1-based; thumbnails exist for the first 50
+      schema: { type: integer, minimum: 1, maximum: 50 }
     tilePreview:
       name: t
       in: query
@@ -10298,3 +10628,656 @@ components:
           samples:
             [{ surface_id: "s0000000-9999-4000-8000-000000000001", z: 611.42 }],
         }
+    ElevationImportRequest:
+      type: object
+      required: [path, name, role]
+      properties:
+        path:
+          {
+            type: string,
+            minLength: 1,
+            description: absolute path of a single-band .tif or .tiff with a CRS,
+          }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        role: { $ref: "#/components/schemas/ElevationRole" }
+        captured_on:
+          {
+            type: [string, "null"],
+            format: date,
+            description: "the survey date; the file's TIFFTAG_DATETIME when absent or null",
+          }
+        align_to_surface_id:
+          {
+            type: [string, "null"],
+            description: "a ready surface whose CRS and cell the output adopts (same lattice); null when absent",
+          }
+        cell_size_m:
+          {
+            type: [number, "null"],
+            minimum: 0.01,
+            maximum: 5,
+            description: "without a target: the output cell; the source cell snapped to the S2 ladder when absent or null",
+          }
+      example:
+        {
+          path: "C:/survey/2026-09-14/dsm.tif",
+          name: "DSM 14 Sep 2026",
+          role: dsm,
+          captured_on: "2026-09-14",
+          align_to_surface_id: null,
+        }
+    DrawingLayer:
+      type: object
+      required: [name, colour, entity_count, visible_default]
+      properties:
+        name: { type: string }
+        colour:
+          {
+            type: string,
+            pattern: "^#[0-9a-fA-F]{6}$",
+            description: ACI or true colour as hex,
+          }
+        entity_count: { type: integer, minimum: 0 }
+        visible_default: { type: boolean }
+    DrawingPage:
+      type: object
+      required: [page, width_pt, height_pt]
+      properties:
+        page: { type: integer, minimum: 1 }
+        width_pt: { type: number }
+        height_pt: { type: number }
+    DrawingWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          {
+            type: string,
+            description: "geodata_unverified, world_file_needs_crs, dpi_lowered, labels_capped, unsupported_entities, no_linework",
+          }
+        message: { type: string }
+    DrawingEmbedded:
+      type: object
+      description: a placement the file carries itself
+      required: [source, crs_wkt, epsg, transform, needs_crs]
+      properties:
+        source: { type: string, enum: [world_file, geotiff] }
+        crs_wkt: { type: [string, "null"] }
+        epsg: { type: [integer, "null"] }
+        transform:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 6,
+            maxItems: 6,
+            description: "a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f, where x = col and y = -row",
+          }
+        needs_crs:
+          {
+            type: boolean,
+            description: "a world file carries no CRS, so the dialog asks for one",
+          }
+    DrawingInspectionCreate:
+      type: object
+      required: [path]
+      properties:
+        path:
+          {
+            type: string,
+            minLength: 1,
+            description: "absolute path of a .dxf, .pdf, .png, .jpg or .jpeg, .tif or .tiff, or .xml or .landxml file",
+          }
+      example: { path: "C:/site/plans/foundation-rev-c.pdf" }
+    DrawingInspection:
+      type: object
+      required:
+        [
+          id,
+          state,
+          error,
+          job_id,
+          path,
+          format,
+          file_size,
+          sha256,
+          units,
+          units_source,
+          crs_hint,
+          extent_src,
+          layers,
+          page_count,
+          pages,
+          width,
+          height,
+          embedded,
+          warnings,
+          created_at,
+        ]
+      properties:
+        id: { type: string }
+        state: { type: string, enum: [inspecting, ready, failed] }
+        error: { type: [string, "null"] }
+        job_id: { type: string }
+        path: { type: string }
+        format: { $ref: "#/components/schemas/DrawingFormat" }
+        file_size: { type: integer }
+        sha256: { type: [string, "null"] }
+        units:
+          {
+            oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }],
+            description: DXF or LandXML only,
+          }
+        units_source:
+          { type: [string, "null"], description: "for example DXF $INSUNITS=6" }
+        crs_hint:
+          {
+            type: [string, "null"],
+            description: "an unverified CRS name (DXF GEODATA)",
+          }
+        extent_src:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "minx, miny, maxx, maxy in drawing coordinates",
+          }
+        layers:
+          { type: array, items: { $ref: "#/components/schemas/DrawingLayer" } }
+        page_count: { type: [integer, "null"], description: PDF only }
+        pages:
+          {
+            type: array,
+            maxItems: 50,
+            items: { $ref: "#/components/schemas/DrawingPage" },
+            description: "PDF: the first 50 pages",
+          }
+        width: { type: [integer, "null"], description: raster pixels }
+        height: { type: [integer, "null"] }
+        embedded:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/DrawingEmbedded" }, { type: "null" }],
+          }
+        warnings:
+          { type: array, items: { $ref: "#/components/schemas/DrawingWarning" } }
+        created_at: { type: string, format: date-time }
+      example:
+        id: "i0000000-1313-4000-8000-000000000001"
+        state: ready
+        error: null
+        job_id: "j0000000-4444-4000-8000-000000000059"
+        path: "C:/site/plans/site-plan.dxf"
+        format: dxf
+        file_size: 18234567
+        sha256: "9f2c8a61d0e4b7c3a1f5e2d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9"
+        units: metre
+        units_source: "DXF $INSUNITS=6"
+        crs_hint: null
+        extent_src: [582950.0, 3264980.0, 583950.0, 3265850.0]
+        layers:
+          - {
+              name: "C-ROAD",
+              colour: "#ffffff",
+              entity_count: 1840,
+              visible_default: true,
+            }
+          - {
+              name: "C-TOPO",
+              colour: "#00ff00",
+              entity_count: 12020,
+              visible_default: true,
+            }
+        page_count: null
+        pages: []
+        width: null
+        height: null
+        embedded: null
+        warnings: []
+        created_at: "2026-09-20T08:59:00Z"
+    DrawingInspectionWithJob:
+      type: object
+      required: [inspection, job]
+      properties:
+        inspection: { $ref: "#/components/schemas/DrawingInspection" }
+        job: { $ref: "#/components/schemas/Job" }
+    DrawingPlacementInput:
+      type: object
+      required: [method]
+      properties:
+        method:
+          {
+            type: string,
+            enum: [crs, embedded, none],
+            description: "none places it later with control points (the K tool)",
+          }
+        crs:
+          {
+            type: string,
+            minLength: 1,
+            description: "EPSG:<code> or WKT; required for crs, and for embedded from a world file",
+          }
+        units: { $ref: "#/components/schemas/LinearUnit" }
+    DrawingCreate:
+      type: object
+      required: [inspection_id, name, placement]
+      properties:
+        inspection_id: { type: string }
+        name: { type: string, minLength: 1, maxLength: 200 }
+        page: { type: integer, minimum: 1, description: "PDF only; 1 when absent" }
+        dpi:
+          {
+            type: integer,
+            enum: [100, 150, 200, 300],
+            description: "PDF only; 150 when absent; lowered to stay within 20 000 px and 300 MP",
+          }
+        layers:
+          {
+            type: array,
+            uniqueItems: true,
+            items: { type: string },
+            description: "DXF or LandXML layers to import; every layer when absent",
+          }
+        placement: { $ref: "#/components/schemas/DrawingPlacementInput" }
+        captured_on:
+          { type: [string, "null"], format: date, description: a revision date }
+      example:
+        {
+          inspection_id: "i0000000-1313-4000-8000-000000000001",
+          name: "Site plan",
+          placement: { method: crs, crs: "EPSG:32638", units: metre },
+        }
+    GeorefModel:
+      type: string
+      enum: [similarity, affine]
+    GeorefPoint:
+      type: object
+      required: [id, src, dst]
+      properties:
+        id: { type: string }
+        src:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 2,
+            maxItems: 2,
+            description: "drawing coordinates; a raster uses col and -row",
+          }
+        dst:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 2,
+            maxItems: 2,
+            description: "E and N in the georef's dst_crs_wkt",
+          }
+    GeorefPointInput:
+      type: object
+      required: [src, dst]
+      properties:
+        id: { type: string, description: client-generated; assigned when absent }
+        src: { type: array, items: { type: number }, minItems: 2, maxItems: 2 }
+        dst:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 2,
+            maxItems: 2,
+            description: "in the site frame (putDrawingGeoref) or any metric plane (fitDrawingGeoref)",
+          }
+    GeorefWarning:
+      type: object
+      required: [code, message]
+      properties:
+        code: { type: string, enum: [rmse_high, scale_mismatch, shear] }
+        message: { type: string }
+    DrawingGeoref:
+      type: object
+      required:
+        [
+          method,
+          crs_wkt,
+          epsg,
+          model,
+          points,
+          dst_crs_wkt,
+          transform,
+          rmse_m,
+          residuals_m,
+          warnings,
+        ]
+      properties:
+        method: { type: string, enum: [crs, control_points, embedded] }
+        crs_wkt:
+          {
+            type: [string, "null"],
+            description: "the drawing's own CRS (method crs or embedded)",
+          }
+        epsg: { type: [integer, "null"] }
+        model:
+          {
+            oneOf: [{ $ref: "#/components/schemas/GeorefModel" }, { type: "null" }],
+            description: control points only,
+          }
+        points:
+          {
+            type: array,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/GeorefPoint" },
+          }
+        dst_crs_wkt:
+          {
+            type: [string, "null"],
+            description: "the CRS the points' dst were picked in; null in a local frame",
+          }
+        transform:
+          {
+            type: array,
+            items: { type: number },
+            minItems: 6,
+            maxItems: 6,
+            description: "a, b, c, d, e, f with E = a·x + b·y + c and N = d·x + e·y + f (a similarity is a, -b', c, b', a, f)",
+          }
+        rmse_m:
+          {
+            type: [number, "null"],
+            description: "0 with exactly the model's minimum of points; null without points",
+          }
+        residuals_m:
+          { type: array, items: { type: number }, description: one per point }
+        warnings:
+          { type: array, items: { $ref: "#/components/schemas/GeorefWarning" } }
+    DrawingLayerState:
+      type: object
+      required: [hidden_layers, knockout_white]
+      properties:
+        hidden_layers:
+          {
+            type: array,
+            items: { type: string },
+            description: DXF or LandXML layers switched off,
+          }
+        knockout_white:
+          { type: boolean, description: "raster: white pixels transparent" }
+    Drawing:
+      type: object
+      required:
+        [
+          id,
+          name,
+          format,
+          kind,
+          status,
+          error,
+          job_id,
+          source_path,
+          source_size,
+          page,
+          units,
+          width,
+          height,
+          dpi,
+          extent_src,
+          layers,
+          georef,
+          georef_version,
+          bounds_site,
+          layer_state,
+          captured_on,
+          created_at,
+          updated_at,
+        ]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        format: { $ref: "#/components/schemas/DrawingFormat" }
+        kind:
+          {
+            type: string,
+            enum: [vector, raster],
+            description: "vector for DXF and LandXML",
+          }
+        status: { type: string, enum: [importing, ready, failed] }
+        error: { type: [string, "null"] }
+        job_id: { type: [string, "null"] }
+        source_path: { type: string }
+        source_size: { type: integer }
+        page: { type: [integer, "null"] }
+        units:
+          { oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }] }
+        width: { type: [integer, "null"] }
+        height: { type: [integer, "null"] }
+        dpi: { type: [integer, "null"] }
+        extent_src:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "drawing coordinates; a raster is 0, -height, width, 0",
+          }
+        layers:
+          { type: array, items: { $ref: "#/components/schemas/DrawingLayer" } }
+        georef:
+          {
+            oneOf:
+              [{ $ref: "#/components/schemas/DrawingGeoref" }, { type: "null" }],
+            description: "null: not placed yet",
+          }
+        georef_version:
+          {
+            type: integer,
+            minimum: 0,
+            description: bumped on every placement change; part of the tile cache key,
+          }
+        bounds_site:
+          {
+            type: [array, "null"],
+            items: { type: number },
+            minItems: 4,
+            maxItems: 4,
+            description: "the footprint in the current site frame; null when not placed or not in the frame",
+          }
+        layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
+        captured_on: { type: [string, "null"], format: date }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    DrawingList:
+      type: object
+      required: [items]
+      properties:
+        items: { type: array, items: { $ref: "#/components/schemas/Drawing" } }
+      example:
+        items:
+          - id: "w0000000-1212-4000-8000-000000000001"
+            name: "Foundation plan rev C"
+            format: pdf
+            kind: raster
+            status: ready
+            error: null
+            job_id: "j0000000-4444-4000-8000-000000000060"
+            source_path: "C:/site/plans/foundation-rev-c.pdf"
+            source_size: 4812345
+            page: 1
+            units: null
+            width: 7016
+            height: 4961
+            dpi: 150
+            extent_src: [0, -4961, 7016, 0]
+            layers: []
+            georef:
+              method: control_points
+              crs_wkt: null
+              epsg: null
+              model: similarity
+              points:
+                - { id: "p1", src: [812.0, -1204.0], dst: [583120.4, 3265410.2] }
+                - { id: "p2", src: [6120.0, -980.0], dst: [583402.9, 3265421.7] }
+                - { id: "p3", src: [3300.0, -4100.0], dst: [583255.1, 3265246.0] }
+              dst_crs_wkt: 'PROJCRS["WGS 84 / UTM zone 38N"]'
+              transform: [0.0532, 0.0021, 583077.0, -0.0021, 0.0532, 3265476.3]
+              rmse_m: 0.06
+              residuals_m: [0.05, 0.07, 0.06]
+              warnings: []
+            georef_version: 3
+            bounds_site: [583077.0, 3265200.0, 583450.0, 3265480.0]
+            layer_state: { hidden_layers: [], knockout_white: true }
+            captured_on: "2026-07-01"
+            created_at: "2026-09-20T09:00:00Z"
+            updated_at: "2026-09-20T09:30:00Z"
+    DrawingWithJob:
+      type: object
+      required: [drawing, job]
+      properties:
+        drawing: { $ref: "#/components/schemas/Drawing" }
+        job: { $ref: "#/components/schemas/Job" }
+    DrawingPatch:
+      type: object
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 200 }
+        layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
+        captured_on:
+          { type: [string, "null"], format: date, description: null clears it }
+    DrawingGeorefPut:
+      type: object
+      required: [model, points, dst_frame]
+      properties:
+        model: { $ref: "#/components/schemas/GeorefModel" }
+        points:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/GeorefPointInput" },
+          }
+        dst_frame:
+          {
+            type: string,
+            enum: [site],
+            description: the frame the dst coordinates are in,
+          }
+      example:
+        {
+          model: similarity,
+          dst_frame: site,
+          points:
+            [
+              { src: [812.0, -1204.0], dst: [583120.4, 3265410.2] },
+              { src: [6120.0, -980.0], dst: [583402.9, 3265421.7] },
+              { src: [3300.0, -4100.0], dst: [583255.1, 3265246.0] },
+            ],
+        }
+    GeorefFitRequest:
+      type: object
+      required: [model, points]
+      properties:
+        model: { $ref: "#/components/schemas/GeorefModel" }
+        points:
+          {
+            type: array,
+            minItems: 2,
+            maxItems: 12,
+            items: { $ref: "#/components/schemas/GeorefPointInput" },
+          }
+        units:
+          {
+            oneOf: [{ $ref: "#/components/schemas/LinearUnit" }, { type: "null" }],
+            description: "the drawing's units, for the scale_mismatch warning; null or absent for a raster",
+          }
+    GeorefFit:
+      type: object
+      required:
+        [model, transform, rmse_m, residuals_m, warnings, scale, rotation_deg]
+      properties:
+        model: { $ref: "#/components/schemas/GeorefModel" }
+        transform:
+          { type: array, items: { type: number }, minItems: 6, maxItems: 6 }
+        rmse_m: { type: number }
+        residuals_m: { type: array, items: { type: number } }
+        warnings:
+          { type: array, items: { $ref: "#/components/schemas/GeorefWarning" } }
+        scale:
+          {
+            type: number,
+            description: "metres per drawing unit (the mean of the two axes for affine)",
+          }
+        rotation_deg:
+          {
+            type: number,
+            description: counter-clockwise from the drawing's x axis to east,
+          }
+      example:
+        {
+          model: similarity,
+          transform: [0.0532, 0.0021, 583077.0, -0.0021, 0.0532, 3265476.3],
+          rmse_m: 0.06,
+          residuals_m: [0.05, 0.07, 0.06],
+          warnings: [],
+          scale: 0.05324,
+          rotation_deg: -2.26,
+        }
+    DrawingVectorLayer:
+      type: object
+      required: [name, colour, lines]
+      properties:
+        name: { type: string }
+        colour: { type: string, pattern: "^#[0-9a-fA-F]{6}$" }
+        lines:
+          {
+            type: array,
+            items: { type: array, minItems: 4, items: { type: number } },
+            description: "each a flat x0, y0, x1, y1, ... list in the site frame",
+          }
+    DrawingLabel:
+      type: object
+      required: [text, x, y, height_m, rotation]
+      properties:
+        text: { type: string }
+        x: { type: number }
+        y: { type: number }
+        height_m: { type: number }
+        rotation: { type: number, description: degrees counter-clockwise }
+        layer:
+          {
+            type: string,
+            description: "the DXF or LandXML layer, so hidden layers hide their labels too",
+          }
+    DrawingVectorTile:
+      type: object
+      required: [layers, labels, truncated]
+      properties:
+        layers:
+          {
+            type: array,
+            items: { $ref: "#/components/schemas/DrawingVectorLayer" },
+          }
+        labels:
+          { type: array, items: { $ref: "#/components/schemas/DrawingLabel" } }
+        truncated:
+          {
+            type: boolean,
+            description: "over 20 000 vertices matched; the shortest runs were dropped first",
+          }
+      example:
+        layers:
+          [
+            {
+              name: "C-ROAD",
+              colour: "#ffffff",
+              lines:
+                [[583100.0, 3265400.0, 583180.0, 3265402.5, 583240.0, 3265430.0]],
+            },
+          ]
+        labels:
+          [
+            {
+              text: "ACCESS ROAD",
+              x: 583150.0,
+              y: 3265405.0,
+              height_m: 1.5,
+              rotation: 2.0,
+              layer: "C-ROAD",
+            },
+          ]
+        truncated: false
