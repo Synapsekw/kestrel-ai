@@ -120,7 +120,7 @@ touch; anchors are in the unit plans.
 | `backend/app/jobs/registry.py` (via job modules) | C0 | per-unit `imagery/jobs_*.py`, `assist/jobs_acquire.py` | 3 JobTypes registered with stub bodies |
 | `backend/tests/test_contract.py` | C0 then BA, BK, BX, BS, BP, BT, FW | `EXPECTED_STUBS`, `BACKEND_PENDING`, `RETIRING`, `REFUSES_VALID_DATA` | C0 adds; each unit deletes its own lines |
 | `backend/tests/test_foundation_contract.py` | C0 | the retired-operations test | scope the assertion to `F-` units |
-| `frontend/src/jobs/jobLabels.ts`, `app/jobVerbs.ts`, `jobs/JobCard.tsx`, `agent/project/ToolRow.tsx` | C0 | after each `dataset_build:` entry | 3 lines each |
+| `frontend/src/jobs/jobLabels.ts`, `app/jobVerbs.ts`, `jobs/JobCard.tsx`, `agent/project/ToolRow.tsx`, `ui/useJobToasts.ts` | C0 | after each `dataset_build:` entry; the `jobToastText` and `resultTarget` switches | 3 lines each in the five `Record<Job["type"], …>` maps, 3 cases in each switch (IMC reconciliation item 1: `main` has five maps and two exhaustive switches, not four) |
 | `frontend/src/test/fixtures.ts`, `test/appSectionFixtures.ts` | C0 (BT: `task` on TrainableDataset fixtures) | `exampleImage*`, `personBox`, `proposalBox`, `examplePreview` | new required fields |
 | `frontend/src/exports/ExportForm.tsx` | C0, BT | `DEFAULT_SELECTED` (C0); `OPTIONS` (BT) | `yolo_seg: false`; the `yolo_seg` option row |
 | `backend/app/datasets/boxes.py` | BA | whole file | `git mv` → `imagery/annotations.py` |
@@ -185,8 +185,8 @@ batch 2 — `datasets/router.py` (BA, BK, BX), `datasets/schemas.py` (BA, BX), `
   models on orthomosaics lift the rest.
 - **Shared anchors other C0s must rebase over:** `openapi.yaml` `JobType` enum and
   `components/parameters`; `api.py` router block (I-C0 adds one guarded loop right after
-  `api_router = APIRouter(…)`); `test_contract.py` allowance dicts; the four frontend job label
-  maps (`dataset_build:` anchor). I-C0 merges first, so M-C0 and C-C0 add after I's lines.
+  `api_router = APIRouter(…)`); `test_contract.py` allowance dicts; the five frontend job label
+  maps and two switches (`dataset_build:` anchor; IMC item 1). I-C0 merges first, so M-C0 and C-C0 add after I's lines.
 - **Keymap:** `isTypingTarget` stays in `ui/keymap.ts`; I adds no scope there, only FC's `nudge` chords.
 - **Finding-edit echo (R8)** is I-FB's: `store/changes.ts` and the findings inspector writes. M and C
   pages that write findings should wrap them in `ownFindingsWrite` (from `store/changesOwnWrite.ts`)
@@ -226,6 +226,10 @@ step), builds the installer and walks E's walkthrough on it.
 10. **No I unit writes a migration other than `0011`**, and none edits another sub-project's paths.
 
 ## Reconciliation log (2026-09-27)
+
+Cross-sub-project seams (I ↔ M ↔ C) are reconciled in `2026-09-27-imc-reconciliation.md`; its
+items 4, 9, 11 and 12 changed `fb`, `fw`, `ba`, `bp` and `e`; item 1 is an I-C0 hand-off; item 10 asks M and C
+to adopt FB's `ownFindingsWrite`.
 
 One line per change: what, and which plan files.
 

@@ -192,16 +192,16 @@ anchor named. Serial rebases resolve them.
 | `backend/tests/test_contract.py` | C0; B1, B2, B3, B4 | the C `EXPECTED_STUBS \|= {…}` block; `BACKEND_PENDING`; the end of `REFUSES_VALID_DATA` | C0 adds; each B unit deletes its own lines. B1 adds `updateCloudMeasurement: {422}`, B4 two entries |
 | `backend/tests/test_pointcloud_schemas.py` | C0, B1 | `NAMES` | C0 drops `CloudMeasurementCreate` and `CloudMeasurementUpdate`; B1 re-adds them |
 | `contract/fixtures/cloud-measure-vectors.json` | B1 | end of file | five new keys |
-| M's cloud provider for `GET /measurements` | B1 (Task 8, WAITING on M-B4) | the cloud row builder | one call to `headline.headline_for`, `method_label` and `list_status` |
+| `backend/app/measurements/providers.py` (M-B4's) | B1 (Task 8, WAITING on M-B4) | the anchor `# C-B1: add "area" and "profile" entries here` in `CLOUD_HEADLINES` | two dict entries calling `headline.headline_for`; written by whichever of B1 and M-B4 merges second (IMC item 6) |
 | Frontend job label maps (`ToolRow.tsx`, `jobVerbs.ts`, `JobCard`, …) | C0 | after the `pointcloud_export` entries | `pointcloud_profile` "Cross-section profile" |
-| `frontend/src/ui/Icon.tsx`, `ui/Feedback.test.tsx` | W1 | the `IconName` union's last member; `PATHS` | 11 palette icons (R6: added, not changed) |
-| `frontend/src/store/changes.ts` | W1 | `ChangesState`, the initial state, `PROJECT_SCOPED_EVENTS`, `applyEvent` | `pointcloudsRevision` |
-| `frontend/src/app/routeModel.ts` (+ test) | W1 | after `if (tab === "maps" && detail) return "fullbleed";` | `clouds/:id` is full-bleed |
+| `frontend/src/ui/Icon.tsx`, `ui/Feedback.test.tsx` | W1 | the `IconName` union's last member; `PATHS` | 11 palette icons (R6: added, not changed); M-W1 also adds `area`, so the second W1 to merge drops its own (IMC item 2) |
+| `frontend/src/store/changes.ts` | W1 | `ChangesState`, the initial state, `PROJECT_SCOPED_EVENTS`, `applyEvent` | `pointcloudsRevision`; one `if` per event shared with M-W6's `measurementsRevision` (IMC item 3) |
+| `frontend/src/app/routeModel.ts` (+ test) | W1 | after the `maps` line (M-W1 rewrites it to `if (tab === "maps") return "fullbleed";`, IMC item 5) | `clouds/:id` is full-bleed |
 | `frontend/src/screens/CloudsScreen.tsx` (+ test deleted) | V1 (props), W1 (shim) | whole file | ~20-line shim rendering `CloudWorkspace` |
 | `frontend/src/routes/projectRoutes.tsx` | X1 | the comment `//   /p/:projectId/maps/:mapId?at=x,y` | four comment lines documenting C's arrivals |
 | `frontend/src/api/clouds.ts` | B3 | `export async function deletePointCloud(` | optional `{deleteFindings}` |
 | `frontend/e2e/fixtures/potreeOctree.ts` | V1, V2 | `buildOctree(...)`; after `hollowStack` | optional attributes; `hollowBox` |
-| `frontend/e2e/clouds.spec.ts`, `pointcloud-foundation.spec.ts`, `clouds-no-webgl.spec.ts` | V1, W1, M1, G | named tests | V1 and W1 adapt; M1 drops the S1 distance test; G rewrites all three |
+| `frontend/e2e/clouds.spec.ts`, `pointcloud-foundation.spec.ts`, `clouds-no-webgl.spec.ts` | V1, W1, M1, G | named tests | V1 and W1 adapt; M1 drops the S1 distance test; G rewrites all three, keeping M-X's `mapRoutes` and two map-start tests if M-X merged first (IMC item 8) |
 | `frontend/scripts/check-packaged-webview.{ps1,mjs}` | G | after the cloud import loop; before `webview ok` | EDL on, 50 pins, one capture (IMC-X runs it) |
 | `backend/scripts/pointcloud_acceptance.py` (+ `tests/test_pointcloud_scripts.py`) | G | `client()`, `new_project()`, `main()` | six scenarios |
 | `docs/progress.md` | G | top | one section |
@@ -232,8 +232,9 @@ merge rebases):
 - **`GET /measurements` belongs to M (M-B4).** B1's Task 8 adds the `area`/`profile` headline, the
   rings label and `status` in M's cloud provider.
   - The task is WAITING, not blocking: it is skipped when M-B4 is not on `main`.
-  - In that case M-B4, merging second, calls B1's `headline.headline_for`, `method_label` and
-    `list_status`.
+  - In that case M-B4, merging second, adds the same two `CLOUD_HEADLINES` entries calling B1's
+    `headline.headline_for` (M-B4 Task 6 Step 7). No `method_label`/`list_status`: M's item has no
+    label field and M maps the status (IMC reconciliation item 6).
 - **The cloud → image arrival is I's (I-FW).** C builds
   `/p/:pid/images/:imageId?at=px,py&r=rpx&from=cloud:<cid>` (X1's `imageJumpHref`).
   - L1's and G's e2e assert only the URL unless I-FW has merged; G greps for I-FW's parser.
@@ -282,6 +283,10 @@ C-G, `2026-09-27-clouds-g.md`:
 - **Out of scope:** G builds no installer and runs no `/wrapup`; both are the coordinator's.
 
 ## Reconciliation log (2026-09-27)
+
+Cross-sub-project seams (I ↔ M ↔ C) are reconciled in `2026-09-27-imc-reconciliation.md`; its
+items 2, 3, 5, 6, 8, 10 and 12 changed `b1`, `w1`, `p1`, `l1` and `g`, and item 14 is a C-C0
+hand-off.
 
 One line per change: what, and which plan files (`c0`, `b1`, `b2`, `b3`, `b4`, `x1`, `v1`, `v2`,
 `w1`, `r1`, `m1`, `p1`, `l1`, `g`, `index`).
