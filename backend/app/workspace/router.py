@@ -11,8 +11,16 @@ from fastapi.responses import JSONResponse
 from app.errors import AppError, envelope
 from app.events_util import publish_map_workspace_changed
 from app.projects.service import ProjectHandle, get_project
-from app.workspace import service, tiles
-from app.workspace.schemas import MapWorkspaceOut, MapWorkspacePut, SiteFrameSet, workspace_out
+from app.workspace import layers, service, surveys, tiles
+from app.workspace.schemas import (
+    MapWorkspaceOut,
+    MapWorkspacePut,
+    SiteFrameSet,
+    WorkspaceLayerList,
+    WorkspaceSurveyList,
+    frame_out,
+    workspace_out,
+)
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["workspace"])
 IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}
@@ -76,3 +84,14 @@ def get_site_tile(
     if body is None:
         return Response(status_code=204, headers=headers)
     return Response(body, media_type="image/png", headers=headers)
+
+
+@router.get("/map-workspace/surveys", response_model=WorkspaceSurveyList)
+def list_workspace_surveys(handle: ProjectHandle = Depends(get_project)) -> WorkspaceSurveyList:
+    return WorkspaceSurveyList(items=surveys.list_surveys(handle))
+
+
+@router.get("/map-workspace/layers", response_model=WorkspaceLayerList)
+def list_workspace_layers(handle: ProjectHandle = Depends(get_project)) -> WorkspaceLayerList:
+    frame, items = layers.list_layers(handle)
+    return WorkspaceLayerList(frame=frame_out(frame), items=items)

@@ -63,3 +63,56 @@ def workspace_out(handle: ProjectHandle, ws: Workspace) -> MapWorkspaceOut:
         frame_items=FrameItems(**items),
         updated_at=ws.updated_at,
     )
+
+
+class WorkspaceLayerOut(BaseModel):
+    kind: Literal["map", "surface", "drawing"]
+    id: str
+    name: str
+    group: Literal["base", "elevation", "drawing"]
+    status: Literal["importing", "ready", "failed"]
+    in_frame: bool
+    tile_kind: Literal["map", "surface", "volume_diff", "drawing_raster"] | None
+    vector: bool
+    version: str
+    date: date | None
+    date_is_import_date: bool
+    footprint_site: list[float] | None
+    max_zoom: int | None
+    meta: str
+    surface_kind: str | None
+    elevation_role: Literal["dsm", "dtm"] | None
+    drawing_format: Literal["dxf", "pdf", "png", "jpg", "tif", "landxml"] | None
+    placed: bool | None
+
+
+class WorkspaceLayerList(BaseModel):
+    frame: SiteFrameOut
+    items: list[WorkspaceLayerOut]
+
+
+class WorkspaceSurveyMapOut(BaseModel):
+    id: str
+    name: str
+    gsd_cm: float | None
+    basis_run_id: str | None
+
+
+class WorkspaceSurveySurfaceOut(BaseModel):
+    id: str
+    name: str
+    kind: str
+    elevation_role: Literal["dsm", "dtm"] | None
+
+
+class WorkspaceSurveyOut(BaseModel):
+    date: date
+    date_is_import_date: bool
+    planned: bool
+    note: str | None
+    maps: list[WorkspaceSurveyMapOut]
+    surfaces: list[WorkspaceSurveySurfaceOut]
+
+
+class WorkspaceSurveyList(BaseModel):
+    items: list[WorkspaceSurveyOut]
