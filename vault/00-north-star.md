@@ -242,8 +242,6 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
   - Point clouds: C-R1, C-M1, C-P1, C-L1, C-G.
   - Then IMC-X (full gate, frozen sidecar, smoke with `sam ok` and `drawings ok`, installer), then Reports.
   - Resume from `.superpowers/sdd/imc-common/HANDOVER.md`.
-- **Full gate on `7c1200b`** was running at wrap-up (`imc-common/full-gate-7c1200b.log`). Merge gates ran only
-  contract and migration tests, lint and build.
 - **Contract prose fixes** that several units listed for IMC-X (`imc-common/handoffs.md`): importElevation,
   importAssistModel, createRuns, reviewMapDetections, exportLibraryDataset/startTrainingRun,
   BoxWriteResult.repaired, getSiteTile, getDrawingVectorTile.
