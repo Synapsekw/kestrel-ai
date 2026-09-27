@@ -198,13 +198,14 @@ def write_plan_georef(path: Path, transform, crs_wkt: str | None) -> None:
     a, b, c, d, e, f = transform
     with quiet(), rasterio.open(path, "r+") as dst:
         dst.transform = Affine(a, -b, c, d, -e, f)
-        if crs_wkt:
-            dst.crs = CRS.from_wkt(crs_wkt)
+        # a local placement unsets the CRS: M-B1 warps a CRS frame by the file's own CRS (task 16 (a))
+        dst.crs = CRS.from_wkt(crs_wkt) if crs_wkt else CRS()
 
 
 def clear_plan_georef(path: Path) -> None:
     with quiet(), rasterio.open(path, "r+") as dst:
         dst.transform = Affine.identity()
+        dst.crs = CRS()
 
 
 def write_plan_thumbnail(plan: Path, out: Path) -> None:

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from app.db.models import Drawing
 from app.drawings.footprint import bounds_out
 from app.drawings.placement import VECTOR
@@ -49,4 +51,9 @@ def require(s, drawing_id: str) -> Drawing:
 
 
 def drop_caches(drawing_id: str) -> None:
+    """The drawing's vector tiles and M-B1's cached site tiles (keys (project, layer, kind, ...)). B1's
+    renderer opens plan.tif per tile inside `with` blocks, so no dataset handle outlives a request."""
     VTILES.drop_map(drawing_id)
+    site_tiles = sys.modules.get("app.workspace.tiles")  # not imported = nothing cached
+    if site_tiles is not None:
+        site_tiles.SITE_TILES.drop_map(drawing_id)
