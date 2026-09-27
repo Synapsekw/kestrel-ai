@@ -27,7 +27,6 @@ from app.volumes.schemas import (
     VolumeMeasurementPatch,
     VolumeMeasurementWithJob,
 )
-from app.workspace.pending import guard_volume_options
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["volumes"])
 IMMUTABLE = {"Cache-Control": "private, max-age=31536000, immutable"}
@@ -51,9 +50,6 @@ def list_volume_measurements(
 def create_volume_measurement(
     body: VolumeMeasurementCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> VolumeMeasurementWithJob:
-    guard_volume_options(body)
-    if body.polygon_native is None:
-        raise AppError("invalid_geometry", "a volume needs a polygon: send polygon_native", 422)
     row = service.create(handle, body)
     try:
         job = _submit(request, handle, row.id)
@@ -85,7 +81,6 @@ def patch_volume_measurement(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> VolumeMeasurementOut:
-    guard_volume_options(body)
     out = service.patch(handle, measurementId, body)
     publish_volumes_changed(request, handle, [measurementId])
     return out

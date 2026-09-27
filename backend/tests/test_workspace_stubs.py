@@ -110,13 +110,6 @@ def test_a_surface_date_or_role_patch_answers_501_until_m_b2(client, project_id)
 # ----------------------------------------------------- M-B5 deletes everything below with its guards
 
 
-def test_volume_options_answer_501_until_m_b5(client, project_id):
-    url = f"/api/v1/projects/{project_id}/volumes"
-    body = {"name": "Pile", "top_surface_id": "s1", "base": {"kind": "toe_plane"}}
-    assert _option(client.post(url, json={**body, "polygon_site": RING})) == "polygon_site"
-    assert _option(client.patch(f"{url}/any", json={"polygon_site": RING})) == "polygon_site"
-
-
 def test_a_volume_without_a_polygon_is_invalid_geometry(client, project_id):
     body = {"name": "Pile", "top_surface_id": "s1", "base": {"kind": "toe_plane"}}
     r = client.post(f"/api/v1/projects/{project_id}/volumes", json=body)

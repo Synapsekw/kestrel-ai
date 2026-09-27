@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Job, MapDetection, MapRun, PointCloud, Surface, VolumeMeasurement
 from app.errors import AppError, not_found
+from app.maps import site_crs
 from app.projects.service import ProjectHandle
 from app.surfaces.grid import MAX_CELLS, _same_crs
 from app.surfaces.tiles import DIFF_TILES
@@ -113,6 +114,19 @@ def normalise_base(base: dict) -> dict:
     }
 
 
+def _site_polygon(s: Session, ring: list, top_id: str) -> list:
+    """A ring drawn in the workspace's site frame, in the top surface's CRS (map spec §10, M5)."""
+    top = s.get(Surface, top_id)
+    if top is None:
+        raise not_found("top surface", top_id)
+    return site_crs.site_to_crs(s, ring, top.crs_wkt)
+
+
+def _one_polygon(native: list | None, site: list | None) -> None:
+    if (native is None) == (site is None):
+        raise _invalid("send exactly one of polygon_native and polygon_site")
+
+
 def _check_inputs(
     s: Session, polygon: list, top_id: str, base: dict, masks: dict, alignment: dict
 ) -> Surface:
@@ -174,10 +188,12 @@ def create(handle: ProjectHandle, body: VolumeMeasurementCreate) -> VolumeMeasur
     alignment = _alignment(None, body.alignment.model_dump(exclude_unset=True) if body.alignment else None)
     base = normalise_base(body.base.model_dump())
     with handle.session() as s:
-        _check_inputs(s, body.polygon_native, body.top_surface_id, base, masks, alignment)
+        _one_polygon(body.polygon_native, body.polygon_site)
+        polygon = body.polygon_native or _site_polygon(s, body.polygon_site, body.top_surface_id)
+        _check_inputs(s, polygon, body.top_surface_id, base, masks, alignment)
         row = VolumeMeasurement(
             name=body.name,
-            polygon_native=body.polygon_native,
+            polygon_native=polygon,
             top_surface_id=body.top_surface_id,
             base=base,
             masks=masks,
@@ -372,6 +388,12 @@ def patch(handle: ProjectHandle, measurement_id: str, body: VolumeMeasurementPat
     sent = body.model_dump(exclude_unset=True)
     with handle.session() as s:
         row = _get(s, measurement_id)
+        if sent.get("polygon_site") is not None:
+            if sent.get("polygon_native") is not None:
+                _one_polygon(sent["polygon_native"], sent["polygon_site"])
+            top_for_site = sent.get("top_surface_id") or row.top_surface_id
+            sent["polygon_native"] = _site_polygon(s, sent.pop("polygon_site"), top_for_site)
+        sent.pop("polygon_site", None)
         if sent.get("name"):
             row.name = sent["name"]
         if "material" in sent:

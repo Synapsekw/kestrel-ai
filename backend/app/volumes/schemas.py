@@ -187,7 +187,8 @@ class VolumeMeasurementList(BaseModel):
 
 class VolumeMeasurementCreate(BaseModel):
     name: str = Field(min_length=1)
-    # Exactly one of the two (map-workspace spec §10); `polygon_site` answers 501 until M-B5.
+    # Exactly one of the two (map-workspace spec §10): send polygon_native, or polygon_site to
+    # draw in the workspace's site frame (converted into the top surface's CRS).
     polygon_native: VolumeRing | None = None
     polygon_site: VolumeRing | None = None
     top_surface_id: str
