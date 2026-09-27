@@ -1,7 +1,7 @@
 ---
 type: north-star
 status: active
-last-updated: 2026-09-26
+last-updated: 2026-09-27
 tags: [project/kestrel-ai, north-star]
 ---
 
@@ -74,6 +74,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Train/Detect split, model library and detection workspace | merged/pushed to `main` (`c9f88e2`, then `f7d7ab6`); **not installed** | app-wide model Library, `train`/`detect` project kinds with a server-side guard, old models adopted into the library; detection projects get Sources, Runs with class mapping, Review with verified counts, Site areas, Analytics (absorbing Surveys) and CSV/PDF export. 1269 backend, 796 frontend, 76 browser tests at landing. **Frozen sidecar with `reportlab` never built; adoption never run on a real project.** See [[2026-09-24-0622-train-detect-split-and-library]] |
 | Design surfaces (S3) — import a DEM/LandXML/DXF design as a surface | merged/pushed to `main` (`23c1ca6`); installed 2026-09-26 (build of `3ad69e4`) | acceptance on the chimney site passes all five §15.4 steps headless (LandXML 98.4 % overlap, median dz +0.005 m; swap fix; 3D faces; contours; EPSG:32638 DEM; S2 volume against each); 1 M-point LandXML inspects in 7.9 s and builds 4996² in 8.4 s. 1969 backend, 982 frontend, 91 browser tests. **Not driven through the UI or installed.** See [[2026-09-26-0144-design-surfaces]] |
 | Point clouds (S1) — import LAS/LAZ, 3D viewer, measurements, map ↔ 3D, LAZ export | merged/pushed to `main` (`0af7084`), acceptance + fixes `ab3fa34`; CI green; installed 2026-09-26 (build of `3ad69e4`) | chimney import 9.5 s; 195 M points in 58.9 s (converter peak 8.98 GB); viewer settled < 0.7 s; picks within 0.002 mm; LAZ export 1.8 s. §17.10 rim u 0.171 m vs ≤ 0.05 m (data-limited, operator decision). 1974 backend, 995 frontend, 93 browser, 8 Rust tests. See [[2026-09-26-0404-point-clouds-s1]] |
+| Foundation of the inspection platform (F): Aero glass UI, projects without kind, catalogue, findings, Models section, migration | merged/pushed to `main` (`09fb538..f3ff568`); installed 2026-09-27 | 11 units via parallel worktrees. 2576 backend, 1622 frontend, 103 browser, 8 Rust tests; smoke ok (CUDA); the smoke run caught and fixed an unbundled catalogue migration. Migration dry run on copies of AHTest, Ahmadia and acceptance: all reach `0010`/v2, 120,278 boxes rewritten, 0 unmapped, originals unchanged. **Not yet opened by the operator.** See [[2026-09-27-1030-foundation-inspection-platform]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -85,19 +86,11 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **The point-cloud programme, complete on `main` and installed** —
-spike → three specs → four plans → F0 `ea262c9`, Volumes `798c0c3`, Design surfaces `23c1ca6`,
-Point clouds `0af7084`/`ab3fa34`, cross-plan follow-ups `2a1f634`/`3ad69e4`, CI e2e fix `6bd6e72`
-(ADR `d32722e`). CI green on `d32722e` (run 36217205986). Rebuilt from `3ad69e4` and installed
-2026-09-26 (smoke green incl. `pointcloud`, `cloud`, `design`, `volumes`; packaged-webview check
-rendered 49 724 points). See [[2026-09-26-0700-pointcloud-programme]] and the per-plan notes
-[[2026-09-26-0404-point-clouds-s1]], [[2026-09-26-0144-design-surfaces]],
-[[2026-09-25-2244-volumes-task17-docs]].
+**Shipped last:** **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**In flight:** nothing from this programme.
+**In flight:** nothing. No agent is running.
 
-**Next:** the operator walks the three walkthroughs in the installed app (point clouds, volumes,
-design surfaces) on real data; see §5 for what that must settle.
+**Next:** the operator opens the installed build (first start upgrades the real projects, with backups) and walks the 9-step Foundation walkthrough in the session note. Then: I, M and C implementation plans against the merged code, built in parallel, then R (Reports).
 
 Before that: **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
 - **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
@@ -237,6 +230,17 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 (unstarted); rotated boxes wave 2 (unplanned); the prepared folder rename (§5).
 
 ## 5. Owed
+
+### Foundation (opened 2026-09-27)
+
+- **Operator walkthrough on the installed build** (9 steps in [[2026-09-27-1030-foundation-inspection-platform]]). Step 8, the glass frame rate on the real GPU, is unproven: the headless evidence is SwiftShader at 60 Hz.
+- **Classify the migrated catalogue types**: all 8 start as Object, and defects must be marked by hand (Catalogue banner → backfill).
+- **A finding edit can trigger up to 10 re-reads** when `findings.changed` echoes the client's own write. Dedupe it in the next wave.
+- **Contract gaps:** `createCatalogueType`, `patchCatalogueType` and `createProject` return 422 refusals the contract does not declare (`UNDECLARED_REFUSALS` in `test_contract.py`).
+- **Search matches case-insensitively for ASCII letters only** (Č/Ć/Š/Ž/Đ).
+- **`scripts/start-task.ps1` and `finish-task.ps1` throw under PowerShell 5.1** (git writes progress to stderr). Merges were done by hand this block.
+- **Leftover locked, unregistered folders:** `.claude/worktrees/f-c0`, `f-ds`, `f-bm`.
+- **Load-only flakes:** `lazyScreens.test`, `MapReviewPanel.test`, `test_import_sample_frames`, `test_project_agent_e2e`, `clouds.spec`.
 
 ### Point-cloud programme: cross-cutting (opened 2026-09-26)
 
