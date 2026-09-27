@@ -93,7 +93,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "refreshImageMetadata",  # I-BK
     "detectImage",  # I-BP
     "detectImageBatch",  # I-BP
 }
@@ -115,8 +114,6 @@ EXPECTED_STUBS |= {
 BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
-    "getImage": "I-BK",  # ImageDetail
-    "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg

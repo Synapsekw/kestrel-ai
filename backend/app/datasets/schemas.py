@@ -160,10 +160,6 @@ class ImagePage(BaseModel):
     total: int
 
 
-class ImageUpdate(BaseModel):
-    marked_empty: bool
-
-
 class BulkMarkEmpty(BaseModel):
     image_ids: list[str] = Field(min_length=1)
     marked_empty: bool

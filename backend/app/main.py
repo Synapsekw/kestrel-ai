@@ -89,6 +89,11 @@ def project_opened(handle, runner) -> None:
         ),
         # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
         ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),
+        # After the orphan sweep: rows imported before migration 0011 get their camera metadata.
+        (
+            "image metadata backfill",
+            lambda: importlib.import_module("app.imagery.jobs_metadata").submit_if_pending(handle, runner),
+        ),
     ):
         try:
             run()
