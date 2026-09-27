@@ -75,6 +75,7 @@ see §3 for the breakdown and §5 for why that figure is not the last word.
 | Design surfaces (S3) — import a DEM/LandXML/DXF design as a surface | merged/pushed to `main` (`23c1ca6`); installed 2026-09-26 (build of `3ad69e4`) | acceptance on the chimney site passes all five §15.4 steps headless (LandXML 98.4 % overlap, median dz +0.005 m; swap fix; 3D faces; contours; EPSG:32638 DEM; S2 volume against each); 1 M-point LandXML inspects in 7.9 s and builds 4996² in 8.4 s. 1969 backend, 982 frontend, 91 browser tests. **Not driven through the UI or installed.** See [[2026-09-26-0144-design-surfaces]] |
 | Point clouds (S1) — import LAS/LAZ, 3D viewer, measurements, map ↔ 3D, LAZ export | merged/pushed to `main` (`0af7084`), acceptance + fixes `ab3fa34`; CI green; installed 2026-09-26 (build of `3ad69e4`) | chimney import 9.5 s; 195 M points in 58.9 s (converter peak 8.98 GB); viewer settled < 0.7 s; picks within 0.002 mm; LAZ export 1.8 s. §17.10 rim u 0.171 m vs ≤ 0.05 m (data-limited, operator decision). 1974 backend, 995 frontend, 93 browser, 8 Rust tests. See [[2026-09-26-0404-point-clouds-s1]] |
 | Foundation of the inspection platform (F): Aero glass UI, projects without kind, catalogue, findings, Models section, migration | merged/pushed to `main` (`09fb538..f3ff568`); installed 2026-09-27 | 11 units via parallel worktrees. 2576 backend, 1622 frontend, 103 browser, 8 Rust tests; smoke ok (CUDA); the smoke run caught and fixed an unbundled catalogue migration. Migration dry run on copies of AHTest, Ahmadia and acceptance: all reach `0010`/v2, 120,278 boxes rewritten, 0 unmapped, originals unchanged. **Not yet opened by the operator.** See [[2026-09-27-1030-foundation-inspection-platform]] |
+| I/M/C wave, part 1: Images, Maps and Point clouds workspaces (plans + 27 of 39 units) | merged/pushed to `main` (`4ebcac1..7c1200b`, 374 commits); **not installed** | plans for all 39 units written in parallel and reconciled; 3 contract units (migrations 0011→0012→0013) plus 24 units merged via per-unit worktrees and batch merges. Remaining: I-FW, I-E, M-W3–W6, M-X, C-R1/M1/P1/L1, C-G, then IMC-X (installer) and Reports. Full gate on `7c1200b` pending at wrap-up. See [[2026-09-27-2140-imc-wave-part-1]] |
 | Public repo, Obsidian dev memory & the working agreement | complete 2026-09-21 | published to [`Synapsekw/kestrel-ai`](https://github.com/Synapsekw/kestrel-ai) (PUBLIC, MIT, 4 branches); vault + 24 ADRs; `AGENTS.md`/`CONTRIBUTING.md`; worktree scripts and `/wrapup` proven end to end (spec §7.5); fresh-clone test passed. Owed: Obsidian GUI check (§7.3) |
 
 Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
@@ -86,11 +87,13 @@ Plans (`docs/superpowers/plans/`): [[2026-09-17-s0-contract-and-scaffolding]],
 
 ## 4. Now
 
-**Shipped last:** **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
+**Shipped last:** **I/M/C wave, part 1 — the plans and 27 of 39 units on `main`** (2026-09-27, `4ebcac1..7c1200b`, 374 commits, pushed). Parallel planning produced 39 unit plans (Images 12, Maps 13 incl. the new Measurements tab M-W6, Point clouds 14) plus a cross-sub-project reconciliation. The three contract units landed first (I-C0 `95562a4`, M-C0 `08d6589`, C-C0 `6e7984c`; migrations `0011→0012→0013`), then 24 units, each built by an opus unit controller in its own worktree and batch-merged through the `imc-int` integration worktree. Merged: Images BS, FC, BA, FB, BX, BK, BT, FA, BP; Maps W1, B1, B2, B3, B4, B5, W2; Point clouds V1, V2, X1, B1, B2, B3, B4, W1. The shared venv gained `pypdfium2==5.13.0`. **No installer; most units have no mounted screen yet; the full gate on `7c1200b` was still running at wrap-up** (`.superpowers/sdd/imc-common/full-gate-7c1200b.log`). See [[2026-09-27-2140-imc-wave-part-1]].
 
-**In flight:** nothing. No agent is running.
+Before that: **Foundation of the inspection platform, complete on `main` and installed** (2026-09-27, `09fb538..f3ff568`, 231 commits). The operator chose the Aero glass direction and one project for every kind of drone data (umbrella spec `2026-09-26-inspection-platform-design.md`). Foundation's 11 units ran in parallel worktrees under per-unit controllers: C0 `8df7682`, BK `cae9491`, DS `fd55985`, MG-framework `23512f1`, SH `f448175`, BC `825c874`, BM `ebb5143`, S1 `54126d1`, MG-steps `822e095`, S2 `7477e3c`, X `16b484e`. Final gate: 2576 backend, 1622 frontend, 103 browser and 8 Rust tests. Smoke ok with CUDA. The migration dry run on copies of all 3 real projects passed, with the originals hash-identical. Installer `dist/Kestrel AI_0.1.0_Foundation_2026-09-27_x64-setup.exe` installed 2026-09-27. Every ruling: `docs/evidence/foundation/rulings.md`. See [[2026-09-27-1030-foundation-inspection-platform]].
 
-**Next:** the operator opens the installed build (first start upgrades the real projects, with backups) and walks the 9-step Foundation walkthrough in the session note. Then: I, M and C implementation plans against the merged code, built in parallel, then R (Reports).
+**In flight:** nothing. No agent is running, and no unit worktree is left (only `imc-int`).
+
+**Next:** start a new session with the prompt at the top of `.superpowers/sdd/imc-common/HANDOVER.md`. Check the full-gate log, then launch the 9 ready units (I-FW, M-W3, M-W4, M-W5, M-W6, C-R1, C-M1, C-P1, C-L1), then I-E, M-X and C-G, then IMC-X (installer), then Reports. The Foundation operator walkthrough on the installed build is still owed (§5).
 
 Before that: **Train/Detect split, an app-wide model library, and the detection workspace**. Plan 1 is `d01a7cb..c9f88e2` (71 commits) and Plan 2 is `c9f88e2..f7d7ab6` (61 commits), both built by parallel agents in `tds-*`/`dw-*` worktrees, merged serially into an integration branch, landed and pushed. All of those worktrees are removed.
 - **Library:** every model now lives once in `%APPDATA%\kestrel-ai\library`, with its provenance.
@@ -231,11 +234,32 @@ walkthrough on a real orthomosaic, with the GeoPackage opened in QGIS; the point
 
 ## 5. Owed
 
+### I/M/C wave (opened 2026-09-27)
+
+- **12 units not built yet:**
+  - Images: I-FW, I-E.
+  - Maps: M-W3, M-W4, M-W5, M-W6, M-X.
+  - Point clouds: C-R1, C-M1, C-P1, C-L1, C-G.
+  - Then IMC-X (full gate, frozen sidecar, smoke with `sam ok` and `drawings ok`, installer), then Reports.
+  - Resume from `.superpowers/sdd/imc-common/HANDOVER.md`.
+- **Full gate on `7c1200b`** was running at wrap-up (`imc-common/full-gate-7c1200b.log`). Merge gates ran only
+  contract and migration tests, lint and build.
+- **Contract prose fixes** that several units listed for IMC-X (`imc-common/handoffs.md`): importElevation,
+  importAssistModel, createRuns, reviewMapDetections, exportLibraryDataset/startTrainingRun,
+  BoxWriteResult.repaired, getSiteTile, getDrawingVectorTile.
+- **Unverified:**
+  - the seg GPU training epoch (no `yolo11n-seg.pt` locally) and the seg starter download URL;
+  - a real DXF or PDF drawing import;
+  - `pypdfium2` bundled in the frozen sidecar.
+- **Camera z assumes metres**, so it is wrong for a cloud whose vertical unit is feet (C-B3; spec follow-up).
+- **`CloudCameraSet.sources` has no maxItems**, and the cloud-delete guard ignores live profile jobs (C-B2/C-B3 hand-offs).
+- **Leftover locked folder:** `.claude/worktrees/m-b2`.
+
 ### Foundation (opened 2026-09-27)
 
 - **Operator walkthrough on the installed build** (9 steps in [[2026-09-27-1030-foundation-inspection-platform]]). Step 8, the glass frame rate on the real GPU, is unproven: the headless evidence is SwiftShader at 60 Hz.
 - **Classify the migrated catalogue types**: all 8 start as Object, and defects must be marked by hand (Catalogue banner → backfill).
-- **A finding edit can trigger up to 10 re-reads** when `findings.changed` echoes the client's own write. Dedupe it in the next wave.
+- ~~**A finding edit can trigger up to 10 re-reads**~~ — closed 2026-09-27 by I-FB (`8e80b38`): `ownFindingsWrite` dedupes the echo; `findings/echoRereads.test.tsx` counts the re-reads. Maps and clouds finding writes adopt it in M-W3/C-P1/C-L1.
 - **Contract gaps:** `createCatalogueType`, `patchCatalogueType` and `createProject` return 422 refusals the contract does not declare (`UNDECLARED_REFUSALS` in `test_contract.py`).
 - **Search matches case-insensitively for ASCII letters only** (Č/Ć/Š/Ž/Đ).
 - **`scripts/start-task.ps1` and `finish-task.ps1` throw under PowerShell 5.1** (git writes progress to stderr). Merges were done by hand this block.
