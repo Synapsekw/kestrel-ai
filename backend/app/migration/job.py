@@ -2,7 +2,10 @@
 
 The job opens the project through the registry, which takes the copy-first backup and upgrades the
 schema, then runs the data steps (`app.migration.steps.PIPELINE`) and records the outcome in
-`migrations.json`. It is resumable: the step ledger lets a new job start where a failed or
+`migrations.json`. When that open took no backup (the project already reached revision 0010 under
+a disarmed build) and no step is recorded yet, the job takes the copy itself before step 1
+(`backup_before_steps`); a failed copy flags `failed/backup_failed` and runs no step. It is
+resumable: the step ledger lets a new job start where a failed or
 cancelled one stopped. While `PIPELINE` is empty the orchestration is disarmed (`armed()`), and
 the job only opens the project.
 
@@ -22,8 +25,15 @@ from app.jobs.cancellation import JobCancelled, JobFailure
 from app.jobs.registry import register_job_type
 from app.library.handle import LIBRARY_UNAVAILABLE
 from app.migration import steps
-from app.migration.backup import backup_path
-from app.migration.pipeline import FINISH, TARGET_SCHEMA_VERSION, MigrationEnv, StepFailed, run_pipeline
+from app.migration.backup import BackupFailed, backup_path, latest_backup
+from app.migration.pipeline import (
+    FINISH,
+    TARGET_SCHEMA_VERSION,
+    MigrationEnv,
+    StepFailed,
+    backup_before_steps,
+    run_pipeline,
+)
 from app.migration.state import MigrationStates
 
 JOB_TYPE = "project_migrate"
@@ -180,6 +190,7 @@ def migrate_project(ctx) -> dict:
     folder = Path(ctx.params["folder"])
     states = states_for(registry)
     ctx.progress(0, "Backing up and opening the project")
+    newest_before_open = latest_backup(folder)
     try:
         handle = registry.open(folder, remember=False)
     except AppError as e:
@@ -205,6 +216,15 @@ def migrate_project(ctx) -> dict:
             progress=ctx.progress,
             check_cancelled=ctx.check_cancelled,
         )
+        if latest_backup(folder) == newest_before_open:
+            try:
+                took = backup_before_steps(handle)
+            except BackupFailed as e:
+                ctx.log.error("project at %s was not upgraded: %s", folder, e)
+                _fail(runner, states, folder, code=BackupFailed.code, step=None, error=str(e))
+                raise JobFailure(str(e)) from e
+            if took is not None:
+                ctx.log.info("backed up %s before its data steps: %s", folder, took)
         try:
             report = run_pipeline(handle, env, steps.PIPELINE)
         except JobCancelled:

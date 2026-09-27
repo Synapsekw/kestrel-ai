@@ -10,6 +10,7 @@ from migration_helpers import (
     add_detect_rows,
     add_images_and_boxes,
     at_revision,
+    legacy_at_head,
     load_script,
     revision_of,
 )
@@ -214,3 +215,22 @@ def test_the_temp_work_dir_is_removed_without_keep_and_kept_with_keep(mod, real_
     assert not made[0].exists()
     assert mod.main(["--data-dir", str(data_dir), "--folders", str(busy), "--keep"]) == 0
     assert made[1].exists()
+
+
+def test_a_copy_at_0010_still_at_version_1_is_backed_up_in_the_copy(mod, tmp_path):
+    """Alembic has no backup left to take at 0010, so the dry run takes the pre-step copy itself,
+    as the job does, in the COPY's folder; the original gets no backups folder."""
+    folder = legacy_at_head(tmp_path / "projects" / "bc")
+    add_images_and_boxes(folder)
+    before = mod.fingerprint(folder)
+    result = mod.dry_run_one(folder, tmp_path / "work" / "p", *mod.open_stores(tmp_path / "appdata"))
+    assert result["ok"], result
+    assert result["backup_expected"] and result["backup"]["quick_check"] == "ok"
+    bak = Path(result["backup"]["path"])
+    assert bak.parent == tmp_path / "work" / "p" / "backups"
+    con = sqlite3.connect(bak)
+    try:
+        assert {r[0] for r in con.execute("SELECT DISTINCT class_id FROM box")} == {"c-exc", "c-dump"}
+    finally:
+        con.close()
+    assert mod.fingerprint(folder) == before and not (folder / "backups").exists()

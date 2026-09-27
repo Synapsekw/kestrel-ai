@@ -162,7 +162,7 @@ def test_old_and_catalogue_hotkey_both_taken_is_one_warning(tmp_path, stores):
             s.execute(
                 text(
                     "INSERT INTO project_type (type_id, position, hotkey_override, name, colour, kind,"
-                    " default_severity, hotkey, \"group\", refreshed_at) VALUES (:t, :p, :k, :n,"
+                    ' default_severity, hotkey, "group", refreshed_at) VALUES (:t, :p, :k, :n,'
                     " '#000000', 'object', NULL, NULL, NULL, '2026-01-01 00:00:00.000000')"
                 ),
                 {"t": ids[name], "p": pos, "k": key, "n": name},

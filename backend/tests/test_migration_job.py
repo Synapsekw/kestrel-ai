@@ -1,5 +1,6 @@
 """The `project_migrate` job and the registry's copy-first hooks (foundation spec §11.2, §11.3)."""
 
+import sqlite3
 import threading
 import time
 from pathlib import Path
@@ -7,6 +8,7 @@ from pathlib import Path
 import pytest
 from migration_helpers import (
     HeldStep,
+    add_images_and_boxes,
     arm,
     at_revision,
     legacy_at_head,
@@ -322,3 +324,70 @@ def test_a_queued_job_cancelled_by_a_graceful_shutdown_stays_pending(app, client
         migration_job.reset_shutdown()
     entry = states.get(folder)
     assert (entry["state"], entry["job_id"], entry.get("code")) == ("pending", "job-queued-at-quit", None)
+
+
+def _baks(folder: Path) -> list[Path]:
+    return sorted((folder / "backups").glob("project.db.v1-*.bak"))
+
+
+def _rekey_boxes(ctx):
+    ctx.session.execute(text("UPDATE box SET class_id = 'type-' || class_id"))
+    return {}
+
+
+def test_a_v1_project_at_0010_is_backed_up_before_any_step(app, client, tmp_path, monkeypatch):
+    """Opened by a disarmed build since BC, it crossed 0010 without the data steps: the job takes a
+    fresh copy before step 1 writes, since Alembic has no backup left to take."""
+    arm(monkeypatch, Step("rekey", "Rekeying", _rekey_boxes))
+    folder = legacy_at_head(tmp_path / "legacy")
+    add_images_and_boxes(folder)
+    assert _baks(folder) == []
+    assert wait_library_job(client, _submit(app, folder).id)["state"] == "succeeded"
+    [bak] = _baks(folder)
+    con = sqlite3.connect(bak)
+    try:
+        old = {r[0] for r in con.execute("SELECT DISTINCT class_id FROM box")}
+    finally:
+        con.close()
+    assert old == {"c-exc", "c-dump"}
+    assert _states(app).get(folder)["backup_path"] == str(bak)
+
+
+def test_a_failed_pre_step_backup_flags_backup_failed_and_runs_no_step(app, client, tmp_path, monkeypatch):
+    arm(monkeypatch, Step("rename", "Renaming", _rename))
+    folder = legacy_at_head(tmp_path / "legacy")
+    (folder / "backups").write_text("in the way", "utf-8")
+    job = _submit(app, folder)
+    done = wait_library_job(client, job.id)
+    assert done["state"] == "failed" and "backed up" in done["error"]
+    entry = _states(app).get(folder)
+    assert (entry["state"], entry["code"], entry["job_id"]) == ("failed", "backup_failed", job.id)
+    con = sqlite3.connect(folder / "project.db")
+    try:
+        assert con.execute("SELECT COUNT(*) FROM migration_step").fetchone()[0] == 0
+        assert con.execute("SELECT name, schema_version FROM project").fetchone() == ("Legacy", 1)
+    finally:
+        con.close()
+
+
+def test_the_open_that_crossed_0010_is_the_only_backup(app, client, tmp_path, monkeypatch):
+    arm(monkeypatch, Step("rename", "Renaming", _rename))
+    folder = at_revision(tmp_path / "old", "0009")
+    assert wait_library_job(client, _submit(app, folder).id)["state"] == "succeeded"
+    assert len(_baks(folder)) == 1
+
+
+def test_a_resumed_upgrade_takes_no_new_backup(app, client, tmp_path, monkeypatch):
+    """Steps already recorded mean the data has moved on since the pre-upgrade copy: a copy now
+    would not be the pre-upgrade state, so none is taken (the first run's copy stays the one)."""
+    arm(monkeypatch, Step("rename", "Renaming", _rename), Step("boom", "Failing", _boom))
+    folder = legacy_at_head(tmp_path / "legacy")
+    assert wait_library_job(client, _submit(app, folder).id)["state"] == "failed"
+    [first] = _baks(folder)
+    arm(monkeypatch, Step("rename", "Renaming", _rename), Step("boom", "Fixed", lambda ctx: {}))
+    assert wait_library_job(client, _submit(app, folder).id)["state"] == "succeeded"
+    assert _baks(folder) == [first]
+
+
+def _boom(ctx):
+    raise RuntimeError("the disk is full")

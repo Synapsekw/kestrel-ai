@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from app.appdata import AppData
 from app.jobs.cancellation import JobCancelled
 from app.migration import ledger
-from app.migration.backup import backups_dir, latest_backup
+from app.migration.backup import backup_project_db, backups_dir, latest_backup
 
 TARGET_SCHEMA_VERSION = 2
 REPORT_NAME = "migration-v2.json"
@@ -72,6 +72,19 @@ class StepFailed(Exception):
         message = getattr(cause, "message", None) or str(cause) or type(cause).__name__
         super().__init__(f"{step}: {message}")
         self.step, self.cause, self.message = step, cause, message
+
+
+def backup_before_steps(handle) -> Path | None:
+    """Take the copy-first backup (`backup_project_db`) of a project whose ledger records no step
+    yet, and return it; None when a step is already recorded (the data has moved on, so a copy now
+    would not be the pre-upgrade state; the first run's copy stays the one). For a project that
+    reached revision 0010 under a disarmed build: Alembic took no copy on this open, and without
+    this one the data steps would run with none. Callers skip it when the open just took one.
+    Raises `BackupFailed`; then no step may run."""
+    with handle.session() as s:
+        if ledger.done_steps(s):
+            return None
+    return backup_project_db(handle.folder)
 
 
 def run_pipeline(handle, env: MigrationEnv, steps) -> dict:

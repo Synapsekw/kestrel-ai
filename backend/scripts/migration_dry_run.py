@@ -38,7 +38,13 @@ from app.db.session import current_revision, head_revision, open_project_db, pro
 from app.migration import steps  # noqa: E402
 from app.migration.backup import latest_backup, needs_backup, quick_check  # noqa: E402
 from app.migration.invariants import compare, snapshot  # noqa: E402
-from app.migration.pipeline import TARGET_SCHEMA_VERSION, MigrationEnv, StepFailed, run_pipeline  # noqa: E402
+from app.migration.pipeline import (  # noqa: E402
+    TARGET_SCHEMA_VERSION,
+    MigrationEnv,
+    StepFailed,
+    backup_before_steps,
+    run_pipeline,
+)
 from app.projects.service import ProjectHandle  # noqa: E402
 
 DB_FILES = ("project.db", "project.db-wal", "project.db-shm")
@@ -180,11 +186,16 @@ def dry_run_one(folder: Path, dest: Path, library, catalogue) -> dict:
         before = snapshot(dest / "project.db")
         engine = open_project_db(dest)
         result["revision_after"] = current_revision(dest)
+        handle = _handle(dest, engine)
+        armed_run = bool(steps.PIPELINE) and handle.schema_version < TARGET_SCHEMA_VERSION
+        # As the job does: a copy already at 0010 but still version 1 got no Alembic backup, so the
+        # pre-step copy is taken here (in the COPY's folder: `handle.folder` is `dest`).
+        if armed_run and latest_backup(dest) is None and backup_before_steps(handle) is not None:
+            result["backup_expected"] = True
         backup = latest_backup(dest)
         if backup is not None:
             result["backup"] = {"path": str(backup), "quick_check": quick_check(backup)}
-        handle = _handle(dest, engine)
-        if steps.PIPELINE and handle.schema_version < TARGET_SCHEMA_VERSION:
+        if armed_run:
             env = MigrationEnv(
                 library=library, catalogue=catalogue, origin_folder=folder, log=log, progress=_print_progress
             )
