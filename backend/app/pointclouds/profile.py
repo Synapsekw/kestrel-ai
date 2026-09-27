@@ -7,19 +7,23 @@ the job `jobs_profile.py`. Plan 2026-09-27-clouds-b2.
 
 from __future__ import annotations
 
+import json
 import math
+import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
 
+import numpy as np
 from pyproj import CRS
 from sqlalchemy import func, select
 
-from app.db.models import CloudMeasurement, Job
+from app.db.models import CloudMeasurement, Job, PointCloud
 from app.errors import AppError
 from app.jobs.runner import JobRunner
 from app.jobs.schemas import JobOut
 from app.pointclouds import measurements, rows
+from app.pointclouds.profile_cut import ProfileCut
 from app.pointclouds.schemas import CloudMeasurementCreate, CloudMeasurementOut, CloudMeasurementWithJob
 from app.projects.service import ProjectHandle
 
@@ -32,6 +36,7 @@ INTERRUPTED = "interrupted by application restart; save the profile again"
 CANCELLED = "profile cancelled; retry to cut it again"
 DELETED = "the cross-section was deleted before its profile was ready"
 CLOUD_DELETED = "the point cloud was deleted"
+FILE_VERSION = 1
 
 
 def profiles_dir(handle: ProjectHandle, cloud_id: str) -> Path:
@@ -161,3 +166,75 @@ def retry_profile(handle: ProjectHandle, runner: JobRunner, cloud_id: str, measu
     job = runner.submit(handle, JOB_TYPE, {"cloud_id": cloud_id, "measurement_id": measurement_id})
     _write_job_id(handle, measurement_id, job.id)
     return job
+
+
+def _settleable(row: CloudMeasurement | None, job_id: str) -> bool:
+    """A stale job never writes over a newer run (plan Ruling 11); a null job_id is the create's own
+    job before `_write_job_id` ran (Review Focus 1)."""
+    return row is not None and row.kind == "profile" and row.job_id in (None, job_id)
+
+
+def load_profile_row(handle: ProjectHandle, cloud_id: str, measurement_id: str) -> CloudMeasurement | None:
+    with handle.session() as s:
+        row = s.get(CloudMeasurement, measurement_id)
+        if row is None or row.point_cloud_id != cloud_id:
+            return None
+        s.expunge(row)
+    return row
+
+
+def write_profile_file(
+    handle: ProjectHandle, cloud: PointCloud, row: CloudMeasurement, cut: ProfileCut
+) -> Path:
+    """`profiles/<id>.partial`, then renamed to `<id>.json` (section 8.4 step 4)."""
+    params = row.params or {}
+    final = profile_path(handle, cloud.id, row.id)
+    partial = partial_path(handle, cloud.id, row.id)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    body = {
+        "s": np.round(cut.s.astype(np.float64), 3).tolist(),
+        "z": np.round(cut.z.astype(np.float64), 3).tolist(),
+        "rgb": None if cut.rgb is None else cut.rgb.reshape(-1).tolist(),
+        "count": cut.count,
+        "thickness_m": params.get("thickness_m", DEFAULT_THICKNESS_M),
+        "length_m": cut.length_m,
+    }
+    header = {
+        "version": FILE_VERSION,
+        "cloud_id": cloud.id,
+        "measurement_id": row.id,
+        "line": row.points,
+        "thickness_m": body["thickness_m"],
+        "max_points": params.get("max_points", DEFAULT_MAX_POINTS),
+        "length_m": cut.length_m,
+        "cell_m": cut.cell_m,
+        "scanned": cut.scanned,
+        "source_path": cloud.source_path,
+        "source_sha256": cloud.source_sha256,
+        "cut_at": datetime.now(UTC).isoformat(),
+    }
+    with partial.open("w", encoding="utf-8") as f:
+        json.dump({"header": header, "profile": body}, f, separators=(",", ":"))
+    os.replace(partial, final)
+    return final
+
+
+def mark_ready(handle: ProjectHandle, measurement_id: str, job_id: str, results: dict) -> bool:
+    with handle.session() as s:
+        row = s.get(CloudMeasurement, measurement_id)
+        if not _settleable(row, job_id):
+            return False
+        row.results = {**(row.results or {}), **results}
+        row.status, row.error = "ready", None
+        row.updated_at = datetime.now(UTC)
+    return True
+
+
+def mark_failed(handle: ProjectHandle, measurement_id: str, job_id: str, message: str) -> bool:
+    with handle.session() as s:
+        row = s.get(CloudMeasurement, measurement_id)
+        if not _settleable(row, job_id):
+            return False
+        row.status, row.error = "failed", message
+        row.updated_at = datetime.now(UTC)
+    return True
