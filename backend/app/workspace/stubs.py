@@ -35,11 +35,6 @@ B1_STUBS: list[Stub] = [
     ("GET", "/site-tiles/{kind}/{layerId}/{z}/{x}/{y}", "getSiteTile"),
 ]
 
-# M-B2: the plain DSM/DTM import (spec §7).
-B2_STUBS: list[Stub] = [
-    ("POST", "/elevations", "importElevation"),
-]
-
 # M-B3: drawings - inspect, build, georeference, tiles (spec §8).
 B3_STUBS: list[Stub] = [
     ("POST", "/drawing-inspections", "createDrawingInspection"),
@@ -67,7 +62,7 @@ B4_STUBS: list[Stub] = [
     ("DELETE", "/map-measurements/{mapMeasurementId}", "deleteMapMeasurement"),
 ]
 
-STUBS: list[Stub] = [*B1_STUBS, *B2_STUBS, *B3_STUBS, *B4_STUBS]
+STUBS: list[Stub] = [*B1_STUBS, *B3_STUBS, *B4_STUBS]
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["workspace"])
 add_stubs(router, STUBS)

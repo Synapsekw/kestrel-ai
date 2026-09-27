@@ -15,7 +15,7 @@ from app.workspace import stubs
 
 UNIT_LISTS = {
     "M-B1": stubs.B1_STUBS,
-    "M-B2": stubs.B2_STUBS,
+    # M-B2 landed importElevation; its stub list is gone from app/workspace/stubs.py.
     "M-B3": stubs.B3_STUBS,
     "M-B4": stubs.B4_STUBS,
 }

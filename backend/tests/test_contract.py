@@ -175,6 +175,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "exportLibraryDataset": {422},  # task_not_supported: a segment dataset cannot be exported yet
     "startTrainingRun": {422},  # task_not_supported / task_mismatch: a segment dataset or a wrong-task base
     "createSurface": {422},
+    # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
+    # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
+    # `grid_too_large`, `insufficient_disk`).
+    "importElevation": {422},
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
