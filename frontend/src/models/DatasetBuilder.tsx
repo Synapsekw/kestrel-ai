@@ -25,7 +25,14 @@ import {
   Select,
   Skeleton,
 } from "@/ui";
-import { emptyBuilderForm, toCreateBody, toFilter, validateBuilder, type BuilderForm } from "./builderModel";
+import {
+  emptyBuilderForm,
+  MAX_DATASET_TYPES,
+  toCreateBody,
+  toFilter,
+  validateBuilder,
+  type BuilderForm,
+} from "./builderModel";
 import { SPLIT_LABEL } from "./datasetLabels";
 import { useDatasetPreview } from "./useDatasetPreview";
 
@@ -232,10 +239,16 @@ export function DatasetBuilder({
                     size="sm"
                     variant="ghost"
                     className="self-start"
-                    onClick={() => patch({ typeIds: liveTypes.map((t) => t.id) })}
+                    onClick={() => patch({ typeIds: liveTypes.slice(0, MAX_DATASET_TYPES).map((t) => t.id) })}
                   >
                     Select all
                   </Button>
+                )}
+                {liveTypes.length > MAX_DATASET_TYPES && (
+                  <p className="text-xs text-muted">
+                    Select all picks the first {MAX_DATASET_TYPES} types: a dataset holds at most{" "}
+                    {MAX_DATASET_TYPES}.
+                  </p>
                 )}
                 <div className="flex flex-wrap gap-x-5 gap-y-2">
                   {liveTypes.map((t) => (

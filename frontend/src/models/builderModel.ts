@@ -14,6 +14,9 @@ export interface BuilderForm {
   seed: string;
 }
 
+/** `DatasetFilter.type_ids` maxItems in the contract. */
+export const MAX_DATASET_TYPES = 200;
+
 export function emptyBuilderForm(projectIds: string[], typeIds: string[]): BuilderForm {
   return {
     name: "",
@@ -47,6 +50,8 @@ export function validateBuilder(f: BuilderForm): string | null {
   if (name.length > 120) return "Keep the name to 120 characters or fewer.";
   if (f.projectIds.length === 0) return "Choose at least one project.";
   if (f.typeIds.length === 0) return "Choose at least one type.";
+  if (f.typeIds.length > MAX_DATASET_TYPES)
+    return `A dataset holds at most ${MAX_DATASET_TYPES} types; ${f.typeIds.length} are chosen.`;
   if (f.from && f.to && f.from > f.to) return "The start date is after the end date.";
   const fraction = Number(f.valFraction);
   if (!(fraction >= 0.05 && fraction <= 0.5)) return "Validation fraction must be between 0.05 and 0.5.";

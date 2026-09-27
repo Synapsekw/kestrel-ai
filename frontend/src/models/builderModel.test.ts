@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyBuilderForm, toCreateBody, toFilter, validateBuilder } from "./builderModel";
+import { emptyBuilderForm, MAX_DATASET_TYPES, toCreateBody, toFilter, validateBuilder } from "./builderModel";
 
 const ready = { ...emptyBuilderForm(["p1"], ["t1"]), name: " machines-v2 " };
 
@@ -28,6 +28,15 @@ describe("dataset builder form", () => {
     );
     expect(validateBuilder({ ...ready, seed: "1.5" })).toBe("Seed must be a whole number.");
     expect(validateBuilder(ready)).toBeNull();
+  });
+
+  it("refuses more types than a dataset can hold (DatasetFilter.type_ids maxItems 200)", () => {
+    expect(MAX_DATASET_TYPES).toBe(200);
+    const ids = (n: number) => Array.from({ length: n }, (_, i) => `t${i}`);
+    expect(validateBuilder({ ...ready, typeIds: ids(200) })).toBeNull();
+    expect(validateBuilder({ ...ready, typeIds: ids(201) })).toBe(
+      "A dataset holds at most 200 types; 201 are chosen.",
+    );
   });
 
   it("builds the create body", () => {

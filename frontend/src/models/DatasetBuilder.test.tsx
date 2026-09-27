@@ -12,6 +12,7 @@ import {
   exampleCataloguePage,
   exampleLibraryDataset,
   examplePreview,
+  exampleTypes,
   TYPE_ID,
 } from "@/test/appSectionFixtures";
 import { renderWithProviders } from "@/test/render";
@@ -151,5 +152,33 @@ describe("DatasetBuilder (F §12.2, §12.4)", () => {
     expect(await screen.findByText("The catalogue could not be loaded")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Select all" })).not.toBeInTheDocument();
+  });
+
+  it("Select all picks at most 200 types, in the shown order, and says so", async () => {
+    const many = Array.from({ length: 205 }, (_, i) => ({
+      ...exampleTypes[0],
+      id: `t-many-${i}`,
+      name: `Type ${String(i).padStart(3, "0")}`,
+      hotkey: null,
+    }));
+    renderBuilder(
+      [
+        PROJECTS,
+        PREVIEW,
+        {
+          method: "GET",
+          path: /\/catalogue\/types$/,
+          body: { items: many, next_cursor: null, needs_classification: false },
+        },
+      ],
+      [],
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Select all" }));
+    expect(screen.getByLabelText("Type 000")).toBeChecked();
+    expect(screen.getByLabelText("Type 199")).toBeChecked();
+    expect(screen.getByLabelText("Type 200")).not.toBeChecked();
+    expect(
+      screen.getByText("Select all picks the first 200 types: a dataset holds at most 200."),
+    ).toBeInTheDocument();
   });
 });
