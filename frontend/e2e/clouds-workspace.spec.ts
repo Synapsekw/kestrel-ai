@@ -135,6 +135,9 @@ test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orb
   await openSettled(page);
   const toolbar = page.getByRole("toolbar", { name: "Point cloud tools" });
   const hint = page.getByTestId("cloud-hintbar");
+  // C-V2 is merged: the real handle has the clip box, so Fly (W) and Clip (C) are offered.
+  await expect(toolbar.getByRole("button", { name: "Fly" })).toBeEnabled();
+  await expect(toolbar.getByRole("button", { name: "Clipping box" })).toBeEnabled();
   await page.keyboard.press("l");
   await expect(toolbar.getByRole("button", { name: "Distance" })).toHaveAttribute("aria-pressed", "true");
   await expect(hint).toContainText("Click two points to measure a distance");

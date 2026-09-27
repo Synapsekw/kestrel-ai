@@ -3,6 +3,7 @@ import { createRef } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { exampleCloud } from "@/test/cloudFixtures";
 import { CloudViewer, type CloudViewerHandle } from "./CloudViewer";
+import { canClip } from "./workspace/clipEngine";
 
 // jsdom has no WebGL: `canvas.getContext("webgl2")` answers null, as a machine whose graphics
 // driver cannot start WebGL does, so three's renderer throws on construction.
@@ -128,6 +129,8 @@ describe("CloudViewer C-V2 members without an engine", () => {
       />,
     );
     const h = ref.current!;
+    // W1's structural probe sees V2's clip box on the real handle: Fly and Clip are enabled
+    expect(canClip(h)).toBe(true);
     expect(() => h.setClipBox({ centre: [0, 0, 0], size: [1, 1, 1], yawDeg: 0 })).not.toThrow();
     // the shell keeps the clip box for the next engine (it survives a rebuild, like the nav mode)
     expect(h.clipBox()).toEqual({
