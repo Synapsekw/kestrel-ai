@@ -31,6 +31,16 @@ interface ChangesState {
   bumpData: () => void;
 }
 
+/** Events about one project, ignored while another project is open (see `openProjectId`). */
+const PROJECT_SCOPED_EVENTS: ReadonlySet<string> = new Set([
+  "findings.changed",
+  "data.changed",
+  "images.changed",
+  "boxes.changed",
+  "surfaces.changed",
+  "volumes.changed",
+]);
+
 export const useChangesStore = create<ChangesState>((set) => ({
   imagesRevision: 0,
   boxesRevision: {},
@@ -48,15 +58,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   applyEvent: (ev) =>
     set((s) => {
       const elsewhere = s.openProjectId !== null && ev.project_id !== s.openProjectId;
-      const scoped = new Set([
-        "findings.changed",
-        "data.changed",
-        "images.changed",
-        "boxes.changed",
-        "surfaces.changed",
-        "volumes.changed",
-      ]);
-      if (scoped.has(ev.type) && elsewhere) return s;
+      if (PROJECT_SCOPED_EVENTS.has(ev.type) && elsewhere) return s;
       if (ev.type === "images.changed") return { imagesRevision: s.imagesRevision + 1 };
       if (ev.type === "boxes.changed") {
         const ids = (ev.payload as { image_ids?: unknown }).image_ids;
