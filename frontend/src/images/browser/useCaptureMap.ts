@@ -68,6 +68,8 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
   const scale = useSeverityScale();
   const targetRef = useRef<HTMLDivElement>(null);
   const handle = useRef<CaptureMapHandle | null>(null);
+  /** The `fitKey` the map was last fit to; a re-fit only happens when this changes (Ruling). */
+  const fitKeyRef = useRef<string | null>(null);
   const [hovered, setHovered] = useState<{ ordinal: number; pixel: number[] } | null>(null);
   const webgl = useMemo(() => rendererName() !== null, []);
   const maps = useMaps(input.projectId);
@@ -94,14 +96,16 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
     const xy: number[][] = [];
     const sev: number[] = [];
     const count: number[] = [];
+    const ids: string[] = [];
     coords.forEach((c, i) => {
       if (!c) return;
       ordinals.push(points[i].ordinal);
       xy.push(c);
       sev.push(points[i].sev);
       count.push(points[i].count);
+      ids.push(points[i].id);
     });
-    return { ordinals, xy, sev, count };
+    return { ordinals, xy, sev, count, ids };
   }, [coords, points]);
 
   const currentOrdinal = index.ordinalOf(input.currentId);
@@ -117,13 +121,23 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
   );
   const path = useMemo(() => (input.sort ? flightPath(coords, input.sort) : null), [coords, input.sort]);
 
+  const projectionKey = background ? `ortho:${background.id}` : "mercator";
+  /**
+   * Ruling: re-fit only when the projection or the *set* of placed ids changes — not on every
+   * index answer, or the operator's zoom/pan would snap back after every finding/detection update
+   * (same images, same locations, only `sev`/`count` differ).
+   */
+  const fitKey = useMemo(
+    () => `${projectionKey}|${[...placed.ids].sort().join(",")}`,
+    [projectionKey, placed.ids],
+  );
+
   // Everything the builder needs, read by the creation effect without making it a dependency.
-  const latest = useRef({ input, placed, currentCoord, footprint, path, style, points, coords });
+  const latest = useRef({ input, placed, currentCoord, footprint, path, style, points, coords, fitKey });
   useEffect(() => {
-    latest.current = { input, placed, currentCoord, footprint, path, style, points, coords };
+    latest.current = { input, placed, currentCoord, footprint, path, style, points, coords, fitKey };
   });
 
-  const projectionKey = background ? `ortho:${background.id}` : "mercator";
   useEffect(() => {
     const target = targetRef.current;
     if (!webgl || !target) return;
@@ -159,6 +173,7 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
     h.setFootprint(l.footprint);
     h.setFlightPath(l.path);
     h.fit(l.placed.xy);
+    fitKeyRef.current = l.fitKey;
     return () => {
       handle.current = null;
       h.destroy();
@@ -169,8 +184,11 @@ export function useCaptureMap(input: CaptureMapInput): CaptureMapView {
 
   useEffect(() => {
     handle.current?.setPoints(placed.ordinals, placed.xy, placed.sev, placed.count);
-    handle.current?.fit(placed.xy);
-  }, [placed]);
+    if (fitKeyRef.current !== fitKey) {
+      fitKeyRef.current = fitKey;
+      handle.current?.fit(placed.xy);
+    }
+  }, [placed, fitKey]);
   // Block bodies: an effect must return only a cleanup function, and the handle's setters are not void.
   useEffect(() => {
     handle.current?.setPointStyle(style);

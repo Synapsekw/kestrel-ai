@@ -219,6 +219,7 @@ export function createCaptureMap(o: CaptureMapOptions): CaptureMapHandle {
         });
     },
     destroy() {
+      hover.cancel();
       map.getViewport().removeEventListener("mouseleave", leave);
       map.setTarget(undefined);
       map.dispose();

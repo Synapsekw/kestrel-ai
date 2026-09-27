@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { fromLonLat } from "ol/proj";
 import type { GeoMap } from "@contract/client";
 import { exampleGeoMap } from "@/test/fixtures";
@@ -154,5 +154,46 @@ describe("capture model", () => {
     t = 40;
     h(3);
     expect(fn.mock.calls).toEqual([[1], [3]]);
+  });
+
+  describe("throttle's trailing call", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("fires the last call at the end of the window, once, even if the pointer stopped mid-window", () => {
+      vi.useFakeTimers();
+      const fn = vi.fn();
+      const h = throttle(fn, 33);
+      h(1); // leading edge: fires now
+      h(2); // inside the window: remembered
+      h(3); // inside the window: replaces the remembered call, not a second timer
+      expect(fn.mock.calls).toEqual([[1]]);
+      vi.advanceTimersByTime(33);
+      expect(fn.mock.calls).toEqual([[1], [3]]);
+      // The trailing call also starts a fresh leading edge; nothing more fires without a new call.
+      vi.advanceTimersByTime(1000);
+      expect(fn.mock.calls).toEqual([[1], [3]]);
+    });
+
+    it("does not fire a trailing call when nothing arrived inside the window", () => {
+      vi.useFakeTimers();
+      const fn = vi.fn();
+      const h = throttle(fn, 33);
+      h(1);
+      vi.advanceTimersByTime(33);
+      expect(fn.mock.calls).toEqual([[1]]);
+    });
+
+    it("cancel drops a pending trailing call", () => {
+      vi.useFakeTimers();
+      const fn = vi.fn();
+      const h = throttle(fn, 33);
+      h(1);
+      h(2);
+      h.cancel();
+      vi.advanceTimersByTime(33);
+      expect(fn.mock.calls).toEqual([[1]]);
+    });
   });
 });

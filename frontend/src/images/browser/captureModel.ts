@@ -137,17 +137,59 @@ export function idsInExtent(
   return out;
 }
 
+export interface Throttled<A extends unknown[]> {
+  (...args: A): void;
+  /** Drops any pending trailing call, without firing it. The builder calls this from `destroy()`. */
+  cancel(): void;
+}
+
+/**
+ * Leading-edge throttle with a trailing call: the first call in a window fires immediately: a
+ * later call inside the same window is remembered and fires once, at the end of the window, so a
+ * pointer that moves fast and then stops mid-window (spec §7.5's hover) still gets its last
+ * position delivered instead of being silently dropped.
+ */
 export function throttle<A extends unknown[]>(
   fn: (...args: A) => void,
   ms: number,
   now: () => number = () => performance.now(),
-): (...args: A) => void {
+): Throttled<A> {
   let last = -Infinity;
-  return (...args: A) => {
-    const t = now();
-    if (t - last >= ms) {
-      last = t;
-      fn(...args);
-    }
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let pending: A | null = null;
+
+  const fire = (args: A) => {
+    last = now();
+    pending = null;
+    fn(...args);
   };
+
+  const throttled = ((...args: A) => {
+    const remaining = ms - (now() - last);
+    if (remaining <= 0) {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      fire(args);
+      return;
+    }
+    pending = args;
+    if (timer === null) {
+      timer = setTimeout(() => {
+        timer = null;
+        if (pending) fire(pending);
+      }, remaining);
+    }
+  }) as Throttled<A>;
+
+  throttled.cancel = () => {
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    pending = null;
+  };
+
+  return throttled;
 }

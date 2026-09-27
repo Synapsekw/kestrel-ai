@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { exampleGeoMap, fakeClient, PROJECT_ID } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { renderWithProviders, TestApiProvider } from "@/test/render";
 import type { CaptureMapOptions } from "./olCaptureMap";
 import { CaptureMap } from "./CaptureMap";
 import { MiniMap } from "./MiniMap";
@@ -147,6 +148,42 @@ describe("CaptureMap", () => {
     renderMap(30);
     expect(screen.getByText(/needs WebGL/)).toBeInTheDocument();
     expect(ol.created).toHaveLength(0);
+  });
+
+  it("re-fits only when the placed id set changes, not on every index answer", async () => {
+    const { api } = fakeClient([{ method: "GET", path: /\/maps$/, body: { items: [], next_cursor: null } }]);
+    const index1 = makeIndexState(30);
+    const tree = (index: ReturnType<typeof makeIndexState>) => (
+      <TestApiProvider api={api}>
+        <MemoryRouter>
+          <CaptureMap
+            projectId={PROJECT_ID}
+            index={index}
+            currentId={null}
+            sort="capture_time"
+            footprint={null}
+            onOpen={() => {}}
+          />
+        </MemoryRouter>
+      </TestApiProvider>
+    );
+    const countOf = (name: string) => ol.calls.filter(([n]) => n === name).length;
+
+    const { rerender } = render(tree(index1));
+    await waitFor(() => expect(countOf("fit")).toBeGreaterThan(0));
+    const fitsAfterMount = countOf("fit");
+    const pointsAfterMount = countOf("setPoints");
+
+    // Same ids, only sev differs (e.g. a detection run updated findings): no re-fit.
+    const index2 = makeIndexState(30, { sev: index1.sev.map((s) => ((s ?? 0) + 1) % 5) });
+    rerender(tree(index2));
+    await waitFor(() => expect(countOf("setPoints")).toBeGreaterThan(pointsAfterMount));
+    expect(countOf("fit")).toBe(fitsAfterMount);
+
+    // A different id set (e.g. a filter change): a re-fit is expected.
+    const index3 = makeIndexState(15);
+    rerender(tree(index3));
+    await waitFor(() => expect(countOf("fit")).toBeGreaterThan(fitsAfterMount));
   });
 });
 
