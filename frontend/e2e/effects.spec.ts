@@ -8,7 +8,9 @@ import { jsonReply } from "./mock";
 //
 // Frame times: headless Chromium through Playwright, no GL flags (playwright.config.ts). The p95 ≤ 20 ms
 // budget of §16 item 5 is asserted only when E2E_FRAME_BUDGET=1, the evidence run on the dev machine
-// with nothing else busy (docs/evidence/foundation/README.md, "Frame time (effects Full)"). The gate
+// with no other Playwright suite running, though the machine itself was not idle (a game and other
+// tooling, 41-46 % CPU; docs/evidence/foundation/README.md, "Frame time (effects Full)" and "Machine
+// load"). The gate
 // runs the whole suite headless in parallel under load, where a frame budget measures the machine's
 // load and not the app; there the test only asserts that the probe gathered a real sample at Full.
 
@@ -18,6 +20,8 @@ const P = "7f1c2e3a-1111-4000-8000-000000000001";
 const MAP = "a0000000-6666-4000-8000-000000000001";
 const FINDINGS = 5000;
 const EFFECTS_KEY = "kestrel.effects";
+/** How long after the Overview renders Auto's probe (2.3 s) may take to decide, with room for load. */
+const PROBE_DEADLINE_MS = 8000;
 // 1x1 grey PNG; OpenLayers stretches it over each tile.
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkaGhgAAAChACB8f3CzwAAAABJRU5ErkJggg==",
@@ -301,12 +305,19 @@ test("Auto: reduced from the start on a software renderer, else the Overview's p
   // Auto starts reduced without a probe on a software renderer (spec §4.3 Auto step 1).
   const software = webglRenderer !== null && /swiftshader|basic render/i.test(webglRenderer);
   // The probe: 300 ms warm-up and 2 s of frames from the first Overview render, then the decision.
-  await page.waitForTimeout(3000);
+  // Keeping Full leaves no trace, so wait for a switch to reduced until well past that, then read.
+  if (!software)
+    await page
+      .waitForFunction(() => document.documentElement.dataset.effects === "reduced", null, {
+        timeout: PROBE_DEADLINE_MS,
+      })
+      .catch(() => undefined);
   const effects = await effectsOf(page);
   const toast = page.getByText("Visual effects reduced for smoother performance");
   let outcome: string;
   if (software) {
     expect(effects).toBe("reduced");
+    await expect(toast).toHaveCount(0);
     outcome = `reduced at start: software renderer (${webglRenderer})`;
   } else if (effects === "full") {
     await expect(toast).toHaveCount(0);
