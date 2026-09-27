@@ -50,7 +50,6 @@ const overviewReads = (requests: { url: string }[]) => requests.filter((r) => r.
 
 describe("OverviewScreen", () => {
   beforeEach(() => {
-    // F12: S2 deletes `panelOpen`, so reset only the jobs.
     useJobsStore.setState({ jobs: {} });
     useChangesStore.setState({ findingsRevision: 0, dataRevision: 0 });
   });
