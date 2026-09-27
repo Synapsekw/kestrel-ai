@@ -9,10 +9,12 @@ import pytest
 from assist_fakes import FakeDiscBackend, FakeFactory
 from PIL import Image as PILImage
 
+from app.assist import service
 from app.assist.errors import AssistUnavailable
 from app.assist.geometry import quantise_crop
 from app.assist.sam import SegmentBackend
-from app.assist.service import SegmentService
+from app.assist.service import CUDA_RETRY_S, SegmentService
+from app.errors import AppError
 from app.jobs.gpu import gpu_lock
 
 KEY = ("project-1", "image-1")
@@ -127,6 +129,32 @@ def test_a_cuda_failure_falls_back_to_the_cpu(frame, weights):
     assert out.device == "cpu" and svc.unavailable_reason is None
 
 
+def test_a_cuda_failure_backs_off_before_retrying_cuda(frame, weights, monkeypatch):
+    """CUDA churn under persistent VRAM pressure: after a CUDA-side AssistUnavailable, don't retry
+    cuda (and pay the load-fail-reload cost, ~1 s) on every click; go straight to the CPU until
+    CUDA_RETRY_S has passed, then try cuda again."""
+    factory = FakeFactory(fail_on={"cuda"})
+    svc = _service(factory, cuda=True)
+    crop_a, crop_b, crop_c = (quantise_crop(x, 0, 600, 600, 2000, 1500) for x in (0, 700, 1400))
+
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(service.time, "monotonic", lambda: clock["t"])
+
+    out1 = svc.prepare(KEY, frame, crop_a, weights)
+    backend = factory.made[0]
+    assert out1.device == "cpu" and backend.attempts == ["cuda", "cpu"]
+
+    clock["t"] += 1.0  # well inside the 60 s window
+    out2 = svc.prepare(KEY, frame, crop_b, weights)
+    assert out2.device == "cpu"
+    assert backend.attempts == ["cuda", "cpu", "cpu"]  # no second cuda attempt
+
+    clock["t"] += CUDA_RETRY_S  # the window has passed
+    out3 = svc.prepare(KEY, frame, crop_c, weights)
+    assert out3.device == "cpu"  # fail_on still has "cuda", so the retry still fails over to cpu
+    assert backend.attempts == ["cuda", "cpu", "cpu", "cuda", "cpu"]  # but cuda was tried again
+
+
 def test_a_cpu_failure_marks_sam_unavailable_until_a_call_succeeds(frame, weights):
     factory = FakeFactory(fail_on={"cpu"})
     svc = _service(factory)
@@ -174,8 +202,7 @@ def test_an_unreadable_frame_gives_a_404_not_a_500(tmp_path, weights):
     bad = tmp_path / "not-an-image.jpg"
     bad.write_bytes(b"not actually a jpeg")
     svc = _service(FakeFactory())
-    with pytest.raises(Exception) as excinfo:
+    with pytest.raises(AppError) as excinfo:
         svc.prepare(KEY, bad, quantise_crop(0, 0, 600, 600, 2000, 1500), weights)
-    err = excinfo.value
-    assert getattr(err, "code", None) == "not_found"
-    assert getattr(err, "status", None) == 404
+    assert excinfo.value.code == "not_found"
+    assert excinfo.value.status == 404

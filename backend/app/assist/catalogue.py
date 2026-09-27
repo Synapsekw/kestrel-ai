@@ -99,7 +99,7 @@ def _file_state(spec: AssistSpec, library_folder: Path) -> str:
     return "ready" if file_ok(path, spec) else "invalid"
 
 
-def _unavailable_message(reason: str) -> str:
+def unavailable_message(reason: str) -> str:
     """The one place that builds the "unavailable" sentence (Task 3 reuses it via this module)."""
     return f"Smart polygon is not available in this build: {reason}"
 
@@ -109,7 +109,7 @@ def status(
 ) -> dict:
     """One `AssistModel` (contract, I-C0): exactly its eight fields; `unavailable` wins (ruling BS1)."""
     if unavailable_reason:
-        state, reason = "unavailable", _unavailable_message(unavailable_reason)
+        state, reason = "unavailable", unavailable_message(unavailable_reason)
     else:
         state = _file_state(spec, library_folder)
         reason = MESSAGES.get(state)
@@ -132,7 +132,7 @@ def missing_error(state: str, message: str) -> AppError:
 def require_ready(library_folder: Path, unavailable_reason: str | None) -> Path:
     """The SAM weights path, or 409 `assist_model_missing` saying why S cannot run (ruling BS1)."""
     if unavailable_reason:
-        raise missing_error("unavailable", _unavailable_message(unavailable_reason))
+        raise missing_error("unavailable", unavailable_message(unavailable_reason))
     spec = get_spec(SAM_KEY)
     state = _file_state(spec, library_folder)
     if state != "ready":

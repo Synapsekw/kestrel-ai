@@ -8,7 +8,10 @@ reports itself unavailable (spec §16).
 
 `unavailable_reason` is not sticky (ruling F2): every call that needs a backend attempts to get one
 when none is loaded, so a factory/import failure or a CPU `AssistUnavailable` sets the reason, and a
-later successful call clears it again.
+later successful call clears it again. A CUDA-side `AssistUnavailable` is different: it is transient
+GPU trouble (e.g. VRAM pressure from another process), not "SAM cannot run" (BS7), so it does not set
+`unavailable_reason` — it only backs the cuda branch off for `CUDA_RETRY_S`, so repeated clicks don't
+each pay a cuda-load-then-fail-then-cpu-reload round trip.
 """
 
 from __future__ import annotations
@@ -40,6 +43,10 @@ GPU_WAIT_S = 0.2
 IDLE_UNLOAD_S = 600.0
 EMBEDDINGS = 2
 BACKEND_MODULE = "app.assist.ultralytics_backend"
+#: After a CUDA-side AssistUnavailable (e.g. OOM under persistent VRAM pressure from another
+#: process), skip the cuda branch for this long and go straight to the CPU, rather than paying a
+#: cuda-load-then-fail-then-cpu-reload round trip (~1 s) on every click.
+CUDA_RETRY_S = 60.0
 
 T = TypeVar("T")
 
@@ -111,6 +118,7 @@ class SegmentService:
         self._cache: OrderedDict[tuple, object] = OrderedDict()
         self._timer: threading.Timer | None = None
         self._last_used = 0.0
+        self._cuda_retry_at = 0.0
         self.unavailable_reason: str | None = None
 
     # ------------------------------------------------------------------ public
@@ -171,7 +179,7 @@ class SegmentService:
 
     def _run(self, weights: Path, work: Callable[[SegmentBackend, Device], T]) -> tuple[Device, T]:
         backend = self._get_backend(weights)
-        if self._cuda_ok():
+        if self._cuda_ok() and time.monotonic() >= self._cuda_retry_at:
             try:
                 with hold_gpu(log, "smart polygon", timeout=GPU_WAIT_S):
                     result = work(backend, "cuda")
@@ -181,6 +189,7 @@ class SegmentService:
                 log.info("the GPU is busy; smart polygon runs on the CPU")
             except AssistUnavailable:
                 log.warning("smart polygon could not use the GPU; trying the CPU", exc_info=True)
+                self._cuda_retry_at = time.monotonic() + CUDA_RETRY_S
         try:
             result = work(backend, "cpu")
         except AssistUnavailable as e:

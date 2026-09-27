@@ -49,12 +49,14 @@ class FakeDiscBackend:
         self.closed = False
         self.calls: list[tuple[str, str]] = []  # (operation, device)
         self.decoded: list[tuple[list, list]] = []
+        self.attempts: list[str] = []  # every device an encode was tried on, even ones that fail_on rejects
 
     def _check(self, device: str) -> None:
         if device in self.fail_on:
             raise AssistUnavailable(f"cannot load SAM on {device}")
 
     def encode(self, rgb: np.ndarray, device: str):
+        self.attempts.append(device)
         self._check(device)
         assert rgb.dtype == np.uint8 and rgb.ndim == 3 and max(rgb.shape[:2]) == 1024
         self.encodes += 1

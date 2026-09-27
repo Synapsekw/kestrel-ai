@@ -52,6 +52,9 @@ def get_segment_service(request: Request) -> SegmentService:
 
 
 def _library_folder(request: Request) -> Path:
+    # Must equal the library handle's `lib.folder` used by the catalogue and acquire job
+    # (app/library/handle.py sets `lib.folder` from this same `library_root`) — segment routes take
+    # only the settings, not a `LibraryHandle`, so this recomputes the same path rather than sharing it.
     return library_root(request.app.state.settings.data_dir)
 
 
@@ -105,7 +108,7 @@ def _frame(handle: ProjectHandle, image_id: str):
 
 def _unavailable(e: AssistUnavailable) -> AppError:
     # Ruling F9: the catalogue owns the "unavailable" sentence; never a second copy of it here.
-    return catalogue.missing_error("unavailable", catalogue._unavailable_message(str(e)))
+    return catalogue.missing_error("unavailable", catalogue.unavailable_message(str(e)))
 
 
 def _prologue(handle: ProjectHandle, image_id: str, request: Request, crop_in: SegmentCrop):
