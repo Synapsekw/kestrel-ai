@@ -7,6 +7,8 @@ import pytest
 from pointclouds import insert_cloud
 from pyproj import CRS
 
+from app.db.models import CloudMeasurement
+
 BASE = "/api/v1/projects"
 P = lambda x, y, z, u=0.01, **kw: {"x": x, "y": y, "z": z, "uncertainty_m": u, **kw}  # noqa: E731
 X0, Y0 = 243500.0, 3178000.0  # inside the fixture cloud's bounds (UTM 39N)
@@ -15,6 +17,12 @@ X0, Y0 = 243500.0, 3178000.0  # inside the fixture cloud's bounds (UTM 39N)
 @pytest.fixture
 def cloud_id(handle):
     return insert_cloud(handle)
+
+
+def _stored_points(handle, mid):
+    """The row's `points` JSON as stored, where a missing key and a null differ."""
+    with handle.session() as s:
+        return s.get(CloudMeasurement, mid).points
 
 
 def murl(project_id, cloud_id, mid=""):
@@ -38,7 +46,7 @@ def ring(cx, cy, z, radius, k, group, u=0.01):
     ]
 
 
-def test_an_area_is_saved_with_its_results_and_params(client, project_id, cloud_id):
+def test_an_area_is_saved_with_its_results_and_params(client, project_id, cloud_id, handle):
     body = {"kind": "area", "points": square(2.0), "params": {"mode": "plan", "view_dir": [0, 0, -1]}}
     r = client.post(murl(project_id, cloud_id), json=body)
     assert r.status_code == 201, r.text
@@ -57,6 +65,7 @@ def test_an_area_is_saved_with_its_results_and_params(client, project_id, cloud_
     assert res["perimeter_m"] == pytest.approx(8.0) and res["uncertainty_m2"] == pytest.approx(0.08)
     assert res["plane_azimuth_deg"] is None and res["distance_3d"] is None
     assert [p.get("group") for p in m["points"]] == [None] * 4
+    assert all("group" not in p for p in _stored_points(handle, m["id"]))  # Ruling 7: not even null
     listed = client.get(murl(project_id, cloud_id)).json()["items"]
     assert [i["id"] for i in listed] == [m["id"]] and listed[0]["params"] == m["params"]
     assert client.post(murl(project_id, cloud_id), json=body).json()["name"] == "Area 2"
@@ -87,11 +96,12 @@ def test_a_rings_vertical_check_keeps_its_groups(client, project_id, cloud_id):
     )
 
 
-def test_group_is_dropped_for_every_other_kind(client, project_id, cloud_id):
+def test_group_is_dropped_for_every_other_kind(client, project_id, cloud_id, handle):
     pts = [P(X0, Y0, 0.0, group=0), P(X0 + 3, Y0 + 4, 0.0, group=1)]
     m = client.post(murl(project_id, cloud_id), json={"kind": "distance", "points": pts}).json()
     assert m["results"]["distance_3d"] == pytest.approx(5.0)
     assert all(p["group"] is None for p in m["points"])
+    assert all("group" not in p for p in _stored_points(handle, m["id"]))  # the S1 row's exact JSON shape
 
 
 def test_a_vertical_without_rings_is_the_s1_two_point_check(client, project_id, cloud_id):
@@ -194,6 +204,55 @@ def test_huge_coordinates_answer_422_not_500(client, project_id, cloud_id):
     assert r.status_code == 422 and r.json()["error"]["code"] == "degenerate_polygon"
 
 
+TOO_LARGE = "these coordinates are too large to measure"
+BIG = 1e100
+HUGE_RING = [(1e77, 0.0), (0.0, 1e77), (-1e77, 0.0)]  # its sums overflow: once "lie in a line"
+
+
+@pytest.mark.parametrize(
+    "body, code",
+    [
+        (
+            {"kind": "area", "points": [P(-BIG, -BIG, 0), P(BIG, -BIG, 0), P(BIG, BIG, 0), P(-BIG, BIG, 0)]},
+            "degenerate_polygon",
+        ),
+        (
+            {"kind": "area", "points": square()[:2] + [P(X0 + 1, Y0 + 1, 1e200), P(X0, Y0 + 1, 0)]},
+            "degenerate_polygon",
+        ),
+        ({"kind": "area", "points": square()[:3] + [P(X0, Y0 + 1, 0, 1e200)]}, "degenerate_polygon"),
+        (
+            {
+                "kind": "vertical",
+                "points": ring(X0, Y0, 0.0, 3.0, 8, 0, u=1e200) + ring(X0, Y0, 30.0, 2.5, 8, 1),
+                "params": {"method": "rings"},
+            },
+            "collinear_ring",
+        ),
+        (
+            {
+                "kind": "vertical",
+                "points": [P(x, y, z, group=g) for g, z in ((0, 0.0), (1, 30.0)) for x, y in HUGE_RING],
+                "params": {"method": "rings"},
+            },
+            "collinear_ring",
+        ),
+    ],
+    ids=[
+        "area-side-1e100",
+        "area-z-1e200",
+        "area-uncertainty-1e200",
+        "rings-uncertainty-1e200",
+        "rings-offsets",
+    ],
+)
+def test_absurd_magnitudes_answer_422_too_large(client, project_id, cloud_id, body, code):
+    """Review Focus 2 (final review): overflow is the kind's 422, never a 500."""
+    r = client.post(murl(project_id, cloud_id), json=body)
+    assert r.status_code == 422, r.text
+    assert r.json()["error"]["code"] == code and r.json()["error"]["message"] == TOO_LARGE
+
+
 def test_a_profile_is_not_creatable_until_c_b2(client, project_id, cloud_id):
     """Ruling 11: until the profile seam lands (Task 6), `profile` is not a creatable kind."""
     from app.pointclouds.schemas import CreatableCloudMeasurementKind
@@ -204,3 +263,26 @@ def test_a_profile_is_not_creatable_until_c_b2(client, project_id, cloud_id):
         murl(project_id, cloud_id), json={"kind": "profile", "points": [P(X0, Y0, 0), P(X0 + 5, Y0, 0)]}
     )
     assert r.status_code == 422 and r.json()["error"]["code"] == "validation_error"
+
+
+@pytest.mark.parametrize(
+    "kind, params, error, code",
+    [
+        ("area", None, OverflowError, "degenerate_polygon"),
+        ("area", None, ZeroDivisionError, "degenerate_polygon"),
+        ("vertical", {"method": "rings"}, OverflowError, "collinear_ring"),
+    ],
+)
+def test_an_arithmetic_error_the_guards_missed_is_still_a_422(monkeypatch, kind, params, error, code):
+    """Belt and braces for Review Focus 2: an overflow the guards miss never reaches the 500 handler."""
+    from app.errors import AppError
+    from app.pointclouds import measure, measurements
+
+    def boom(*_args):
+        raise error
+
+    monkeypatch.setattr(measure, "area_results", boom)
+    monkeypatch.setattr(measure, "rings_results", boom)
+    with pytest.raises(AppError) as e:
+        measurements.measure_points(kind, square(), params)
+    assert (e.value.code, e.value.message, e.value.status) == (code, TOO_LARGE, 422)

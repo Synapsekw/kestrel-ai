@@ -88,6 +88,9 @@ def measure_points(kind: str, points: list[dict], params: dict | None) -> tuple[
             return points, measure.rings_results(points)
     except measure.Refusal as e:
         raise AppError(e.code, e.message, 422) from None
+    except ArithmeticError:  # OverflowError, ZeroDivisionError the guards missed: a 422, never a 500
+        code = "degenerate_polygon" if kind == "area" else "collinear_ring"
+        raise AppError(code, measure.TOO_LARGE, 422) from None
     points = _plain(points)
     expected = 1 if kind == "point" else 2
     if len(points) != expected:

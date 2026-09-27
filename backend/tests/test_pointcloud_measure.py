@@ -206,3 +206,46 @@ def test_huge_ring_coordinates_are_refused(big):
     with pytest.raises(measure.Refusal) as e:
         measure.rings_results(pts)
     assert e.value.code == "collinear_ring"
+
+
+# ------------------------------------------------ Review Focus 2: absurd magnitudes (final review)
+
+TOO_LARGE = "these coordinates are too large to measure"
+
+
+def _big_square(side):
+    h = side / 2
+    return [_p(-h, -h, 0), _p(h, -h, 0), _p(h, h, 0), _p(-h, h, 0)]
+
+
+@pytest.mark.parametrize(
+    "pts",
+    [
+        _big_square(1e100),  # the Newell norm overflows to inf
+        [_p(0, 0, 0), _p(1, 0, 0), _p(1, 1, 1e200), _p(0, 1, 0)],  # z alone overflows the products
+        [_p(0, 0, 0), _p(1, 0, 0), _p(1, 1, 0, 1e200), _p(0, 1, 0)],  # uncertainty_m overflows
+    ],
+    ids=["side-1e100", "z-1e200", "uncertainty-1e200"],
+)
+def test_absurd_areas_are_refused_as_too_large(pts):
+    with pytest.raises(measure.Refusal) as e:
+        measure.area_results(pts, None)
+    assert (e.value.code, e.value.message) == ("degenerate_polygon", TOO_LARGE)
+
+
+def test_an_absurd_ring_uncertainty_is_refused_as_too_large():
+    pts = _compass(10.0, 20.0, 0.0, 3.0, 0) + _compass(10.0, 20.0, 50.0, 2.0, 1)
+    pts[0] = {**pts[0], "uncertainty_m": 1e200}
+    with pytest.raises(measure.Refusal) as e:
+        measure.rings_results(pts)
+    assert (e.value.code, e.value.message) == ("collinear_ring", TOO_LARGE)
+
+
+@pytest.mark.parametrize("big", [1e77, 1e103, 1e200, 1e308])
+def test_huge_ring_offsets_say_too_large(big):
+    """Minor 2: not "the picks lie in a line"."""
+    pts = [_p(big, 0, 0, 0, 0), _p(0, big, 0, 0, 0), _p(-big, 0, 0, 0, 0)]
+    pts += [_p(big, 0, big, 0, 1), _p(0, big, big, 0, 1), _p(-big, 0, big, 0, 1)]
+    with pytest.raises(measure.Refusal) as e:
+        measure.rings_results(pts)
+    assert (e.value.code, e.value.message) == ("collinear_ring", TOO_LARGE)

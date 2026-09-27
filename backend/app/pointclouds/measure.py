@@ -125,11 +125,17 @@ def _norm(a: Vec) -> float:
     return math.sqrt(_dot(a, a))
 
 
+TOO_LARGE = "these coordinates are too large to measure"
+
+
 def _finite(out: dict[str, float | None], code: str) -> dict[str, float | None]:
-    """Coordinates so large that the products overflow give inf/nan: refused, never a 500."""
+    """Coordinates so large that the products overflow give inf/nan: refused, never a 500.
+
+    The area and rings code squares with `x * x`, never `x ** 2`: a Python float `**` raises
+    OverflowError where `*` gives inf (as in JavaScript), and inf is what this check refuses."""
     if all(v is None or math.isfinite(v) for v in out.values()):
         return out
-    raise Refusal(code, "these coordinates are too large to measure")
+    raise Refusal(code, TOO_LARGE)
 
 
 def area_vertices(points: list[dict]) -> list[dict]:
@@ -166,7 +172,8 @@ def _segments_touch(p1, p2, p3, p4, eps: float) -> bool:
 def _self_intersects(q: list[tuple[float, float]]) -> bool:
     """Two non-adjacent edges touching, or an edge folding back over the previous one (a spike)."""
     n = len(q)
-    eps = 1e-12 * max(1.0, max(max(abs(x), abs(y)) for x, y in q)) ** 2
+    scale = max(1.0, max(max(abs(x), abs(y)) for x, y in q))
+    eps = 1e-12 * scale * scale
     for i in range(n):
         a, b, c = q[i], q[(i + 1) % n], q[(i + 2) % n]
         if abs(_orient(a, b, c)) <= eps and (c[0] - b[0]) * (a[0] - b[0]) + (c[1] - b[1]) * (a[1] - b[1]) > 0:
@@ -198,6 +205,8 @@ def area_results(points: list[dict], params: dict | None) -> dict[str, float | N
         perimeter += _norm(_sub(b, a))
     big_n = (sx / 2, sy / 2, sz / 2)
     surface = _norm(big_n)
+    if not (math.isfinite(surface) and math.isfinite(perimeter)):
+        raise Refusal("degenerate_polygon", TOO_LARGE)
     if surface < MIN_AREA_M2:
         raise Refusal(
             "degenerate_polygon", "the outline has no area (less than 1 cm²); pick vertices around a surface"
@@ -221,7 +230,7 @@ def area_results(points: list[dict], params: dict | None) -> dict[str, float | N
     horizontal = math.hypot(facing[0], facing[1])
     azimuth = None if horizontal < 1e-12 else (math.degrees(math.atan2(facing[0], facing[1])) + 360) % 360
     plan = abs(big_n[2])
-    u_rms = math.sqrt(sum(float(v["uncertainty_m"]) ** 2 for v in pts) / n)
+    u_rms = math.sqrt(sum(float(v["uncertainty_m"]) * float(v["uncertainty_m"]) for v in pts) / n)
     mode = (params or {}).get("mode") or "surface"
     return _finite(
         {
@@ -229,7 +238,7 @@ def area_results(points: list[dict], params: dict | None) -> dict[str, float | N
             "area_surface_m2": surface,
             "area_plan_m2": plan,
             "perimeter_m": perimeter,
-            "plane_rms_m": math.sqrt(sum(_dot(v, nhat) ** 2 for v in q) / n),
+            "plane_rms_m": math.sqrt(sum(_dot(v, nhat) * _dot(v, nhat) for v in q) / n),
             "plane_tilt_deg": math.degrees(math.acos(min(1.0, abs(nhat[2])))),
             "plane_azimuth_deg": azimuth,
             "uncertainty_m2": perimeter * u_rms,
@@ -259,6 +268,8 @@ def fit_ring(points: list[dict]) -> dict[str, float]:
     svv = sum(b * b for b in v)
     suv = sum(a * b for a, b in zip(u, v, strict=True))
     trace, det = suu + svv, suu * svv - suv * suv
+    if not all(math.isfinite(t) for t in (mx, my, suu, svv, suv, trace * trace, det)):
+        raise Refusal("collinear_ring", TOO_LARGE)  # huge offsets: not "the picks lie in a line"
     disc = math.sqrt(max(trace * trace / 4 - det, 0.0))
     lmax, lmin = trace / 2 + disc, trace / 2 - disc
     if lmin <= 0 or lmax / lmin > RING_COND_MAX:
@@ -273,8 +284,9 @@ def fit_ring(points: list[dict]) -> dict[str, float]:
     f = -sum(w) / k
     cx, cy = mx - d / 2, my - e / 2
     r = math.sqrt(max(d * d / 4 + e * e / 4 - f, 0.0))
-    rms = math.sqrt(sum((math.hypot(float(p["x"]) - cx, float(p["y"]) - cy) - r) ** 2 for p in points) / k)
-    mean_u2 = sum(float(p["uncertainty_m"]) ** 2 for p in points) / k
+    off = [math.hypot(float(p["x"]) - cx, float(p["y"]) - cy) - r for p in points]
+    rms = math.sqrt(sum(t * t for t in off) / k)
+    mean_u2 = sum(float(p["uncertainty_m"]) * float(p["uncertainty_m"]) for p in points) / k
     return {
         "x": cx,
         "y": cy,
