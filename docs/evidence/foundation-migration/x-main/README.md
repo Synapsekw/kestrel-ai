@@ -9,11 +9,11 @@
 
 ## Inputs
 
-| Folder | Revision before | Classes | Boxes | Project datasets |
-| --- | --- | --- | --- | --- |
-| `E:\Projects\AHTest` (the recent list; display name "Ahmadia") | `0009` | 7 | 11,951 | 4 materialised |
-| `E:\Projects\Ahmadia` | `0001` | 1 | 0 | none |
-| `%TEMP%\acceptance-project` | `0002` | 8 | 108,327 | `v1`, not materialised |
+| Folder                                                         | Revision before | Classes | Boxes   | Project datasets       |
+| -------------------------------------------------------------- | --------------- | ------- | ------- | ---------------------- |
+| `E:\Projects\AHTest` (the recent list; display name "Ahmadia") | `0009`          | 7       | 11,951  | 4 materialised         |
+| `E:\Projects\Ahmadia`                                          | `0001`          | 1       | 0       | none                   |
+| `%TEMP%\acceptance-project`                                    | `0002`          | 8       | 108,327 | `v1`, not materialised |
 
 All three folders existed and were used (none missing).
 
@@ -40,17 +40,17 @@ were never started against real data.
 
 ## Pass criteria (values read from `dry-run.json`)
 
-| # | Criterion | Result |
-| --- | --- | --- |
-| 1 | exit 0, `ok`, `armed`, three projects in order AHTest, Ahmadia, acceptance | exit 0, `ok: true`, `armed: true`, order as listed |
-| 2 | each `ok`, no error, `revision_after` = head, `schema_version_after` = 2, backup expected and `quick_check` ok | all three: `0009/0001/0002 -> 0010`, v2, backup `ok` |
-| 3 | `mismatches: []` (row counts and count totals unchanged) | `[]` for all three; box rewrites 11,951 / 0 / 108,327 |
-| 4 | `originals_unchanged: true` | true for all three (per `dry-run.json`); independently confirmed: SHA-256 of every original `project.db`, `-wal`, `-shm`, plus the app-data files the script reads, identical before and after the whole session (see `hashes.txt`); no `backups` folder appeared in any original project folder |
-| 5 | `project_types` 7 / 1 / 8; `unmapped_boxes` 0; `findings` 0 | 7 / 1 / 8; 0 / 0 / 0; 0 / 0 / 0 |
-| 6 | 8 catalogue types, all `object`/`migrated`, AHTest's hotkeys, wheel_loader none, `needs_classification` | backhoe 7, bulldozer 2, concrete_mixer 5, crane 4, dump_truck 3, excavator 1, roller 6, wheel_loader none; `needs_classification: true` |
-| 7 | 4 legacy datasets `"<name> (Ahmadia)"` under `E:\Projects\AHTest\datasets\`; acceptance `v1` only a warning | `ICVD_V2`, `ICVD_V3`, `ICVD_V4`, `Initial_Construction_Vehicle_Detection`, each `(Ahmadia)` (AHTest's project name is "Ahmadia"), paths under `E:\Projects\AHTest\datasets\`; `v1` warned "never built on disk" |
-| 8 | every warning of an expected kind | yes, see below |
-| 9 | durations recorded; acceptance well under a minute | AHTest 0.375 s, Ahmadia 0.110 s, acceptance 1.687 s |
+| #   | Criterion                                                                                                      | Result                                                                                                                                                                                                                                                                                           |
+| --- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | exit 0, `ok`, `armed`, three projects in order AHTest, Ahmadia, acceptance                                     | exit 0, `ok: true`, `armed: true`, order as listed                                                                                                                                                                                                                                               |
+| 2   | each `ok`, no error, `revision_after` = head, `schema_version_after` = 2, backup expected and `quick_check` ok | all three: `0009/0001/0002 -> 0010`, v2, backup `ok`                                                                                                                                                                                                                                             |
+| 3   | `mismatches: []` (row counts and count totals unchanged)                                                       | `[]` for all three; box rewrites 11,951 / 0 / 108,327                                                                                                                                                                                                                                            |
+| 4   | `originals_unchanged: true`                                                                                    | true for all three (per `dry-run.json`); independently confirmed: SHA-256 of every original `project.db`, `-wal`, `-shm`, plus the app-data files the script reads, identical before and after the whole session (see `hashes.txt`); no `backups` folder appeared in any original project folder |
+| 5   | `project_types` 7 / 1 / 8; `unmapped_boxes` 0; `findings` 0                                                    | 7 / 1 / 8; 0 / 0 / 0; 0 / 0 / 0                                                                                                                                                                                                                                                                  |
+| 6   | 8 catalogue types, all `object`/`migrated`, AHTest's hotkeys, wheel_loader none, `needs_classification`        | backhoe 7, bulldozer 2, concrete_mixer 5, crane 4, dump_truck 3, excavator 1, roller 6, wheel_loader none; `needs_classification: true`                                                                                                                                                          |
+| 7   | 4 legacy datasets `"<name> (Ahmadia)"` under `E:\Projects\AHTest\datasets\`; acceptance `v1` only a warning    | `ICVD_V2`, `ICVD_V3`, `ICVD_V4`, `Initial_Construction_Vehicle_Detection`, each `(Ahmadia)` (AHTest's project name is "Ahmadia"), paths under `E:\Projects\AHTest\datasets\`; `v1` warned "never built on disk"                                                                                  |
+| 8   | every warning of an expected kind                                                                              | yes, see below                                                                                                                                                                                                                                                                                   |
+| 9   | durations recorded; acceptance well under a minute                                                             | AHTest 0.375 s, Ahmadia 0.110 s, acceptance 1.687 s                                                                                                                                                                                                                                              |
 
 Skip-and-flag (`broken-run.txt`): `[ok]` AHTest, `[FAILED]` the broken folder
 (`x-broken-project`, `DatabaseError: file is not a database`), run ends `FAIL`, exit 1. One broken
@@ -61,6 +61,7 @@ left untouched, since it was not created by this session.
 ## Warnings
 
 All on `acceptance-project`, all expected kinds:
+
 - six hotkey notes. Acceptance had wheel_loader on 2 and the other classes shifted by one; the
   catalogue keeps AHTest's keys (merged first), so wheel_loader gets no hotkey in this project and
   the others use the catalogue's key.

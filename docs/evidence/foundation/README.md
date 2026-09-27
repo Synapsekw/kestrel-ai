@@ -16,13 +16,13 @@ app sent to the API from that click until nothing was in flight and nothing star
 
 **5 reads**, the same list in every run (3 isolated runs and the full suite):
 
-| # | Request (ids replaced by names) | Who reads it |
-| --- | --- | --- |
-| 1 | `GET /projects/{projectId}/overview` | the project tab counts (`useProjectCounts`) |
-| 2 | `GET /projects/{projectId}/activity?subject_id={findingId}&limit=20` | the inspector's History |
-| 3 | `GET /projects/{projectId}/findings/{findingId}` | the inspector's detail (`useFinding`) |
-| 4 | `GET /projects/{projectId}/findings/summary` | the Findings filter counts (`useFindingSummary`) |
-| 5 | `GET /projects/{projectId}/findings?sort=-severity&limit=200` | the Findings list, re-read (`useFindingsList`) |
+| #   | Request (ids replaced by names)                                      | Who reads it                                     |
+| --- | -------------------------------------------------------------------- | ------------------------------------------------ |
+| 1   | `GET /projects/{projectId}/overview`                                 | the project tab counts (`useProjectCounts`)      |
+| 2   | `GET /projects/{projectId}/activity?subject_id={findingId}&limit=20` | the inspector's History                          |
+| 3   | `GET /projects/{projectId}/findings/{findingId}`                     | the inspector's detail (`useFinding`)            |
+| 4   | `GET /projects/{projectId}/findings/summary`                         | the Findings filter counts (`useFindingSummary`) |
+| 5   | `GET /projects/{projectId}/findings?sort=-severity&limit=200`        | the Findings list, re-read (`useFindingsList`)   |
 
 All five come from one `bumpFindings()` after the PATCH answers: each hook keyed on
 `findingsRevision` re-reads once (the list after its 300 ms debounce). Every read is bounded (a
@@ -51,11 +51,11 @@ Measured 2026-09-27 on `task/f-x` (HEAD d5ac68f plus the spec), with
 is `full` before load. Each surface: `requestAnimationFrame` for 2 s after 300 ms of warm-up, gaps over
 500 ms dropped, p95 as in `effects.ts` (the sorted sample at `ceil(n × 0.95) − 1`).
 
-| Surface | What moves | Run 1 p50 / p95 / max | Run 2 | Run 3 | Frames | Verdict |
-| --- | --- | --- | --- | --- | --- | --- |
-| Overview | nothing (after its entrances; what the Auto probe sees) | 16.7 / 16.7 / 16.8 | 16.7 / 16.7 / 16.8 | 16.7 / 16.7 / 16.8 | 120-121 | pass (≤ 20) |
-| Findings, 5000 rows | the table scrolled 24 px per frame, all 25 pages loaded (200 per page, by cursor) | 16.7 / 16.7 / 16.8 | 16.7 / 16.8 / 16.8 | 16.7 / 16.7 / 16.8 | 120-121 | pass (≤ 20) |
-| Map + floating glass | the Overview's map hero (tiles, pins, 3 `glass-float` panels) with the page scrolled 24 px per frame | 16.7 / 16.7 / 16.8 | 16.7 / 16.8 / 16.8 | 16.7 / 16.8 / 16.8 | 121-122 | pass (≤ 20) |
+| Surface              | What moves                                                                                           | Run 1 p50 / p95 / max | Run 2              | Run 3              | Frames  | Verdict     |
+| -------------------- | ---------------------------------------------------------------------------------------------------- | --------------------- | ------------------ | ------------------ | ------- | ----------- |
+| Overview             | nothing (after its entrances; what the Auto probe sees)                                              | 16.7 / 16.7 / 16.8    | 16.7 / 16.7 / 16.8 | 16.7 / 16.7 / 16.8 | 120-121 | pass (≤ 20) |
+| Findings, 5000 rows  | the table scrolled 24 px per frame, all 25 pages loaded (200 per page, by cursor)                    | 16.7 / 16.7 / 16.8    | 16.7 / 16.8 / 16.8 | 16.7 / 16.7 / 16.8 | 120-121 | pass (≤ 20) |
+| Map + floating glass | the Overview's map hero (tiles, pins, 3 `glass-float` panels) with the page scrolled 24 px per frame | 16.7 / 16.7 / 16.8    | 16.7 / 16.8 / 16.8 | 16.7 / 16.8 / 16.8 | 121-122 | pass (≤ 20) |
 
 Values in ms.
 
@@ -166,12 +166,12 @@ installer simply won't carry the WebView2 bootstrapper). Coordinator ruling (bin
 bootstrapper was staged, and that is acceptable because the operator's machine already has WebView2
 (today's installed app runs on it).
 
-| Field | Value |
-| --- | --- |
-| Path | `frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe` |
-| Size | 1,973,227,855 bytes (1,881.8 MB) |
-| SHA-256 | `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d` |
-| Built | 2026-09-27 07:06:33 +03:00 |
+| Field   | Value                                                                          |
+| ------- | ------------------------------------------------------------------------------ |
+| Path    | `frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe` |
+| Size    | 1,973,227,855 bytes (1,881.8 MB)                                               |
+| SHA-256 | `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d`             |
+| Built   | 2026-09-27 07:06:33 +03:00                                                     |
 
 `git status` showed only `backend/kestrel_backend.spec` as a tracked change throughout; `dist/`,
 `frontend/src-tauri/target/` and `frontend/src-tauri/binaries/*` (except `.gitkeep`) are git-ignored.
