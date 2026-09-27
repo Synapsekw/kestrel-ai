@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { errorBody, fakeClient, type FakeRoute } from "@/test/fixtures";
-import { exampleCataloguePage, exampleTypes } from "@/test/appSectionFixtures";
+import { exampleCataloguePage, exampleSeverity, exampleTypes } from "@/test/appSectionFixtures";
 import { renderWithProviders } from "@/test/render";
 import { CatalogueScreen } from "./CatalogueScreen";
 
@@ -133,5 +133,18 @@ describe("CatalogueScreen, types", () => {
     expect(
       await screen.findByRole("button", { name: "Create findings from accepted annotations of this type" }),
     ).toBeInTheDocument();
+  });
+
+  it("shows the severity editor on the Severity tab", async () => {
+    const { api } = fakeClient([
+      LIST,
+      { method: "GET", path: /\/catalogue\/severity$/, body: { levels: exampleSeverity } },
+    ]);
+    renderWithProviders(<CatalogueScreen tab="severity" />, {
+      api,
+      route: "/catalogue/severity",
+      path: "/catalogue/severity",
+    });
+    expect(await screen.findByLabelText("Name of level 1")).toHaveValue("Minor");
   });
 });

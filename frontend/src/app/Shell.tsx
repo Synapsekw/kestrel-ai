@@ -7,6 +7,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { fetchProject } from "@/api/project";
 import { pushLog } from "@/app/diagnostics";
+import { CatalogueSeverityProvider } from "@/catalogue/CatalogueSeverityProvider";
 import { jobUrl } from "@/jobs/jobsFilters";
 import { useInitialJobs } from "@/jobs/useJobList";
 import { useChangesStore } from "@/store/changes";
@@ -67,37 +68,39 @@ export function Shell() {
   const bare = info.layout !== "page";
 
   return (
-    <div className="grid h-full w-full grid-cols-[64px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] text-ink">
-      <Rail projectId={projectId} />
-      <div className="relative flex min-h-0 min-w-0 flex-col">
-        <TopBar
-          projectId={projectId}
-          projectName={project?.name ?? null}
-          onOpenPalette={() => setPaletteOpen(true)}
-        />
-        {projectId && info.layout !== "fullbleed" && <ProjectTabs projectId={projectId} />}
-        <main
-          className={
-            bare
-              ? "flex min-h-0 flex-1 flex-col overflow-hidden"
-              : "flex min-h-0 flex-1 flex-col overflow-auto px-5 py-4 lg:px-6 lg:py-5"
-          }
-        >
-          <PageTransition>
-            <Outlet />
-          </PageTransition>
-        </main>
-        <AgentDrawer
-          projectId={projectId}
-          projectName={project?.name ?? null}
-          open={agent.open}
-          onClose={() => agent.setOpen(false)}
-        />
-        <AddDataHost project={project} />
+    <CatalogueSeverityProvider>
+      <div className="grid h-full w-full grid-cols-[64px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] text-ink">
+        <Rail projectId={projectId} />
+        <div className="relative flex min-h-0 min-w-0 flex-col">
+          <TopBar
+            projectId={projectId}
+            projectName={project?.name ?? null}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
+          {projectId && info.layout !== "fullbleed" && <ProjectTabs projectId={projectId} />}
+          <main
+            className={
+              bare
+                ? "flex min-h-0 flex-1 flex-col overflow-hidden"
+                : "flex min-h-0 flex-1 flex-col overflow-auto px-5 py-4 lg:px-6 lg:py-5"
+            }
+          >
+            <PageTransition>
+              <Outlet />
+            </PageTransition>
+          </main>
+          <AgentDrawer
+            projectId={projectId}
+            projectName={project?.name ?? null}
+            open={agent.open}
+            onClose={() => agent.setOpen(false)}
+          />
+          <AddDataHost project={project} />
+        </div>
+        <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} project={project} />
+        <ShortcutSheet />
+        <Toaster />
       </div>
-      <Palette open={paletteOpen} onClose={() => setPaletteOpen(false)} project={project} />
-      <ShortcutSheet />
-      <Toaster />
-    </div>
+    </CatalogueSeverityProvider>
   );
 }

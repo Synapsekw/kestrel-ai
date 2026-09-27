@@ -15,11 +15,6 @@ const training = (
     Training runs on those datasets, and their results, are listed here.
   </SectionPlaceholder>
 );
-const catalogue = (
-  <SectionPlaceholder title="Catalogue" icon="catalogue">
-    The defect and object types your projects use, and the severity scale, are managed here.
-  </SectionPlaceholder>
-);
 
 /** The app-level routes (spec 2026-09-26-foundation section 5.3). S2 adds or swaps entries here only. */
 export const appRoutes: RouteObject[] = [
@@ -37,7 +32,14 @@ export const appRoutes: RouteObject[] = [
       </Later>
     ),
   },
-  { path: "catalogue/severity", element: catalogue },
+  {
+    path: "catalogue/severity",
+    element: (
+      <Later>
+        <CatalogueScreen tab="severity" />
+      </Later>
+    ),
+  },
   {
     path: "jobs",
     element: (

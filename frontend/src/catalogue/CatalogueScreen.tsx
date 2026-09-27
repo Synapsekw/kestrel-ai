@@ -1,12 +1,16 @@
 import { useMemo, useState } from "react";
 import { useProvideRouteActions, type RouteAction } from "@/app/routeActions";
 import { Alert, Button, Tabs } from "@/ui";
+import { SeverityEditor } from "./SeverityEditor";
 import { TypesPane } from "./TypesPane";
 import { useCatalogue } from "./useCatalogue";
 
-export type CatalogueTab = "types";
+export type CatalogueTab = "types" | "severity";
 
-const TABS = [{ id: "types", to: "/catalogue", label: "Types", end: true }];
+const TABS = [
+  { id: "types", to: "/catalogue", label: "Types", end: true },
+  { id: "severity", to: "/catalogue/severity", label: "Severity" },
+];
 
 /** The 503 block (F §15). "Copy folder path" stands in for "Reveal folder" (plan decision 6). */
 function CatalogueUnavailable({ folder }: { folder: string | null }) {
@@ -75,8 +79,10 @@ export function CatalogueScreen({ tab }: { tab: CatalogueTab }) {
         >
           {catalogue.error}
         </Alert>
-      ) : (
+      ) : tab === "types" ? (
         <TypesPane catalogue={catalogue} />
+      ) : (
+        <SeverityEditor />
       )}
     </section>
   );
