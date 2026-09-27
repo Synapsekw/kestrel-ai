@@ -210,7 +210,7 @@ def test_a_pre_foundation_project_shows_its_legacy_classes_until_migrated(handle
 def test_a_pre_foundation_project_keeps_its_legacy_classes_once_a_type_row_is_written(client, handle):
     """Until MG migrates it, a v1 project lists its legacy classes followed by any `project_type` row
     (a run's mapped type, a finding's type), so its existing boxes stay editable."""
-    from app.datasets import boxes
+    from app.imagery import annotations as boxes
 
     crack = add_type(client, "crack")
     with handle.session() as s:

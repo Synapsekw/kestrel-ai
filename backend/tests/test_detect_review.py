@@ -11,10 +11,10 @@ import pytest
 from pyproj import CRS
 from sqlalchemy import select
 
-from app.datasets import boxes
 from app.db.models import Box, GeoMap, Image, MapDetection, MapRun, QueryRun, SiteArea, Source
 from app.detect.areas import areas_for_map
 from app.detect.counts import recount_map_run, recount_query_run
+from app.imagery import annotations as boxes
 from app.maps.georef import Georef
 
 BASE = "/api/v1/projects"

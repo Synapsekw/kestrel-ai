@@ -17,11 +17,11 @@ from collections.abc import Callable
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.datasets import boxes
 from app.db.models import Box, GeoMap, MapDetection, MapRun, QueryRun
 from app.detect.areas import ProjectedArea, area_ids_for_point, areas_for_map
 from app.detect.counts import VERIFIED_STATES, Entry, apply_area_transition, apply_transition
 from app.errors import AppError, not_found
+from app.imagery import annotations as boxes
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.projects.service import ProjectHandle

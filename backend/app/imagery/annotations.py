@@ -1,5 +1,5 @@
-"""Box create, update, delete and bulk review (spec sections 4 and 6), and the annotation <-> finding
-invariant (spec 2026-09-26-foundation section 8.5).
+"""The annotation (box) service: shapes, validation, review (spec 2026-09-26-image-inspection
+section 8), and the annotation <-> finding invariant (spec 2026-09-26-foundation section 8.5).
 
 Accepted and edited boxes are ground truth; unreviewed proposals are not. Editing a proposal is
 itself a review decision, so it becomes `edited` rather than staying pending. A ground-truth box on
