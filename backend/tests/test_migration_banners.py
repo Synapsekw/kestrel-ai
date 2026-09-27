@@ -3,6 +3,8 @@
 import json
 from types import SimpleNamespace
 
+from fastapi.testclient import TestClient
+
 from app.migration import banners
 from app.overview import service as overview_service
 
@@ -43,11 +45,17 @@ def test_an_unreadable_report_is_ignored(tmp_path):
     assert banners.migration_banners(SimpleNamespace(folder=tmp_path)) == []
 
 
-def test_it_is_registered_once():
+def test_it_is_registered_once(monkeypatch):
+    monkeypatch.setattr(overview_service, "BANNER_PROVIDERS", [])  # no residue in the global list
     banners.register()
     banners.register()
-    assert overview_service.BANNER_PROVIDERS.count(banners.migration_banners) == 1
+    assert overview_service.BANNER_PROVIDERS == [banners.migration_banners]
 
 
-def test_the_app_registers_it_on_start(client):
-    assert overview_service.BANNER_PROVIDERS.count(banners.migration_banners) == 1
+def test_the_app_registers_it_on_start(app, monkeypatch):
+    """A fresh provider list before the app starts: only the lifespan can put the banner in it."""
+    fresh: list = []
+    monkeypatch.setattr(overview_service, "BANNER_PROVIDERS", fresh)
+    assert banners.migration_banners not in fresh
+    with TestClient(app, headers={"Authorization": "Bearer test-token"}):
+        assert fresh.count(banners.migration_banners) == 1
