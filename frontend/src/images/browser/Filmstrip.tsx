@@ -74,7 +74,8 @@ function Frame(p: {
         style={{ width: p.current ? FILM_CURRENT_W : FILM_W, height: FILM_H }}
         className={cx(
           "relative block overflow-hidden rounded-sm border",
-          "transition-transform duration-base ease-out hover:-translate-y-0.5 reduce-motion:transition-none reduce-motion:hover:translate-y-0",
+          "transition-transform duration-base ease-out hover:-translate-y-0.5 hover:scale-[1.03]",
+          "reduce-motion:transition-none reduce-motion:hover:translate-y-0 reduce-motion:hover:scale-100",
           p.current ? "border-accent ring-2 ring-accent/40" : "border-line",
           focusRing,
         )}

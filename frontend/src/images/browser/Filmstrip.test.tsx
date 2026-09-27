@@ -72,4 +72,14 @@ describe("Filmstrip", () => {
       "#ff9c3a",
     );
   });
+
+  it("lifts and scales a thumb on hover, disabled under reduced motion (Global Constraints)", () => {
+    renderStrip(30, idAt(5));
+    const five = screen.getAllByRole("listitem").find((i) => i.dataset.ordinal === "5")!;
+    const className = five.querySelector("button")!.className;
+    expect(className).toContain("hover:-translate-y-0.5");
+    expect(className).toContain("hover:scale-[1.03]");
+    expect(className).toContain("reduce-motion:hover:translate-y-0");
+    expect(className).toContain("reduce-motion:hover:scale-100");
+  });
 });
