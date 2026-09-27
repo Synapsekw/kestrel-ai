@@ -1,5 +1,6 @@
 import { BUDGETS } from "@/clouds/viewer/budget";
 import { POINT_SIZE_MAX, POINT_SIZE_MIN, type ColourMode } from "@/clouds/viewer/materialOptions";
+import type { ColourAvailability } from "@/clouds/viewer/types";
 import { Button, Field, Input, Kbd, Segmented, Select } from "@/ui";
 
 export interface ViewSettings {
@@ -12,6 +13,7 @@ export interface ViewSettings {
 export function ViewPanel({
   settings,
   hasRgb,
+  availability,
   defaultRange,
   onChange,
   onFit,
@@ -19,6 +21,7 @@ export function ViewPanel({
 }: {
   settings: ViewSettings;
   hasRgb: boolean;
+  availability: ColourAvailability | null;
   defaultRange: [number, number];
   onChange(s: ViewSettings): void;
   onFit(): void;
@@ -26,6 +29,10 @@ export function ViewPanel({
 }) {
   const set = (patch: Partial<ViewSettings>) => onChange({ ...settings, ...patch });
   const [lo, hi] = settings.elevationRange;
+  // Spec §7: a mode whose attribute is missing is disabled and says why (plan Ruling 10).
+  const missing = availability
+    ? (["intensity", "classification"] as const).filter((k) => !availability[k])
+    : [];
   return (
     <div className="flex flex-col gap-4">
       <Field label="Point budget" htmlFor="cloud-budget" hint="More points look denser and use more memory.">
@@ -46,10 +53,13 @@ export function ViewPanel({
         value={settings.colour}
         onChange={(colour) => set({ colour })}
         options={[
-          { value: "rgb", label: "RGB", disabled: !hasRgb },
+          { value: "rgb", label: "RGB", disabled: !(availability?.rgb ?? hasRgb) },
           { value: "elevation", label: "Elevation" },
+          { value: "intensity", label: "Intensity", disabled: !availability?.intensity },
+          { value: "classification", label: "Class", disabled: !availability?.classification },
         ]}
       />
+      {missing.length > 0 && <p className="text-xs text-muted">This cloud has no {missing.join(" or ")}.</p>}
       {settings.colour === "elevation" && (
         <div className="flex items-end gap-2">
           <Field label="Lowest" htmlFor="cloud-zlo">

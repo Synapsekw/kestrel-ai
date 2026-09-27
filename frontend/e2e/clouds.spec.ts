@@ -529,3 +529,43 @@ test("right-click on the map opens that spot in 3D; a spot outside the cloud say
   await page.goto(`/p/${P}/clouds/${CLOUD}?at=100.000,200.000`);
   await expect(page.getByText("This spot is outside the cloud")).toBeVisible({ timeout: 20_000 });
 });
+
+test("colour modes: Intensity and Class are off for a cloud without those attributes", async ({ page }) => {
+  await routeCloud(page);
+  await routeOctree(
+    page,
+    CLOUD,
+    buildOctree(redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 })),
+  );
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await page.getByRole("radio", { name: "View" }).click();
+  await expect(page.getByRole("radio", { name: "RGB" })).toBeEnabled();
+  await expect(page.getByRole("radio", { name: "Elevation" })).toBeEnabled();
+  await expect(page.getByRole("radio", { name: "Intensity" })).toBeDisabled();
+  await expect(page.getByRole("radio", { name: "Class" })).toBeDisabled();
+  await expect(page.getByText("This cloud has no intensity or classification.")).toBeVisible();
+});
+
+test("colour modes: a cloud with intensity and classification draws in both", async ({ page }) => {
+  await routeCloud(page);
+  const grid = redGreenGrid({ origin: [243500, 3178000, 0], size: 100, step: 2 }).map((p, i) => ({
+    ...p,
+    intensity: (i * 977) % 65536,
+    classification: p.x < 243550 ? 2 : 6,
+  }));
+  await routeOctree(page, CLOUD, buildOctree(grid, 0.001, { intensity: true, classification: true }));
+  await page.goto(`/p/${P}/clouds/${CLOUD}`);
+  await viewerSettled(page);
+  await page.getByRole("radio", { name: "View" }).click();
+  await expect(page.getByRole("radio", { name: "Intensity" })).toBeEnabled();
+  await expect(page.getByRole("radio", { name: "Class" })).toBeEnabled();
+  await expect(page.getByText(/This cloud has no/)).toHaveCount(0);
+  for (const mode of ["Intensity", "Class"]) {
+    await page.getByRole("radio", { name: mode }).click();
+    const c = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
+    expect(c.total - c.background, `${mode} draws points`).toBeGreaterThan(0.01 * c.total);
+    expect(c.white, `${mode} is not blown out`).toBe(0);
+  }
+  expect((await page.evaluate(() => window.__kestrelCloudViewer!.stats())).errors).toEqual([]);
+});
