@@ -111,6 +111,40 @@ def test_more_than_max_vertices_is_invalid_shape():
     assert _code(polygon_fields, W, H, many) == "invalid_shape"
 
 
+def test_non_finite_rect_fields_are_invalid_shape():
+    for bad in (math.nan, math.inf, -math.inf):
+        assert _code(shape_fields, W, H, x=bad, y=20, w=30, h=40) == "invalid_shape"
+        assert _code(shape_fields, W, H, x=10, y=bad, w=30, h=40) == "invalid_shape"
+        assert _code(shape_fields, W, H, x=10, y=20, w=bad, h=40) == "invalid_shape"
+        assert _code(shape_fields, W, H, x=10, y=20, w=30, h=bad) == "invalid_shape"
+        assert _code(shape_fields, W, H, x=10, y=20, w=30, h=40, angle=bad) == "invalid_shape"
+
+
+def test_non_finite_point_fields_are_invalid_shape():
+    for bad in (math.nan, math.inf, -math.inf):
+        assert _code(shape_fields, W, H, shape="point", x=bad, y=20) == "invalid_shape"
+        assert _code(shape_fields, W, H, shape="point", x=10, y=bad) == "invalid_shape"
+
+
+def test_non_finite_polygon_vertex_is_invalid_shape():
+    for bad in (math.nan, math.inf, -math.inf):
+        pts = [[bad, 10], [60, 10], [60, 40], [10, 40]]
+        assert _code(polygon_fields, W, H, pts) == "invalid_shape"
+        pts = [[10, bad], [60, 10], [60, 40], [10, 40]]
+        assert _code(polygon_fields, W, H, pts) == "invalid_shape"
+
+
+def test_rounding_pinch_is_repaired_not_empty():
+    # Raw input is a valid simple polygon; rounding the near-duplicate vertex (10.04, 10.02) to
+    # 0.1 px alone would collapse it onto (10, 10), pinching the ring invalid. The server must
+    # repair the rounded result rather than answer empty_polygon.
+    pts = [[10, 10], [50, 10], [50, 50], [10.04, 10.02], [10, 50]]
+    f = polygon_fields(W, H, pts)
+    assert f.repaired is True
+    poly = Polygon(f.points)
+    assert poly.is_valid
+
+
 def test_coordinates_are_rounded_to_a_tenth():
     f = polygon_fields(W, H, [[10.04, 10.06], [60.01, 10], [60, 40], [10, 40]])
     assert [10.0, 10.1] in f.points

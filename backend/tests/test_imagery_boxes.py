@@ -136,6 +136,15 @@ def test_patch_polygon_rejects_rect_fields_and_accepts_points(client, ctx):
     b = _post(client, ctx, shape="polygon", points=SQUARE).json()
     r = _patch(client, ctx, b["id"], x=20)
     assert r.status_code == 422 and _code(r) == "invalid_shape"
+    unchanged = client.get(f"{ctx['base']}/images/{ctx['image_id']}/boxes").json()["items"]
+    box = next(item for item in unchanged if item["id"] == b["id"])
+    assert (box["x"], box["y"], box["w"], box["h"], box["points"]) == (
+        b["x"],
+        b["y"],
+        b["w"],
+        b["h"],
+        b["points"],
+    )
     r = _patch(client, ctx, b["id"], points=[[x + 5, y + 5] for x, y in SQUARE])
     assert r.status_code == 200, r.text
     assert (r.json()["x"], r.json()["y"], r.json()["area_px"], r.json()["repaired"]) == (15, 15, 1500, False)

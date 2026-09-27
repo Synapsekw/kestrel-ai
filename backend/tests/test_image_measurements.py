@@ -66,6 +66,18 @@ def test_ends_must_be_inside(client, ctx):
         assert r.status_code == 422 and _code(r) == "out_of_bounds", body
 
 
+def test_non_finite_ends_are_validation_error(client, ctx):
+    for bad in ("NaN", "Infinity", "-Infinity"):
+        for body in (
+            {"x1": bad, "y1": 0, "x2": 5, "y2": 5},
+            {"x1": 0, "y1": bad, "x2": 5, "y2": 5},
+            {"x1": 0, "y1": 0, "x2": bad, "y2": 5},
+            {"x1": 0, "y1": 0, "x2": 5, "y2": bad},
+        ):
+            r = client.post(ctx["url"], json=body)
+            assert r.status_code == 422 and _code(r) == "validation_error", body
+
+
 def test_cap_per_image(client, ctx, monkeypatch):
     assert measurements.PER_IMAGE_MEASUREMENTS == 500
     monkeypatch.setattr(measurements, "PER_IMAGE_MEASUREMENTS", 1)

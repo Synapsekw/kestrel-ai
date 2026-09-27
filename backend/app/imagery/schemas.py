@@ -172,8 +172,8 @@ class ImageMeasurementList(BaseModel):
 
 
 class ImageMeasurementCreate(BaseModel):
-    x1: float
-    y1: float
-    x2: float
-    y2: float
+    x1: float = Field(allow_inf_nan=False)
+    y1: float = Field(allow_inf_nan=False)
+    x2: float = Field(allow_inf_nan=False)
+    y2: float = Field(allow_inf_nan=False)
     label: str = Field(default="", max_length=200)

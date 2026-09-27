@@ -11,6 +11,7 @@ empty_polygon.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Literal
@@ -59,6 +60,14 @@ def invalid_shape(message: str) -> AppError:
     return AppError("invalid_shape", message, 422)
 
 
+def _require_finite(**values: float | None) -> None:
+    """Refuse a NaN/Inf coordinate before it ever reaches Shapely (which raises a raw
+    GEOSException on a non-finite ring, and would silently accept NaN in a rectangle)."""
+    for name, v in values.items():
+        if v is not None and not math.isfinite(v):
+            raise invalid_shape(f"{name} must be a finite number, got {v!r}")
+
+
 def _outside(message: str) -> AppError:
     return AppError("out_of_bounds", message, 422)
 
@@ -84,6 +93,7 @@ def check_rect_bounds(width: int, height: int, x: float, y: float, w: float, h: 
 def rect_fields(
     width: int, height: int, x: float, y: float, w: float, h: float, angle: float = 0.0
 ) -> ShapeFields:
+    _require_finite(x=x, y=y, w=w, h=h, angle=angle)
     angle = normalise_angle(angle)
     check_rect_bounds(width, height, x, y, w, h, angle)
     shape: Shape = "rbox" if angle else "box"
@@ -91,6 +101,7 @@ def rect_fields(
 
 
 def point_fields(width: int, height: int, x: float, y: float) -> ShapeFields:
+    _require_finite(x=x, y=y)
     if not (0 <= x <= width and 0 <= y <= height):
         raise _outside(f"point ({x}, {y}) is outside the {width}x{height} image")
     return ShapeFields("point", float(x), float(y), 0.0, 0.0, 0.0, None, 0.0)
@@ -124,6 +135,8 @@ def polygon_fields(width: int, height: int, points: list[list[float]]) -> ShapeF
     if len(points) > MAX_VERTICES:
         raise invalid_shape(f"a polygon has at most {MAX_VERTICES} vertices, got {len(points)}")
     pts = [(float(p[0]), float(p[1])) for p in points]
+    for px, py in pts:
+        _require_finite(x=px, y=py)
     if len(set(pts)) < 3:
         raise _empty()
     raw = Polygon(pts)
@@ -136,10 +149,24 @@ def polygon_fields(width: int, height: int, points: list[list[float]]) -> ShapeF
     if len(ring) > MAX_VERTICES:
         raise invalid_shape(f"the repaired polygon has more than {MAX_VERTICES} vertices")
     out = Polygon(ring) if len(ring) >= 3 else None
-    if out is None or not out.is_valid or out.area < MIN_AREA_PX:
-        raise _empty()
+    rounding_pinched = out is None or not out.is_valid or out.area < MIN_AREA_PX
+    if rounding_pinched:
+        # A valid ring can still pinch invalid once independently rounded to 0.1 px (two
+        # vertices that were merely close collapse onto the same point). Snap the whole
+        # geometry to the 0.1 px grid instead of rounding coordinates one at a time, then
+        # take its largest part again.
+        snapped = shapely.set_precision(part, 0.1)
+        snapped_part = _largest(snapped if snapped.is_valid else shapely.make_valid(snapped))
+        if snapped_part is None or snapped_part.area < MIN_AREA_PX:
+            raise _empty()
+        ring = _ring(orient(snapped_part, sign=1.0))
+        if len(ring) > MAX_VERTICES:
+            raise invalid_shape(f"the repaired polygon has more than {MAX_VERTICES} vertices")
+        out = Polygon(ring) if len(ring) >= 3 else None
+        if out is None or not out.is_valid or out.area < MIN_AREA_PX:
+            raise _empty()
     rounded_in = Polygon([(round(px, 1), round(py, 1)) for px, py in pts])
-    repaired = not raw.is_valid or not rounded_in.is_valid or not out.equals(rounded_in)
+    repaired = rounding_pinched or not raw.is_valid or not rounded_in.is_valid or not out.equals(rounded_in)
     minx, miny, maxx, maxy = out.bounds
     return ShapeFields(
         "polygon", minx, miny, maxx - minx, maxy - miny, 0.0, ring, round(out.area, 1), repaired
