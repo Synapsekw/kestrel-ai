@@ -128,14 +128,18 @@ const NO_PATH = { current: "" };
 
 /**
  * The screen that already reports each job type's outcome inline: a project-relative segment
- * (checked against `/p/{projectId}/{segment}`), or an absolute app path (checked exactly) for a
- * screen that moved off the project routes.
+ * (checked against `/p/{projectId}/{segment}`), or an absolute app path for a screen that moved off
+ * the project routes (it and its sub-routes, e.g. `/models/training/{runId}`).
  */
 const REPORTED_ON: Partial<Record<Job["type"], string>> = {
   import: "images",
   dataset: "images",
   train: "/models/training",
   infer: "query",
+  library_import: "/models/library",
+  library_export: "/models/library",
+  library_starter: "/models/library",
+  library_adopt: "/models/library",
 };
 
 /** Job ids whose outcome a mounted component reports itself (e.g. the Clouds screen's ExportWatch). */
@@ -164,7 +168,7 @@ export function reportedInline(job: Job, pathname: string): boolean {
   const segment = REPORTED_ON[job.type];
   if (!segment) return false;
   const path = pathname.replace(/\/$/, "");
-  if (segment.startsWith("/")) return path === segment;
+  if (segment.startsWith("/")) return path === segment || path.startsWith(`${segment}/`);
   return path.endsWith(`/p/${job.project_id}/${segment}`);
 }
 

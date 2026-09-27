@@ -58,6 +58,18 @@ describe("reportedInline", () => {
     expect(reportedInline(base, "/p/other/images")).toBe(false);
   });
 
+  it("an app screen reports its jobs on its sub-routes too, and the library reports its own jobs", () => {
+    const train = { ...base, type: "train" } as Job;
+    expect(reportedInline(train, "/models/training/run-1")).toBe(true);
+    expect(reportedInline(train, "/models/training/run-1/")).toBe(true);
+    expect(reportedInline(train, "/models/trainingx")).toBe(false);
+    for (const type of ["library_import", "library_export", "library_starter", "library_adopt"] as const) {
+      const job = { ...base, project_id: "library", type } as Job;
+      expect(reportedInline(job, "/models/library")).toBe(true);
+      expect(reportedInline(job, "/models/training")).toBe(false);
+    }
+  });
+
   it("a LAZ export is quiet only while a mounted watcher claims it, on any screen", () => {
     const job = { ...runningJob, type: "pointcloud_export", project_id: "p1", state: "succeeded" } as Job;
     // Unclaimed (the Clouds screen was left and opened again before F1): the global toast shows.
