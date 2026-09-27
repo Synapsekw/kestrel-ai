@@ -3,8 +3,13 @@
 import numpy as np
 from affine import Affine
 from pyproj import CRS, Transformer
+from surfaces import CX, CY, X0, Y1, circle, cone, fixture_spec, plane, write_surface
+from volume_rows import add_surface
 from workspace_rows import BASE, add_map, rgba, set_frame, write_plan_tif
 
+from app.db.models import Surface, VolumeMeasurement
+from app.surfaces.grid import aligned_grid
+from app.surfaces.paths import surface_path
 from app.workspace import grid, tiles
 
 UTM38 = CRS.from_epsg(32638).to_wkt()
@@ -143,3 +148,118 @@ def test_far_away_layer_is_204_not_500(client, project_id, handle, monkeypatch):
     assert boxes[-1] is not None  # finite, just elsewhere
     assert client.get(f"{BASE}/{project_id}/site-tiles/map/{map_id}/0/-400/-400").status_code == 204
     assert boxes[-1] is None  # the inf path: no finite point, a 204 and never a 500
+
+
+def test_surface_styles_through_the_route(client, project_id, handle):
+    sid = add_surface(handle, fixture_spec(0.1), lambda xs, ys: 0.1 * (xs - X0))  # 1 m per 10 m east
+    set_frame(client, project_id, 32639)
+    x, y = grid.tile_of(X0 + 30, Y1 - 30, 13)
+    url = f"{BASE}/{project_id}/site-tiles/surface/{sid}/13/{x}/{y}"
+    hs = client.get(url)
+    assert hs.status_code == 200
+    assert client.get(url, params={"style": "tint"}).content != hs.content
+    img = rgba(client.get(url, params={"style": "contours", "interval": 1.0}).content)
+    on = np.nonzero(img[128, :, 3])[0]
+    assert len(on) >= 2 and set(np.diff(on)) <= {79, 80, 81}  # a line every 10 m = 80 px at 0.125 m
+    assert client.get(url, params={"style": "contours", "interval": 0}).status_code == 422
+    assert client.get(url, params={"knockout": True}).content == hs.content  # ignored for surfaces
+
+
+def test_one_read_per_surface_tile_within_258(client, project_id, handle, monkeypatch):
+    sid = add_surface(handle, fixture_spec(0.1), plane)
+    set_frame(client, project_id, 32639)
+    shapes = []
+    real = tiles._read_vrt
+    monkeypatch.setattr(
+        tiles, "_read_vrt", lambda vrt, s: shapes.append((vrt.height, vrt.width)) or real(vrt, s)
+    )
+    x, y = grid.tile_of(X0 + 30, Y1 - 30, 12)
+    assert client.get(f"{BASE}/{project_id}/site-tiles/surface/{sid}/12/{x}/{y}").status_code == 200
+    assert shapes == [(258, 258)]
+
+
+def test_a_building_surface_is_409(client, project_id, handle):
+    with handle.session() as s:
+        row = Surface(name="b", kind="cloud_dsm", status="building")
+        s.add(row)
+        s.flush()
+        sid = row.id
+    r = client.get(f"{BASE}/{project_id}/site-tiles/surface/{sid}/13/0/0")
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "not_ready")
+
+
+def test_frame_change_never_serves_the_old_frames_tile(client, project_id, handle):
+    """Review Focus 3."""
+    sid = add_surface(handle, fixture_spec(0.1), plane)
+    set_frame(client, project_id, 32639)
+    x, y = grid.tile_of(X0 + 30, Y1 - 30, 13)
+    url = f"{BASE}/{project_id}/site-tiles/surface/{sid}/13/{x}/{y}"
+    first = client.get(url)
+    assert first.status_code == 200
+    set_frame(client, project_id, 32638)
+    second = client.get(url)
+    assert second.status_code == 204 or second.content != first.content
+
+
+def test_local_frame_surface_at_negative_coordinates(client, project_id, handle):
+    """Review Focus 4: a local-metres surface south-west of the origin."""
+    spec = aligned_grid((-40.0, -40.0, -10.0, -10.0), 0.1, None, None)
+    with handle.session() as s:
+        row = Surface(name="local", kind="design", status="building")
+        s.add(row)
+        s.flush()
+        sid = row.id
+    stats = write_surface(surface_path(handle, sid), spec, lambda xs, ys: 10.0 + 0.01 * xs)
+    with handle.session() as s:
+        row = s.get(Surface, sid)
+        row.status, row.cell_size_m, row.width, row.height = "ready", 0.1, spec.width, spec.height
+        row.geotransform, row.bounds_native = list(spec.geotransform), list(spec.bounds)
+        row.z_min, row.z_max = stats.z_min, stats.z_max
+    assert client.put(f"{BASE}/{project_id}/map-workspace/frame", json={"kind": "local"}).status_code == 200
+    x, y = grid.tile_of(-25.0, -25.0, 13)
+    assert (x, y) == (-1, 0)
+    img = rgba(client.get(f"{BASE}/{project_id}/site-tiles/surface/{sid}/13/{x}/{y}").content)
+    minx, _, _, maxy = grid.tile_bounds(13, x, y)  # E -32..0, N -32..0
+    assert img[int((maxy + 25.0) / 0.125), int((-25.0 - minx) / 0.125), 3] == 255
+    assert img[5, 250, 3] == 0  # E, N ~ -0.7: outside the surface (E and N -40..-10)
+
+
+def test_volume_diff_tile(client, project_id, handle, wait_job):
+    """A calculated measurement (the volume_calc job through the API, as test_volumes_api.py does)
+    serves its cut/fill diff; a missing or failed one is 404 (R-B1-10), an uncalculated one 409."""
+    top = add_surface(handle, fixture_spec(0.1), lambda xs, ys: plane(xs, ys) + cone(xs, ys))
+    body = {
+        "name": "Pile",
+        "polygon_native": circle(CX, CY, 12.0, 128),
+        "top_surface_id": top,
+        "base": {"kind": "toe_plane"},
+    }
+    r = client.post(f"{BASE}/{project_id}/volumes", json=body)
+    assert r.status_code == 202, r.text
+    assert wait_job(project_id, r.json()["job"]["id"])["state"] == "succeeded"
+    mid = r.json()["measurement"]["id"]
+    set_frame(client, project_id, 32639)
+    x, y = grid.tile_of(CX, CY, 13)
+    r = client.get(f"{BASE}/{project_id}/site-tiles/volume_diff/{mid}/13/{x}/{y}")
+    assert r.status_code == 200, r.text
+    assert (rgba(r.content)[..., 3] > 0).any()
+    assert client.get(f"{BASE}/{project_id}/site-tiles/volume_diff/nope/13/0/0").status_code == 404
+    ids = {}
+    for status in ("calculating", "failed"):
+        with handle.session() as s:
+            row = VolumeMeasurement(
+                name=status,
+                polygon_native=circle(CX, CY, 5.0, 16),
+                top_surface_id=top,
+                base={"kind": "toe_plane"},
+                masks={},
+                alignment={},
+                status=status,
+            )
+            s.add(row)
+            s.flush()
+            ids[status] = row.id
+    r = client.get(f"{BASE}/{project_id}/site-tiles/volume_diff/{ids['calculating']}/13/{x}/{y}")
+    assert (r.status_code, r.json()["error"]["code"]) == (409, "not_ready")
+    r = client.get(f"{BASE}/{project_id}/site-tiles/volume_diff/{ids['failed']}/13/{x}/{y}")
+    assert r.status_code == 404

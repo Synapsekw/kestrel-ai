@@ -27,12 +27,15 @@ from pyproj import CRS
 from rasterio.enums import Resampling
 from rasterio.vrt import WarpedVRT
 
-from app.db.models import GeoMap
+from app.db.models import GeoMap, Surface
 from app.errors import AppError, not_found
 from app.maps.georef import Georef
 from app.maps.startup import map_raster_path
 from app.maps.tiles import TileCache
 from app.projects.service import ProjectHandle
+from app.surfaces.grid import hillshade
+from app.surfaces.paths import surface_path
+from app.surfaces.tiles import ALTITUDE, AZIMUTH, diff_colours, tint
 from app.workspace import grid
 from app.workspace.frame import SiteFrame, bbox_from_site, not_in_frame
 
@@ -141,6 +144,61 @@ def _paint_rgba(data: np.ndarray, valid: np.ndarray, ctx: TileContext, *, knocko
 def rgba_paint(knockout_white: bool) -> Paint:
     """A drawing raster (RGBA plan.tif); with `knockout_white`, min(R, G, B) >= 245 is transparent."""
     return partial(_paint_rgba, knockout_white=knockout_white)
+
+
+CONTOUR_ALPHA = 140  # white at 55 %
+NICE = (1.0, 2.0, 2.5, 5.0)
+
+
+def nice_interval(lo: float, hi: float) -> float:
+    """The nice number (1, 2, 2.5, 5 x 10^k) nearest (hi - lo) / 20 on a log scale; 1 m when flat."""
+    target = (hi - lo) / 20.0
+    if not (math.isfinite(target) and target > 0):
+        return 1.0
+    k = math.floor(math.log10(target))
+    candidates = [m * 10.0**e for e in (k - 1, k, k + 1) for m in NICE]
+    return min(candidates, key=lambda c: abs(math.log(c / target)))
+
+
+def paint_hillshade(
+    data: np.ndarray, valid: np.ndarray, ctx: TileContext, *, tint_range: tuple[float, float] | None = None
+) -> np.ndarray:
+    """Hillshade with the effective cell = the tile resolution; with `tint_range`, tint x hillshade.
+    `data` carries a one-pixel halo that is cropped here."""
+    z = data[0].astype(np.float64)
+    shade = hillshade(z, ctx.res, ctx.res, azimuth=AZIMUTH, altitude=ALTITUDE)[1:-1, 1:-1]
+    grey = shade.astype(np.float64)[..., None]
+    if tint_range is not None:
+        rgb = grey / 255.0 * tint(z[1:-1, 1:-1], *tint_range)
+    else:
+        rgb = np.repeat(grey, 3, axis=-1)
+    rgba = np.zeros((*shade.shape, 4), dtype=np.uint8)
+    rgba[..., :3] = np.clip(np.rint(rgb), 0, 255).astype(np.uint8)
+    rgba[..., 3] = np.where(shade > 0, 255, 0)
+    return rgba
+
+
+def paint_contours(
+    data: np.ndarray, valid: np.ndarray, ctx: TileContext, *, interval: float
+) -> np.ndarray | None:
+    """A pixel is on a contour when its band floor(z / interval) is greater than a 4-neighbour's
+    (plan deviation 4: 1 px lines), drawn white at 55 % on a transparent tile."""
+    band = np.floor(data[0].astype(np.float64) / interval)
+    c = band[1:-1, 1:-1]
+    on = np.zeros(c.shape, dtype=bool)
+    with np.errstate(invalid="ignore"):
+        for n in (band[:-2, 1:-1], band[2:, 1:-1], band[1:-1, :-2], band[1:-1, 2:]):
+            on |= np.isfinite(n) & (c > n)
+    on &= np.isfinite(c)
+    if not on.any():
+        return None
+    rgba = np.zeros((*c.shape, 4), dtype=np.uint8)
+    rgba[on] = (255, 255, 255, CONTOUR_ALPHA)
+    return rgba
+
+
+def paint_diff(data: np.ndarray, valid: np.ndarray, ctx: TileContext, *, scale: float) -> np.ndarray:
+    return diff_colours(data[0].astype(np.float64), scale)
 
 
 # --- the pipeline ---------------------------------------------------------------------------------
@@ -280,6 +338,14 @@ def _not_ready(what: str, name: str, status: str) -> AppError:
     return AppError("not_ready", f"{what} {name} is {status}, not ready", 409)
 
 
+def map_native_m(m: GeoMap) -> float:
+    """A georeferenced map's full-resolution ground pixel in metres: its GSD, else the geotransform's
+    pixel size. The one rule for it (controller ruling F10): import this, never re-derive it."""
+    if m.gsd_cm:
+        return m.gsd_cm / 100
+    return Georef(m.geotransform, m.crs_wkt).metres_per_pixel(m.width, m.height)
+
+
 def _map_source(handle: ProjectHandle, map_id: str, style: TileStyle) -> SiteTileSource:
     with handle.session() as s:
         m = s.get(GeoMap, map_id)
@@ -291,7 +357,7 @@ def _map_source(handle: ProjectHandle, map_id: str, style: TileStyle) -> SiteTil
             raise not_in_frame(f"map {m.name}, which has no coordinates,")
         g = Georef(m.geotransform, m.crs_wkt)
         bounds = tuple(m.bounds_native) if m.bounds_native else tuple(g.bounds_native(m.width, m.height))
-        native = m.gsd_cm / 100 if m.gsd_cm else g.metres_per_pixel(m.width, m.height)
+        native = map_native_m(m)
         crs = m.crs_wkt
     return SiteTileSource(
         layer_id=map_id,
@@ -304,4 +370,64 @@ def _map_source(handle: ProjectHandle, map_id: str, style: TileStyle) -> SiteTil
     )
 
 
+def _surface_source(handle: ProjectHandle, surface_id: str, style: TileStyle) -> SiteTileSource:
+    with handle.session() as s:
+        row = s.get(Surface, surface_id)
+        if row is None or row.status == "failed":
+            raise not_found("surface", surface_id)
+        if row.status != "ready":
+            raise _not_ready("surface", row.name, row.status)
+        stats = row.stats or {}
+        lo, hi = stats.get("z_p02"), stats.get("z_p98")
+        if lo is None or hi is None:
+            lo, hi = row.z_min, row.z_max
+        fields = dict(
+            layer_id=row.id,
+            version=row.job_id or "1",  # ruling R-B1-2
+            path=surface_path(handle, row.id),
+            crs_wkt=row.crs_wkt,
+            bounds_native=tuple(row.bounds_native),
+            native_res_m=float(row.cell_size_m),
+        )
+    has_range = lo is not None and hi is not None
+    mode = style.style or "hillshade"  # ruling R-B1-3
+    if mode == "contours":
+        interval = style.interval or (nice_interval(lo, hi) if has_range else 1.0)
+        paint = partial(paint_contours, interval=interval)
+    elif mode == "tint" and has_range:
+        paint = partial(paint_hillshade, tint_range=(float(lo), float(hi)))
+    else:
+        paint = paint_hillshade
+    return SiteTileSource(**fields, paint=paint, bands=(1,), float_data=True, halo=1)
+
+
+def _diff_source(handle: ProjectHandle, measurement_id: str, style: TileStyle) -> SiteTileSource:
+    # local imports: importing `tiles` never pulls the volumes engine at module load
+    from app.surfaces.service import require_ready
+    from app.volumes.engine import ring_polygon
+    from app.volumes.paths import diff_path
+    from app.volumes.service import peek
+
+    out = peek(handle, measurement_id)  # 404 when absent
+    if out.status == "failed":
+        raise not_found("volume measurement", measurement_id)  # ruling R-B1-10 (controller F15)
+    path = diff_path(handle, measurement_id)
+    if out.results is None or not path.is_file():
+        raise AppError("not_ready", f"{out.name} has no results yet; calculate it first", 409)
+    top = require_ready(handle, out.results.top_surface.id)
+    return SiteTileSource(
+        layer_id=measurement_id,
+        version=out.results.computed_at.isoformat(),  # ruling R-B1-2
+        path=path,
+        crs_wkt=top.crs_wkt,
+        bounds_native=tuple(ring_polygon(out.polygon_native).bounds),  # deviation 5: no I/O
+        native_res_m=float(top.cell_size_m),
+        paint=partial(paint_diff, scale=out.results.diff_scale_m),
+        bands=(1,),
+        float_data=True,
+    )
+
+
 register_site_tile_source("map", _map_source)
+register_site_tile_source("surface", _surface_source)
+register_site_tile_source("volume_diff", _diff_source)

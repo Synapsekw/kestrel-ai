@@ -10,6 +10,7 @@ from pyproj import CRS
 from workspace_rows import rgba, write_plan_tif
 
 from app.errors import AppError
+from app.surfaces.grid import hillshade
 from app.workspace import grid, tiles
 from app.workspace.frame import LOCAL, frame_for_epsg
 
@@ -229,3 +230,42 @@ def test_local_frame_uses_the_stand_in_crs(tmp_path):
     img = rgba(tiles.render_site_tile(LOCAL, src, 13, -1, -1, tiles.TileStyle()))  # E -32..0, N 0..32
     assert (img[130:, 130:, 3] == 255).all() and (img[:120, :, 3] == 0).all()
     assert tiles.render_site_tile(F39, src, 13, -1, -1, tiles.TileStyle()) is None  # not in a CRS frame
+
+
+def _ctx(res=0.125, halo=1):
+    return tiles.TileContext(F39, 13, 0, 0, res, halo)
+
+
+def test_nice_interval_is_the_nearest_nice_number():
+    assert tiles.nice_interval(0.0, 20.0) == 1.0
+    assert tiles.nice_interval(598.1, 624.8) == 1.0  # 26.7 / 20 = 1.335 -> 1
+    assert tiles.nice_interval(0.0, 7.0) == 0.25  # 0.35 is nearer 0.25 than 0.5 on a log scale
+    assert tiles.nice_interval(0.0, 90.0) == 5.0  # 4.5 -> 5
+    assert tiles.nice_interval(3.0, 3.0) == 1.0  # a flat surface
+
+
+def test_contours_are_one_pixel_lines_every_interval():
+    cols = np.arange(258, dtype=np.float32)
+    z = np.tile(cols * 0.05, (258, 1))[None]  # 1 m every 20 px
+    img = tiles.paint_contours(z, np.isfinite(z[0]), _ctx(), interval=1.0)
+    assert img.shape == (256, 256, 4)
+    on = np.nonzero(img[128, :, 3])[0]
+    assert list(on) == [c - 1 for c in range(20, 257, 20)]  # halo column c is output column c - 1
+    lit = img[..., 3] > 0
+    assert (img[..., 3][lit] == 140).all() and (img[..., :3][lit] == 255).all()
+    assert (img[:, :, 3] == img[128, :, 3]).all()  # the same columns on every row
+
+
+def test_contours_skip_nan():
+    z = np.full((1, 258, 258), np.nan, np.float32)
+    assert tiles.paint_contours(z, np.zeros((258, 258), bool), _ctx(), interval=1.0) is None
+
+
+def test_hillshade_paint_equals_the_grid_hillshade_cropped():
+    rng = np.random.default_rng(1)
+    z = rng.normal(50, 2, (1, 258, 258)).astype(np.float32)
+    img = tiles.paint_hillshade(z, np.isfinite(z[0]), _ctx())
+    want = hillshade(z[0], 0.125, 0.125, azimuth=tiles.AZIMUTH, altitude=tiles.ALTITUDE)[1:-1, 1:-1]
+    assert (img[..., 0] == want).all() and (img[..., 3] == np.where(want > 0, 255, 0)).all()
+    tinted = tiles.paint_hillshade(z, np.isfinite(z[0]), _ctx(), tint_range=(45.0, 55.0))
+    assert not (tinted[..., 0] == tinted[..., 1]).all()  # coloured, not grey
