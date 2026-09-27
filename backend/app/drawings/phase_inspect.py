@@ -13,6 +13,7 @@ READERS: dict[str, str] = {
     "png": "app.drawings.raster_io",
     "jpg": "app.drawings.raster_io",
     "tif": "app.drawings.raster_io",
+    "dxf": "app.drawings.dxf_flatten",
 }
 MESSAGE = "Reading drawing"
 HASH_SHARE = 0.2

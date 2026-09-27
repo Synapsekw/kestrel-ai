@@ -12,7 +12,14 @@ from app.errors import AppError, not_found
 from app.surfaces.design.detect import DWG_MESSAGE
 
 # Extension -> format. Tasks 4, 10 and 11 add PDF, DXF and LandXML as their readers land.
-FORMATS: dict[str, str] = {".png": "png", ".jpg": "jpg", ".jpeg": "jpg", ".tif": "tif", ".tiff": "tif"}
+FORMATS: dict[str, str] = {
+    ".png": "png",
+    ".jpg": "jpg",
+    ".jpeg": "jpg",
+    ".tif": "tif",
+    ".tiff": "tif",
+    ".dxf": "dxf",
+}
 
 
 def _refuse(message: str, reason: str) -> AppError:
