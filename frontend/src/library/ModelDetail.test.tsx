@@ -10,6 +10,7 @@ import {
   runningJob,
   TRAINED_MODEL_ID,
 } from "@/test/fixtures";
+import { exampleCataloguePage } from "@/test/appSectionFixtures";
 import { renderWithProviders } from "@/test/render";
 import { ModelDetail } from "./ModelDetail";
 
@@ -147,5 +148,18 @@ describe("ModelDetail", () => {
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Delete model" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("library is down");
+  });
+
+  it("opens the class mapping and loads the catalogue only then", async () => {
+    const { api, requests } = fakeClient([
+      { method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage },
+    ]);
+    renderWithProviders(
+      <ModelDetail model={exampleModel} onChanged={() => {}} onDeleted={() => {}} onJobStarted={() => {}} />,
+      { api },
+    );
+    expect(requests.some((r) => r.url.includes("/catalogue/types"))).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Class mapping" }));
+    expect(await screen.findByText("by alias dump_truck")).toBeInTheDocument();
   });
 });

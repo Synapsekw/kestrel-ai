@@ -4,8 +4,9 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { deleteLibraryModel, fetchModelUsage, updateLibraryModel } from "@/api/library";
 import { pushLog } from "@/app/diagnostics";
-import { Alert, Button, Field, Input, Pill, Textarea } from "@/ui";
+import { Alert, Button, Disclosure, Field, Input, Pill, Textarea } from "@/ui";
 import { formatAliases, parseAliases } from "./aliases";
+import { ClassMapEditor } from "./ClassMapEditor";
 import { ExportButtons } from "./ExportButtons";
 import { ModelArtifacts } from "./ModelArtifacts";
 import { formatLocalDate, formatMetric, originLabel, taskLabel } from "./modelLabels";
@@ -166,7 +167,7 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
           <Pill tone={model.origin === "trained" ? "ok" : "neutral"} size="sm">
             {originLabel(model.origin)}
           </Pill>
-          <span className="text-xs text-muted">{taskLabel(model.task)}</span>
+          <Pill size="sm">{taskLabel(model.task)}</Pill>
           <span className="text-xs tabular-nums text-muted">added {formatLocalDate(model.created_at)}</span>
         </div>
         <Provenance model={model} />
@@ -318,6 +319,10 @@ export function ModelDetail({ model, onChanged, onDeleted, onJobStarted }: Model
         <h3 className="text-sm font-semibold">Training charts</h3>
         <ModelArtifacts model={model} />
       </section>
+
+      <Disclosure label="Class mapping">
+        <ClassMapEditor model={model} onSaved={onChanged} />
+      </Disclosure>
 
       <ExportButtons model={model} onStarted={onJobStarted} />
 
