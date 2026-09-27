@@ -82,9 +82,19 @@ on the catalogue-migrations packaging bug above, then passed clean in 37.1 s aft
 (`eca3d28`); `cargo test --manifest-path frontend/src-tauri/Cargo.toml` now runs (sidecar present):
 8 passed. The installer built in 502.3 s:
 `frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe`
-(1,973,227,855 bytes, SHA-256 `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d`).
+(1,973,227,855 bytes, SHA-256 `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d`,
+**superseded, see below**).
 **Not installed** — installing migrates the operator's real projects on first start, so that step
 waits on the operator.
+
+**Installer rebuilt at the fix-wave head (Unit X):** after the final fix wave landed on
+`task/f-x` (frontend product code only — the sidecar above, built from `eca3d28`, is unchanged
+because `git diff --stat eca3d28 HEAD -- backend/app backend/kestrel_backend.spec` is empty), the
+installer was rebuilt at `13fed13` and repackaged the same sidecar: 446 s end to end ->
+`frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe`
+(1,973,252,956 bytes, SHA-256 `3a204ec36393400273b107628ce9f55ec53a9f5255540f29d83a022cb28a4129`,
+built 2026-09-27 08:19:48 +03:00). Still **not installed** — the coordinator asks the operator
+before installing.
 
 **Final full gate on `task/f-x`, run for this entry (ports 52030/52031):**
 

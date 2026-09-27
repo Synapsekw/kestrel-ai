@@ -173,7 +173,40 @@ bootstrapper was staged, and that is acceptable because the operator's machine a
 | SHA-256 | `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d`             |
 | Built   | 2026-09-27 07:06:33 +03:00                                                     |
 
+**Superseded — the values above are from the pre-fix-wave build.** These four fields are the only
+part of this section that changed; everything above (build, smoke, cargo test) still describes the
+run that produced them and was not repeated.
+
 `git status` showed only `backend/kestrel_backend.spec` as a tracked change throughout; `dist/`,
 `frontend/src-tauri/target/` and `frontend/src-tauri/binaries/*` (except `.gitkeep`) are git-ignored.
+
+### Installer rebuilt after the final fix wave
+
+Measured 2026-09-27 on `task/f-x`, commit built `13fed13` (HEAD after the final fix wave, which
+changed frontend product code only — dataset-builder type cap, training's "preparing" copy, toast
+quieting, the dead-code cleanup, and the docs commit that recorded gate counts). The frozen sidecar
+in `frontend/src-tauri/binaries/` was **reused as-is**, not rebuilt: it is still the one built from
+`eca3d28` above, and
+
+```
+git diff --stat eca3d28 HEAD -- backend/app backend/kestrel_backend.spec
+```
+
+is empty, so nothing that the sidecar embeds (`backend/app`, the PyInstaller spec) changed between
+`eca3d28` and `13fed13`. `git status --short` showed a clean tree both before and after the rebuild;
+only the git-ignored `frontend/src-tauri/target/` output changed.
+
+`pnpm -C frontend build:installer` (Tauri release build, then the Inno Setup 6 compiler packing the
+unchanged `frontend/src-tauri/binaries/`): **446 s** end to end (script-reported: 445 s), started
+2026-09-27 08:12:22 +03:00, installer file written 2026-09-27 08:19:48 +03:00. Same
+`no MicrosoftEdgeWebview2Setup.exe found` warning as before, under the same coordinator ruling
+(acceptable — the operator's machine already has WebView2).
+
+| Field   | Value                                                                          |
+| ------- | ------------------------------------------------------------------------------ |
+| Path    | `frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe` |
+| Size    | 1,973,252,956 bytes (1,881.8 MB)                                               |
+| SHA-256 | `3a204ec36393400273b107628ce9f55ec53a9f5255540f29d83a022cb28a4129`             |
+| Built   | 2026-09-27 08:19:48 +03:00                                                     |
 
 Not installed: the coordinator asks the operator before installing.
