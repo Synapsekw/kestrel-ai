@@ -80,8 +80,8 @@ function PastRuns() {
 }
 
 /**
- * The Detect screen. `readOnly` shows the project's past runs only (a training project's
- * detections from before the split), without the form or any control that changes a run.
+ * The Detect screen. `readOnly` shows the project's past runs only (detections recorded before
+ * the split), without the form or any control that changes a run.
  */
 export function QueryScreen({ readOnly = false }: { readOnly?: boolean }) {
   return readOnly ? <PastRuns /> : <DetectWorkspace />;

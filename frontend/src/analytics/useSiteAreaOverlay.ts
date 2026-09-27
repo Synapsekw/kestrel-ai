@@ -12,8 +12,9 @@ export const DRAW_PARAM = "draw";
 export const DRAW_SITE_AREA = "site-area";
 
 /**
- * The map viewer's site areas: loads them (detection projects only), draws them on the map and,
- * while `?draw=site-area` is set, runs the outline tool. Returns what the draw strip needs.
+ * The map viewer's site areas: loads them (skipped when `enabled` is false, e.g. a read-only
+ * map), draws them on the map and, while `?draw=site-area` is set, runs the outline tool.
+ * Returns what the draw strip needs.
  */
 export function useSiteAreaOverlay(
   olMap: OlMap | null,

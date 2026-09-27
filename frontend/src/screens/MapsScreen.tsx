@@ -136,7 +136,7 @@ function MapFacts({ m }: { m: GeoMap }) {
 }
 
 /**
- * The Maps screen. `readOnly` shows a training project's maps from before the split: maps, runs,
+ * The Maps screen. `readOnly` shows a project's maps from before the split: maps, runs,
  * results, scores and export stay; importing, new runs, labeling, zones and deleting are gone.
  */
 export function MapsScreen({ readOnly = false }: { readOnly?: boolean }) {

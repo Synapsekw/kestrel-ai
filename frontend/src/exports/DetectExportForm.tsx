@@ -32,7 +32,7 @@ const ALL = "";
 const sourceName = (s: Source) =>
   `${s.label ?? s.folder} (${s.kind === "map" ? "map" : "photos"}${s.captured_on ? `, ${s.captured_on}` : ""})`;
 
-/** The counts of a detection project, as a CSV table or a PDF report per source. */
+/** A project's counts, as a CSV table or a PDF report per source. */
 export function DetectExportForm({ projectId, onStarted }: Props) {
   const api = useApi();
   const [format, setFormat] = useState<DetectExportFormat>("csv");

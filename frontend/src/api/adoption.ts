@@ -5,7 +5,7 @@ export type AdoptionStatus = components["schemas"]["AdoptionStatus"];
 
 const P = "/api/v1/projects/{projectId}" as const;
 
-/** How far this training project's old models are on their way into the library. */
+/** How far this project's old models are on their way into the library. */
 export function fetchAdoption(api: ApiClient, projectId: string): Promise<AdoptionStatus> {
   return unwrap(api.GET(`${P}/adoption`, { params: { path: { projectId } } }));
 }

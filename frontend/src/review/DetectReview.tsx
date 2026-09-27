@@ -40,9 +40,9 @@ function sourceOption(s: Source): string {
 }
 
 /**
- * Review in a detection project (spec 2026-09-23 section 8): pick a source, and review the run that
- * counts for it (the pinned one, else the newest). Photos use the image queue and the editor; a map
- * opens the map viewer in review mode.
+ * Review (spec 2026-09-23 section 8): pick a source, and review the run that counts for it (the
+ * pinned one, else the newest). Photos use the image queue and the editor; a map opens the map
+ * viewer in review mode.
  */
 export function DetectReview({ projectId }: { projectId: string }) {
   const api = useApi();
