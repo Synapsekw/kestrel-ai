@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from datetime import UTC, datetime
 
-from sqlalchemy import case, delete, func, select
+from sqlalchemy import case, delete, event, func, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
@@ -87,3 +87,48 @@ def _recompute(c: Connection, ids: list[str]) -> None:
     gone = [i for i in ids if i not in live]
     if gone:
         c.execute(delete(table).where(table.c.image_id.in_(gone)))
+
+
+_PENDING = "image_summary_pending"
+
+
+def _collect(session: Session, _flush_context) -> None:
+    """after_flush: `new`/`dirty`/`deleted` still show what this flush wrote."""
+    ids = session.info.setdefault(_PENDING, set())
+    for obj in (*session.new, *session.dirty, *session.deleted):
+        if isinstance(obj, Box) and obj.image_id:
+            ids.add(obj.image_id)
+
+
+def _apply(session: Session, _flush_context) -> None:
+    """after_flush_postexec: recompute through the connection, so no new flush starts."""
+    ids = session.info.pop(_PENDING, None)
+    if ids:
+        touch_many(session.connection(), ids)
+
+
+def _bulk(state):
+    """do_orm_execute: an ORM bulk UPDATE/DELETE on `box` recomputes the images it matched."""
+    if not (state.is_update or state.is_delete):
+        return None
+    mapper = state.bind_mapper
+    if mapper is None or mapper.class_ is not Box:
+        return None
+    session = state.session
+    if not session._flushing:  # pending ORM boxes must be in the table before we look
+        session.flush()
+    where = state.statement.whereclause
+    probe = select(Box.image_id).distinct()
+    if where is not None:
+        probe = probe.where(where)
+    ids = set(session.connection().execute(probe).scalars())
+    result = state.invoke_statement()
+    touch_many(session.connection(), ids)
+    return result
+
+
+def install(target) -> None:
+    """Hook a project sessionmaker (plan I-BX Ruling 1). Call once per factory."""
+    event.listen(target, "after_flush", _collect)
+    event.listen(target, "after_flush_postexec", _apply)
+    event.listen(target, "do_orm_execute", _bulk)

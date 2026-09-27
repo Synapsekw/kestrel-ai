@@ -1,10 +1,14 @@
 """image_summary (image inspection spec §7.1, I-D2): a per-image recompute from `box`, never an
 increment."""
 
+import re
+from pathlib import Path
+
 import pytest
 from image_summary_helpers import add_box, expected_summary, new_image, stored_summary
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 
+import app as app_pkg
 from app.db.models import Box, ImageSummary
 from app.imagery import summary
 
@@ -88,3 +92,60 @@ def test_a_wrong_row_is_overwritten(handle, cls):
     with handle.session() as s:
         summary.touch(s, image_id)
     assert stored_summary(handle, image_id) == (1, 0, None)
+
+
+def test_orm_insert_update_delete_recompute_without_touch(handle, cls):
+    image_id = new_image(handle)
+    box_id = add_box(handle, image_id, cls[1], state="unreviewed", conf=0.6)
+    assert stored_summary(handle, image_id) == (0, 1, 0.6)
+    with handle.session() as s:
+        s.get(Box, box_id).review_state = "accepted"
+    assert stored_summary(handle, image_id) == (1, 0, None)
+    with handle.session() as s:
+        s.delete(s.get(Box, box_id))
+    assert stored_summary(handle, image_id) == (0, 0, None)
+
+
+def test_core_bulk_delete_through_the_session_recomputes(handle, cls):
+    """Review Focus 1: the `infer` write deletes old suggestions with an ORM bulk DELETE."""
+    image_id = new_image(handle)
+    add_box(handle, image_id, cls[1], state="unreviewed", conf=0.8)
+    add_box(handle, image_id, cls[0])
+    with handle.session() as s:
+        s.execute(delete(Box).where(Box.image_id == image_id, Box.review_state == "unreviewed"))
+    assert stored_summary(handle, image_id) == expected_summary(handle, image_id) == (1, 0, None)
+
+
+def test_core_bulk_update_through_the_session_recomputes(handle, cls):
+    """`bulk_mark_empty` rejects pending proposals with an ORM bulk UPDATE."""
+    a, b = new_image(handle), new_image(handle)
+    add_box(handle, a, cls[1], state="unreviewed", conf=0.3)
+    add_box(handle, b, cls[1], state="unreviewed", conf=0.7)
+    with handle.session() as s:
+        s.execute(update(Box).where(Box.image_id.in_([a, b])).values(review_state="rejected"))
+    assert stored_summary(handle, a) == stored_summary(handle, b) == (0, 0, None)
+
+
+def test_bulk_mark_empty_rejects_and_the_summary_follows(client, project, handle, cls):
+    image_id = new_image(handle)
+    add_box(handle, image_id, cls[1], state="unreviewed", conf=0.5)
+    r = client.post(
+        f"/api/v1/projects/{project['id']}/images/bulk-mark-empty",
+        json={"image_ids": [image_id], "marked_empty": True},
+    )
+    assert r.status_code == 200, r.text
+    assert stored_summary(handle, image_id) == (0, 0, None)
+
+
+def test_no_box_write_bypasses_the_session():
+    """Review Focus 2: raw SQL or connection-level writes to `box` skip the session events."""
+    root = Path(app_pkg.__file__).parent
+    raw = re.compile(r"(INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+box\b", re.IGNORECASE)
+    conn_level = re.compile(r"(conn|connection|engine)\w*\.execute\(\s*(insert|update|delete)\(\s*Box\b")
+    offenders = [
+        str(p.relative_to(root))
+        for p in root.rglob("*.py")
+        if "migrations" not in p.parts
+        and (raw.search(p.read_text("utf-8")) or conn_level.search(p.read_text("utf-8")))
+    ]
+    assert offenders == [], offenders

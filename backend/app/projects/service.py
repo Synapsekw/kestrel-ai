@@ -15,6 +15,7 @@ from app.appdata import AppData
 from app.db.models import Job, Project
 from app.db.session import make_session_factory, open_project_db
 from app.errors import AppError, not_found
+from app.imagery import summary as image_summary
 from app.migration.backup import BackupFailed, backup_path
 from app.migration.state import MigrationStates, failed_error
 
@@ -40,6 +41,7 @@ class ProjectHandle:
         # (foundation spec §11.3), and the `project_migrate` job sets it when the upgrade finishes.
         self.schema_version = schema_version
         self._factory = make_session_factory(engine)
+        image_summary.install(self._factory)  # image_summary follows every box write (plan I-BX)
 
     images_dir = property(lambda s: s.folder / "images")
     labels_dir = property(lambda s: s.folder / "labels")
