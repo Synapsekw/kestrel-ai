@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from app.jobs.schemas import JobOut
 
-ResultsExportFormat = Literal["csv", "yolo", "coco", "html"]
+ResultsExportFormat = Literal["csv", "yolo", "yolo_seg", "coco", "html"]
 
 
 class ResultsExportRequest(BaseModel):
