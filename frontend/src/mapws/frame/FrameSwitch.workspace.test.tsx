@@ -17,7 +17,7 @@ describe("FrameSwitch inside the workspace", () => {
       route: `/p/${PROJECT_ID}/maps`,
       path: "/p/:projectId/maps",
     });
-    const button = await screen.findByRole("button", { name: "Local metres · 2 items" });
+    const button = await screen.findByRole("button", { name: "Local metres · 2 surfaces" });
     expect(screen.getByTestId("coord-readout")).toContainElement(button);
   });
 });

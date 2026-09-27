@@ -2,17 +2,15 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createApiClient } from "@contract/client";
-import { exampleGeoMap, fakeClient, type FakeRoute } from "@/test/fixtures";
+import { fakeClient, type FakeRoute } from "@/test/fixtures";
 import { useChangesStore } from "@/store/changes";
 import { useToastStore } from "@/ui";
 import { LOCAL, UTM33 } from "../test/fixtures";
 import { makeStores, renderInWorkspace } from "../test/harness";
 import type { SiteFrame } from "../types";
 import { FrameSwitch } from "./FrameSwitch";
-import { forgetCrsEpsg } from "./frameSwitchModel";
 
 const FRAME_PUT: FakeRoute = { method: "PUT", path: /\/map-workspace\/frame$/, body: {} };
-const MAPS: FakeRoute = { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap] } };
 
 function setup(
   frame: SiteFrame,
@@ -29,10 +27,7 @@ function setup(
 const rev = () => useChangesStore.getState().mapWorkspaceRevision;
 
 describe("FrameSwitch (spec M §6, M-B1 hand-off 1)", () => {
-  beforeEach(() => {
-    useToastStore.getState().clear();
-    forgetCrsEpsg();
-  });
+  beforeEach(() => useToastStore.getState().clear());
 
   it.each([
     ["no local items", UTM33, { crs: 3, local: 0 }],
@@ -46,35 +41,19 @@ describe("FrameSwitch (spec M §6, M-B1 hand-off 1)", () => {
   it("in a CRS frame offers local metres and PUTs {kind: local}, then re-reads", async () => {
     const { requests } = setup(UTM33, { crs: 4, local: 2 });
     const r0 = rev();
-    await userEvent.click(screen.getByRole("button", { name: "Local metres · 2 items" }));
+    await userEvent.click(screen.getByRole("button", { name: "Local metres · 2 surfaces" }));
     await waitFor(() => expect(rev()).toBe(r0 + 1));
     const put = requests.find((r) => r.method === "PUT");
     expect(put?.url).toMatch(/\/map-workspace\/frame$/);
     expect(put?.body).toEqual({ kind: "local" });
   });
 
-  it("in the local frame switches back to the CRS frame seen before the switch", async () => {
-    setup(UTM33, { crs: 4, local: 2 }).unmount();
-    const { requests } = setup(LOCAL, { crs: 4, local: 2 });
-    await userEvent.click(screen.getByRole("button", { name: "Site CRS · 4 items" }));
-    await waitFor(() => expect(requests.some((r) => r.method === "PUT")).toBe(true));
-    expect(requests.find((r) => r.method === "PUT")?.body).toEqual({ kind: "crs", epsg: 32633 });
-    expect(requests.some((r) => r.method === "GET")).toBe(false);
-  });
-
-  it("with no CRS frame seen, takes the EPSG from the maps list (rule M3)", async () => {
-    const { requests } = setup(LOCAL, { crs: 1, local: 2 }, [FRAME_PUT, MAPS]);
-    await userEvent.click(await screen.findByRole("button", { name: "Site CRS · 1 item" }));
-    await waitFor(() => expect(requests.some((r) => r.method === "PUT")).toBe(true));
-    expect(requests.find((r) => r.method === "PUT")?.body).toEqual({ kind: "crs", epsg: 32633 });
-  });
-
-  it("offers no way back while the EPSG is unknown", async () => {
-    const { requests, container } = setup(LOCAL, { crs: 1, local: 2 }, [
-      { method: "GET", path: /\/maps$/, body: { items: [] } },
-    ]);
-    await waitFor(() => expect(requests.some((r) => r.method === "GET")).toBe(true));
-    expect(container).toBeEmptyDOMElement();
+  it("in the local frame switches back with {kind: crs} and no epsg (the server's rule M3)", async () => {
+    const { requests } = setup(LOCAL, { crs: 1, local: 1 });
+    const r0 = rev();
+    await userEvent.click(screen.getByRole("button", { name: "Site CRS · 1 item" }));
+    await waitFor(() => expect(rev()).toBe(r0 + 1));
+    expect(requests.map((r) => [r.method, r.body])).toEqual([["PUT", { kind: "crs" }]]);
   });
 
   it("toasts the server's message and does not re-read when the switch fails", async () => {
@@ -89,7 +68,7 @@ describe("FrameSwitch (spec M §6, M-B1 hand-off 1)", () => {
       },
     ]);
     const r0 = rev();
-    const button = screen.getByRole("button", { name: "Local metres · 2 items" });
+    const button = screen.getByRole("button", { name: "Local metres · 2 surfaces" });
     await userEvent.click(button);
     await waitFor(() =>
       expect(useToastStore.getState().toasts.map((t) => [t.tone, t.text])).toEqual([
@@ -114,7 +93,7 @@ describe("FrameSwitch (spec M §6, M-B1 hand-off 1)", () => {
     const stores = makeStores({ frame: UTM33 });
     stores.workspace.getState().setFrameItems({ crs: 4, local: 2 });
     renderInWorkspace(<FrameSwitch />, { stores, api });
-    const button = screen.getByRole("button", { name: /Local metres · 2 items/ });
+    const button = screen.getByRole("button", { name: /Local metres · 2 surfaces/ });
     await userEvent.click(button);
     expect(button).toBeDisabled();
     await userEvent.click(button);
