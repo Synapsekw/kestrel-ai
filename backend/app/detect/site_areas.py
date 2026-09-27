@@ -19,6 +19,7 @@ from app.detect.counts import recount_map_run
 from app.errors import AppError, not_found
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.maps import timeline
 from app.maps.georef import Georef
 from app.projects.service import ProjectHandle
 
@@ -142,7 +143,11 @@ def run_area_recount(ctx: JobContext) -> dict:
     site areas are projected once per map."""
     with ctx.project.session() as s:
         run_ids = list(
-            s.execute(select(MapRun.id, MapRun.map_id).order_by(MapRun.map_id, MapRun.created_at)).all()
+            s.execute(
+                select(MapRun.id, MapRun.map_id)
+                .where(timeline.survey_run_clause())
+                .order_by(MapRun.map_id, MapRun.created_at)
+            ).all()
         )
     total = len(run_ids)
     ctx.progress(0.0, f"Recounting {total} map runs")

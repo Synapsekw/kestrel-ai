@@ -301,3 +301,16 @@ def test_an_explicit_null_category_patch_is_refused(client, project_id):
     assert r.json()["error"]["code"] == "validation_error"
     items = client.get(f"{BASE}/{project_id}/site-areas").json()["items"]
     assert next(a for a in items if a["id"] == area["id"])["category"] == "general"
+
+
+def test_the_area_recount_skips_region_runs(client, project_id, handle, two_maps, wait_job):
+    with handle.session() as s:
+        _add_run(s, "run-region", "map-1", [("c1", 150, 150, "accepted")])
+        s.flush()
+        s.get(MapRun, "run-region").scope = "region"
+    body = {"name": "A", "polygon_wgs84": _wgs(_square(100, 100, 200, 200))}
+    assert client.post(f"{BASE}/{project_id}/site-areas", json=body).status_code == 201
+    job = _latest_recount(client, project_id, wait_job)
+    assert job["state"] == "succeeded" and job["result"]["runs"] == 2, job
+    with handle.session() as s:
+        assert s.get(MapRun, "run-region").area_counts == {}

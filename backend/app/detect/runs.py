@@ -30,6 +30,7 @@ from app.jobs.runner import JobContext
 from app.library import service as library
 from app.library.catalogue_port import CataloguePort
 from app.library.handle import LibraryHandle, library_unavailable
+from app.maps import timeline
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
 from app.providers.config import ProviderConfigStore
@@ -338,6 +339,13 @@ def set_pinned(handle: ProjectHandle, run_id: str, pinned: bool) -> RunSummary:
     map run's source is its map, so runs made before the map had a source are unpinned too."""
     with handle.session() as s:
         kind, row = _find(s, run_id)
+        if pinned and kind == "map" and not timeline.is_survey_run(row):
+            raise AppError(
+                "conflict",
+                "A region run counts only part of its map, so it cannot speak for the survey.",
+                409,
+                {"run_id": run_id},
+            )
         if pinned:
             if kind == "map":
                 others = update(MapRun).where(MapRun.map_id == row.map_id, MapRun.id != row.id)

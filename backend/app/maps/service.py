@@ -21,7 +21,7 @@ from app.errors import AppError, not_found
 # `model_id`, `provider`, `query` and `conf`, which `MapRunCreate` carries under the same names.
 from app.inference.service import _cost_per_request, _validate, class_ids_by_name
 from app.library.handle import LibraryHandle
-from app.maps import raster, scoring
+from app.maps import raster, scoring, timeline
 from app.maps.schemas import (
     GeoMapCreate,
     MapLabelCreate,
@@ -98,7 +98,7 @@ def timeline_rows(handle: ProjectHandle) -> tuple[list[GeoMap], dict[str, list[M
     """Every map of the project with its runs. Bounded: tens of rows, and never a detection."""
     with handle.session() as s:
         maps = list(s.execute(select(GeoMap)).scalars())
-        runs = list(s.execute(select(MapRun)).scalars())
+        runs = list(s.execute(select(MapRun).where(timeline.survey_run_clause())).scalars())
         for row in (*maps, *runs):
             s.expunge(row)
     by_map: dict[str, list[MapRun]] = {}
