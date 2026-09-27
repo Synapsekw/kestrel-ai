@@ -1,6 +1,7 @@
-import { Profiler, type ComponentProps } from "react";
+import { Profiler, StrictMode, type ComponentProps } from "react";
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useChangesStore } from "@/store/changes";
 import { makeStores } from "../test/harness";
 import { UTM33 } from "../test/fixtures";
 import { AUG, SEP, fakeOlMap, mapLayer, workspaceWrapper } from "../test/rasterFixtures";
@@ -18,9 +19,11 @@ type FakeLayer = {
 };
 const made: FakeLayer[] = [];
 let lastOnGone: (() => void) | null = null;
+let lastSrc: { extent: unknown } | null = null;
 vi.mock("./makeRasterLayer", () => ({
-  makeRasterLayer: (_src: unknown, ctx: { onGone: () => void }) => {
+  makeRasterLayer: (src: { extent: unknown }, ctx: { onGone: () => void }) => {
     lastOnGone = ctx.onGone;
+    lastSrc = src;
     const l = {
       setZIndex: vi.fn(),
       setOpacity: vi.fn(),
@@ -125,11 +128,53 @@ describe("RasterMount", () => {
     expect(made[1].on).not.toHaveBeenCalled();
   });
 
-  it("drops its layer when its tiles answer 404", () => {
+  it("drops its layer once when its tiles answer 404, however many tiles do", () => {
     const { map } = mount();
-    act(() => lastOnGone?.());
+    const rev = useChangesStore.getState().mapWorkspaceRevision;
+    act(() => {
+      lastOnGone?.();
+      lastOnGone?.();
+      lastOnGone?.();
+    });
     expect(useGoneLayers.getState().gone.has("map:sep")).toBe(true);
+    expect(useChangesStore.getState().mapWorkspaceRevision).toBe(rev + 1);
     expect(map.removeLayer).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a live layer on the map under StrictMode's double effects", () => {
+    const map = fakeOlMap();
+    render(
+      <StrictMode>
+        <RasterMount
+          row={row}
+          map={map as never}
+          side="right"
+          zIndex={3}
+          opacity={1}
+          style={{}}
+          projectId="p"
+          frame={UTM33}
+        />
+      </StrictMode>,
+      { wrapper: workspaceWrapper(makeStores()) },
+    );
+    const added = map.addLayer.mock.calls.map((c) => c[0] as FakeLayer);
+    const removed = map.removeLayer.mock.calls.map((c) => c[0] as FakeLayer);
+    const live = added.filter((l) => !removed.includes(l));
+    expect(live).toHaveLength(1);
+    expect(live[0].dispose).not.toHaveBeenCalled();
+    // Every layer ever built is either live or removed and disposed: nothing leaks.
+    for (const l of made) if (l !== live[0]) expect(l.dispose).toHaveBeenCalled();
+  });
+
+  it("uses the footprint as the extent only when it is four numbers", () => {
+    mount();
+    expect(lastSrc?.extent).toEqual([500000, 4981200, 502400, 4983000]);
+    const [bad] = baseMapRows({
+      layers: [mapLayer("bad", SEP, { footprint_site: [1, 2, 3] })],
+    });
+    mount(makeStores(), { row: bad });
+    expect(lastSrc?.extent).toBeNull();
   });
 
   it("clips a left-date row to the left side in Swipe", () => {
