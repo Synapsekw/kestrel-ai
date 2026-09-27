@@ -91,18 +91,9 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Images I-C0 stubs; each unit deletes its lines.
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "listImageMeasurements",  # I-BA
-    "createImageMeasurement",  # I-BA
-    "deleteImageMeasurement",  # I-BA
     "refreshImageMetadata",  # I-BK
-    "prepareImageSegment",  # I-BS
-    "segmentImage",  # I-BS
-    "listAssistModels",  # I-BS
-    "acquireAssistModel",  # I-BS
-    "importAssistModel",  # I-BS
     "detectImage",  # I-BP
     "detectImageBatch",  # I-BP
 }
@@ -133,10 +124,6 @@ BACKEND_PENDING: dict[str, str] = {
     # fields. Each unit deletes its lines once its routes fill them.
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
-    "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at
-    "createBox": "I-BA",  # BoxWriteResult; BoxCreate shapes
-    "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
-    "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
@@ -230,6 +217,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "addFindingAttachment": {422},
     # BC: a generated type that exists but is an object type (`not_a_defect`).
     "backfillCatalogueType": {422},
+    # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
+    "acquireAssistModel": {409},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

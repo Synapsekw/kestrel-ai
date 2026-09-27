@@ -10,7 +10,7 @@ import {
   type FindingAttachment,
 } from "@/api/findings";
 import { pushLog } from "@/app/diagnostics";
-import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { Alert, Button, Dialog, Icon, Input, cx, focusRing, lift, pressable, transition } from "@/ui";
 
 function refusal(e: unknown): string {
@@ -57,10 +57,9 @@ export function Attachments({ projectId, findingId }: { projectId: string; findi
     setBusy(true);
     setError(null);
     try {
-      await addAttachment(api, projectId, findingId, file);
+      await ownFindingsWrite([findingId], () => addAttachment(api, projectId, findingId, file));
       setPath("");
       setRevision((r) => r + 1);
-      useChangesStore.getState().bumpFindings();
     } catch (e) {
       setError(refusal(e));
     } finally {
@@ -79,10 +78,9 @@ export function Attachments({ projectId, findingId }: { projectId: string; findi
 
   async function remove(a: FindingAttachment) {
     try {
-      await deleteAttachment(api, projectId, findingId, a.id);
+      await ownFindingsWrite([findingId], () => deleteAttachment(api, projectId, findingId, a.id));
       setViewing(null);
       setRevision((r) => r + 1);
-      useChangesStore.getState().bumpFindings();
     } catch (e) {
       setError(messageOf(e, "could not remove the photo"));
     }

@@ -11,10 +11,10 @@ import pytest
 from pyproj import CRS
 from sqlalchemy import select
 
-from app.datasets import boxes
 from app.db.models import Box, GeoMap, Image, MapDetection, MapRun, QueryRun, SiteArea, Source
 from app.detect.areas import areas_for_map
 from app.detect.counts import recount_map_run, recount_query_run
+from app.imagery import annotations as boxes
 from app.maps.georef import Georef
 
 BASE = "/api/v1/projects"
@@ -315,7 +315,7 @@ def _query_counts(handle, run_id="q1") -> tuple[tuple, tuple]:
 
 
 def test_box_review_in_a_photo_run_updates_the_run_counts(handle, photo_run, cls):
-    assert boxes.review_boxes(handle, ["b1", "b3"], "accept") == 2
+    assert boxes.review_boxes(handle, ["b1", "b3"], "accept").changed == 2
     stored, fresh = _query_counts(handle)
     assert stored == fresh == ({cls[0]: 2, cls[1]: 1}, {cls[0]: 1, cls[1]: 1})
     boxes.review_boxes(handle, ["b2", "b3"], "reject")
@@ -345,7 +345,7 @@ def test_a_box_drawn_into_a_photo_run_counts_as_verified(handle, photo_run, cls)
 
 def test_boxes_outside_a_run_leave_run_counts_alone(handle, photo_run, cls):
     before = _query_counts(handle)[0]
-    box = boxes.create_box(handle, "i1", cls[0], 50, 50, 10, 10)
+    box = boxes.create_box(handle, "i1", cls[0], 50, 50, 10, 10).box
     boxes.update_box(handle, box.id, class_id=cls[1])
     boxes.delete_box(handle, box.id)
     assert _query_counts(handle)[0] == before
