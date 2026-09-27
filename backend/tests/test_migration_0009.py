@@ -85,7 +85,12 @@ def test_foreign_keys_carry_the_spec_actions(tmp_path):
                 return {(r[3], r[2], r[6]) for r in c.exec_driver_sql(f"PRAGMA foreign_key_list({table})")}
 
             assert fks("point_cloud") == {("map_id", "geo_map", "SET NULL")}
-            assert fks("cloud_measurement") == {("point_cloud_id", "point_cloud", "CASCADE")}
+            # migration 0013 (point-cloud workspace) adds cloud_measurement.finding_id (SET NULL);
+            # this helper opens at head, so the set below is head's, not 0009's alone.
+            assert fks("cloud_measurement") == {
+                ("point_cloud_id", "point_cloud", "CASCADE"),
+                ("finding_id", "finding", "SET NULL"),
+            }
             assert fks("surface") == {("point_cloud_id", "point_cloud", "SET NULL")}
             assert fks("volume_measurement") == {("top_surface_id", "surface", "RESTRICT")}
             indexes = {

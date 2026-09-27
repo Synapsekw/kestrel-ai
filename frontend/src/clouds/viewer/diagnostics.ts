@@ -1,3 +1,5 @@
+import type { CameraPose, EdlState, NavMode, ViewName } from "./types";
+
 /** The read-only diagnostics hook (spec §8): the packaged check and the acceptance read it. */
 export const DIAGNOSTICS_KEY = "kestrel.diagnostics";
 
@@ -21,6 +23,22 @@ export interface ColourSample {
   white: number;
 }
 
+/** `lastFrame()`: the frame hook's last camera, as plain JSON for page.evaluate. */
+export interface FrameCameraSample {
+  viewProj: number[];
+  rect: { left: number; top: number; width: number; height: number };
+  position: [number, number, number];
+  direction: [number, number, number];
+}
+
+/** `topSnapshotSample()`: the snapshot's size and the colours of its west and east halves. */
+export interface SnapshotSample {
+  width: number;
+  height: number;
+  left: ColourSample;
+  right: ColourSample;
+}
+
 export interface CloudViewerDiagnostics {
   stats(): ViewerStats;
   sampleColours(): ColourSample;
@@ -33,6 +51,19 @@ export interface CloudViewerDiagnostics {
   ): { x: number; y: number; z: number; level: number; uncertainty_m: number } | null;
   /** The keys of the overlays currently drawn ("measure", "pin", "footprint"), for the e2e tests. */
   overlays(): string[];
+  /** The last ≤ 600 frame times in ms, oldest first (spec §7; the perf runs read it over CDP). */
+  frameTimes(): number[];
+  setNavMode(mode: NavMode): void;
+  navMode(): NavMode;
+  setView(view: ViewName): void;
+  /** Turns the camera about the orbit target for `seconds`; resolves when done. */
+  scriptOrbit(seconds: number): Promise<void>;
+  cameraPose(): CameraPose | null;
+  lastFrame(): FrameCameraSample | null;
+  edl(): EdlState;
+  /** e2e only: SwiftShader resolves Auto effects to reduced, so EDL must be forced on (plan Ruling 14). */
+  setEdl(on: boolean): void;
+  topSnapshotSample(px?: number): Promise<SnapshotSample | null>;
 }
 
 declare global {

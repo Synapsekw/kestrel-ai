@@ -43,7 +43,8 @@ x-websocket:
     - `map_runs.changed`: `payload` is `{map_id, run_ids: [...]}` after a map detection run finishes.
     - `map_labels.changed`: `payload` is `{map_id}` after a zone or ground-truth label changes.
     - `pointclouds.changed`: `payload` is `{cloud_ids: [...]}` after a point cloud is created, changes
-      status, is patched or deleted, or one of its measurements changes.
+      status, is patched or deleted, one of its measurements changes (a profile turning `ready` or
+      `failed` included), a camera height offset is set, or a report view is stored.
     - `surfaces.changed`: `payload` is `{surface_ids: [...]}` after a surface (cloud DSM or design)
       is created, built, renamed or deleted, or its build is cancelled before it started.
     - `volumes.changed`: `payload` is `{measurement_ids: [...]}` after a volume measurement is
@@ -2648,11 +2649,21 @@ paths:
     delete:
       tags: [pointclouds]
       operationId: deletePointCloud
-      summary: Delete the cloud, its measurements and its folder under `pointclouds/`. The source file is untouched.
+      summary: |
+        Delete the cloud, its measurements, report views and camera offsets, and its folder under
+        `pointclouds/`. The source file is untouched. Findings anchored on the cloud are deleted only
+        with `delete_findings=true` (through the findings service, attachments and comments included);
+        otherwise the delete is refused with 409 `cloud_has_findings`.
+      parameters:
+        - name: delete_findings
+          in: query
+          required: false
+          description: "also delete the findings anchored on this cloud; false when absent"
+          schema: { type: boolean }
       responses:
         "204": { description: deleted }
         "409":
-          description: "its import or export job is queued or running (`code` is `job_running`)"
+          description: "its import or export job is queued or running (`code` is `job_running`), or findings are anchored on it and `delete_findings` is not true (`code` is `cloud_has_findings`, details `{count}`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2731,7 +2742,11 @@ paths:
     post:
       tags: [pointclouds]
       operationId: createCloudMeasurement
-      summary: Save a measurement. The server recomputes `results` from the points; a client never sends them.
+      summary: |
+        Save a measurement. The server recomputes `results` from the points; a client never sends
+        them. A `profile` is cut from the source file by a `pointcloud_profile` job: it answers 202
+        with the measurement at `status: computing` and its job, and `pointclouds.changed` reports it
+        `ready` or `failed`. Every other kind answers 201 at `status: ready`.
       requestBody:
         required: true
         content:
@@ -2743,13 +2758,18 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        "202":
+          description: "a profile measurement at `status: computing` and its `pointcloud_profile` job"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudMeasurementWithJob" }
         "409":
           description: "the cloud is not `ready` (`code` is `not_ready`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
         "422":
-          description: "the wrong number of points for the kind (`wrong_point_count`), a distance, height difference or vertical check on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error`"
+          description: "the wrong number of points for the kind (`wrong_point_count`), a distance, height difference, vertical check, area or profile on a cloud in a geographic CRS (`needs_projected_crs`), a `vertical` check whose points are less than 0.5 m apart vertically (`vertical_span_too_small`), an area whose outline crosses itself (`self_intersecting`) or has no area (`degenerate_polygon`), a ring with fewer than three points (`ring_needs_three_points`) or in a line (`collinear_ring`), a profile line outside the cloud or of zero length (`profile_out_of_range`), a `finding_id` that is not a cloud finding on this cloud (`invalid_finding`), or the cloud already has 1 000 measurements (`measurement_limit`); a malformed body is `validation_error`"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -2762,7 +2782,7 @@ paths:
     patch:
       tags: [pointclouds]
       operationId: updateCloudMeasurement
-      summary: Rename a measurement or change its note.
+      summary: Rename a measurement, change its note, or attach it to a cloud finding (null detaches it).
       requestBody:
         required: true
         content:
@@ -2774,6 +2794,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        "422":
+          description: "`finding_id` is not a cloud finding on this cloud (`code` is `invalid_finding`); a malformed body is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
         default: { $ref: "#/components/responses/Error" }
     delete:
       tags: [pointclouds]
@@ -2806,6 +2831,218 @@ paths:
               schema: { $ref: "#/components/schemas/JobRef" }
         "409":
           description: "the cloud is not `ready` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+
+  # ------------------------------------------------------------------ point cloud workspace (C, spec 2026-09-26 section 12)
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    post:
+      tags: [pointclouds]
+      operationId: retryCloudProfile
+      summary: Run the `pointcloud_profile` job again for a `failed` profile; the measurement goes back to `computing`.
+      responses:
+        "202":
+          description: job queued
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/JobRef" }
+        "409":
+          description: "the measurement is not a `failed` profile (`code` is `not_retryable`), or the cloud is not `ready` (`not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    get:
+      tags: [pointclouds]
+      operationId: getCloudProfile
+      summary: |
+        The stored cross-section of a `ready` profile, cut from the source file by its job: at most
+        500 000 points, gzip-compressed on the wire. A measurement of another kind is 404 `not_found`.
+      responses:
+        "200":
+          description: the profile
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudProfile" }
+        "409":
+          description: "the profile is still `computing`, or `failed` (`code` is `not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/view3d:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/cloudMeasurementId"
+    put:
+      tags: [pointclouds]
+      operationId: putCloudMeasurementView3d
+      summary: Store the measurement's report view (as `putFindingView3d`). Replaces the previous one; publishes `pointclouds.changed`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/CloudViewUpload" }
+            encoding:
+              meta: { contentType: application/json }
+      responses:
+        "200":
+          description: the stored view's metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudViewOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: "the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [pointclouds]
+      operationId: getCloudMeasurementView3d
+      summary: "The measurement's stored report view; `ETag` is the quoted sha256 of the bytes."
+      responses:
+        "200":
+          description: the image
+          headers:
+            ETag: { schema: { type: string }, description: "\"<sha256>\"" }
+            Cache-Control: { schema: { type: string }, description: "private, no-cache" }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404":
+          description: "the measurement does not exist (`code` is `not_found`) or has no view (`no_view`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/views:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    get:
+      tags: [pointclouds]
+      operationId: listCloudViews
+      summary: The metadata of every report view in the cloud (findings and measurements), no image bytes; at most 1 500.
+      responses:
+        "200":
+          description: the views
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudViewList" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+    get:
+      tags: [pointclouds]
+      operationId: getCloudCameras
+      summary: |
+        The project's drone photos near the cloud, reprojected into its CRS, as compact parallel
+        arrays: one column-only query, at most 20 000 cameras, no image file is read.
+      responses:
+        "200":
+          description: the cameras
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudCameraSet" }
+        "409":
+          description: "the cloud has no CRS (`code` is `needs_coordinates`) or is not `ready` (`not_ready`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/pointclouds/{cloudId}/cameras/offsets/{sourceId}:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/cloudId"
+      - $ref: "#/components/parameters/sourceId"
+    put:
+      tags: [pointclouds]
+      operationId: setCloudCameraOffset
+      summary: Set the height offset added to this image set's altitudes for this cloud; publishes `pointclouds.changed`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CloudCameraOffsetPut" }
+      responses:
+        "200":
+          description: the image set with its new offset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudCameraSource" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        default: { $ref: "#/components/responses/Error" }
+  /api/v1/projects/{projectId}/findings/{findingId}/view3d:
+    parameters:
+      - $ref: "#/components/parameters/projectId"
+      - $ref: "#/components/parameters/findingId"
+    put:
+      tags: [pointclouds]
+      operationId: putFindingView3d
+      summary: |
+        Store the report view of a cloud finding: a 1600 x 1000 PNG (a JPEG when the PNG is over
+        6 MiB) the workspace rendered, with the pose and render settings that took it. Replaces the
+        previous view; publishes `pointclouds.changed`. Owned by the point-cloud workspace.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema: { $ref: "#/components/schemas/CloudViewUpload" }
+            encoding:
+              meta: { contentType: application/json }
+      responses:
+        "200":
+          description: the stored view's metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CloudViewOut" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: "the finding is not anchored on a cloud (`code` is `not_a_cloud_finding`)"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "422":
+          description: "the image is not a 1600 x 1000 PNG or JPEG of at most 6 MiB (`code` is `bad_view_image`, details `{reason}`); a malformed `meta` is `validation_error`"
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        default: { $ref: "#/components/responses/Error" }
+    get:
+      tags: [pointclouds]
+      operationId: getFindingView3d
+      summary: "The cloud finding's stored report view (R's `view3d` source); `ETag` is the quoted sha256 of the bytes."
+      responses:
+        "200":
+          description: the image
+          headers:
+            ETag: { schema: { type: string }, description: "\"<sha256>\"" }
+            Cache-Control: { schema: { type: string }, description: "private, no-cache" }
+          content:
+            image/png:
+              schema: { type: string, format: binary }
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "404":
+          description: "the finding does not exist (`code` is `not_found`) or has no view (`no_view`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -5691,10 +5928,10 @@ components:
                 type deletes its finding; retry with `confirm_finding_delete=true`),
                 attachment_invalid (422: not a JPEG, PNG or WebP, or over 50 MB; details
                 `{reason}`), task_not_supported (422: a task this build cannot write or train),
-                task_mismatch (422: the base model's task differs from the dataset's), class_in_use
-                (409: also counts findings;
-                details `{type_id, box_count, finding_count}`), model_or_provider_required (422: a
-                run has neither a library `model_id` nor a cloud `provider`), query_required (422:
+                task_mismatch (422: the base model's task differs from the dataset's),
+                class_in_use (409: also counts findings; details `{type_id, box_count,
+                finding_count}`), model_or_provider_required (422: a run has neither a library
+                `model_id` nor a cloud `provider`), query_required (422:
                 a cloud-provider run's `query` is blank), invalid_outline (422: a site area's
                 outline breaks the `polygon_wgs84` / `map_id`+`polygon_px` shape rule),
                 state_too_large (422: the map workspace state is over 64 KB), local_frame (422: the
@@ -5715,8 +5952,16 @@ components:
                 not_elevation, geographic_output and non_metric_output (422: an elevation import
                 that is not a single-band elevation raster, or would be written in a geographic or
                 non-metric CRS), invalid_patch (422: a date or role patch on a surface that is not a
-                dem). A 501 not_implemented for an option of an existing operation carries details
-                `{option, unit}`.
+                dem),
+                self_intersecting, degenerate_polygon, ring_needs_three_points, collinear_ring,
+                profile_out_of_range and invalid_finding (422: a point-cloud measurement;
+                invalid_finding is a `finding_id` that is not a cloud finding on that cloud),
+                not_retryable (409: only a failed profile can be retried), needs_coordinates (409:
+                the cloud has no CRS), cloud_has_findings (409: findings are anchored on the cloud;
+                details `{count}`), not_a_cloud_finding (409: a report view for a finding with
+                another anchor kind), bad_view_image (422: not a 1600 x 1000 PNG or JPEG of at most
+                6 MiB; details `{reason}`), no_view (404: no report view is stored). A 501
+                not_implemented for an option of an existing operation carries details `{option, unit}`.
             message: { type: string }
             details:
               type: object
@@ -8640,7 +8885,11 @@ components:
         admission: { $ref: "#/components/schemas/PointCloudAdmission" }
     CloudMeasurementKind:
       type: string
-      enum: [point, distance, height, vertical]
+      enum: [point, distance, height, vertical, area, profile]
+    CloudMeasurementStatus:
+      type: string
+      description: "only a profile is ever `computing` (its `pointcloud_profile` job runs) or `failed`"
+      enum: [ready, computing, failed]
     CloudMeasurementPoint:
       type: object
       required: [x, y, z, uncertainty_m]
@@ -8649,6 +8898,21 @@ components:
         y: { type: number }
         z: { type: number }
         uncertainty_m: { type: number, minimum: 0, description: the display spacing of the deepest loaded node that contains the pick }
+        group: { type: [integer, "null"], minimum: 0, maximum: 1, description: "a rings vertical check: 0 is the lower ring and 1 the upper; null or absent for every other kind" }
+    CloudMeasurementParams:
+      type: object
+      additionalProperties: false
+      description: "per kind: area `{mode}`, vertical `{method}`, profile `{thickness_m, max_points}`; `view_dir` is the camera direction at save, used only to orient `plane_azimuth_deg`. A key that does not apply is absent or null"
+      properties:
+        mode: { type: [string, "null"], enum: [surface, plan, null], description: "area: which area is primary; surface when absent" }
+        method: { type: [string, "null"], enum: [points, rings, null], description: "vertical: two picks, or two fitted rings (6 to 64 points with `group` 0 and 1, at least 3 each); points when absent" }
+        thickness_m: { type: [number, "null"], minimum: 0.01, maximum: 5, description: "profile: the slab thickness; 0.20 when absent" }
+        max_points: { type: [integer, "null"], minimum: 1000, maximum: 500000, description: "profile: the stored point cap; 200 000 when absent" }
+        view_dir:
+          type: [array, "null"]
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
     CloudMeasurementCreate:
       type: object
       required: [kind, points]
@@ -8656,22 +8920,28 @@ components:
         kind: { $ref: "#/components/schemas/CloudMeasurementKind" }
         points:
           type: array
-          description: one point for `point`, two for the other kinds
+          description: "point 1; distance, height and vertical (points) 2; vertical (rings) 6 to 64 with `group`; area 3 to 200 (the outline, not closed); profile 2 (the section line A, B)"
           items: { $ref: "#/components/schemas/CloudMeasurementPoint" }
           minItems: 1
-          maxItems: 2
+          maxItems: 200
         name: { type: string, minLength: 1, maxLength: 200, description: "\"Distance 3\"-style numbering when absent" }
         note: { type: string, maxLength: 2000 }
+        params:
+          oneOf:
+            - $ref: "#/components/schemas/CloudMeasurementParams"
+            - type: "null"
+        finding_id: { type: [string, "null"], description: "attach to this finding (a cloud finding on this cloud); null or absent for none" }
     CloudMeasurementUpdate:
       type: object
       additionalProperties: false
       properties:
         name: { type: string, minLength: 1, maxLength: 200 }
         note: { type: [string, "null"], maxLength: 2000, description: null clears it }
+        finding_id: { type: [string, "null"], description: "attach to this cloud finding on this cloud; null detaches" }
     CloudMeasurementResults:
       type: object
       description: computed by the server from the stored points; a quantity that does not apply to the kind is null
-      required: [lon, lat, dx, dy, dz, distance_3d, distance_horizontal, distance_vertical, height_difference, lean_offset_m, lean_angle_deg, lean_azimuth_deg, lean_mm_per_m, uncertainty_m, angle_uncertainty_deg]
+      required: [lon, lat, dx, dy, dz, distance_3d, distance_horizontal, distance_vertical, height_difference, lean_offset_m, lean_angle_deg, lean_azimuth_deg, lean_mm_per_m, uncertainty_m, angle_uncertainty_deg, area_m2, area_surface_m2, area_plan_m2, perimeter_m, plane_rms_m, plane_tilt_deg, plane_azimuth_deg, uncertainty_m2, ring_radius_lower_m, ring_radius_upper_m, ring_rms_lower_m, ring_rms_upper_m, profile_length_m, profile_z_min, profile_z_max, profile_width_max_m, profile_point_count]
       properties:
         lon: { type: [number, "null"] }
         lat: { type: [number, "null"] }
@@ -8688,9 +8958,26 @@ components:
         lean_mm_per_m: { type: [number, "null"] }
         uncertainty_m: { type: [number, "null"] }
         angle_uncertainty_deg: { type: [number, "null"] }
+        area_m2: { type: [number, "null"], description: "the primary area (`params.mode`)" }
+        area_surface_m2: { type: [number, "null"], description: "on the polygon's best-fit plane (Newell)" }
+        area_plan_m2: { type: [number, "null"], description: projected horizontally }
+        perimeter_m: { type: [number, "null"] }
+        plane_rms_m: { type: [number, "null"], description: the vertices' RMS distance from the best-fit plane }
+        plane_tilt_deg: { type: [number, "null"], description: "the plane's tilt from horizontal (0 is a slab, 90 a wall)" }
+        plane_azimuth_deg: { type: [number, "null"], description: "the plane normal's bearing, clockwise from grid north" }
+        uncertainty_m2: { type: [number, "null"] }
+        ring_radius_lower_m: { type: [number, "null"] }
+        ring_radius_upper_m: { type: [number, "null"] }
+        ring_rms_lower_m: { type: [number, "null"] }
+        ring_rms_upper_m: { type: [number, "null"] }
+        profile_length_m: { type: [number, "null"] }
+        profile_z_min: { type: [number, "null"] }
+        profile_z_max: { type: [number, "null"] }
+        profile_width_max_m: { type: [number, "null"] }
+        profile_point_count: { type: [integer, "null"] }
     CloudMeasurementOut:
       type: object
-      required: [id, point_cloud_id, kind, name, note, points, results, created_at, updated_at]
+      required: [id, point_cloud_id, kind, name, note, points, results, params, status, error, job_id, finding_id, view, created_at, updated_at]
       properties:
         id: { type: string }
         point_cloud_id: { type: string }
@@ -8701,8 +8988,21 @@ components:
           type: array
           items: { $ref: "#/components/schemas/CloudMeasurementPoint" }
           minItems: 1
-          maxItems: 2
+          maxItems: 200
         results: { $ref: "#/components/schemas/CloudMeasurementResults" }
+        params:
+          oneOf:
+            - $ref: "#/components/schemas/CloudMeasurementParams"
+            - type: "null"
+        status: { $ref: "#/components/schemas/CloudMeasurementStatus" }
+        error: { type: [string, "null"], description: "why a profile failed; null otherwise" }
+        job_id: { type: [string, "null"], description: "the profile's `pointcloud_profile` job" }
+        finding_id: { type: [string, "null"], description: the cloud finding this measurement is attached to }
+        view:
+          description: its stored report view (metadata only); null when there is none
+          oneOf:
+            - $ref: "#/components/schemas/CloudViewOut"
+            - type: "null"
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
     CloudMeasurementList:
@@ -8712,12 +9012,204 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/CloudMeasurementOut" }
+    CloudMeasurementWithJob:
+      type: object
+      required: [measurement, job]
+      properties:
+        measurement: { $ref: "#/components/schemas/CloudMeasurementOut" }
+        job: { $ref: "#/components/schemas/Job" }
     PointCloudExportRequest:
       type: object
       required: [format]
       properties:
         format: { type: string, enum: [laz] }
         include_measurements: { type: boolean, description: "true when absent: write measurements.csv when the cloud has measurements" }
+    # ------------------------------------------------------------ point cloud workspace (C)
+    CloudViewPose:
+      type: object
+      additionalProperties: false
+      description: "the camera that took a report view, in the cloud's native CRS; `fov_deg` is vertical and the aspect is fixed at 1.6"
+      required: [position, target, up, fov_deg]
+      properties:
+        position: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        target: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        up: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        fov_deg: { type: number, exclusiveMinimum: 0, exclusiveMaximum: 180 }
+    CloudClipBox:
+      type: object
+      additionalProperties: false
+      required: [centre, size, yaw_deg, mode]
+      properties:
+        centre: { type: array, items: { type: number }, minItems: 3, maxItems: 3 }
+        size: { type: array, items: { type: number, exclusiveMinimum: 0 }, minItems: 3, maxItems: 3 }
+        yaw_deg: { type: number, description: rotation about Z }
+        mode: { type: string, enum: [show_inside, highlight_inside] }
+    CloudViewRender:
+      type: object
+      additionalProperties: false
+      description: the render settings on screen at capture, so a re-capture reproduces the view
+      required: [colour_mode, point_budget, point_size, edl, clip_box, complete]
+      properties:
+        colour_mode: { type: string, enum: [rgb, elevation, intensity, classification] }
+        point_budget: { type: integer, minimum: 1000000, maximum: 8000000 }
+        point_size: { type: number, exclusiveMinimum: 0, maximum: 10 }
+        edl: { type: boolean }
+        clip_box:
+          oneOf:
+            - $ref: "#/components/schemas/CloudClipBox"
+            - type: "null"
+        complete: { type: boolean, description: "false when the capture timed out before every node had loaded" }
+    CloudViewSubjectKind:
+      type: string
+      enum: [finding, cloud_measurement]
+    CloudViewOut:
+      type: object
+      description: "a stored report view's metadata (the image is served by the `view3d` GET); `stale` is computed on read"
+      required: [subject_kind, subject_id, pose, render, anchor_normal, sha256, bytes, width, height, captured_at, stale]
+      properties:
+        subject_kind: { $ref: "#/components/schemas/CloudViewSubjectKind" }
+        subject_id: { type: string }
+        pose: { $ref: "#/components/schemas/CloudViewPose" }
+        render: { $ref: "#/components/schemas/CloudViewRender" }
+        anchor_normal:
+          type: [array, "null"]
+          description: "findings only: the unit surface normal at the pin; null when unknown"
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+        sha256: { type: string, description: "of the image bytes; the GET's `ETag`" }
+        bytes: { type: integer, minimum: 1, maximum: 6291456 }
+        width: { type: integer }
+        height: { type: integer }
+        captured_at: { type: string, format: date-time }
+        stale: { type: boolean, description: "the subject's geometry changed since the capture" }
+      example:
+        subject_kind: finding
+        subject_id: "f0000000-7777-4000-8000-000000000001"
+        pose: { position: [243540.2, 3178030.5, 12.4], target: [243552.0, 3178041.0, -20.1], up: [0, 0, 1], fov_deg: 50 }
+        render: { colour_mode: rgb, point_budget: 3000000, point_size: 1.4, edl: true, clip_box: null, complete: true }
+        anchor_normal: [0.71, -0.70, 0.05]
+        sha256: "3a7bd3e2360a3d29eea436fcfb7e44c735d117c42d1c1835420b6b9942dd4f1b"
+        bytes: 2311840
+        width: 1600
+        height: 1000
+        captured_at: "2026-09-27T10:00:00Z"
+        stale: false
+    CloudViewMeta:
+      type: object
+      additionalProperties: false
+      required: [pose, render]
+      properties:
+        pose: { $ref: "#/components/schemas/CloudViewPose" }
+        render: { $ref: "#/components/schemas/CloudViewRender" }
+        anchor_normal:
+          type: [array, "null"]
+          description: "findings only: the unit surface normal at the pin; null or absent when unknown"
+          items: { type: number }
+          minItems: 3
+          maxItems: 3
+    CloudViewUpload:
+      type: object
+      required: [image, meta]
+      properties:
+        image: { type: string, format: binary, description: "PNG or JPEG, exactly 1600 x 1000, at most 6 MiB" }
+        meta: { $ref: "#/components/schemas/CloudViewMeta" }
+    CloudViewList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          maxItems: 1500
+          items: { $ref: "#/components/schemas/CloudViewOut" }
+      example:
+        items: []
+    CloudProfile:
+      type: object
+      description: "a stored cross-section: s (metres along the line from A) against z, thinned to at most `max_points`"
+      required: [s, z, rgb, count, thickness_m, length_m]
+      properties:
+        s: { type: array, items: { type: number }, maxItems: 500000 }
+        z: { type: array, items: { type: number }, maxItems: 500000 }
+        rgb:
+          type: [array, "null"]
+          description: "r, g, b per point (3 x `count` values); null when the cloud has no colour"
+          items: { type: integer, minimum: 0, maximum: 255 }
+          maxItems: 1500000
+        count: { type: integer, minimum: 0 }
+        thickness_m: { type: number }
+        length_m: { type: number }
+      example:
+        s: [0.0, 0.5, 1.0]
+        z: [-44.8, -44.7, -30.2]
+        rgb: [120, 120, 118, 121, 119, 117, 200, 40, 30]
+        count: 3
+        thickness_m: 0.2
+        length_m: 12.84
+    CloudCameraSource:
+      type: object
+      required: [id, label, count, height_offset_m, posed_count]
+      properties:
+        id: { type: string, description: the image set (source) id }
+        label: { type: string, description: "the set's label, else its site, else its folder name" }
+        count: { type: integer, minimum: 0, description: this set's cameras in the payload }
+        height_offset_m: { type: number, minimum: -500, maximum: 500 }
+        posed_count: { type: integer, minimum: 0, description: those with a gimbal pose }
+      example: { id: "s0000000-3333-4000-8000-000000000001", label: "Flight 14 Sep", count: 2, height_offset_m: -31.5, posed_count: 1 }
+    CloudCameraOffsetPut:
+      type: object
+      additionalProperties: false
+      required: [height_offset_m]
+      properties:
+        height_offset_m: { type: number, minimum: -500, maximum: 500 }
+    CloudCameraSet:
+      type: object
+      description: |
+        The drone photos near a cloud as parallel arrays (index i is one camera) in the cloud's
+        native CRS: at most 20 000, ordered by capture time, `truncated` when more exist.
+      required: [image_id, source_idx, x, y, z, yaw, pitch, roll, hfov, vfov, fov_assumed, width, height, sigma_m, sources, truncated, z_p1, z_p99, without_gps]
+      properties:
+        image_id: { type: array, items: { type: string }, maxItems: 20000 }
+        source_idx: { type: array, items: { type: integer, minimum: 0 }, maxItems: 20000, description: "an index into `sources`" }
+        x: { type: array, items: { type: number }, maxItems: 20000 }
+        y: { type: array, items: { type: number }, maxItems: 20000 }
+        z: { type: array, items: { type: [number, "null"] }, maxItems: 20000, description: "EXIF altitude plus the set's height offset; null without an altitude" }
+        yaw: { type: array, items: { type: [number, "null"] }, maxItems: 20000, description: "grid yaw in degrees, clockwise from grid north; null without a pose" }
+        pitch: { type: array, items: { type: [number, "null"] }, maxItems: 20000, description: "degrees, -90 is nadir; null without a pose" }
+        roll: { type: array, items: { type: [number, "null"] }, maxItems: 20000 }
+        hfov: { type: array, items: { type: number }, maxItems: 20000, description: horizontal field of view in degrees }
+        vfov: { type: array, items: { type: number }, maxItems: 20000 }
+        fov_assumed: { type: array, items: { type: boolean }, maxItems: 20000, description: "true when the FOV is the assumed 84 degree diagonal" }
+        width: { type: array, items: { type: integer }, maxItems: 20000, description: "the stored image's pixel size" }
+        height: { type: array, items: { type: integer }, maxItems: 20000 }
+        sigma_m: { type: array, items: { type: number }, maxItems: 20000, description: "position uncertainty; 3.0 until an RTK flag exists" }
+        sources:
+          type: array
+          items: { $ref: "#/components/schemas/CloudCameraSource" }
+        truncated: { type: boolean }
+        z_p1: { type: [number, "null"], description: "the cloud's `z_stats.p1`, for the plausibility check" }
+        z_p99: { type: [number, "null"], description: "the cloud's `z_stats.p99`" }
+        without_gps: { type: integer, minimum: 0, description: "project images with no GPS position (lat or lon null), one COUNT query; the cloud panel shows it as \"n photos without GPS\"" }
+      example:
+        image_id: ["i0000000-5555-4000-8000-000000000001", "i0000000-5555-4000-8000-000000000002"]
+        source_idx: [0, 0]
+        x: [243540.2, 243561.9]
+        y: [3178030.5, 3178044.1]
+        z: [12.4, null]
+        yaw: [131.2, null]
+        pitch: [-45.0, null]
+        roll: [0.0, null]
+        hfov: [73.7, 73.7]
+        vfov: [53.1, 53.1]
+        fov_assumed: [false, true]
+        width: [2048, 2048]
+        height: [1536, 1536]
+        sigma_m: [3.0, 3.0]
+        sources: [{ id: "s0000000-3333-4000-8000-000000000001", label: "Flight 14 Sep", count: 2, height_offset_m: -31.5, posed_count: 1 }]
+        truncated: false
+        z_p1: -45.9
+        z_p99: -5.1
+        without_gps: 0
     # ------------------------------------------------------------ surfaces and volumes (S2)
     SurfaceKind:
       type: string
@@ -9310,7 +9802,7 @@ components:
         accepted_warnings: { type: array, items: { type: string } }
     JobType:
       type: string
-      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import]
+      enum: [import, dataset, train, infer, export, results_export, map_import, map_detect, map_export, library_import, library_export, library_starter, library_adopt, map_move, accept_above, recount, area_recount, detect_export, pointcloud_import, pointcloud_export, surface_build, volume_calc, volume_export, design_import, project_migrate, findings_backfill, findings_recount, dataset_build, image_metadata, summary_rebuild, assist_acquire, elevation_import, drawing_import, pointcloud_profile]
     JobState:
       type: string
       enum: [queued, running, succeeded, failed, cancelled]
@@ -9331,7 +9823,7 @@ components:
         result:
           type: [object, "null"]
           additionalProperties: true
-          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build)"
+          description: "type-specific: import {source_id, imported, duplicates, failed}; dataset {dataset_id}; train {model_id, metrics} (a library model id); infer {query_run_id, boxes}; library_import and library_starter {model_id}; library_export {format, path}; accept_above {run_id, accepted}; recount {run_id}; area_recount {runs}; detect_export {format, paths}; project_migrate {folder, report_path}; findings_backfill {projects, created}; findings_recount {findings}; dataset_build {dataset_id}; image_metadata {images, updated, skipped}; summary_rebuild {images}; assist_acquire {key}; elevation_import {surface_id}; drawing_import {inspection_id} (phase inspect) or {drawing_id} (phase build); pointcloud_profile {measurement_id, count}"
         error: { type: [string, "null"] }
         created_at: { type: string, format: date-time }
         started_at: { type: [string, "null"], format: date-time }

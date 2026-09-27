@@ -72,8 +72,11 @@ def patch_point_cloud(
 
 @sub.delete("/pointclouds/{cloudId}", status_code=204)
 def delete_point_cloud(
-    cloudId: str, request: Request, handle: ProjectHandle = Depends(get_project)
-) -> Response:  # noqa: N803
-    service.delete_cloud(handle, cloudId, request.app.state.jobs.is_live)
+    cloudId: str,  # noqa: N803
+    request: Request,
+    delete_findings: bool = False,
+    handle: ProjectHandle = Depends(get_project),
+) -> Response:
+    service.delete_cloud(handle, cloudId, request.app.state.jobs.is_live, delete_findings=delete_findings)
     publish_pointclouds_changed(request, handle, [cloudId])
     return Response(status_code=204)

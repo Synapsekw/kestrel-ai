@@ -67,6 +67,14 @@ def project_opened(handle, runner) -> None:
         ("agent turn sweep", lambda: agent_store.sweep_interrupted(handle)),
         ("interrupted map import sweep", lambda: maps_startup.sweep_interrupted_imports(handle, runner)),
         ("interrupted point cloud import sweep", sweep("app.pointclouds.startup")),
+        (
+            "interrupted cloud profile sweep",
+            lambda: importlib.import_module("app.pointclouds.startup").sweep_profiles(handle, runner),
+        ),
+        (
+            "orphan cloud view sweep",
+            lambda: importlib.import_module("app.pointclouds.startup").sweep_views(handle),
+        ),
         ("interrupted surface build sweep", sweep("app.surfaces.startup")),
         ("interrupted volume calculation sweep", sweep("app.volumes.startup")),
         ("stale design inspection sweep", sweep("app.surfaces.design.startup")),
@@ -74,6 +82,10 @@ def project_opened(handle, runner) -> None:
         (
             "project type snapshot refresh",
             lambda: importlib.import_module("app.catalogue.project_types").refresh_handle(handle),
+        ),
+        (
+            "image summary check",
+            lambda: importlib.import_module("app.imagery.jobs_summary").check_on_open(handle, runner),
         ),
         # After the orphan sweep, so an adoption job a crash left `running` does not block a new one.
         ("model adoption", lambda: adoption.submit_if_pending(handle, runner)),

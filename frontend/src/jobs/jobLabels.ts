@@ -21,6 +21,7 @@ const TYPE_LABEL: Record<Job["type"], string> = {
   detect_export: "Detection export",
   pointcloud_import: "Point cloud import",
   pointcloud_export: "Point cloud export",
+  pointcloud_profile: "Cross-section profile",
   surface_build: "Build surface",
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",
@@ -145,6 +146,10 @@ export function resultTarget(job: Job, projectId: string): ResultTarget | null {
     case "pointcloud_import":
     case "pointcloud_export":
       return { label: "Open point clouds", to: `${p}/clouds` };
+    case "pointcloud_profile": {
+      const cloud = str(job.params, "cloud_id");
+      return { label: "Open point cloud", to: cloud ? `${p}/clouds/${cloud}` : `${p}/clouds` };
+    }
     case "surface_build":
     case "volume_calc":
     case "volume_export":

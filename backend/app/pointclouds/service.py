@@ -6,10 +6,12 @@ import shutil
 from collections.abc import Callable
 from pathlib import Path
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
-from app.db.models import GeoMap, Job, PointCloud, Surface
+from app.db.models import Finding, GeoMap, Job, PointCloud, Surface
 from app.errors import AppError, not_found
+from app.findings import service as findings_service
+from app.findings import trash as findings_trash
 from app.pointclouds import admission, converter_path, rows
 from app.pointclouds.crs import bounds_wgs84, crs_from_epsg
 from app.pointclouds.lasfile import HeaderInfo, UnsupportedCloud, inspect_file
@@ -214,7 +216,15 @@ def patch_cloud(handle: ProjectHandle, cloud_id: str, body: PointCloudPatch) -> 
     return row
 
 
-def delete_cloud(handle: ProjectHandle, cloud_id: str, is_live: Callable[[str], bool]) -> None:
+def delete_cloud(
+    handle: ProjectHandle, cloud_id: str, is_live: Callable[[str], bool], *, delete_findings: bool = False
+) -> list[str]:
+    """Delete a cloud (measurements, offsets and views go by ON DELETE CASCADE) and its folder.
+
+    Findings anchored on it are inspection evidence (spec C14). Without `delete_findings` they refuse
+    the delete with 409 `cloud_has_findings {count}`. With it, they go through F's finding service in
+    the same transaction, and their files go to F's trash after commit. Returns the deleted finding ids.
+    """
     with handle.session() as s:
         row = s.get(PointCloud, cloud_id)
         if row is None:
@@ -227,5 +237,27 @@ def delete_cloud(handle: ProjectHandle, cloud_id: str, is_live: Callable[[str], 
             raise AppError(
                 "job_running", "the point cloud has an import or export running; cancel it first", 409
             )
-        s.delete(row)  # measurements go with it (ON DELETE CASCADE)
+        n = s.execute(
+            select(func.count())
+            .select_from(Finding)
+            .where(Finding.anchor_kind == "cloud", Finding.cloud_id == cloud_id)
+        ).scalar_one()
+        if n and not delete_findings:
+            noun = "finding" if n == 1 else "findings"
+            raise AppError(
+                "cloud_has_findings",
+                f"{row.name} has {n} {noun} anchored on it; delete them with the cloud, or keep the cloud",
+                409,
+                {"count": n},
+            )
+        finding_ids = (
+            findings_service.delete_for_anchor(
+                s, project_id=handle.id, anchor_kind="cloud", target_id=cloud_id
+            )
+            if n
+            else []
+        )
+        s.delete(row)  # measurements, camera offsets and report views go with it (ON DELETE CASCADE)
+    findings_trash.move(handle, finding_ids)
     shutil.rmtree(rows.cloud_dir(handle, cloud_id), ignore_errors=True)
+    return finding_ids

@@ -19,6 +19,7 @@ fix, this fails exactly like the frozen build did.
 
 from __future__ import annotations
 
+import functools
 import json
 import re
 import subprocess
@@ -38,8 +39,9 @@ def _extract_dynamic_app_modules() -> set[str]:
     return names
 
 
-def test_dynamically_loaded_app_modules_are_covered_by_the_spec_hiddenimports():
-    targets = _extract_dynamic_app_modules()
+@functools.lru_cache(maxsize=1)
+def _spec_hiddenimports() -> frozenset[str]:
+    """The spec's `hiddenimports`, computed the way a pyinstaller.exe run sees them (see the ADR)."""
     spec_src = (BACKEND / "kestrel_backend.spec").read_text("utf-8")
     prelude, sep, _ = spec_src.partition("\ndatas = (")
     assert sep, "kestrel_backend.spec's shape changed: no 'datas = (' to stop the prelude at"
@@ -71,8 +73,33 @@ def test_dynamically_loaded_app_modules_are_covered_by_the_spec_hiddenimports():
         timeout=120,
     )
     assert result.returncode == 0, f"probe subprocess failed:\n{result.stdout}\n{result.stderr}"
-    hidden = set(json.loads(result.stdout.strip().splitlines()[-1]))
-    missing = targets - hidden
+    return frozenset(json.loads(result.stdout.strip().splitlines()[-1]))
+
+
+# Smart polygon (spec 2026-09-26-image-inspection §21 risk 2): the SAM 2.1 builder and predictor are
+# reached only when the first segment call imports app.assist.ultralytics_backend through importlib.
+SAM_MODULES = {
+    "app.assist.router",
+    "app.assist.ultralytics_backend",
+    "app.assist.jobs_acquire",
+    "ultralytics.models.sam",
+    "ultralytics.models.sam.build",
+    "ultralytics.models.sam.predict",
+    "ultralytics.models.sam.modules.encoders",
+    "ultralytics.models.sam.modules.decoders",
+    "ultralytics.models.sam.modules.sam",
+    "ultralytics.models.sam.modules.memory_attention",
+}
+
+
+def test_the_sam_modules_are_in_the_spec_hiddenimports():
+    missing = SAM_MODULES - _spec_hiddenimports()
+    assert not missing, f"kestrel_backend.spec's hiddenimports does not cover: {sorted(missing)}"
+
+
+def test_dynamically_loaded_app_modules_are_covered_by_the_spec_hiddenimports():
+    targets = _extract_dynamic_app_modules()
+    missing = targets - _spec_hiddenimports()
     assert not missing, f"kestrel_backend.spec's hiddenimports does not cover: {sorted(missing)}"
 
 
