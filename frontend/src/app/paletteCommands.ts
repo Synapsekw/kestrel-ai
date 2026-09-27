@@ -1,5 +1,6 @@
 import type { ApiClient, ClassDef, components } from "@contract/client";
 import { unwrap } from "@/api/errors";
+import { findingPath } from "@/findings/links";
 import type { Command, CommandSource, IconName } from "@/ui";
 import type { AddDataTile } from "./addDataStore";
 import type { RouteAction } from "./routeActions";
@@ -198,7 +199,7 @@ export function projectSearchSources(
           title: `${formatFindingNumber(f.number)} · ${typeName(f.type_id)}`,
           hint: excerpt(f.note),
           icon: "findings" as IconName,
-          run: () => go(`/p/${projectId}/findings/${f.id}`),
+          run: () => go(findingPath(projectId, f.id)),
         })),
     },
     {
