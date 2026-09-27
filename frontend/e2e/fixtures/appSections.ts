@@ -142,7 +142,13 @@ export const LIB_DATASET = {
   name: "machines-v1",
   task: "detect",
   origin: "built",
-  filter: { project_ids: [P], type_ids: ["t-1", "t-2"], captured_from: null, captured_to: null, reviewed_only: true },
+  filter: {
+    project_ids: [P],
+    type_ids: ["t-1", "t-2"],
+    captured_from: null,
+    captured_to: null,
+    reviewed_only: true,
+  },
   classes: [
     { type_id: "t-1", name: "Excavator" },
     { type_id: "t-2", name: "Dump truck" },
@@ -156,7 +162,9 @@ export const LIB_DATASET = {
   legacy_path: null,
   job_id: "j-build",
   created_at: T0,
-  sources: [{ project_id: P, project_name: "Ahmadia", project_folder: "E:\\Projects\\Ahmadia", image_count: 30 }],
+  sources: [
+    { project_id: P, project_name: "Ahmadia", project_folder: "E:\\Projects\\Ahmadia", image_count: 30 },
+  ],
 };
 
 /** A queued library job; `patch` sets the id, type and params (export, build and training fixtures). */
@@ -179,9 +187,17 @@ export function libraryJob(patch: Record<string, unknown>) {
   };
 }
 
+export const RECENT_PROJECT = { id: P, name: "Ahmadia", folder: "E:\\Projects\\Ahmadia", classes: [] };
+
+export const PREVIEW = {
+  images: 30,
+  boxes_per_type: { "t-1": 40, "t-2": 72 },
+  projects: [{ project_id: P, project_name: "Ahmadia", images: 30, boxes: 112, state: "ok" }],
+};
+
 export const EXPORT_JOB = libraryJob({ id: "j-export", type: "dataset", params: { dataset_id: "d-lib-1" } });
 
-/** Routes every `/library/datasets…` request to fixtures (Task 10 adds preview and create). */
+/** Routes every `/library/datasets…` request to fixtures, the builder's preview and create included. */
 export async function routeDatasets(page: import("@playwright/test").Page): Promise<void> {
   await page.route(
     (url) => url.pathname.startsWith("/api/v1/library/datasets"),
@@ -190,9 +206,20 @@ export async function routeDatasets(page: import("@playwright/test").Page): Prom
       const method = route.request().method();
       if (pathname === "/api/v1/library/datasets" && method === "GET")
         return fulfilJson(route, { items: [LIB_DATASET], next_cursor: null });
+      if (pathname.endsWith("/preview")) return fulfilJson(route, PREVIEW);
+      if (pathname === "/api/v1/library/datasets" && method === "POST")
+        return fulfilJson(
+          route,
+          {
+            dataset: { ...LIB_DATASET, id: "d-lib-2", name: "machines-v2", state: "resolving" },
+            job: libraryJob({ id: "j-build-2", type: "dataset_build" }),
+          },
+          202,
+        );
       if (pathname.endsWith("/items")) return fulfilJson(route, { items: [], next_cursor: null });
       if (pathname.endsWith("/export")) return fulfilJson(route, { job: EXPORT_JOB }, 202);
-      if (method === "DELETE") return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*" } });
+      if (method === "DELETE")
+        return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*" } });
       return fulfilJson(route, LIB_DATASET);
     },
   );

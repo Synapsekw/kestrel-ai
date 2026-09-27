@@ -1,7 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { errorBody, fakeClient, IMAGE_ID, runningJob, type FakeRoute } from "@/test/fixtures";
-import { exampleDatasetItems, exampleLibraryDataset, LIB_DATASET_ID } from "@/test/appSectionFixtures";
+import {
+  errorBody,
+  exampleProject,
+  fakeClient,
+  IMAGE_ID,
+  PROJECT_ID,
+  runningJob,
+  type FakeRoute,
+} from "@/test/fixtures";
+import {
+  exampleCataloguePage,
+  exampleDatasetItems,
+  exampleLibraryDataset,
+  examplePreview,
+  LIB_DATASET_ID,
+} from "@/test/appSectionFixtures";
 import { renderWithProviders } from "@/test/render";
 import { useJobsStore } from "@/store/jobs";
 import { DatasetsScreen } from "./DatasetsScreen";
@@ -107,5 +121,33 @@ describe("DatasetsScreen (F §12.4)", () => {
       },
     ]);
     expect(await screen.findByText("The model library could not be opened")).toBeInTheDocument();
+  });
+
+  it("opens the builder from ?project= (the /p/:id/datasets redirect)", async () => {
+    renderDatasets(`/models/datasets?project=${PROJECT_ID}`, [
+      LIST,
+      { method: "GET", path: /\/api\/v1\/projects$/, body: { items: [exampleProject], next_cursor: null } },
+      { method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage },
+      { method: "POST", path: /\/preview$/, body: examplePreview },
+    ]);
+    expect(await screen.findByRole("form", { name: "New dataset" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Ahmadia")).toBeChecked();
+  });
+
+  it("opens an empty builder from ?new=1 (the New dataset action)", async () => {
+    renderDatasets("/models/datasets?new=1", [
+      LIST,
+      { method: "GET", path: /\/api\/v1\/projects$/, body: { items: [exampleProject], next_cursor: null } },
+      { method: "GET", path: /\/catalogue\/types$/, body: exampleCataloguePage },
+    ]);
+    expect(await screen.findByRole("form", { name: "New dataset" })).toBeInTheDocument();
+    expect(await screen.findByLabelText("Ahmadia")).not.toBeChecked();
+    expect(screen.getByText("Choose projects and types to count the images.")).toBeInTheDocument();
+  });
+
+  it("keeps the builder closed on the plain list", async () => {
+    renderDatasets("/models/datasets");
+    await screen.findByRole("row", { name: /machines-v1/ });
+    expect(screen.queryByRole("form", { name: "New dataset" })).not.toBeInTheDocument();
   });
 });

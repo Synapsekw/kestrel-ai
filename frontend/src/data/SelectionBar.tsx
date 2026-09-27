@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import { datasetBuilderHref } from "@/models/links";
 import { useChangesStore } from "@/store/changes";
 import { Alert, Button } from "@/ui";
 import { deleteImages, markImagesEmpty, unmarkImagesEmpty } from "./bulkActions";
@@ -116,7 +117,7 @@ export function SelectionBar({
           <Button
             size="sm"
             className={onInverse}
-            onClick={() => void navigate(`/models/datasets?new=1&project=${projectId}`)}
+            onClick={() => void navigate(datasetBuilderHref({ projectIds: [projectId] }))}
             disabled={busy}
             title="Open the dataset builder in Models with this project"
           >

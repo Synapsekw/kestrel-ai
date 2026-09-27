@@ -34,6 +34,7 @@ import {
 import { useImageList } from "@/data/useImageList";
 import { IMAGE_PAGE_SIZE } from "@/api/images";
 import { isTypingTarget } from "@/ui/keymap";
+import { datasetBuilderHref } from "@/models/links";
 import { useNavigationStore } from "@/store/navigation";
 import { Alert, Button, IconButton, Kbd, Skeleton, buttonClass, type AlertTone } from "@/ui";
 
@@ -252,7 +253,7 @@ export function DataManagerScreen() {
           onDismiss={() => setAllLabeled(false)}
           actions={
             <Link
-              to={`/models/datasets?new=1&project=${projectId}`}
+              to={datasetBuilderHref({ projectIds: [projectId] })}
               className={buttonClass("secondary", "sm")}
             >
               Build a dataset

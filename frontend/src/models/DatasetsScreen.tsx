@@ -1,13 +1,15 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useApi } from "@/api/client";
 import { fetchLibraryDataset, type LibraryDataset } from "@/api/libraryDatasets";
 import { useProvideRouteActions, type RouteAction } from "@/app/routeActions";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
 import { formatLocalDate } from "@/library/modelLabels";
 import { Alert, Button, DataTable, EmptyState, GlassPanel, Pill, SkeletonRows, type Column } from "@/ui";
+import { DatasetBuilder } from "./DatasetBuilder";
 import { DatasetDetail } from "./DatasetDetail";
 import { DATASET_TASK_LABEL, datasetStateLabel, sourcesText } from "./datasetLabels";
+import { datasetBuilderHref, readBuilderPreset } from "./links";
 import { useItemById } from "./useItemById";
 import { useLibraryDatasets } from "./useLibraryDatasets";
 
@@ -79,6 +81,8 @@ export function DatasetsScreen() {
   const { datasetId = null } = useParams();
   const api = useApi();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const preset = readBuilderPreset(params);
   const list = useLibraryDatasets();
   const fetchDataset = useCallback((id: string) => fetchLibraryDataset(api, id), [api]);
   const { reload } = list;
@@ -92,7 +96,7 @@ export function DatasetsScreen() {
         label: "New dataset",
         icon: "plus",
         variant: "primary",
-        to: "/models/datasets?new=1",
+        to: datasetBuilderHref(),
       },
     ],
     [],
@@ -117,6 +121,19 @@ export function DatasetsScreen() {
           is built.
         </p>
       </header>
+
+      {preset.open && !list.unavailable && (
+        <DatasetBuilder
+          key={params.toString()}
+          initialProjectIds={preset.projectIds}
+          initialTypeIds={preset.typeIds}
+          onCreated={(d) => {
+            list.put(d);
+            navigate(`/models/datasets/${d.id}`);
+          }}
+          onClose={() => setParams({}, { replace: true })}
+        />
+      )}
 
       {list.unavailable && (
         <Alert tone="danger" title="The model library could not be opened">
