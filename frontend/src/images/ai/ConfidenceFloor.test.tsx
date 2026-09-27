@@ -18,3 +18,12 @@ describe("ConfidenceFloor", () => {
     expect(screen.getByTestId("confidence-floor")).toHaveTextContent("all shown");
   });
 });
+
+describe("ConfidenceFloor inline", () => {
+  it("renders a compact row for the hint bar", () => {
+    render(<ConfidenceFloor value={0.4} hidden={3} onChange={() => {}} inline />);
+    const label = screen.getByTestId("confidence-floor");
+    expect(label.className).toContain("flex-nowrap");
+    expect(screen.getByText("below 40% · 3 hidden")).toBeTruthy();
+  });
+});
