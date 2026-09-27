@@ -218,6 +218,10 @@ def delete_in_session(s: Session, *, project_id: str, finding_id: str, delete_an
     box goes too (an annotation on a defect type IS the finding's geometry, section 8.5); the box
     hooks pass False, since they are deleting or changing that box themselves."""
     row = get_or_404(s, finding_id)
+    if row.anchor_kind == "map":
+        from app.detect import map_findings  # detect's review imports this module
+
+        map_findings.on_finding_deleting(s, finding_id)  # its detection becomes rejected (M §9.3)
     annotation_id = row.annotation_id
     counts.change(s, counts.key_of(row), None)
     s.delete(row)

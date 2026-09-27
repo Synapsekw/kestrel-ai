@@ -18,12 +18,15 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import Box, GeoMap, MapDetection, MapRun, QueryRun
+from app.detect import map_findings
 from app.detect.areas import ProjectedArea, area_ids_for_point, areas_for_map
 from app.detect.counts import VERIFIED_STATES, Entry, apply_area_transition, apply_transition
 from app.errors import AppError, not_found
+from app.findings import trash
 from app.imagery import annotations as boxes
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
+from app.maps import timeline
 from app.projects.service import ProjectHandle
 
 ACCEPT_BATCH = 1000
@@ -50,7 +53,9 @@ class _RunCounts:
     def __init__(self, s: Session, run: MapRun):
         self.run = run
         gmap = s.get(GeoMap, run.map_id)
-        self.areas: list[ProjectedArea] = areas_for_map(s, gmap) if gmap is not None else []
+        # A region run is area-free (spec §9.3): the area recount skips it, so it never gains any.
+        survey = timeline.is_survey_run(run)
+        self.areas: list[ProjectedArea] = areas_for_map(s, gmap) if gmap is not None and survey else []
         self.counts = dict(run.counts or {})
         self.verified = dict(run.verified_counts or {})
         self.area_counts = copy.deepcopy(run.area_counts or {})
@@ -89,36 +94,72 @@ def _decide(action: str, class_id: str | None) -> Decision:
     return decide
 
 
-def _apply(s: Session, run: MapRun, detection_ids: list[str], decide: Decision) -> int:
+def _apply(
+    s: Session,
+    handle: ProjectHandle,
+    run: MapRun,
+    detection_ids: list[str],
+    decide: Decision,
+    *,
+    confirm_finding_delete: bool = False,
+) -> tuple[int, list[str]]:
+    """Apply `decide` to the run's detections among `detection_ids`: `(changed, deleted finding ids)`.
+    A change that would delete a finding needs `confirm_finding_delete`; without it the whole batch is
+    refused before anything changes (map workspace spec §9.3)."""
+    # Materialised first: the finding link below queries and flushes on this session mid-loop.
+    rows = (
+        s.execute(
+            select(MapDetection).where(MapDetection.run_id == run.id, MapDetection.id.in_(detection_ids))
+        )
+        .scalars()
+        .all()
+    )
+    planned = [(d, new) for d in rows if (new := decide(d)) is not None]
+    if not confirm_finding_delete:
+        doomed = [d.finding_id for d, (cid, state) in planned if map_findings.would_delete(s, d, cid, state)]
+        if doomed:
+            raise map_findings.refuse(s, doomed)
     tally = _RunCounts(s, run)
-    changed = 0
-    rows = s.execute(
-        select(MapDetection).where(MapDetection.run_id == run.id, MapDetection.id.in_(detection_ids))
-    ).scalars()
-    for d in rows:
-        new = decide(d)
-        if new is None:
-            continue
+    link = map_findings.Link(s, handle, run)
+    for d, new in planned:
         old = (d.class_id, d.review_state)
         d.class_id, d.review_state = new
         tally.apply(d, old, new)
-        changed += 1
-    if changed:
+        link.after_change(d)
+    if planned:
         tally.save()
-    return changed
+    link.finish()
+    return len(planned), link.deleted
 
 
 def review_map_detections(
-    handle: ProjectHandle, run_id: str, detection_ids: list[str], action: str, class_id: str | None = None
+    handle: ProjectHandle,
+    run_id: str,
+    detection_ids: list[str],
+    action: str,
+    class_id: str | None = None,
+    *,
+    confirm_finding_delete: bool = False,
 ) -> int:
     """Accept, reject, unreview or reclass detections of one map run; returns how many changed.
 
-    Ids of another run, or unknown ids, are ignored. Reclass sets the class and the state `edited`."""
+    Ids of another run, or unknown ids, are ignored. Reclass sets the class and the state `edited`.
+    An accepted defect becomes a finding in the same transaction; a change that would delete one
+    answers 409 `finding_would_be_deleted` unless confirmed."""
     with handle.session() as s:
         run = _map_run(s, run_id)
         if action == "reclass":
             _check_class(handle, s, class_id)
-        return _apply(s, run, detection_ids, _decide(action, class_id))
+        changed, deleted = _apply(
+            s,
+            handle,
+            run,
+            detection_ids,
+            _decide(action, class_id),
+            confirm_finding_delete=confirm_finding_delete,
+        )
+    trash.move(handle, deleted)
+    return changed
 
 
 def add_map_detection(
@@ -157,6 +198,8 @@ def add_map_detection(
         tally = _RunCounts(s, run)
         tally.apply(row, None, (class_id, "accepted"))
         tally.save()
+        s.flush()
+        map_findings.Link(s, handle, run, batch=False).after_change(row)  # a drawn defect is a finding
         s.flush()
         s.expunge(row)
     return row
@@ -258,7 +301,8 @@ def run_accept_above(ctx: JobContext) -> dict:
         after = ids[-1]
         if kind == "map":
             with ctx.project.session() as s:
-                accepted += _apply(s, _map_run(s, run_id), ids, _decide("accept", None))
+                n, _ = _apply(s, ctx.project, _map_run(s, run_id), ids, _decide("accept", None))
+                accepted += n
         else:
             accepted += boxes.review_boxes(ctx.project, ids, "accept").changed
         ctx.progress(accepted / total if total else 1.0, f"Accepted {accepted} of {total}")

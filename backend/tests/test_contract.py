@@ -123,18 +123,6 @@ RETIRING: dict[str, str] = {
     "preannotateImage": "I-FW",
 }
 
-# Existing operations whose new request options (map-workspace spec §12, unit M-C0) answer 501
-# `not_implemented` with details {option, unit} until the named unit builds them
-# (app/workspace/pending.py). Only a request that uses such an option gets the 501; every other
-# request to these operations is checked as usual. The unit deletes its entries with its guards.
-OPTION_STUBS: dict[str, str] = {
-    "createVolumeMeasurement": "M-B5",  # polygon_site, material, base toe_lowest
-    "patchVolumeMeasurement": "M-B5",  # polygon_site, material, base toe_lowest
-    "createRuns": "M-B5",  # region
-    "createSiteArea": "M-B5",  # category
-    "updateSiteArea": "M-B5",  # category
-}
-
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
 # the rule (a Range the file cannot satisfy, a point count a measurement kind does not take, an
 # admission refusal, a self-crossing polygon): operationId -> the statuses such a request may get.
@@ -265,7 +253,7 @@ def test_responses_conform(case, app, project_id, tmp_path):
         return
     if is_stub:
         # A stub: the operation is routed but not built yet; it must still answer in the error envelope.
-        assert op_id in EXPECTED_STUBS or op_id in OPTION_STUBS, f"unexpected stub for {op_id}"
+        assert op_id in EXPECTED_STUBS, f"unexpected stub for {op_id}"
         checks = [response_schema_conformance, content_type_conformance, status_code_conformance]
         case.validate_response(response, checks=checks)
         return

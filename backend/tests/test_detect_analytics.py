@@ -346,3 +346,27 @@ def test_responses_match_the_contract_in_a_detection_project(client, project_id,
     response = client.get(f"{BASE}/{project_id}/{path}")
     assert response.status_code == 200, response.text
     schema[f"/api/v1/projects/{{projectId}}/{template}"]["GET"].validate_response(response)
+
+
+def test_a_region_run_never_speaks_for_a_map(client, project_id, handle, site):
+    with handle.session() as s:
+        s.add(
+            MapRun(
+                id="run-may-region",
+                map_id="map-2",
+                source_id="src-map-2",
+                kind="local_model",
+                model_id="mod",
+                model_name="mod",
+                conf=0.25,
+                counts={},
+                created_at=_at(20),  # the newest run of all
+                scope="region",
+                region_px=[[0, 0], [10, 0], [10, 10]],
+            )
+        )
+    assert client.get(f"{BASE}/{project_id}/analytics/sources/src-map-2").json()["run"]["id"] == "run-may"
+    timeline = client.get(f"{BASE}/{project_id}/survey-timeline").json()["surveys"]
+    assert {sv["map_id"]: sv["run_id"] for sv in timeline}["map-2"] == "run-may"
+    r = client.patch(f"{BASE}/{project_id}/runs/run-may-region", json={"pinned": True})
+    assert r.status_code == 409 and r.json()["error"]["code"] == "conflict", r.text

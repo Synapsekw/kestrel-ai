@@ -153,7 +153,7 @@ def _map_rows(s: Session) -> tuple[list[GeoMap], dict[str, list[MapRun]]]:
     """Every map and its runs: tens of rows, never a detection."""
     maps = list(s.execute(select(GeoMap)).scalars())
     by_map: dict[str, list[MapRun]] = {}
-    for r in s.execute(select(MapRun)).scalars():
+    for r in s.execute(select(MapRun).where(timeline.survey_run_clause())).scalars():
         by_map.setdefault(r.map_id, []).append(r)
     return maps, by_map
 

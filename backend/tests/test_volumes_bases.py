@@ -13,6 +13,7 @@ from app.volumes.bases import (
     BaseFitError,
     EdgeSamples,
     densify_ring,
+    fit_toe_lowest,
     fit_toe_plane,
     fit_toe_surface,
     flat_fit,
@@ -123,3 +124,23 @@ def test_sample_edge_drops_nodata_and_masked_samples(tmp_path):
         assert info.usable_fraction < 0.5
     fit = flat_fit(edge, 50.0)
     assert fit.kind == "flat" and fit.rejected == 0 and fit.rms_m > 0
+
+
+def test_toe_lowest_is_the_lowest_sample_below_a_hundred_samples():
+    zs = [5.0] * 50 + [1.0]
+    fitted, fit = fit_toe_lowest(_edge(range(51), range(51), zs))
+    assert fit.kind == "toe_lowest" and fit.samples == 51 and fit.rejected == 0
+    assert fit.plane == [0.0, 0.0, 1.0]
+    assert fitted.z_at(np.array([3.0]), np.array([4.0]))[0] == 1.0
+
+
+def test_toe_lowest_drops_the_lowest_percent_from_a_hundred_samples_on():
+    zs = [10.0 + 0.001 * i for i in range(198)] + [0.0, -3.0]  # two spikes into a hole
+    _, fit = fit_toe_lowest(_edge(range(200), range(200), zs))
+    assert fit.rejected == 2 and fit.plane[2] == pytest.approx(10.0)
+    assert fit.to_json()["kind"] == "toe_lowest"
+
+
+def test_toe_lowest_refuses_an_edge_without_samples():
+    with pytest.raises(BaseFitError, match="no observed ground"):
+        fit_toe_lowest(EdgeSamples(np.array([]), np.array([]), np.array([]), 10, 5.0))

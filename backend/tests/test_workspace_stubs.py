@@ -1,14 +1,14 @@
 """M-C0: the map-workspace operations are routed as 501 stubs until their unit lands.
 
 A unit that builds an operation deletes its tuple from `app/workspace/stubs.py` (and its route
-goes live), and these tests follow because they read the lists. M-B5 deletes the option-guard
-tests at the end of this file together with the guards in `app/workspace/pending.py`.
+goes live), and these tests follow because they read the lists. The option guards
+(`app/workspace/pending.py`) are gone: M-B2 and M-B5 built every option they refused.
 """
 
 import re
 
 import yaml
-from test_contract import EXPECTED_STUBS, METHODS, OPTION_STUBS, SPEC
+from test_contract import EXPECTED_STUBS, METHODS, SPEC
 from test_workspace_contract import WORKSPACE_OPERATIONS
 
 from app.workspace import stubs
@@ -70,57 +70,10 @@ def test_an_unknown_project_is_404_before_any_stub(client):
         assert r.status_code == 404, (op_id, r.text)
 
 
-WGS = [[15.0, 44.99], [15.01, 44.99], [15.01, 44.995]]
-RING = [[0, 0], [10, 0], [10, 10]]
-
-
-def _option(r, unit: str = "M-B5") -> str:
-    assert r.status_code == 501, r.text
-    error = r.json()["error"]
-    assert error["code"] == "not_implemented"
-    assert error["details"]["unit"] == unit
-    return error["details"]["option"]
-
-
-def test_option_stubs_name_real_operations():
-    """The last unit to delete its guards deletes this test and `_option` with them."""
-    spec = yaml.safe_load(SPEC.read_text("utf-8"))
-    ids = {op["operationId"] for ops in spec["paths"].values() for m, op in ops.items() if m in METHODS}
-    assert set(OPTION_STUBS) <= ids
-    assert set(OPTION_STUBS.values()) <= {"M-B5"}
-    assert not set(OPTION_STUBS) & EXPECTED_STUBS
-
-
-# ----------------------------------------------------- M-B5 deletes everything below with its guards
-
-
-def test_volume_options_answer_501_until_m_b5(client, project_id):
-    url = f"/api/v1/projects/{project_id}/volumes"
-    body = {"name": "Pile", "top_surface_id": "s1", "base": {"kind": "toe_plane"}}
-    material = {"name": "Gravel", "density_t_m3": 1.8}
-    assert _option(client.post(url, json={**body, "polygon_site": RING})) == "polygon_site"
-    with_material = {**body, "polygon_native": RING, "material": material}
-    assert _option(client.post(url, json=with_material)) == "material"
-    lowest = {**body, "polygon_native": RING, "base": {"kind": "toe_lowest"}}
-    assert _option(client.post(url, json=lowest)) == "toe_lowest"
-    assert _option(client.patch(f"{url}/any", json={"material": None})) == "material"
-    assert _option(client.patch(f"{url}/any", json={"polygon_site": RING})) == "polygon_site"
-    assert _option(client.patch(f"{url}/any", json={"base": {"kind": "toe_lowest"}})) == "toe_lowest"
+# ------------------------------------------- volumes: a request without any polygon (M-C0 contract)
 
 
 def test_a_volume_without_a_polygon_is_invalid_geometry(client, project_id):
     body = {"name": "Pile", "top_surface_id": "s1", "base": {"kind": "toe_plane"}}
     r = client.post(f"/api/v1/projects/{project_id}/volumes", json=body)
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry"
-
-
-def test_a_region_run_answers_501_until_m_b5(client, project_id):
-    body = {"source_ids": ["s1"], "model_id": "m1", "region": {"map_id": "m1", "polygon_site": RING}}
-    assert _option(client.post(f"/api/v1/projects/{project_id}/runs", json=body)) == "region"
-
-
-def test_a_site_area_category_answers_501_until_m_b5(client, project_id):
-    url = f"/api/v1/projects/{project_id}/site-areas"
-    body = {"name": "Yard", "polygon_wgs84": WGS, "category": "laydown"}
-    assert _option(client.post(url, json=body)) == "category"
-    assert _option(client.patch(f"{url}/any", json={"category": "exclusion"})) == "category"

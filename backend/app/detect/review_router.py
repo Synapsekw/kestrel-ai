@@ -67,9 +67,17 @@ def review_map_detections(
     runId: str,  # noqa: N803
     body: MapDetectionReview,
     request: Request,
+    confirm_finding_delete: bool = Query(False),
     handle: ProjectHandle = Depends(get_project),
 ) -> MapDetectionReviewResult:
-    updated = review.review_map_detections(handle, runId, body.detection_ids, body.action, body.class_id)
+    updated = review.review_map_detections(
+        handle,
+        runId,
+        body.detection_ids,
+        body.action,
+        body.class_id,
+        confirm_finding_delete=confirm_finding_delete,
+    )
     if updated:
         _masks_changed(request, handle, runId)
     return MapDetectionReviewResult(updated=updated)

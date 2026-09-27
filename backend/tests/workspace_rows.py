@@ -11,8 +11,9 @@ from affine import Affine
 from PIL import Image as PILImage
 from pyproj import CRS
 from rasterio.enums import ColorInterp, Resampling
+from sqlalchemy import delete
 
-from app.db.models import GeoMap
+from app.db.models import GeoMap, MapWorkspace
 from app.maps.georef import Georef
 from app.maps.startup import map_raster_path
 
@@ -119,3 +120,19 @@ def write_plan_tif(path: Path, data: np.ndarray, *, crs_wkt, transform: Affine) 
         ds.write(data)
         ds.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
     return path
+
+
+def set_site_frame(handle, crs_wkt: str | None) -> None:
+    """The map workspace's one row (map spec §6) written straight into the project DB: a site frame
+    in `crs_wkt`, or the local-metres frame for None (M-B5's tests)."""
+    with handle.session() as s:
+        s.execute(delete(MapWorkspace))
+        s.add(
+            MapWorkspace(
+                frame_kind="crs" if crs_wkt else "local",
+                crs_wkt=crs_wkt,
+                epsg=CRS.from_user_input(crs_wkt).to_epsg() if crs_wkt else None,
+                state={},
+                planned_surveys=[],
+            )
+        )
