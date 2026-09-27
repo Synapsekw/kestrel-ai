@@ -41,11 +41,21 @@ function toSettings(form: Form): Required<ImportSettings> | null {
 
 export function ImportDefaultsSection({ project, onSaved }: Props) {
   const api = useApi();
-  // Mounted with `key={JSON.stringify(project.import_defaults)}` by SettingsScreen.
   const [form, setForm] = useState<Form>(() => fromProject(project));
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // No `key` on this component (see SettingsScreen): a remount would drop `status` right after a
+  // save, since saving is what changes `project.import_defaults` in the first place. Instead,
+  // resync the draft during render whenever the saved value actually changes, whether from this
+  // section's own save or from elsewhere; `status` is untouched, so "Import defaults saved"
+  // survives. (React's documented pattern for adjusting state from a prop change.)
+  const importDefaultsKey = JSON.stringify(project.import_defaults);
+  const [syncedImportDefaultsKey, setSyncedImportDefaultsKey] = useState(importDefaultsKey);
+  if (syncedImportDefaultsKey !== importDefaultsKey) {
+    setSyncedImportDefaultsKey(importDefaultsKey);
+    setForm(fromProject(project));
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();

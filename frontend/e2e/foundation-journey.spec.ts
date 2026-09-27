@@ -531,9 +531,7 @@ test("one project from creation to a training run: every Foundation unit reads w
   const put = page.waitForRequest((r) => r.method() === "PUT" && r.url().endsWith(`/projects/${P}/types`));
   await types.getByRole("button", { name: "Save types" }).click();
   expect((await put).postDataJSON()).toMatchObject({ type_ids: [CRACK.id, EXCAVATOR.id] });
-  // No "Types saved" check: SettingsScreen keys the section on `project.classes`, so the save that
-  // changes them remounts it and drops the status (reported in the unit X report). The saved list
-  // is what a fresh read of the project answers.
+  await expect(types.getByText("Types saved")).toBeVisible();
   await expect(types.getByRole("button", { name: "Save types" })).toBeDisabled();
   await page.reload();
   await expect(types.getByRole("listitem")).toHaveText([/^1\s*Crack/, /^2\s*Excavator/]);

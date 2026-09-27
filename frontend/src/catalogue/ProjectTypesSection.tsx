@@ -36,6 +36,17 @@ export function ProjectTypesSection({
   // untouched empty override into a `null` that clears the project's stored one.
   const [edited, setEdited] = useState<{ rows: TypeRow[]; base: TypeRow[] } | null>(null);
   const rows = edited?.rows ?? initial;
+  // No `key` on this component (see SettingsScreen): a remount would drop `status` right after a
+  // save, since saving is what changes `project.classes` in the first place. Instead, drop a
+  // stale draft in place during render whenever the saved list actually changes value, whether
+  // from this section's own save or from elsewhere; `status`/`error` are untouched, so "Types
+  // saved" survives. (React's documented pattern for adjusting state from a prop change.)
+  const classesKey = JSON.stringify(project.classes);
+  const [syncedClassesKey, setSyncedClassesKey] = useState(classesKey);
+  if (syncedClassesKey !== classesKey) {
+    setSyncedClassesKey(classesKey);
+    setEdited(null);
+  }
   const [query, setQuery] = useState("");
   const [newKind, setNewKind] = useState<TypeKind>("defect");
   const [busy, setBusy] = useState(false);

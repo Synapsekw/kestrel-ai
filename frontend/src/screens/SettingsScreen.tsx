@@ -29,14 +29,9 @@ export function SettingsScreen() {
       )}
       {project && (
         <div className="divide-y divide-line">
-          {/* keys remount the form sections with fresh drafts whenever the saved project changes */}
-          <ProjectTypesSection key={JSON.stringify(project.classes)} project={project} onSaved={setProject} />
+          <ProjectTypesSection project={project} onSaved={setProject} />
           <PreannotationSection project={project} onSaved={setProject} />
-          <ImportDefaultsSection
-            key={JSON.stringify(project.import_defaults)}
-            project={project}
-            onSaved={setProject}
-          />
+          <ImportDefaultsSection project={project} onSaved={setProject} />
           <SourcesSection projectId={projectId} />
           <ProvidersSection />
         </div>
