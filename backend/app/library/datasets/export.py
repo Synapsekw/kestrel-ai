@@ -134,6 +134,7 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
         counts = {"train": 0, "val": 0}
         skipped = done = 0
         skipped_task = 0
+        labelled = 0  # items written with at least one label line; negatives alone train nothing
         for project_id, _, _ in sources:
             handle = handles[project_id]
             for page in _item_pages(lib, dataset_id, project_id):
@@ -173,9 +174,10 @@ def export_dataset(ctx: JobContext, dataset_id: str, progress: Callable[[float, 
                         label, "utf-8"
                     )
                     counts[item.split] += 1
+                    labelled += bool(label.strip())
                     if done % PROGRESS_EVERY == 0 or done == total:
                         progress(done / max(total, 1), f"{done} / {total} images")
-        if counts["train"] + counts["val"] == 0 and skipped_task:
+        if labelled == 0 and skipped_task:  # R-BT7: never a folder of empty label files
             raise JobFailure(UNEXPRESSIBLE_EXPORT)
         (staging / "data.yaml").write_text(data_yaml(final, [c["name"] for c in classes]), "utf-8")
         if final.is_dir() and not final.is_symlink():

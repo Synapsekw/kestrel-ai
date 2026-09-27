@@ -142,6 +142,21 @@ def test_a_build_where_everything_is_skipped_says_why(client, app, tmp_path, mak
     assert "Boxes as polygons" in done["error"]
 
 
+def test_skipped_boxes_beside_a_negative_still_say_why(client, app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+    """A marked-empty image enters, so the build gets past pass one; the message must still name the
+    skipped boxes, not claim the filter selects no box (R-BT6)."""
+    exc = catalogue.add("Excavator")
+    p = make_project(app, tmp_path / "boxes", "Boxes")
+    src = add_source(p)
+    add_box(p, add_image(p, make_jpeg, src, "a.jpg", group_key="a", seed=1), exc.id)
+    add_image(p, make_jpeg, src, "b.jpg", group_key="b", seed=2, marked_empty=True)
+    r = client.post(f"{LIB}/datasets", json=create_body("seg", [p.id], [exc.id], task="segment"))
+    done = wait_library_job(client, r.json()["job"]["id"])
+    assert done["state"] == "failed"
+    assert "1 matching images were skipped" in done["error"]
+    assert "Boxes as polygons" in done["error"]
+
+
 def test_a_detect_dataset_freezes_boxes_with_their_shape(client, app, mixed):
     p, crack, ids = mixed
     d = build_dataset(client, create_body("det", [p.id], [crack.id]))
@@ -186,6 +201,21 @@ def test_a_pre_bt_segment_dataset_of_boxes_is_not_exported_as_background(client,
     with app.state.library.session() as s:  # rewrite the items as F froze them before BT
         for item in s.query(LibraryDatasetItem).filter(LibraryDatasetItem.dataset_id == d["id"]):
             item.labels = [{"type_id": crack.id, "x": 1, "y": 1, "w": 5, "h": 5, "angle": 0.0}]
+    done = _export(client, d["id"])
+    assert done["state"] == "failed"
+    assert "Rebuild this dataset" in done["error"]
+
+
+def test_a_pre_bt_segment_dataset_with_a_negative_is_not_exported_as_background(client, app, mixed):
+    """The negative stays expressible and writes an empty label file; with every labelled item
+    skipped the export must still fail rather than hand over background only (R-BT7)."""
+    p, crack, ids = mixed
+    d = build_dataset(client, create_body("old", [p.id], [crack.id], task="segment"))
+    with app.state.library.session() as s:  # rewrite the labelled items as F froze them before BT
+        for item in s.query(LibraryDatasetItem).filter(LibraryDatasetItem.dataset_id == d["id"]):
+            if item.labels:
+                item.labels = [{"type_id": crack.id, "x": 1, "y": 1, "w": 5, "h": 5, "angle": 0.0}]
+    assert _items(app, d["id"])[ids[3]] == []
     done = _export(client, d["id"])
     assert done["state"] == "failed"
     assert "Rebuild this dataset" in done["error"]

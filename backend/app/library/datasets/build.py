@@ -44,15 +44,16 @@ def _item_key(project_id: str, image_id: str) -> str:
 
 
 def all_skipped(skipped: int, task: str, boxes_as_polygons: bool) -> str:
-    """R-BT6: the build failed because every match was skipped; say how many and what to change."""
+    """R-BT6: the build failed because every labelled match was skipped (images marked empty may
+    still have entered); say how many and what to change."""
     if task == "segment" and not boxes_as_polygons:
         return (
-            f"Nothing to train on: all {skipped} matching images were skipped because they hold boxes "
+            f"Nothing to train on: {skipped} matching images were skipped because they hold boxes "
             "or point markers of the chosen types, which a polygon dataset cannot use. Tick “Boxes as "
             "polygons” to use boxes as 4-point outlines, or choose types drawn as polygons."
         )
     return (
-        f"Nothing to train on: all {skipped} matching images were skipped because they hold point "
+        f"Nothing to train on: {skipped} matching images were skipped because they hold point "
         "markers of the chosen types. Point markers cannot be trained; choose other types."
     )
 
@@ -198,8 +199,8 @@ def _build(ctx: JobContext) -> dict:
                 image_count=taken,
             )
         )
-    if not counts["per_class"]:
-        raise JobFailure(NOTHING_TO_TRAIN_ON)
+    if not counts["per_class"]:  # negatives may have entered while every labelled match was skipped
+        raise JobFailure(all_skipped(skipped, task, f.boxes_as_polygons) if skipped else NOTHING_TO_TRAIN_ON)
     with lib.session() as s:
         row = s.get(LibraryDataset, dataset_id)
         if row is None:
