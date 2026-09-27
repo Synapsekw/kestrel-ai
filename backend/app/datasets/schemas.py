@@ -20,6 +20,7 @@ ImageSort = Literal[
     "max_pending_confidence",
     "capture_time",
     "created_at",
+    "worst_severity",
 ]
 SortOrder = Literal["asc", "desc"]
 
@@ -113,11 +114,21 @@ class ImageOut(BaseModel):
     labeled: bool
     marked_empty: bool
     created_at: datetime
+    finding_count: int
+    worst_severity: int | None
+    reviewed: bool
 
     @classmethod
     def from_row(
-        cls, image: Image, box_count: int, pending_count: int, max_pending_confidence: float | None
+        cls,
+        image: Image,
+        box_count: int,
+        pending_count: int,
+        max_pending_confidence: float | None,
+        finding_count: int = 0,
+        worst_severity: int | None = None,
     ) -> "ImageOut":
+        labeled = box_count > 0 or image.marked_empty
         return cls(
             id=image.id,
             path=image.path,
@@ -134,9 +145,12 @@ class ImageOut(BaseModel):
             box_count=box_count,
             pending_count=pending_count,
             max_pending_confidence=max_pending_confidence,
-            labeled=box_count > 0 or image.marked_empty,
+            labeled=labeled,
             marked_empty=image.marked_empty,
             created_at=image.created_at,
+            finding_count=finding_count,
+            worst_severity=worst_severity,
+            reviewed=pending_count == 0 and labeled,
         )
 
 
