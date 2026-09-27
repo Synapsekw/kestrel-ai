@@ -120,6 +120,27 @@ test("lookThrough fits the photo in the canvas and maps its centre to the canvas
   expect(pose.up).toEqual([0, 1, 0]);
 });
 
+test("lookThrough on a zero-size canvas leaves the camera alone (final review M7)", async ({ page }) => {
+  await openGrid(page);
+  const before = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+  const got = await page.evaluate(() => {
+    document.querySelector<HTMLCanvasElement>('[data-testid="cloud-canvas"]')!.style.width = "0px";
+    return window.__kestrelCloudViewer!.lookThrough({
+      position: [243550, 3178050, 60],
+      forward: [0, 0, -1],
+      up: [0, 1, 0],
+      hfovDeg: 73.7,
+      vfovDeg: 53.1,
+      width: 4000,
+      height: 3000,
+    });
+  });
+  expect(got.frame.width).toBe(0);
+  const after = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+  expect(after.fov_deg).toBe(before.fov_deg);
+  expect(after.position).toEqual(before.position);
+});
+
 test("a second lookThrough, then restore, goes back to the pose before the first, Z-up (review I1)", async ({
   page,
 }) => {
@@ -210,9 +231,10 @@ test("occlusion: after settle, a point behind the south wall is hidden; the clip
     );
   await expect.poll(async () => (await run()).result, { timeout: 5_000 }).toEqual([true, false]);
   const timed = await run();
-  console.log(
-    `occlusion pass: ${timed.ms.toFixed(1)} ms (target <= 40 ms on the operator's laptop; SwiftShader reported only)`,
-  );
+  test.info().annotations.push({
+    type: "perf",
+    description: `occlusion pass: ${timed.ms.toFixed(1)} ms (target <= 40 ms on the operator's laptop; SwiftShader reported only)`,
+  });
   await page.evaluate((b) => window.__kestrelCloudViewer!.setClipBox(b, "show_inside"), NORTH_ONLY);
   await expect.poll(async () => (await run()).result, { timeout: 5_000 }).toEqual([false, false]);
 });
@@ -234,7 +256,10 @@ test("a capture is 1600 x 1000, not uniform, red and green, and the screen comes
   await openGrid(page, 1);
   await edlOn(page); // EDL on screen; the capture is taken without it (plan Ruling 5)
   const shot = await page.evaluate(() => window.__kestrelCloudViewer!.captureSample([]));
-  console.log(`capture: ${shot.ms.toFixed(0)} ms, complete ${shot.complete}`);
+  test.info().annotations.push({
+    type: "perf",
+    description: `capture: ${shot.ms.toFixed(0)} ms, complete ${shot.complete}`,
+  });
   expect(shot).toMatchObject({ width: 1600, height: 1000, type: "image/png", complete: true, edl: false });
   const c = shot.colours;
   expect(c.background, "the background is the canvas token, byte for byte (plan Ruling 6)").toBeGreaterThan(
@@ -303,6 +328,41 @@ test("a second capture while one runs is refused, and the chip shows", async ({ 
   expect(got.second).toBe("a capture is already running");
   expect(got.chipSeen).toBe(true);
   await expect(page.getByTestId("cloud-saving-view")).toHaveCount(0);
+});
+
+test("a capture keeps fly mode (final review I1)", async ({ page }) => {
+  await openGrid(page);
+  await page.evaluate(() => window.__kestrelCloudViewer!.setNavMode("fly"));
+  await page.evaluate(() => window.__kestrelCloudViewer!.captureSample([]));
+  expect(await page.evaluate(() => window.__kestrelCloudViewer!.navMode())).toBe("fly");
+});
+
+test("during a capture picks and occlusion answer null, and a slab waits for it (final review I2)", async ({
+  page,
+}) => {
+  await openGrid(page, 1);
+  await expect.poll(() => page.evaluate(() => window.__kestrelCloudViewer!.pickCenter())).not.toBeNull();
+  const got = await page.evaluate(async () => {
+    const h = window.__kestrelCloudViewer!;
+    const shot = h.captureSample([]);
+    // the capture owns the octree's visibility now: its pose's nodes, not the screen's
+    const pick = h.pickCenter();
+    const down = h.pickDown(243550, 3178050, 5);
+    const occ = h.occlusion([[243550, 3178050, 1]], [0.3]).result;
+    // the slab waits for the capture: when it answers, the screen's nodes are back and picks land
+    const slab = h
+      .sampleSlab([243500, 3178050, 0], [243600, 3178050, 0], 1)
+      .then((r) => ({ count: r.count, pickAfter: h.pickCenter() }));
+    const [, after] = await Promise.all([shot, slab]);
+    return { pick, down, occ, ...after };
+  });
+  expect(got.pick).toBeNull();
+  expect(got.down).toBeNull();
+  expect(got.occ).toBeNull();
+  expect(got.pickAfter, "the slab answered after the capture ended").not.toBeNull();
+  expect(got.count).toBeGreaterThan(0);
+  // and after it, picks land again
+  await expect.poll(() => page.evaluate(() => window.__kestrelCloudViewer!.pickCenter())).not.toBeNull();
 });
 
 test("pickWithNormal: the south wall seen from the south has a normal facing south", async ({ page }) => {

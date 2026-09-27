@@ -15,7 +15,8 @@ export interface MouseButtons {
 export type AppliedNavMode = Exclude<NavMode, "fly">;
 
 /** Every mode applies: orbit and pan are OrbitControls button maps, fly is `flyControls.ts` (C-V2). */
-export function resolveNavMode(requested: NavMode): NavMode {
+export function resolveNavMode(requested: NavMode, current?: NavMode): NavMode {
+  void current; // the planned (requested, current) arity; every mode applies whatever the current one
   return requested;
 }
 

@@ -151,7 +151,12 @@ export interface CloudEngine {
   lookThrough(pose: LookPose): LookThrough;
   /** C-V2: the displayed points in a vertical slab along a→b (≤ maxPoints, ≤ 5 Hz). */
   sampleSlab(a: Vec3, b: Vec3, thicknessM: number, maxPoints?: number): Promise<SlabSample>;
-  /** C-V2: fires once each time the render loop goes idle. Returns the unsubscribe. */
+  /**
+   * C-V2: fires once each time the render loop goes idle. Returns the unsubscribe. A listener must
+   * not call anything that requests a render (setOverlay, requestRender) unconditionally: that
+   * restarts the loop, which settles again 1 s later and fires the listener again, so the view never
+   * goes idle.
+   */
   onSettle(cb: () => void): () => void;
   /** C-V2: after settle, which points a drawn point hides (null while the view is not settled). */
   occlusion(points: readonly Vec3[], tolM: readonly number[]): boolean[] | null;
@@ -280,6 +285,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
   let capturing = false;
   /** Set while a capture owns the octree's visibility (captureRun.ts): the loop neither updates nor draws. */
   let frozen = false;
+  /** Resolves when the running capture ends: a slab waits for it (the octree holds the capture pose's nodes). */
+  let captureDone: Promise<void> | null = null;
   const fly = new FlyControls({
     camera,
     element: canvas,
@@ -571,7 +578,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
     clientX: number,
     clientY: number,
   ): { pick: CloudPick | null; hits: DrawnPoint[] | null } {
-    if (!pco) return { pick: null, hits: null };
+    // while a capture runs the octree's visible nodes are the capture pose's, not the screen's
+    if (!pco || frozen) return { pick: null, hits: null };
     const rect = canvas.getBoundingClientRect();
     const ndc = new THREE.Vector2(
       ((clientX - rect.left) / rect.width) * 2 - 1,
@@ -602,7 +610,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   }
 
   function pickDown(x: number, y: number, radius: number): CloudPick | null {
-    if (!pco || !bounds) return null;
+    if (!pco || !bounds || frozen) return null; // frozen: the capture pose's nodes (see pickWindowAt)
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
     if (!w || !h) return null;
@@ -675,6 +683,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
     const p = pickAtClient(e.clientX, e.clientY);
     if (!p) return;
     tween = null;
+    leavePose(); // navigation input: Z-up and the pre-photo FOV (plan Ruling 9)
     controls.target.set(p.x, p.y, p.z);
     controls.update();
     events.onDoublePick?.(p);
@@ -736,7 +745,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
   function topSnapshotPixels(
     px = 512,
   ): { width: number; height: number; data: Uint8ClampedArray<ArrayBuffer> } | null {
-    if (!pco || !bounds) return null;
+    if (!pco || !bounds || frozen) return null; // frozen: the capture pose's nodes (see pickWindowAt)
     const t = topOrtho(bounds, px, DOWN_MARGIN_M);
     const cam = new THREE.OrthographicCamera(
       -t.halfWidth,
@@ -795,7 +804,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       fov_deg: camera.fov,
     }),
     setNavMode(mode) {
-      const next = resolveNavMode(mode);
+      const next = resolveNavMode(mode, nav);
       if (next === nav) return;
       if (nav === "fly") {
         controls.target.set(...fly.disable()); // 10 m ahead (spec §7)
@@ -960,6 +969,15 @@ export function createEngine(o: EngineOptions): CloudEngine {
     },
     clipBox: () => (clip ? { box: clip.box, mode: clip.mode } : null),
     lookThrough(pose) {
+      const first = canvas.getBoundingClientRect();
+      // a zero-size canvas has no letterbox (k = 0 would make the FOV NaN): refuse, camera untouched
+      if (!first.width || !first.height) {
+        return {
+          toCanvas: () => ({ x: first.left, y: first.top }),
+          frame: () => ({ left: first.left, top: first.top, width: 0, height: 0 }),
+          restore: () => {},
+        };
+      }
       tween = null;
       if (nav === "fly") engine.setNavMode("orbit");
       // stepping through photos keeps the snapshot from before the first one (review I1)
@@ -969,7 +987,6 @@ export function createEngine(o: EngineOptions): CloudEngine {
         fov: camera.fov,
       };
       const rect = () => canvas.getBoundingClientRect();
-      const first = rect();
       camera.fov = letterbox(pose, first.width, first.height).vfovDeg;
       camera.position.set(...pose.position);
       camera.up.set(...pose.up);
@@ -996,7 +1013,11 @@ export function createEngine(o: EngineOptions): CloudEngine {
         },
       };
     },
-    sampleSlab: (a, b, thicknessM, maxPoints = SLAB_MAX_POINTS) => throttledSlab(a, b, thicknessM, maxPoints),
+    sampleSlab: (a, b, thicknessM, maxPoints = SLAB_MAX_POINTS) =>
+      // during a capture the octree holds the capture pose's nodes: sample the screen's after it
+      captureDone
+        ? captureDone.then(() => throttledSlab(a, b, thicknessM, maxPoints))
+        : throttledSlab(a, b, thicknessM, maxPoints),
     onSettle(cb) {
       settleListeners.add(cb);
       return () => {
@@ -1006,8 +1027,12 @@ export function createEngine(o: EngineOptions): CloudEngine {
     occlusion: (points, tolM) => runOcclusion(parts, points, tolM),
     async capture(pose, marks, opts = {}) {
       if (capturing) throw new Error("a capture is already running");
-      if (nav === "fly") engine.setNavMode("orbit");
+      // fly stays on: the capture has its own camera and the frozen tick stops fly.update (review I1)
       capturing = true;
+      let done = () => {};
+      captureDone = new Promise<void>((resolve) => {
+        done = resolve;
+      });
       try {
         return await runCapture(parts, pose, marks, opts, (busy) => {
           for (const cb of [...captureListeners]) {
@@ -1023,6 +1048,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
         });
       } finally {
         capturing = false;
+        captureDone = null;
+        done();
       }
     },
     onCaptureState(cb) {

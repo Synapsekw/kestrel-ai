@@ -74,7 +74,10 @@ export interface CloudViewerHandle {
   /** Null without a running engine. */
   lookThrough(pose: LookPose): LookThrough | null;
   sampleSlab(a: Vec3, b: Vec3, thicknessM: number, maxPoints?: number): Promise<SlabSample>;
-  /** Fires once each time the view settles; survives a cloud switch. Returns the unsubscribe. */
+  /**
+   * Fires once each time the view settles; survives a cloud switch. Returns the unsubscribe. A listener
+   * must not request a render (setOverlay, requestRender) unconditionally, or the view never goes idle.
+   */
   onSettle(cb: () => void): () => void;
   /** C-V2: null while the view is not settled, or without a running engine. */
   occlusion(points: readonly Vec3[], tolM: readonly number[]): boolean[] | null;
@@ -204,7 +207,14 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     bridge.attach(e);
     const stopEffects = watchEffects((reduced) => e.setEdl(!reduced));
     const stopSettle = e.onSettle(() => {
-      for (const cb of [...settle]) cb();
+      // one listener's throw must not skip the others (P1, L1 and M1 each subscribe)
+      for (const cb of [...settle]) {
+        try {
+          cb();
+        } catch (err) {
+          console.error(err);
+        }
+      }
     });
     const stopCapture = e.onCaptureState((busy) => setSavingKey(busy ? key : null));
 
@@ -402,7 +412,10 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         style={{ cursor: armed ? "crosshair" : "grab" }}
       />
       {savingKey === sceneKey && (
-        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-chip bg-glass-solid shadow-elev-2">
+        <div
+          role="status"
+          className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-chip bg-glass-solid shadow-elev-2"
+        >
           <Pill tone="neutral" live data-testid="cloud-saving-view">
             Saving view…
           </Pill>

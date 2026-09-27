@@ -22,5 +22,6 @@ describe("navigation modes", () => {
     expect(resolveNavMode("pan")).toBe("pan");
     expect(resolveNavMode("orbit")).toBe("orbit");
     expect(resolveNavMode("fly")).toBe("fly");
+    expect(resolveNavMode("fly", "orbit")).toBe("fly"); // the planned (requested, current) arity
   });
 });
