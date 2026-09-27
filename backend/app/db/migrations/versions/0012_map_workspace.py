@@ -7,7 +7,7 @@ data step, dating cloud DSMs from their clouds, is best effort: a failure logs a
 null (AGENTS.md: a broken migration must never be the reason the app won't open).
 
 Revision ID: 0012
-Revises: 0010 (0011 once rebased on I-C0)
+Revises: 0011
 Create Date: 2026-09-27 00:00:00.000000
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0012"
-down_revision = "0010"  # I-C0's "0011" once M-C0 is rebased on it (R4, plan Task 9)
+down_revision = "0011"  # I-C0's (R4: 0010 -> 0011 -> 0012 -> 0013)
 branch_labels = None
 depends_on = None
 
