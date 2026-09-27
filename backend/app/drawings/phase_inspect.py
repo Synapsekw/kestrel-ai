@@ -15,6 +15,7 @@ READERS: dict[str, str] = {
     "tif": "app.drawings.raster_io",
     "dxf": "app.drawings.dxf_flatten",
     "landxml": "app.drawings.landxml_lines",
+    "pdf": "app.drawings.pdf",
 }
 MESSAGE = "Reading drawing"
 HASH_SHARE = 0.2

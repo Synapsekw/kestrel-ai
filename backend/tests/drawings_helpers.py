@@ -93,3 +93,28 @@ def write_landxml(path: Path, body: str, *, units: str = 'linearUnit="meter"', n
         "utf-8",
     )
     return path
+
+
+def write_pdf(
+    path: Path, pages: list[tuple[float, float]], *, encrypt: str | None = None, rotate: int = 0
+) -> Path:
+    """One page per (width_pt, height_pt): a red line fan, a blue disc and a label. `rotate` sets
+    /Rotate (reportlab swaps the MediaBox so the page *displays* at the given size)."""
+    from reportlab.lib.colors import blue, red
+    from reportlab.pdfgen import canvas
+
+    c = canvas.Canvas(str(path), pagesize=pages[0], encrypt=encrypt)
+    for w, h in pages:
+        c.setPageSize((w, h))
+        if rotate:
+            c.setPageRotation(rotate)
+        c.setStrokeColor(red)
+        c.setLineWidth(0.7)
+        for i in range(0, int(w), 23):
+            c.line(i, 0, w - i, h)
+        c.setFillColor(blue)
+        c.circle(w / 3, h / 3, min(w, h) / 6, fill=1)
+        c.drawString(12, 12, "Kestrel plan")
+        c.showPage()
+    c.save()
+    return path
