@@ -6,6 +6,8 @@ import pytest
 from pointclouds import insert_cloud, make_las
 from profile_helpers import cloud_from_las, insert_profile, line_points, wall_section
 
+from app.findings import service
+from app.findings.anchors import AnchorIn
 from app.jobs.cancellation import JobFailure
 from app.pointclouds import router, schemas
 
@@ -122,6 +124,34 @@ def test_create_refusals_carry_their_codes(client, project_id, handle):
     assert r.status_code == 409 and r.json()["error"]["code"] == "not_ready"
     bad = {"kind": "profile", "points": line_points(), "params": {"thickness_m": 9}}
     assert client.post(_meas(project_id, cloud_id), json=bad).status_code == 422
+
+
+def _pin(handle, crack, cloud_id) -> str:
+    anchor = AnchorIn(kind="cloud", cloud_id=cloud_id, x=243550.0, y=3178050.0, z=10.0)
+    return service.create_finding(handle, type_id=crack["id"], anchor=anchor).id
+
+
+def test_create_with_a_valid_finding_id_stores_it_on_the_row(client, project_id, handle, crack):
+    """Ruling 1: the route validates `finding_id` before the profile branch and passes it through
+    to `create_profile_measurement`, which stores it without validating it again."""
+    cloud_id = insert_cloud(handle, bounds_native=None)  # skip the box test (Ruling 4); line_points()
+    fid = _pin(handle, crack, cloud_id)  # uses profile_helpers' ORIGIN, not this fixture's default bounds
+    body = {"kind": "profile", "points": line_points(), "finding_id": fid}
+    r = client.post(_meas(project_id, cloud_id), json=body)
+    assert r.status_code == 202, r.text
+    assert r.json()["measurement"]["finding_id"] == fid
+    listed = client.get(_meas(project_id, cloud_id)).json()["items"]
+    assert [m["finding_id"] for m in listed if m["kind"] == "profile"] == [fid]
+
+
+def test_an_unknown_finding_id_is_refused_like_other_kinds(client, project_id, handle):
+    """The same `invalid_finding` refusal other kinds get (test_cloud_measurement_findings.py); the
+    profile branch is never reached because `require_finding` runs first."""
+    cloud_id = insert_cloud(handle)
+    body = {"kind": "profile", "points": line_points(), "finding_id": "f-does-not-exist"}
+    r = client.post(_meas(project_id, cloud_id), json=body)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_finding"
+    assert client.get(_meas(project_id, cloud_id)).json()["items"] == []
 
 
 def test_the_other_kinds_still_answer_201(client, project_id, handle):
