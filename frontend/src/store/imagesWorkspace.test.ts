@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { makeDetail, makeMeasurement, makeShape } from "@/images/canvas/testing";
+import { exampleClasses } from "@/test/fixtures";
 import {
   acceptedShapes,
   isDrawing,
@@ -64,6 +65,19 @@ describe("loading an image", () => {
   it("ignores a shape that belongs to another image", () => {
     st().upsertBox(makeShape({ id: "stray", image_id: "elsewhere" }));
     expect(st().boxes.stray).toBeUndefined();
+  });
+});
+
+describe("types", () => {
+  it("drops an active type the new catalogue does not have (I5)", () => {
+    const a = { ...exampleClasses[0], id: "a-type" };
+    const b = { ...exampleClasses[0], id: "b-type" };
+    st().setTypes([a]);
+    st().setActiveType("a-type");
+    st().setTypes([a, b]);
+    expect(st().activeTypeId).toBe("a-type");
+    st().setTypes([b]);
+    expect(st().activeTypeId).toBeNull();
   });
 });
 

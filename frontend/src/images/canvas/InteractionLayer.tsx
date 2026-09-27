@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef, type ReactNode } from "react";
 import { Circle, Layer, Line, Transformer } from "react-konva";
 import type Konva from "konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -74,7 +74,13 @@ function SelectionGlow({
 
 function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; scale: number }) {
   const points = useMemo(() => toPoints(box.points ?? []), [box.points]);
-  const save = (next: Point[]) => void cmdUpdateShape(ctx, box.id, { kind: "points", points: next });
+  // The edit applies to the points as they stand when the queued command runs, so a second
+  // vertex drag made while the first is saving does not undo it.
+  const save = (edit: (current: Point[]) => Point[] | null) =>
+    void cmdUpdateShape(ctx, box.id, (current) => {
+      const next = edit(toPoints(current.points ?? []));
+      return next ? { kind: "points", points: next } : null;
+    });
   // Only Alt+click uses the edges; otherwise a press must reach the polygon below (select, drag)
   // instead of bubbling to the stage, where the select tool would clear the selection.
   const altHeld = useImagesWorkspace((s) => s.altHeld);
@@ -95,7 +101,7 @@ function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; sca
           e.cancelBubble = true;
           const at = e.target.getStage()?.getRelativePointerPosition();
           const hit = at ? nearestEdge(points, at) : null;
-          if (hit) save(insertVertex(points, hit.index, hit.at));
+          if (hit) save((current) => insertVertex(current, hit.index, hit.at));
         }}
       />
       {points.map((p, i) => (
@@ -114,14 +120,14 @@ function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; sca
           onMouseDown={(e: KonvaEventObject<MouseEvent>) => {
             e.cancelBubble = true;
             if (!e.evt.altKey) return;
-            const next = removeVertex(points, i);
-            if (next) save(next);
+            if (removeVertex(points, i)) save((current) => removeVertex(current, i));
             else toast("info", "A polygon needs at least 3 points.");
           }}
           onDragEnd={(e: KonvaEventObject<DragEvent>) => {
             e.cancelBubble = true;
             const image = ctx.store.getState().image;
-            if (image) save(moveVertex(points, i, clampPoint({ x: e.target.x(), y: e.target.y() }, image)));
+            const at = image ? clampPoint({ x: e.target.x(), y: e.target.y() }, image) : null;
+            if (at) save((current) => moveVertex(current, i, at));
           }}
         />
       ))}
@@ -129,8 +135,17 @@ function VertexHandles({ ctx, box, scale }: { ctx: CommandContext; box: Box; sca
   );
 }
 
-/** Layer 4: glow, Transformer, vertex handles, the active tool's draft, and the overlay slot. */
-export function InteractionLayer({ ctx, overlay }: { ctx: CommandContext; overlay?: ReactNode }) {
+/**
+ * Layer 4: glow, Transformer, vertex handles, the active tool's draft, and the overlay slot.
+ * Memoised (m2): ImageCanvas re-renders on every pan frame, this layer only on its own state.
+ */
+export const InteractionLayer = memo(function InteractionLayer({
+  ctx,
+  overlay,
+}: {
+  ctx: CommandContext;
+  overlay?: ReactNode;
+}) {
   const selected = useImagesWorkspace(singleSelected);
   const selectedIds = useImagesWorkspace((s) => s.selectedIds);
   const boxes = useImagesWorkspace((s) => s.boxes);
@@ -203,4 +218,4 @@ export function InteractionLayer({ ctx, overlay }: { ctx: CommandContext; overla
       {overlay}
     </Layer>
   );
-}
+});

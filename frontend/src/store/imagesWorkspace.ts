@@ -29,7 +29,7 @@ export type Draft =
 
 export type ConfirmState =
   | { kind: "delete"; ids: string[]; findings: FindingDetail[] }
-  | { kind: "retype"; ids: string[]; typeId: string }
+  | { kind: "retype"; ids: string[]; typeId: string; findings?: FindingDetail[] }
   | null;
 
 export const INITIAL_VIEW: ViewTransform = { scale: 1, x: 0, y: 0 };
@@ -199,7 +199,12 @@ export const useImagesWorkspace = create<ImagesWorkspaceState>((set, get) => {
       }),
     // A response for an image the workspace has since left must not land here.
     setImage: (image) => set((s) => (s.imageId === image.id ? { image } : s)),
-    setTypes: (types) => set({ types: [...types] }),
+    // I5: an active type the new catalogue lacks (another project's) must not survive the switch.
+    setTypes: (types) =>
+      set((s) => ({
+        types: [...types],
+        activeTypeId: types.some((t) => t.id === s.activeTypeId) ? s.activeTypeId : null,
+      })),
     setBoxes: (boxes) =>
       set((s) => {
         const map = keyed(boxes.filter((b) => b.image_id === s.imageId));

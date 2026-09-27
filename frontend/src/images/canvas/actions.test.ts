@@ -1,7 +1,8 @@
+import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fakeClient, IMAGE_ID, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
-import { makeDetail, makeShape } from "./testing";
+import { gatedClient, makeDetail, makeShape } from "./testing";
 import {
   confirmDelete,
   confirmRetype,
@@ -95,13 +96,56 @@ describe("retype", () => {
       },
     ]);
     await retypeSelection(ctx, "obj");
-    expect(st().confirm).toEqual({ kind: "retype", ids: ["b1"], typeId: "obj" });
+    expect(st().confirm).toEqual({ kind: "retype", ids: ["b1"], typeId: "obj", findings: [] });
     await confirmRetype(ctx);
     expect(st().boxes.b1.class_id).toBe("obj");
   });
 });
 
+describe("retype confirmation names the findings (m5)", () => {
+  it("reads the linked finding so the dialog can name it", async () => {
+    const { ctx } = ctxWith([
+      { method: "GET", path: /\/findings\/f1$/, body: finding({ number: 12 }) },
+      {
+        method: "PATCH",
+        path: /\/boxes\/b1$/,
+        status: 409,
+        body: { error: { code: "finding_would_be_deleted", message: "x", details: {} } },
+      },
+    ]);
+    await retypeSelection(ctx, "obj");
+    expect(st().confirm).toMatchObject({ kind: "retype", findings: [{ number: 12 }] });
+  });
+});
+
 describe("nudge and rotate", () => {
+  it("two quick nudges add up, the second PATCH sent after the first resolves (I1)", async () => {
+    const { api, requests, gate } = gatedClient([
+      {
+        method: "PATCH",
+        path: /\/boxes\/b1$/,
+        body: (req) => ({ ...st().boxes.b1, ...(req.body as object) }),
+      },
+    ]);
+    const ctx: CommandContext = {
+      api,
+      projectId: PROJECT_ID,
+      store: useImagesWorkspace,
+      history: st().history,
+    };
+    const first = nudgeSelection(ctx, 1, 0);
+    const second = nudgeSelection(ctx, 1, 0);
+    await waitFor(() => expect(gate.arrived).toBe(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(gate.arrived).toBe(1);
+    gate.release();
+    await waitFor(() => expect(gate.arrived).toBe(2));
+    gate.release();
+    await Promise.all([first, second]);
+    expect(requests.map((r) => (r.body as { x: number }).x)).toEqual([101, 102]);
+    expect(st().boxes.b1.x).toBe(102);
+  });
+
   it("nudges the single selection and rotates a box into an rbox angle", async () => {
     const { ctx, requests } = ctxWith([]);
     await nudgeSelection(ctx, 10, 0);

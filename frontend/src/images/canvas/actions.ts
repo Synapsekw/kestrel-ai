@@ -1,6 +1,7 @@
 import { fetchFinding, type FindingDetail } from "@/api/findings";
 import { messageOf } from "@/api/errors";
 import { pushLog } from "@/app/diagnostics";
+import type { Box } from "@contract/client";
 import { selectedShapes, singleSelected } from "@/store/imagesWorkspace";
 import {
   cmdDeleteMeasurement,
@@ -8,18 +9,13 @@ import {
   cmdDuplicate,
   cmdSetType,
   cmdUpdateShape,
+  findingHasContent,
   type CommandContext,
+  type ShapePatch,
 } from "./commands";
 import { clampOriented, clampPoint, orientedRectOf, toPoints, translatePoints } from "./geometry";
 
-export { FINDING_HAS_CONTENT_MESSAGE } from "./commands";
-
-/** Ruling FC-R4: a note, a photo or a comment makes a finding worth a confirmation. */
-export function findingHasContent(
-  f: Pick<FindingDetail, "note" | "attachment_count" | "comment_count">,
-): boolean {
-  return f.note.trim() !== "" || f.attachment_count > 0 || f.comment_count > 0;
-}
+export { FINDING_HAS_CONTENT_MESSAGE, findingHasContent } from "./commands";
 
 /** Del: a selected measurement, or the selected shapes (confirming when a finding has content). */
 export async function deleteSelection(ctx: CommandContext): Promise<void> {
@@ -60,7 +56,17 @@ export async function retypeSelection(ctx: CommandContext, typeId: string): Prom
   const ids = ctx.store.getState().selectedIds;
   if (ids.length === 0) return;
   const outcome = await cmdSetType(ctx, ids, typeId);
-  if (outcome === "needs-confirm") ctx.store.getState().setConfirm({ kind: "retype", ids, typeId });
+  if (outcome !== "needs-confirm") return;
+  // m5 (FC-R5): the dialog names the findings the change deletes, read as the delete flow does.
+  const s = ctx.store.getState();
+  const linked = ids.map((id) => s.findingOf[id]).filter((f): f is string => !!f);
+  let findings: FindingDetail[] = [];
+  try {
+    findings = await Promise.all(linked.map((fid) => fetchFinding(ctx.api, ctx.projectId, fid)));
+  } catch (e) {
+    pushLog(`read finding before retype failed: ${messageOf(e, String(e))}`);
+  }
+  ctx.store.getState().setConfirm({ kind: "retype", ids, typeId, findings });
 }
 
 export async function confirmRetype(ctx: CommandContext): Promise<void> {
@@ -74,27 +80,26 @@ export async function duplicateSelection(ctx: CommandContext): Promise<void> {
   await cmdDuplicate(ctx, ctx.store.getState().selectedIds);
 }
 
-/** Alt+arrows: 1 px, with Shift 10 px (the caller passes the step). One shape only (FC-R7). */
+function nudged(box: Box, dx: number, dy: number, image: { width: number; height: number }): ShapePatch {
+  if (box.shape === "polygon")
+    return { kind: "points", points: translatePoints(toPoints(box.points ?? []), dx, dy) };
+  if (box.shape === "point")
+    return { kind: "point", at: clampPoint({ x: box.x + dx, y: box.y + dy }, image) };
+  const r = orientedRectOf(box);
+  return { kind: "rect", rect: clampOriented({ ...r, x: r.x + dx, y: r.y + dy }, image) };
+}
+
+/**
+ * Alt+arrows: 1 px, with Shift 10 px (the caller passes the step). One shape only (FC-R7). The
+ * offset applies to the box as it stands when the queued command runs, so quick presses add up.
+ */
 export async function nudgeSelection(ctx: CommandContext, dx: number, dy: number): Promise<void> {
   const s = ctx.store.getState();
   const box = singleSelected(s);
   if (!box || !s.image) return;
-  if (box.shape === "polygon") {
-    return cmdUpdateShape(ctx, box.id, {
-      kind: "points",
-      points: translatePoints(toPoints(box.points ?? []), dx, dy),
-    });
-  }
-  if (box.shape === "point") {
-    return cmdUpdateShape(ctx, box.id, {
-      kind: "point",
-      at: clampPoint({ x: box.x + dx, y: box.y + dy }, s.image),
-    });
-  }
-  const r = orientedRectOf(box);
-  return cmdUpdateShape(ctx, box.id, {
-    kind: "rect",
-    rect: clampOriented({ ...r, x: r.x + dx, y: r.y + dy }, s.image),
+  return cmdUpdateShape(ctx, box.id, (current) => {
+    const image = ctx.store.getState().image;
+    return image ? nudged(current, dx, dy, image) : null;
   });
 }
 
@@ -103,9 +108,10 @@ export async function rotateSelection(ctx: CommandContext, deltaDeg: number): Pr
   const s = ctx.store.getState();
   const box = singleSelected(s);
   if (!box || !s.image || (box.shape !== "box" && box.shape !== "rbox")) return;
-  const r = orientedRectOf(box);
-  return cmdUpdateShape(ctx, box.id, {
-    kind: "rect",
-    rect: clampOriented({ ...r, angle: r.angle + deltaDeg }, s.image),
+  return cmdUpdateShape(ctx, box.id, (current) => {
+    const image = ctx.store.getState().image;
+    if (!image) return null;
+    const r = orientedRectOf(current);
+    return { kind: "rect", rect: clampOriented({ ...r, angle: r.angle + deltaDeg }, image) };
   });
 }

@@ -1,9 +1,9 @@
 import { waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Box } from "@contract/client";
-import { errorBody, fakeClient, IMAGE_ID, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
+import { errorBody, exampleClasses, fakeClient, IMAGE_ID, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { useImagesWorkspace } from "@/store/imagesWorkspace";
-import { makeDetail, makeMeasurement, makeShape, makeWritten } from "./testing";
+import { gatedClient, makeDetail, makeMeasurement, makeShape, makeWritten } from "./testing";
 import {
   cmdCreateMeasurement,
   cmdCreateShape,
@@ -14,10 +14,21 @@ import {
   cmdSetType,
   cmdUndo,
   cmdUpdateShape,
+  FINDING_HAS_CONTENT_MESSAGE,
   type CommandContext,
 } from "./commands";
 
 let counter = 0;
+const finding = (over: object) => ({
+  id: "f1",
+  number: 1,
+  note: "",
+  attachment_count: 0,
+  comment_count: 0,
+  ...over,
+});
+const defect = { ...exampleClasses[0], id: "defect", kind: "defect" as const };
+const object = { ...exampleClasses[0], id: "object", kind: "object" as const };
 const st = () => useImagesWorkspace.getState();
 
 function ctxWith(extra: FakeRoute[] = []) {
@@ -54,6 +65,8 @@ function ctxWith(extra: FakeRoute[] = []) {
         makeMeasurement({ id: measurementCounter++ === 0 ? "m-new" : `m-restored-${measurementCounter}` }),
     },
     { method: "DELETE", path: /\/image-measurements\/[^/]+$/, status: 204, body: null },
+    // A finding with no content: the undo guard (I4) lets the undo through.
+    { method: "GET", path: /\/findings\/[^/]+$/, body: finding({}) },
   ];
   const { api, requests } = fakeClient(routes);
   const ctx: CommandContext = {
@@ -347,5 +360,111 @@ describe("measurements", () => {
     expect(st().measurements.m1).toBeUndefined();
     await cmdUndo(ctx);
     expect(Object.keys(st().measurements)).toHaveLength(2);
+  });
+});
+
+describe("serialisation (I1)", () => {
+  const ctxOf = (api: CommandContext["api"]): CommandContext => ({
+    api,
+    projectId: PROJECT_ID,
+    store: useImagesWorkspace,
+    history: st().history,
+  });
+  const patchRoute: FakeRoute = {
+    method: "PATCH",
+    path: /\/boxes\/[^/]+$/,
+    body: (req) => ({ ...st().boxes.p1, ...(req.body as object) }),
+  };
+  const shifted = (dx: number) => (b: Box) => ({
+    kind: "points" as const,
+    points: (b.points ?? []).map(([x, y]) => ({ x: x + dx, y })),
+  });
+
+  it("runs a second relative edit on the box the first one left, after the first PATCH resolves", async () => {
+    const { api, requests, gate } = gatedClient([patchRoute]);
+    const ctx = ctxOf(api);
+    const first = cmdUpdateShape(ctx, "p1", shifted(1));
+    const second = cmdUpdateShape(ctx, "p1", shifted(1));
+    await waitFor(() => expect(gate.arrived).toBe(1));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(gate.arrived).toBe(1); // the second PATCH waits for the first
+    gate.release();
+    await waitFor(() => expect(gate.arrived).toBe(2));
+    gate.release();
+    await Promise.all([first, second]);
+    expect(requests.map((r) => (r.body as { points: number[][] }).points[0][0])).toEqual([11, 12]);
+    expect(st().boxes.p1.points?.[0]).toEqual([12, 10]);
+  });
+
+  it("an undo asked for while a save is in flight applies after it", async () => {
+    const { api, requests, gate } = gatedClient([patchRoute]);
+    const ctx = ctxOf(api);
+    const save = cmdUpdateShape(ctx, "p1", shifted(5));
+    const undo = cmdUndo(ctx);
+    await waitFor(() => expect(gate.arrived).toBe(1));
+    gate.release();
+    await waitFor(() => expect(gate.arrived).toBe(2));
+    gate.release();
+    await Promise.all([save, undo]);
+    expect(requests.map((r) => (r.body as { points: number[][] }).points[0][0])).toEqual([15, 10]);
+    expect(st().boxes.p1.points?.[0]).toEqual([10, 10]);
+    expect(st().history.canUndo()).toBe(false);
+  });
+});
+
+describe("cmdSetType finding links (I3)", () => {
+  it("links the finding an object -> defect change creates, and drops it on defect -> object", async () => {
+    const { ctx } = ctxWith([
+      {
+        method: "PATCH",
+        path: /\/boxes\/p1$/,
+        body: (req) => {
+          const classId = (req.body as { class_id: string }).class_id;
+          return makeWritten({
+            ...st().boxes.p1,
+            class_id: classId,
+            finding_id: classId === "defect" ? "f-made" : null,
+          });
+        },
+      },
+    ]);
+    expect(await cmdSetType(ctx, ["p1"], "defect")).toBe("done");
+    expect(st().findingOf.p1).toBe("f-made");
+    expect(await cmdSetType(ctx, ["p1"], "object", { confirmFindingDelete: true })).toBe("done");
+    expect(st().findingOf.p1).toBeUndefined();
+  });
+});
+
+describe("undo refuses to delete a finding with content (I4)", () => {
+  it("keeps a drawn shape whose finding got a note, and its history entry", async () => {
+    const { ctx, requests } = ctxWith([
+      { method: "GET", path: /\/findings\/f-new$/, body: finding({ id: "f-new", note: "crack" }) },
+    ]);
+    const box = await cmdCreateShape(ctx, IMAGE_ID, { class_id: "c", shape: "box", x: 1, y: 1, w: 9, h: 9 });
+    await cmdUndo(ctx);
+    expect(st().boxes[box!.id]).toBeDefined();
+    expect(requests.some((r) => r.method === "DELETE")).toBe(false);
+    expect(st().history.canUndo()).toBe(true);
+    expect(st().failure?.message).toBe(FINDING_HAS_CONTENT_MESSAGE);
+  });
+
+  it("keeps an object -> defect retype whose finding got a photo", async () => {
+    useImagesWorkspace.setState({ types: [defect, object] });
+    st().upsertBox({ ...st().boxes.p1, class_id: "object" });
+    const { ctx, requests } = ctxWith([
+      {
+        method: "PATCH",
+        path: /\/boxes\/p1$/,
+        body: (req) => makeWritten({ ...st().boxes.p1, ...(req.body as object), finding_id: "f-made" }),
+      },
+      { method: "GET", path: /\/findings\/f-made$/, body: finding({ id: "f-made", attachment_count: 1 }) },
+    ]);
+    await cmdSetType(ctx, ["p1"], "defect");
+    const patches = requests.filter((r) => r.method === "PATCH").length;
+    await cmdUndo(ctx);
+    expect(requests.filter((r) => r.method === "PATCH")).toHaveLength(patches);
+    expect(st().boxes.p1.class_id).toBe("defect");
+    expect(st().history.canUndo()).toBe(true);
+    expect(st().failure?.message).toBe(FINDING_HAS_CONTENT_MESSAGE);
   });
 });

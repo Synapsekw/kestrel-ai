@@ -3,6 +3,7 @@ import type { ApiClient, Box, BoxCreate, BoxUpdate } from "@contract/client";
 import { deleteBox } from "@/api/boxes";
 import { useApi } from "@/api/client";
 import { ApiFailure, codeOf, messageOf } from "@/api/errors";
+import { fetchFinding, type FindingDetail } from "@/api/findings";
 import {
   bodyOf,
   createImageMeasurement,
@@ -47,10 +48,42 @@ export type ShapePatch =
 /** Spec §16's wording for an undo refused because the finding already has content. */
 export const FINDING_HAS_CONTENT_MESSAGE = "This finding has a note or photos; delete it from the inspector.";
 
-/** Queues a whole command behind the earlier ones of the same image, so history order equals action order. */
+/**
+ * Queues a whole command behind the earlier ones of the same image, so history order equals action
+ * order and each command reads the state the previous one left. Every exported `cmd*` runs its
+ * body (state reads included) through this; a body must never await another `enqueue` (the queue
+ * would wait on itself), so bodies call the `*Now` functions and undo/redo call the API directly.
+ */
 export function enqueue<T>(ctx: CommandContext, fn: () => Promise<T>): Promise<T> {
   ctx.store.getState().beginRequest();
   return ctx.history.run(fn).finally(() => ctx.store.getState().endRequest());
+}
+
+/** Ruling FC-R4: a note, a photo or a comment makes a finding worth a confirmation. */
+export function findingHasContent(
+  f: Pick<FindingDetail, "note" | "attachment_count" | "comment_count">,
+): boolean {
+  return f.note.trim() !== "" || f.attachment_count > 0 || f.comment_count > 0;
+}
+
+/**
+ * An undo that would delete the finding linked to `boxId` refuses when that finding has content
+ * (spec section 16): it throws `finding_has_content`, so `tracked` shows FINDING_HAS_CONTENT_MESSAGE
+ * and the history entry stays on the stack.
+ */
+async function refuseIfFindingHasContent(ctx: CommandContext, boxId: string): Promise<void> {
+  const findingId = ctx.store.getState().findingOf[boxId];
+  if (!findingId) return;
+  const finding = await fetchFinding(ctx.api, ctx.projectId, findingId);
+  if (findingHasContent(finding))
+    throw new ApiFailure("finding_has_content", FINDING_HAS_CONTENT_MESSAGE, 409);
+}
+
+/** A write result's finding link, or none: F links a defect's finding and drops an object's. */
+function syncFindingLink(ctx: CommandContext, written: BoxWriteResult): void {
+  const s = ctx.store.getState();
+  if (written.finding_id) s.linkFindings({ [written.id]: written.finding_id });
+  else s.unlinkFinding(written.id);
 }
 
 function failureText(label: string, e: unknown): string {
@@ -99,7 +132,15 @@ function afterCreate(ctx: CommandContext, created: BoxWriteResult): void {
   toastIfRepaired(created);
 }
 
-export async function cmdCreateShape(
+export function cmdCreateShape(
+  ctx: CommandContext,
+  imageId: string,
+  body: BoxCreate,
+): Promise<BoxWriteResult | undefined> {
+  return enqueue(ctx, () => createShapeNow(ctx, imageId, body));
+}
+
+async function createShapeNow(
   ctx: CommandContext,
   imageId: string,
   body: BoxCreate,
@@ -114,6 +155,7 @@ export async function cmdCreateShape(
   history.push({
     label: "draw shape",
     undo: async () => {
+      await refuseIfFindingHasContent(ctx, ref.id); // I4: deleting the shape deletes its finding.
       await deleteBox(api, projectId, ref.id);
       store.getState().removeBox(ref.id);
       store.getState().unlinkFinding(ref.id);
@@ -148,11 +190,29 @@ function samePatch(a: ShapePatch, b: ShapePatch): boolean {
   return JSON.stringify(patchBody(a)) === JSON.stringify(patchBody(b));
 }
 
-/** Move/resize/rotate a box or rbox, move a point, or replace a polygon's points (R-BA6). */
-export async function cmdUpdateShape(ctx: CommandContext, id: string, after: ShapePatch): Promise<void> {
+/**
+ * Move/resize/rotate a box or rbox, move a point, or replace a polygon's points (R-BA6). `after`
+ * may be a function of the box as it stands when the command runs (after every earlier queued
+ * command), so relative edits such as a nudge compose instead of reading a stale box.
+ */
+export function cmdUpdateShape(
+  ctx: CommandContext,
+  id: string,
+  after: ShapePatch | ((box: Box) => ShapePatch | null),
+): Promise<void> {
+  return enqueue(ctx, () => updateShapeNow(ctx, id, after));
+}
+
+async function updateShapeNow(
+  ctx: CommandContext,
+  id: string,
+  next: ShapePatch | ((box: Box) => ShapePatch | null),
+): Promise<void> {
   const { api, projectId, store, history } = ctx;
   const box = store.getState().boxes[id];
   if (!box) return;
+  const after = typeof next === "function" ? next(box) : next;
+  if (!after) return;
   const before = patchOf(box);
   if (samePatch(before, after)) return;
   const restoreProposal = isProposal(box) && box.review_state === "unreviewed";
@@ -192,13 +252,27 @@ export async function cmdUpdateShape(ctx: CommandContext, id: string, after: Sha
  * before returning "done". The confirm retry calls this again with the full original selection;
  * ids already at `typeId` are filtered out of `targets`, so only the unfinished ones are retried.
  */
-export async function cmdSetType(
+export function cmdSetType(
   ctx: CommandContext,
   ids: string[],
   typeId: string,
   opts: { confirmFindingDelete?: boolean } = {},
 ): Promise<"done" | "needs-confirm" | "failed"> {
+  return enqueue(ctx, () => setTypeNow(ctx, ids, typeId, opts));
+}
+
+async function setTypeNow(
+  ctx: CommandContext,
+  ids: string[],
+  typeId: string,
+  opts: { confirmFindingDelete?: boolean },
+): Promise<"done" | "needs-confirm" | "failed"> {
   const { api, projectId, store, history } = ctx;
+  const retype = async (id: string, classId: string, o: { confirmFindingDelete?: boolean }) => {
+    const written = await updateShape(api, projectId, id, { class_id: classId }, o);
+    store.getState().upsertBox(written);
+    syncFindingLink(ctx, written); // I3: object -> defect links a finding, defect -> object drops it.
+  };
   const targets = ids
     .map((id) => store.getState().boxes[id])
     .filter((b): b is Box => !!b && b.class_id !== typeId);
@@ -210,7 +284,7 @@ export async function cmdSetType(
   store.getState().clearFailure();
   try {
     for (const b of targets) {
-      store.getState().upsertBox(await updateShape(api, projectId, b.id, { class_id: typeId }, opts));
+      await retype(b.id, typeId, opts);
       applied.push(b.id);
     }
   } catch (e) {
@@ -229,33 +303,19 @@ export async function cmdSetType(
     history.push({
       label: "change type",
       undo: async () => {
+        // I4: going back to an object type deletes the finding the retype created; refuse when
+        // it has content by now (every id is checked first, so nothing is half undone).
+        const kindOf = (classId: string) => store.getState().types.find((t) => t.id === classId)?.kind;
         for (const [id, classId] of appliedPrevious) {
-          store
-            .getState()
-            .upsertBox(
-              await updateShape(
-                api,
-                projectId,
-                history.resolve(id),
-                { class_id: classId },
-                { confirmFindingDelete: true },
-              ),
-            );
+          if (kindOf(classId) !== "defect") await refuseIfFindingHasContent(ctx, history.resolve(id));
+        }
+        for (const [id, classId] of appliedPrevious) {
+          await retype(history.resolve(id), classId, { confirmFindingDelete: true });
         }
       },
       redo: async () => {
         for (const id of appliedPrevious.keys()) {
-          store
-            .getState()
-            .upsertBox(
-              await updateShape(
-                api,
-                projectId,
-                history.resolve(id),
-                { class_id: typeId },
-                { confirmFindingDelete: true },
-              ),
-            );
+          await retype(history.resolve(id), typeId, { confirmFindingDelete: true });
         }
       },
     });
@@ -264,12 +324,20 @@ export async function cmdSetType(
 }
 
 /** Accept or reject suggestions (A / X are FA's keys). Undo is `unreview` (§8.3). */
-export async function cmdReview(
+export function cmdReview(
   ctx: CommandContext,
   ids: string[],
   action: "accept" | "reject",
 ): Promise<BoxReviewResult | undefined> {
-  if (ids.length === 0) return undefined;
+  if (ids.length === 0) return Promise.resolve(undefined);
+  return enqueue(ctx, () => reviewNow(ctx, ids, action));
+}
+
+async function reviewNow(
+  ctx: CommandContext,
+  ids: string[],
+  action: "accept" | "reject",
+): Promise<BoxReviewResult | undefined> {
   const { api, projectId, store, history } = ctx;
   const state = action === "accept" ? "accepted" : "rejected";
   const result = await tracked(ctx, `${action} suggestions`, () => reviewShapes(api, projectId, ids, action));
@@ -296,7 +364,11 @@ export async function cmdReview(
 }
 
 /** Person shapes are deleted; proposals are rejected (the row stays for its provenance). */
-export async function cmdDeleteShapes(ctx: CommandContext, ids: string[]): Promise<void> {
+export function cmdDeleteShapes(ctx: CommandContext, ids: string[]): Promise<void> {
+  return enqueue(ctx, () => deleteShapesNow(ctx, ids));
+}
+
+async function deleteShapesNow(ctx: CommandContext, ids: string[]): Promise<void> {
   const { api, projectId, store, history } = ctx;
   const boxes = ids.map((id) => store.getState().boxes[id]).filter((b): b is Box => !!b);
   if (boxes.length === 0) return;
@@ -364,7 +436,11 @@ export async function cmdDeleteShapes(ctx: CommandContext, ids: string[]): Promi
 }
 
 /** Ctrl+D: each selected shape again, offset 12 px, as person shapes. */
-export async function cmdDuplicate(ctx: CommandContext, ids: string[]): Promise<void> {
+export function cmdDuplicate(ctx: CommandContext, ids: string[]): Promise<void> {
+  return enqueue(ctx, () => duplicateNow(ctx, ids));
+}
+
+async function duplicateNow(ctx: CommandContext, ids: string[]): Promise<void> {
   const { store } = ctx;
   const image = store.getState().image;
   if (!image) return;
@@ -380,13 +456,22 @@ export async function cmdDuplicate(ctx: CommandContext, ids: string[]): Promise<
       body.x = (body.x ?? 0) + dx;
       body.y = (body.y ?? 0) + dy;
     }
-    const b = await cmdCreateShape(ctx, box.image_id, body);
+    const b = await createShapeNow(ctx, box.image_id, body);
     if (b) created.push(b.id);
   }
   if (created.length) store.getState().select(created);
 }
 
-export async function cmdCreateMeasurement(
+export function cmdCreateMeasurement(
+  ctx: CommandContext,
+  imageId: string,
+  a: Point,
+  b: Point,
+): Promise<ImageMeasurement | undefined> {
+  return enqueue(ctx, () => createMeasurementNow(ctx, imageId, a, b));
+}
+
+async function createMeasurementNow(
   ctx: CommandContext,
   imageId: string,
   a: Point,
@@ -414,7 +499,11 @@ export async function cmdCreateMeasurement(
   return created;
 }
 
-export async function cmdDeleteMeasurement(ctx: CommandContext, id: string): Promise<void> {
+export function cmdDeleteMeasurement(ctx: CommandContext, id: string): Promise<void> {
+  return enqueue(ctx, () => deleteMeasurementNow(ctx, id));
+}
+
+async function deleteMeasurementNow(ctx: CommandContext, id: string): Promise<void> {
   const { api, projectId, store, history } = ctx;
   const m = store.getState().measurements[id];
   if (!m) return;
@@ -440,10 +529,11 @@ export async function cmdDeleteMeasurement(ctx: CommandContext, id: string): Pro
   });
 }
 
+/** Queued like any command, so Ctrl+Z pressed while a save is in flight undoes it once it lands. */
 export async function cmdUndo(ctx: CommandContext): Promise<void> {
-  await tracked(ctx, "undo", () => ctx.history.undo());
+  await enqueue(ctx, () => tracked(ctx, "undo", () => ctx.history.undo()));
 }
 
 export async function cmdRedo(ctx: CommandContext): Promise<void> {
-  await tracked(ctx, "redo", () => ctx.history.redo());
+  await enqueue(ctx, () => tracked(ctx, "redo", () => ctx.history.redo()));
 }

@@ -1,6 +1,6 @@
-import type { Box } from "@contract/client";
+import { createApiClient, type ApiClient, type Box } from "@contract/client";
 import type { BoxWriteResult, ImageDetail, ImageMeasurement } from "@/api/shapes";
-import { exampleImage, IMAGE_ID, personBox } from "@/test/fixtures";
+import { exampleImage, fakeFetch, IMAGE_ID, personBox, type FakeRoute } from "@/test/fixtures";
 
 /** A Box with every shape field set; `partial` wins. */
 export function makeShape(partial: Partial<Box> = {}): Box {
@@ -62,4 +62,24 @@ export function makeMeasurement(partial: Partial<ImageMeasurement> = {}): ImageM
     created_at: "2026-09-27T10:00:00Z",
   };
   return { ...base, ...partial } as ImageMeasurement;
+}
+
+/**
+ * A fake client whose `method` requests wait at a gate until the test calls `release()` (one
+ * request per call), so a test can hold a save in flight. `arrived` counts requests at the gate.
+ */
+export function gatedClient(routes: FakeRoute[], method = "PATCH") {
+  const { fetch: inner, requests } = fakeFetch(routes);
+  const waiting: Array<() => void> = [];
+  const gate = { arrived: 0, release: () => waiting.shift()?.() };
+  const fetchImpl = (async (input: Request | string | URL, init?: RequestInit) => {
+    const m = input instanceof Request ? input.method : (init?.method ?? "GET");
+    if (m === method) {
+      gate.arrived += 1;
+      await new Promise<void>((resolve) => waiting.push(resolve));
+    }
+    return inner(input, init);
+  }) as typeof fetch;
+  const api: ApiClient = createApiClient({ baseUrl: "http://fake", token: "t", fetch: fetchImpl });
+  return { api, requests, gate };
 }
