@@ -75,3 +75,43 @@ def test_a_broken_inspection_folder_does_not_stop_the_sweep(handle):
     (bad / "request.json").write_text("[not a dict]", "utf-8")
     os.utime(bad, (time.time() - 3 * 86400, time.time() - 3 * 86400))
     assert startup.sweep_inspections(handle, _Idle()) == [bad.name]
+
+
+def test_the_sweep_removes_drawing_folders_that_have_no_row(handle, tmp_path, monkeypatch):
+    """A DELETE whose folder removal failed (a file held open) leaves a folder with no row: the next
+    project open removes it. A folder whose row exists stays; a folder that cannot be removed is
+    logged and skipped, never raised."""
+    with handle.session() as s:
+        row = Drawing(
+            name="kept",
+            format="png",
+            source_path=str(tmp_path / "x.png"),
+            source_size=1,
+            status="ready",
+            layers=[],
+            layer_state={},
+            georef_version=0,
+        )
+        s.add(row)
+        s.flush()
+        kept = row.id
+    orphan, stuck = store.new_id(), store.new_id()
+    for did in (kept, orphan, stuck):
+        store.drawing_dir(handle, did).mkdir(parents=True)
+        (store.drawing_dir(handle, did) / "plan.tif").write_bytes(b"x")
+    stray = store.drawing_dir(handle, kept).parent / "not-an-id"
+    stray.mkdir()
+    real = startup.shutil.rmtree
+
+    def rmtree(path, *a, **k):
+        if os.path.basename(path) == stuck:
+            raise PermissionError("held open")
+        return real(path, *a, **k)
+
+    monkeypatch.setattr(startup.shutil, "rmtree", rmtree)
+    assert startup.sweep_orphan_folders(handle) == [orphan]
+    assert store.drawing_dir(handle, kept).is_dir() and stray.is_dir()
+    assert not store.drawing_dir(handle, orphan).exists() and store.drawing_dir(handle, stuck).exists()
+    monkeypatch.setattr(startup.shutil, "rmtree", real)
+    startup.sweep_interrupted(handle, _Idle())  # the open sweep runs it too
+    assert not store.drawing_dir(handle, stuck).exists()

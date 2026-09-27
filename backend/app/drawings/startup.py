@@ -2,7 +2,8 @@
 
 An `importing` drawing whose `drawing_import` job this process does not hold becomes `failed`
 ("interrupted") and loses its partial folder under `drawings/` (M-B3); drawing-inspection folders no
-live job holds are removed after 24 h, and a younger one still `inspecting` is marked failed. Each
+live job holds are removed after 24 h, and a younger one still `inspecting` is marked failed. A folder
+under `drawings/` with no Drawing row (a DELETE whose removal met a file held open) is removed. Each
 item is swept on its own and nothing raises: a failing sweep never stops a project from opening.
 """
 
@@ -16,6 +17,7 @@ from sqlalchemy import select
 from app.db.base import utcnow
 from app.db.models import Drawing
 from app.drawings import store
+from app.surfaces.design.store import ID_RE
 from app.projects.service import ProjectHandle
 
 INTERRUPTED = "import interrupted by application restart; import the drawing again"
@@ -61,6 +63,26 @@ def sweep_inspections(handle: ProjectHandle, runner) -> list[str]:
     return removed
 
 
+def sweep_orphan_folders(handle: ProjectHandle) -> list[str]:
+    """Remove every drawing-id folder under `drawings/` whose Drawing row is gone."""
+    root, removed = Path(handle.drawings_dir), []
+    if not root.is_dir():
+        return removed
+    with handle.session() as s:
+        known = set(s.execute(select(Drawing.id)).scalars())
+    for folder in sorted(root.iterdir()):
+        try:
+            if not folder.is_dir() or not ID_RE.fullmatch(folder.name) or folder.name in known:
+                continue
+            shutil.rmtree(folder)
+            removed.append(folder.name)
+        except Exception:
+            log.exception("could not remove orphan drawing folder %s", folder.name)
+    if removed:
+        log.info("removed %d orphan drawing folder(s) in project %s", len(removed), handle.id)
+    return removed
+
+
 def sweep_interrupted(handle: ProjectHandle, runner) -> list[str]:
     swept: list[str] = []
     with handle.session() as s:
@@ -77,4 +99,8 @@ def sweep_interrupted(handle: ProjectHandle, runner) -> list[str]:
         sweep_inspections(handle, runner)
     except Exception:
         log.exception("could not sweep drawing inspections in project %s", handle.id)
+    try:
+        sweep_orphan_folders(handle)
+    except Exception:
+        log.exception("could not sweep orphan drawing folders in project %s", handle.id)
     return swept
