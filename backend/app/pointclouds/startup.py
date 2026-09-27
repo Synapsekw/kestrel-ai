@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import shutil
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -89,6 +90,7 @@ def sweep_profiles(handle: ProjectHandle, runner) -> list[str]:
                     writing.add(row.id)
                     continue
                 row.status, row.error = "failed", profile.INTERRUPTED
+                row.updated_at = datetime.now(UTC)
                 swept.append(row.id)
     except Exception:
         log.exception("could not mark interrupted cloud profiles in project %s", handle.id)

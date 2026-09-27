@@ -1,6 +1,7 @@
 """C-B2 Task 5: profiles a restart cut short (spec 2026-09-26-point-cloud-workspace section 8.4 step 5)."""
 
 import logging
+from datetime import UTC, datetime
 
 from pointclouds import insert_cloud
 from profile_helpers import insert_profile
@@ -71,3 +72,15 @@ def test_a_db_failure_logs_and_touches_no_file(handle, monkeypatch, caplog):
 
 def test_a_fresh_project_has_nothing_to_sweep(handle):
     assert startup.sweep_profiles(handle, _Runner()) == []
+
+
+def test_a_swept_profile_gets_a_new_updated_at(handle):
+    cloud_id = insert_cloud(handle)
+    mid = insert_profile(handle, cloud_id, job_id="gone")
+    old = datetime(2020, 1, 1, tzinfo=UTC)
+    with handle.session() as s:
+        s.get(CloudMeasurement, mid).updated_at = old
+    startup.sweep_profiles(handle, _Runner())
+    with handle.session() as s:
+        stamped = s.get(CloudMeasurement, mid).updated_at
+    assert stamped.replace(tzinfo=stamped.tzinfo or UTC) > old
