@@ -268,14 +268,19 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           const shot = await e.capture(e.currentPose(), marks);
           const ms = performance.now() - t0;
           const bmp = await createImageBitmap(shot.blob);
-          const oc = new OffscreenCanvas(bmp.width, bmp.height);
-          const ctx = oc.getContext("2d");
-          if (!ctx) throw new Error("no 2D context to decode the capture");
-          ctx.drawImage(bmp, 0, 0);
-          const data = ctx.getImageData(0, 0, bmp.width, bmp.height).data;
+          const { width, height } = bmp;
+          let data: Uint8ClampedArray;
+          try {
+            const ctx = new OffscreenCanvas(width, height).getContext("2d");
+            if (!ctx) throw new Error("no 2D context to decode the capture");
+            ctx.drawImage(bmp, 0, 0);
+            data = ctx.getImageData(0, 0, width, height).data;
+          } finally {
+            bmp.close();
+          }
           return {
-            width: bmp.width,
-            height: bmp.height,
+            width,
+            height,
             type: shot.blob.type,
             complete: shot.complete,
             edl: shot.edl,

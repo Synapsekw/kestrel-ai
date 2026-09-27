@@ -26,9 +26,7 @@ function fakePartsThatThrowsDuringSetup(recoverableFinally: boolean) {
     readRenderTargetPixels: vi.fn(),
   } as unknown as THREE.WebGLRenderer;
   const pco = { pcoGeometry: {} } as never;
-  const potree = recoverableFinally
-    ? ({ updatePointClouds: vi.fn() } as never)
-    : ({} as never); // no updatePointClouds: the finally's own recovery call throws too
+  const potree = recoverableFinally ? ({ updatePointClouds: vi.fn() } as never) : ({} as never); // no updatePointClouds: the finally's own recovery call throws too
   const parts: EngineParts = {
     renderer,
     overlayScene,
@@ -77,5 +75,62 @@ describe("runCapture: a throw during GPU-resource setup (review I1)", () => {
     expect(setFrozenCalls).toEqual([true, false]);
     expect(notify.mock.calls.map((c) => c[0])).toEqual([true, false]);
     expect(requestRender).toHaveBeenCalled();
+  });
+});
+
+/** A fake whose cloud goes away (the engine disposed: `parts.pco()` answers null) while the capture
+ * waits for the pose's nodes. */
+function fakePartsDisposedMidWait() {
+  let disposed = false;
+  const setFrozenCalls: boolean[] = [];
+  const pco = { pcoGeometry: { numNodesLoading: 1 } } as never;
+  const updatePointClouds = vi.fn(() => {
+    disposed = true; // the engine is rebuilt while this step's node loads are in flight
+    return { nodeLoadPromises: [Promise.resolve()], exceededMaxLoadsToGPU: false };
+  });
+  const renderer = {
+    getContext: () => ({ isContextLost: () => false }),
+    getClearColor: vi.fn((c: THREE.Color) => c),
+    getClearAlpha: vi.fn(() => 1),
+    setClearColor: vi.fn(),
+    readRenderTargetPixels: vi.fn(),
+  } as unknown as THREE.WebGLRenderer;
+  const renderToTarget = vi.fn();
+  const parts: EngineParts = {
+    renderer,
+    overlayScene: { add: vi.fn(), remove: vi.fn() } as unknown as THREE.Scene,
+    overlay: { visible: true } as unknown as THREE.Group,
+    camera: new THREE.PerspectiveCamera(),
+    potree: { updatePointClouds } as never,
+    canvas: document.createElement("canvas"),
+    bounds: null,
+    pco: () => (disposed ? null : pco),
+    edl: () => ({ on: false, rendersToTarget: false }),
+    clearRgb: () => [21, 27, 25],
+    accentRgb: () => [229, 175, 100],
+    idle: () => true,
+    frozen: () => false,
+    setFrozen: (f: boolean) => setFrozenCalls.push(f),
+    pickParams: () => ({}),
+    pickGuard: (fn) => fn(),
+    renderToTarget,
+    requestRender: vi.fn(),
+  };
+  return { parts, setFrozenCalls, updatePointClouds, renderer, renderToTarget };
+}
+
+describe("runCapture: the engine disposed mid-capture (review T8 I1)", () => {
+  it("rejects, stops updating the old octree, draws nothing and touches no GL state", async () => {
+    const { parts, setFrozenCalls, updatePointClouds, renderer, renderToTarget } = fakePartsDisposedMidWait();
+    const notify = vi.fn();
+    await expect(runCapture(parts, pose, [], { timeoutMs: 5_000 }, notify)).rejects.toThrow(
+      "the cloud changed during the capture",
+    );
+    expect(updatePointClouds).toHaveBeenCalledTimes(1); // no further LOD update on the disposed cloud
+    expect(renderToTarget).not.toHaveBeenCalled();
+    expect(renderer.setClearColor).not.toHaveBeenCalled(); // the next engine shares the WebGL context
+    expect(renderer.readRenderTargetPixels).not.toHaveBeenCalled();
+    expect(setFrozenCalls).toEqual([true, false]);
+    expect(notify.mock.calls.map((c) => c[0])).toEqual([true, false]);
   });
 });

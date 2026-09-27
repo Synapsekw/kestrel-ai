@@ -48,6 +48,9 @@ export async function runCapture(
   let texture: THREE.DataTexture | null = null;
   let clearWas: THREE.Color | null = null;
   let clearAlphaWas = 1;
+  /** Restored only when changed: a capture that stops earlier (the engine disposed, and the next one
+   * sharing this WebGL context) must never write GL clear state. */
+  let clearSet = false;
   const pixels = new Uint8Array(CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
   let complete = false;
   try {
@@ -65,18 +68,17 @@ export async function runCapture(
     cam.lookAt(pose.target[0], pose.target[1], pose.target[2]);
     cam.updateProjectionMatrix();
     cam.updateMatrixWorld(true);
-    complete = await waitForNodes(
-      () => {
-        const r = potree.updatePointClouds([pco], cam, renderer);
-        void Promise.allSettled(r.nodeLoadPromises);
-        const loading = (pco.pcoGeometry as unknown as { numNodesLoading?: number }).numNodesLoading ?? 0;
-        return {
-          busy: loading > 0 || r.nodeLoadPromises.length > 0 || r.exceededMaxLoadsToGPU,
-          loads: r.nodeLoadPromises,
-        };
-      },
-      opts.timeoutMs ?? CAPTURE_TIMEOUT_MS,
-    );
+    complete = await waitForNodes(() => {
+      // the engine was disposed (or the cloud replaced): stop touching the old octree at once
+      if (parts.pco() !== pco) return { busy: false, loads: [] };
+      const r = potree.updatePointClouds([pco], cam, renderer);
+      void Promise.allSettled(r.nodeLoadPromises);
+      const loading = (pco.pcoGeometry as unknown as { numNodesLoading?: number }).numNodesLoading ?? 0;
+      return {
+        busy: loading > 0 || r.nodeLoadPromises.length > 0 || r.exceededMaxLoadsToGPU,
+        loads: r.nodeLoadPromises,
+      };
+    }, opts.timeoutMs ?? CAPTURE_TIMEOUT_MS);
     if (parts.pco() !== pco) throw new Error("the cloud changed during the capture");
     // once more, so the node texture the material reads matches `cam` for the draw
     potree.updatePointClouds([pco], cam, renderer);
@@ -90,6 +92,7 @@ export async function runCapture(
     for (const o of markObjects(marks, origin, colours, texture, p.fov)) group.add(o);
     overlayScene.add(group);
     overlay.visible = false;
+    clearSet = true;
     renderer.setClearColor(rawColor(parts.clearRgb()), 1);
     parts.renderToTarget(target, cam);
     if (renderer.getContext().isContextLost()) throw lostError();
@@ -104,7 +107,7 @@ export async function runCapture(
     // replace the real outcome (the error being propagated, or a successful capture) with a cleanup
     // error, and `setFrozen(false)` / `requestRender()` must still run either way.
     try {
-      if (clearWas) renderer.setClearColor(clearWas, clearAlphaWas);
+      if (clearSet && clearWas) renderer.setClearColor(clearWas, clearAlphaWas);
     } catch {
       // best-effort restore only; never lets a cleanup failure mask the real outcome
     }
@@ -118,7 +121,8 @@ export async function runCapture(
     try {
       // the screen camera's nodes again before the loop resumes (plan Ruling 14)
       const now = parts.pco();
-      if (now && !renderer.getContext().isContextLost()) potree.updatePointClouds([now], parts.camera, renderer);
+      if (now && !renderer.getContext().isContextLost())
+        potree.updatePointClouds([now], parts.camera, renderer);
     } catch {
       // best-effort restore only; never lets a cleanup failure mask the real outcome
     }
@@ -126,9 +130,20 @@ export async function runCapture(
     parts.requestRender();
   }
   try {
-    const blob = await encodeView(opaque(flipRows(pixels, CAPTURE_WIDTH, CAPTURE_HEIGHT)), CAPTURE_WIDTH, CAPTURE_HEIGHT);
+    const blob = await encodeView(
+      opaque(flipRows(pixels, CAPTURE_WIDTH, CAPTURE_HEIGHT)),
+      CAPTURE_WIDTH,
+      CAPTURE_HEIGHT,
+    );
     const edl = parts.edl();
-    return { blob, width: CAPTURE_WIDTH, height: CAPTURE_HEIGHT, complete, edl: edl.on && edl.rendersToTarget, pose };
+    return {
+      blob,
+      width: CAPTURE_WIDTH,
+      height: CAPTURE_HEIGHT,
+      complete,
+      edl: edl.on && edl.rendersToTarget,
+      pose,
+    };
   } finally {
     notify(false);
   }

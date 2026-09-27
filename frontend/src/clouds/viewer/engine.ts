@@ -321,7 +321,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
     potree,
     canvas,
     bounds,
-    pco: () => pco,
+    // a disposed engine has no cloud: a capture in flight across dispose() rejects (plan Ruling 7)
+    pco: () => (disposed ? null : pco),
     edl: () => ({ on: edlOn, rendersToTarget: EDL_RENDERS_TO_TARGET }),
     clearRgb: () => clear,
     accentRgb: () => tokenRgb("accent"),
@@ -1009,7 +1010,16 @@ export function createEngine(o: EngineOptions): CloudEngine {
       capturing = true;
       try {
         return await runCapture(parts, pose, marks, opts, (busy) => {
-          for (const cb of [...captureListeners]) cb(busy);
+          for (const cb of [...captureListeners]) {
+            try {
+              cb(busy);
+            } catch (err) {
+              pushErrorOnce(
+                stats.errors,
+                `onCaptureState: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
+          }
         });
       } finally {
         capturing = false;
