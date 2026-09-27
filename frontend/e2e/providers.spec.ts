@@ -63,5 +63,5 @@ test("a 501 from providers shows the note and leaves the other settings sections
     page.getByRole("note").filter({ hasText: "Cloud providers are not available yet" }),
   ).toBeVisible();
   await expect(page.getByLabel("Pre-annotation model")).toBeEnabled();
-  await expect(page.getByRole("button", { name: "Save classes" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save types" })).toBeVisible();
 });
