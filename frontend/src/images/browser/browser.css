@@ -1,0 +1,15 @@
+/* OpenLayers' ScaleLine renders its own DOM; style it with the design tokens (DESIGN.md). */
+.capture-scale {
+  position: absolute;
+  left: 12px;
+  bottom: 36px;
+  pointer-events: none;
+}
+.capture-scale-inner {
+  border: 1px solid rgb(var(--ink) / 0.6);
+  border-top: none;
+  color: rgb(var(--ink));
+  font-family: var(--font-mono, monospace);
+  font-size: 10.5px;
+  text-align: center;
+}
