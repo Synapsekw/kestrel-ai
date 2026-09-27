@@ -14,6 +14,7 @@ import {
 } from "./bridge";
 import { ensureAiRegistered } from "./register";
 import { useSamStore } from "./sam/useSmartPolygon";
+import { AiHosts } from "./AiHosts";
 import { SamWarmEdge } from "./SamWarmEdge";
 import { SmartPolygonPanel } from "./SmartPolygonPanel";
 import { accepted, renderAi, resetAll, seedWorkspace } from "./testing";
@@ -57,6 +58,7 @@ function Workspace() {
   useImagesKeymap([ai.keyHandlers, useCanvasKeyHandlers(ctx)]);
   return (
     <>
+      <AiHosts projectId={PROJECT_ID} />
       <SamWarmEdge />
       <SmartPolygonPanel />
     </>

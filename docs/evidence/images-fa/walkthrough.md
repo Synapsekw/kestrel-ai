@@ -1,7 +1,7 @@
 # I-FA: how to test this
 
 FA builds components; they become visible once I-FW assembles the Images workspace. Until then its
-behaviour is covered by its vitest suites (`frontend/src/images/ai/*.test.*`, 18 test files, 116
+behaviour is covered by its vitest suites (`frontend/src/images/ai/*.test.*`, 20 test files, 136
 cases) and by exercising the pieces directly (dev canvas lab / component tests) — there is nothing
 an operator can click in the shipped app yet. Below is what I-FW will need to wire up, and how an
 operator will check it once that merge lands. Steps that are not observable today are marked
@@ -9,13 +9,15 @@ operator will check it once that merge lands. Steps that are not observable toda
 
 ## Differences from the plan I-FW should know about
 
-- **`SmartPolygonPanel` must always be mounted**, not only while the S tool is active. The plan
-  described a separate S session hook mounted by FW; the merged code moved that session into a
-  `SmartPolygonSession` child of `SmartPolygonPanel` itself (`frontend/src/images/ai/register.ts`),
-  because the session subscribes to pan/zoom (`view`, `viewport`) and would otherwise re-render
-  FW's whole workspace host on every pan frame. `SmartPolygonPanel()` returns `null` visually
-  unless S is active, but FW must render it unconditionally (as `ImageCanvas` `children`, per the
-  interface) so the session exists before the operator presses **S**.
+- **FW must mount `AiHosts` unconditionally**, once for the whole Images workspace — not behind
+  the S tool, the hint bar or any other condition. `AiHosts` (`frontend/src/images/ai/AiHosts.tsx`)
+  hosts the two pieces of always-on state: the S session (`SmartPolygonSession`) and the
+  Shift+A / Shift+X bulk confirm (`BulkConfirm`). The plan described a separate S session hook
+  mounted by FW; the session is a leaf component instead because it subscribes to pan/zoom (`view`,
+  `viewport`) and would otherwise re-render FW's whole workspace host on every pan frame. With
+  `AiHosts` mounted, `SmartPolygonPanel` and `HintBar` are purely presentational: FW may render them
+  only where and when they are visible (`HintBar` no longer takes a `projectId`). `BatchDetectWatch`
+  is likewise always mounted.
 - **SAM has a fourth availability, `"absent"`**, for builds with no assist routes at all (distinct
   from `"missing"`/`"invalid"`/`"unavailable"`). The panel shows "Smart polygon is not available in
   this build" and does not offer Get model or Try again.
@@ -51,8 +53,8 @@ operator will check it once that merge lands. Steps that are not observable toda
 10. Open `…/images?batch=1`: "Detect on many images" queues a run; when it ends, the toast offers
     "Review suggestions →".
 
-All ten steps are **(not yet observable)** until I-FW mounts `AiBar`, `HintBar`, `SuggestionChip`,
-`SmartPolygonPanel`, `SamWarmEdge`, `SuggestionsLayer`, `AiDetectButton`, `ModelMenu`,
+All ten steps are **(not yet observable)** until I-FW mounts `AiHosts` (unconditionally), `AiBar`,
+`HintBar`, `SuggestionChip`, `SmartPolygonPanel`, `SamWarmEdge`, `SuggestionsLayer`, `AiDetectButton`, `ModelMenu`,
 `BatchDetectDialog` and `BatchDetectWatch`, and calls `ensureAiRegistered()` and `useAiWorkspace()`
 per the interfaces in `frontend/src/images/ai/index.ts`. This is not a user-observable change by
 itself: FA is a library of components and hooks with no route or screen of its own.

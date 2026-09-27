@@ -14,6 +14,7 @@ function SamPreview({ scale }: { scale: number }) {
   const teal = useMemo(() => tokenColour("ok"), []);
   const fill = useMemo(() => tokenColour("ok", 0.15), []);
   const red = useMemo(() => tokenColour("danger"), []);
+  const ring = useMemo(() => tokenColour("accent-fg"), []);
   return (
     <Group listening={false} name="sam-preview">
       {s.polygon ? (
@@ -34,7 +35,7 @@ function SamPreview({ scale }: { scale: number }) {
           y={p.y}
           radius={5 / scale}
           fill={p.positive ? teal : red}
-          stroke="white"
+          stroke={ring}
           strokeWidth={1.5}
           strokeScaleEnabled={false}
         />

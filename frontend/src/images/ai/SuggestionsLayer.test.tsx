@@ -3,9 +3,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { fakeClient } from "@/test/fixtures";
 import { useAiStore } from "./aiStore";
-import { wsGet } from "./bridge";
+import { useImagesWorkspace, wsGet } from "./bridge";
 import { SuggestionChip } from "./SuggestionChip";
 import { SuggestionsLayer } from "./SuggestionsLayer";
+import { ensureBuiltInTools } from "@/images/tools"; // I-FC
 import { renderAi, resetAll, seedWorkspace, suggestion } from "./testing";
 
 // FC's ShapeNode is FC's to test; here it only has to be handed the right props. drift.md Task 6:
@@ -16,6 +17,7 @@ vi.mock("@/images/canvas/ShapeLayer", () => ({
     box: { id: string };
     variant: string;
     selected: boolean;
+    interactive?: boolean;
     onPointerDown?: (
       id: string,
       e?: { evt: { button: number; shiftKey: boolean }; cancelBubble: boolean },
@@ -25,6 +27,7 @@ vi.mock("@/images/canvas/ShapeLayer", () => ({
       data-shape={p.box.id}
       data-variant={p.variant}
       data-selected={String(p.selected)}
+      data-interactive={String(p.interactive)}
       onClick={() =>
         p.onPointerDown?.(p.box.id, { evt: { button: 0, shiftKey: false }, cancelBubble: false })
       }
@@ -41,6 +44,7 @@ vi.mock("react-konva", () => ({
       data-name={String(p.name ?? "")}
       data-dash={JSON.stringify(p.dash ?? null)}
       data-stroke={String(p.stroke ?? "")}
+      data-listening={String(p.listening)}
     />
   )),
 }));
@@ -64,6 +68,57 @@ describe("SuggestionsLayer", () => {
     render(<SuggestionsLayer />);
     fireEvent.click(document.querySelector('[data-shape="b"]')!);
     expect(wsGet().focusedSuggestionId).toBe("b");
+  });
+
+  it("passes FC's interactive gate: off while a drawing tool is active or Space is held", () => {
+    ensureBuiltInTools();
+    seedWorkspace([suggestion("a", 0.9)]);
+    render(<SuggestionsLayer />);
+    const node = () => document.querySelector('[data-shape="a"]')!.getAttribute("data-interactive");
+    expect(node()).toBe("true");
+    act(() => wsGet().setTool("box"));
+    expect(node()).toBe("false");
+    act(() => wsGet().setTool("select"));
+    expect(node()).toBe("true");
+    act(() => useImagesWorkspace.setState({ spaceHeld: true }));
+    expect(node()).toBe("false");
+    act(() => useImagesWorkspace.setState({ spaceHeld: false }));
+  });
+
+  it("keeps an in-flight suggestion drawn as a held, non-interactive ghost until the answer", () => {
+    vi.useFakeTimers();
+    const box = suggestion("h", 0.9);
+    seedWorkspace([box, suggestion("b", 0.8)]);
+    render(<SuggestionsLayer />);
+    act(() => {
+      useAiStore.getState().markInFlight(["h"]);
+      useAiStore.getState().addLeaving([{ box: wsGet().boxes.h, kind: "held", colour: null }]);
+    });
+    // No longer a target (no ShapeNode), but its outline stays: teal dash, and it does not time out.
+    expect(document.querySelector('[data-shape="h"]')).toBeNull();
+    expect(document.querySelector('[data-shape="b"]')!.getAttribute("data-selected")).toBe("true");
+    act(() => vi.advanceTimersByTime(1000));
+    const held = document.querySelector('[data-name="held h"]')!;
+    expect(held.getAttribute("data-dash")).toBe("[8,4]");
+    expect(held.getAttribute("data-listening")).toBe("false");
+    // The answer replaces it with the fade, which then ends.
+    act(() => useAiStore.getState().addLeaving([{ box: wsGet().boxes.h, kind: "reject", colour: null }]));
+    expect(document.querySelector('[data-name="held h"]')).toBeNull();
+    expect(document.querySelector('[data-name="leaving h"]')).not.toBeNull();
+    act(() => vi.advanceTimersByTime(400));
+    expect(document.querySelector('[data-name="leaving h"]')).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("never draws a ghost from another image", () => {
+    seedWorkspace([]);
+    render(<SuggestionsLayer />);
+    act(() =>
+      useAiStore
+        .getState()
+        .addLeaving([{ box: suggestion("o", 0.9, { image_id: "other-image" }), kind: "held", colour: null }]),
+    );
+    expect(document.querySelector('[data-name="held o"]')).toBeNull();
   });
 
   it("draws an accept ghost solid in the type colour, then removes it", () => {

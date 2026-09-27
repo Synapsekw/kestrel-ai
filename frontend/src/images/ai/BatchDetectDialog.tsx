@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components --
    the module store is exported next to the dialog that writes it, for BatchDetectWatch to read; not a fast-refresh boundary. */
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { create } from "zustand";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
@@ -9,6 +9,7 @@ import { DEFAULT_TILING } from "@/api/queryRuns";
 import { useProjectTypes } from "@/findings/useProjectTypes";
 import { useJobsStore } from "@/store/jobs";
 import { Button, Checkbox, Dialog, Disclosure, Field, Input, Select, Slider, Switch, toast } from "@/ui";
+import { useAiStore } from "./aiStore";
 import { detectBatch, type DetectBatchRequest } from "./api";
 import { menuSubtitle, readConf, readLastModel } from "./models";
 import { stopTabPropagation } from "./overlayKeys";
@@ -51,6 +52,12 @@ export function BatchDetectDialog({
   const { providers } = useProviders();
   const keyed = useMemo(() => providers.filter((p) => p.has_key), [providers]);
   const [modelId, setModelId] = useState<string | null>(() => readLastModel(projectId));
+  // Re-seed on a project change (M7): the component can outlive one project.
+  const [modelFor, setModelFor] = useState(projectId);
+  if (modelFor !== projectId) {
+    setModelFor(projectId);
+    setModelId(readLastModel(projectId));
+  }
   const chosen = models.find((m) => m.id === modelId) ?? models[0] ?? null;
   const [conf, setConf] = useState(0.25);
   const [tiling, setTiling] = useState(DEFAULT_TILING.enabled);
@@ -76,6 +83,20 @@ export function BatchDetectDialog({
 
   const p = keyed.find((x) => x.name === provider) ?? null;
   const cost = p && scopeCount !== null ? (p.cost_per_request * scopeCount).toFixed(2) : null;
+  // The tick acknowledges one amount on one account (I3): a new provider, amount or opening of the
+  // dialog asks again.
+  const costKey = `${provider}|${cost}|${open}`;
+  const [costAckFor, setCostAckFor] = useState(costKey);
+  if (costAckFor !== costKey) {
+    setCostAckFor(costKey);
+    setCostOk(false);
+  }
+  // FA's canvas keys stay quiet behind this dialog (M8).
+  useEffect(() => {
+    if (!open) return;
+    useAiStore.getState().setBatchOpen(true);
+    return () => useAiStore.getState().setBatchOpen(false);
+  }, [open]);
   const ready = cloud ? p !== null && query.trim().length > 0 && costOk : chosen !== null;
 
   async function start() {
@@ -201,7 +222,7 @@ export function BatchDetectDialog({
                     label={
                       cost !== null
                         ? `I accept about $${cost} of charges to my ${providerLabel(provider)} account`
-                        : `I accept about $ charges that depend on the filter (${providerLabel(provider)})`
+                        : "I accept charges; the cost depends on the filter"
                     }
                   />
                 </>

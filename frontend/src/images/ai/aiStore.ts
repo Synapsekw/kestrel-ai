@@ -5,7 +5,8 @@ import { dur, isReducedMotion } from "@/ui";
 import { useWs, wsGet } from "./bridge";
 import type { Visibility } from "./suggestions";
 
-export type LeavingKind = "accept" | "reject";
+/** `held`: the review request is out; the outline stays, still and non-interactive, until it answers. */
+export type LeavingKind = "held" | "accept" | "reject";
 export interface Leaving {
   box: Box;
   kind: LeavingKind;
@@ -31,6 +32,8 @@ export interface AiState {
   inFlight: ReadonlySet<string>;
   leaving: Record<string, Leaving>;
   confirm: BulkConfirmState | null;
+  /** FW's BatchDetectDialog is open: FA's canvas keys stay quiet behind it (M8). */
+  batchOpen: boolean;
 
   openMenu: () => void;
   closeMenu: () => void;
@@ -40,14 +43,18 @@ export interface AiState {
   discardDetect: () => boolean;
   markInFlight: (ids: string[]) => void;
   clearInFlight: (ids: string[]) => void;
+  /** `held` items stay until replaced (accept/reject start the fade) or dropped. */
   addLeaving: (items: Leaving[]) => void;
+  /** Removes the ghosts still `held` for these ids (a failed or stale review). */
+  dropHeld: (ids: string[]) => void;
+  setBatchOpen: (open: boolean) => void;
   askConfirm: (c: BulkConfirmState) => void;
   closeConfirm: () => void;
   reset: () => void;
 }
 
 /** R-FA4b: accept morph over --dur-base, reject fade over --dur-fast; reduced motion: both fast. */
-export function leaveMs(kind: LeavingKind): number {
+export function leaveMs(kind: Exclude<LeavingKind, "held">): number {
   return kind === "accept" && !isReducedMotion() ? dur.base : dur.fast;
 }
 
@@ -59,6 +66,7 @@ const initial = () => ({
   inFlight: new Set<string>() as ReadonlySet<string>,
   leaving: {},
   confirm: null,
+  batchOpen: false,
 });
 
 export const useAiStore = create<AiState>((set, get) => ({
@@ -91,6 +99,8 @@ export const useAiStore = create<AiState>((set, get) => ({
   addLeaving: (items) => {
     set((s) => ({ leaving: { ...s.leaving, ...Object.fromEntries(items.map((l) => [l.box.id, l])) } }));
     for (const l of items) {
+      if (l.kind === "held") continue;
+      const kind = l.kind;
       setTimeout(() => {
         set((s) => {
           if (s.leaving[l.box.id] !== l) return s;
@@ -98,9 +108,18 @@ export const useAiStore = create<AiState>((set, get) => ({
           delete leaving[l.box.id];
           return { leaving };
         });
-      }, leaveMs(l.kind));
+      }, leaveMs(kind));
     }
   },
+  dropHeld: (ids) =>
+    set((s) => {
+      const held = ids.filter((id) => s.leaving[id]?.kind === "held");
+      if (held.length === 0) return s;
+      const leaving = { ...s.leaving };
+      for (const id of held) delete leaving[id];
+      return { leaving };
+    }),
+  setBatchOpen: (batchOpen) => set({ batchOpen }),
   askConfirm: (confirm) => set({ confirm }),
   closeConfirm: () => set({ confirm: null }),
   reset: () => set(initial()),

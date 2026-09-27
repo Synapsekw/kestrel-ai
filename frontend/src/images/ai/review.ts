@@ -34,7 +34,11 @@ async function toastAccept(ctx: CommandContext, ids: string[], created: string[]
 /**
  * A / X / Shift+A / Shift+X (spec §11.4) on top of FC's `cmdReview`. The ids leave the targets at
  * once (`inFlight`), so a second key press acts on the next suggestion while the first request is
- * still out.
+ * still out; their outlines stay drawn as still, non-interactive `held` ghosts until the answer
+ * starts the accept morph or reject fade (a failure drops them and the suggestion is back).
+ *
+ * The answer can arrive after the operator moved to another image: then FA only toasts and bumps
+ * the findings list; it never links, selects, focuses or ghosts on the image now loaded.
  */
 export async function cmdReviewSuggestions(
   ctx: CommandContext,
@@ -42,38 +46,47 @@ export async function cmdReviewSuggestions(
   action: "accept" | "reject",
 ): Promise<ReviewResult | undefined> {
   if (ids.length === 0) return undefined;
+  const imageId = wsGet().imageId;
   const before = ids.map((id) => wsGet().boxes[id]).filter((b): b is Box => Boolean(b));
-  useAiStore.getState().markInFlight(ids);
+  const ai = () => useAiStore.getState();
+  ai().markInFlight(ids);
+  ai().addLeaving(before.map((box) => ({ box, kind: "held" as const, colour: null })));
   let result: ReviewResult | undefined;
   try {
     result = await cmdReview(ctx, ids, action);
   } finally {
-    useAiStore.getState().clearInFlight(ids);
+    ai().clearInFlight(ids);
   }
-  if (!result) return undefined; // FC's `tracked` recorded the failure: "Save failed · Retry"
   const s = wsGet();
-  useAiStore.getState().addLeaving(
-    before.map((box) => ({
-      box,
-      kind: action,
-      colour: action === "accept" ? (typeOf(s, box.class_id)?.colour ?? null) : null,
-    })),
-  );
+  const current = s.imageId === imageId;
+  if (!result || !current) ai().dropHeld(ids);
+  if (!result) return undefined; // FC's `tracked` recorded the failure: "Save failed · Retry"
+  if (current) {
+    ai().addLeaving(
+      before.map((box) => ({
+        box,
+        kind: action,
+        colour: action === "accept" ? (typeOf(s, box.class_id)?.colour ?? null) : null,
+      })),
+    );
+  }
   const created = result.finding_ids_created;
   if (action === "accept") {
     // R-FA2: one id ↔ one finding is certain only for a single accept; FW links the rest from the
     // image's findings list, which re-reads on the bump.
-    if (ids.length === 1 && created.length === 1) s.linkFindings({ [ids[0]]: created[0] });
+    if (current && ids.length === 1 && created.length === 1) s.linkFindings({ [ids[0]]: created[0] });
     if (created.length > 0) useChangesStore.getState().bumpFindings();
-    if (ids.length === 1) {
+    if (current && ids.length === 1) {
       s.focusSuggestion(null);
       s.select([ids[0]]); // R-FA11: the inspector opens the new finding
     }
     void toastAccept(ctx, ids, created);
   } else {
-    const after = wsGet();
-    const next = targetOf(visibleSuggestions(after.boxes, after.order, visibilityNow()), null);
-    after.focusSuggestion(next?.id ?? null); // R-FA11: X X X clears a run
+    if (current) {
+      const after = wsGet();
+      const next = targetOf(visibleSuggestions(after.boxes, after.order, visibilityNow()), null);
+      after.focusSuggestion(next?.id ?? null); // R-FA11: X X X clears a run
+    }
     toast(
       "info",
       ids.length === 1

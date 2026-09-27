@@ -1,9 +1,12 @@
 import type { ReactElement } from "react";
 import type { ApiClient, Box, ImageDetail } from "@contract/client";
 import { exampleClasses, PROJECT_ID, proposalBox } from "@/test/fixtures";
-import { renderWithProviders } from "@/test/render";
+import { MemoryRouter } from "react-router-dom";
+import { render } from "@testing-library/react";
+import { TestApiProvider } from "@/test/render";
 import { makeDetail, makeShape } from "@/images/canvas/testing"; // I-FC's helpers
 import { useChangesStore } from "@/store/changes";
+import { useJobsStore } from "@/store/jobs";
 import { useToastStore } from "@/ui";
 import { useAiStore } from "./aiStore";
 import { useBatchRuns } from "./BatchDetectDialog";
@@ -58,11 +61,17 @@ export function resetAll(): void {
   useAiStore.getState().reset();
   useSamStore.setState({ state: INITIAL_SAM, handle: null });
   useBatchRuns.setState({ ids: [] });
+  useJobsStore.setState({ jobs: {} });
   useToastStore.getState().clear();
   useChangesStore.setState({ findingsRevision: 0 });
   localStorage.clear();
 }
 
+/** The API context and a memory router, opted into React Router's v7 behaviour (no future-flag warnings). */
 export function renderAi(ui: ReactElement, api: ApiClient) {
-  return renderWithProviders(ui, { api });
+  return render(
+    <TestApiProvider api={api}>
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>{ui}</MemoryRouter>
+    </TestApiProvider>,
+  );
 }

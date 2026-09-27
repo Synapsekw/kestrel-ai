@@ -5,7 +5,7 @@ import { useChangesStore } from "@/store/changes";
 import { useAiStore } from "./aiStore";
 import { useImagesWorkspace, wsGet, type CommandContext } from "./bridge";
 import { cmdReviewSuggestions, setFindingSeverity } from "./review";
-import { resetAll, seedWorkspace, suggestion } from "./testing";
+import { accepted, resetAll, seedWorkspace, suggestion } from "./testing";
 
 const finding = { id: "f1", number: 231 };
 function ctxFor(routes: FakeRoute[]) {
@@ -87,6 +87,46 @@ describe("cmdReviewSuggestions", () => {
     await wsGet().history.undo();
     expect(wsGet().boxes.s1.review_state).toBe("unreviewed");
     expect(wsGet().findingOf).toEqual({});
+  });
+
+  it("holds the outline while the request is out, then starts the accept fade on the answer", async () => {
+    const { ctx } = ctxFor([review({ updated: 1, finding_ids_created: [], finding_ids_deleted: [] })]);
+    const pending = cmdReviewSuggestions(ctx, ["s1"], "accept");
+    expect(useAiStore.getState().inFlight.has("s1")).toBe(true);
+    expect(useAiStore.getState().leaving.s1.kind).toBe("held");
+    await pending;
+    expect(useAiStore.getState().leaving.s1.kind).toBe("accept");
+  });
+
+  it("an answer after the operator moved to another image only toasts and bumps (I1)", async () => {
+    const { ctx } = ctxFor([
+      review({ updated: 1, finding_ids_created: ["f1"], finding_ids_deleted: [] }),
+      { method: "GET", path: /\/findings\/f1$/, body: finding },
+    ]);
+    seedWorkspace([suggestion("s1", 0.9)]); // the last suggestion on this image
+    const pending = cmdReviewSuggestions(ctx, ["s1"], "accept");
+    const other = { ...wsGet().image!, id: "other-image" };
+    seedWorkspace([suggestion("o1", 0.8), accepted("p1")], other);
+    wsGet().select(["p1"]);
+    await pending;
+    const s = wsGet();
+    expect(s.imageId).toBe("other-image");
+    expect(s.findingOf).toEqual({});
+    expect(s.selectedIds).toEqual(["p1"]);
+    expect(s.focusedSuggestionId).toBeNull();
+    expect(useAiStore.getState().leaving).toEqual({});
+    expect(useAiStore.getState().inFlight.size).toBe(0);
+    expect(useChangesStore.getState().findingsRevision).toBe(1);
+    await expect.poll(texts).toContain("✓ Accepted as finding F-0231");
+  });
+
+  it("a reject answered on another image does not move the focus there (I1)", async () => {
+    const { ctx } = ctxFor([review({ updated: 1, finding_ids_created: [], finding_ids_deleted: [] })]);
+    const pending = cmdReviewSuggestions(ctx, ["s1"], "reject");
+    seedWorkspace([suggestion("o1", 0.8)], { ...wsGet().image!, id: "other-image" });
+    await pending;
+    expect(wsGet().focusedSuggestionId).toBeNull();
+    expect(texts()).toContain("✕ Rejected · kept as a training negative");
   });
 
   it("leaves the store as it was when the request fails (FC records the failure)", async () => {

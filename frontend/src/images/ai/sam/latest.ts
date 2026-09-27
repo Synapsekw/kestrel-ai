@@ -18,11 +18,14 @@ export class LatestOnly<T, R> {
     this.run(v);
   }
 
-  /** Forget the queue and ignore the answer of the request in flight. */
+  /**
+   * Forget the queue and ignore the answer of the request in flight. That request still counts as
+   * in flight until it answers (M1): a value submitted meanwhile waits for it, so there is never a
+   * second concurrent request.
+   */
   reset(): void {
     this.queued = null;
     this.epoch += 1;
-    this.inFlight = false;
   }
 
   private run(v: T): void {
@@ -35,9 +38,8 @@ export class LatestOnly<T, R> {
   }
 
   private done(epoch: number, report: () => void): void {
-    if (epoch !== this.epoch) return;
     this.inFlight = false;
-    report();
+    if (epoch === this.epoch) report();
     const next = this.queued;
     this.queued = null;
     if (next) this.run(next.v);

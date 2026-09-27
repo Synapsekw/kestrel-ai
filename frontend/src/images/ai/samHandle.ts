@@ -1,7 +1,7 @@
 import { useSamStore, type SmartPolygon } from "./sam/useSmartPolygon";
 
 /**
- * The workspace's one S session, set by `SmartPolygonSession` (inside `SmartPolygonPanel`). The tool
+ * The workspace's one S session, set by `SmartPolygonSession` (inside `AiHosts`). The tool
  * definition is module-level, so its callbacks reach the session here; the panel reads it too.
  */
 export const samHandle = () => useSamStore.getState().handle;

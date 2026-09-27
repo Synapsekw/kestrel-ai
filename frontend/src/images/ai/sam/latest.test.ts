@@ -42,4 +42,28 @@ describe("LatestOnly", () => {
     await Promise.resolve();
     expect(onResult).not.toHaveBeenCalled();
   });
+
+  it("after reset, a new value waits for the ignored request instead of running beside it (M1)", async () => {
+    const calls: number[] = [];
+    const gates = [deferred<number>(), deferred<number>()];
+    const onResult = vi.fn();
+    const q = new LatestOnly<number, number>(
+      (v) => {
+        calls.push(v);
+        return gates[calls.length - 1].promise;
+      },
+      onResult,
+      vi.fn(),
+    );
+    q.submit(1);
+    q.reset();
+    q.submit(2);
+    expect(calls).toEqual([1]); // one request in flight, never two
+    gates[0].resolve(10);
+    await vi.waitFor(() => expect(calls).toEqual([1, 2]));
+    expect(onResult).not.toHaveBeenCalled(); // the reset request's answer is dropped
+    gates[1].resolve(20);
+    await vi.waitFor(() => expect(onResult).toHaveBeenCalledWith(20, 2));
+    expect(onResult).toHaveBeenCalledTimes(1);
+  });
 });

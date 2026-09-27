@@ -24,6 +24,7 @@ export function SuggestionsLayer() {
   const tool = useWs((s) => s.tool);
   const spaceHeld = useWs((s) => s.spaceHeld);
   const vis = useVisibility();
+  const imageId = useWs((s) => s.imageId);
   const leaving = useAiStore((s) => s.leaving);
   const teal = useMemo(() => tokenColour("ok"), []);
   const visible = useMemo(() => visibleSuggestions(boxes, order, vis), [boxes, order, vis]);
@@ -55,24 +56,30 @@ export function SuggestionsLayer() {
           onPointerDown={onPointerDown}
         />
       ))}
-      {Object.values(leaving).map((l) => (
-        <Ghost key={l.box.id} leaving={l} teal={teal} />
-      ))}
+      {Object.values(leaving).map((l) =>
+        // A ghost belongs to the image it was reviewed on; another image never draws it.
+        l.box.image_id === imageId ? <Ghost key={l.box.id} leaving={l} teal={teal} /> : null,
+      )}
     </>
   );
 }
 
-/** R-FA4b: the accept morph (solid type colour fading out over the new annotation) or the reject fade. */
+/**
+ * R-FA4b: while the review request is out the outline is `held` (still, teal dash, not listening);
+ * the answer starts the accept morph (solid type colour fading out over the new annotation) or the
+ * reject fade. Both are opacity tweens (`leaveMs`: dur.fast under reduced motion).
+ */
 function Ghost({ leaving, teal }: { leaving: Leaving; teal: string }) {
   const ref = useRef<Konva.Line>(null);
   useEffect(() => {
+    if (leaving.kind === "held") return;
     ref.current?.to?.({ opacity: 0, duration: leaveMs(leaving.kind) / 1000 });
   }, [leaving.kind]);
   const accept = leaving.kind === "accept";
   return (
     <Line
       ref={ref}
-      name={`leaving ${leaving.box.id}`}
+      name={`${leaving.kind === "held" ? "held" : "leaving"} ${leaving.box.id}`}
       points={outlineOf(leaving.box)}
       closed
       stroke={accept ? (leaving.colour ?? teal) : teal}

@@ -20,7 +20,8 @@ export function BatchDetectWatch({ onReview }: { onReview: () => void }) {
       if (!job || isActiveJob(job)) continue;
       if (job.state === "succeeded") {
         const boxes = typeof job.result?.boxes === "number" ? (job.result.boxes as number) : null;
-        toast("ok", boxes === null ? "Detection finished" : `Detection finished: ${boxes} suggestions`, {
+        const found = boxes === null ? "" : `: ${boxes} ${boxes === 1 ? "suggestion" : "suggestions"}`;
+        toast("ok", `Detection finished${found}`, {
           label: "Review suggestions →",
           onClick: () => review.current(),
         });
@@ -31,9 +32,13 @@ export function BatchDetectWatch({ onReview }: { onReview: () => void }) {
     }
   }, [ids, jobs]);
 
+  // Unmounting hands every tracked run back to the global job toast (its claim is released), so it
+  // is dropped here too: a remount must not report an outcome the global toast already did (M5).
   useEffect(
     () => () => {
       for (const release of releases.current.values()) release();
+      releases.current.clear();
+      useBatchRuns.setState({ ids: [] });
     },
     [],
   );

@@ -45,12 +45,14 @@ export function useAssistModel() {
 
   const reload = useCallback(() => setNonce((n) => n + 1), []);
 
-  // The acquire job ended: read the catalogue again (on the jobs store's change, not in render).
+  // The acquire job ended: read the catalogue again, once (on the jobs store's change, not in
+  // render). Only the active -> ended transition counts; later upserts of the ended job do not (T9).
   useEffect(() => {
     if (!jobId) return;
     return useJobsStore.subscribe((s, prev) => {
       const j = s.jobs[jobId];
-      if (j && j !== prev.jobs[jobId] && !isActiveJob(j)) reload();
+      const before = prev.jobs[jobId];
+      if (j && before && isActiveJob(before) && !isActiveJob(j)) reload();
     });
   }, [jobId, reload]);
 

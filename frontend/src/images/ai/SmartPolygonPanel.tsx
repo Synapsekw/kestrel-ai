@@ -1,41 +1,16 @@
-import { useEffect, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Button, GlassPanel, Pill, Progress } from "@/ui";
 import { SMART_TOOL, useWs } from "./bridge";
 import { SAM_OUTSIDE_HINT } from "./sam/hints";
-import { useSamStore, useSmartPolygon } from "./sam/useSmartPolygon";
-import { samHandle, sameHandle, setSamHandle, useSamHandle } from "./samHandle";
-
-/**
- * The workspace's one S session (drift.md Task 5/10). `useSmartPolygon` subscribes to the view and
- * the viewport (R-FA8), so it lives in this leaf rather than in `useAiWorkspace`, whose host (FW's
- * workspace) would otherwise re-render on every pan frame. It publishes the handle only when
- * something a reader sees changed.
- */
-function SmartPolygonSession({ projectId }: { projectId: string }) {
-  const smart = useSmartPolygon(projectId);
-  useEffect(() => {
-    const prev = samHandle();
-    if (!prev || !sameHandle(prev, smart)) setSamHandle(smart);
-  });
-  useEffect(() => () => setSamHandle(null), []);
-  return null;
-}
+import { useSamStore } from "./sam/useSmartPolygon";
+import { useSamHandle } from "./samHandle";
 
 /**
  * Under the palette while S is active (spec §10, §16): status, CPU chip, empty mask, and what to do
- * when the weights are not usable. FW mounts it for the whole workspace; it hosts the S session.
+ * when the weights are not usable. Purely presentational: it renders nothing unless S is active and
+ * the session (`SmartPolygonSession`, mounted by `AiHosts`) has published its handle.
  */
 export function SmartPolygonPanel() {
-  const projectId = useWs((s) => s.projectId);
-  return (
-    <>
-      {projectId ? <SmartPolygonSession projectId={projectId} /> : null}
-      <SmartPolygonStatus />
-    </>
-  );
-}
-
-function SmartPolygonStatus() {
   const active = useWs((s) => s.tool === SMART_TOOL);
   const s = useSamStore((x) => x.state);
   const handle = useSamHandle();

@@ -35,6 +35,8 @@ export function useDetect(projectId: string) {
   return useCallback(
     async (imageId: string, model: LibraryModel, conf: number) => {
       const ai = useAiStore.getState();
+      // One detection at a time (M6): a second run would supersede the first and drop its result.
+      if (ai.detect) return;
       writeLastModel(projectId, model.id);
       writeConf(model.id, conf);
       ai.closeMenu();

@@ -23,7 +23,14 @@ export function ModelMenu({
   const { all } = useProjectTypes(projectId);
   const { models, loading, error } = useDetectModels(projectId);
   const run = useDetect(projectId);
+  const detecting = useAiStore((s) => s.detect !== null);
   const [modelId, setModelId] = useState<string | null>(() => readLastModel(projectId));
+  // Re-seed on a project change (M7): the menu can outlive one project.
+  const [modelFor, setModelFor] = useState(projectId);
+  if (modelFor !== projectId) {
+    setModelFor(projectId);
+    setModelId(readLastModel(projectId));
+  }
   const chosen = models.find((m) => m.id === modelId) ?? models[0] ?? null;
   const [conf, setConf] = useState(DEFAULT_CONF);
   const primary = useRef<HTMLButtonElement>(null);
@@ -114,7 +121,7 @@ export function ModelMenu({
               variant="primary"
               className="w-full justify-between"
               onClick={go}
-              disabled={!image}
+              disabled={!image || detecting}
             >
               <span className="truncate">Detect on {image ? stem(image.file_name) : "this image"}</span>
               <Kbd>D</Kbd>

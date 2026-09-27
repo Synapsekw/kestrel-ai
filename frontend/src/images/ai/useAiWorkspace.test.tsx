@@ -279,4 +279,23 @@ describe("FA's keys", () => {
     press("d");
     expect(useAiStore.getState().runNonce).toBe(1);
   });
+
+  it("quiets the same keys, and D, while FA's batch dialog is open (M8)", async () => {
+    seedWorkspace([suggestion("s1", 0.9), accepted("p1")]);
+    const { api, requests } = fakeClient([
+      reviewRoute(),
+      { method: "PATCH", path: /\/findings\/f1$/, body: {} },
+    ]);
+    const onOpenImage = mount(api, { index: { ids: [wsGet().imageId!, "next"], flags: [2, 2] } });
+    act(() => {
+      wsGet().linkFindings({ p1: "f1" });
+      wsGet().select(["p1"]);
+      useAiStore.getState().setBatchOpen(true);
+    });
+    quietKeys();
+    press("d");
+    await flush();
+    expectUntouched(requests, onOpenImage);
+    expect(useAiStore.getState().menuOpen).toBe(false);
+  });
 });

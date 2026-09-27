@@ -32,12 +32,12 @@ const walkPosition = (s: WsState) =>
 
 /**
  * G5 (drift.md): FC's `whenMatches` quiets rows only behind FC's own confirm and picker. Behind FA's
- * BulkConfirm or model menu, FA's keys are swallowed (handled, not `false`, so no later layer acts
- * on the canvas behind the overlay either).
+ * BulkConfirm, model menu or batch dialog, FA's keys are swallowed (handled, not `false`, so no
+ * later layer acts on the canvas behind the overlay either).
  */
 const behindOverlay = (): boolean => {
-  const { confirm, menuOpen } = useAiStore.getState();
-  return confirm !== null || menuOpen;
+  const { confirm, menuOpen, batchOpen } = useAiStore.getState();
+  return confirm !== null || menuOpen || batchOpen;
 };
 
 export function useAiWorkspace(opts: AiWorkspaceOptions): { keyHandlers: KeyHandlers } {
@@ -132,7 +132,7 @@ export function useAiWorkspace(opts: AiWorkspaceOptions): { keyHandlers: KeyHand
       },
       // D: opens the menu; inside it D runs the model (spec §11.2). Quiet behind the bulk confirm.
       "ai-detect": () => {
-        if (ai().confirm) return;
+        if (ai().confirm || ai().batchOpen) return;
         if (ai().menuOpen) ai().requestRun();
         else ai().openMenu();
       },

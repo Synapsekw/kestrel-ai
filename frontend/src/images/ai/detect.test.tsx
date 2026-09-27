@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { act, fireEvent, screen } from "@testing-library/react";
 import type { LibraryModel } from "@contract/client";
 import {
@@ -149,6 +149,44 @@ describe("model menu and detect", () => {
     const t = useToastStore.getState().toasts.at(-1)!;
     expect(t.text).toBe("None of this model's classes map to this project's types.");
     expect(t.action?.label).toBe("Open class map");
+  });
+
+  it("refuses a second run while one is out, so the first result is never dropped (M6)", async () => {
+    const { api, requests } = fakeClient(routes());
+    renderAi(<Menu />, api);
+    fireEvent.click(await screen.findByRole("button", { name: /Detect on/ }));
+    expect(useAiStore.getState().detect).not.toBeNull();
+    act(() => useAiStore.getState().openMenu());
+    expect((screen.getByRole("button", { name: /Detect on/ }) as HTMLButtonElement).disabled).toBe(true);
+    act(() => useAiStore.getState().requestRun()); // D inside the menu
+    await act(async () => {});
+    expect(requests.filter((r) => r.url.endsWith("/detect"))).toHaveLength(1);
+    expect(Object.keys(wsGet().boxes).sort()).toEqual(["n1"]);
+    expect(texts()).toContain(`${model.name}: 1 new, 5 already covered · ran on CPU`);
+  });
+
+  it("re-seeds the chosen model from the new project's last choice (M7)", async () => {
+    const other = { ...model, id: "m-2", name: "second" };
+    localStorage.setItem("kestrel.images.detectModel.p2", "m-2");
+    const { api } = fakeClient([
+      routes()[0],
+      { method: "GET", path: /\/library\/models$/, body: { items: [model, other], next_cursor: null } },
+    ]);
+    function Switcher() {
+      const ref = useRef<HTMLButtonElement>(null);
+      const [projectId, setProjectId] = useState("p");
+      return (
+        <>
+          <button ref={ref} data-testid="project-2" onClick={() => setProjectId("p2")} />
+          <ModelMenu projectId={projectId} anchorRef={ref} />
+        </>
+      );
+    }
+    renderAi(<Switcher />, api);
+    const selected = () => screen.getByRole("option", { selected: true }).textContent;
+    await vi.waitFor(() => expect(selected()).toContain(model.name));
+    fireEvent.click(screen.getByTestId("project-2"));
+    await vi.waitFor(() => expect(selected()).toContain("second"));
   });
 
   it("formats the toast", () => {
