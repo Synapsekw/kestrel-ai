@@ -100,8 +100,13 @@ def test_review_answers_the_finding_ids(spec):
 def test_list_images_takes_the_browser_filters(spec):
     names = set()
     for p in _operations(spec)["listImages"][2]["parameters"]:
-        names.add(spec["components"]["parameters"][p["$ref"].rsplit("/", 1)[1]]["name"] if "$ref" in p else p["name"])
-    wanted = {"has_findings", "severity", "finding_status", "type_ids", "has_suggestions", "reviewed", "unlabeled"}
+        if "$ref" in p:
+            names.add(spec["components"]["parameters"][p["$ref"].rsplit("/", 1)[1]]["name"])
+        else:
+            names.add(p["name"])
+    wanted = {
+        "has_findings", "severity", "finding_status", "type_ids", "has_suggestions", "reviewed", "unlabeled",
+    }  # fmt: skip
     assert wanted <= names
     sort = next(p for p in _operations(spec)["listImages"][2]["parameters"] if p.get("name") == "sort")
     assert "worst_severity" in sort["schema"]["enum"]

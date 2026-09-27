@@ -12,7 +12,8 @@ def test_the_old_editor_calls_still_work(client, handle, project):
     image_id, _ = insert_box(handle, class_id)
     base = f"/api/v1/projects/{project['id']}"
 
-    r = client.post(f"{base}/images/{image_id}/boxes", json={"class_id": class_id, "x": 10, "y": 10, "w": 20, "h": 20})
+    body = {"class_id": class_id, "x": 10, "y": 10, "w": 20, "h": 20}
+    r = client.post(f"{base}/images/{image_id}/boxes", json=body)
     assert r.status_code == 201, r.text
     assert OLD_BOX_FIELDS <= set(r.json())
 
