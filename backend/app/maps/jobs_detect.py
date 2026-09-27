@@ -35,7 +35,7 @@ from app.inference.service import class_ids_by_name, class_names
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
 from app.library import service as library
-from app.maps import raster
+from app.maps import raster, region, timeline
 from app.maps.startup import map_dir, map_raster_path
 from app.maps.windows import (
     SKIP_MASKED,
@@ -190,11 +190,18 @@ def run_map_detect(ctx: JobContext) -> dict:
     fill_snapshot(ctx, MapRun, run)
     scale = gsd_scale(gmap.gsd_cm, run.target_gsd_cm)
     wins = plan_windows(gmap.width, gmap.height, run.tile_size, run.overlap, scale)
+    region_px = None if timeline.is_survey_run(run) else run.region_px
+    todo = wins if region_px is None else region.windows_in(wins, region_px)
+    todo_ids = {w.index for w in todo}
+
+    def keep(dets: list[Detection]) -> list[Detection]:
+        return dets if region_px is None else region.keep_inside(dets, region_px)
+
     with ctx.project.session() as s:
         s.execute(delete(MapDetection).where(MapDetection.run_id == run.id))
     _masks_changed(ctx, run.id)
     totals = {
-        "windows": len(wins),
+        "windows": len(todo),
         "skipped_windows": 0,
         "cached_windows": 0,
         "failed_windows": 0,
@@ -206,9 +213,14 @@ def run_map_detect(ctx: JobContext) -> dict:
         mask, mscale = raster.low_res_mask(src)
         strip_list = strips(wins)
         skipped_by_index = _skip_map(mask, mscale, wins)
+        for w in wins:
+            if w.index not in todo_ids:
+                skipped_by_index[w.index] = True  # outside the region: never looked at, like nodata
         for i, strip in enumerate(strip_list):
             strip_dets: list[Detection] = []
             for j, win in enumerate(strip):
+                if win.index not in todo_ids:
+                    continue
                 ctx.check_cancelled()
                 sides = _open_sides(strip_list, i, j, skipped_by_index)
                 payload, cached = _window_result(
@@ -232,9 +244,11 @@ def run_map_detect(ctx: JobContext) -> dict:
                 ]
                 done += 1
                 pending = totals["detections"] + len(merger.pending) + len(strip_dets)
-                ctx.progress(done / len(wins), f"window {done} / {len(wins)} · {pending} detections")
-            totals["detections"] += _insert(ctx, run.id, merger.add_strip(strip[0].y, strip_dets), by_name)
-        totals["detections"] += _insert(ctx, run.id, merger.finish(), by_name)
+                ctx.progress(done / max(1, len(todo)), f"window {done} / {len(todo)} · {pending} detections")
+            totals["detections"] += _insert(
+                ctx, run.id, keep(merger.add_strip(strip[0].y, strip_dets)), by_name
+            )
+        totals["detections"] += _insert(ctx, run.id, keep(merger.finish()), by_name)
     with ctx.project.session() as s:
         # counts, verified_counts and area_counts from the rows just written (app/detect/counts.py)
         recount_map_run(s, s.get(MapRun, run.id), areas_for_map(s, s.get(GeoMap, gmap.id)))

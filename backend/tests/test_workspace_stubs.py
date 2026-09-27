@@ -71,7 +71,6 @@ def test_an_unknown_project_is_404_before_any_stub(client):
 
 
 WGS = [[15.0, 44.99], [15.01, 44.99], [15.01, 44.995]]
-RING = [[0, 0], [10, 0], [10, 10]]
 
 
 def test_frame_site_is_ignored_until_m_b1(client, project_id):
@@ -114,8 +113,3 @@ def test_a_volume_without_a_polygon_is_invalid_geometry(client, project_id):
     body = {"name": "Pile", "top_surface_id": "s1", "base": {"kind": "toe_plane"}}
     r = client.post(f"/api/v1/projects/{project_id}/volumes", json=body)
     assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry"
-
-
-def test_a_region_run_answers_501_until_m_b5(client, project_id):
-    body = {"source_ids": ["s1"], "model_id": "m1", "region": {"map_id": "m1", "polygon_site": RING}}
-    assert _option(client.post(f"/api/v1/projects/{project_id}/runs", json=body)) == "region"

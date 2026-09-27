@@ -30,6 +30,7 @@ from app.jobs.runner import JobContext
 from app.library import service as library
 from app.library.catalogue_port import CataloguePort
 from app.library.handle import LibraryHandle, library_unavailable
+from app.maps import region as regions
 from app.maps import timeline
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
@@ -85,6 +86,16 @@ def _targets(handle: ProjectHandle, source_ids: list[str]) -> list[_Target]:
         return [_target(s, sid) for sid in dict.fromkeys(source_ids)]
 
 
+def _region_px(handle: ProjectHandle, targets: list[_Target], region) -> list[list[float]] | None:
+    """The region in its map's pixels, checked before anything is written; None without a region."""
+    if region is None:
+        return None
+    if len(targets) != 1 or targets[0].kind != "map" or targets[0].map_id != region.map_id:
+        raise regions.invalid("A region run looks at one map: send that map's source alone, with its map_id.")
+    with handle.session() as s:
+        return regions.to_map_px(s, s.get(GeoMap, region.map_id), region.polygon_site)
+
+
 def _cloud_model_name(config: ProviderConfigStore, keys: KeyStore, body: RunCreate) -> str:
     if not (body.query or "").strip():
         raise AppError("query_required", "a cloud provider run needs a non-empty query", 422)
@@ -107,11 +118,13 @@ def create_runs(
     if not body.model_id and not body.provider:
         raise AppError("model_or_provider_required", "a run needs a library model_id or a provider", 422)
     targets = _targets(handle, body.source_ids)  # unknown sources: 404 before anything else
+    region_px = _region_px(handle, targets, body.region)
 
     model = None
     mapping: dict = {}
     snapshot: dict = {}
     added: list[str] = []
+    to_add: list[str] = []
     if body.model_id:
         if lib is None:
             raise library_unavailable()
@@ -133,9 +146,7 @@ def create_runs(
                 422,
                 {"model_id": model.id, "unmapped": unmapped},
             )
-        # A mapped type the project does not list yet joins its type list (F §7.4). This commits
-        # before any job is queued, on purpose: it can never cause a refusal.
-        added = catalogue.add_to_project(handle, [t for t in dict.fromkeys(mapping.values()) if t])
+        to_add = [t for t in dict.fromkeys(mapping.values()) if t]
         snapshot = class_maps.model_snapshot(model)
         model_name = model.name
     else:
@@ -155,6 +166,15 @@ def create_runs(
     target_gsd = (
         body.target_gsd_cm if body.target_gsd_cm is not None else (model.train_gsd_cm if model else None)
     )
+    if region_px is not None:
+        regions.require_imagery(
+            handle, targets[0].map_id, region_px, tiling.tile_size, tiling.overlap, target_gsd
+        )
+    if model is not None:
+        # A mapped type the project does not list yet joins its type list (F §7.4). This commits
+        # before any job is queued, on purpose - and after the region check, so a refused region
+        # adds nothing.
+        added = catalogue.add_to_project(handle, to_add)
     rows: list[tuple[_Target, str, str, str]] = []
     with handle.session() as s:
         for t in targets:
@@ -172,6 +192,8 @@ def create_runs(
                     overlap=tiling.overlap,
                     nms_iou=tiling.nms_iou,
                     target_gsd_cm=target_gsd,
+                    scope="region" if region_px is not None else "map",
+                    region_px=region_px,
                 )
                 job_type, key = "map_detect", "map_run_id"
             s.add(row)

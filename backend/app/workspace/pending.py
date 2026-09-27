@@ -19,12 +19,6 @@ def option_pending(option: str, unit: str) -> AppError:
     )
 
 
-def guard_run_region(body) -> None:
-    """`RunCreate.region`: a region run (spec §9.3)."""
-    if body.region is not None:
-        raise option_pending("region", "M-B5")
-
-
 def guard_surface_patch(body) -> None:
     """`captured_on` and `elevation_role` on a surface patch (spec §5.2 row menu, §7): M-B2."""
     for option in ("captured_on", "elevation_role"):

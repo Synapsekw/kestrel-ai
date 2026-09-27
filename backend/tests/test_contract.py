@@ -149,7 +149,6 @@ RETIRING: dict[str, str] = {
 # (app/workspace/pending.py). Only a request that uses such an option gets the 501; every other
 # request to these operations is checked as usual. The unit deletes its entries with its guards.
 OPTION_STUBS: dict[str, str] = {
-    "createRuns": "M-B5",  # region
     "patchSurface": "M-B2",  # captured_on, elevation_role
 }
 

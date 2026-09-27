@@ -4,8 +4,12 @@ import cv2
 import numpy as np
 import pytest
 from geotiffs import make_squares_geotiff
+from pyproj import CRS
+from workspace_rows import set_site_frame
 
-from app.db.models import MapDetection
+from app.db.models import GeoMap, Job, MapDetection, MapRun
+from app.maps.region import windows_in
+from app.maps.windows import plan_windows
 from app.providers.base import Detection, ProviderError, TileResult
 
 BASE = "/api/v1/projects"
@@ -248,3 +252,75 @@ def test_a_rerun_turns_measurements_masking_with_it_stale_and_says_so(
     assert {"measurement_ids": [mid]} in [e["payload"] for e in seen if e["type"] == "volumes.changed"]
     with handle.session() as s:
         assert s.get(VolumeMeasurement, mid).status == "stale"
+
+
+UTM33 = CRS.from_epsg(32633).to_wkt()  # make_squares_geotiff's CRS: origin (500000, 4983000), 0.03 m pixels
+
+
+def _site(px_points):
+    return [[500000.0 + 0.03 * x, 4983000.0 - 0.03 * y] for x, y in px_points]
+
+
+def _region_body(handle, map_id, px_points, **over):
+    with handle.session() as s:
+        source_id = s.get(GeoMap, map_id).source_id
+    return {
+        "source_ids": [source_id],
+        "provider": "anthropic",
+        "query": "excavators",
+        "region": {"map_id": map_id, "polygon_site": _site(px_points)},
+        **over,
+    }
+
+
+SQUARE_1 = [(100, 100), (400, 100), (400, 400), (100, 400)]  # around the square at (200, 200) only
+
+
+def test_a_region_run_looks_only_inside_its_region(
+    client, project_id, handle, wait_job, squares_map, use_provider, with_key, class_ids
+):
+    map_id = squares_map()
+    set_site_frame(handle, UTM33)
+    provider = use_provider(SquareProvider())
+    r = client.post(f"{BASE}/{project_id}/runs", json=_region_body(handle, map_id, SQUARE_1))
+    assert r.status_code == 202, r.text
+    item = r.json()["runs"][0]
+    assert wait_job(project_id, item["job"]["id"])["state"] == "succeeded"
+    expected = windows_in(plan_windows(3000, 1500, 1280, 0.2, 1.0), [list(p) for p in SQUARE_1])
+    assert sorted(provider.calls) == sorted(w.index for w in expected)
+    run = client.get(f"{BASE}/{project_id}/map-runs/{item['run_id']}").json()
+    assert run["scope"] == "region" and run["region_px"][0] == pytest.approx([100.0, 100.0], abs=1e-3)
+    assert run["detection_count"] == 1 and run["counts"] == {class_ids["excavator"]: 1}
+    timeline = client.get(f"{BASE}/{project_id}/survey-timeline").json()["surveys"]
+    assert all(sv["run_id"] != item["run_id"] for sv in timeline)
+
+
+def test_a_region_over_nodata_is_refused_before_anything_is_written(
+    client, project_id, handle, squares_map, use_provider, with_key
+):
+    map_id = squares_map(nodata_left=1500)
+    set_site_frame(handle, UTM33)
+    provider = use_provider(SquareProvider())
+    off_map = [(5000, 100), (5200, 100), (5200, 300), (5000, 300)]
+    for px in (SQUARE_1, off_map):
+        r = client.post(f"{BASE}/{project_id}/runs", json=_region_body(handle, map_id, px))
+        assert r.status_code == 422 and r.json()["error"]["code"] == "empty_region", r.text
+    with handle.session() as s:
+        assert s.query(MapRun).count() == 0 and s.query(Job).filter(Job.type == "map_detect").count() == 0
+    assert provider.calls == []
+
+
+def test_a_region_must_match_its_one_map_and_the_site_frame(
+    client, project_id, handle, squares_map, with_key
+):
+    map_id = squares_map()
+    body = _region_body(handle, map_id, SQUARE_1)
+    r = client.post(f"{BASE}/{project_id}/runs", json=body)  # no site frame yet
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry", r.text
+    set_site_frame(handle, UTM33)
+    other = {**body, "region": {**body["region"], "map_id": "another-map"}}
+    r = client.post(f"{BASE}/{project_id}/runs", json=other)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry", r.text
+    bow_tie = _region_body(handle, map_id, [(100, 100), (400, 400), (400, 100), (100, 400)])
+    r = client.post(f"{BASE}/{project_id}/runs", json=bow_tie)
+    assert r.status_code == 422 and r.json()["error"]["code"] == "invalid_geometry", r.text
