@@ -4,13 +4,17 @@ ComputeDevice, DetectBatchRequest, DetectBatchScope, ImageFilter; image inspecti
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.imagery.schemas import BoxOut
+from app.inference.schemas import QueryRunKind, Tiling
+from app.providers.schemas import ProviderName
 
 ComputeDevice = Literal["cuda", "cpu"]
+MAX_BATCH_IDS = 100_000
+FindingStatus = Literal["open", "reviewed", "closed"]
 
 
 class DetectRequest(BaseModel):
@@ -37,3 +41,44 @@ class DetectResult(BaseModel):
             device=out.device,
             elapsed_ms=out.elapsed_ms,
         )
+
+
+class ImageFilter(BaseModel):
+    """The browser's filters as a body (C0: same meaning as `getImageIndex`'s query parameters)."""
+
+    source_id: str | None = None
+    has_findings: bool | None = None
+    severity: list[Annotated[int, Field(ge=1, le=9)]] | None = None
+    finding_status: list[FindingStatus] | None = None
+    type_ids: list[str] | None = None
+    has_suggestions: bool | None = None
+    reviewed: bool | None = None
+    unlabeled: bool | None = None
+    search: str | None = None
+
+
+class DetectBatchScope(BaseModel):
+    """C0's `oneOf` of `{image_ids}`, `{source_id}`, `{filter}`, each with no other key."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    image_ids: list[str] | None = Field(default=None, min_length=1, max_length=MAX_BATCH_IDS)
+    source_id: str | None = None
+    filter: ImageFilter | None = None
+
+    @model_validator(mode="after")
+    def exactly_one(self) -> DetectBatchScope:
+        given = [k for k in ("image_ids", "source_id", "filter") if getattr(self, k) is not None]
+        if len(given) != 1:
+            raise ValueError("scope takes exactly one of image_ids, source_id or filter")
+        return self
+
+
+class DetectBatchRequest(BaseModel):
+    kind: QueryRunKind
+    model_id: str | None = None
+    provider: ProviderName | None = None
+    query: str | None = Field(default=None, min_length=1)
+    conf: float = Field(default=0.25, ge=0, le=1)
+    tiling: Tiling = Tiling()
+    scope: DetectBatchScope

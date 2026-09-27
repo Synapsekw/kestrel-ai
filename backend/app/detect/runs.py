@@ -115,11 +115,13 @@ def create_runs(
         if lib is None:
             raise library_unavailable()
         model = library.require_ready(lib, body.model_id)
-        if model.task == "segment":
+        if model.task in ("segment", "obb") and any(t.kind == "map" for t in targets):
+            # Photo runs write rboxes and polygons (image inspection spec §11.3); map runs write
+            # axis-aligned boxes only, so those models wait for the Maps workspace (ruling R-BP12).
             raise AppError(
                 "task_not_supported",
-                f"{model.name} is a segmentation model; runs with segmentation models arrive with "
-                "the Images workspace.",
+                f"{model.name} is a {model.task} model; map runs with {model.task} models arrive "
+                "with the Maps workspace.",
                 422,
                 {"model_id": model.id},
             )

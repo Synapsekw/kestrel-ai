@@ -12930,6 +12930,7 @@ export interface operations {
                     "application/json": components["schemas"]["QueryRunWithJob"];
                 };
             };
+            404: components["responses"]["NotFound"];
             /** @description the model's weights file is missing (`code` is `model_unavailable`) */
             409: {
                 headers: {

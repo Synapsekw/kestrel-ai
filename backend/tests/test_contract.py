@@ -94,7 +94,6 @@ schema = schemathesis.openapi.from_path(str(SPEC))
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
     "refreshImageMetadata",  # I-BK
-    "detectImageBatch",  # I-BP
 }
 EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
 
@@ -220,6 +219,10 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # I-BP: a generated model id may exist but have no weights (`model_unavailable` 409) or no class
     # that reaches a catalogue type (`unmapped_classes` 422).
     "detectImage": {409, 422},
+    # I-BP: a scope matching no image (`no_images`), a kind without its model/provider
+    # (`model_or_provider_required`), a blank cloud query (`query_required`), no class mapped
+    # (`unmapped_classes`), no stored key (`conflict` 409) or missing weights (`model_unavailable`).
+    "detectImageBatch": {409, 422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
