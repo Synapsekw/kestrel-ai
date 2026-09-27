@@ -12,6 +12,8 @@ interface FakeState {
   availability: ColourAvailability | null;
   /** The handle has V2's setClipBox (Fly and Clip enabled). */
   v2: boolean;
+  /** The mounted viewer's latest props, for emitViewState. */
+  props: CloudViewerProps | null;
 }
 
 export const fake: FakeState = {
@@ -20,10 +22,12 @@ export const fake: FakeState = {
   state: "running",
   availability: { rgb: true, elevation: true, intensity: false, classification: true },
   v2: true,
+  props: null,
 };
 
-export function resetFake(over: Partial<Omit<FakeState, "calls" | "frames">> = {}): void {
+export function resetFake(over: Partial<Omit<FakeState, "calls" | "frames" | "props">> = {}): void {
   fake.calls = [];
+  fake.props = null;
   fake.frames = new Set();
   fake.state = "running";
   fake.availability = { rgb: true, elevation: true, intensity: false, classification: true };
@@ -33,6 +37,11 @@ export function resetFake(over: Partial<Omit<FakeState, "calls" | "frames">> = {
 
 export function callsTo(name: string): unknown[][] {
   return fake.calls.filter((c) => c.name === name).map((c) => c.args);
+}
+
+/** The viewer reports a view state again (a reloaded view, a new engine); wrap it in act(). */
+export function emitViewState(state: ViewState): void {
+  fake.props?.onViewState?.(state);
 }
 
 export function emitFrame(cam: Partial<FrameCamera> = {}): void {
@@ -51,6 +60,7 @@ export const FakeCloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(
     const latest = useRef(props);
     useEffect(() => {
       latest.current = props;
+      fake.props = props;
     });
     useImperativeHandle(ref, () => {
       const rec =
