@@ -52,6 +52,7 @@ class ProjectHandle:
     pointclouds_dir = property(lambda s: s.folder / "pointclouds")
     surfaces_dir = property(lambda s: s.folder / "surfaces")
     volumes_dir = property(lambda s: s.folder / "volumes")
+    drawings_dir = property(lambda s: s.folder / "drawings")  # map workspace; made by the first import
 
     @contextmanager
     def session(self) -> Iterator[Session]:

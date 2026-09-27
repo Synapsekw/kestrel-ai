@@ -1,0 +1,59 @@
+{
+  "spec": "docs/superpowers/specs/2026-09-26-map-workspace-design.md section 6",
+  "note": "res(z) = 1024 / 2^z m/px; a tile is 256 px, s = 256 res; x = floor(E / s), y = floor(-N / s); tile (z, x, y) spans minx = x s, maxx = (x + 1) s, maxy = -y s, miny = -(y + 1) s; max_zoom is the smallest z in 0..20 with res(z) <= native_m / 2, else 20. JavaScript's Math.floor(-0) is -0, which toEqual(0) rejects: normalise with + 0.",
+  "tile_px": 256,
+  "res": [
+    { "z": 0, "res": 1024 },
+    { "z": 10, "res": 1 },
+    { "z": 17, "res": 0.0078125 },
+    { "z": 20, "res": 0.0009765625 }
+  ],
+  "tiles": [
+    { "z": 0, "e": 0.0, "n": 0.0, "x": 0, "y": 0 },
+    { "z": 17, "e": 583120.4, "n": 3265410.2, "x": 291560, "y": -1632706 },
+    { "z": 10, "e": -1.5, "n": 2.5, "x": -1, "y": -1 },
+    { "z": 12, "e": 500000.0, "n": -10000.0, "x": 7812, "y": 156 },
+    { "z": 20, "e": 0.001, "n": -0.001, "x": 0, "y": 0 },
+    { "z": 0, "e": 262144.0, "n": -262144.0, "x": 1, "y": 1 },
+    { "z": 3, "e": -1.0, "n": -1.0, "x": -1, "y": 0 }
+  ],
+  "bounds": [
+    {
+      "z": 0,
+      "x": 0,
+      "y": 0,
+      "minx": 0.0,
+      "miny": -262144.0,
+      "maxx": 262144.0,
+      "maxy": 0.0
+    },
+    {
+      "z": 17,
+      "x": -3,
+      "y": 5,
+      "minx": -6.0,
+      "miny": -12.0,
+      "maxx": -4.0,
+      "maxy": -10.0
+    },
+    {
+      "z": 10,
+      "x": 2,
+      "y": -1,
+      "minx": 512.0,
+      "miny": 0.0,
+      "maxx": 768.0,
+      "maxy": 256.0
+    }
+  ],
+  "max_zoom": [
+    { "native_m": 0.02, "max_zoom": 17 },
+    { "native_m": 0.015625, "max_zoom": 17 },
+    { "native_m": 0.05, "max_zoom": 16 },
+    { "native_m": 0.25, "max_zoom": 13 },
+    { "native_m": 1.0, "max_zoom": 11 },
+    { "native_m": 2048.0, "max_zoom": 0 },
+    { "native_m": 5000.0, "max_zoom": 0 },
+    { "native_m": 1e-7, "max_zoom": 20 }
+  ]
+}
