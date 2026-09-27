@@ -21,6 +21,7 @@ export function useClipTool({
   viewer: RefObject<CloudViewerHandle>;
   running: boolean;
 }): { tool: WorkspaceTool; box: CloudClipBox | null; restore(): void } {
+  // Read once: the hook must be remounted per cloud (ReadyWorkspace key={cloud.id}), never re-used.
   const [box, setBox] = useState<CloudClipBox | null>(() => readClip(cloud.id));
   const bounds = cloud.bounds_native as Bounds6 | null;
 

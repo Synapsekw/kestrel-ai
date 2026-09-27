@@ -28,7 +28,7 @@ const routes = (items: object[]) => [
 ];
 
 const importInfo = {
-  path: "D:\clouds\site.las",
+  path: "D:\\clouds\\site.las",
   size: 737_902_645,
   compressed: false,
   las_version: "1.2",
@@ -470,7 +470,7 @@ describe("CloudWorkspace (spec §6)", () => {
     await userEvent.click(await screen.findByRole("button", { name: /^Point cloud: / }));
     await userEvent.click(screen.getByRole("button", { name: "Import point cloud…" }));
     const missingSeen = watchFor(MISSING);
-    await userEvent.type(screen.getByLabelText("LAS or LAZ file"), "D:\clouds\site.las");
+    await userEvent.type(screen.getByLabelText("LAS or LAZ file"), "D:\\clouds\\site.las");
     await screen.findByText("21.7 M points");
     await userEvent.click(
       within(screen.getByRole("dialog", { name: "Import point cloud" })).getByRole("button", {

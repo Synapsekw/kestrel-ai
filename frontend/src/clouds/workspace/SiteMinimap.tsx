@@ -62,6 +62,7 @@ export function Minimap({
   const dot = useRef<SVGCircleElement>(null);
   const cone = useRef<SVGPolygonElement>(null);
   const snapCanvas = useRef<HTMLCanvasElement>(null);
+  // Never reset for a new cloud: the minimap is remounted per cloud (ReadyWorkspace key={cloud.id}).
   const [snapped, setSnapped] = useState(false);
 
   useEffect(() => {
