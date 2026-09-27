@@ -157,6 +157,8 @@ def test_success_bodies_conform_to_the_contract(client, project_id, dsm, dtm):
     _assert_conforms("MapMeasurementPage", page)
     page_site = client.get(url(project_id), params={"frame": "site"}).json()
     _assert_conforms("MapMeasurementPage", page_site)
+    for row in page["items"] + page_site["items"]:  # listed profiles carry empty placeholders
+        assert _errors(BRANCH_SCHEMA[row["kind"]], row["results"]) == [], row["results"]
 
     one = client.get(url(project_id, created["area"]), params={"frame": "site"}).json()
     _assert_conforms("MapMeasurement", one)
