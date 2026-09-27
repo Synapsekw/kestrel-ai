@@ -260,7 +260,7 @@ def run_accept_above(ctx: JobContext) -> dict:
             with ctx.project.session() as s:
                 accepted += _apply(s, _map_run(s, run_id), ids, _decide("accept", None))
         else:
-            accepted += boxes.review_boxes(ctx.project, ids, "accept")
+            accepted += boxes.review_boxes(ctx.project, ids, "accept").changed
         ctx.progress(accepted / total if total else 1.0, f"Accepted {accepted} of {total}")
     ctx.log.info("accept_above run %s at %.2f: %d accepted", run_id, min_conf, accepted)
     return {"run_id": run_id, "accepted": accepted}

@@ -20,7 +20,16 @@ from sqlalchemy import func, select
 
 from app.catalogue import service as catalogue_service
 from app.datasets.empties import clear_mark_for_ground_truth
-from app.db.models import Box, Image, ProjectType, QueryRun
+from app.db.models import (
+    Activity,
+    Box,
+    Finding,
+    FindingAttachment,
+    FindingComment,
+    Image,
+    ProjectType,
+    QueryRun,
+)
 from app.detect.counts import Entry, apply_transition
 from app.errors import AppError, not_found
 from app.findings import annotations as hooks
@@ -30,6 +39,7 @@ from app.imagery import shapes, summary
 from app.projects.service import ProjectHandle
 
 PER_IMAGE_CAP = 5000
+CONTENT_MESSAGE = "This finding has a note or photos; delete it from the inspector."
 
 
 @dataclass(frozen=True)
@@ -37,6 +47,13 @@ class Written:
     box: Box
     finding_id: str | None
     repaired: bool
+
+
+@dataclass(frozen=True)
+class ReviewOutcome:
+    changed: int
+    finding_ids_created: list[str]
+    finding_ids_deleted: list[str]
 
 
 def _entry(row: Box) -> Entry:
@@ -318,23 +335,63 @@ def delete_box(handle: ProjectHandle, box_id: str) -> None:
     trash.move(handle, trashed)
 
 
-def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
-    """Accept, reject or unreview proposals in bulk; the count is the boxes that changed state.
+def _has_content(s, f: Finding) -> bool:
+    """Untouched = no note, no photo, no comment, still `reviewed`, severity never set by a person
+    (R-BA2: a `finding.severity` activity row is the record of a person's change)."""
+    if (f.note or "").strip() or f.status != "reviewed":
+        return True
+    for model, column in (
+        (FindingAttachment, FindingAttachment.finding_id),
+        (FindingComment, FindingComment.finding_id),
+    ):
+        if s.scalar(select(model.id).where(column == f.id).limit(1)) is not None:
+            return True
+    return (
+        s.scalar(
+            select(Activity.id)
+            .where(Activity.subject_id == f.id, Activity.kind == "finding.severity")
+            .limit(1)
+        )
+        is not None
+    )
 
-    Unknown ids and person-drawn boxes are ignored: only a model proposal has a decision to make
-    or undo. Accepting an already edited box leaves it `edited` — it is ground truth either way,
-    and the state records that a person changed its geometry. An accepted defect proposal becomes
-    a `reviewed` finding; rejecting or unreviewing it removes that finding again.
+
+def _refuse_unreview_with_content(s, rows: list[Box]) -> None:
+    """An unreview is an undo: it never takes a note, comment or photo with it (spec 8.3, R-BA2).
+    Any touched finding refuses the whole request before anything changes."""
+    touched = []
+    for row in rows:
+        if row.provenance_kind == "person" or row.review_state not in GROUND_TRUTH:
+            continue
+        f = hooks.finding_of(s, row.id)
+        if f is not None and _has_content(s, f):
+            touched.append(f.id)
+    if touched:
+        raise AppError(
+            "finding_has_content", CONTENT_MESSAGE, 409, {"finding_id": touched[0], "finding_ids": touched}
+        )
+
+
+def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> ReviewOutcome:
+    """Accept, reject or unreview proposals in bulk (spec 8.3).
+
+    Unknown ids and person-drawn boxes are ignored. Accepting an edited box leaves it `edited`. An
+    accepted defect proposal becomes a `reviewed` finding (F's hook); reject removes it; unreview
+    removes it only while untouched, otherwise the whole request is 409 `finding_has_content` and
+    nothing changes. Each affected image's summary is recomputed once.
     """
     now = datetime.now(UTC)
     changed = 0
     accepted_image_ids: set[str] = set()
+    touched_images: dict[str, None] = {}
     runs: dict[str, QueryRun | None] = {}
-    new_findings: list[str] = []
-    trashed: list[str] = []
+    created: list[str] = []
+    deleted: list[str] = []
     with handle.session() as s:
         # Materialised first: the hooks below query and flush on this session mid-loop.
         rows = s.execute(select(Box).where(Box.id.in_(box_ids))).scalars().all()
+        if action == "unreview":
+            _refuse_unreview_with_content(s, rows)
         for row in rows:
             if row.provenance_kind == "person":
                 continue
@@ -350,10 +407,15 @@ def review_boxes(handle: ProjectHandle, box_ids: list[str], action: str) -> int:
                 row.review_state, row.reviewed_at = target, now
                 if action == "accept":
                     accepted_image_ids.add(row.image_id)
+            row.updated_at = now
             _count_transition(s, runs, row.query_run_id, old, _entry(row))
-            trashed += hooks.on_box_changed(s, handle.id, handle.catalogue, row, accepted=new_findings)
+            deleted += hooks.on_box_changed(s, handle.id, handle.catalogue, row, accepted=created)
+            touched_images[row.image_id] = None
             changed += 1
         clear_mark_for_ground_truth(s, accepted_image_ids)
-        hooks.record_accepted(s, new_findings)
-    trash.move(handle, trashed)
-    return changed
+        hooks.record_accepted(s, created)
+        s.flush()
+        for image_id in touched_images:
+            summary.touch(s, image_id)
+    trash.move(handle, deleted)
+    return ReviewOutcome(changed, list(created), deleted)

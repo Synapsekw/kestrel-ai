@@ -315,7 +315,7 @@ def _query_counts(handle, run_id="q1") -> tuple[tuple, tuple]:
 
 
 def test_box_review_in_a_photo_run_updates_the_run_counts(handle, photo_run, cls):
-    assert boxes.review_boxes(handle, ["b1", "b3"], "accept") == 2
+    assert boxes.review_boxes(handle, ["b1", "b3"], "accept").changed == 2
     stored, fresh = _query_counts(handle)
     assert stored == fresh == ({cls[0]: 2, cls[1]: 1}, {cls[0]: 1, cls[1]: 1})
     boxes.review_boxes(handle, ["b2", "b3"], "reject")

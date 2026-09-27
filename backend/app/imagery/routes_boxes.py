@@ -68,7 +68,12 @@ def delete_box(boxId: str, handle: ProjectHandle = Depends(get_project)) -> None
 
 @router.post("/boxes/review", response_model=BoxReviewResult)
 def review_boxes(body: BoxReview, handle: ProjectHandle = Depends(get_project)) -> BoxReviewResult:
-    return BoxReviewResult(updated=annotations.review_boxes(handle, body.box_ids, body.action))
+    out = annotations.review_boxes(handle, body.box_ids, body.action)
+    return BoxReviewResult(
+        updated=out.changed,
+        finding_ids_created=out.finding_ids_created,
+        finding_ids_deleted=out.finding_ids_deleted,
+    )
 
 
 @router.get("/images/{imageId}/measurements", response_model=ImageMeasurementList)

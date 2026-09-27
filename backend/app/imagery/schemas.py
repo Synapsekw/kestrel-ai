@@ -129,6 +129,8 @@ class BoxReview(BaseModel):
 
 class BoxReviewResult(BaseModel):
     updated: int
+    finding_ids_created: list[str]
+    finding_ids_deleted: list[str]
 
 
 class ImageMeasurementOut(BaseModel):

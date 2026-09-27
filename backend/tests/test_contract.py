@@ -132,7 +132,6 @@ BACKEND_PENDING: dict[str, str] = {
     "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
-    "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
