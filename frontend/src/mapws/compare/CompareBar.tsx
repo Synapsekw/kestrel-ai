@@ -14,7 +14,6 @@ import {
   type SegmentedOption,
 } from "@/ui";
 import { useWorkspace } from "../context";
-import type { PanelProps } from "../panels/panelRegistry";
 import { canCompare, flownDates } from "../state/surveys";
 import { formatSurveyDate, pickDate } from "../timeline/timelineModel";
 import type { CompareMode } from "../types";
@@ -86,8 +85,7 @@ function DateChip({
 }
 
 /** M §5 Compare panel: the mode switch, the date chips and, in Blend, the slider. `C` is W1's. */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- the panel Component type takes PanelProps; this panel reads the store instead
-export function CompareBar(_props: PanelProps) {
+export function CompareBar() {
   const { surveys, mode, l, r, blend, setMode, setDates, setBlend } =
     useWorkspace(
       useShallow((s) => ({
@@ -137,7 +135,11 @@ export function CompareBar(_props: PanelProps) {
       data-testid="compare-bar"
       className="flex items-center gap-2 px-2 py-1.5"
     >
-      {one ? <Tooltip label="One survey so far">{seg}</Tooltip> : seg}
+      {one ? (
+        <Tooltip label={dates.length === 0 ? "No surveys yet" : "One survey so far"}>{seg}</Tooltip>
+      ) : (
+        seg
+      )}
       {comparing && (
         <DateChip
           which="l"
@@ -147,13 +149,15 @@ export function CompareBar(_props: PanelProps) {
           onPick={pick("l")}
         />
       )}
-      <DateChip
-        which="r"
-        label={comparing ? "Right" : "Survey"}
-        date={r}
-        dates={dates}
-        onPick={pick("r")}
-      />
+      {dates.length > 0 && (
+        <DateChip
+          which="r"
+          label={comparing ? "Right" : "Survey"}
+          date={r}
+          dates={dates}
+          onPick={pick("r")}
+        />
+      )}
       {mode === "blend" && (
         <div className="flex items-center gap-2 text-2xs text-muted">
           <span className="tabular-nums">{formatSurveyDate(l, true)}</span>

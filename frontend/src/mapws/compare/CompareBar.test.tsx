@@ -1,10 +1,9 @@
 import { act, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import { PROJECT_ID } from "@/test/fixtures";
 import { useToastStore } from "@/ui";
 import { makeStores, renderInWorkspace } from "../test/harness";
-import { UTM33, survey } from "../test/fixtures";
+import { survey } from "../test/fixtures";
 import { AUG, OCT, SEP } from "../test/rasterFixtures";
 import { CompareBar } from "./CompareBar";
 
@@ -12,7 +11,7 @@ const TWO = [survey(AUG), survey(SEP), survey(OCT, { planned: true })];
 
 function setup(surveys = TWO) {
   const stores = makeStores({ surveys });
-  renderInWorkspace(<CompareBar projectId={PROJECT_ID} frame={UTM33} />, {
+  renderInWorkspace(<CompareBar />, {
     stores,
   });
   return stores.workspace;
@@ -29,6 +28,17 @@ describe("CompareBar (M §5 Compare)", () => {
       screen.getByRole("radiogroup", { name: "Compare mode" }),
     );
     expect(await screen.findByText("One survey so far")).toBeInTheDocument();
+  });
+
+  it("says there are no surveys yet and offers no date chip with none", async () => {
+    setup([]);
+    expect(screen.getByRole("radio", { name: "Swipe" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: /^Survey/ })).toBeNull();
+    await userEvent.hover(
+      screen.getByRole("radiogroup", { name: "Compare mode" }),
+    );
+    expect(await screen.findByText("No surveys yet")).toBeInTheDocument();
+    expect(screen.queryByText("One survey so far")).toBeNull();
   });
 
   it("switches modes through W1's store", async () => {
