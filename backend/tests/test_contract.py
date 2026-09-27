@@ -91,24 +91,16 @@ def test_no_extra_api_routes(app):
 
 schema = schemathesis.openapi.from_path(str(SPEC))
 
-# Images I-C0 stubs; each unit deletes its lines.
 EXPECTED_STUBS: set[str] = {
     # Images (plan 2026-09-27-images-c0): each unit deletes its lines when it lands them.
-    "listImageMeasurements",  # I-BA
-    "createImageMeasurement",  # I-BA
-    "deleteImageMeasurement",  # I-BA
-    "refreshImageMetadata",  # I-BK
-    "getImageIndex",  # I-BX
-    "rebuildImageSummary",  # I-BX
-    "prepareImageSegment",  # I-BS
-    "segmentImage",  # I-BS
-    "listAssistModels",  # I-BS
-    "acquireAssistModel",  # I-BS
-    "importAssistModel",  # I-BS
     "detectImage",  # I-BP
     "detectImageBatch",  # I-BP
 }
 EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py, one list per M unit
+
+# Point cloud workspace (spec 2026-09-26-point-cloud-workspace section 12), unit C-C0: the tuples of
+# app/pointclouds/router.py::STUBS. C-B2, C-B3 and C-B4 have all landed and deleted their own names
+# here and in app/pointclouds/router.py::STUBS; the block is empty.
 
 # Operations whose contract is ahead of the backend after foundation unit C0: the contract dropped
 # the project kind and added `Project.summary`/`migration`, `ClassDef.kind`/`default_severity`/
@@ -118,13 +110,6 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 BACKEND_PENDING: dict[str, str] = {
     # Images I-C0 (plan 2026-09-27-images-c0): kept operations whose responses gained required
     # fields. Each unit deletes its lines once its routes fill them.
-    "listImages": "I-BX",  # Image.finding_count / worst_severity / reviewed
-    "getImage": "I-BK",  # ImageDetail
-    "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
-    "listBoxes": "I-BA",  # Box.shape / points / assist / area_px / updated_at
-    "createBox": "I-BA",  # BoxWriteResult; BoxCreate shapes
-    "updateBox": "I-BA",  # BoxWriteResult; BoxUpdate.points
-    "reviewBoxes": "I-BA",  # BoxReviewResult.finding_ids_created / deleted
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
     # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
     "createResultsExport": "I-BT",  # ResultsExportFormat.yolo_seg
@@ -134,6 +119,7 @@ BACKEND_PENDING: dict[str, str] = {
     # STARTER_KEYS, which has no -seg entries yet; I-BT adds them.
     "chatWithSetupAgent": "I-BT",
 }
+
 
 # Deprecated operations (`deprecated: true`, `x-retire-with`) that leave the contract with their
 # last frontend caller, in the named unit. A backend unit may delete such a route earlier (spec
@@ -154,7 +140,6 @@ OPTION_STUBS: dict[str, str] = {
     "createRuns": "M-B5",  # region
     "createSiteArea": "M-B5",  # category
     "updateSiteArea": "M-B5",  # category
-    "patchSurface": "M-B2",  # captured_on, elevation_role
 }
 
 # Operations that may refuse a schema-valid request by design, because the schema cannot express
@@ -175,11 +160,16 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "exportLibraryDataset": {422},  # task_not_supported: a segment dataset cannot be exported yet
     "startTrainingRun": {422},  # task_not_supported / task_mismatch: a segment dataset or a wrong-task base
     "createSurface": {422},
+    # M-B2: a schema-valid path that is not a usable elevation file (`source_missing`,
+    # `not_elevation`, `no_coordinates`, `geographic_output`, `non_metric_output`, `no_overlap`,
+    # `grid_too_large`, `insufficient_disk`).
+    "importElevation": {422},
     "getSurfaceOrthoTile": {422},  # no_coordinates: the map or the surface has no CRS
     "createVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "patchVolumeMeasurement": {422},  # invalid_geometry / invalid_base
     "getPointCloudOctreeFile": {416},  # a Range the file cannot satisfy
     "createCloudMeasurement": {422},
+    "updateCloudMeasurement": {422},  # C-B1: a generated finding_id is never a finding on that cloud
     "createPointCloud": {422},  # a readable path that is not LAS/LAZ, or refused by admission
     "inspectPointCloudFile": {422},  # a readable path that is not LAS/LAZ
     "patchPointCloud": {422},  # a link without overlap or coordinates, an unknown EPSG
@@ -222,6 +212,22 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "getMapMeasurement": {409},
     "createMapMeasurement": {409, 422},
     "patchMapMeasurement": {409, 422},
+    # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
+    "acquireAssistModel": {409},
+    # C-B4 (spec 2026-09-26-point-cloud-workspace section 11.4): a schema-valid multipart whose image
+    # is not a 1600 x 1000 PNG/JPEG (`bad_view_image`), or a finding anchored on an image or a map
+    # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
+    "putFindingView3d": {409, 422},
+    "putCloudMeasurementView3d": {422},
+    # M-B1: a schema-valid EPSG pyproj does not know (`invalid_epsg`) or that is not a projected
+    # metre CRS (`needs_projected_crs`); a schema-valid state over 64 KB (`state_too_large`); an
+    # anchor on a map without CRS, in a local frame or off the map (`no_coordinates`, `local_frame`,
+    # `outside_map`); a tile of a layer outside the frame (`no_coordinates`) or a malformed preview
+    # affine `t` (`invalid_preview`).
+    "setSiteFrame": {422},
+    "putMapWorkspace": {422},
+    "convertAnchor": {422},
+    "getSiteTile": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in

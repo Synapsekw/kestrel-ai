@@ -103,10 +103,12 @@ class SurfaceList(BaseModel):
 
 
 class SurfacePatch(BaseModel):
+    """Map workspace (spec §5.2 "set date and role", §7). `elevation_role` is not nullable: an
+    explicit null in the request is refused by pydantic itself, before the service ever sees it."""
+
     name: str | None = Field(default=None, min_length=1)
-    # Map workspace (spec §5.2 "set date and role", §7): answer 501 until M-B2 (app/workspace/pending.py).
     captured_on: date | None = None
-    elevation_role: ElevationRole | None = None
+    elevation_role: ElevationRole = None
 
 
 class SurfaceWithJob(BaseModel):
@@ -118,3 +120,15 @@ class SurfaceSample(BaseModel):
     x: float
     y: float
     z: float | None
+
+
+class ElevationImportRequest(BaseModel):
+    """`POST /elevations` (map workspace spec §7). Absent and null mean the same for every optional
+    field: null `captured_on` reads the file's date, null `cell_size_m` the snapped source cell."""
+
+    path: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=200)
+    role: ElevationRole
+    captured_on: date | None = None
+    align_to_surface_id: str | None = None
+    cell_size_m: float | None = Field(default=None, ge=0.01, le=5.0)

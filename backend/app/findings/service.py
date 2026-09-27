@@ -198,7 +198,7 @@ def patch_in_session(
     if pt is not None:
         row.type_id = pt.type_id
         if row.anchor_kind == "image" and row.annotation_id:
-            from app.datasets import boxes
+            from app.imagery import annotations as boxes
 
             boxes.reclass_in_session(s, row.annotation_id, pt.type_id)
     if "note" in fields and fields["note"] is not None:
@@ -223,7 +223,7 @@ def delete_in_session(s: Session, *, project_id: str, finding_id: str, delete_an
     s.delete(row)
     s.flush()  # the finding goes before the box it references
     if delete_annotation and annotation_id:
-        from app.datasets import boxes  # boxes imports this package's hooks
+        from app.imagery import annotations as boxes  # boxes imports this package's hooks
 
         box = s.get(Box, annotation_id)
         if box is not None:
@@ -247,8 +247,8 @@ def delete_for_anchor(s: Session, *, project_id: str, anchor_kind: str, target_i
 def _image_annotation(s: Session, handle, anchor: AnchorIn, type_id: str) -> AnchorIn:
     """`POST /findings` on an image: draw its box (`box`), or adopt a ground-truth box
     (`annotation_id`), whose type becomes the finding's type."""
-    from app.datasets import boxes
     from app.findings.annotations import GROUND_TRUTH  # annotations imports this module
+    from app.imagery import annotations as boxes
 
     defect_type(s, handle.catalogue, type_id)  # refuse an object type before a box is drawn
     if anchor.box is not None:

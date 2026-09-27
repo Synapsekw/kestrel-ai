@@ -18,7 +18,9 @@ from sqlalchemy import func, select
 
 from app.datasets.grouping import find_duplicates, group_key
 from app.datasets.prepare import Prepared, list_images, process_one, unique_dest
+from app.db.base import new_id
 from app.db.models import Image, Source
+from app.imagery import metadata as image_metadata
 from app.jobs.cancellation import JobCancelled
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
@@ -123,7 +125,10 @@ def _run_import(ctx: JobContext) -> dict:
     skipped = len(planned) - len(todo)
     ctx.check_cancelled()
 
-    results = _prepare_all(ctx, todo, settings)
+    # Ids are assigned here so the worker can write each frame's thumbnail under its final name.
+    ids = {str(dest): new_id() for _, dest in todo}
+    thumbs = {dest: str(handle.thumbs_dir / f"{image_id}.jpg") for dest, image_id in ids.items()}
+    results = _prepare_all(ctx, todo, settings, thumbs)
     prepared = [r for r in results if r.action != "failed"]
     failed = len(results) - len(prepared)
     prepared.sort(key=lambda r: r.dest)
@@ -136,7 +141,10 @@ def _run_import(ctx: JobContext) -> dict:
     duplicates = {name: kept for name, kept in found.items() if name in new_names}
 
     for name in duplicates:
-        (dest_dir / name).unlink(missing_ok=True)  # our own copy, never the original
+        dest = dest_dir / name
+        dest.unlink(missing_ok=True)  # our own copy, never the original
+        if str(dest) in thumbs:
+            Path(thumbs[str(dest)]).unlink(missing_ok=True)
     recorded.update(
         {
             name: {"duplicate_of": kept, "hamming": d, "source_id": source_id}
@@ -146,7 +154,7 @@ def _run_import(ctx: JobContext) -> dict:
     (dest_dir / DUPLICATES_FILE).write_text(json.dumps(recorded, indent=2), "utf-8")
 
     keep = [r for r in prepared if Path(r.dest).name not in duplicates]
-    imported = _write_rows(ctx, source_id, site, keep, settings.group_regex)
+    imported = _write_rows(ctx, source_id, site, keep, settings.group_regex, folder=folder, ids=ids)
 
     with handle.session() as s:
         source = s.get(Source, source_id)
@@ -174,7 +182,9 @@ def _run_import(ctx: JobContext) -> dict:
     }
 
 
-def _prepare_all(ctx: JobContext, todo: list[tuple[Path, Path]], settings: ImportSettings) -> list[Prepared]:
+def _prepare_all(
+    ctx: JobContext, todo: list[tuple[Path, Path]], settings: ImportSettings, thumbs: dict[str, str]
+) -> list[Prepared]:
     """Convert every planned file in a process pool, checking cancellation as results arrive."""
     if not todo:
         return []
@@ -186,7 +196,14 @@ def _prepare_all(ctx: JobContext, todo: list[tuple[Path, Path]], settings: Impor
             chunk = todo[start : start + CHUNK]
             ctx.check_cancelled()
             futures = [
-                ex.submit(process_one, str(src), str(dest), settings.max_side, settings.quality)
+                ex.submit(
+                    process_one,
+                    str(src),
+                    str(dest),
+                    settings.max_side,
+                    settings.quality,
+                    thumbs.get(str(dest), ""),
+                )
                 for src, dest in chunk
             ]
             for future in as_completed(futures):
@@ -201,7 +218,16 @@ def _prepare_all(ctx: JobContext, todo: list[tuple[Path, Path]], settings: Impor
     return results
 
 
-def _write_rows(ctx: JobContext, source_id: str, site: str, keep: list[Prepared], regex: str) -> int:
+def _write_rows(
+    ctx: JobContext,
+    source_id: str,
+    site: str,
+    keep: list[Prepared],
+    regex: str,
+    *,
+    folder: Path,
+    ids: dict[str, str],
+) -> int:
     """Insert Image rows in batches so the UI sees the import grow."""
     handle = ctx.project
     if not keep:
@@ -215,6 +241,7 @@ def _write_rows(ctx: JobContext, source_id: str, site: str, keep: list[Prepared]
                 name = Path(r.dest).name
                 s.add(
                     Image(
+                        id=ids.get(r.dest) or new_id(),
                         path=_relative(handle, Path(r.dest)),
                         width=r.width,
                         height=r.height,
@@ -225,9 +252,21 @@ def _write_rows(ctx: JobContext, source_id: str, site: str, keep: list[Prepared]
                         alt=r.alt,
                         phash=r.phash,
                         group_key=group_key(name, regex, r.lat, r.lon, site),
+                        original_name=_original_name(folder, r.src),
+                        **image_metadata.camera_columns(r.camera, r.lat, r.lon),
                     )
                 )
         imported += len(batch)
         ctx.progress(0.5 + imported / (2 * len(keep)), f"{imported} / {len(keep)} images")
         ctx.publish("images.changed", {"source_id": source_id, "count": len(batch)})
     return imported
+
+
+def _original_name(folder: Path, src: str) -> str | None:
+    """The original's path relative to `Source.folder`, which the backfill uses to find it again."""
+    if not src:
+        return None
+    try:
+        return Path(src).relative_to(folder).as_posix()
+    except ValueError:
+        return Path(src).name

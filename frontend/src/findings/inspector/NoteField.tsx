@@ -3,7 +3,7 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { patchFinding } from "@/api/findings";
 import { pushLog } from "@/app/diagnostics";
-import { useChangesStore } from "@/store/changes";
+import { ownFindingsWrite } from "@/store/changesOwnWrite";
 import { Textarea, toast } from "@/ui";
 import { formatFindingNumber } from "../format";
 import { useAutosave } from "./useAutosave";
@@ -46,7 +46,7 @@ export function NoteField({
   const save = useCallback(
     async (v: string) => {
       try {
-        await patchFinding(api, projectId, findingId, { note: v });
+        await ownFindingsWrite([findingId], () => patchFinding(api, projectId, findingId, { note: v }));
       } catch (e) {
         if (!mounted.current) {
           const name = number === undefined ? "the previous finding" : formatFindingNumber(number);
@@ -58,7 +58,6 @@ export function NoteField({
         throw e;
       }
       setSaved(v);
-      useChangesStore.getState().bumpFindings();
     },
     [api, projectId, findingId, number],
   );

@@ -1,33 +1,48 @@
 import type { PointCloud } from "@/api/clouds";
 
-export type ColourMode = "rgb" | "elevation";
+/** C-C0's `CloudViewRender.colour_mode` strings (spec §7 Colour). */
+export type ColourMode = "rgb" | "elevation" | "intensity" | "classification";
 export const POINT_SIZE_MIN = 0.5;
 export const POINT_SIZE_MAX = 3;
 
+/** potree-core's PointColorType: RGB 0, HEIGHT 3, INTENSITY 4, CLASSIFICATION 8 (enums.d.ts). */
+export const POINT_COLOR_TYPE: Record<ColourMode, 0 | 3 | 4 | 8> = {
+  rgb: 0,
+  elevation: 3,
+  intensity: 4,
+  classification: 8,
+};
+
+/** The full uint16 range: the material's range until the first settle samples one. */
+export const DEFAULT_INTENSITY_RANGE: [number, number] = [0, 65535];
+
 /** potree-core's enum values, written out so this module (and its test) never loads WebGL code:
- * ColorEncoding.SRGB = 1, PointSizeType.ADAPTIVE = 2, PointColorType.RGB = 0 / HEIGHT = 3. */
+ * ColorEncoding.SRGB = 1, PointSizeType.ADAPTIVE = 2, PointColorType as above. */
 export interface MaterialOptions {
   inputColorEncoding: 1;
   outputColorEncoding: 1;
   pointSizeType: 2;
-  pointColorType: 0 | 3;
+  pointColorType: 0 | 3 | 4 | 8;
   size: number;
   elevationRange: [number, number];
+  intensityRange: [number, number];
 }
 
 export function makeMaterialOptions(o: {
   colour: ColourMode;
   elevationRange: [number, number];
   pointSize: number;
+  intensityRange?: [number, number];
 }): MaterialOptions {
   return {
     // Both encodings 1, or every RGB point renders pure white (spike, spec §8 "Material").
     inputColorEncoding: 1,
     outputColorEncoding: 1,
     pointSizeType: 2,
-    pointColorType: o.colour === "rgb" ? 0 : 3,
+    pointColorType: POINT_COLOR_TYPE[o.colour],
     size: Math.min(POINT_SIZE_MAX, Math.max(POINT_SIZE_MIN, o.pointSize)),
     elevationRange: o.elevationRange,
+    intensityRange: o.intensityRange ?? DEFAULT_INTENSITY_RANGE,
   };
 }
 

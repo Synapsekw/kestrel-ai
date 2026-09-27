@@ -142,6 +142,7 @@ for _module in (
     # each M unit inserts its router module on its own line above this one
     "app.mapmeasure.router",
     "app.measurements.union",
+    "app.workspace.router",
     "app.workspace.stubs",
 ):
     try:

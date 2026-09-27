@@ -11,7 +11,8 @@
 
   Prints `geo ok 32633 <lon> <lat>`, `pointcloud ok 50000 32639 BROTLI laz 50000`, `health ok`,
   `cuda True <gpu name>`, `starter ok 3`, `library ok`, `import ok <n> images`,
-  `cloud ok 50000 206`, `predict ok <n> boxes` and `worker ok`, and exits non-zero on any failure.
+  `cloud ok 50000 206`, `predict ok <n> boxes`, `sam ok <device> <n> vertices` and `worker ok`,
+  and exits non-zero on any failure.
   Sample frames are copied out of the read-only source folder first.
 
 .PARAMETER Keep
@@ -30,7 +31,8 @@ param(
   [int] $Frames = 3,
   [int] $Imgsz = 640,
   [switch] $Keep,  # leave the generated work dir (project folder, run artefacts, ONNX) on disk
-  [string] $WorkDir  # defaults to a fresh folder under $env:TEMP, which is the only one deleted
+  [string] $WorkDir,  # defaults to a fresh folder under $env:TEMP, which is the only one deleted
+  [string] $SamWeights  # a local sam2.1_t.pt to import; otherwise the assist_acquire job downloads it (78 MB)
 )
 
 $ErrorActionPreference = "Stop"
@@ -280,6 +282,27 @@ try {
     @{ model_id = $model.id; imgsz = $Imgsz; conf = 0.05 }
   Complete-Step "predict"
   Write-Host "predict ok $($predicted.items.Count) boxes"
+
+  # 6b. smart polygon (spec 2026-09-26-image-inspection §10, §21 risk 2): the SAM 2.1 modules are in
+  #     the bundle, the weights arrive through the assist_acquire job, one prepare and one click answer.
+  if ($SamWeights) {
+    $samJob = Invoke-Api POST "/library/assist-models/sam2.1_t/import" @{ path = $SamWeights }
+  } else {
+    $samJob = Invoke-Api POST "/library/assist-models/sam2.1_t/acquire" $null
+  }
+  $job = Wait-ApiJob "/library/jobs" $samJob.job.id
+  if ($job.state -ne "succeeded") { throw "smart polygon weights failed: $($job.error)" }
+  $samImage = (Invoke-Api GET "/projects/$pid1/images?limit=1&sort=path").items[0]
+  $samCrop = @{ x = 0; y = 0; w = $samImage.width; h = $samImage.height }
+  $prepared = Invoke-Api POST "/projects/$pid1/images/$($samImage.id)/segment/prepare" @{ crop = $samCrop }
+  $clicked = Invoke-Api POST "/projects/$pid1/images/$($samImage.id)/segment" @{
+    crop = $samCrop
+    points = @(@{ x = [math]::Floor($samImage.width / 2); y = [math]::Floor($samImage.height / 2); positive = $true })
+  }
+  $vertices = 0
+  if ($clicked.polygon) { $vertices = $clicked.polygon.Count }
+  Complete-Step "smart_polygon"
+  Write-Host "sam ok $($clicked.device) $vertices vertices encode $($prepared.encode_ms) ms decode $($clicked.decode_ms) ms"
 
   # 7. a dataset and a 1-epoch run: the `worker` subcommand with DataLoader workers
   foreach ($image in $images.items) {

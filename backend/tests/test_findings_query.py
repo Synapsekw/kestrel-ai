@@ -288,3 +288,27 @@ def test_a_tampered_cursor_is_422_not_500(client, project, crack, cloud, handle,
         f"/api/v1/projects/{project['id']}/findings", params={"sort": sort, "cursor": encode_cursor(**cursor)}
     )
     assert (r.status_code, r.json()["error"]["code"]) == (422, "validation_error")
+
+
+def test_list_filters_by_image_id(client, project, handle, crack):
+    """Image inspection spec §3: the Images inspector lists one image's findings."""
+    from image_summary_helpers import add_box, new_image
+
+    from app.findings.anchors import AnchorIn
+    from app.findings.service import create_finding
+
+    a, b = new_image(handle), new_image(handle)
+    made = {}
+    for image_id in (a, a, b):
+        box_id = add_box(handle, image_id, crack["id"])
+        f = create_finding(
+            handle,
+            type_id=crack["id"],
+            anchor=AnchorIn(kind="image", image_id=image_id, annotation_id=box_id),
+        )
+        made.setdefault(image_id, set()).add(f.id)
+    r = client.get(f"/api/v1/projects/{project['id']}/findings", params={"image_id": a})
+    assert r.status_code == 200, r.text
+    assert {i["id"] for i in r.json()["items"]} == made[a]
+    none = client.get(f"/api/v1/projects/{project['id']}/findings", params={"image_id": "nope"})
+    assert none.json()["items"] == []

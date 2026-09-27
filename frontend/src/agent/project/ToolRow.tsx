@@ -31,6 +31,7 @@ const JOB_NAME: Record<Job["type"], string> = {
   detect_export: "Detection export",
   pointcloud_import: "Point cloud import",
   pointcloud_export: "Point cloud export",
+  pointcloud_profile: "Cross-section profile",
   surface_build: "Build surface",
   volume_calc: "Calculate volume",
   volume_export: "Export volumes",

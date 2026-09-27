@@ -1,7 +1,7 @@
 import type { RouteObject } from "react-router-dom";
 import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { FindingsScreen } from "@/findings/FindingsScreen";
-import { MapDataList } from "@/maps/MapDataList";
+import { MapWorkspace } from "@/mapws/MapWorkspace";
 import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
@@ -25,13 +25,17 @@ export const projectRoutes: RouteObject[] = [
   // Images: interim host, today's screens (I replaces them).
   { path: "images", element: <DataManagerScreen /> },
   { path: "images/:imageId", element: <EditorScreen /> },
-  // Maps: interim Data-list host and today's viewer (M replaces them).
-  { path: "maps", element: <MapDataList /> },
+  // Maps: the map workspace (M-W1); `maps/:mapId` stays today's viewer until M-X redirects it.
+  { path: "maps", element: <MapWorkspace /> },
   { path: "maps/:mapId", element: <MapsScreen /> },
   // The 3D jump contract (spec 2026-09-23-point-clouds section 10), used unchanged by the
   // maps -> 3D jump, the 3D -> map jump and the Volumes screen's "View in 3D":
   //   /p/:projectId/clouds/:cloudId?at=x,y[&fp=x1,y1;x2,y2;x3,y3;x4,y4]
   //   /p/:projectId/maps/:mapId?at=x,y
+  // Point clouds workspace additions (spec 2026-09-26-point-cloud-workspace section 10.4, helpers in
+  // clouds/jump.ts): /p/:projectId/clouds/:cloudId?finding=<id> opens a pin, ?from_image=<imageId>&px=u,v
+  // looks through that photo and picks at the pixel; the cloud -> image jump is
+  //   /p/:projectId/images/:imageId?at=px,py&r=rpx&from=cloud:<cloudId> (stored-image pixels, I section 6.5).
   // Coordinates are in the DESTINATION's native CRS; the source screen converts them with
   // proj4 (both entities carry `proj4`), so the destination never knows where the caller came
   // from. `fp` is a box footprint's four corners. The screen reads them once per navigation.
