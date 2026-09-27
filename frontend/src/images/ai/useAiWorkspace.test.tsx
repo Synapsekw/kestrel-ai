@@ -5,7 +5,7 @@ import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { ensureBuiltInTools } from "@/images/tools"; // I-FC
 import { useToastStore } from "@/ui";
 import { useAiStore } from "./aiStore";
-import { useCanvasKeyHandlers, useCommandContext, useImagesKeymap, wsGet } from "./bridge";
+import { SMART_TOOL, useCanvasKeyHandlers, useCommandContext, useImagesKeymap, wsGet } from "./bridge";
 import { ensureAiRegistered } from "./register";
 import { accepted, renderAi, resetAll, seedWorkspace, suggestion } from "./testing";
 import { useAiWorkspace, type AiWorkspaceOptions } from "./useAiWorkspace";
@@ -204,6 +204,13 @@ describe("FA's keys", () => {
     input.remove();
   });
 
+  it("S chooses the smart polygon tool through FC's registry (so the quiet checks below are not vacuous)", () => {
+    seedWorkspace([]);
+    mount(fakeClient([]).api);
+    press("s");
+    expect(wsGet().tool).toBe(SMART_TOOL);
+  });
+
   // G5 / controller ruling: FC's `whenMatches` quiets rows only behind FC's own confirm and picker;
   // FA's BulkConfirm and model menu must quiet FA's keys the same way.
   const quietKeys = () => {
@@ -216,6 +223,7 @@ describe("FA's keys", () => {
     press("]");
     press("[");
     press("3");
+    press("s"); // S (smart-polygon) chooses no tool behind the overlay
   };
   const expectUntouched = (
     requests: { method: string; url: string; body: unknown }[],
@@ -229,6 +237,7 @@ describe("FA's keys", () => {
     expect(wsGet().focusedSuggestionId).toBeNull();
     expect(wsGet().selectedIds).toEqual(["p1"]);
     expect(onOpenImage).not.toHaveBeenCalled();
+    expect(wsGet().tool).toBe("select");
   };
 
   it("quiets A, X, Shift+A/X, Tab, [ ], digits and D while FA's bulk confirm is open", async () => {

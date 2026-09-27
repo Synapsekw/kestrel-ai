@@ -1,4 +1,13 @@
-import { IMAGES_KEY_ROWS, registerKeyRows, row, type ImagesKeyRow } from "./bridge";
+import {
+  getTool,
+  IMAGES_KEY_ROWS,
+  registerKeyRows,
+  registerTool,
+  row,
+  SMART_TOOL,
+  type ImagesKeyRow,
+} from "./bridge";
+import { SMART_TOOL_DEF } from "./smartTool";
 
 /**
  * FA's rows of the Images keymap, exactly FC's `FA_ACTIONS` with the `when` FC's collision test
@@ -20,7 +29,12 @@ export function AI_KEY_ROWS(): ImagesKeyRow[] {
   ];
 }
 
-/** Idempotent; call at module scope before the workspace first renders (FC's keymap reads rows then). */
+/**
+ * Idempotent; call at module scope before the workspace first renders (FC's keymap reads rows then).
+ * Also registers the S tool in FC's registry (FC's `resetToolsForTests` may clear it between tests,
+ * so it is checked on its own).
+ */
 export function ensureAiRegistered(): void {
   if (!IMAGES_KEY_ROWS.some((r) => r.action === "accept")) registerKeyRows(AI_KEY_ROWS());
+  if (!getTool(SMART_TOOL)) registerTool(SMART_TOOL_DEF);
 }
