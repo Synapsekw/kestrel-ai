@@ -1,0 +1,415 @@
+{
+  "armed": true,
+  "head": "0010",
+  "data_dir": "C:\\Users\\D\\AppData\\Roaming\\ai.synapse-solutions.kestrel-ai",
+  "ok": true,
+  "projects": [
+    {
+      "folder": "E:\\Projects\\AHTest",
+      "ok": true,
+      "error": null,
+      "steps": [
+        {
+          "name": "catalogue_merge",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "types_merged": 0,
+            "types_created": 7,
+            "merged": [],
+            "created": [
+              "excavator",
+              "bulldozer",
+              "dump_truck",
+              "crane",
+              "concrete_mixer",
+              "roller",
+              "backhoe"
+            ]
+          }
+        },
+        {
+          "name": "rewrite_class_ids",
+          "skipped": false,
+          "seconds": 0.109,
+          "detail": {
+            "rows_rewritten": {
+              "box": 11951,
+              "map_detection": 3,
+              "map_label": 0
+            },
+            "json_rows": 7,
+            "classes_changed": 7,
+            "warnings": []
+          }
+        },
+        {
+          "name": "project_types",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "types": 7,
+            "hotkey_overrides": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "library_class_maps",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "models": 0,
+            "names_added": 0,
+            "conflicts": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "legacy_datasets",
+          "skipped": false,
+          "seconds": 0.032,
+          "detail": {
+            "registered": 4,
+            "names": [
+              "Initial_Construction_Vehicle_Detection (Ahmadia)",
+              "ICVD_V2 (Ahmadia)",
+              "ICVD_V3 (Ahmadia)",
+              "ICVD_V4 (Ahmadia)"
+            ],
+            "already_registered": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "findings_from_annotations",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "findings_created": 0
+          }
+        },
+        {
+          "name": "counts_rebuild",
+          "skipped": false,
+          "seconds": 0.015,
+          "detail": {
+            "findings": 0
+          }
+        }
+      ],
+      "warnings": [],
+      "mismatches": [],
+      "checks": {
+        "project_types": 7,
+        "unmapped_boxes": 0,
+        "findings": 0
+      },
+      "backup": {
+        "path": "C:\\Users\\D\\AppData\\Local\\Temp\\kestrel-dry-run-h5pcuo6f\\project-00\\backups\\project.db.v1-20260927T010340Z.bak",
+        "quick_check": "ok"
+      },
+      "revision_before": "0009",
+      "backup_expected": true,
+      "revision_after": "0010",
+      "schema_version_after": 2,
+      "originals_unchanged": true,
+      "seconds": 0.375
+    },
+    {
+      "folder": "E:\\Projects\\Ahmadia",
+      "ok": true,
+      "error": null,
+      "steps": [
+        {
+          "name": "catalogue_merge",
+          "skipped": false,
+          "seconds": 0.016,
+          "detail": {
+            "types_merged": 1,
+            "types_created": 0,
+            "merged": [
+              "excavator"
+            ],
+            "created": []
+          }
+        },
+        {
+          "name": "rewrite_class_ids",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "rows_rewritten": {
+              "box": 0,
+              "map_detection": 0,
+              "map_label": 0
+            },
+            "json_rows": 0,
+            "classes_changed": 1,
+            "warnings": []
+          }
+        },
+        {
+          "name": "project_types",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "types": 1,
+            "hotkey_overrides": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "library_class_maps",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "models": 0,
+            "names_added": 0,
+            "conflicts": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "legacy_datasets",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "registered": 0,
+            "names": [],
+            "already_registered": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "findings_from_annotations",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "findings_created": 0
+          }
+        },
+        {
+          "name": "counts_rebuild",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "findings": 0
+          }
+        }
+      ],
+      "warnings": [],
+      "mismatches": [],
+      "checks": {
+        "project_types": 1,
+        "unmapped_boxes": 0,
+        "findings": 0
+      },
+      "backup": {
+        "path": "C:\\Users\\D\\AppData\\Local\\Temp\\kestrel-dry-run-h5pcuo6f\\project-01\\backups\\project.db.v1-20260927T010340Z.bak",
+        "quick_check": "ok"
+      },
+      "revision_before": "0001",
+      "backup_expected": true,
+      "revision_after": "0010",
+      "schema_version_after": 2,
+      "originals_unchanged": true,
+      "seconds": 0.109
+    },
+    {
+      "folder": "C:\\Users\\D\\AppData\\Local\\Temp\\acceptance-project",
+      "ok": true,
+      "error": null,
+      "steps": [
+        {
+          "name": "catalogue_merge",
+          "skipped": false,
+          "seconds": 0.015,
+          "detail": {
+            "types_merged": 7,
+            "types_created": 1,
+            "merged": [
+              "excavator",
+              "bulldozer",
+              "dump_truck",
+              "crane",
+              "concrete_mixer",
+              "roller",
+              "backhoe"
+            ],
+            "created": [
+              "wheel_loader"
+            ]
+          }
+        },
+        {
+          "name": "rewrite_class_ids",
+          "skipped": false,
+          "seconds": 0.891,
+          "detail": {
+            "rows_rewritten": {
+              "box": 108327,
+              "map_detection": 0,
+              "map_label": 0
+            },
+            "json_rows": 1,
+            "classes_changed": 8,
+            "warnings": []
+          }
+        },
+        {
+          "name": "project_types",
+          "skipped": false,
+          "seconds": 0.016,
+          "detail": {
+            "types": 8,
+            "hotkey_overrides": 1,
+            "warnings": [
+              "hotkey 2 of wheel_loader is taken in this project; it uses no hotkey",
+              "hotkey 3 of bulldozer is taken in this project; it uses 2",
+              "hotkey 4 of dump_truck is taken in this project; it uses 3",
+              "hotkey 5 of crane is taken in this project; it uses 4",
+              "hotkey 6 of concrete_mixer is taken in this project; it uses 5",
+              "hotkey 7 of roller is taken in this project; it uses 6"
+            ]
+          }
+        },
+        {
+          "name": "library_class_maps",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "models": 0,
+            "names_added": 0,
+            "conflicts": 0,
+            "warnings": []
+          }
+        },
+        {
+          "name": "legacy_datasets",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "registered": 0,
+            "names": [],
+            "already_registered": 0,
+            "warnings": [
+              "dataset v1 was never built on disk (datasets/v1); it is not carried into Models"
+            ]
+          }
+        },
+        {
+          "name": "findings_from_annotations",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "findings_created": 0
+          }
+        },
+        {
+          "name": "counts_rebuild",
+          "skipped": false,
+          "seconds": 0.0,
+          "detail": {
+            "findings": 0
+          }
+        }
+      ],
+      "warnings": [
+        "project_types: hotkey 2 of wheel_loader is taken in this project; it uses no hotkey",
+        "project_types: hotkey 3 of bulldozer is taken in this project; it uses 2",
+        "project_types: hotkey 4 of dump_truck is taken in this project; it uses 3",
+        "project_types: hotkey 5 of crane is taken in this project; it uses 4",
+        "project_types: hotkey 6 of concrete_mixer is taken in this project; it uses 5",
+        "project_types: hotkey 7 of roller is taken in this project; it uses 6",
+        "legacy_datasets: dataset v1 was never built on disk (datasets/v1); it is not carried into Models"
+      ],
+      "mismatches": [],
+      "checks": {
+        "project_types": 8,
+        "unmapped_boxes": 0,
+        "findings": 0
+      },
+      "backup": {
+        "path": "C:\\Users\\D\\AppData\\Local\\Temp\\kestrel-dry-run-h5pcuo6f\\project-02\\backups\\project.db.v1-20260927T010340Z.bak",
+        "quick_check": "ok"
+      },
+      "revision_before": "0002",
+      "backup_expected": true,
+      "revision_after": "0010",
+      "schema_version_after": 2,
+      "originals_unchanged": true,
+      "seconds": 1.688
+    }
+  ],
+  "stores": {
+    "catalogue_types": [
+      {
+        "name": "backhoe",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "7"
+      },
+      {
+        "name": "bulldozer",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "2"
+      },
+      {
+        "name": "concrete_mixer",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "5"
+      },
+      {
+        "name": "crane",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "4"
+      },
+      {
+        "name": "dump_truck",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "3"
+      },
+      {
+        "name": "excavator",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "1"
+      },
+      {
+        "name": "roller",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": "6"
+      },
+      {
+        "name": "wheel_loader",
+        "kind": "object",
+        "origin": "migrated",
+        "hotkey": null
+      }
+    ],
+    "needs_classification": true,
+    "legacy_datasets": [
+      {
+        "name": "ICVD_V2 (Ahmadia)",
+        "legacy_path": "E:\\Projects\\AHTest\\datasets\\ICVD_V2"
+      },
+      {
+        "name": "ICVD_V3 (Ahmadia)",
+        "legacy_path": "E:\\Projects\\AHTest\\datasets\\ICVD_V3"
+      },
+      {
+        "name": "ICVD_V4 (Ahmadia)",
+        "legacy_path": "E:\\Projects\\AHTest\\datasets\\ICVD_V4"
+      },
+      {
+        "name": "Initial_Construction_Vehicle_Detection (Ahmadia)",
+        "legacy_path": "E:\\Projects\\AHTest\\datasets\\Initial_Construction_Vehicle_Detection"
+      }
+    ]
+  }
+}

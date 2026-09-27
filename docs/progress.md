@@ -9,6 +9,16 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Foundation MG: real-folder dry run — 2026-09-27 (`task/f-mg-steps`)
+
+The armed migration (seven data steps, Part B of `2026-09-26-foundation-mg-migration.md`) ran on
+copies of every real project: AHTest `0009`, Ahmadia `0001`, acceptance-project `0002`, all to `0010`
+at schema version 2 with a checked backup. 11,951 and 108,327 boxes rewritten, 0 unmapped, 0
+findings (F4). Row counts and totals unchanged, originals hash-identical. The catalogue holds the 8
+expected migrated object types with AHTest's hotkeys, and 4 legacy datasets were registered. The
+slowest project took 1.7 s. A broken folder is skipped and flagged. Evidence:
+`docs/evidence/foundation-migration/`.
+
 ## Foundation SH: app shell — 2026-09-26 (`task/f-sh`, merged to `main`)
 
 Spec `docs/superpowers/specs/2026-09-26-foundation-design.md` §5, §6.2, plan
