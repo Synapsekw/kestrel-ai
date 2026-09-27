@@ -133,7 +133,14 @@ def test_invert_and_compose_round_trip():
 
 def test_parse_preview():
     assert georef.parse_preview("1,0,5,0,1,-2.5") == (1.0, 0.0, 5.0, 0.0, 1.0, -2.5)
-    for bad in ("1,0,5,0,1", "a,b,c,d,e,f", "1,0,0,0,0,0", "nan,0,0,0,1,0", "-1,0,0,0,1,0"):
+    for bad in (
+        "1,0,5,0,1",
+        "a,b,c,d,e,f",
+        "1,0,0,0,0,0",
+        "nan,0,0,0,1,0",
+        "-1,0,0,0,1,0",
+        "1e-300,0,0,0,1e-300,0",
+    ):
         with pytest.raises(georef.GeorefRefused) as e:
             georef.parse_preview(bad)
         assert e.value.code == "invalid_preview"

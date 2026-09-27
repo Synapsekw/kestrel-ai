@@ -26,6 +26,7 @@ DEGENERATE_EPS = 1e-18
 COLLINEAR_RATIO = 1e-12
 MIN_SCALE = 1e-12
 MIRROR_RMSE_RATIO = 0.5
+PREVIEW_DET_EPS = 1e-12  # a `t` whose 2x2 part is this close to singular is refused (M-B1 R-B1-11)
 MIRRORED = "Points picked in mirrored order"
 
 
@@ -102,18 +103,17 @@ def rotation_of(t: Transform) -> float:
 
 
 def parse_preview(text: str) -> Transform:
-    """`a,b,c,d,e,f` from a tile request's `t` query (drawing -> site); mirrored or singular refused."""
+    """`a,b,c,d,e,f` from a tile request's `t` query (drawing -> site); mirrored (det < 0), singular or
+    near-singular refused. The one implementation: M-B1's site-tile route calls it too (task 16)."""
     try:
         vals = tuple(float(v) for v in text.split(","))
     except ValueError:
         vals = ()
-    if (
-        len(vals) != 6
-        or not all(math.isfinite(v) for v in vals)
-        or vals[0] * vals[4] - vals[1] * vals[3] <= 0
-    ):
-        raise GeorefRefused("invalid_preview", "t must be six finite numbers a,b,c,d,e,f with a*e - b*d > 0")
-    return vals  # type: ignore[return-value]
+    if len(vals) == 6 and all(math.isfinite(v) for v in vals):
+        a, b, _c, d, e, _f = vals
+        if a * e - b * d > PREVIEW_DET_EPS * max(1.0, abs(a), abs(b), abs(d), abs(e)) ** 2:
+            return vals  # type: ignore[return-value]
+    raise GeorefRefused("invalid_preview", "t must be six finite numbers a,b,c,d,e,f with a*e - b*d > 0")
 
 
 def _affine(u, v) -> tuple[float, float, float, float] | None:
