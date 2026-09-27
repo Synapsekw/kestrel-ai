@@ -29,7 +29,7 @@ export function SurveyDateDialog({
       await onSave(date.trim() || null, nextRole);
       onClose();
     } catch (e) {
-      setError(messageOf(e, "could not save the date"));
+      setError(messageOf(e, "Could not save the date."));
     } finally {
       setBusy(false);
     }

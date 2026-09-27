@@ -22,7 +22,7 @@ export function ConfirmDeleteDialog({
       await onConfirm();
       onClose();
     } catch (e) {
-      setError(messageOf(e, "could not delete it"));
+      setError(messageOf(e, "Could not delete it."));
     } finally {
       setBusy(false);
     }
