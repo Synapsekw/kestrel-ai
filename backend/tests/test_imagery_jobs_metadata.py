@@ -94,6 +94,24 @@ def test_backfill_keeps_xmp_columns_when_the_original_is_gone(
     assert _by_path(handle)["UNIQUE.jpg"].rel_alt == 38.40  # kept, not nulled (ruling 2)
 
 
+def test_backfill_keeps_orig_dims_when_the_original_is_gone_and_the_prepared_copy_has_no_exif_size(
+    app, project_id, handle, import_source, wait_job, tmp_path
+):
+    """A non-DJI frame: the original's EXIF has no ExifImageWidth/Height, so import falls back to
+    the original's own pixel size (§7.3). A forced refresh with the original gone must not
+    overwrite that with None just because the prepared copy's EXIF also lacks the tags."""
+    folder = tmp_path / "flight"
+    dji_jpeg(folder / "NODIM.jpg", seed=4, xmp=None, orig=None, focal_mm=None, sensor_w_mm=None)
+    import_source(project_id, folder)
+    before = _by_path(handle)["NODIM.jpg"]
+    assert before.orig_w == 800 and before.orig_h == 600  # import fallback: the original's own size
+    folder.rename(tmp_path / "moved")
+    job = jobs_metadata.submit(handle, app.state.jobs, force=True)
+    assert wait_job(project_id, job.id)["result"] == {"images": 1, "updated": 0, "skipped": 1}
+    after = _by_path(handle)["NODIM.jpg"]
+    assert after.orig_w == 800 and after.orig_h == 600  # kept, not nulled
+
+
 def test_backfill_is_idempotent_and_survives_a_missing_folder(
     app, project_id, handle, import_source, wait_job, tmp_path
 ):

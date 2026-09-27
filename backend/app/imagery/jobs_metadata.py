@@ -93,6 +93,8 @@ def _columns(handle, folder: Path, image: Image, stems) -> tuple[dict, bool]:
     meta = _read(handle.folder / image.path, original=False) or CameraMeta()
     for name in XMP_COLUMNS:  # ruling 2: what only the original can say is kept
         setattr(meta, name, getattr(image, name))
+    if meta.orig_w is None:  # a non-DJI frame's prepared copy has no EXIF width/height either
+        meta.orig_w, meta.orig_h = image.orig_w, image.orig_h
     return camera_columns(meta, image.lat, image.lon), False
 
 
