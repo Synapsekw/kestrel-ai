@@ -29,7 +29,6 @@ B1_STUBS: list[Stub] = [
     ("POST", "/map-workspace/anchor", "convertAnchor"),
     ("GET", "/map-workspace/findings", "listMapFindingsInView"),
     ("POST", "/map-workspace/sample", "sampleInFrame"),
-    ("GET", "/site-tiles/{kind}/{layerId}/{z}/{x}/{y}", "getSiteTile"),
 ]
 
 # M-B2: the plain DSM/DTM import (spec §7).

@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import io
+from pathlib import Path
+
 import numpy as np
 import rasterio
 from affine import Affine
+from PIL import Image as PILImage
 from pyproj import CRS
-from rasterio.enums import Resampling
+from rasterio.enums import ColorInterp, Resampling
 
 from app.db.models import GeoMap
 from app.maps.georef import Georef
@@ -91,3 +95,27 @@ def set_frame(client, project_id: str, epsg: int) -> dict:
     r = client.put(f"{BASE}/{project_id}/map-workspace/frame", json={"kind": "crs", "epsg": epsg})
     assert r.status_code == 200, r.text
     return r.json()
+
+
+def rgba(body: bytes) -> np.ndarray:
+    """A PNG tile body as a (h, w, 4) uint8 array."""
+    return np.asarray(PILImage.open(io.BytesIO(body)).convert("RGBA"))
+
+
+def write_plan_tif(path: Path, data: np.ndarray, *, crs_wkt, transform: Affine) -> Path:
+    """An RGBA drawing raster like M-B3's plan.tif: `data` is (4, h, w) uint8, band 4 the alpha."""
+    _, height, width = data.shape
+    with rasterio.open(
+        path,
+        "w",
+        driver="GTiff",
+        width=width,
+        height=height,
+        count=4,
+        dtype="uint8",
+        crs=crs_wkt,
+        transform=transform,
+    ) as ds:
+        ds.write(data)
+        ds.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
+    return path

@@ -223,3 +223,17 @@ def crack(client, project) -> dict:
     t = add_type(client, "crack", colour="#ff5a4f", default_severity=2)
     use_types(client, project, t)
     return t
+
+
+@pytest.fixture
+def drawing_resolver():
+    """Registers a `drawing_raster` site tile resolver for one test (`drawing_resolver(fn)`); the
+    registry is restored afterwards, whether M-B3's resolver was registered before or not."""
+    from app.workspace import tiles
+
+    saved = tiles._RESOLVERS.get("drawing_raster")
+    yield lambda resolve: tiles.register_site_tile_source("drawing_raster", resolve)
+    if saved is None:
+        tiles._RESOLVERS.pop("drawing_raster", None)
+    else:
+        tiles._RESOLVERS["drawing_raster"] = saved
