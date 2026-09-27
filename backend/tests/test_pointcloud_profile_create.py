@@ -1,8 +1,8 @@
 """C-B2 Task 2: the profile create seam and retry (spec 2026-09-26-point-cloud-workspace 8.2, 12 rows 8-9).
 
 The job these submit is whatever `pointcloud_profile` is registered as; every assertion here reads
-the returned objects or rows the job cannot have touched, so the tests hold with the C-C0 stub and
-with Task 3's real job."""
+the returned objects or rows the job cannot have touched, except the retry test, which now waits for
+the job to end before reading the row (Task 3's real job settles it, so reading early would race it)."""
 
 import pytest
 from pointclouds import insert_cloud
@@ -109,14 +109,20 @@ def test_the_thousand_measurement_cap(app, handle, monkeypatch):
     assert _code(e) == ("measurement_limit", 422)
 
 
-def test_retry_puts_a_failed_profile_back_to_computing(app, handle):
+def test_retry_starts_a_new_job_that_re_runs_and_settles_the_row(app, handle, project_id, wait_job):
+    """The old `"boom"` error from the `failed` row `insert_profile` seeds must be gone once the
+    retried job settles the row again (Task 3's job now really runs, so the race that let this test
+    read the row before the job finished is no longer safe to assume)."""
     cloud_id = insert_cloud(handle)
     mid = insert_profile(handle, cloud_id, status="failed")
     job = profile.retry_profile(handle, app.state.jobs, cloud_id, mid)
     assert job.type == "pointcloud_profile" and job.params == {"cloud_id": cloud_id, "measurement_id": mid}
+    ended = wait_job(project_id, job.id)
+    assert ended["state"] == "failed", ended
+    message = f"the source file is not reachable: {handle.folder / 'source.las'}"
     with handle.session() as s:
         row = s.get(CloudMeasurement, mid)
-        assert row.job_id == job.id and row.error is None and row.status in ("computing", "failed", "ready")
+        assert (row.job_id, row.status, row.error) == (job.id, "failed", message)
 
 
 @pytest.mark.parametrize("status", ["ready", "computing"])
