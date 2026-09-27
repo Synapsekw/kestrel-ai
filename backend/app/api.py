@@ -140,6 +140,7 @@ for _module in (
 # "app.workspace.stubs" and deletes its tuples from app/workspace/stubs.py.
 for _module in (
     # each M unit inserts its router module on its own line above this one
+    "app.workspace.router",
     "app.workspace.stubs",
 ):
     try:

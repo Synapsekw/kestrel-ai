@@ -207,6 +207,15 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     # (`not_a_cloud_finding`). Generated ids resolve to 404 first, so these are rare.
     "putFindingView3d": {409, 422},
     "putCloudMeasurementView3d": {422},
+    # M-B1: a schema-valid EPSG pyproj does not know (`invalid_epsg`) or that is not a projected
+    # metre CRS (`needs_projected_crs`); a schema-valid state over 64 KB (`state_too_large`); an
+    # anchor on a map without CRS, in a local frame or off the map (`no_coordinates`, `local_frame`,
+    # `outside_map`); a tile of a layer outside the frame (`no_coordinates`) or a malformed preview
+    # affine `t` (`invalid_preview`).
+    "setSiteFrame": {422},
+    "putMapWorkspace": {422},
+    "convertAnchor": {422},
+    "getSiteTile": {422},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
