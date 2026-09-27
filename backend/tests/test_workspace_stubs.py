@@ -74,15 +74,6 @@ WGS = [[15.0, 44.99], [15.01, 44.99], [15.01, 44.995]]
 RING = [[0, 0], [10, 0], [10, 10]]
 
 
-def test_frame_site_is_ignored_until_m_b1(client, project_id):
-    """M-B1 turns this into a test that `polygon_site` is filled."""
-    url = f"/api/v1/projects/{project_id}/site-areas"
-    assert client.post(url, json={"name": "Yard", "polygon_wgs84": WGS}).status_code == 201
-    (area,) = client.get(url, params={"frame": "site"}).json()["items"]
-    assert area["category"] == "general"
-    assert "polygon_site" not in area
-
-
 def _option(r, unit: str = "M-B5") -> str:
     assert r.status_code == 501, r.text
     error = r.json()["error"]

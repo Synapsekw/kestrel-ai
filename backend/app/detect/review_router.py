@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, field_validator
 
 from app.detect import review
@@ -91,10 +91,16 @@ def add_map_detection(
 def next_unreviewed(
     runId: str,  # noqa: N803
     after_id: str | None = None,
+    frame: str | None = Query(None, pattern="^site$"),
     handle: ProjectHandle = Depends(get_project),
 ) -> NextUnreviewed:
     row, remaining = review.next_unreviewed(handle, runId, after_id)
-    return NextUnreviewed(detection=MapDetectionOut.from_row(row) if row else None, remaining=remaining)
+    detection = MapDetectionOut.from_row(row) if row else None
+    if frame == "site" and detection is not None:
+        from app.workspace.views import detection_with_site
+
+        detection = detection_with_site(handle, runId, detection)
+    return NextUnreviewed(detection=detection, remaining=remaining)
 
 
 @router.post("/runs/{runId}/accept-above", response_model=JobRef, status_code=202)

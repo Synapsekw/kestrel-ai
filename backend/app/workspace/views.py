@@ -8,19 +8,26 @@ import numpy as np
 from affine import Affine
 from sqlalchemy import select
 
-from app.db.models import Finding, GeoMap, Surface
+from app.db.models import Finding, GeoMap, MapRun, Surface
 from app.errors import AppError, not_found
 from app.findings.anchors import centroid, check_geometry, to_wgs84
+from app.maps.georef import box_corners
 from app.projects.service import ProjectHandle
 from app.surfaces.grid import open_surface
 from app.surfaces.paths import surface_path
 from app.workspace.frame import (
     BBox,
+    SiteFrame,
     densify_bbox,
     geometry_from_site,
     geometry_to_site,
+    map_pixels_to_site,
+    not_in_frame,
     points_from_site,
+    points_to_site,
+    site_bbox_to_map_pixels,
     site_to_wgs84,
+    wgs84_to_site,
 )
 from app.workspace.schemas import AnchorOut, MapFindingPinOut, SurfaceZOut
 from app.workspace.service import get_frame
@@ -138,3 +145,118 @@ def findings_in_view(
                 )
             )
     return out, truncated
+
+
+# --- frame=site on existing endpoints (plan deviation 1: additive fields) ---------------------------
+
+
+def _run_frame(handle: ProjectHandle, run_id: str) -> tuple[str, list[float], SiteFrame]:
+    """The run's map CRS and geotransform, and the workspace frame, once the map is confirmed to be
+    in it (the 4-line guard the brief repeated per function, factored per F8)."""
+    with handle.session() as s:
+        run = s.get(MapRun, run_id)
+        if run is None:
+            raise not_found("run", run_id)
+        m = s.get(GeoMap, run.map_id)
+        crs, gt = m.crs_wkt, m.geotransform
+    frame = get_frame(handle)
+    if not crs or not gt or not frame.holds(crs):
+        raise not_in_frame("this map")
+    return crs, gt, frame
+
+
+def _corners_site(frame: SiteFrame, crs: str, gt: list[float], rows: list) -> list[list[list[float]]]:
+    """Each row's box corners (`box_corners`) converted to site coordinates, one batched call."""
+    flat: list[list[float]] = []
+    counts: list[int] = []
+    for r in rows:
+        corners = [list(p) for p in box_corners(r.x, r.y, r.w, r.h, r.angle)]
+        flat += corners
+        counts.append(len(corners))
+    site = map_pixels_to_site(frame, crs, gt, flat) if flat else []
+    out, i = [], 0
+    for n in counts:
+        out.append(site[i : i + n])
+        i += n
+    return out
+
+
+def detections_in_site(handle: ProjectHandle, run_id: str, bbox: str | None, min_conf, class_id):
+    from app.maps import service as maps_service
+    from app.maps.schemas import MapDetectionOut, MapDetectionPage
+
+    crs, gt, frame = _run_frame(handle, run_id)
+    px_bbox = None
+    box = parse_bbox(bbox)
+    if box is not None:
+        px_bbox = ",".join(f"{v:.6f}" for v in site_bbox_to_map_pixels(frame, crs, gt, box))
+    rows, truncated = maps_service.detections_in(handle, run_id, px_bbox, min_conf, class_id)
+    corners = _corners_site(frame, crs, gt, rows)
+    items = [
+        MapDetectionOut.from_row(r).model_copy(update={"corners_site": c})
+        for r, c in zip(rows, corners, strict=True)
+    ]
+    return MapDetectionPage(items=items, truncated=truncated)
+
+
+def detection_with_site(handle: ProjectHandle, run_id: str, detection):
+    """One detection (nextUnreviewedMapDetection) with its site corners (R-B1-12)."""
+    crs, gt, frame = _run_frame(handle, run_id)
+    (corners,) = _corners_site(frame, crs, gt, [detection])
+    return detection.model_copy(update={"corners_site": corners})
+
+
+def density_in_site(handle: ProjectHandle, run_id: str, cells: int, min_conf):
+    from app.maps import service as maps_service
+    from app.maps.schemas import MapDensity, MapDensityCell
+
+    crs, gt, frame = _run_frame(handle, run_id)
+    cell, rows = maps_service.density(handle, run_id, cells, min_conf)
+    centres = [[(r["gx"] + 0.5) * cell, (r["gy"] + 0.5) * cell] for r in rows]
+    site = map_pixels_to_site(frame, crs, gt, centres) if centres else []
+    return MapDensity(
+        cell_size=cell, cells=[MapDensityCell(**r, center_site=c) for r, c in zip(rows, site, strict=True)]
+    )
+
+
+def site_areas_in_site(handle: ProjectHandle, items: list) -> list:
+    frame = get_frame(handle)
+    if frame.kind == "local":
+        return items
+    out = []
+    for item in items:
+        try:
+            out.append(item.model_copy(update={"polygon_site": wgs84_to_site(frame, item.polygon_wgs84)}))
+        except AppError:
+            out.append(item)
+    return out
+
+
+def volume_in_site(handle: ProjectHandle, out):
+    with handle.session() as s:
+        top = s.get(Surface, out.top_surface_id)
+        crs = top.crs_wkt if top is not None else None
+    frame = get_frame(handle)
+    if top is None or not frame.holds(crs):
+        return out
+    try:
+        return out.model_copy(update={"polygon_site": points_to_site(frame, crs, out.polygon_native)})
+    except AppError:
+        return out
+
+
+def footprints_in_site(handle: ProjectHandle, surface_crs_wkt: str | None, items: list) -> list:
+    frame = get_frame(handle)
+    if not items or not frame.holds(surface_crs_wkt):
+        return items
+    flat = [p for f in items for p in f.ring]
+    try:
+        site = points_to_site(frame, surface_crs_wkt, flat)
+    except AppError:
+        return items
+    out, i = [], 0
+    for f in items:
+        n = len(f.ring)
+        out.append(f.model_copy(update={"ring_site": site[i : i + n]}))
+        i += n
+    return out
