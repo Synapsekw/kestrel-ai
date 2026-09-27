@@ -205,3 +205,74 @@ def test_zoom_out_of_range_is_rejected(client, project_id, wait_job, handle, tmp
         lambda m: m.add_line((500040, 4983000), (500080, 4983000)),
     )
     assert _tile(client, project_id, d["id"], z, 0, 0).status_code == 422
+
+
+def _zigzag(n=100):
+    return [(500035 + i * 0.5, 4983000 + (1.0 if i % 2 else 0.0)) for i in range(n)]
+
+
+def test_a_run_over_the_read_budget_is_decimated_not_dropped(
+    client, project_id, wait_job, handle, tmp_path, monkeypatch
+):
+    def fill(m):
+        m.add_lwpolyline(_zigzag(), dxfattribs={"layer": "LONG"})
+        m.add_line((500040, 4982990), (500041, 4982990), dxfattribs={"layer": "SHORT"})
+
+    d = _drawing(client, project_id, wait_job, handle, tmp_path, fill)
+    monkeypatch.setattr(vtiles, "MAX_READ", 10)
+    r = _tile(client, project_id, d["id"], 12, TX, TY)
+    assert r.status_code == 200
+    body = r.json()
+    by_name = {layer["name"]: layer["lines"] for layer in body["layers"]}
+    assert body["truncated"] is True and set(by_name) == {"LONG", "SHORT"}
+    long_line = by_name["LONG"][0]
+    assert 4 <= len(long_line) <= 2 * 10  # decimated to fit the budget
+    assert long_line[:2] == [500035.0, 4983000.0]  # first vertex kept
+    assert long_line[-2:] == [500035 + 99 * 0.5, 4983001.0]  # last vertex kept
+
+
+def test_a_part_over_the_output_cap_is_decimated_not_dropped(
+    client, project_id, wait_job, handle, tmp_path, monkeypatch
+):
+    def fill(m):
+        m.add_lwpolyline(_zigzag(), dxfattribs={"layer": "LONG"})
+        m.add_line((500040, 4982990), (500041, 4982990), dxfattribs={"layer": "SHORT"})
+
+    d = _drawing(client, project_id, wait_job, handle, tmp_path, fill)
+    monkeypatch.setattr(vtiles, "MAX_OUT", 20)
+    body = _tile(client, project_id, d["id"], 12, TX, TY).json()
+    by_name = {layer["name"]: layer["lines"] for layer in body["layers"]}
+    assert body["truncated"] is True and set(by_name) == {"LONG", "SHORT"}
+    total = sum(len(ln) // 2 for lines in by_name.values() for ln in lines)
+    assert total <= 20 and len(by_name["LONG"][0]) >= 4
+
+
+def test_a_truncated_empty_tile_is_200_not_204(client, project_id, wait_job, handle, tmp_path, monkeypatch):
+    d = _drawing(
+        client,
+        project_id,
+        wait_job,
+        handle,
+        tmp_path,
+        lambda m: m.add_line((500040, 4983000), (500080, 4983000)),
+    )
+    monkeypatch.setattr(vtiles, "MAX_READ", 1)
+    r = _tile(client, project_id, d["id"], 12, TX, TY)
+    assert r.status_code == 200 and r.json() == {"layers": [], "labels": [], "truncated": True}
+
+
+def test_a_vanished_folder_is_404(client, project_id, wait_job, handle, tmp_path):
+    import shutil
+
+    from app.drawings import store
+
+    d = _drawing(
+        client,
+        project_id,
+        wait_job,
+        handle,
+        tmp_path,
+        lambda m: m.add_line((500040, 4983000), (500080, 4983000)),
+    )
+    shutil.rmtree(store.drawing_dir(handle, d["id"]))
+    assert _tile(client, project_id, d["id"], 12, TX, TY).status_code == 404

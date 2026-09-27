@@ -324,7 +324,8 @@ def get_drawing_vector_tile(
     t: str | None = Query(default=None),
     handle: ProjectHandle = Depends(get_project),
 ) -> Response:
-    """M-C0's statuses: 200 JSON, 204 nothing in the tile, 404 unknown/failed, 409 not_ready/not_placed,
+    """M-C0's statuses: 200 JSON (also when truncated with nothing left), 204 nothing in the tile,
+    404 unknown/failed/deleted while serving, 409 not_ready/not_placed,
     422 not_vector / no_coordinates (not in this frame) / invalid_preview. `t` (plan Ruling 6) is a
     drawing -> site affine used instead of the stored georef; its responses are never cached."""
     with handle.session() as s:
@@ -353,14 +354,21 @@ def get_drawing_vector_tile(
     key = (handle.id, drawingId, version, frame.key, z, x, y)
     body = None if t is not None else service.VTILES.get(key)
     if body is None:
-        tile = vtiles.vector_tile(
-            store.drawing_dir(handle, drawingId), layers, transform, conv, site.frame_unit_m(frame), z, x, y
-        )
-        body = (
-            b""
-            if not tile["layers"] and not tile["labels"]
-            else json.dumps(tile, separators=(",", ":")).encode()
-        )
+        try:
+            tile = vtiles.vector_tile(
+                store.drawing_dir(handle, drawingId),
+                layers,
+                transform,
+                conv,
+                site.frame_unit_m(frame),
+                z,
+                x,
+                y,
+            )
+        except FileNotFoundError:
+            raise not_found("drawing", drawingId) from None  # deleted while this request ran
+        empty = not tile["layers"] and not tile["labels"] and not tile["truncated"]
+        body = b"" if empty else json.dumps(tile, separators=(",", ":")).encode()
         if t is None:
             service.VTILES.put(key, body)
     if t is not None:
