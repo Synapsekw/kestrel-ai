@@ -13,7 +13,18 @@ import { useRecentProjects } from "@/api/recentProjects";
 import { pushLog } from "@/app/diagnostics";
 import { useCatalogue } from "@/catalogue/useCatalogue";
 import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, Checkbox, Disclosure, Field, GlassPanel, Input, Segmented, Select } from "@/ui";
+import {
+  Alert,
+  Button,
+  Checkbox,
+  Disclosure,
+  Field,
+  GlassPanel,
+  Input,
+  Segmented,
+  Select,
+  Skeleton,
+} from "@/ui";
 import { emptyBuilderForm, toCreateBody, toFilter, validateBuilder, type BuilderForm } from "./builderModel";
 import { SPLIT_LABEL } from "./datasetLabels";
 import { useDatasetPreview } from "./useDatasetPreview";
@@ -124,7 +135,8 @@ export function DatasetBuilder({
   onClose,
 }: DatasetBuilderProps) {
   const api = useApi();
-  const { projects } = useRecentProjects();
+  const recent = useRecentProjects();
+  const { projects } = recent;
   const catalogue = useCatalogue();
   const liveTypes = useMemo(() => catalogue.types.filter((t) => !t.archived), [catalogue.types]);
   const [form, setForm] = useState<BuilderForm>(() => emptyBuilderForm(initialProjectIds, initialTypeIds));
@@ -170,8 +182,16 @@ export function DatasetBuilder({
 
           <fieldset className="flex flex-col gap-2">
             <legend className="text-xs font-medium text-muted">Projects</legend>
-            {projects.length === 0 && (
-              <p className="text-sm text-muted">No recent projects. Open one from Projects first.</p>
+            {recent.loading ? (
+              <Skeleton className="h-4 w-48" />
+            ) : recent.error ? (
+              <Alert tone="danger" title="The project list could not be loaded">
+                {recent.error}
+              </Alert>
+            ) : (
+              projects.length === 0 && (
+                <p className="text-sm text-muted">No recent projects. Open one from Projects first.</p>
+              )
             )}
             <div className="flex flex-wrap gap-x-5 gap-y-2">
               {projects.map((p) => (
@@ -193,14 +213,30 @@ export function DatasetBuilder({
               </Alert>
             ) : (
               <>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="self-start"
-                  onClick={() => patch({ typeIds: liveTypes.map((t) => t.id) })}
-                >
-                  Select all
-                </Button>
+                {catalogue.error && (
+                  <Alert
+                    tone="danger"
+                    title="The catalogue could not be loaded"
+                    actions={
+                      <Button size="sm" onClick={catalogue.reload}>
+                        Retry
+                      </Button>
+                    }
+                  >
+                    {catalogue.error}
+                  </Alert>
+                )}
+                {catalogue.loading && <Skeleton className="h-4 w-64" />}
+                {liveTypes.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="self-start"
+                    onClick={() => patch({ typeIds: liveTypes.map((t) => t.id) })}
+                  >
+                    Select all
+                  </Button>
+                )}
                 <div className="flex flex-wrap gap-x-5 gap-y-2">
                   {liveTypes.map((t) => (
                     <Checkbox

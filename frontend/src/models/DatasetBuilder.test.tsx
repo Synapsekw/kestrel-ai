@@ -130,4 +130,26 @@ describe("DatasetBuilder (F §12.2, §12.4)", () => {
     renderBuilder();
     expect(await screen.findByRole("radio", { name: "Polygons" })).toBeDisabled();
   });
+
+  it("says the project list failed instead of claiming there are no projects", async () => {
+    renderBuilder([
+      TYPES,
+      PREVIEW,
+      { method: "GET", path: /\/api\/v1\/projects$/, status: 500, body: errorBody("internal", "disk error") },
+    ]);
+    expect(screen.queryByText("No recent projects. Open one from Projects first.")).not.toBeInTheDocument();
+    expect(await screen.findByText("The project list could not be loaded")).toBeInTheDocument();
+    expect(screen.queryByText("No recent projects. Open one from Projects first.")).not.toBeInTheDocument();
+  });
+
+  it("says the catalogue failed to load when it is not merely unavailable", async () => {
+    renderBuilder([
+      PROJECTS,
+      PREVIEW,
+      { method: "GET", path: /\/catalogue\/types$/, status: 500, body: errorBody("internal", "boom") },
+    ]);
+    expect(await screen.findByText("The catalogue could not be loaded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Select all" })).not.toBeInTheDocument();
+  });
 });
