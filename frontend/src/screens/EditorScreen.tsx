@@ -9,7 +9,7 @@ import { BoxLayer } from "@/editor/BoxLayer";
 import { EditorInspector } from "@/editor/EditorInspector";
 import { EditorCanvas } from "@/editor/EditorCanvas";
 import { BackLink } from "@/editor/BackLink";
-import { ConfidenceFloor } from "@/editor/ConfidenceFloor";
+import { ConfidenceFloor } from "@/images/ai/ConfidenceFloor";
 import { EditorToolbar } from "@/editor/EditorToolbar";
 import { EmptyToggle } from "@/editor/EmptyToggle";
 import { clampRect, displayMaxSide, dragRect, normalizeRect, toImage, type Point } from "@/editor/geometry";
@@ -77,7 +77,7 @@ function EditorBody({
   project: Project;
 }) {
   const { baseUrl, token } = useBackend();
-  const { loading } = useEditorImage(projectId, imageId, project.preannotation_model_id);
+  const { loading } = useEditorImage(projectId, imageId);
   const image = useEditorStore((s) => s.image);
   const error = useEditorStore((s) => s.error);
   const notice = useEditorStore((s) => s.notice);

@@ -31,6 +31,9 @@ class ExportBox:
     origin: str  # person | local_model | cloud_provider
     origin_name: str  # "" for a person-drawn box
     review_state: str
+    shape: str = "box"  # box | rbox | polygon | point (image spec §8.1)
+    points: list | None = None  # polygon ring in image px, polygons only
+    area_px: float = 0.0
 
 
 @dataclass
@@ -113,6 +116,9 @@ def load(
                     origin=b.provenance_kind,
                     origin_name=_origin_name(b.provenance_kind, b.provider, b.model_name),
                     review_state=b.review_state,
+                    shape=b.shape or ("rbox" if b.angle else "box"),
+                    points=b.points,
+                    area_px=b.area_px or 0.0,
                 )
                 for b in boxes_by_image.get(image.id, [])
                 if b.class_id in class_names  # the class may have been removed from the project since

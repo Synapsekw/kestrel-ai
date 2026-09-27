@@ -16,7 +16,6 @@ from app.errors import AppError, not_found
 from app.library import service as library
 from app.library.datasets.service import (
     LIVE,
-    SEGMENT_NOT_SUPPORTED,
     TERMINAL,
     effective_export_state,
     effective_state,
@@ -74,8 +73,6 @@ def create_run(lib: LibraryHandle, body: TrainRequest) -> str:
         s.expunge(dataset)
     if state != "ready":
         raise AppError("not_ready", f"Dataset {dataset.name} is {state}; train it once it is ready.", 409)
-    if dataset.task == "segment":
-        raise AppError("task_not_supported", SEGMENT_NOT_SUPPORTED, 422)
     if base.task != dataset.task:
         raise AppError(
             "task_mismatch",

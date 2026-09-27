@@ -77,6 +77,9 @@ def add_box(
     angle: float = 0.0,
     review_state: str = "accepted",
     provenance_kind: str = "person",
+    shape: str = "box",
+    points: list | None = None,
+    area_px: float | None = None,
 ) -> str:
     with handle.session() as s:
         row = Box(
@@ -89,6 +92,9 @@ def add_box(
             angle=angle,
             review_state=review_state,
             provenance_kind=provenance_kind,
+            shape=shape,
+            points=points,
+            area_px=area_px if area_px is not None else (0.0 if shape == "point" else w * h),
         )
         s.add(row)
         s.flush()

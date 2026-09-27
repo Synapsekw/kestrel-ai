@@ -26,7 +26,6 @@ from app.library.handle import library_unavailable
 from app.maps.jobs_detect import run_map_detect  # noqa: F401 - registers `map_detect`
 from app.projects.service import ProjectHandle, get_project
 from app.training.schemas import JobRef
-from app.workspace.pending import guard_run_region
 
 router = APIRouter(prefix="/projects/{projectId}", tags=["detect"])
 
@@ -91,7 +90,6 @@ def list_runs(
 def create_runs(
     body: RunCreate, request: Request, handle: ProjectHandle = Depends(get_project)
 ) -> RunCreated:
-    guard_run_region(body)
     state = request.app.state
     # A cloud-provider run never touches the catalogue: resolve it only when a local library model
     # needs mapping, so a cloud run never fails on an unavailable catalogue (foundation plan BM A11).

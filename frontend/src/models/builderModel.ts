@@ -9,6 +9,7 @@ export interface BuilderForm {
   to: string;
   reviewedOnly: boolean;
   task: DatasetTask;
+  boxesAsPolygons: boolean;
   split: "by_group" | "by_tile" | "random";
   valFraction: string;
   seed: string;
@@ -26,6 +27,7 @@ export function emptyBuilderForm(projectIds: string[], typeIds: string[]): Build
     to: "",
     reviewedOnly: true,
     task: "detect",
+    boxesAsPolygons: false,
     split: "by_group",
     valFraction: "0.2",
     seed: "42",
@@ -41,7 +43,15 @@ export function toFilter(f: BuilderForm): DatasetFilter | null {
     captured_from: f.from || null,
     captured_to: f.to || null,
     reviewed_only: f.reviewedOnly,
+    boxes_as_polygons: f.boxesAsPolygons,
   };
+}
+
+/** Why the preview's skipped images stay out of a dataset of this task (image spec I-D10). */
+export function skippedReason(task: DatasetTask, boxesAsPolygons: boolean): string {
+  return task === "segment" && !boxesAsPolygons
+    ? "they hold boxes or point markers of the chosen types"
+    : "they hold point markers of the chosen types";
 }
 
 export function validateBuilder(f: BuilderForm): string | null {

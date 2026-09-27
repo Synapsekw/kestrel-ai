@@ -1,11 +1,10 @@
-"""Pydantic models for query runs and pre-annotation, matching contract/openapi.yaml exactly."""
+"""Pydantic models for query runs, matching contract/openapi.yaml exactly."""
 
 from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from app.datasets.schemas import BoxOut
 from app.db.models import QueryRun
 from app.jobs.schemas import JobOut
 from app.providers.base import TilingSpec
@@ -112,15 +111,3 @@ class PromoteResult(BaseModel):
 class UnpromoteResult(BaseModel):
     query_run: QueryRunOut
     reverted: int
-
-
-class PreannotateRequest(BaseModel):
-    model_id: str | None = None
-    imgsz: int = Field(default=2560, ge=320, le=6400)
-    conf: float = Field(default=0.25, ge=0, le=1)
-
-
-class PreannotateResult(BaseModel):
-    skipped: bool
-    model_id: str
-    items: list[BoxOut]

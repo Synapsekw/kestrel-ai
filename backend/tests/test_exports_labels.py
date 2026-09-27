@@ -274,3 +274,62 @@ def test_yolo_clip_keeps_the_emitted_box_a_sub_rectangle_of_the_image(tmp_path):
     left, right, top, bottom = cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2
     assert (left, bottom) == pytest.approx((0.0, 1.0), abs=1e-6)  # the two edges that were outside
     assert (right, top) == pytest.approx((0.779619, 0.090381), abs=1e-6)  # the two that were not
+
+
+def _poly_box(points, **over) -> ExportBox:
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    return _box(
+        shape="polygon",
+        points=[list(p) for p in points],
+        x=min(xs),
+        y=min(ys),
+        w=max(xs) - min(xs),
+        h=max(ys) - min(ys),
+        area_px=123.0,
+        **over,
+    )
+
+
+def test_yolo_seg_writes_polygons_and_boxes_as_outlines(tmp_path):
+    tri = [(1000, 600), (1400, 600), (1200, 900)]
+    images = [
+        _image(
+            path="images/siteA/a.jpg",
+            boxes=[_poly_box(tri), _box(class_id="c-dt", x=0, y=0, w=400, h=300)],
+        )
+    ]
+    files = yolo_out.write(images, CLASSES, tmp_path, task="segment")
+    assert files == ["labels_yolo_seg", "labels_yolo_seg/classes.txt"]
+    lines = (tmp_path / "labels_yolo_seg" / "siteA" / "a.txt").read_text("utf-8").splitlines()
+    assert [len(line.split()) for line in lines] == [7, 9]  # the triangle, then the box's 4 corners
+    assert lines[1].startswith("1 ")
+
+
+def test_yolo_seg_and_yolo_leave_points_out(tmp_path):
+    point = _box(shape="point", w=0, h=0, x=100, y=100)
+    images = [_image(path="images/siteA/a.jpg", boxes=[point])]
+    yolo_out.write(images, CLASSES, tmp_path / "d")
+    yolo_out.write(images, CLASSES, tmp_path / "s", task="segment")
+    assert (tmp_path / "d" / "labels_yolo" / "siteA" / "a.txt").read_text("utf-8") == ""
+    assert (tmp_path / "s" / "labels_yolo_seg" / "siteA" / "a.txt").read_text("utf-8") == ""
+
+
+def test_yolo_detect_writes_a_polygon_as_its_envelope(tmp_path):
+    images = [_image(path="images/siteA/a.jpg", boxes=[_poly_box([(1000, 600), (1400, 600), (1200, 900)])])]
+    yolo_out.write(images, CLASSES, tmp_path)
+    text = (tmp_path / "labels_yolo" / "siteA" / "a.txt").read_text("utf-8")
+    assert text == "0 0.300000 0.250000 0.100000 0.100000\n"
+
+
+def test_coco_writes_a_polygon_segmentation_with_envelope_and_area(tmp_path):
+    tri = [(10, 10), (60, 20), (40, 70)]
+    coco_out.write([_image(boxes=[_poly_box(tri)])], CLASSES, tmp_path)
+    ann = json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))["annotations"][0]
+    assert ann["bbox"] == [10, 10, 50, 60]
+    assert ann["area"] == 123.0
+    assert ann["segmentation"] == [[10, 10, 60, 20, 40, 70]]
+
+
+def test_coco_leaves_points_out(tmp_path):
+    coco_out.write([_image(boxes=[_box(shape="point", w=0, h=0)])], CLASSES, tmp_path)
+    assert json.loads((tmp_path / "labels_coco.json").read_text("utf-8"))["annotations"] == []

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { screen, fireEvent } from "@testing-library/react";
+import { screen, fireEvent, within } from "@testing-library/react";
 import { exampleModel, exampleTrainedModel, fakeClient } from "@/test/fixtures";
 import { exampleTrainable } from "@/test/appSectionFixtures";
 import { MemoryRouter } from "react-router-dom";
@@ -225,6 +225,11 @@ describe("TrainForm", () => {
       />,
       { api },
     );
+    // The "no model of this task" notice would misleadingly imply an empty library; the
+    // "library could not be opened" warning already covers this state.
+    expect(
+      screen.queryByText(/No .* model in the library yet\. Add a? .*starter under Library\./),
+    ).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
   });
 
@@ -244,6 +249,7 @@ describe("TrainForm", () => {
       { api },
     );
     expect(screen.queryByRole("link", { name: "Add a starter model" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/model in the library yet/)).not.toBeInTheDocument();
   });
 
   it("explains the parameters and warns about a dataset too small to learn from", () => {
@@ -312,5 +318,53 @@ describe("TrainForm", () => {
     );
     fireEvent.submit(start.closest("form")!);
     expect(onStart).not.toHaveBeenCalled();
+  });
+
+  it("lists only base models of the dataset's task", () => {
+    const { api } = fakeClient([]);
+    const detect = { ...exampleModel, id: "m-det", name: "coco-det", task: "detect" as const };
+    const seg = { ...exampleModel, id: "m-seg", name: "coco-seg", task: "segment" as const };
+    const boxes = { ...exampleTrainable, id: "d-box", name: "machines", task: "detect" as const };
+    const polys = { ...exampleTrainable, id: "d-poly", name: "cracks", task: "segment" as const };
+    renderWithProviders(
+      <TrainForm
+        datasets={[boxes, polys]}
+        models={[detect, seg]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    const model = screen.getByLabelText("Base model");
+    expect(within(model).queryByRole("option", { name: /coco-seg/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Dataset"), { target: { value: "d-poly" } });
+    expect(within(model).getByRole("option", { name: /coco-seg/ })).toBeInTheDocument();
+    expect(within(model).queryByRole("option", { name: /coco-det/ })).not.toBeInTheDocument();
+    expect(model).toHaveValue("m-seg");
+  });
+
+  it("says when the library has no model of the dataset's task", () => {
+    const { api } = fakeClient([]);
+    const polys = { ...exampleTrainable, id: "d-poly", task: "segment" as const };
+    renderWithProviders(
+      <TrainForm
+        datasets={[polys]}
+        models={[{ ...exampleModel, task: "detect" as const }]}
+        datasetsUnavailable={false}
+        modelsUnavailable={false}
+        modelsLoading={false}
+        modelsError={null}
+        busy={false}
+        onStart={() => {}}
+      />,
+      { api },
+    );
+    expect(
+      screen.getByText("No polygon model in the library yet. Add a segmentation starter under Library."),
+    ).toBeInTheDocument();
   });
 });

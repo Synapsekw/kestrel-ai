@@ -116,6 +116,11 @@ export function TrainProgress({ projectId, jobId }: { projectId: string; jobId: 
         <Stat term="mAP50" testId="map50">
           {formatMetric(epoch?.map50)}
         </Stat>
+        {epoch?.maskMap50 != null && (
+          <Stat term="Mask mAP50" testId="mask-map50">
+            {formatMetric(epoch.maskMap50)}
+          </Stat>
+        )}
         <Stat term="Elapsed" testId="elapsed">
           {elapsed === null ? "–" : formatDuration(elapsed)}
         </Stat>

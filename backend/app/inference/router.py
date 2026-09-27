@@ -1,15 +1,13 @@
-"""Query runs and synchronous pre-annotation (spec sections 7 and 8)."""
+"""Query runs (spec section 8). Interactive detection is `imagery/routes_detect.py` (image
+inspection spec §11.2)."""
 
 from fastapi import APIRouter, Body, Depends, Query, Request
 
-from app.datasets.schemas import BoxOut
 from app.events_util import publish_image_ids_event
 from app.inference import service
 from app.inference.jobs import run_infer  # noqa: F401 - the import registers the `infer` job type
 from app.inference.schemas import (
     CostEstimate,
-    PreannotateRequest,
-    PreannotateResult,
     PromoteRequest,
     PromoteResult,
     QueryRunCreate,
@@ -108,17 +106,3 @@ def unpromote_query_run(
     row, count, reverted, image_ids = service.unpromote(handle, runId)
     _boxes_changed(request, handle, image_ids)
     return UnpromoteResult(query_run=QueryRunOut.from_row(row, count), reverted=reverted)
-
-
-@router.post("/images/{imageId}/preannotate", response_model=PreannotateResult)
-def preannotate_image(
-    imageId: str,  # noqa: N803
-    request: Request,
-    handle: ProjectHandle = Depends(get_project),
-    body: PreannotateRequest | None = Body(None),
-) -> PreannotateResult:
-    """Synchronous by design: the editor opens an image and wants its proposals in that response."""
-    skipped, model_id, rows = service.preannotate(
-        handle, imageId, body or PreannotateRequest(), _library(request)
-    )
-    return PreannotateResult(skipped=skipped, model_id=model_id, items=[BoxOut.from_row(r) for r in rows])

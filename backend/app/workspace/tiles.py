@@ -63,23 +63,21 @@ def _invalid_preview(message: str) -> AppError:
 
 
 def parse_preview(t: str | None) -> tuple[float, float, float, float, float, float] | None:
-    """The `t` query: "a,b,c,d,e,f", a preview placement from drawing coordinates to the site frame
-    (E = a*x + b*y + c, N = d*x + e*y + f) used instead of the stored georef while aligning; the
-    drawing_raster resolver (M-B3) composes it with the plan pixel -> drawing coordinates transform.
-    Ruling R-B1-11: anything else, non-finite values or a near-singular 2x2 part is 422 invalid_preview."""
+    """The `t` query: "a,b,c,d,e,f", a preview placement from drawing coordinates (col, -row) to the
+    site frame (E = a*x + b*y + c, N = d*x + e*y + f) used instead of the stored georef while
+    aligning; the drawing_raster resolver (M-B3) composes it with the plan pixel -> drawing transform.
+    Ruling R-B1-11 and M-B3 task 16: M-B3's `georef.parse_preview` is the one rule, so a malformed,
+    non-finite, singular or near-singular, or mirrored (det < 0) `t` is 422 invalid_preview here
+    exactly as on the drawing vector tiles."""
     if t is None:
         return None
+    from app.drawings.georef import GeorefRefused
+    from app.drawings.georef import parse_preview as parse_drawing_preview
+
     try:
-        values = tuple(float(v) for v in t.split(","))
-    except ValueError:
-        values = ()
-    if len(values) != 6 or not all(math.isfinite(v) for v in values):
-        raise _invalid_preview("t must be six finite numbers a,b,c,d,e,f of an invertible affine")
-    a, b, _c, d, e, _f = values
-    tolerance = 1e-12 * max(1.0, abs(a), abs(b), abs(d), abs(e)) ** 2
-    if abs(a * e - b * d) <= tolerance:
-        raise _invalid_preview("t must be six finite numbers a,b,c,d,e,f of an invertible affine")
-    return values
+        return parse_drawing_preview(t)
+    except GeorefRefused as e:
+        raise _invalid_preview(e.message) from None
 
 
 @dataclass(frozen=True)

@@ -27,6 +27,7 @@ EDGE_FAIL = 0.5
 EDGE_WARN = 0.8
 FIT_POOR_M = 0.10
 TOO_STRAIGHT = "edge too short or too straight for a plane"
+LOWEST_REJECT_MIN = 100  # from this many edge samples on, the lowest 1 % are outliers (map spec §10)
 
 
 class BaseFitError(Exception):
@@ -212,3 +213,20 @@ class Flat:
 def flat_fit(edge: EdgeSamples, z: float) -> BaseFit:
     """Information only: how far the edge sits from the chosen level."""
     return BaseFit("flat", int(edge.xs.size), 0, edge.usable_fraction, _rms(edge.zs - z), None)
+
+
+def fit_toe_lowest(edge: EdgeSamples) -> tuple[Flat, BaseFit]:
+    """A flat base at the lowest observed edge sample (map workspace spec §10, M12): the same edge
+    samples and exclusions as `toe_plane`; from 100 samples on, the lowest 1 % are dropped first as
+    outliers (a hole or a spike). The level travels as a horizontal plane `[0, 0, z]`, so `BaseFit`
+    keeps the contract's shape."""
+    n = int(edge.zs.size)
+    if n == 0:
+        raise BaseFitError("no observed ground on the polygon edge — redraw the edge on bare ground")
+    rejected = n // 100 if n >= LOWEST_REJECT_MIN else 0
+    ordered = np.sort(edge.zs)
+    z = float(ordered[rejected])
+    fit = BaseFit(
+        "toe_lowest", n, rejected, edge.usable_fraction, _rms(ordered[rejected:] - z), [0.0, 0.0, z]
+    )
+    return Flat(z), fit

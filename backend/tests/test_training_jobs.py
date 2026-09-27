@@ -193,12 +193,13 @@ def test_a_detect_base_on_an_obb_dataset_is_refused(client, app, tmp_path, make_
     assert client.get(f"{LIB}/jobs", params={"type": "train"}).json()["items"] == []
 
 
-def test_a_segment_dataset_cannot_train_yet(client, app, tmp_path, make_jpeg, catalogue):  # noqa: F811
+def test_a_segment_dataset_needs_a_matching_base(client, app, tmp_path, make_jpeg, catalogue, base_model):  # noqa: F811
     a, _, exc, _ = two_projects(app, tmp_path, make_jpeg, catalogue)
-    masks = build_dataset(client, create_body("masks", [a.id], [exc.id], task="segment"))
-    seg_base = add_library_model(app, tmp_path, name="yolo11n-seg", task="segment", origin="starter")
-    r = client.post(RUNS, json=train_body(masks["id"], seg_base.id))
-    assert r.status_code == 422 and r.json()["error"]["code"] == "task_not_supported"
+    body = create_body("masks", [a.id], [exc.id], task="segment")
+    body["filter"]["boxes_as_polygons"] = True  # a's labels are boxes; let them in as polygons
+    masks = build_dataset(client, body)
+    r = client.post(RUNS, json=train_body(masks["id"], base_model.id))
+    assert r.status_code == 422 and r.json()["error"]["code"] == "task_mismatch"
 
 
 def test_a_legacy_dataset_whose_yaml_drifted_is_refused(client, app, legacy, base_model):

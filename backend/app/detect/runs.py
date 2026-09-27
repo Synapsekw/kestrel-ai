@@ -30,6 +30,8 @@ from app.jobs.runner import JobContext
 from app.library import service as library
 from app.library.catalogue_port import CataloguePort
 from app.library.handle import LibraryHandle, library_unavailable
+from app.maps import region as regions
+from app.maps import timeline
 from app.pagination import clamp_limit, decode_cursor, encode_cursor
 from app.projects.service import ProjectHandle
 from app.providers.config import ProviderConfigStore
@@ -84,6 +86,16 @@ def _targets(handle: ProjectHandle, source_ids: list[str]) -> list[_Target]:
         return [_target(s, sid) for sid in dict.fromkeys(source_ids)]
 
 
+def _region_px(handle: ProjectHandle, targets: list[_Target], region) -> list[list[float]] | None:
+    """The region in its map's pixels, checked before anything is written; None without a region."""
+    if region is None:
+        return None
+    if len(targets) != 1 or targets[0].kind != "map" or targets[0].map_id != region.map_id:
+        raise regions.invalid("A region run looks at one map: send that map's source alone, with its map_id.")
+    with handle.session() as s:
+        return regions.to_map_px(s, s.get(GeoMap, region.map_id), region.polygon_site)
+
+
 def _cloud_model_name(config: ProviderConfigStore, keys: KeyStore, body: RunCreate) -> str:
     if not (body.query or "").strip():
         raise AppError("query_required", "a cloud provider run needs a non-empty query", 422)
@@ -106,20 +118,24 @@ def create_runs(
     if not body.model_id and not body.provider:
         raise AppError("model_or_provider_required", "a run needs a library model_id or a provider", 422)
     targets = _targets(handle, body.source_ids)  # unknown sources: 404 before anything else
+    region_px = _region_px(handle, targets, body.region)
 
     model = None
     mapping: dict = {}
     snapshot: dict = {}
     added: list[str] = []
+    to_add: list[str] = []
     if body.model_id:
         if lib is None:
             raise library_unavailable()
         model = library.require_ready(lib, body.model_id)
-        if model.task == "segment":
+        if model.task in ("segment", "obb") and any(t.kind == "map" for t in targets):
+            # Photo runs write rboxes and polygons (image inspection spec §11.3); map runs write
+            # axis-aligned boxes only, so those models wait for the Maps workspace (ruling R-BP12).
             raise AppError(
                 "task_not_supported",
-                f"{model.name} is a segmentation model; runs with segmentation models arrive with "
-                "the Images workspace.",
+                f"{model.name} is a {model.task} model; map runs with {model.task} models arrive "
+                "with the Maps workspace.",
                 422,
                 {"model_id": model.id},
             )
@@ -132,9 +148,7 @@ def create_runs(
                 422,
                 {"model_id": model.id, "unmapped": unmapped},
             )
-        # A mapped type the project does not list yet joins its type list (F §7.4). This commits
-        # before any job is queued, on purpose: it can never cause a refusal.
-        added = catalogue.add_to_project(handle, [t for t in dict.fromkeys(mapping.values()) if t])
+        to_add = [t for t in dict.fromkeys(mapping.values()) if t]
         snapshot = class_maps.model_snapshot(model)
         model_name = model.name
     else:
@@ -154,6 +168,15 @@ def create_runs(
     target_gsd = (
         body.target_gsd_cm if body.target_gsd_cm is not None else (model.train_gsd_cm if model else None)
     )
+    if region_px is not None:
+        regions.require_imagery(
+            handle, targets[0].map_id, region_px, tiling.tile_size, tiling.overlap, target_gsd
+        )
+    if model is not None:
+        # A mapped type the project does not list yet joins its type list (F §7.4). This commits
+        # before any job is queued, on purpose - and after the region check, so a refused region
+        # adds nothing.
+        added = catalogue.add_to_project(handle, to_add)
     rows: list[tuple[_Target, str, str, str]] = []
     with handle.session() as s:
         for t in targets:
@@ -171,6 +194,8 @@ def create_runs(
                     overlap=tiling.overlap,
                     nms_iou=tiling.nms_iou,
                     target_gsd_cm=target_gsd,
+                    scope="region" if region_px is not None else "map",
+                    region_px=region_px,
                 )
                 job_type, key = "map_detect", "map_run_id"
             s.add(row)
@@ -338,6 +363,13 @@ def set_pinned(handle: ProjectHandle, run_id: str, pinned: bool) -> RunSummary:
     map run's source is its map, so runs made before the map had a source are unpinned too."""
     with handle.session() as s:
         kind, row = _find(s, run_id)
+        if pinned and kind == "map" and not timeline.is_survey_run(row):
+            raise AppError(
+                "conflict",
+                "A region run counts only part of its map, so it cannot speak for the survey.",
+                409,
+                {"run_id": run_id},
+            )
         if pinned:
             if kind == "map":
                 others = update(MapRun).where(MapRun.map_id == row.map_id, MapRun.id != row.id)
@@ -361,7 +393,8 @@ def recount(handle: ProjectHandle, run_id: str) -> dict:
         if kind == "images":
             recount_query_run(s, row)
         else:
-            recount_map_run(s, row, areas_for_map(s, s.get(GeoMap, row.map_id)))
+            areas = areas_for_map(s, s.get(GeoMap, row.map_id)) if timeline.is_survey_run(row) else []
+            recount_map_run(s, row, areas)  # a region run is area-free (spec §9.3)
         return {"run_id": run_id, "kind": kind, "counts": dict(row.counts or {})}
 
 

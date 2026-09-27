@@ -146,12 +146,12 @@ def test_a_source_outside_the_frame_is_422(handle, tmp_path, drawing_resolver):
 
 def test_parse_preview():
     assert tiles.parse_preview(None) is None
-    assert tiles.parse_preview("0.125,0,500000,0,-0.125,3300000") == (
+    assert tiles.parse_preview("0.125,0,500000,0,0.125,3300000") == (
         0.125,
         0.0,
         500000.0,
         0.0,
-        -0.125,
+        0.125,
         3300000.0,
     )
     for bad in (
@@ -161,6 +161,8 @@ def test_parse_preview():
         "nan,0,0,0,1,0",
         "1,2,3,2,4,6",
         "1e-300,0,0,0,1e-300,0",  # near-singular: exact a*e == b*d is not the only case to refuse
+        "0.125,0,500000,0,-0.125,3300000",  # mirrored (det < 0): M-B3's georef.parse_preview refuses it too
+        "0,1,0,1,0,0",  # a swap of the axes is a mirror as well
     ):
         with pytest.raises(AppError) as e:
             tiles.parse_preview(bad)
@@ -170,7 +172,7 @@ def test_parse_preview():
 def test_a_preview_on_another_kind_is_422_before_any_resolver(handle, monkeypatch):
     """Contract getSiteTile 422: `t` sent for a kind other than drawing_raster is invalid_preview."""
     monkeypatch.setitem(tiles._RESOLVERS, "map", lambda *a: pytest.fail("resolved"))
-    style = tiles.TileStyle(preview=(0.125, 0.0, 500000.0, 0.0, -0.125, 3300000.0))
+    style = tiles.TileStyle(preview=(0.125, 0.0, 500000.0, 0.0, 0.125, 3300000.0))
     for kind in ("map", "surface", "volume_diff"):
         with pytest.raises(AppError) as e:
             tiles.serve_site_tile(handle, F39, kind, "M", 13, 0, 0, style)
@@ -184,7 +186,7 @@ def test_a_preview_affine_replaces_the_files_geotransform_and_is_never_cached(
     data = np.full((4, 256, 256), 40, np.uint8)
     data[3] = 255  # opaque dark ink
     path = write_plan_tif(tmp_path / "plan.tif", data, crs_wkt=UTM39, transform=PLAN_GT)
-    preview = (0.125, 0.0, 500032.0, 0.0, -0.125, 3300000.0)
+    preview = (0.125, 0.0, 500032.0, 0.0, 0.125, 3300000.0)  # drawing (col, -row) -> site, as parsed
 
     def resolve(h, layer_id, style):
         t = style.preview
@@ -200,7 +202,7 @@ def test_a_preview_affine_replaces_the_files_geotransform_and_is_never_cached(
             paint=tiles.rgba_paint(False),
             bands=(1, 2, 3, 4),
             alpha_band=4,
-            src_transform=Affine(*t) if t else None,
+            src_transform=Affine(t[0], -t[1], t[2], t[3], -t[4], t[5]) if t else None,  # M-B3's pixel form
         )
 
     drawing_resolver(resolve)

@@ -81,6 +81,7 @@ describe("DatasetBuilder (F §12.2, §12.4)", () => {
         captured_from: null,
         captured_to: null,
         reviewed_only: true,
+        boxes_as_polygons: false,
       },
       split_method: "by_group",
       val_fraction: 0.2,
@@ -127,9 +128,35 @@ describe("DatasetBuilder (F §12.2, §12.4)", () => {
     expect(screen.getByRole("button", { name: "Create dataset" })).toBeDisabled();
   });
 
-  it("offers polygons only once the Images workspace lands", async () => {
+  it("offers polygons, with boxes as polygons, and says how many images the task skips", async () => {
+    const { requests } = renderBuilder([
+      PROJECTS,
+      TYPES,
+      { ...PREVIEW, body: { ...examplePreview, skipped_by_task: 12 } },
+    ]);
+    fireEvent.click(await screen.findByRole("radio", { name: "Polygons" }));
+    expect(
+      await screen.findByText(
+        "12 of 30 images will be skipped: they hold boxes or point markers of the chosen types.",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Boxes as polygons/));
+    await waitFor(() =>
+      expect(
+        requests.some(
+          (r) =>
+            /task=segment/.test(r.url) &&
+            (r.body as { boxes_as_polygons?: boolean } | null)?.boxes_as_polygons === true,
+        ),
+      ).toBe(true),
+    );
+  });
+
+  it("shows no skipped line when the chosen task skips nothing", async () => {
     renderBuilder();
-    expect(await screen.findByRole("radio", { name: "Polygons" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByTestId("preview-images")).toHaveTextContent("30"));
+    expect(screen.queryByText(/will be skipped/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Boxes as polygons/)).not.toBeInTheDocument();
   });
 
   it("says the project list failed instead of claiming there are no projects", async () => {

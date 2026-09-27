@@ -53,11 +53,16 @@ CSV_COLUMNS = [
     "centroid_y",
     "centroid_lon",
     "centroid_lat",
+    "material",
+    "density_t_m3",
+    "tonnage_t",
 ]
 VOLUME_FORMAT = "#,##0.0"
 METRE_FORMAT = "0.000"
 VOLUME_COLUMNS = {c for c in CSV_COLUMNS if c.endswith(("_m3", "_m2"))}
 METRE_COLUMNS = {"cell_size_m", "shift_applied_m", "align_median_dz_m", "align_mad_m", "base_fit_rms_m"}
+TONNE_COLUMNS = {"tonnage_t"}
+DENSITY_COLUMNS = {"density_t_m3"}
 
 
 def row_for(item: ExportItem) -> dict:
@@ -71,6 +76,8 @@ def row_for(item: ExportItem) -> dict:
         lon, lat = Transformer.from_crs(CRS.from_user_input(item.crs_wkt), 4326, always_xy=True).transform(
             cx, cy
         )
+    material = item.material or {}
+    density = material.get("density_t_m3")
     return {
         "measurement_id": item.id,
         "name": item.name,
@@ -108,6 +115,9 @@ def row_for(item: ExportItem) -> dict:
         "centroid_y": cy,
         "centroid_lon": lon,
         "centroid_lat": lat,
+        "material": material.get("name"),
+        "density_t_m3": density,
+        "tonnage_t": r["net_m3"] * density if density is not None else None,
     }
 
 
@@ -145,6 +155,10 @@ def _cell(ws, column: str, value):
     if column in VOLUME_COLUMNS:
         cell.number_format = VOLUME_FORMAT
     elif column in METRE_COLUMNS:
+        cell.number_format = METRE_FORMAT
+    elif column in TONNE_COLUMNS:
+        cell.number_format = VOLUME_FORMAT
+    elif column in DENSITY_COLUMNS:
         cell.number_format = METRE_FORMAT
     return cell
 

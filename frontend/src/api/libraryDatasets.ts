@@ -34,9 +34,14 @@ export async function deleteLibraryDataset(api: ApiClient, datasetId: string): P
   );
 }
 
-/** COUNT queries only, with a per-project timeout on the server (§12.2 step 1). */
-export function previewDataset(api: ApiClient, filter: DatasetFilter): Promise<DatasetPreview> {
-  return unwrap(api.POST("/api/v1/library/datasets/preview", { body: filter }));
+/** COUNT queries only, with a per-project timeout on the server (§12.2 step 1); `skipped_by_task`
+ * counts what `task` would skip (image spec I-D10). */
+export function previewDataset(
+  api: ApiClient,
+  filter: DatasetFilter,
+  task: DatasetTask,
+): Promise<DatasetPreview> {
+  return unwrap(api.POST("/api/v1/library/datasets/preview", { body: filter, params: { query: { task } } }));
 }
 
 /** 202: the dataset (`state: resolving`) and its `dataset_build` job. */

@@ -1127,7 +1127,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. */
+        /** Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. Refuses with 409 `finding_has_content` (nothing changes) when a reverted box's finding has a note, photo, comment, a status other than reviewed, or a person-set severity. */
         post: operations["unpromoteQueryRun"];
         delete?: never;
         options?: never;
@@ -7143,7 +7143,7 @@ export interface components {
             pinned: boolean;
         };
         /**
-         * @description the `Error` envelope for `createRuns`'s 422s
+         * @description the `Error` envelope for `createRuns`'s, `detectImage`'s and `detectImageBatch`'s 422s
          * @example {
          *       "error": {
          *         "code": "unmapped_classes",
@@ -7160,7 +7160,7 @@ export interface components {
          */
         UnmappedClassesError: {
             error: {
-                /** @description `unmapped_classes`, `task_not_supported`, `model_or_provider_required`, `query_required`, or `validation_error` for a malformed body */
+                /** @description `unmapped_classes`, `task_not_supported` (`createRuns` only), `model_or_provider_required`, `query_required`, `no_images`, `too_many_images`, or `validation_error` for a malformed body */
                 code: string;
                 message: string;
                 details: {
@@ -11412,8 +11412,9 @@ export interface components {
         MapProfileResults: {
             length_m: number | null;
             grid_length_m: number;
-            /** @description chainage of each station */
+            /** @description chainage of each station; empty in listMapMeasurements rows (placeholders), GET the measurement for the data */
             stations_m: number[];
+            /** @description one series per surface; empty in listMapMeasurements rows (placeholders), GET the measurement for the data */
             series: components["schemas"]["ProfileSeries"][];
             z_min: number | null;
             z_max: number | null;
@@ -12931,7 +12932,8 @@ export interface operations {
                     "application/json": components["schemas"]["QueryRunWithJob"];
                 };
             };
-            /** @description the model's weights file is missing (`code` is `model_unavailable`) */
+            404: components["responses"]["NotFound"];
+            /** @description the model's weights file is missing (`code` is `model_unavailable`), or no API key is stored for a cloud provider (`code` is `conflict`) */
             409: {
                 headers: {
                     [name: string]: unknown;

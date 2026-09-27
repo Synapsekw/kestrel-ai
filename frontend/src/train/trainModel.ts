@@ -1,5 +1,5 @@
 import type { LibraryModel, TrainRequest } from "@contract/client";
-import type { LibraryDataset } from "@/api/libraryDatasets";
+import type { DatasetTask, LibraryDataset } from "@/api/libraryDatasets";
 
 /** What the training form needs of a dataset: a ready library dataset through `toTrainable`. */
 export interface TrainableDataset {
@@ -10,6 +10,8 @@ export interface TrainableDataset {
   val_count: number;
   class_count: number;
   split_method: string;
+  /** R-BT13: only base models of the same task train on this dataset. */
+  task: DatasetTask;
   /**
    * Another job is preparing this dataset: its export is building, or an active run will export it
    * because it has not been exported yet. A run started now fails at once (the backend refuses a
@@ -31,6 +33,7 @@ export function toTrainable(d: LibraryDataset, activeRunDatasetIds?: ReadonlySet
     val_count: d.counts.val,
     class_count: d.classes.length,
     split_method: d.split_method,
+    task: d.task,
     exportBusy:
       d.export_state === "building" ||
       (Boolean(activeRunDatasetIds?.has(d.id)) && d.export_state !== "ready"),
@@ -103,35 +106,39 @@ export function toTrainRequest(f: TrainForm): TrainRequest {
 }
 
 const EPOCH_MESSAGE =
-  /^epoch (\d+)\/(\d+)(?: mAP50 ([\d.]+))?(?: loss((?: [a-z_]+ [\d.]+)+))?(?: ETA (\d+)s)?$/;
+  /^epoch (\d+)\/(\d+)(?: mAP50 ([\d.]+))?(?: mask mAP50 ([\d.]+))?(?: loss((?: [a-z_]+ [\d.]+)+))?(?: ETA (\d+)s)?$/;
 
 export interface EpochProgress {
   epoch: number;
   epochs: number;
   map50: number | null;
+  /** Mask mAP50 of a segmentation run; null for boxes. */
+  maskMap50: number | null;
   /** Loss terms by short name (`box`, `cls`, `dfl`), empty before the trainer reports any. */
   losses: Record<string, number>;
   etaSeconds: number | null;
 }
 
 /**
- * The trainer's `job.progress` message: `epoch 3/50 mAP50 0.612 loss box 1.234 cls 2.346 dfl 1.111 ETA 252s`
- * (mAP50 absent before the first validation; loss and ETA absent on older messages).
+ * The trainer's `job.progress` message: `epoch 3/50 mAP50 0.612 mask mAP50 0.412 loss box 1.234 cls
+ * 2.346 dfl 1.111 ETA 252s` (mAP50 absent before the first validation; mask mAP50 present only for a
+ * segmentation run; loss and ETA absent on older messages).
  */
 export function parseEpochMessage(message: string): EpochProgress | null {
   const m = EPOCH_MESSAGE.exec(message.trim());
   if (!m) return null;
   const losses: Record<string, number> = {};
-  if (m[4]) {
-    const parts = m[4].trim().split(" ");
+  if (m[5]) {
+    const parts = m[5].trim().split(" ");
     for (let i = 0; i + 1 < parts.length; i += 2) losses[parts[i]] = Number(parts[i + 1]);
   }
   return {
     epoch: Number(m[1]),
     epochs: Number(m[2]),
     map50: m[3] === undefined ? null : Number(m[3]),
+    maskMap50: m[4] === undefined ? null : Number(m[4]),
     losses,
-    etaSeconds: m[5] === undefined ? null : Number(m[5]),
+    etaSeconds: m[6] === undefined ? null : Number(m[6]),
   };
 }
 

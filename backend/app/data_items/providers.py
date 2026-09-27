@@ -2,8 +2,8 @@
 
 Every provider pages its own table in the one Data list order - `captured_on` descending with
 undated rows last, then `created_at` descending, then `id` ascending - so their pages merge with a
-keyset cursor. A page is one statement per provider, `limit` rows at most. `drawing` has no
-provider until unit M adds its table.
+keyset cursor. A page is one statement per provider, `limit` rows at most. `drawing` is M-B3's
+provider, at the end of this file.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.data_items.schemas import DataItem
-from app.db.models import GeoMap, Job, PointCloud, Source, Surface
+from app.db.models import Drawing, GeoMap, Job, PointCloud, Source, Surface
 from app.errors import AppError
 from app.pagination import decode_cursor, encode_cursor
 
@@ -240,3 +240,34 @@ def merge(pages: list[list[DataItem]], limit: int) -> tuple[list[DataItem], Sort
         return items, None
     items = items[:limit]
     return items, SortKey.of(items[-1])
+
+
+class Drawings(_Provider):
+    """Drawings (map-workspace spec §8.1, unit M-B3): dated by their revision date, when set."""
+
+    type = "drawing"
+
+    def columns(self):
+        return Drawing.captured_on, Drawing.created_at, Drawing.id, Drawing.name
+
+    def base(self):
+        return select(Drawing)
+
+    def count_query(self):
+        return select(func.count()).select_from(Drawing)
+
+    def item(self, row) -> DataItem:
+        (d,) = row
+        georef = d.georef or {}
+        return DataItem(
+            id=d.id,
+            type="drawing",
+            label=d.name,
+            captured_on=d.captured_on,
+            status=d.status,
+            created_at=d.created_at,
+            summary={"format": d.format, "placed": d.georef is not None, "rmse_m": georef.get("rmse_m")},
+        )
+
+
+PROVIDERS["drawing"] = Drawings()

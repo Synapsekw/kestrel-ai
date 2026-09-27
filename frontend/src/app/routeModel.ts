@@ -91,6 +91,7 @@ export interface RouteInfo {
  */
 export function layoutOf(tab: string, detail: boolean): Layout {
   if (tab === "maps") return "fullbleed";
+  if (tab === "clouds" && detail) return "fullbleed"; // C-W1: the point cloud workspace
   if (tab === "images" && detail) return "workspace";
   return "page";
 }

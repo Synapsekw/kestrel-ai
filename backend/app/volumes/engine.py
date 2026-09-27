@@ -27,6 +27,7 @@ from app.volumes.bases import (
     FIT_POOR_M,
     BaseFitError,
     Flat,
+    fit_toe_lowest,
     fit_toe_plane,
     fit_toe_surface,
     flat_fit,
@@ -51,7 +52,7 @@ class EngineFailure(Exception):
 class EngineInputs:
     polygon: list[list[float]]
     top: SurfaceReader
-    base_kind: str  # toe_plane | toe_surface | flat | surface
+    base_kind: str  # toe_plane | toe_surface | toe_lowest | flat | surface
     base_z: float | None = None
     base: SurfaceReader | None = None
     footprints: list[Polygon] = field(default_factory=list)
@@ -164,6 +165,8 @@ def measure(inp: EngineInputs) -> dict:
                 model, fit = fit_toe_plane(edge)
             elif inp.base_kind == "toe_surface":
                 model, fit = fit_toe_surface(edge)
+            elif inp.base_kind == "toe_lowest":
+                model, fit = fit_toe_lowest(edge)
             else:
                 if inp.base_z is None:
                     raise EngineFailure("a flat base needs a height")
@@ -309,7 +312,7 @@ def measure(inp: EngineInputs) -> dict:
     mean_abs = acc["abs"] / n["measured"]
     if inp.base_kind in TOE_KINDS:
         base_m3 = measured_area * fit.rms_m
-    elif inp.base_kind == "flat":
+    elif inp.base_kind in ("flat", "toe_lowest"):  # a chosen level: no fitted model to be wrong
         base_m3 = 0.0
     else:
         base_m3 = None

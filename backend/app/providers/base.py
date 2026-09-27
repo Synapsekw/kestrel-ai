@@ -13,9 +13,18 @@ from typing import Protocol
 
 from PIL import Image as PILImage
 
+from app.geometry import aabb_of
+
 
 @dataclass(frozen=True)
 class Detection:
+    """One detection in full-image pixels, labelled with a project class name.
+
+    `x, y, w, h` follow the `Box` convention (`app/geometry.py`): a box's rectangle, an rbox's
+    *unrotated* rectangle turned by `angle` degrees about its centre, a polygon's axis-aligned
+    envelope. NMS and IoU compare `envelope()`s (image inspection spec §11.3).
+    """
+
     label: str
     x: float
     y: float
@@ -23,6 +32,33 @@ class Detection:
     h: float
     confidence: float
     raw_ref: str = ""  # where the provider's raw response for this box was persisted
+    angle: float = 0.0  # degrees in [0, 180); non-zero only for an rbox
+    polygon: tuple[tuple[float, float], ...] | None = None  # full-image px; polygon only
+
+    def __post_init__(self) -> None:
+        # A tile cache round-trips through JSON, which turns tuples into lists: keep one type so a
+        # cached detection equals a fresh one.
+        if self.polygon is not None:
+            object.__setattr__(self, "polygon", tuple((float(px), float(py)) for px, py in self.polygon))
+
+    @property
+    def shape(self) -> str:
+        if self.polygon is not None:
+            return "polygon"
+        return "rbox" if self.angle else "box"
+
+    def envelope(self) -> tuple[float, float, float, float]:
+        """The axis-aligned `(x, y, w, h)` that holds the shape."""
+        if self.polygon is not None or not self.angle:
+            return (self.x, self.y, self.w, self.h)
+        return aabb_of(self.x, self.y, self.w, self.h, self.angle)
+
+    @classmethod
+    def from_polygon(cls, label: str, ring, confidence: float, raw_ref: str = "") -> Detection:
+        xs = [float(p[0]) for p in ring]
+        ys = [float(p[1]) for p in ring]
+        x0, y0 = min(xs), min(ys)
+        return cls(label, x0, y0, max(xs) - x0, max(ys) - y0, confidence, raw_ref, polygon=tuple(ring))
 
 
 @dataclass(frozen=True)

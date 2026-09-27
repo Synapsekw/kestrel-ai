@@ -16,10 +16,11 @@ from sqlalchemy import delete
 from app.datasets.grouping import tile_key
 from app.datasets.splits import assign_splits
 from app.db.models import Image
+from app.imagery import labels as label_rules
 from app.jobs.cancellation import JobFailure
 from app.jobs.registry import register_job_type
 from app.jobs.runner import JobContext
-from app.library.datasets.selection import Filter, labels_of, matching_images
+from app.library.datasets.selection import Filter, labels_of, matching_images, unexpressible
 from app.library.db import LibraryDataset, LibraryDatasetItem, LibraryDatasetSource
 
 PAGE = 500
@@ -42,13 +43,28 @@ def _item_key(project_id: str, image_id: str) -> str:
     return f"{project_id}:{image_id}"
 
 
-def _key_pages(handle, f: Filter) -> Iterator[list]:
+def all_skipped(skipped: int, task: str, boxes_as_polygons: bool) -> str:
+    """R-BT6: the build failed because every labelled match was skipped (images marked empty may
+    still have entered); say how many and what to change."""
+    if task == "segment" and not boxes_as_polygons:
+        return (
+            f"Nothing to train on: {skipped} matching images were skipped because they hold boxes "
+            "or point markers of the chosen types, which a polygon dataset cannot use. Tick “Boxes as "
+            "polygons” to use boxes as 4-point outlines, or choose types drawn as polygons."
+        )
+    return (
+        f"Nothing to train on: {skipped} matching images were skipped because they hold point "
+        "markers of the chosen types. Point markers cannot be trained; choose other types."
+    )
+
+
+def _key_pages(handle, f: Filter, task: str) -> Iterator[list]:
     after = ""
     while True:
         with handle.session() as s:
             rows = s.execute(
                 matching_images(f)
-                .add_columns(Image.group_key, Image.lat, Image.lon)
+                .add_columns(Image.group_key, Image.lat, Image.lon, unexpressible(f, task).label("skip"))
                 .where(Image.id > after)
                 .order_by(Image.id)
                 .limit(PAGE)
@@ -108,6 +124,7 @@ def _build(ctx: JobContext) -> dict:
         if row is None:
             raise JobFailure("This dataset was deleted before it was built.")
         f = Filter.from_json(row.filter or {})
+        task = row.task
         method, params = row.split_method, dict(row.split_params or {})
     handles, missing = [], []
     for project_id in f.project_ids:
@@ -120,15 +137,19 @@ def _build(ctx: JobContext) -> dict:
 
     ctx.progress(0, "Finding matching images")
     keyed: list[tuple[str, str]] = []
+    skipped = 0
     for handle in handles:
-        for rows in _key_pages(handle, f):
+        for rows in _key_pages(handle, f, task):
             ctx.check_cancelled()
-            keyed += [
-                (_item_key(handle.id, r.id), group_of(handle.id, method, r.group_key, r.lat, r.lon))
-                for r in rows
-            ]
+            for r in rows:
+                if r.skip:  # I-D10: never enters, so it never unbalances the split (R-BT5)
+                    skipped += 1
+                    continue
+                keyed.append(
+                    (_item_key(handle.id, r.id), group_of(handle.id, method, r.group_key, r.lat, r.lon))
+                )
     if not keyed:
-        raise JobFailure(NOTHING_TO_TRAIN_ON)
+        raise JobFailure(all_skipped(skipped, task, f.boxes_as_polygons) if skipped else NOTHING_TO_TRAIN_ON)
     splits = assign_splits(keyed, method, float(params.get("val_fraction", 0.2)), int(params.get("seed", 42)))
     del keyed
 
@@ -147,6 +168,11 @@ def _build(ctx: JobContext) -> dict:
                 if split is None:  # labelled after the first pass: it joins the next dataset
                     continue
                 frozen = labels.get(image_id, [])
+                if not label_rules.expressible(
+                    task, frozen, f.type_ids, boxes_as_polygons=f.boxes_as_polygons
+                ):
+                    skipped += 1  # labelled between the passes with a shape the task cannot write
+                    continue
                 items.append(
                     LibraryDatasetItem(
                         dataset_id=dataset_id,
@@ -173,18 +199,19 @@ def _build(ctx: JobContext) -> dict:
                 image_count=taken,
             )
         )
-    if not counts["per_class"]:
-        raise JobFailure(NOTHING_TO_TRAIN_ON)
+    if not counts["per_class"]:  # negatives may have entered while every labelled match was skipped
+        raise JobFailure(all_skipped(skipped, task, f.boxes_as_polygons) if skipped else NOTHING_TO_TRAIN_ON)
     with lib.session() as s:
         row = s.get(LibraryDataset, dataset_id)
         if row is None:
             raise JobFailure("This dataset was deleted while it was being built.")
         s.add_all(sources)
         row.counts, row.state = counts, "ready"
-    ctx.log.info("built dataset %s: %s", dataset_id, counts)
+    ctx.log.info("built dataset %s: %s, skipped %s (%s)", dataset_id, counts, skipped, task)
     return {
         "dataset_id": dataset_id,
         "images": counts["images"],
         "train": counts["train"],
         "val": counts["val"],
+        "skipped": skipped,
     }

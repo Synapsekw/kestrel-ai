@@ -45,7 +45,7 @@ SitePoint = Annotated[list[float], Field(min_length=2, max_length=2)]
 
 
 class RunRegion(BaseModel):
-    """A map run over part of one map (map-workspace spec §9.3); answers 501 until M-B5."""
+    """Look only inside this polygon of one map (map workspace spec §9.3), drawn in the site frame."""
 
     map_id: str
     polygon_site: list[SitePoint] = Field(min_length=3, max_length=5000)

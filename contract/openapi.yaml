@@ -831,8 +831,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/QueryRunWithJob" }
+        "404": { $ref: "#/components/responses/NotFound" }
         "409":
-          description: "the model's weights file is missing (`code` is `model_unavailable`)"
+          description: "the model's weights file is missing (`code` is `model_unavailable`), or no API key is stored for a cloud provider (`code` is `conflict`)"
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1543,7 +1544,7 @@ paths:
     post:
       tags: [query-runs]
       operationId: unpromoteQueryRun
-      summary: Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone.
+      summary: Undo a promotion. Boxes the promotion accepted go back to unreviewed; boxes a person accepted, edited or rejected are left alone. Refuses with 409 `finding_has_content` (nothing changes) when a reverted box's finding has a note, photo, comment, a status other than reviewed, or a person-set severity.
       responses:
         "200":
           description: run with `promoted_at` cleared and the number of boxes returned to unreviewed
@@ -8345,7 +8346,7 @@ components:
       example: { pinned: true }
     UnmappedClassesError:
       type: object
-      description: the `Error` envelope for `createRuns`'s 422s
+      description: the `Error` envelope for `createRuns`'s, `detectImage`'s and `detectImageBatch`'s 422s
       required: [error]
       properties:
         error:
@@ -8354,7 +8355,7 @@ components:
           properties:
             code:
               type: string
-              description: "`unmapped_classes`, `task_not_supported`, `model_or_provider_required`, `query_required`, or `validation_error` for a malformed body"
+              description: "`unmapped_classes`, `task_not_supported` (`createRuns` only), `model_or_provider_required`, `query_required`, `no_images`, `too_many_images`, or `validation_error` for a malformed body"
             message: { type: string }
             details:
               type: object
@@ -11687,7 +11688,7 @@ components:
           }
         placement: { $ref: "#/components/schemas/DrawingPlacementInput" }
         captured_on:
-          { type: [string, "null"], format: date, description: a revision date }
+          { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: a revision date }
       example:
         {
           inspection_id: "i0000000-1313-4000-8000-000000000001",
@@ -11945,7 +11946,7 @@ components:
         name: { type: string, minLength: 1, maxLength: 200 }
         layer_state: { $ref: "#/components/schemas/DrawingLayerState" }
         captured_on:
-          { type: [string, "null"], format: date, description: null clears it }
+          { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: null clears it }
     DrawingGeorefPut:
       type: object
       required: [model, points, dst_frame]
@@ -12180,14 +12181,14 @@ components:
             type: array,
             maxItems: 2000,
             items: { type: number },
-            description: chainage of each station,
+            description: "chainage of each station; empty in listMapMeasurements rows (placeholders), GET the measurement for the data",
           }
         series:
           {
             type: array,
-            minItems: 1,
             maxItems: 3,
             items: { $ref: "#/components/schemas/ProfileSeries" },
+            description: "one series per surface; empty in listMapMeasurements rows (placeholders), GET the measurement for the data",
           }
         z_min: { type: [number, "null"] }
         z_max: { type: [number, "null"] }

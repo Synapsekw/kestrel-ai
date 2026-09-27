@@ -28,6 +28,7 @@ import {
 import {
   emptyBuilderForm,
   MAX_DATASET_TYPES,
+  skippedReason,
   toCreateBody,
   toFilter,
   validateBuilder,
@@ -46,7 +47,7 @@ export interface DatasetBuilderProps {
 const TASKS: { value: DatasetTask; label: string; disabled?: boolean }[] = [
   { value: "detect", label: "Boxes" },
   { value: "obb", label: "Rotated boxes" },
-  { value: "segment", label: "Polygons", disabled: true },
+  { value: "segment", label: "Polygons" },
 ];
 
 /** What a project's preview row says instead of a count. */
@@ -65,12 +66,16 @@ function PreviewPanel({
   loading,
   error,
   types,
+  task,
+  boxesAsPolygons,
 }: {
   filter: DatasetFilter | null;
   preview: DatasetPreview | null;
   loading: boolean;
   error: string | null;
   types: CatalogueType[];
+  task: DatasetTask;
+  boxesAsPolygons: boolean;
 }) {
   if (!filter) {
     return (
@@ -95,6 +100,11 @@ function PreviewPanel({
       {loading && <span className="text-xs text-muted">Counting…</span>}
       {error && <Alert tone="danger">{error}</Alert>}
       {preview && preview.images === 0 && <Alert tone="warn">No labelled images match this filter.</Alert>}
+      {preview && preview.skipped_by_task > 0 && (
+        <Alert tone="warn">
+          {`${preview.skipped_by_task} of ${preview.images} images will be skipped: ${skippedReason(task, boxesAsPolygons)}.`}
+        </Alert>
+      )}
       {preview && (
         <ul data-testid="preview-types" className="flex flex-col gap-1 text-sm">
           {filter.type_ids.map((id) => (
@@ -150,9 +160,10 @@ export function DatasetBuilder({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const filter = useMemo(() => toFilter(form), [form]);
-  const preview = useDatasetPreview(filter);
+  const preview = useDatasetPreview(filter, form.task);
   const patch = (p: Partial<BuilderForm>) => setForm((f) => ({ ...f, ...p }));
-  const nothingMatches = preview.preview !== null && preview.preview.images === 0;
+  const nothingMatches =
+    preview.preview !== null && preview.preview.images - preview.preview.skipped_by_task <= 0;
   const canCreate = !catalogue.unavailable && !nothingMatches && !busy;
 
   async function submit(e: FormEvent) {
@@ -286,7 +297,13 @@ export function DatasetBuilder({
 
           <div className="flex flex-col gap-1">
             <Segmented label="Task" options={TASKS} value={form.task} onChange={(task) => patch({ task })} />
-            <p className="text-xs text-muted">Polygon datasets arrive with the Images workspace.</p>
+            {form.task === "segment" && (
+              <Checkbox
+                label="Boxes as polygons (use boxes and rotated boxes as 4-point outlines)"
+                checked={form.boxesAsPolygons}
+                onChange={(e) => patch({ boxesAsPolygons: e.target.checked })}
+              />
+            )}
           </div>
 
           <Disclosure label="Split options">
@@ -349,6 +366,8 @@ export function DatasetBuilder({
           loading={preview.loading}
           error={preview.error}
           types={catalogue.types}
+          task={form.task}
+          boxesAsPolygons={form.boxesAsPolygons}
         />
       </form>
     </GlassPanel>

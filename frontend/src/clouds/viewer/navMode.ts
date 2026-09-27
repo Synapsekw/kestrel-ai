@@ -11,12 +11,13 @@ export interface MouseButtons {
   RIGHT: MouseAction;
 }
 
-/** The modes V1 applies. */
+/** The modes OrbitControls applies (fly is `flyControls.ts`). */
 export type AppliedNavMode = Exclude<NavMode, "fly">;
 
-/** Fly is C-V2's: until then a request for it leaves the current mode in place (plan Ruling 2). */
-export function resolveNavMode(requested: NavMode, current: AppliedNavMode): AppliedNavMode {
-  return requested === "fly" ? current : requested;
+/** Every mode applies: orbit and pan are OrbitControls button maps, fly is `flyControls.ts` (C-V2). */
+export function resolveNavMode(requested: NavMode, current?: NavMode): NavMode {
+  void current; // the planned (requested, current) arity; every mode applies whatever the current one
+  return requested;
 }
 
 /** Orbit is S1's OrbitControls; pan swaps the buttons so a left drag pans (spec §7). */

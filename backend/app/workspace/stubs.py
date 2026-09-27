@@ -26,31 +26,11 @@ Stub = tuple[str, str, str]
 B1_STUBS: list[Stub] = []
 
 # M-B3: drawings - inspect, build, georeference, tiles (spec §8).
-B3_STUBS: list[Stub] = [
-    ("POST", "/drawing-inspections", "createDrawingInspection"),
-    ("GET", "/drawing-inspections/{inspectionId}", "getDrawingInspection"),
-    ("GET", "/drawing-inspections/{inspectionId}/pages/{page}/thumbnail", "getDrawingPageThumbnail"),
-    ("GET", "/drawings", "listDrawings"),
-    ("POST", "/drawings", "createDrawing"),
-    ("POST", "/drawings/georef-fit", "fitDrawingGeoref"),
-    ("GET", "/drawings/{drawingId}", "getDrawing"),
-    ("PATCH", "/drawings/{drawingId}", "patchDrawing"),
-    ("DELETE", "/drawings/{drawingId}", "deleteDrawing"),
-    ("PUT", "/drawings/{drawingId}/georef", "putDrawingGeoref"),
-    ("DELETE", "/drawings/{drawingId}/georef", "clearDrawingGeoref"),
-    ("GET", "/drawings/{drawingId}/vtiles/{z}/{x}/{y}", "getDrawingVectorTile"),
-    ("GET", "/drawings/{drawingId}/thumbnail", "getDrawingThumbnail"),
-]
+B3_STUBS: list[Stub] = []
 
 # M-B4: map measurements and the project-wide measurements union (spec §9.1, §9.2, §4 item 8).
-B4_STUBS: list[Stub] = [
-    ("GET", "/measurements", "listMeasurements"),
-    ("GET", "/map-measurements", "listMapMeasurements"),
-    ("POST", "/map-measurements", "createMapMeasurement"),
-    ("GET", "/map-measurements/{mapMeasurementId}", "getMapMeasurement"),
-    ("PATCH", "/map-measurements/{mapMeasurementId}", "patchMapMeasurement"),
-    ("DELETE", "/map-measurements/{mapMeasurementId}", "deleteMapMeasurement"),
-]
+# All six operations are routed for real now (app/mapmeasure/router.py, app/measurements/union.py).
+B4_STUBS: list[Stub] = []
 
 STUBS: list[Stub] = [*B1_STUBS, *B3_STUBS, *B4_STUBS]
 
