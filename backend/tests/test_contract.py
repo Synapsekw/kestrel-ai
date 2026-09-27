@@ -100,11 +100,6 @@ EXPECTED_STUBS: set[str] = {
     "refreshImageMetadata",  # I-BK
     "getImageIndex",  # I-BX
     "rebuildImageSummary",  # I-BX
-    "prepareImageSegment",  # I-BS
-    "segmentImage",  # I-BS
-    "listAssistModels",  # I-BS
-    "acquireAssistModel",  # I-BS
-    "importAssistModel",  # I-BS
     "detectImage",  # I-BP
     "detectImageBatch",  # I-BP
 }
@@ -213,6 +208,8 @@ REFUSES_VALID_DATA: dict[str, set[int]] = {
     "addFindingAttachment": {422},
     # BC: a generated type that exists but is an object type (`not_a_defect`).
     "backfillCatalogueType": {422},
+    # I-BS: a generated acquire can land while the previous one is still live (`job_running`).
+    "acquireAssistModel": {409},
 }
 
 # A REFUSES_VALID_DATA status the contract does not declare for that operation (a real gap in
