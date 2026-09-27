@@ -18,9 +18,14 @@ interface ChangesState {
   findingsRevision: number;
   /** Bumped on `migration.changed`: the Projects list re-reads (F §11.3). */
   projectsRevision: number;
+  /** Bumped on `map_workspace.changed`, `drawings.changed` and `maps.changed` (M-W1): the map workspace re-reads its frame, layers and surveys. */
+  mapWorkspaceRevision: number;
+  /** Bumped on `map_measurements.changed` (M-W1, read by M-W3). */
+  mapMeasurementsRevision: number;
   /** The project the route has open (set by the Shell), or null. The events socket is app-wide, so
-   * `findings.changed`, `data.changed`, `images.changed`, `boxes.changed`, `surfaces.changed` and
-   * `volumes.changed` of another project (a job running in B while A is open) are ignored rather
+   * `findings.changed`, `data.changed`, `images.changed`, `boxes.changed`, `surfaces.changed`,
+   * `volumes.changed`, `map_workspace.changed`, `drawings.changed`, `maps.changed` and
+   * `map_measurements.changed` of another project (a job running in B while A is open) are ignored rather
    * than re-reading A's screens. App-wide events (`catalogue.changed`, `migration.changed`) are
    * never scoped this way. */
   openProjectId: string | null;
@@ -39,6 +44,10 @@ const PROJECT_SCOPED_EVENTS: ReadonlySet<string> = new Set([
   "boxes.changed",
   "surfaces.changed",
   "volumes.changed",
+  "map_workspace.changed",
+  "drawings.changed",
+  "maps.changed",
+  "map_measurements.changed",
 ]);
 
 export const useChangesStore = create<ChangesState>((set) => ({
@@ -50,6 +59,8 @@ export const useChangesStore = create<ChangesState>((set) => ({
   dataRevision: 0,
   findingsRevision: 0,
   projectsRevision: 0,
+  mapWorkspaceRevision: 0,
+  mapMeasurementsRevision: 0,
   openProjectId: null,
   setOpenProject: (openProjectId) => set({ openProjectId }),
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
@@ -73,6 +84,11 @@ export const useChangesStore = create<ChangesState>((set) => ({
       if (ev.type === "findings.changed") return { findingsRevision: s.findingsRevision + 1 };
       if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
       if (ev.type === "catalogue.changed") return { catalogueRevision: s.catalogueRevision + 1 };
+      if (ev.type === "map_workspace.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
+      if (ev.type === "drawings.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
+      if (ev.type === "maps.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
+      if (ev.type === "map_measurements.changed")
+        return { mapMeasurementsRevision: s.mapMeasurementsRevision + 1 };
       return s;
     }),
 }));
