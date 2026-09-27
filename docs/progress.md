@@ -91,12 +91,20 @@ waits on the operator.
 - `pnpm -C contract check` — PASS.
 - backend `ruff check .` — PASS.
 - backend `ruff format --check .` — PASS.
-- backend `pytest` — PASS.
+- backend `pytest` — PASS: 2575 passed, 8 skipped, 9 deselected. Unit X's first gate (before the
+  build) had 2572 passed, 11 skipped with no backend test added since: the three tests that skip
+  on "PotreeConverter payload not fetched" (`test_pointcloud_importer.py` ×2,
+  `test_pointcloud_selftest.py` ×1) ran once the build step put the PotreeConverter payload in this
+  worktree's `backend/third_party/`.
 - `pnpm -C frontend lint` — PASS.
-- `pnpm -C frontend test` — PASS.
+- `pnpm -C frontend test` — PASS: 1621 tests.
 - `pnpm -C frontend build` — PASS.
-- `pnpm -C frontend e2e` (52030/52031) — PASS.
-- `cargo test --manifest-path frontend/src-tauri/Cargo.toml` — PASS (sidecar present).
+- `pnpm -C frontend e2e` (52030/52031) — PASS: 103 tests.
+- `cargo test --manifest-path frontend/src-tauri/Cargo.toml` — PASS (sidecar present): 8 tests.
+
+The final-review fix wave then added one backend test (every `app/*/migrations` history is in the
+spec's `datas`) and one vitest case (Project settings on a project switch): pytest 2576 passed,
+8 skipped, 9 deselected; vitest 1622; e2e 103 (ports 52040/52041).
 
 Left for the operator/coordinator: install the built installer above (first start migrates real
 projects); run the operator walkthrough (index "Operator walkthrough", 9 steps, including the real
