@@ -39,7 +39,9 @@ export function useFinding(projectId: string, findingId: string) {
   const ownBump = useRef<{ findingId: string; revision: number } | null>(null);
 
   useEffect(() => {
+    // Read-and-clear: the skip fires once, for the bump itself; switching away and back re-reads.
     const own = ownBump.current;
+    ownBump.current = null;
     if (own && own.findingId === findingId && own.revision === revision) return;
     let cancelled = false;
     fetchFinding(api, projectId, findingId)

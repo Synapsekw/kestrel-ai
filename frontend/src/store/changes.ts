@@ -1,6 +1,13 @@
 import { create } from "zustand";
 import type { AppEvent } from "@contract/client";
-import { consumeEcho, EMPTY_LEDGER, expectEchoes, releaseEchoes, type EchoLedger } from "./changesEcho";
+import {
+  consumeEcho,
+  EMPTY_LEDGER,
+  expectEchoes,
+  releaseEchoes,
+  renewEchoes,
+  type EchoLedger,
+} from "./changesEcho";
 
 interface ChangesState {
   /** Bumped whenever the image list may have changed (import batches, box counts). */
@@ -22,6 +29,8 @@ interface ChangesState {
   findingEchoes: EchoLedger;
   expectFindingEchoes: (ids: readonly string[]) => void;
   releaseFindingEchoes: (ids: readonly string[]) => void;
+  /** An own write succeeded: its expected echo gets a fresh TTL from now. */
+  renewFindingEchoes: (ids: readonly string[]) => void;
   /** Bumped on `migration.changed`: the Projects list re-reads (F §11.3). */
   projectsRevision: number;
   /** The project the route has open (set by the Shell), or null. The events socket is app-wide, so
@@ -59,6 +68,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   expectFindingEchoes: (ids) =>
     set((s) => ({ findingEchoes: expectEchoes(s.findingEchoes, ids, Date.now()) })),
   releaseFindingEchoes: (ids) => set((s) => ({ findingEchoes: releaseEchoes(s.findingEchoes, ids) })),
+  renewFindingEchoes: (ids) => set((s) => ({ findingEchoes: renewEchoes(s.findingEchoes, ids, Date.now()) })),
   projectsRevision: 0,
   openProjectId: null,
   setOpenProject: (openProjectId) => set({ openProjectId }),

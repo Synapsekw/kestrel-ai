@@ -168,3 +168,52 @@ describe("one finding edit re-reads each findings view once (rulings R8)", () =>
     expect(reads(requests).detail).toBe(2);
   });
 });
+
+describe("the own-edit skip fires once (rulings R8, ruling 15)", () => {
+  beforeEach(() => {
+    useChangesStore.setState({ findingsRevision: 0, findingEchoes: EMPTY_LEDGER, openProjectId: null });
+  });
+
+  it("edit A, switch to B, back to A: A's detail is re-read and shown", async () => {
+    const detailB = { ...exampleFindingDetail, id: FINDING_ID_2 };
+    const { api, requests } = fakeClient([
+      { method: "GET", path: DETAIL, body: detail },
+      { method: "GET", path: new RegExp(`/findings/${FINDING_ID_2}$`), body: detailB },
+      { method: "PATCH", path: DETAIL, body: (r) => ({ ...detail, ...(r.body as object) }) },
+    ]);
+    const seen: { id: string | null; update: ((p: FindingPatch) => Promise<void>) | null } = {
+      id: null,
+      update: null,
+    };
+    function Probe({ id }: { id: string }) {
+      const { finding, update } = useFinding(PROJECT_ID, id);
+      useEffect(() => {
+        seen.id = finding?.id ?? null;
+        seen.update = update;
+      });
+      return null;
+    }
+    const view = render(
+      <TestApiProvider api={api}>
+        <Probe id={FINDING_ID} />
+      </TestApiProvider>,
+    );
+    await waitFor(() => expect(seen.id).toBe(FINDING_ID));
+    await act(async () => {
+      await seen.update!({ severity: 3 });
+    });
+    view.rerender(
+      <TestApiProvider api={api}>
+        <Probe id={FINDING_ID_2} />
+      </TestApiProvider>,
+    );
+    await waitFor(() => expect(seen.id).toBe(FINDING_ID_2));
+    view.rerender(
+      <TestApiProvider api={api}>
+        <Probe id={FINDING_ID} />
+      </TestApiProvider>,
+    );
+    await waitFor(() => expect(seen.id).toBe(FINDING_ID));
+    expect(reads(requests).detail).toBe(2);
+  });
+});

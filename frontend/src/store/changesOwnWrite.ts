@@ -30,6 +30,8 @@ export async function ownFindingsWrite<T>(
     throw e;
   }
   const s = useChangesStore.getState();
+  // The TTL counts from the answer, not the request: a write slower than it keeps its dedupe.
+  s.renewFindingEchoes(tracked);
   opts.onSaved?.(result, s.findingsRevision + 1);
   s.bumpFindings();
   return result;

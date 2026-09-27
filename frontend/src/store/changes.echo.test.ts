@@ -8,6 +8,7 @@ import {
   FINDING_ECHO_MAX_IDS,
   FINDING_ECHO_TTL_MS,
   releaseEchoes,
+  renewEchoes,
 } from "./changesEcho";
 import { ownFindingsWrite } from "./changesOwnWrite";
 
@@ -46,10 +47,21 @@ describe("echo ledger (pure)", () => {
     expect(consumeEcho(l, undefined, 1).skip).toBe(false);
   });
 
-  it("drops an expectation after the TTL", () => {
+  it("drops a settled write's expectation after the TTL, counted from the answer", () => {
+    const l = renewEchoes(expectEchoes(EMPTY_LEDGER, ["a"], 0), ["a"], 6_000);
+    expect(consumeEcho(l, { ids: ["a"] }, 6_000 + FINDING_ECHO_TTL_MS).skip).toBe(true);
+    expect(consumeEcho(l, { ids: ["a"] }, 6_000 + FINDING_ECHO_TTL_MS + 1).skip).toBe(false);
+  });
+
+  it("never drops the expectation of a write still in flight", () => {
     const l = expectEchoes(EMPTY_LEDGER, ["a"], 0);
-    expect(consumeEcho(l, { ids: ["a"] }, FINDING_ECHO_TTL_MS).skip).toBe(true);
-    expect(consumeEcho(l, { ids: ["a"] }, FINDING_ECHO_TTL_MS + 1).skip).toBe(false);
+    const pruned = expectEchoes(l, ["b"], FINDING_ECHO_TTL_MS * 3);
+    expect(consumeEcho(pruned, { ids: ["a"] }, FINDING_ECHO_TTL_MS * 3).skip).toBe(true);
+  });
+
+  it("renewing after the echo already came re-arms nothing", () => {
+    const l = consumeEcho(expectEchoes(EMPTY_LEDGER, ["a"], 0), { ids: ["a"] }, 1).ledger;
+    expect(renewEchoes(l, ["a"], 2)).toEqual({});
   });
 
   it("does not track writes of more ids than the backend lists", () => {
@@ -100,6 +112,22 @@ describe("changes store: own finding writes", () => {
     vi.setSystemTime(1_000_000 + FINDING_ECHO_TTL_MS + 1);
     useChangesStore.getState().applyEvent(findingsChanged({ ids: ["a"] }));
     expect(useChangesStore.getState().findingsRevision).toBe(2);
+  });
+
+  it("a write slower than the TTL still swallows its echo, and bumps once", async () => {
+    const done = ownFindingsWrite(
+      ["a"],
+      () => new Promise<string>((resolve) => setTimeout(() => resolve("saved"), 6_000)),
+    );
+    await vi.advanceTimersByTimeAsync(5_500);
+    // Another client's write prunes the ledger mid-request: the slow write's expectation survives.
+    useChangesStore.getState().expectFindingEchoes(["b"]);
+    await vi.advanceTimersByTimeAsync(500);
+    await done;
+    expect(useChangesStore.getState().findingsRevision).toBe(1);
+    await vi.advanceTimersByTimeAsync(1_000);
+    useChangesStore.getState().applyEvent(findingsChanged({ ids: ["a"] }));
+    expect(useChangesStore.getState().findingsRevision).toBe(1);
   });
 
   it("a failed write releases its expectation and does not bump", async () => {
