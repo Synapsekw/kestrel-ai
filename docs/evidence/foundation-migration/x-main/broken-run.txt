@@ -1,0 +1,30 @@
+﻿-> E:\Projects\AHTest
+        0.0%  Merging the project's classes into the catalogue
+       12.5%  Pointing annotations and detections at catalogue types
+       25.0%  Building the project's type list
+       37.5%  Moving model class mappings into the library
+       50.0%  Registering the project's datasets in Models
+       62.5%  Creating findings from accepted defect annotations
+       75.0%  Counting findings
+       87.5%  Finishing the upgrade
+-> C:\Users\D\AppData\Local\Temp\x-broken-project
+head 0010  armed True  data C:\Users\D\AppData\Roaming\ai.synapse-solutions.kestrel-ai
+[ok] E:\Projects\AHTest  0009 -> 0010  v2  0.359 s  backup ok
+     catalogue_merge  {"types_merged": 0, "types_created": 7, "merged": [], "created": ["excavator", "bulldozer", "dump_truck", "crane", "concrete_mixer", "roller", "backhoe"]}
+     rewrite_class_ids  {"rows_rewritten": {"box": 11951, "map_detection": 3, "map_label": 0}, "json_rows": 7, "classes_changed": 7}
+     project_types  {"types": 7, "hotkey_overrides": 0}
+     library_class_maps  {"models": 0, "names_added": 0, "conflicts": 0}
+     legacy_datasets  {"registered": 4, "names": ["Initial_Construction_Vehicle_Detection (Ahmadia)", "ICVD_V2 (Ahmadia)", "ICVD_V3 (Ahmadia)", "ICVD_V4 (Ahmadia)"], "already_registered": 0}
+     findings_from_annotations  {"findings_created": 0}
+     counts_rebuild  {"findings": 0}
+     check project_types: 7
+     check unmapped_boxes: 0
+     check findings: 0
+[FAILED] C:\Users\D\AppData\Local\Temp\x-broken-project  None -> None  vNone  0.0 s  backup none
+     error: DatabaseError: (sqlite3.DatabaseError) file is not a database
+[SQL: PRAGMA main.table_info("alembic_version")]
+(Background on this error at: https://sqlalche.me/e/20/4xp6)
+store catalogue_types: [{"name": "backhoe", "kind": "object", "origin": "migrated", "hotkey": "7"}, {"name": "bulldozer", "kind": "object", "origin": "migrated", "hotkey": "2"}, {"name": "concrete_mixer", "kind": "object", "origin": "migrated", "hotkey": "5"}, {"name": "crane", "kind": "object", "origin": "migrated", "hotkey": "4"}, {"name": "dump_truck", "kind": "object", "origin": "migrated", "hotkey": "3"}, {"name": "excavator", "kind": "object", "origin": "migrated", "hotkey": "1"}, {"name": "roller", "kind": "object", "origin": "migrated", "hotkey": "6"}]
+store needs_classification: true
+store legacy_datasets: [{"name": "ICVD_V2 (Ahmadia)", "legacy_path": "E:\\Projects\\AHTest\\datasets\\ICVD_V2"}, {"name": "ICVD_V3 (Ahmadia)", "legacy_path": "E:\\Projects\\AHTest\\datasets\\ICVD_V3"}, {"name": "ICVD_V4 (Ahmadia)", "legacy_path": "E:\\Projects\\AHTest\\datasets\\ICVD_V4"}, {"name": "Initial_Construction_Vehicle_Detection (Ahmadia)", "legacy_path": "E:\\Projects\\AHTest\\datasets\\Initial_Construction_Vehicle_Detection"}]
+FAIL

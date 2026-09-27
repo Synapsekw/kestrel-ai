@@ -1,0 +1,59 @@
+﻿=== BEFORE : 2026-09-27T05:42:05.1355374+03:00 ===
+
+[project folder] E:\Projects\AHTest
+  top-level entries:
+    dir   cache
+    dir   datasets
+    dir   images
+    dir   labels
+    dir   maps
+    dir   models
+    file  project.db
+    file  project.db-shm
+    file  project.db-wal
+    dir   runs
+  backups folder present: False
+  sha256 project.db = 8CC84346118F263BB3500813CD2033774CE5F5EC9E0717918FB0E85B53FE07BE
+  sha256 project.db-wal = 87A4ADE37A0A0F803752DF00B3A851EC372AB934442EF102652944835CB8206B
+  sha256 project.db-shm = C4C840BAB50E743659170E3215485CA1A85B732C89FF96999D2E39593C864725
+
+[project folder] E:\Projects\Ahmadia
+  top-level entries:
+    dir   cache
+    dir   datasets
+    dir   images
+    dir   labels
+    dir   models
+    file  project.db
+    file  project.db-shm
+    file  project.db-wal
+    dir   runs
+  backups folder present: False
+  sha256 project.db = E8322ADE7A163DF1E5212CDE3CA76684ABCCF07A451DC5FC9BF23D894E89E6FB
+  sha256 project.db-wal = E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+  sha256 project.db-shm = FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB
+
+[project folder] C:\Users\D\AppData\Local\Temp\acceptance-project
+  top-level entries:
+    dir   cache
+    dir   datasets
+    dir   images
+    dir   labels
+    dir   models
+    file  project.db
+    file  project.db-shm
+    file  project.db-wal
+    dir   runs
+  backups folder present: False
+  sha256 project.db = 28CAD7B1BE1695403EF369CA98EEDCFD121CAC78C068C3C249631F93A06EED83
+  sha256 project.db-wal = E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855
+  sha256 project.db-shm = FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB
+
+[app data] C:\Users\D\AppData\Roaming\ai.synapse-solutions.kestrel-ai
+  sha256 recent_projects.json = 154B903562DC95F1C582FA8EA47582BAB6A5B86E9FD64242A5B13749C0C5ED03
+  sha256 library\library.db = 0AB48B25CBA617ED3A4ACCA0161813B314C095EF63544BB4AF60769EB1012977
+  sha256 library\library.db-wal = BE8C9104B8D17749DD4025D1B2F1E091CF7AAB82CC9484FEA154F15FA10B54A3
+  sha256 library\library.db-shm = F25E984D63D40FA829205F3BAE9D84D35FB056D1E82BF0FD392CBE4F0E14159C
+  sha256 library\catalogue.db = (absent)
+  sha256 library\catalogue.db-wal = (absent)
+  sha256 library\catalogue.db-shm = (absent)

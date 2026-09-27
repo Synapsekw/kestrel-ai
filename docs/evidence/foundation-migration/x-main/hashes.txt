@@ -1,0 +1,36 @@
+Foundation X run - original-file hash check (SHA-256), before/after the whole session
+Raw snapshots: hash-before.txt (2026-09-27T05:42:05+03:00), hash-after.txt (2026-09-27T05:43:05+03:00)
+Kestrel AI (kestrel-ai.exe / kestrel-backend*.exe) was NOT running at any point checked (verified
+before the session with Get-Process; nothing matched '*kestrel*').
+
+| File | Before | After | Match |
+| --- | --- | --- | --- |
+| E:\Projects\AHTest\project.db | 8CC84346118F263BB3500813CD2033774CE5F5EC9E0717918FB0E85B53FE07BE | same | yes |
+| E:\Projects\AHTest\project.db-wal | 87A4ADE37A0A0F803752DF00B3A851EC372AB934442EF102652944835CB8206B | same | yes |
+| E:\Projects\AHTest\project.db-shm | C4C840BAB50E743659170E3215485CA1A85B732C89FF96999D2E39593C864725 | same | yes |
+| E:\Projects\Ahmadia\project.db | E8322ADE7A163DF1E5212CDE3CA76684ABCCF07A451DC5FC9BF23D894E89E6FB | same | yes |
+| E:\Projects\Ahmadia\project.db-wal | E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 | same | yes |
+| E:\Projects\Ahmadia\project.db-shm | FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB | same | yes |
+| %TEMP%\acceptance-project\project.db | 28CAD7B1BE1695403EF369CA98EEDCFD121CAC78C068C3C249631F93A06EED83 | same | yes |
+| %TEMP%\acceptance-project\project.db-wal | E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855 | same | yes |
+| %TEMP%\acceptance-project\project.db-shm | FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB | same | yes |
+| %APPDATA%\ai.synapse-solutions.kestrel-ai\recent_projects.json | 154B903562DC95F1C582FA8EA47582BAB6A5B86E9FD64242A5B13749C0C5ED03 | same | yes |
+| %APPDATA%\...\library\library.db | 0AB48B25CBA617ED3A4ACCA0161813B314C095EF63544BB4AF60769EB1012977 | same | yes |
+| %APPDATA%\...\library\library.db-wal | BE8C9104B8D17749DD4025D1B2F1E091CF7AAB82CC9484FEA154F15FA10B54A3 | same | yes |
+| %APPDATA%\...\library\library.db-shm | F25E984D63D40FA829205F3BAE9D84D35FB056D1E82BF0FD392CBE4F0E14159C | same | yes |
+| %APPDATA%\...\library\catalogue.db | (absent, both) | (absent, both) | yes (n/a) |
+| %APPDATA%\...\library\catalogue.db-wal | (absent, both) | (absent, both) | yes (n/a) |
+| %APPDATA%\...\library\catalogue.db-shm | (absent, both) | (absent, both) | yes (n/a) |
+
+No catalogue.db exists in this app-data folder yet (never created on this machine), so there is
+nothing to hash for it; both before and after agree it is absent.
+
+Top-level folder listing (all three project folders, before vs after): identical entry-for-entry
+(cache, datasets, images, labels, [maps for AHTest only], models, project.db, project.db-shm,
+project.db-wal, runs). No `backups` folder appeared in any of the three original project folders,
+before or after.
+
+Verdict: PASS. Every hashed original file is byte-identical before and after the whole session
+(dry run + broken-folder run + pytest real-data run). No original project folder gained a
+`backups` directory. This corroborates criterion 4's `originals_unchanged: true` for each of the
+three projects in dry-run.json.
