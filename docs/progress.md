@@ -9,6 +9,101 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Foundation lands — 2026-09-27 (`task/f-x`, unit X evidence)
+
+Sub-project F (spec `docs/superpowers/specs/2026-09-26-foundation-design.md`, index plan
+`docs/superpowers/plans/2026-09-26-foundation-index.md`) is built, gated and evidenced end to end.
+Ten build units plus X:
+
+- **C0 contract:** the OpenAPI additions every other unit builds against — catalogue, findings,
+  the Models/library operations, `Project.availability`, `GET/PUT /settings/operator` — plus the
+  `RETIRING` markers the deleting units later act on.
+- **DS design system:** the Aero glass tokens and primitives (`DataTable`, `InspectorPane`,
+  `SeverityPicker`, `Tabs`, `MenuButton`, the shared keymap), and the primary-button contrast fix
+  (darker gradient, ≥ 4.5:1 white-on-violet).
+- **BK:** projects lose their kind in the UI, the Data list, project search, New project without a
+  kind, Open folder / Locate folder.
+- **MG-framework:** the migration pipeline armed behind a startup banner, the ports module, the
+  backup guard, the bounded startup probe.
+- **BC:** the catalogue and severity scale, `PUT /types`, the classification banner and findings
+  backfill from defect boxes, the operator-name setting.
+- **BM:** the Models section's backend — library datasets, training runs, the class-map API,
+  paged hooks.
+- **SH:** the Aero glass shell — rail, top bar, Ctrl K palette, project tabs, `appRoutes`/
+  `projectRoutes`, the `?` shortcut sheet; `legacyKind.ts` deleted.
+- **MG-steps:** the seven migration data steps (class merge, box rewrite, project types, class
+  maps to the library, legacy dataset registration, findings from accepted defect boxes).
+- **S1:** the project screens — Overview dashboard, Findings tab and inspector (autosave, photos,
+  comments, history, review keys), the map hero.
+- **S2:** the app screens — Catalogue, Models/Library (datasets across projects, training runs,
+  run comparison), Jobs, Settings (Appearance, operator name, project type list editor), the
+  retirement of `/datasets*`, `trainModel` and `PUT /classes`.
+- **X (this entry):** the cross-unit journey spec, the reads-per-finding-edit and frame-time
+  evidence, the repeated migration dry run on `main`, the frozen sidecar/installer build and
+  smoke, three of its own fixes found along the way (below), and this progress entry.
+
+X's own fixes, beyond writing evidence: scoped `images.changed`/`boxes.changed`/
+`surfaces.changed`/`volumes.changed` to the open project the same way `findings.changed`/
+`data.changed` already were, and built the palette's finding links through the `links` module
+instead of an inline template (both Task 3, commit `2e47c35`/`40e8f4d`); fixed "Types saved" and
+"Import defaults saved" never appearing because the section's own save changed the `key` prop it
+was keyed on, remounting itself mid-toast (`d5ac68f`); and fixed a packaging bug smoke caught —
+the frozen sidecar's PyInstaller spec bundled `app/db/migrations` and `app/library/migrations` but
+never gained the matching line for `app/catalogue/migrations` when the catalogue subsystem was
+added, so the frozen exe 503'd on `catalogue_unavailable` (`eca3d28`).
+
+**Gate on `main` (task-1-report.md, before X's own changes):** contract clean; ruff clean; pytest
+2572 passed, 11 skipped, 9 deselected (977.6 s); frontend lint clean (1 pre-existing warning);
+vitest 1615 passed (268 files); build ok; e2e 98 passed (ports 52000/52001); cargo test skipped
+(no frozen sidecar yet). No flakes hit.
+
+**Migration dry run repeated on `main`** (`docs/evidence/foundation-migration/x-main/README.md`):
+same three real-project folders as MG's run (AHTest, Ahmadia, acceptance-project), same result —
+all three upgrade to `0010`/schema v2 cleanly, 11,951 and 108,327 boxes rewritten, 0 unmapped
+boxes, 0 findings from step 6 on this data, originals hash-identical, a broken `project.db` is
+skipped and flagged without stopping the others. Every number reproduces MG's own run exactly
+(`backend/` is unchanged between the two commits); only sub-millisecond timing differs.
+
+**Journey, reads and frame time** (`docs/evidence/foundation/README.md`):
+`frontend/e2e/foundation-journey.spec.ts` drives one project through New project, Add data,
+setting the type list, accepting a detection into finding F-0001, setting its severity, seeing it
+in Findings and the Overview, building a cross-project dataset in Models and starting a training
+run on it. A severity edit in the Findings inspector costs **5 reads** against the mock (bounded:
+a detail, a summary, a limited list); the backend's own `findings.changed` event can add the same
+five again, up to **10** in the running app (the mock has no events socket, so this is not
+measured end to end). Frame time at effects Full — Overview, the Findings table at 5,000 rows, and
+the Overview's map hero under floating glass panels — held **p95 16.7-16.8 ms** against the
+spec's 20 ms budget in three runs; headless Chromium paces at 60 Hz and renders WebGL on
+SwiftShader, so this proves no dropped frames, not GPU compositor headroom. The real GPU check is
+operator-walkthrough step 8 on the installed WebView2 build.
+
+**Build, smoke, installer:** the frozen sidecar built in 182.5 s; `smoke_frozen.ps1` first failed
+on the catalogue-migrations packaging bug above, then passed clean in 37.1 s after the fix
+(`eca3d28`); `cargo test --manifest-path frontend/src-tauri/Cargo.toml` now runs (sidecar present):
+8 passed. The installer built in 502.3 s:
+`frontend/src-tauri/target/release/bundle/inno/Kestrel AI_0.1.0_x64-setup.exe`
+(1,973,227,855 bytes, SHA-256 `e721c0e5d3a2f3774505a43f688be0bb78b7a7c2d484db6fae555cea6a01592d`).
+**Not installed** — installing migrates the operator's real projects on first start, so that step
+waits on the operator.
+
+**Final full gate on `task/f-x`, run for this entry (ports 52030/52031):**
+- `pnpm -C contract check` — PASS.
+- backend `ruff check .` — PASS.
+- backend `ruff format --check .` — PASS.
+- backend `pytest` — PASS.
+- `pnpm -C frontend lint` — PASS.
+- `pnpm -C frontend test` — PASS.
+- `pnpm -C frontend build` — PASS.
+- `pnpm -C frontend e2e` (52030/52031) — PASS.
+- `cargo test --manifest-path frontend/src-tauri/Cargo.toml` — PASS (sidecar present).
+
+Left for the operator/coordinator: install the built installer above (first start migrates real
+projects); run the operator walkthrough (index "Operator walkthrough", 9 steps, including the real
+GPU check at step 8) and capture native screenshots into `docs/evidence/foundation/`; a parked
+finding for the coordinator — a finding edit's re-read count can reach up to 10 (measured 5
+against the mock, which has no events socket) when a live `findings.changed` lands on top of the
+client's own bump; then `/wrapup` and merge `task/f-x` to `main`.
+
 ## Foundation MG: real-folder dry run — 2026-09-27 (`task/f-mg-steps`)
 
 The armed migration (seven data steps, Part B of `2026-09-26-foundation-mg-migration.md`) ran on
