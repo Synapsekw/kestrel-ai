@@ -58,11 +58,8 @@ B3_STUBS: list[Stub] = [
 ]
 
 # M-B4: map measurements and the project-wide measurements union (spec §9.1, §9.2, §4 item 8).
-# The five map-measurement operations are routed for real (app/mapmeasure/router.py); only the
-# union list stays a stub until Task 7.
-B4_STUBS: list[Stub] = [
-    ("GET", "/measurements", "listMeasurements"),
-]
+# All six operations are routed for real now (app/mapmeasure/router.py, app/measurements/union.py).
+B4_STUBS: list[Stub] = []
 
 STUBS: list[Stub] = [*B1_STUBS, *B2_STUBS, *B3_STUBS, *B4_STUBS]
 
