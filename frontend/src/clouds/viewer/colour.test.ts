@@ -11,7 +11,9 @@ import {
 
 describe("colour availability from the octree's point attributes", () => {
   it("reads the attribute names of a Potree 2.0 geometry, lower-cased", () => {
-    const geometry = { pointAttributes: { attributes: [{ name: "position" }, { name: "RGB" }, { name: "intensity" }] } };
+    const geometry = {
+      pointAttributes: { attributes: [{ name: "position" }, { name: "RGB" }, { name: "intensity" }] },
+    };
     expect(attributeNames(geometry)).toEqual(["position", "rgb", "intensity"]);
   });
 

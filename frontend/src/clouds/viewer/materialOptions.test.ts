@@ -46,12 +46,16 @@ describe("colour modes (spec §7 Colour)", () => {
   });
 
   it("carries the intensity range, 0-65535 until one is sampled", () => {
-    expect(makeMaterialOptions({ colour: "intensity", elevationRange: [0, 1], pointSize: 1 }).intensityRange).toEqual(
-      DEFAULT_INTENSITY_RANGE,
-    );
     expect(
-      makeMaterialOptions({ colour: "intensity", elevationRange: [0, 1], pointSize: 1, intensityRange: [5, 900] })
-        .intensityRange,
+      makeMaterialOptions({ colour: "intensity", elevationRange: [0, 1], pointSize: 1 }).intensityRange,
+    ).toEqual(DEFAULT_INTENSITY_RANGE);
+    expect(
+      makeMaterialOptions({
+        colour: "intensity",
+        elevationRange: [0, 1],
+        pointSize: 1,
+        intensityRange: [5, 900],
+      }).intensityRange,
     ).toEqual([5, 900]);
   });
 });

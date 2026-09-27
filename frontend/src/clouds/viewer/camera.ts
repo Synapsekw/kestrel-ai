@@ -74,7 +74,11 @@ export function isoView(b: Bounds6): View {
   const h = d * Math.cos(e);
   return {
     target,
-    position: { x: target.x + h * Math.SQRT1_2, y: target.y - h * Math.SQRT1_2, z: target.z + d * Math.sin(e) },
+    position: {
+      x: target.x + h * Math.SQRT1_2,
+      y: target.y - h * Math.SQRT1_2,
+      z: target.z + d * Math.sin(e),
+    },
   };
 }
 

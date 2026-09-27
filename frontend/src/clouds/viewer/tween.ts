@@ -29,5 +29,8 @@ export function tweenAt(tw: Tween, now: number): { view: View; done: boolean } {
     y: a.y + (b.y - a.y) * k,
     z: a.z + (b.z - a.z) * k,
   });
-  return { view: { position: lerp(tw.from.position, tw.to.position), target: lerp(tw.from.target, tw.to.target) }, done: false };
+  return {
+    view: { position: lerp(tw.from.position, tw.to.position), target: lerp(tw.from.target, tw.to.target) },
+    done: false,
+  };
 }

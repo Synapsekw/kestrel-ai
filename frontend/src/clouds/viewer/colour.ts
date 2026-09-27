@@ -8,7 +8,8 @@ import type { ColourAvailability } from "./types";
  * node whether the file has the attribute or not (plan Ruling 9).
  */
 export function attributeNames(geometry: unknown): string[] {
-  const attrs = (geometry as { pointAttributes?: { attributes?: unknown } } | null)?.pointAttributes?.attributes;
+  const attrs = (geometry as { pointAttributes?: { attributes?: unknown } } | null)?.pointAttributes
+    ?.attributes;
   if (!Array.isArray(attrs)) return [];
   const out: string[] = [];
   for (const a of attrs) {
@@ -63,7 +64,8 @@ export function intensityRange(
   const sample = Float64Array.from(sampleEvery(arrays, max));
   if (sample.length === 0) return null;
   sample.sort();
-  const at = (q: number) => sample[Math.min(sample.length - 1, Math.max(0, Math.round(q * (sample.length - 1))))];
+  const at = (q: number) =>
+    sample[Math.min(sample.length - 1, Math.max(0, Math.round(q * (sample.length - 1))))];
   const lo = at(0.02);
   const hi = at(0.98);
   return hi > lo ? [lo, hi] : [lo, lo + 1];
