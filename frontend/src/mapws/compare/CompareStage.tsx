@@ -99,6 +99,7 @@ function SwipeDivider({ rootRef }: { rootRef: RefObject<HTMLDivElement> }) {
         aria-valuemin={2}
         aria-valuemax={98}
         aria-valuenow={Math.round(swipe)}
+        aria-valuetext={`${Math.round(swipe)}%`}
         data-testid="swipe-handle"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

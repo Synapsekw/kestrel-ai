@@ -29,6 +29,12 @@ describe("TimelineScrubber (M §5 Timeline, §14 dates)", () => {
     expect(screen.getByTestId("timeline-track").querySelectorAll("[data-planned]")).toHaveLength(1);
   });
 
+  it("names a planned tick to assistive technology without a hover", () => {
+    setup();
+    const planned = screen.getByTestId("timeline-track").querySelector("[data-planned]")!;
+    expect(within(planned as HTMLElement).getByText("Planned · 14 Oct 2026")).toHaveClass("sr-only");
+  });
+
   it("a tick click sets R in Single", async () => {
     const { ws } = setup();
     await userEvent.click(screen.getByRole("button", { name: "Survey 14 Aug 2026" }));

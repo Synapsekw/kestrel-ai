@@ -83,6 +83,7 @@ describe("CompareStage", () => {
     expect(ws.getState().swipe).toBe(12);
     fireEvent.keyDown(handle, { key: "End" });
     expect(ws.getState().swipe).toBe(98);
+    expect(handle).toHaveAttribute("aria-valuetext", "98%");
     expect(screen.getByText("14 Aug")).toBeInTheDocument();
   });
 

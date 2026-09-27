@@ -82,6 +82,8 @@ export function TimelineScrubber({ projectId }: PanelProps) {
                   <Tooltip label={`Planned · ${formatSurveyDate(t.date)}`}>
                     <span className="block h-5 border-l border-dashed border-muted" />
                   </Tooltip>
+                  {/* Not a button (W2-3), so the tooltip alone never reaches a screen reader. */}
+                  <span className="sr-only">{`Planned · ${formatSurveyDate(t.date)}`}</span>
                 </div>
               ) : (
                 <button
