@@ -1,6 +1,7 @@
 """GET /site-tiles (spec 2026-09-26-map-workspace sections 6 and 15)."""
 
 import numpy as np
+import pytest
 from affine import Affine
 from pyproj import CRS, Transformer
 from surfaces import CX, CY, X0, Y1, circle, cone, fixture_spec, plane, write_surface
@@ -8,6 +9,7 @@ from volume_rows import add_surface
 from workspace_rows import BASE, add_map, rgba, set_frame, write_plan_tif
 
 from app.db.models import Surface, VolumeMeasurement
+from app.errors import not_found
 from app.surfaces.grid import aligned_grid
 from app.surfaces.paths import surface_path
 from app.workspace import grid, tiles
@@ -15,6 +17,7 @@ from app.workspace import grid, tiles
 UTM38 = CRS.from_epsg(32638).to_wkt()
 UTM39 = CRS.from_epsg(32639).to_wkt()
 GT39 = [500000.0, 0.1, 0.0, 3300000.0, 0.0, -0.1]
+pytestmark = pytest.mark.usefixtures("fresh_site_tiles")
 
 
 def test_a_map_in_another_crs_lands_where_pyproj_says(client, project_id, handle):
@@ -92,6 +95,8 @@ def test_preview_query_rules(client, project_id, handle):
     for t in ("1,2,3", "a,b,c,d,e,f", "0.1,0,0,0,-0.1,0"):
         r = client.get(url, params={"t": t})
         assert (r.status_code, r.json()["error"]["code"]) == (422, "invalid_preview"), t
+        assert r.headers["cache-control"] == "no-store", t  # contract tilePreview: any response to `t`
+    assert "cache-control" not in client.get(f"{BASE}/{project_id}/site-tiles/map/nope/13/{x}/{y}").headers
     assert client.get(url, params={"frame_key": "k" * 201}).status_code == 422
 
 
@@ -122,7 +127,12 @@ def test_a_drawing_preview_is_no_store(client, project_id, handle, tmp_path, dra
     assert r.status_code == 200 and r.headers["cache-control"] == "no-store"
     r = client.get(f"{BASE}/{project_id}/site-tiles/drawing_raster/D/13/0/0", params={"t": "1,0,0,0,-1,0"})
     assert r.status_code == 204 and r.headers["cache-control"] == "no-store"  # also on its 204
+    r = client.get(f"{BASE}/{project_id}/site-tiles/drawing_raster/D/13/{x}/{y}", params={"t": "1,0,0,0,0,0"})
+    assert (r.status_code, r.headers["cache-control"]) == (422, "no-store")  # singular: invalid_preview
     assert "immutable" in client.get(url).headers["cache-control"]
+    drawing_resolver(lambda h, i, s: (_ for _ in ()).throw(not_found("drawing", i)))
+    r = client.get(url, params={"t": "0.125,0,500000,0,-0.125,3300000"})
+    assert (r.status_code, r.headers["cache-control"]) == (404, "no-store")  # the resolver's error too
 
 
 def test_far_away_layer_is_204_not_500(client, project_id, handle, monkeypatch):

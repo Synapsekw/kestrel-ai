@@ -6,7 +6,9 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi import Path as PathParam
+from fastapi.responses import JSONResponse
 
+from app.errors import AppError, envelope
 from app.events_util import publish_map_workspace_changed
 from app.projects.service import ProjectHandle, get_project
 from app.workspace import service, tiles
@@ -60,8 +62,16 @@ def get_site_tile(
     frame_key: str | None = Query(None, max_length=200),  # a client-side cache-buster, ignored here
     handle: ProjectHandle = Depends(get_project),
 ) -> Response:
-    style = tiles.TileStyle(style, interval, knockout, tiles.parse_preview(t))  # 422 invalid_preview first
-    body = tiles.serve_site_tile(handle, service.get_frame(handle), kind, layerId, z, x, y, style)
+    try:
+        style = tiles.TileStyle(
+            style, interval, knockout, tiles.parse_preview(t)
+        )  # 422 invalid_preview first
+        body = tiles.serve_site_tile(handle, service.get_frame(handle), kind, layerId, z, x, y, style)
+    except AppError as e:
+        if t is None:
+            raise
+        # the contract (tilePreview): any response to a request with `t` is no-store, errors included
+        return JSONResponse(envelope(e.code, e.message, e.details), e.status, headers=NO_STORE)
     headers = NO_STORE if tiles.is_preview(kind, style) else IMMUTABLE
     if body is None:
         return Response(status_code=204, headers=headers)

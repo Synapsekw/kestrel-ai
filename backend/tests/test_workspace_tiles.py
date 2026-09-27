@@ -18,6 +18,7 @@ UTM39 = CRS.from_epsg(32639).to_wkt()
 F39 = frame_for_epsg(32639)
 ORIGIN = (500000.0, 3300000.0)
 PLAN_GT = Affine(0.125, 0, 500000.0, 0, -0.125, 3300000.0)
+pytestmark = pytest.mark.usefixtures("fresh_site_tiles")
 
 
 def _rgb_tif(path: Path, origin=ORIGIN, px=0.125, size=512, value=200, mask_left=0) -> Path:
@@ -201,7 +202,7 @@ def test_a_preview_affine_replaces_the_files_geotransform_and_is_never_cached(
     assert tiles.serve_site_tile(handle, F39, "drawing_raster", "D", 13, x, y, style) is None  # moved away
     moved = tiles.serve_site_tile(handle, F39, "drawing_raster", "D", 13, x + 1, y, style)
     assert (rgba(moved)[..., 3] == 255).all()
-    assert not [k for k in tiles.SITE_TILES._items if k[1] == "D"]  # nothing cached
+    assert not [k for k in tiles.SITE_TILES._items if k[:2] == (handle.id, "D")]  # nothing cached
     assert tiles.is_preview("drawing_raster", style) and not tiles.is_preview("map", style)
 
 

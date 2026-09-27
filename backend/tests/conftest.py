@@ -237,3 +237,13 @@ def drawing_resolver():
         tiles._RESOLVERS.pop("drawing_raster", None)
     else:
         tiles._RESOLVERS["drawing_raster"] = saved
+
+
+@pytest.fixture
+def fresh_site_tiles():
+    """An empty site tile LRU (a module global) for tests that look inside it or depend on a miss."""
+    from app.workspace import tiles
+
+    with tiles.SITE_TILES._lock:
+        tiles.SITE_TILES._items.clear()
+    yield tiles.SITE_TILES
