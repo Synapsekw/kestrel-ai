@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
-import { Button, Tooltip, toast } from "@/ui";
+import { Icon, Tooltip, cx, focusRing, toast, transition } from "@/ui";
 import { useWorkspace, useWorkspaceStores } from "../context";
 import { bumpWorkspaceData } from "../data/bump";
 import { frameSwitchLabel, setSiteFrame } from "./frameSwitchModel";
@@ -24,14 +24,27 @@ export function FrameSwitch() {
       .finally(() => setPending(false));
   };
 
+  const label = frameSwitchLabel(frame.kind, items);
+  const action = local ? "Show the georeferenced maps and surfaces" : "Show the surfaces without coordinates";
+  // A text-height control, capped in width, so it neither grows the coordinates row nor pushes it
+  // into the timeline; the full label stays in its name and tooltip.
   return (
-    <Tooltip
-      label={local ? "Show the georeferenced maps and surfaces" : "Show the surfaces without coordinates"}
-      className="ml-auto"
-    >
-      <Button variant="ghost" size="sm" loading={pending} onClick={onSwitch} className="font-sans">
-        {frameSwitchLabel(frame.kind, items)}
-      </Button>
+    <Tooltip label={`${label}. ${action}`} className="ml-auto min-w-0">
+      <button
+        type="button"
+        aria-label={label}
+        aria-busy={pending || undefined}
+        disabled={pending}
+        onClick={onSwitch}
+        className={cx(
+          "inline-flex max-w-44 items-center gap-1 rounded-control px-1 font-sans text-xs font-semibold leading-4 text-ink hover:bg-surface-2 disabled:pointer-events-none disabled:opacity-45",
+          transition,
+          focusRing,
+        )}
+      >
+        {pending && <Icon name="spinner" size={12} className="shrink-0 animate-spin reduce-motion:animate-none" />}
+        <span className="truncate">{label}</span>
+      </button>
     </Tooltip>
   );
 }

@@ -79,6 +79,19 @@ describe("FrameSwitch (spec M §6, M-B1 hand-off 1)", () => {
     expect(button).toBeEnabled();
   });
 
+  it("is a compact, width-capped text control whose full label stays in its name and tooltip", async () => {
+    setup(UTM33, { crs: 4, local: 12 });
+    const button = screen.getByRole("button", { name: "Local metres · 12 surfaces" });
+    // Text height, not a 28 px button: the coordinates row keeps its height.
+    expect(button.className).not.toMatch(/\bh-7\b/);
+    expect(button.className).toMatch(/\bmax-w-/);
+    expect(button.querySelector(".truncate")).toHaveTextContent("Local metres · 12 surfaces");
+    await userEvent.hover(button);
+    expect(
+      await screen.findByText("Local metres · 12 surfaces. Show the surfaces without coordinates"),
+    ).toBeInTheDocument();
+  });
+
   it("is disabled while the switch is pending", async () => {
     let answer: (r: Response) => void = () => {};
     let calls = 0;
