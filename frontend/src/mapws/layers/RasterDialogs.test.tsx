@@ -8,6 +8,8 @@ import { evaluateHref } from "../links";
 import { renderInWorkspace } from "../test/harness";
 import { UTM33 } from "../test/fixtures";
 import { AUG, SEP, mapLayer, surfaceLayer } from "../test/rasterFixtures";
+import { useToastStore } from "@/ui";
+import { useGoneLayers } from "./goneLayers";
 import { RasterDialogs } from "./RasterDialogs";
 import { rasterMenu, useRasterActions } from "./rasterMenu";
 import { baseMapRows, elevationRows } from "./rasterRows";
@@ -105,6 +107,17 @@ describe("row-menu dialogs (M §5.2)", () => {
     await waitFor(() =>
       expect(screen.getByTestId("location")).toHaveTextContent(evaluateHref(PROJECT_ID, "sep")),
     );
+  });
+
+  it("marks an own delete gone silently, so a late tile 404 does not toast (M §14)", async () => {
+    useGoneLayers.setState({ gone: new Set() });
+    useToastStore.getState().clear();
+    setup();
+    choose(ortho, "delete");
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(useGoneLayers.getState().gone.has(ortho.key)).toBe(true));
+    useGoneLayers.getState().markGone(ortho.key, ortho.name); // a tile that 404s after the delete
+    expect(useToastStore.getState().toasts).toHaveLength(0);
   });
 
   it("deletes after confirming, and shows the server's 409", async () => {

@@ -18,4 +18,11 @@ describe("gone layers (M §14)", () => {
       "Orthomosaic · 14 Sep 2026 is no longer available, so it was removed from the map.",
     );
   });
+
+  it("drops a layer the operator deleted without a toast", () => {
+    useGoneLayers.getState().markGone("map:a", "Orthomosaic · 14 Sep 2026", { silent: true });
+    useGoneLayers.getState().markGone("map:a", "Orthomosaic · 14 Sep 2026");
+    expect(useGoneLayers.getState().gone.has("map:a")).toBe(true);
+    expect(useToastStore.getState().toasts).toHaveLength(0);
+  });
 });

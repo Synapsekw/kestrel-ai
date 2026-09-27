@@ -9,6 +9,7 @@ import { bumpWorkspaceData } from "../data/useRasterLayers";
 import { evaluateHref } from "../links";
 import type { PanelProps } from "../panels/panelRegistry";
 import { ConfirmDeleteDialog } from "./ConfirmDeleteDialog";
+import { useGoneLayers } from "./goneLayers";
 import { updateSurfaceDateRole } from "./elevationApi";
 import { useRasterActions } from "./rasterMenu";
 import { elevationRoleOf } from "./rasterRows";
@@ -61,6 +62,8 @@ export function RasterDialogs({ projectId }: PanelProps) {
       onConfirm={async () => {
         if (surface) await deleteSurface(api, projectId, row.id);
         else await deleteMap(api, projectId, row.id);
+        // Its tiles may still 404 before the re-read drops the row; that is not a loss to report.
+        useGoneLayers.getState().markGone(row.key, row.name, { silent: true });
         bumpWorkspaceData(surface);
       }}
       onClose={clear}
