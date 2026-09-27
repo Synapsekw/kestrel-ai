@@ -7,7 +7,7 @@ function dataset(overrides: Partial<SplitAdviceInput>): SplitAdviceInput {
     train_count: 24,
     val_count: 6,
     split_method: "by_group",
-    split_params: { val_fraction: 0.2, seed: 42 },
+    split_params: { val_fraction: 0.2 },
     ...overrides,
   };
 }
@@ -20,7 +20,7 @@ describe("splitAdvice", () => {
         image_count: 14,
         train_count: 8,
         val_count: 6,
-        split_params: { val_fraction: 0.2, seed: 42 },
+        split_params: { val_fraction: 0.2 },
       }),
     );
     expect(message).toBe(
@@ -38,7 +38,7 @@ describe("splitAdvice", () => {
         train_count: 8,
         val_count: 6,
         split_method: "by_tile",
-        split_params: { val_fraction: 0.2, seed: 42 },
+        split_params: { val_fraction: 0.2 },
       }),
     );
     expect(message).toBe(
@@ -67,7 +67,7 @@ describe("splitAdvice", () => {
           train_count: 8,
           val_count: 6,
           split_method: "random",
-          split_params: { val_fraction: 0.2, seed: 42 },
+          split_params: { val_fraction: 0.2 },
         }),
       ),
     ).toBeNull();

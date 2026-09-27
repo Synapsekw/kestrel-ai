@@ -16,6 +16,9 @@ export const JobsScreen = lazy(() => import("@/jobs/JobsScreen").then((m) => ({ 
 export const CatalogueScreen = lazy(() =>
   import("@/catalogue/CatalogueScreen").then((m) => ({ default: m.CatalogueScreen })),
 );
+export const DatasetsScreen = lazy(() =>
+  import("@/models/DatasetsScreen").then((m) => ({ default: m.DatasetsScreen })),
+);
 
 /** A screen-shaped placeholder while a screen's code is still loading. */
 export function ScreenPlaceholder() {

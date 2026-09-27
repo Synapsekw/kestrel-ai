@@ -136,3 +136,64 @@ export function appJobsBody(url: string) {
     next_cursor: null,
   };
 }
+
+export const LIB_DATASET = {
+  id: "d-lib-1",
+  name: "machines-v1",
+  task: "detect",
+  origin: "built",
+  filter: { project_ids: [P], type_ids: ["t-1", "t-2"], captured_from: null, captured_to: null, reviewed_only: true },
+  classes: [
+    { type_id: "t-1", name: "Excavator" },
+    { type_id: "t-2", name: "Dump truck" },
+  ],
+  split_method: "by_group",
+  split_params: { val_fraction: 0.2, seed: 42 },
+  state: "ready",
+  counts: { images: 30, train: 24, val: 6, per_class: { "t-1": 40, "t-2": 72 } },
+  export_path: null,
+  export_state: "none",
+  legacy_path: null,
+  job_id: "j-build",
+  created_at: T0,
+  sources: [{ project_id: P, project_name: "Ahmadia", project_folder: "E:\\Projects\\Ahmadia", image_count: 30 }],
+};
+
+/** A queued library job; `patch` sets the id, type and params (export, build and training fixtures). */
+export function libraryJob(patch: Record<string, unknown>) {
+  return {
+    id: "j-lib",
+    project_id: "library",
+    type: "dataset",
+    state: "queued",
+    progress: 0,
+    message: "",
+    log_path: "library/runs/j-lib/job.log",
+    params: {},
+    result: null,
+    error: null,
+    created_at: T0,
+    started_at: null,
+    finished_at: null,
+    ...patch,
+  };
+}
+
+export const EXPORT_JOB = libraryJob({ id: "j-export", type: "dataset", params: { dataset_id: "d-lib-1" } });
+
+/** Routes every `/library/datasets…` request to fixtures (Task 10 adds preview and create). */
+export async function routeDatasets(page: import("@playwright/test").Page): Promise<void> {
+  await page.route(
+    (url) => url.pathname.startsWith("/api/v1/library/datasets"),
+    (route) => {
+      const { pathname } = new URL(route.request().url());
+      const method = route.request().method();
+      if (pathname === "/api/v1/library/datasets" && method === "GET")
+        return fulfilJson(route, { items: [LIB_DATASET], next_cursor: null });
+      if (pathname.endsWith("/items")) return fulfilJson(route, { items: [], next_cursor: null });
+      if (pathname.endsWith("/export")) return fulfilJson(route, { job: EXPORT_JOB }, 202);
+      if (method === "DELETE") return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*" } });
+      return fulfilJson(route, LIB_DATASET);
+    },
+  );
+}

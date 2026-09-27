@@ -1,10 +1,11 @@
-import type { Dataset } from "@contract/client";
-
-/** The fields `splitAdvice` needs; a full `Dataset` satisfies this. */
-export type SplitAdviceInput = Pick<
-  Dataset,
-  "image_count" | "train_count" | "val_count" | "split_method" | "split_params"
->;
+/** The fields `splitAdvice` needs; a library dataset maps onto it with `toSplitAdviceInput`. */
+export interface SplitAdviceInput {
+  image_count: number;
+  train_count: number;
+  val_count: number;
+  split_method: "by_group" | "by_tile" | "random";
+  split_params: { val_fraction: number };
+}
 
 const TOLERANCE = 0.1;
 

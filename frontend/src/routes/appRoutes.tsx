@@ -1,16 +1,11 @@
 import type { RouteObject } from "react-router-dom";
 import { SectionPlaceholder } from "@/app/InterimScreens";
-import { AboutScreen, CatalogueScreen, JobsScreen, Later } from "@/app/lazyScreens";
+import { AboutScreen, CatalogueScreen, DatasetsScreen, JobsScreen, Later } from "@/app/lazyScreens";
 import { LibraryScreen } from "@/library/LibraryScreen";
 import { ModelsLayout } from "@/models/ModelsLayout";
 import { AppSettingsScreen } from "@/screens/AppSettingsScreen";
 import { Redirect } from "./Redirect";
 
-const datasets = (
-  <SectionPlaceholder title="Datasets" icon="datasets">
-    Datasets built from the reviewed images of any project are listed here.
-  </SectionPlaceholder>
-);
 const training = (
   <SectionPlaceholder title="Training" icon="train">
     Training runs on those datasets, and their results, are listed here.
@@ -25,8 +20,22 @@ export const appRoutes: RouteObject[] = [
     children: [
       { index: true, element: <Redirect to={() => "/models/library"} /> },
       { path: "library", element: <LibraryScreen /> },
-      { path: "datasets", element: datasets },
-      { path: "datasets/:datasetId", element: datasets },
+      {
+        path: "datasets",
+        element: (
+          <Later>
+            <DatasetsScreen />
+          </Later>
+        ),
+      },
+      {
+        path: "datasets/:datasetId",
+        element: (
+          <Later>
+            <DatasetsScreen />
+          </Later>
+        ),
+      },
       { path: "training", element: training },
       { path: "training/:runId", element: training },
     ],
