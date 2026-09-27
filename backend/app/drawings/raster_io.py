@@ -13,12 +13,16 @@ from pathlib import Path
 
 import numpy as np
 import rasterio
+from affine import Affine
 from PIL import Image
+from rasterio.crs import CRS
 from rasterio.enums import ColorInterp, Resampling
 from rasterio.errors import NotGeoreferencedWarning
+from rasterio.windows import Window
 
 from app.drawings import store
 from app.drawings.inspected import Inspected, warning
+from app.maps.raster import overview_factors
 
 MESSAGE = "Reading drawing"
 THUMB = 160
@@ -121,3 +125,88 @@ def inspect_file(path: Path, idir: Path, *, progress, check_cancelled) -> Inspec
         embedded=embedded,
         warnings=warnings_,
     )
+
+
+BLOCK = 512
+COPY_BLOCK = 2048
+
+
+def plan_profile(width: int, height: int) -> dict:
+    """plan.tif (spec §8.1): RGBA 8-bit, tiled 512, DEFLATE; overviews are added after the write."""
+    return dict(
+        driver="GTiff",
+        width=width,
+        height=height,
+        count=4,
+        dtype="uint8",
+        tiled=True,
+        blockxsize=BLOCK,
+        blockysize=BLOCK,
+        compress="DEFLATE",
+        predictor=2,
+        photometric="RGB",
+        bigtiff="IF_SAFER",
+    )
+
+
+@contextlib.contextmanager
+def open_plan(path: Path, width: int, height: int):
+    with quiet(), rasterio.open(path, "w", **plan_profile(width, height)) as dst:
+        dst.colorinterp = [ColorInterp.red, ColorInterp.green, ColorInterp.blue, ColorInterp.alpha]
+        yield dst
+
+
+def build_overviews(path: Path, *, progress, check_cancelled) -> None:
+    with quiet(), rasterio.open(path) as probe:
+        factors = overview_factors(probe.width, probe.height)
+    if not factors:
+        return
+    progress(0.9, "building zoom levels")
+    check_cancelled()
+    env = rasterio.Env(COMPRESS_OVERVIEW="DEFLATE", PREDICTOR_OVERVIEW=2)
+    with quiet(), env, rasterio.open(path, "r+") as dst:
+        dst.build_overviews(factors, Resampling.average)
+
+
+def copy_to_plan(
+    src_path: Path, dst: Path, *, progress, check_cancelled, block: int = COPY_BLOCK
+) -> tuple[int, int]:
+    """The source, window by window, as plan.tif (written to .partial, renamed when complete)."""
+    partial = dst.with_name(dst.name + ".partial")
+    try:
+        with quiet(), rasterio.open(src_path) as src:
+            width, height = src.width, src.height
+            cells = [(r, c) for r in range(0, height, block) for c in range(0, width, block)]
+            with open_plan(partial, width, height) as out:
+                for i, (r, c) in enumerate(cells, start=1):
+                    check_cancelled()
+                    win = Window(c, r, min(block, width - c), min(block, height - r))
+                    out.write(read_rgba(src, window=win), window=win)
+                    progress(0.85 * i / len(cells), f"block {i} / {len(cells)}")
+        build_overviews(partial, progress=progress, check_cancelled=check_cancelled)
+        os.replace(partial, dst)
+    except BaseException:
+        partial.unlink(missing_ok=True)
+        raise
+    return width, height
+
+
+def write_plan_georef(path: Path, transform, crs_wkt: str | None) -> None:
+    """The placement as plan.tif's own geotransform (M-B1 warps plan.tif like an ortho). A metadata
+    write (r+), so overviews stay valid. (col, -row) -> (E, N) = [a, b, c, d, e, f] is the pixel
+    geotransform Affine(a, -b, c, d, -e, f)."""
+    a, b, c, d, e, f = transform
+    with quiet(), rasterio.open(path, "r+") as dst:
+        dst.transform = Affine(a, -b, c, d, -e, f)
+        if crs_wkt:
+            dst.crs = CRS.from_wkt(crs_wkt)
+
+
+def clear_plan_georef(path: Path) -> None:
+    with quiet(), rasterio.open(path, "r+") as dst:
+        dst.transform = Affine.identity()
+
+
+def write_plan_thumbnail(plan: Path, out: Path) -> None:
+    with quiet(), rasterio.open(plan) as src:
+        write_thumbnail(src, out)

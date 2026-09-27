@@ -70,6 +70,19 @@ def inspect_ready(client, project_id, wait_job, path) -> dict:
     return client.get(f"{BASE}/{project_id}/drawing-inspections/{body['inspection']['id']}").json()
 
 
+def build_drawing(client, project_id, wait_job, inspection_id, *, wait=True, **body) -> dict:
+    body = {"name": "Plan", "placement": {"method": "none"}, **body, "inspection_id": inspection_id}
+    r = client.post(f"{BASE}/{project_id}/drawings", json=body)
+    assert r.status_code == 202, r.text
+    created = r.json()
+    if not wait:
+        return created
+    job = wait_job(project_id, created["job"]["id"])
+    got = client.get(f"{BASE}/{project_id}/drawings/{created['drawing']['id']}").json()
+    assert job["state"] == "succeeded", (job, got)
+    return got
+
+
 def write_landxml(path: Path, body: str, *, units: str = 'linearUnit="meter"', ns: bool = True) -> Path:
     """A LandXML 1.2 file around `body` (Surfaces, Alignments, PlanFeatures ...). P/Start/End text is
     northing first, as LandXML has it."""
