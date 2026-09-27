@@ -1,10 +1,13 @@
 // frontend/src/clouds/CloudViewer.tsx
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
+import type { CloudViewPose } from "@contract/client";
 import type { PointCloud } from "@/api/clouds";
-import { Alert, Button } from "@/ui";
+import { Alert, Button, Pill } from "@/ui";
 import type { Bounds6, Vec3 as XYZ } from "./viewer/camera";
+import type { CaptureMark, CaptureResult } from "./viewer/capture";
 import type { ClipBox, ClipBoxMode, ClipState } from "./viewer/clipBox";
 import {
+  classifyPixels,
   diagnosticsEnabled,
   installHook,
   type FrameCameraSample,
@@ -16,7 +19,7 @@ import { FrameBridge } from "./viewer/frameBridge";
 import type { LookPose, LookThrough } from "./viewer/lookThrough";
 import type { ColourMode } from "./viewer/materialOptions";
 import { resolveNavMode } from "./viewer/navMode";
-import type { OverlayShape } from "./viewer/overlay";
+import { tokenRgb, type OverlayShape } from "./viewer/overlay";
 import type { SlabSample } from "./viewer/slab";
 import type {
   CameraPose,
@@ -73,6 +76,14 @@ export interface CloudViewerHandle {
   sampleSlab(a: Vec3, b: Vec3, thicknessM: number, maxPoints?: number): Promise<SlabSample>;
   /** Fires once each time the view settles; survives a cloud switch. Returns the unsubscribe. */
   onSettle(cb: () => void): () => void;
+  /** C-V2: null while the view is not settled, or without a running engine. */
+  occlusion(points: readonly Vec3[], tolM: readonly number[]): boolean[] | null;
+  /** C-V2: the report view (one at a time); rejects without a running engine. */
+  capture(
+    pose: CloudViewPose,
+    marks: readonly CaptureMark[],
+    opts?: { timeoutMs?: number },
+  ): Promise<CaptureResult>;
 }
 
 export interface CloudViewerProps {
@@ -116,6 +127,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const sceneKey = `${cloud.id}|${octreeUrl}|${generation}`;
   const [loadError, setLoadError] = useState<{ key: string; message: string } | null>(null);
   const [lostKey, setLostKey] = useState<string | null>(null);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
   const [noWebGlKey, setNoWebGlKey] = useState<string | null>(null);
   const [bar, setBar] = useState<{ pts: number; loading: number; pick: CloudPick | null }>({
     pts: 0,
@@ -192,6 +204,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
     const stopSettle = e.onSettle(() => {
       for (const cb of [...settle]) cb();
     });
+    const stopCapture = e.onCaptureState((busy) => setSavingKey(busy ? key : null));
 
     let releaseHook = () => {};
     if (diagnosticsEnabled()) {
@@ -243,6 +256,31 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         },
         goToPose: (pose) => e.goToPose(pose),
         restoreLook: () => lastLook?.restore(),
+        occlusion: (points, tolM) => {
+          const t0 = performance.now();
+          const result = e.occlusion(points, tolM);
+          return { result, ms: performance.now() - t0 };
+        },
+        captureSample: async (marks) => {
+          const t0 = performance.now();
+          const shot = await e.capture(e.currentPose(), marks);
+          const ms = performance.now() - t0;
+          const bmp = await createImageBitmap(shot.blob);
+          const oc = new OffscreenCanvas(bmp.width, bmp.height);
+          const ctx = oc.getContext("2d");
+          if (!ctx) throw new Error("no 2D context to decode the capture");
+          ctx.drawImage(bmp, 0, 0);
+          const data = ctx.getImageData(0, 0, bmp.width, bmp.height).data;
+          return {
+            width: bmp.width,
+            height: bmp.height,
+            type: shot.blob.type,
+            complete: shot.complete,
+            edl: shot.edl,
+            ms,
+            colours: classifyPixels(new Uint8Array(data.buffer), tokenRgb("bg")),
+          };
+        },
       });
       releaseHook = () => {
         stopRecording();
@@ -254,6 +292,8 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       releaseHook();
       stopEffects();
       stopSettle();
+      stopCapture();
+      setSavingKey((k) => (k === key ? null : k)); // a token change rebuilds under the same sceneKey mid-capture
       bridge.detach();
       navRef.current = e.navMode(); // the engine may have left fly itself (lookThrough)
       e.dispose();
@@ -331,6 +371,11 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           settle.delete(cb);
         };
       },
+      occlusion: (points, tolM) => engine.current?.occlusion(points, tolM) ?? null,
+      capture: (pose, marks, opts) =>
+        engine.current
+          ? engine.current.capture(pose, marks, opts)
+          : Promise.reject(new Error("the 3D view is not running")),
     }),
     [bridge, settle],
   );
@@ -344,6 +389,13 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         className="absolute inset-0 h-full w-full bg-bg"
         style={{ cursor: armed ? "crosshair" : "grab" }}
       />
+      {savingKey === sceneKey && (
+        <div className="pointer-events-none absolute left-1/2 top-4 -translate-x-1/2 rounded-chip bg-glass-solid shadow-elev-2">
+          <Pill tone="neutral" live data-testid="cloud-saving-view">
+            Saving view…
+          </Pill>
+        </div>
+      )}
       {/* The notices sit on the opaque glass-solid backing: the tones alone are 15% tints, unreadable over the points. */}
       {noWebGlKey === sceneKey && (
         <div className="absolute inset-x-4 top-4 rounded-control bg-glass-solid shadow-elev-2">

@@ -190,3 +190,117 @@ test("Fit and the named views put the default FOV back after a stored pose or a 
   expect(p.fov_deg).toBeCloseTo(60, 6);
   expect(p.up).toEqual([0, 0, 1]);
 });
+
+test("occlusion: after settle, a point behind the south wall is hidden; the clip box clears it", async ({
+  page,
+}) => {
+  await openCloud(page, BOX, BOX_BOUNDS);
+  await frontSettled(page);
+  const run = () =>
+    page.evaluate(
+      ([x, y, z]) =>
+        window.__kestrelCloudViewer!.occlusion(
+          [
+            [x, y + 5, z], // the north wall's centre, behind the south wall
+            [x, y - 5, z], // the south wall's centre, in front
+          ],
+          [0.3, 0.3],
+        ),
+      [C.x, C.y, C.z],
+    );
+  await expect.poll(async () => (await run()).result, { timeout: 5_000 }).toEqual([true, false]);
+  const timed = await run();
+  console.log(
+    `occlusion pass: ${timed.ms.toFixed(1)} ms (target <= 40 ms on the operator's laptop; SwiftShader reported only)`,
+  );
+  await page.evaluate((b) => window.__kestrelCloudViewer!.setClipBox(b, "show_inside"), NORTH_ONLY);
+  await expect.poll(async () => (await run()).result, { timeout: 5_000 }).toEqual([false, false]);
+});
+
+test("occlusion answers null while the view is moving", async ({ page }) => {
+  await openCloud(page, BOX, BOX_BOUNDS);
+  const r = await page.evaluate(
+    ([x, y, z]) => {
+      const h = window.__kestrelCloudViewer!;
+      h.setView("front"); // starts the tween: the loop is running
+      return h.occlusion([[x, y + 5, z]], [0.3]).result;
+    },
+    [C.x, C.y, C.z],
+  );
+  expect(r).toBeNull();
+});
+
+test("a capture is 1600 x 1000, not uniform, red and green, and the screen comes back", async ({ page }) => {
+  await openGrid(page, 1);
+  await edlOn(page); // EDL on screen; the capture is taken without it (plan Ruling 5)
+  const shot = await page.evaluate(() => window.__kestrelCloudViewer!.captureSample([]));
+  console.log(`capture: ${shot.ms.toFixed(0)} ms, complete ${shot.complete}`);
+  expect(shot).toMatchObject({ width: 1600, height: 1000, type: "image/png", complete: true, edl: false });
+  const c = shot.colours;
+  expect(c.background, "the background is the canvas token, byte for byte (plan Ruling 6)").toBeGreaterThan(
+    0,
+  );
+  expect(c.background, "a blank read-back is uniform").toBeLessThan(c.total);
+  expect(c.red / c.total).toBeGreaterThan(0.01);
+  expect(c.green / c.total).toBeGreaterThan(0.01);
+  expect(c.white, "the S1 white-colour trap").toBe(0);
+  // resumed: the chip is gone, the loop draws again, and still in both colours
+  await expect(page.getByTestId("cloud-saving-view")).toHaveCount(0);
+  await viewerSettled(page);
+  const screen = await page.evaluate(() => window.__kestrelCloudViewer!.sampleColours());
+  expect(screen.red / screen.total).toBeGreaterThan(0.01);
+  expect(screen.green / screen.total).toBeGreaterThan(0.01);
+  // sampleColours draws a frame itself: prove the loop itself runs again (a tween only a live tick moves).
+  // The fit view looks from the south, well off the vertical; the top view is a hair off straight down.
+  const offVertical = async () => {
+    const p = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+    return (
+      Math.hypot(p.position[0] - p.target[0], p.position[1] - p.target[1]) / (p.position[2] - p.target[2])
+    );
+  };
+  expect(await offVertical()).toBeGreaterThan(0.5);
+  await page.evaluate(() => window.__kestrelCloudViewer!.setView("top")); // not reduced motion: a tween
+  await expect.poll(offVertical, { timeout: 2_000 }).toBeLessThan(1e-3);
+  // and it goes idle again: the occlusion pass answers (not frozen, no frame pending)
+  await expect
+    .poll(
+      async () =>
+        (await page.evaluate(() => window.__kestrelCloudViewer!.occlusion([[243550, 3178050, 1]], [0.3])))
+          .result,
+      { timeout: 5_000 },
+    )
+    .not.toBeNull();
+});
+
+test("a finding mark is drawn as a white-ringed pin", async ({ page }) => {
+  await openGrid(page, 1);
+  const shot = await page.evaluate(() =>
+    window.__kestrelCloudViewer!.captureSample([{ kind: "finding", at: [243550, 3178050, 1] }]),
+  );
+  expect(shot.colours.white).toBeGreaterThan(50);
+  expect(shot.colours.white / shot.colours.total).toBeLessThan(0.01);
+});
+
+test("a second capture while one runs is refused, and the chip shows", async ({ page }) => {
+  await openGrid(page);
+  const got = await page.evaluate(async () => {
+    let chipSeen = false;
+    const obs = new MutationObserver(() => {
+      if (document.querySelector('[data-testid="cloud-saving-view"]')) chipSeen = true;
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+    const h = window.__kestrelCloudViewer!;
+    const first = h.captureSample([]);
+    const second = await h.captureSample([]).then(
+      () => "accepted",
+      (e: Error) => e.message,
+    );
+    await first;
+    await new Promise((r) => setTimeout(r, 0)); // the observer's last records
+    obs.disconnect();
+    return { second, chipSeen };
+  });
+  expect(got.second).toBe("a capture is already running");
+  expect(got.chipSeen).toBe(true);
+  await expect(page.getByTestId("cloud-saving-view")).toHaveCount(0);
+});

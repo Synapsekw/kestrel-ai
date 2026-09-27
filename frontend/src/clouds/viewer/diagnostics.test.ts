@@ -33,6 +33,8 @@ function hook(): CloudViewerDiagnostics {
     restoreLook: () => {},
     sampleSlab: () => Promise.resolve({ count: 0, total: 0, s: [], z: [] }),
     goToPose: () => {},
+    occlusion: () => ({ result: null, ms: 0 }),
+    captureSample: () => Promise.reject(new Error("unused")),
   };
 }
 

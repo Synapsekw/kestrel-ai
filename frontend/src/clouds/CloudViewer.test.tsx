@@ -66,3 +66,48 @@ describe("CloudViewer handle without an engine", () => {
     expect(h.stats().numVisiblePoints).toBe(0);
   });
 });
+
+describe("CloudViewer C-V2 members without an engine", () => {
+  it("answer null or reject, and nothing throws", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const ref = createRef<CloudViewerHandle>();
+    render(
+      <CloudViewer
+        ref={ref}
+        cloud={exampleCloud}
+        octreeUrl="http://127.0.0.1:1/octree/"
+        token="t"
+        budget={3_000_000}
+        colour="rgb"
+        elevationRange={[0, 1]}
+        pointSize={1}
+      />,
+    );
+    const h = ref.current!;
+    expect(() => h.setClipBox({ centre: [0, 0, 0], size: [1, 1, 1], yawDeg: 0 })).not.toThrow();
+    // the shell keeps the clip box for the next engine (it survives a rebuild, like the nav mode)
+    expect(h.clipBox()).toEqual({
+      box: { centre: [0, 0, 0], size: [1, 1, 1], yawDeg: 0 },
+      mode: "show_inside",
+    });
+    expect(
+      h.lookThrough({
+        position: [0, 0, 1],
+        forward: [0, 0, -1],
+        up: [0, 1, 0],
+        hfovDeg: 70,
+        vfovDeg: 50,
+        width: 4,
+        height: 3,
+      }),
+    ).toBeNull();
+    expect(h.occlusion([[0, 0, 0]], [0.3])).toBeNull();
+    const off = h.onSettle(() => {});
+    expect(typeof off).toBe("function");
+    off();
+    await expect(h.sampleSlab([0, 0, 0], [1, 0, 0], 1)).rejects.toThrow("not running");
+    await expect(
+      h.capture({ position: [0, -1, 1], target: [0, 0, 0], up: [0, 0, 1], fov_deg: 50 }, []),
+    ).rejects.toThrow("not running");
+  });
+});

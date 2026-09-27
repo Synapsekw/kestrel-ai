@@ -1,6 +1,7 @@
 // frontend/src/clouds/viewer/engine.ts
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import type { CloudViewPose } from "@contract/client";
 import { Potree, PotreeRenderer, VIRIDIS, type PointCloudMaterial, type PointCloudOctree } from "potree-core";
 import { isReducedMotion } from "@/ui/motion";
 import {
@@ -16,6 +17,8 @@ import {
   type View,
   type Vec3 as XYZ,
 } from "./camera";
+import type { CaptureMark, CaptureResult } from "./capture";
+import { runCapture } from "./captureRun";
 import { classificationLut, type ClassLut } from "./classes";
 import {
   applyClipToMaterial,
@@ -35,12 +38,14 @@ import {
 } from "./diagnostics";
 import { disposeChildren, disposePointsGeometries } from "./dispose";
 import { EDL_OPTIONS, EDL_RENDERS_TO_TARGET } from "./edl";
+import type { EngineParts } from "./engineParts";
 import { FLY_EXIT_AHEAD_M, FlyControls } from "./flyControls";
 import { FrameRing, frameInterval } from "./frameRing";
 import { shouldKeepRendering } from "./idle";
 import { letterbox, photoFrame, photoToCanvas, type LookPose, type LookThrough } from "./lookThrough";
 import { makeMaterialOptions, type ColourMode } from "./materialOptions";
 import { mouseButtonsFor, resolveNavMode } from "./navMode";
+import { runOcclusion } from "./occlusion";
 import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
 import { pickAllPoints } from "./pickAll";
 import { flipRows, splitHalves } from "./pixels";
@@ -147,6 +152,16 @@ export interface CloudEngine {
   sampleSlab(a: Vec3, b: Vec3, thicknessM: number, maxPoints?: number): Promise<SlabSample>;
   /** C-V2: fires once each time the render loop goes idle. Returns the unsubscribe. */
   onSettle(cb: () => void): () => void;
+  /** C-V2: after settle, which points a drawn point hides (null while the view is not settled). */
+  occlusion(points: readonly Vec3[], tolM: readonly number[]): boolean[] | null;
+  /** C-V2: the 1600 × 1000 report view of `pose` with `marks`, one at a time. */
+  capture(
+    pose: CloudViewPose,
+    marks: readonly CaptureMark[],
+    opts?: { timeoutMs?: number },
+  ): Promise<CaptureResult>;
+  /** C-V2: true while a capture runs (the shell's "Saving view…" chip). */
+  onCaptureState(cb: (busy: boolean) => void): () => void;
   /** For C-V2 (clip box, fly, capture): the live objects. Read them; do not replace them. */
   readonly three: {
     renderer: THREE.WebGLRenderer;
@@ -258,6 +273,10 @@ export function createEngine(o: EngineOptions): CloudEngine {
   let posed: { position: THREE.Vector3; target: THREE.Vector3; fov: number } | null = null;
   const settleListeners = new Set<() => void>();
   let renderedSinceSettle = false;
+  const captureListeners = new Set<(busy: boolean) => void>();
+  let capturing = false;
+  /** Set while a capture owns the octree's visibility (captureRun.ts): the loop neither updates nor draws. */
+  let frozen = false;
   const fly = new FlyControls({
     camera,
     element: canvas,
@@ -289,6 +308,30 @@ export function createEngine(o: EngineOptions): CloudEngine {
     (a: Vec3, b: Vec3, thicknessM: number, maxPoints: number): SlabSample =>
       sliceSlab(pco && !disposed ? slabNodes(pco) : [], a, b, thicknessM, maxPoints),
   );
+  // The engine as occlusion.ts and captureRun.ts see it (`requestRender` and `renderToTarget` are
+  // hoisted function declarations). V1 applied no `withoutEdl`, so picks run as they are.
+  const parts: EngineParts = {
+    renderer,
+    overlayScene,
+    overlay,
+    camera,
+    potree,
+    canvas,
+    bounds,
+    pco: () => pco,
+    edl: () => ({ on: edlOn, rendersToTarget: EDL_RENDERS_TO_TARGET }),
+    clearRgb: () => clear,
+    accentRgb: () => tokenRgb("accent"),
+    idle: () => raf === 0,
+    frozen: () => frozen,
+    setFrozen: (f) => {
+      frozen = f;
+    },
+    pickParams: () => clipParams,
+    pickGuard: (fn) => fn(),
+    renderToTarget: (target, cam) => renderToTarget(target, cam),
+    requestRender: () => requestRender(),
+  };
 
   function drawFrame(cam: THREE.Camera = camera): void {
     potreeRenderer.render({ renderer, scene, camera: cam, pointClouds: pco ? [pco] : [] });
@@ -386,7 +429,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
 
   const tick = () => {
     raf = 0;
-    if (disposed) return;
+    if (disposed || frozen) return; // a capture owns the octree's visibility (captureRun.ts); it asks for a frame when done
     const now = performance.now();
     const gap = frameInterval(lastTickAt, now, chained);
     if (gap !== null) frames.push(gap);
@@ -880,6 +923,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       frameCallbacks.clear();
       if (fly.isEnabled) fly.disable();
       settleListeners.clear();
+      captureListeners.clear();
       // the canvas is keyed by the shell's `generation` only: a new cloud reuses this WebGL context,
       // so every buffer this scene made is released here, not left to the context's end
       disposeChildren(overlay);
@@ -939,6 +983,25 @@ export function createEngine(o: EngineOptions): CloudEngine {
       settleListeners.add(cb);
       return () => {
         settleListeners.delete(cb);
+      };
+    },
+    occlusion: (points, tolM) => runOcclusion(parts, points, tolM),
+    async capture(pose, marks, opts = {}) {
+      if (capturing) throw new Error("a capture is already running");
+      if (nav === "fly") engine.setNavMode("orbit");
+      capturing = true;
+      try {
+        return await runCapture(parts, pose, marks, opts, (busy) => {
+          for (const cb of [...captureListeners]) cb(busy);
+        });
+      } finally {
+        capturing = false;
+      }
+    },
+    onCaptureState(cb) {
+      captureListeners.add(cb);
+      return () => {
+        captureListeners.delete(cb);
       };
     },
     three: { renderer, scene, overlayScene, camera, controls, potree, potreeRenderer, pco: () => pco },

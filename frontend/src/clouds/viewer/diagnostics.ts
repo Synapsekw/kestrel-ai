@@ -92,6 +92,21 @@ export interface CloudViewerDiagnostics {
   ): Promise<{ count: number; total: number; s: number[]; z: number[] }>;
   /** C-V2: V1's goToPose (the FOV hand-off check). */
   goToPose(pose: CameraPoseInput): void;
+  /** C-V2: the occlusion pass and its duration; `result` is null while the view is not settled. */
+  occlusion(
+    points: Array<[number, number, number]>,
+    tolM: number[],
+  ): { result: boolean[] | null; ms: number };
+  /** C-V2: captures the current view (with finding marks), decodes the image and samples its colours. */
+  captureSample(marks: Array<{ kind: "finding"; at: [number, number, number] }>): Promise<{
+    width: number;
+    height: number;
+    type: string;
+    complete: boolean;
+    edl: boolean;
+    ms: number;
+    colours: ColourSample;
+  }>;
 }
 
 declare global {

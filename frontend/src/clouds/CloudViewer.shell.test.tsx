@@ -45,6 +45,7 @@ vi.mock("./viewer/engine", async (importOriginal) => {
         },
         onFrame: () => () => {},
         onSettle: () => () => {},
+        onCaptureState: () => () => {},
         dispose: record("dispose"),
       };
     },
