@@ -15,7 +15,7 @@ from app.workspace import stubs
 
 UNIT_LISTS = {
     "M-B1": stubs.B1_STUBS,
-    "M-B2": stubs.B2_STUBS,
+    # M-B2 landed importElevation; its stub list is gone from app/workspace/stubs.py.
     "M-B3": stubs.B3_STUBS,
     "M-B4": stubs.B4_STUBS,
 }
@@ -87,15 +87,8 @@ def test_option_stubs_name_real_operations():
     spec = yaml.safe_load(SPEC.read_text("utf-8"))
     ids = {op["operationId"] for ops in spec["paths"].values() for m, op in ops.items() if m in METHODS}
     assert set(OPTION_STUBS) <= ids
-    assert set(OPTION_STUBS.values()) <= {"M-B2", "M-B5"}
+    assert set(OPTION_STUBS.values()) <= {"M-B5"}
     assert not set(OPTION_STUBS) & EXPECTED_STUBS
-
-
-def test_a_surface_date_or_role_patch_answers_501_until_m_b2(client, project_id):
-    """M-B2 deletes this test with `guard_surface_patch`."""
-    url = f"/api/v1/projects/{project_id}/surfaces/any"
-    assert _option(client.patch(url, json={"captured_on": "2026-09-14"}), "M-B2") == "captured_on"
-    assert _option(client.patch(url, json={"elevation_role": "dtm"}), "M-B2") == "elevation_role"
 
 
 # ----------------------------------------------------- M-B5 deletes everything below with its guards
