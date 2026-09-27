@@ -88,6 +88,13 @@ computed `backdrop-filter` on the Overview (map hero shown), the Findings inspec
 dialog finds none. The same scan at Full finds the hero's `glass-float` panels and the dialog, so the
 check can fail; it did when the reduced rule in `src/ui/ui.css` was temporarily changed to `blur(1px)`.
 
+**The real GPU check.** These headless measurements are accepted as evidence with their limits
+stated above: 60 Hz headless frame pacing, WebGL on SwiftShader, a loaded machine, and Auto starting
+Reduced under a software renderer. The real GPU check is the operator walkthrough step 8
+(`docs/superpowers/plans/2026-09-26-foundation-index.md`, "Operator walkthrough") on the installed
+WebView2 build: "Settings → Appearance: switch effects to Reduced. The glass becomes solid and the app
+stays smooth."
+
 The p95 ≤ 20 ms assertion runs only with `E2E_FRAME_BUDGET=1`: the gate runs the whole suite
 headless in parallel, where a frame budget would measure the machine's load. The gate still asserts
 at least 60 frames in each 2 s window and that the page is at Full.
