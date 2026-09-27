@@ -149,6 +149,7 @@ class CloudMeasurementCreate(BaseModel):
 class CloudMeasurementUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
     note: str | None = Field(default=None, max_length=2000)
+    finding_id: str | None = None  # null detaches; absent leaves the link as it is
 
 
 class CloudMeasurementResults(BaseModel):

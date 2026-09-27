@@ -33,6 +33,8 @@ def create_cloud_measurement(
     request: Request,
     handle: ProjectHandle = Depends(get_project),
 ) -> CloudMeasurementOut:
+    # C-B1: `finding_id` is checked for every kind first; C-B2's profile branch follows this line.
+    measurements.require_finding(handle, cloudId, body.finding_id)
     row = measurements.create(handle, cloudId, body)
     publish_pointclouds_changed(request, handle, [cloudId])
     return CloudMeasurementOut.from_row(row)

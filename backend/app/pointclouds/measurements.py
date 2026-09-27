@@ -11,8 +11,9 @@ from datetime import UTC, datetime
 
 from pyproj import CRS, Transformer
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from app.db.models import CloudMeasurement, PointCloud
+from app.db.models import CloudMeasurement, Finding, PointCloud
 from app.errors import AppError, not_found
 from app.pointclouds import measure, rows
 from app.pointclouds.schemas import CloudMeasurementCreate, CloudMeasurementUpdate
@@ -110,6 +111,27 @@ def _params(body: CloudMeasurementCreate) -> dict | None:
     return body.params.model_dump(exclude_none=True) or None
 
 
+def check_finding(s: Session, cloud_id: str, finding_id: str | None) -> None:
+    """A measurement attaches only to a finding pinned on the same cloud (spec §8.5 "Attach to finding")."""
+    if finding_id is None:
+        return
+    finding = s.get(Finding, finding_id)
+    if finding is None or finding.anchor_kind != "cloud" or finding.cloud_id != cloud_id:
+        raise AppError(
+            "invalid_finding", "attach the measurement to a finding pinned on this point cloud", 422
+        )
+
+
+def require_finding(handle: ProjectHandle, cloud_id: str, finding_id: str | None) -> None:
+    """The create route's first check, for every kind (the profile included): 404 for an unknown
+    cloud, then 422 `invalid_finding`. `insert` checks again inside its transaction."""
+    if finding_id is None:
+        return
+    rows.get_cloud(handle, cloud_id)
+    with handle.session() as s:
+        check_finding(s, cloud_id, finding_id)
+
+
 def insert(
     handle: ProjectHandle,
     cloud_id: str,
@@ -122,6 +144,7 @@ def insert(
     note: str | None = None,
     status: str = "ready",
     job_id: str | None = None,
+    finding_id: str | None = None,
 ) -> CloudMeasurement:
     """One new row under the 1 000 cap, named "<Label> n" when unnamed, in one transaction."""
     with handle.session() as s:
@@ -134,6 +157,7 @@ def insert(
             raise AppError(
                 "measurement_limit", "this cloud already has 1 000 measurements; delete some first", 422
             )
+        check_finding(s, cloud_id, finding_id)
         row = CloudMeasurement(
             point_cloud_id=cloud_id,
             kind=kind,
@@ -144,6 +168,7 @@ def insert(
             params=params,
             status=status,
             job_id=job_id,
+            finding_id=finding_id,
         )
         s.add(row)
         s.flush()
@@ -169,6 +194,7 @@ def create(handle: ProjectHandle, cloud_id: str, body: CloudMeasurementCreate) -
         params=params,
         name=body.name,
         note=body.note,
+        finding_id=body.finding_id,
     )
 
 
@@ -189,6 +215,9 @@ def update(
             row.name = body.name
         if "note" in body.model_fields_set:
             row.note = body.note
+        if "finding_id" in body.model_fields_set:
+            check_finding(s, cloud_id, body.finding_id)
+            row.finding_id = body.finding_id
         row.updated_at = datetime.now(UTC)
         s.flush()
         s.expunge(row)
