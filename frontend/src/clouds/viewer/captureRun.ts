@@ -39,16 +39,24 @@ export async function runCapture(
   const { renderer, potree, overlayScene, overlay } = parts;
   if (renderer.getContext().isContextLost()) throw lostError();
   notify(true);
-  parts.setFrozen(true);
-  const target = new THREE.WebGLRenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT);
-  const group = new THREE.Group();
-  const texture = pinTexture(parts.accentRgb());
+  // Everything from here on (including the GPU-resource setup) is inside the try, so a throw
+  // anywhere — plausibly a context loss (spec §14) — still unfreezes the loop and clears the chip
+  // instead of leaving the engine permanently frozen with no recovery path.
   const overlayWas = overlay.visible;
-  const clearWas = renderer.getClearColor(new THREE.Color());
-  const clearAlphaWas = renderer.getClearAlpha();
+  let target: THREE.WebGLRenderTarget | null = null;
+  let group: THREE.Group | null = null;
+  let texture: THREE.DataTexture | null = null;
+  let clearWas: THREE.Color | null = null;
+  let clearAlphaWas = 1;
   const pixels = new Uint8Array(CAPTURE_WIDTH * CAPTURE_HEIGHT * 4);
   let complete = false;
   try {
+    parts.setFrozen(true);
+    target = new THREE.WebGLRenderTarget(CAPTURE_WIDTH, CAPTURE_HEIGHT);
+    group = new THREE.Group();
+    texture = pinTexture(parts.accentRgb());
+    clearWas = renderer.getClearColor(new THREE.Color());
+    clearAlphaWas = renderer.getClearAlpha();
     const p = captureCameraParams(pose, parts.bounds);
     const cam = new THREE.PerspectiveCamera(p.fov, p.aspect, p.near, p.far);
     // the contract's arrays are number[], not tuples
@@ -90,15 +98,30 @@ export async function runCapture(
     notify(false);
     throw err;
   } finally {
-    renderer.setClearColor(clearWas, clearAlphaWas);
-    overlayScene.remove(group);
-    disposeChildren(group);
-    texture.dispose();
-    target.dispose();
+    // Every step here is guarded against what may never have been created (a throw before resource
+    // allocation completed leaves the later locals null). The two GPU calls are also each wrapped in
+    // their own try/catch: a *second* failure here (also plausible during a lost context) must never
+    // replace the real outcome (the error being propagated, or a successful capture) with a cleanup
+    // error, and `setFrozen(false)` / `requestRender()` must still run either way.
+    try {
+      if (clearWas) renderer.setClearColor(clearWas, clearAlphaWas);
+    } catch {
+      // best-effort restore only; never lets a cleanup failure mask the real outcome
+    }
+    if (group) {
+      overlayScene.remove(group);
+      disposeChildren(group);
+    }
+    texture?.dispose();
+    target?.dispose();
     overlay.visible = overlayWas;
-    // the screen camera's nodes again before the loop resumes (plan Ruling 14)
-    const now = parts.pco();
-    if (now && !renderer.getContext().isContextLost()) potree.updatePointClouds([now], parts.camera, renderer);
+    try {
+      // the screen camera's nodes again before the loop resumes (plan Ruling 14)
+      const now = parts.pco();
+      if (now && !renderer.getContext().isContextLost()) potree.updatePointClouds([now], parts.camera, renderer);
+    } catch {
+      // best-effort restore only; never lets a cleanup failure mask the real outcome
+    }
     parts.setFrozen(false);
     parts.requestRender();
   }
