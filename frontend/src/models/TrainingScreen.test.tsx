@@ -146,6 +146,26 @@ describe("TrainingScreen (F §12.4)", () => {
     expect(await screen.findByText("That training run no longer exists")).toBeInTheDocument();
   });
 
+  it("shows the compare view from ?compare= and closes it", async () => {
+    const second = { ...exampleTrainingRun, id: "t-2b", name: "machines-v1-e100", model_id: "m-2b" };
+    renderTraining(`/models/training?compare=${TRAINING_RUN_ID},t-2b`, [
+      {
+        method: "GET",
+        path: /\/library\/training-runs$/,
+        body: { items: [exampleTrainingRun, second], next_cursor: null },
+      },
+    ]);
+    expect(await screen.findByRole("img", { name: /mAP50 of 2 runs/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Close compare" }));
+    expect(screen.queryByRole("img", { name: /mAP50 of 2 runs/ })).not.toBeInTheDocument();
+  });
+
+  it("keeps Compare off until two runs with a model are chosen", async () => {
+    renderTraining("/models/training");
+    await screen.findByRole("row", { name: /machines-v1-yolo11m-coco/ });
+    expect(screen.getByRole("button", { name: "Compare" })).toBeDisabled();
+  });
+
   describe("a dataset another job is exporting (H8)", () => {
     const BUSY_NOTE = "Dataset is being exported by another run; start when it has finished.";
     const activeRun = {

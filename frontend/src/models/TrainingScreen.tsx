@@ -32,6 +32,8 @@ import {
   SkeletonRows,
   type Column,
 } from "@/ui";
+import { CompareCurves } from "./CompareCurves";
+import { compareProblem, readCompare } from "./compareModel";
 import { useItemById } from "./useItemById";
 import { useLibraryDatasets } from "./useLibraryDatasets";
 import { useResultsCurve } from "./useResultsCurve";
@@ -114,6 +116,18 @@ export function TrainingScreen() {
   const creating = params.get("new") === "1";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const compareKey = readCompare(params).join(",");
+  const compared = useMemo(
+    () =>
+      (compareKey ? compareKey.split(",") : [])
+        .map((id) => runs.runs.find((r) => r.id === id))
+        .filter((r): r is TrainingRun => Boolean(r)),
+    [compareKey, runs.runs],
+  );
+  const [chosen, setChosen] = useState<string[]>([]);
+  const chosenRuns = runs.runs.filter((r) => chosen.includes(r.id));
+  const chooseProblem = compareProblem(chosenRuns);
 
   // A finished run changes its dataset's export too, and a finished export frees a busy dataset (H8).
   const reloadRuns = runs.reload;
@@ -272,6 +286,34 @@ export function TrainingScreen() {
       )}
 
       {!runs.unavailable && (
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            size="sm"
+            disabled={chooseProblem !== null}
+            title={chooseProblem ?? undefined}
+            onClick={() => setParams({ compare: chosen.join(",") })}
+          >
+            Compare
+          </Button>
+          <span className="text-xs text-muted">{chooseProblem ?? `${chosen.length} runs chosen`}</span>
+        </div>
+      )}
+      {compared.length > 0 && (
+        <GlassPanel variant="pane" className="flex flex-col gap-3 p-5">
+          <div className="flex items-center gap-2">
+            <h3 className="flex-1 text-lg font-semibold">Compare</h3>
+            <IconButton
+              icon="x"
+              label="Close compare"
+              size="sm"
+              onClick={() => setParams({}, { replace: true })}
+            />
+          </div>
+          <CompareCurves runs={compared} />
+        </GlassPanel>
+      )}
+
+      {!runs.unavailable && (
         <div className="grid items-start gap-4 min-[1100px]:grid-cols-[minmax(0,1fr)_340px]">
           <GlassPanel variant="pane" className="min-w-0 overflow-hidden">
             <DataTable
@@ -283,6 +325,8 @@ export function TrainingScreen() {
               onOpen={(r) => navigate(`/models/training/${r.id}`)}
               loading={runs.loading}
               onEndReached={runs.hasMore ? runs.loadMore : undefined}
+              selected={new Set(chosen)}
+              onSelectionChange={(next) => setChosen(Array.from(next))}
               empty={
                 <EmptyState icon="train" title="No training runs yet">
                   Choose New training run to train a model on a dataset.
