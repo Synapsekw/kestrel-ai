@@ -320,3 +320,12 @@ def test_the_router_stubs_are_c_operations():
     stubbed = {op_id for _, _, op_id in router.STUBS}
     assert stubbed <= set(C_OPERATIONS), sorted(stubbed - set(C_OPERATIONS))
     assert router.UPLOAD_STUBS <= {"putFindingView3d", "putCloudMeasurementView3d"}
+
+
+# ------------------------------------------------------------------------------ Task 4
+
+
+def test_the_profile_job_type(spec):
+    assert "pointcloud_profile" in _schemas(spec)["JobType"]["enum"]
+    result = _schemas(spec)["Job"]["properties"]["result"]["description"]
+    assert "pointcloud_profile {measurement_id, count}" in result

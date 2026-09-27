@@ -39,6 +39,7 @@ const TYPE_ICON: Record<Job["type"], IconName> = {
   detect_export: "download",
   pointcloud_import: "cloud",
   pointcloud_export: "cloud",
+  pointcloud_profile: "cloud",
   surface_build: "volume",
   volume_calc: "volume",
   volume_export: "volume",

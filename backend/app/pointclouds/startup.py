@@ -63,3 +63,20 @@ def sweep_interrupted(handle: ProjectHandle, runner) -> list[str]:
     if swept:
         log.info("marked %d interrupted point-cloud import(s) failed in project %s", len(swept), handle.id)
     return swept
+
+
+def sweep_profiles(handle: ProjectHandle, runner) -> list[str]:
+    """Profiles a restart cut short (spec 2026-09-26-point-cloud-workspace section 8.4 step 5).
+
+    Unit C-B2 marks each `computing` measurement whose job this process does not hold `failed`
+    ("interrupted by application restart; save the profile again") and removes orphan
+    `profiles/*.partial` files. Returns the measurement ids it marked. A no-op until C-B2."""
+    return []
+
+
+def sweep_views(handle: ProjectHandle) -> int:
+    """Report-view files with no `cloud_view` row, and `views/.partial-*` a crash left (section 11.2).
+
+    Unit C-B4 removes them through `app/pointclouds/views.py`. Returns the number of files removed.
+    A no-op until C-B4."""
+    return 0

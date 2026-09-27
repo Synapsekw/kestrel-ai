@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends
 from app.errors import not_implemented
 from app.pointclouds.jobs_export import run_pointcloud_export  # noqa: F401 - registers `pointcloud_export`
 from app.pointclouds.jobs_import import run_pointcloud_import  # noqa: F401 - registers `pointcloud_import`
+from app.pointclouds.jobs_profile import run_pointcloud_profile  # noqa: F401 - registers `pointcloud_profile`
 from app.pointclouds.routes_clouds import sub as cloud_routes
 from app.pointclouds.routes_export import sub as export_routes
 from app.pointclouds.routes_measurements import sub as measurement_routes
