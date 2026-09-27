@@ -128,11 +128,6 @@ BACKEND_PENDING: dict[str, str] = {
     "getImage": "I-BK",  # ImageDetail
     "updateImage": "I-BK",  # ImageDetail; ImageUpdate.subject_distance_m, marked_empty optional
     "preannotateImage": "I-BP",  # PreannotateResult items are Boxes (deprecated, see RETIRING)
-    # Images I-C0, the §11 fields on Foundation schemas; I-BT deletes these.
-    "acquireStarterModel": "I-BT",  # StarterModelKey gains the -seg starters
-    # chatWithSetupAgent validates plan.starter_model_key against training/starter.py's
-    # STARTER_KEYS, which has no -seg entries yet; I-BT adds them.
-    "chatWithSetupAgent": "I-BT",
 }
 
 # Point cloud workspace (unit C-C0, plan 2026-09-27-clouds-c0 Ruling 2): the create request widens to

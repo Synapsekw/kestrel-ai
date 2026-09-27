@@ -101,5 +101,8 @@ def test_catalogue_covers_compatible_coco_detection_families_without_loading_wei
     expected |= {f"yolov9{s}" for s in "tsmce"}
     expected |= {f"yolov5{s}{suffix}" for s in "nsmlx" for suffix in ("u", "6u")}
     expected |= {"yolov3u", "yolov3-tinyu", "yolov3-sppu"}
+    expected |= {f"yolo11{s}-seg" for s in "nsm"}
     assert keys == expected
-    assert all(i["task"] == "detect" and i["family"] for i in items)
+    assert all(i["family"] for i in items)
+    assert {i["key"] for i in items if i["task"] == "segment"} == {f"yolo11{s}-seg" for s in "nsm"}
+    assert all(i["task"] == "detect" for i in items if not i["key"].endswith("-seg"))

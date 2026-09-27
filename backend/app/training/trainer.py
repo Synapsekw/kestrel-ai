@@ -121,9 +121,10 @@ def _loss_short_name(key: str) -> str:
 
 
 def epoch_message(event: dict) -> str:
-    """The `job.progress` message: epoch, mAP50, the loss terms and an ETA when the event has them.
+    """The `job.progress` message: epoch, mAP50, mask mAP50 (segmentation), the loss terms and an
+    ETA when the event has them.
 
-    Format (spec section 7): `epoch 2/10 mAP50 0.500 loss box 1.234 cls 2.346 dfl 1.111 ETA 252s`.
+    Format (spec section 7): `epoch 2/10 mAP50 0.500 [mask mAP50 0.412] loss box 1.234 … ETA 252s`.
     Every part after the epoch is optional so early events and older writers still produce a
     message the UI parses.
     """
@@ -132,6 +133,9 @@ def epoch_message(event: dict) -> str:
     map50 = (event.get("metrics") or {}).get("metrics/mAP50(B)")
     if map50 is not None:
         parts.append(f"mAP50 {float(map50):.3f}")
+    mask = (event.get("metrics") or {}).get("metrics/mAP50(M)")
+    if mask is not None:
+        parts.append(f"mask mAP50 {float(mask):.3f}")
     losses = event.get("loss") or {}
     if losses:
         terms = " ".join(f"{_loss_short_name(str(k))} {float(v):.3f}" for k, v in losses.items())
