@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 from pyproj import CRS
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db.models import CloudMeasurement, Job, PointCloud
 from app.errors import AppError
@@ -146,7 +146,7 @@ def create_profile_measurement(
         s.add(row)
         s.flush()
         s.expunge(row)
-    job = runner.submit(handle, JOB_TYPE, {"cloud_id": cloud_id, "measurement_id": row.id})
+    job = _submit(handle, runner, cloud_id, row.id)
     _write_job_id(handle, row.id, job.id)
     row.job_id = job.id  # the answer shows the row as created: computing, with its job
     return CloudMeasurementWithJob(
@@ -158,17 +158,36 @@ def retry_profile(handle: ProjectHandle, runner: JobRunner, cloud_id: str, measu
     """Run the job again for a `failed` profile (section 12 row 9); 409 `not_retryable` otherwise."""
     rows.require_ready(handle, cloud_id)
     with handle.session() as s:
-        row = measurements._get(s, cloud_id, measurement_id)
-        if row.kind != "profile" or row.status != "failed":
+        # One conditional UPDATE, so two racing retries cannot both pass a read-then-write check.
+        flipped = s.execute(
+            update(CloudMeasurement)
+            .where(
+                CloudMeasurement.id == measurement_id,
+                CloudMeasurement.point_cloud_id == cloud_id,
+                CloudMeasurement.kind == "profile",
+                CloudMeasurement.status == "failed",
+            )
+            .values(status="computing", error=None, job_id=None, updated_at=datetime.now(UTC))
+        ).rowcount
+        if flipped == 0:
+            measurements._get(s, cloud_id, measurement_id)  # 404 not_found when it does not exist
             raise AppError("not_retryable", "only a failed cross-section profile can be retried", 409)
-        row.status, row.error, row.job_id = "computing", None, None
-        row.updated_at = datetime.now(UTC)
-    job = runner.submit(handle, JOB_TYPE, {"cloud_id": cloud_id, "measurement_id": measurement_id})
+    job = _submit(handle, runner, cloud_id, measurement_id)
     _write_job_id(handle, measurement_id, job.id)
     return job
 
 
-def _settleable(row: CloudMeasurement | None, job_id: str) -> bool:
+def _submit(handle: ProjectHandle, runner: JobRunner, cloud_id: str, measurement_id: str) -> Job:
+    """Submit the job; a submit that raises leaves the row `failed`, never `computing` with no job
+    (its `job_id` is still null, so `mark_failed` may settle it)."""
+    try:
+        return runner.submit(handle, JOB_TYPE, {"cloud_id": cloud_id, "measurement_id": measurement_id})
+    except Exception as e:
+        mark_failed(handle, measurement_id, None, f"the profile job could not be started: {e}")
+        raise
+
+
+def _settleable(row: CloudMeasurement | None, job_id: str | None) -> bool:
     """A stale job never writes over a newer run (plan Ruling 11); a null job_id is the create's own
     job before `_write_job_id` ran (Review Focus 1)."""
     return row is not None and row.kind == "profile" and row.job_id in (None, job_id)
@@ -230,7 +249,7 @@ def mark_ready(handle: ProjectHandle, measurement_id: str, job_id: str, results:
     return True
 
 
-def mark_failed(handle: ProjectHandle, measurement_id: str, job_id: str, message: str) -> bool:
+def mark_failed(handle: ProjectHandle, measurement_id: str, job_id: str | None, message: str) -> bool:
     with handle.session() as s:
         row = s.get(CloudMeasurement, measurement_id)
         if not _settleable(row, job_id):

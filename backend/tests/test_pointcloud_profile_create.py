@@ -4,12 +4,15 @@ The job these submit is whatever `pointcloud_profile` is registered as; every as
 the returned objects or rows the job cannot have touched, except the retry test, which now waits for
 the job to end before reading the row (Task 3's real job settles it, so reading early would race it)."""
 
+import threading
+
 import pytest
 from pointclouds import insert_cloud
 from profile_helpers import insert_profile
 from pyproj import CRS
+from sqlalchemy import select
 
-from app.db.models import CloudMeasurement
+from app.db.models import CloudMeasurement, Job
 from app.errors import AppError
 from app.pointclouds import profile, schemas
 
@@ -150,3 +153,79 @@ def test_the_profile_files_live_under_the_cloud(handle):
     assert profile.profiles_dir(handle, "c1") == base
     assert profile.profile_path(handle, "c1", "m1") == base / "m1.json"
     assert profile.partial_path(handle, "c1", "m1") == base / "m1.partial"
+
+
+class _HoldingRunner:
+    """Submits nothing: a real job would fail at once (no source) and set the row `failed` again,
+    letting a second retry legitimately pass after the first one ended."""
+
+    def __init__(self):
+        self.submitted: list[dict] = []
+
+    def submit(self, handle, job_type, params):
+        self.submitted.append(params)
+        return Job(id=f"held-{len(self.submitted)}", type=job_type, params=params)
+
+
+def test_two_concurrent_retries_start_one_job(handle, monkeypatch):
+    """F2: the status flip is one conditional UPDATE, so only one of two racing retries wins. `_get`
+    is held at a gate so a read-then-write retry would let both threads read `failed` first."""
+    runner = _HoldingRunner()
+    cloud_id = insert_cloud(handle)
+    mid = insert_profile(handle, cloud_id, status="failed")
+    gate = threading.Barrier(2, timeout=1)
+    real_get = profile.measurements._get
+
+    def gated_get(s, c, m):
+        row = real_get(s, c, m)
+        try:
+            gate.wait()
+        except threading.BrokenBarrierError:
+            pass
+        return row
+
+    monkeypatch.setattr(profile.measurements, "_get", gated_get)
+    start = threading.Barrier(2)
+    out: list = []
+
+    def retry():
+        start.wait()
+        try:
+            out.append(profile.retry_profile(handle, runner, cloud_id, mid))
+        except Exception as e:  # noqa: BLE001 - the test inspects what each thread got
+            out.append(e)
+
+    threads = [threading.Thread(target=retry) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(10)
+    jobs = [o for o in out if isinstance(o, Job)]
+    errors = [o for o in out if isinstance(o, AppError)]
+    assert len(jobs) == 1 and len(errors) == 1, out
+    assert (errors[0].code, errors[0].status) == ("not_retryable", 409)
+    assert len(runner.submitted) == 1
+
+
+class _FailingRunner:
+    def submit(self, handle, job_type, params):
+        raise RuntimeError("queue closed")
+
+
+def test_a_submit_that_raises_leaves_the_created_row_failed(handle):
+    cloud_id = insert_cloud(handle)
+    with pytest.raises(RuntimeError):
+        profile.create_profile_measurement(handle, _FailingRunner(), cloud_id, _body())
+    with handle.session() as s:
+        row = s.execute(select(CloudMeasurement).where(CloudMeasurement.kind == "profile")).scalar_one()
+        assert row.status == "failed" and "queue closed" in row.error and row.job_id is None
+
+
+def test_a_submit_that_raises_leaves_the_retried_row_failed(handle):
+    cloud_id = insert_cloud(handle)
+    mid = insert_profile(handle, cloud_id, status="failed")
+    with pytest.raises(RuntimeError):
+        profile.retry_profile(handle, _FailingRunner(), cloud_id, mid)
+    with handle.session() as s:
+        row = s.get(CloudMeasurement, mid)
+        assert row.status == "failed" and "queue closed" in row.error and row.job_id is None
