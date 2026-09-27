@@ -9262,8 +9262,8 @@ components:
       properties:
         project_ids: { type: array, minItems: 1, maxItems: 50, items: { type: string } }
         type_ids: { type: array, minItems: 1, maxItems: 200, items: { type: string }, description: "catalogue type ids; they fix the dataset's classes, in this order" }
-        captured_from: { type: [string, "null"], format: date, description: null when absent }
-        captured_to: { type: [string, "null"], format: date, description: null when absent }
+        captured_from: { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: null when absent }
+        captured_to: { type: [string, "null"], format: date, pattern: "^\\d{4}-\\d{2}-\\d{2}$", description: null when absent }
         reviewed_only: { type: boolean, description: "only ground truth (accepted, edited or person-drawn annotations); false when absent" }
         boxes_as_polygons: { type: boolean, description: "write boxes and rotated boxes as 4-point polygons in a segment dataset; false when absent" }
       example: { project_ids: ["7f1c2e3a-1111-4000-8000-000000000001", "7f1c2e3a-1111-4000-8000-000000000002"], type_ids: ["c1a2b3c4-0000-4000-8000-000000000001", "c1a2b3c4-0000-4000-8000-000000000004"], captured_from: null, captured_to: "2026-06-30", reviewed_only: true }
