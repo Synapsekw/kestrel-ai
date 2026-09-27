@@ -52,3 +52,34 @@ def drawing_raster_fields(handle, layer_id: str, frame, preview=None) -> dict:
         # (col, -row) -> (E, N) = [a, b, c, d, e, f] is the pixel geotransform (a, -b, c, d, -e, f)
         "preview_transform": None if preview is None else (t[0], -t[1], t[2], t[3], -t[4], t[5]),
     }
+
+
+def resolve_drawing_raster(handle, layer_id: str, style):
+    """M-B1's resolver for kind `drawing_raster`: plan.tif as a SiteTileSource. B1's renderer does the
+    204 check on bounds_native, the one-overview WarpedVRT read, the LRU and the frame check."""
+    from affine import Affine
+
+    from app.workspace.service import get_frame
+    from app.workspace.tiles import SiteTileSource, rgba_paint
+
+    f = drawing_raster_fields(handle, layer_id, get_frame(handle), preview=style.preview)
+    extra = {} if f["preview_transform"] is None else {"src_transform": Affine(*f["preview_transform"])}
+    return SiteTileSource(
+        layer_id=f["layer_id"],
+        version=f["version"],
+        path=f["path"],
+        crs_wkt=f["crs_wkt"],
+        bounds_native=f["bounds_native"],
+        native_res_m=f["native_res_m"],
+        paint=rgba_paint(style.knockout),
+        bands=(1, 2, 3, 4),
+        alpha_band=4,
+        **extra,
+    )
+
+
+def register() -> None:
+    """The one line B1's plan names: kind `drawing_raster` -> resolve_drawing_raster."""
+    from app.workspace.tiles import register_site_tile_source
+
+    register_site_tile_source("drawing_raster", resolve_drawing_raster)

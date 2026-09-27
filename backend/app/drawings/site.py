@@ -1,9 +1,10 @@
 """The site frame and the site tile grid, as the drawings package sees them (spec §6).
 
-M-B1 owns both (app/workspace/frame.py + service.get_frame, app/workspace/grid.py). Until M-B1 is on
-main this module carries a local copy of exactly what drawings need, pinned by M-C0's
-contract/fixtures/site-grid-vectors.json; the three bodies marked `B1-SWAP` become B1 delegations in
-plan task 16. Nothing else in app.drawings imports app.workspace.
+M-B1 owns both (app/workspace/frame.py + service.get_frame, app/workspace/grid.py): `res`,
+`tile_bounds` and `current_frame` are delegations to M-B1 since plan task 16 (imported inside the
+functions, so this module stays light). `Frame` stays for tests and the local-frame literal; B1's
+SiteFrame has the same `kind`, `crs_wkt`, `epsg` and `key`, and `frame_unit_m` and `Conversion` take
+either. Nothing else in app.drawings imports app.workspace, except raster_source's registration.
 """
 
 from __future__ import annotations
@@ -14,9 +15,7 @@ from typing import Literal
 
 import numpy as np
 from pyproj import CRS, Transformer
-from sqlalchemy import select
 
-from app.errors import AppError
 from app.surfaces.design.units import UnsupportedCrsUnit, crs_axis_unit, unit_to_m
 
 TILE = 256
@@ -61,15 +60,16 @@ class NotInFrame(Exception):
     """A drawing placed in a CRS shown in a local frame, or the reverse (spec §6)."""
 
 
-def res(z: int) -> float:  # B1-SWAP: app.workspace.grid.res
-    if not 0 <= z <= Z_MAX:
-        raise ValueError(f"zoom {z} is outside 0..{Z_MAX}")
-    return 1024.0 / 2**z
+def res(z: int) -> float:  # M-B1: app.workspace.grid
+    from app.workspace import grid
+
+    return grid.res(z)
 
 
-def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:  # B1-SWAP: grid.tile_bounds
-    span = TILE * res(z)
-    return (x * span, -(y + 1) * span, (x + 1) * span, -y * span)
+def tile_bounds(z: int, x: int, y: int) -> tuple[float, float, float, float]:  # M-B1: app.workspace.grid
+    from app.workspace import grid
+
+    return tuple(grid.tile_bounds(z, x, y))
 
 
 def ring(bbox, n: int = 16) -> tuple[np.ndarray, np.ndarray]:
@@ -81,16 +81,10 @@ def ring(bbox, n: int = 16) -> tuple[np.ndarray, np.ndarray]:
     return xs, ys
 
 
-def current_frame(handle):  # B1-SWAP: app.workspace.service.get_frame (creates the frame, rule M3)
-    from app.db.models import MapWorkspace
+def current_frame(handle):  # M-B1: the project's SiteFrame, created lazily (rule M3)
+    from app.workspace.service import get_frame
 
-    with handle.session() as s:
-        row = s.execute(select(MapWorkspace)).scalars().first()
-        if row is None:
-            raise AppError(
-                "no_site_frame", "Open the map workspace once so the project has a site frame.", 409
-            )
-        return Frame("local" if row.frame_kind == "local" else "crs", row.crs_wkt, row.epsg)
+    return get_frame(handle)
 
 
 class Conversion:

@@ -86,9 +86,7 @@ def test_refusals(client, project_id, handle, scan, model, points, code):
     assert r.status_code == 422 and r.json()["error"]["code"] == code
 
 
-def test_no_site_frame_and_not_ready_are_409(client, project_id, handle, scan):
-    r = put(client, project_id, scan["id"], "similarity", PAIRS)
-    assert r.status_code == 409 and r.json()["error"]["code"] == "no_site_frame"  # until M-B1 (Task 16)
+def test_not_ready_is_409(client, project_id, handle, scan):
     seed_frame(handle, 32633)
     with handle.session() as s:
         s.get(Drawing, scan["id"]).status = "importing"

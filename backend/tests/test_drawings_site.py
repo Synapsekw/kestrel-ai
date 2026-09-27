@@ -9,7 +9,6 @@ from drawings_helpers import seed_frame
 from pyproj import CRS
 
 from app.drawings import site
-from app.errors import AppError
 
 GRID_PATH = Path(__file__).resolve().parents[2] / "contract" / "fixtures" / "site-grid-vectors.json"
 GRID = json.loads(GRID_PATH.read_text("utf-8"))
@@ -69,12 +68,16 @@ def test_not_in_frame():
     assert site.Conversion(None, local).identity
 
 
-def test_current_frame_reads_the_row_or_answers_409(handle):
-    with pytest.raises(AppError) as e:
-        site.current_frame(handle)
-    assert e.value.status == 409 and e.value.code == "no_site_frame"
+def test_current_frame_is_the_workspace_frame(handle):
+    assert site.current_frame(handle).kind == "local"  # B1 creates it lazily; an empty project is local (M3)
     seed_frame(handle, 32638)
-    f = site.current_frame(handle)
-    assert (f.kind, f.epsg) == ("crs", 32638)
-    seed_frame(handle, None)
-    assert site.current_frame(handle).kind == "local"
+    assert site.current_frame(handle).epsg == 32638
+
+
+def test_the_grid_is_b1s():
+    from app.workspace import grid
+
+    for z, x, y in ((0, 0, 0), (10, -1, -1), (17, 123456, -654321), (20, -5, 7)):
+        assert site.res(z) == grid.res(z) and tuple(site.tile_bounds(z, x, y)) == tuple(
+            grid.tile_bounds(z, x, y)
+        )

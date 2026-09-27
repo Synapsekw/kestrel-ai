@@ -210,8 +210,8 @@ def delete_drawing(
                 {"job_id": row.job_id},
             )
         s.delete(row)
-    shutil.rmtree(folder, ignore_errors=True)
     service.drop_caches(drawingId)
+    shutil.rmtree(folder, ignore_errors=True)
     publish_drawings_changed(request, handle, [drawingId])
     return Response(status_code=204)
 
@@ -382,3 +382,15 @@ def get_drawing_vector_tile(
     if not body:
         return Response(status_code=204, headers={"Cache-Control": cache})
     return Response(body, media_type="application/json", headers={"Cache-Control": cache})
+
+
+try:
+    from app.drawings import raster_source
+
+    raster_source.register()
+except Exception:
+    import logging
+
+    logging.getLogger(__name__).exception(
+        "drawing_raster tiles could not be registered with the site-tile renderer"
+    )
