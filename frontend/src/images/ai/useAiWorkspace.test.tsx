@@ -224,6 +224,8 @@ describe("FA's keys", () => {
     expect(reviews(requests)).toHaveLength(0);
     expect(requests.some((r) => r.method === "PATCH")).toBe(false);
     expect(wsGet().threshold).toBe(0);
+    // ] then [ would land back on 0; any step at all would have saved the threshold.
+    expect(localStorage.getItem(`kestrel.images.threshold.${PROJECT_ID}`)).toBeNull();
     expect(wsGet().focusedSuggestionId).toBeNull();
     expect(wsGet().selectedIds).toEqual(["p1"]);
     expect(onOpenImage).not.toHaveBeenCalled();
