@@ -57,7 +57,8 @@ test("layout: every panel sits at its mockup position and the canvas fills the v
   near(giz.x - vp.x, 72, "gizmo left");
   near(bottom(giz), 14, "gizmo bottom");
   const ro = await box(page.getByTestId("cloud-readout"));
-  near(ro.x + ro.width / 2, vp.x + vp.width / 2, "readout centre");
+  // Centred in the band between the gizmo (72 + 64) and the minimap (14 + 330), not the full width.
+  near(ro.x + ro.width / 2, vp.x + (150 + vp.width - 358) / 2, "readout centre");
   near(bottom(ro), 14, "readout bottom");
   const mini = await box(page.getByTestId("cloud-minimap"));
   near(right(mini), 14, "minimap right");
@@ -69,6 +70,18 @@ test("layout: every panel sits at its mockup position and the canvas fills the v
   near(hint.x + hint.width / 2, vp.x + vp.width / 2, "hint bar centre");
   // Full-bleed: the project tabs are hidden on the workspace (F §5.2).
   await expect(page.getByRole("tab", { name: /^Point clouds/ })).toHaveCount(0);
+
+  // At the default 1280 × 720 the readout (and its "Show on map") never runs under the minimap.
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect
+    .poll(async () => {
+      const r = await box(page.getByTestId("cloud-readout"));
+      const m = await box(page.getByTestId("cloud-minimap"));
+      const apart =
+        r.x + r.width <= m.x || m.x + m.width <= r.x || r.y + r.height <= m.y || m.y + m.height <= r.y;
+      return apart;
+    })
+    .toBe(true);
 });
 
 test("tool keys arm tools, the hint bar follows, Esc and Esc again return to Orbit (spec §15 e2e 2)", async ({

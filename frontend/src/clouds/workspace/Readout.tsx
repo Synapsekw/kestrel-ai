@@ -23,33 +23,39 @@ export function Readout({
     ["N", pick?.y],
     ["Z", pick?.z],
   ];
+  // Centred in the band between the gizmo (left 72 + 64) and the minimap (right 14 + 330), so the
+  // pill never runs under the minimap (which would take "Show on map"'s click). The band is not
+  // interactive; the pill is. No transform centring: animate-reveal animates transform. A band too
+  // narrow for one line wraps the pill's items instead of overlapping.
   return (
-    <GlassPanel
-      variant="float"
-      aria-label="Pick readout"
-      data-testid="cloud-readout"
-      style={stagger(4)}
-      className="stagger absolute inset-x-0 bottom-3.5 z-10 mx-auto flex w-fit items-center gap-4 whitespace-nowrap rounded-full px-4 py-2 text-xs animate-reveal reduce-motion:animate-none"
-    >
-      <span aria-hidden className={cx("h-[7px] w-[7px] rounded-full", pick ? "bg-ok" : "bg-dim")} />
-      {values.map(([k, v]) => (
-        <span key={k}>
-          <span className="mr-1 text-dim">{k}</span>
-          <span className="inline-block min-w-[76px] font-mono tabular-nums text-ink">
-            {v === undefined ? "—" : v.toFixed(2)}
+    <div className="pointer-events-none absolute bottom-3.5 left-[150px] right-[358px] z-10 flex justify-center">
+      <GlassPanel
+        variant="float"
+        aria-label="Pick readout"
+        data-testid="cloud-readout"
+        style={stagger(4)}
+        className="stagger pointer-events-auto flex max-w-full flex-wrap items-center justify-center gap-x-4 gap-y-1 whitespace-nowrap rounded-full px-4 py-2 text-xs animate-reveal reduce-motion:animate-none"
+      >
+        <span aria-hidden className={cx("h-[7px] w-[7px] rounded-full", pick ? "bg-ok" : "bg-dim")} />
+        {values.map(([k, v]) => (
+          <span key={k}>
+            <span className="mr-1 text-dim">{k}</span>
+            <span className="inline-block min-w-[76px] font-mono tabular-nums text-ink">
+              {v === undefined ? "—" : v.toFixed(2)}
+            </span>
+          </span>
+        ))}
+        <span aria-hidden className="h-4 w-px bg-line" />
+        <span>
+          <span className="mr-1 text-dim">Spacing</span>
+          <span className={cx("font-mono", warn ? "text-warn" : "text-ink")}>
+            {pick ? formatLength(pick.uncertainty_m) : "—"}
           </span>
         </span>
-      ))}
-      <span aria-hidden className="h-4 w-px bg-line" />
-      <span>
-        <span className="mr-1 text-dim">Spacing</span>
-        <span className={cx("font-mono", warn ? "text-warn" : "text-ink")}>
-          {pick ? formatLength(pick.uncertainty_m) : "—"}
-        </span>
-      </span>
-      <span aria-hidden className="h-4 w-px bg-line" />
-      <span className="text-dim">{cloud.epsg ? `EPSG:${cloud.epsg} · m` : "No CRS · m"}</span>
-      {onShowOnMap && <IconButton size="sm" icon="map" label="Show on map" onClick={onShowOnMap} />}
-    </GlassPanel>
+        <span aria-hidden className="h-4 w-px bg-line" />
+        <span className="text-dim">{cloud.epsg ? `EPSG:${cloud.epsg} · m` : "No CRS · m"}</span>
+        {onShowOnMap && <IconButton size="sm" icon="map" label="Show on map" onClick={onShowOnMap} />}
+      </GlassPanel>
+    </div>
   );
 }

@@ -455,9 +455,6 @@ async function mapRoutes(page: Page) {
 test("a detection on the map opens the same spot in 3D, and a pick goes back to the map", async ({
   page,
 }) => {
-  // At the default 1280 px the readout's right end (where "Show on map" sits) runs under the
-  // minimap; the mockup's 1600 px keeps them apart (C-W1 Task 11 report, concern 1).
-  await page.setViewportSize({ width: 1600, height: 900 });
   await mapRoutes(page);
   await page.goto(`/p/${P}/maps/${MAP}`);
   await page.getByRole("checkbox", { name: /Show machinery-v3/ }).check();
