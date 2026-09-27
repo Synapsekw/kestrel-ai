@@ -111,7 +111,6 @@ EXPECTED_STUBS |= workspace_stub_operation_ids()  # M-C0: app/workspace/stubs.py
 EXPECTED_STUBS |= {
     "retryCloudProfile",  # C-B2
     "getCloudProfile",  # C-B2
-    "setCloudCameraOffset",  # C-B3
     "putFindingView3d",  # C-B4
     "getFindingView3d",  # C-B4
     "putCloudMeasurementView3d",  # C-B4

@@ -26,8 +26,6 @@ STUBS: list[tuple[str, str, str]] = [
     # C-B2: the profile job's routes
     ("POST", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/retry", "retryCloudProfile"),
     ("GET", "/pointclouds/{cloudId}/measurements/{cloudMeasurementId}/profile", "getCloudProfile"),
-    # C-B3: the camera offsets
-    ("PUT", "/pointclouds/{cloudId}/cameras/offsets/{sourceId}", "setCloudCameraOffset"),
     # C-B4: the report views
     ("PUT", "/findings/{findingId}/view3d", "putFindingView3d"),
     ("GET", "/findings/{findingId}/view3d", "getFindingView3d"),

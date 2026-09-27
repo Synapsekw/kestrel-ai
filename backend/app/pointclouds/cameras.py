@@ -21,8 +21,8 @@ import numpy as np
 from pyproj import CRS, Proj, Transformer
 from sqlalchemy import func, select
 
-from app.db.models import CloudCameraOffset, Image, Source
-from app.errors import AppError
+from app.db.models import CloudCameraOffset, Image, PointCloud, Source
+from app.errors import AppError, not_found
 from app.pointclouds import rows
 from app.pointclouds.schemas import CloudCameraSet, CloudCameraSource
 from app.projects.service import ProjectHandle
@@ -352,4 +352,37 @@ def camera_set(handle: ProjectHandle, cloud_id: str) -> CloudCameraSet:
         z_p1=_num(z_stats.get("p1")),
         z_p99=_num(z_stats.get("p99")),
         without_gps=without_gps,
+    )
+
+
+def set_offset(
+    handle: ProjectHandle, cloud_id: str, source_id: str, height_offset_m: float
+) -> CloudCameraSource:
+    """Upsert one set's height offset for one cloud (spec section 10.1, C-B3 Ruling 10)."""
+    with handle.session() as s:
+        if s.get(PointCloud, cloud_id) is None:
+            raise not_found("point cloud", cloud_id)
+        src = s.get(Source, source_id)
+        if src is None:
+            raise not_found("image set", source_id)
+        label = _label(src.folder, src.site, src.label, src.id)
+        row = s.get(CloudCameraOffset, (cloud_id, source_id))
+        if row is None:
+            s.add(
+                CloudCameraOffset(
+                    point_cloud_id=cloud_id, source_id=source_id, height_offset_m=height_offset_m
+                )
+            )
+        else:
+            row.height_offset_m = height_offset_m
+    try:
+        entry = next((e for e in camera_set(handle, cloud_id).sources if e.id == source_id), None)
+    except AppError:  # not ready, or no coordinates: the offset is stored, nothing is placed yet
+        entry = None
+    return CloudCameraSource(
+        id=source_id,
+        label=label,
+        count=entry.count if entry else 0,
+        height_offset_m=height_offset_m,
+        posed_count=entry.posed_count if entry else 0,
     )

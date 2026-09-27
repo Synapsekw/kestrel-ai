@@ -298,3 +298,85 @@ def test_without_gps_counts_images_with_no_position(client, project_id, cloud_id
     body = client.get(url(project_id, cloud_id)).json()
     assert body["without_gps"] == 1
     assert body["image_id"] == [inside] and no_gps not in body["image_id"]
+
+
+# ------------------------------------------------------------------------------ Task 3: PUT
+
+
+def off_url(project_id, cloud_id, source_id) -> str:
+    return f"{BASE}/{project_id}/pointclouds/{cloud_id}/cameras/offsets/{source_id}"
+
+
+def test_an_offset_moves_the_set_and_answers_it(client, project_id, cloud_id, handle, app):
+    src = add_set(handle, label="Flight 14 Sep")
+    add_photo(handle, src, alt=50.0, gimbal_yaw=0.0, gimbal_pitch=-90.0)
+    add_photo(handle, src, alt=None, minutes=1)
+    seen = []
+    original = app.state.events.publish
+    app.state.events.publish = lambda e: (seen.append(e), original(e))
+    r = client.put(off_url(project_id, cloud_id, src), json={"height_offset_m": -31.5})
+    assert r.status_code == 200, r.text
+    assert r.json() == {
+        "id": src,
+        "label": "Flight 14 Sep",
+        "count": 2,
+        "height_offset_m": -31.5,
+        "posed_count": 1,
+    }
+    assert any(e["type"] == "pointclouds.changed" and e["payload"] == {"cloud_ids": [cloud_id]} for e in seen)
+    body = client.get(url(project_id, cloud_id)).json()
+    assert body["z"] == [pytest.approx(18.5), None]
+    assert body["sources"][0]["height_offset_m"] == -31.5
+    assert client.put(off_url(project_id, cloud_id, src), json={"height_offset_m": 0}).status_code == 200
+    assert client.get(url(project_id, cloud_id)).json()["z"] == [pytest.approx(50.0), None]
+    with handle.session() as s:
+        from app.db.models import CloudCameraOffset
+
+        assert s.query(CloudCameraOffset).count() == 1  # the second PUT replaced the first
+
+
+def test_an_offset_is_per_cloud(client, project_id, cloud_id, handle):
+    other = insert_cloud(handle, name="Other")
+    src = add_set(handle)
+    add_photo(handle, src, alt=50.0)
+    client.put(off_url(project_id, cloud_id, src), json={"height_offset_m": 10})
+    assert client.get(url(project_id, other)).json()["z"] == [pytest.approx(50.0)]
+    assert client.get(url(project_id, cloud_id)).json()["z"] == [pytest.approx(60.0)]
+
+
+@pytest.mark.parametrize("value", [-500, 500])
+def test_the_range_ends_are_accepted(client, project_id, cloud_id, handle, value):
+    src = add_set(handle)
+    r = client.put(off_url(project_id, cloud_id, src), json={"height_offset_m": value})
+    assert r.status_code == 200 and r.json()["height_offset_m"] == value
+
+
+@pytest.mark.parametrize(
+    "body", [{"height_offset_m": -500.01}, {"height_offset_m": 500.01}, {}, {"height_offset_m": 1, "x": 2}]
+)
+def test_out_of_range_or_malformed_is_422(client, project_id, cloud_id, handle, body):
+    src = add_set(handle)
+    r = client.put(off_url(project_id, cloud_id, src), json=body)
+    assert (r.status_code, r.json()["error"]["code"]) == (422, "validation_error")
+
+
+def test_an_unknown_set_or_cloud_is_404(client, project_id, cloud_id, handle):
+    src = add_set(handle)
+    for path in (off_url(project_id, cloud_id, "nope"), off_url(project_id, "nope", src)):
+        r = client.put(path, json={"height_offset_m": 1})
+        assert (r.status_code, r.json()["error"]["code"]) == (404, "not_found")
+
+
+def test_a_set_with_no_photos_here_is_stored_with_zero_counts(client, project_id, cloud_id, handle):
+    src = add_set(handle, site="Elsewhere")
+    add_photo(handle, src, lon=MAXLON + 0.05)  # 5 km away
+    r = client.put(off_url(project_id, cloud_id, src), json={"height_offset_m": 2.5})
+    assert r.json() == {"id": src, "label": "Elsewhere", "count": 0, "height_offset_m": 2.5, "posed_count": 0}
+
+
+def test_an_offset_on_a_cloud_without_coordinates_is_stored(client, project_id, handle):
+    cid = insert_cloud(handle, crs_wkt=None, epsg=None, proj4=None)
+    src = add_set(handle)
+    add_photo(handle, src)
+    r = client.put(off_url(project_id, cid, src), json={"height_offset_m": -3})
+    assert r.status_code == 200 and (r.json()["count"], r.json()["height_offset_m"]) == (0, -3)
