@@ -276,3 +276,30 @@ def test_a_vanished_folder_is_404(client, project_id, wait_job, handle, tmp_path
     )
     shutil.rmtree(store.drawing_dir(handle, d["id"]))
     assert _tile(client, project_id, d["id"], 12, TX, TY).status_code == 404
+
+
+def test_a_feet_drawing_in_a_metric_frame_sizes_labels_and_thin_runs_in_metres(
+    client, project_id, wait_job, handle, tmp_path
+):
+    """EPSG:2229 (US survey feet) shown in a UTM 11N (metre) frame: a 10 ft TEXT is 3.05 m tall, and
+    a 3 ft line (0.91 m) is thinner than one pixel at z 10 (1 m/px) but not at z 11 (0.5 m/px)."""
+    x0, y0 = 6485900.0, 1840700.0  # EPSG:2229 -> about E 384618, N 3768413 in EPSG:32611
+    seed_frame(handle, 32611)
+    doc = new_doc(insunits=21)  # US survey feet
+    m = doc.modelspace()
+    m.add_line((x0, y0), (x0 + 3, y0))
+    m.add_text("PAD", height=10.0, dxfattribs={"layer": "TXT"}).set_placement((x0 + 1, y0 + 1))
+    insp = inspect_ready(client, project_id, wait_job, save(doc, tmp_path / "ft.dxf"))
+    d = build_drawing(
+        client, project_id, wait_job, insp["id"], placement={"method": "crs", "crs": "EPSG:2229"}
+    )
+    e, n = 384618.35, 3768413.16
+
+    def tile(z):
+        span = 256 * 1024 / 2**z
+        return _tile(client, project_id, d["id"], z, int(np.floor(e / span)), int(np.floor(-n / span)))
+
+    t11 = tile(11).json()
+    assert t11["layers"] and [lab["text"] for lab in t11["labels"]] == ["PAD"]
+    assert abs(t11["labels"][0]["height_m"] - 10 * 1200 / 3937) < 1e-3  # 3.048 m, not 10
+    assert tile(10).status_code == 204  # 3.05 m label is 3 px, 0.91 m line under a pixel

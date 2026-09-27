@@ -341,12 +341,13 @@ def get_drawing_vector_tile(
     try:
         if t is not None:
             transform = fitting.parse_preview(t)
-            conv = site.Conversion(frame.crs_wkt if frame.kind == "crs" else None, frame)
+            dst_wkt = frame.crs_wkt if frame.kind == "crs" else None
         elif georef_json is None:
             raise AppError("not_placed", "the drawing is not placed yet", 409)
         else:
             transform = tuple(georef_json["transform"])
-            conv = site.Conversion(georef_json.get("dst_crs_wkt"), frame)
+            dst_wkt = georef_json.get("dst_crs_wkt")
+        conv = site.Conversion(dst_wkt, frame)
     except fitting.GeorefRefused as e:
         raise AppError(e.code, e.message, 422) from None
     except site.NotInFrame:
@@ -364,6 +365,7 @@ def get_drawing_vector_tile(
                 z,
                 x,
                 y,
+                dst_unit_m=site.crs_unit_m(dst_wkt),
             )
         except FileNotFoundError:
             raise not_found("drawing", drawingId) from None  # deleted while this request ran

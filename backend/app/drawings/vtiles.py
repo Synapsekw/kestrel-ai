@@ -93,12 +93,25 @@ def _sample(starts: np.ndarray, lens: np.ndarray, take: np.ndarray) -> np.ndarra
 
 
 def vector_tile(
-    folder: Path, layers: list[dict], t, conv: site.Conversion, frame_unit_m: float, z: int, x: int, y: int
+    folder: Path,
+    layers: list[dict],
+    t,
+    conv: site.Conversion,
+    frame_unit_m: float,
+    z: int,
+    x: int,
+    y: int,
+    *,
+    dst_unit_m: float,
 ) -> dict:
-    """Raises FileNotFoundError when the drawing's files are gone (a delete raced the request)."""
+    """`t` maps drawing units to the destination CRS (`dst_unit_m` metres per unit); the tile grid
+    is in site-frame units (`frame_unit_m`). Raises FileNotFoundError when the drawing's files are
+    gone (a delete raced the request)."""
     import shapely
 
     r = site.res(z)
+    # Site-frame units per drawing unit (the dst -> site grid scale factor is ignored, ruling 15).
+    site_scale = fitting.scale_of(t) * dst_unit_m / frame_unit_m
     box = _box(t, conv, z, x, y)
     truncated = False
     out_layers: list[dict] = []
@@ -113,7 +126,7 @@ def vector_tile(
         if ids.size:
             bb = np.asarray(idx.bbox[ids])
             diag = np.hypot(bb[:, 2] - bb[:, 0], bb[:, 3] - bb[:, 1])
-            visible = diag >= r / fitting.scale_of(t)  # one site pixel, in drawing units
+            visible = diag >= r / site_scale  # one site pixel, in drawing units
             ids, diag = ids[visible], diag[visible]
             starts = np.asarray(rs.runs[ids])
             lens = np.asarray(rs.runs[ids + 1]) - starts
@@ -158,12 +171,12 @@ def vector_tile(
     finally:
         idx.release()
         rs.release()
-    scale, turn = fitting.scale_of(t), fitting.rotation_of(t)
+    turn = fitting.rotation_of(t)
     labels = []
     for lab in _load_labels(folder):
         if not (box[0] <= lab["x"] <= box[2] and box[1] <= lab["y"] <= box[3]):
             continue
-        height_site = lab["height"] * scale
+        height_site = lab["height"] * site_scale
         if height_site / r < LABEL_MIN_PX:
             continue
         e, n = conv.to_site(*fitting.apply(t, np.array([lab["x"]]), np.array([lab["y"]])))
