@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { screen } from "@testing-library/react";
 import { fakeClient } from "@/test/fixtures";
@@ -50,5 +51,30 @@ describe("CatalogueSeverityProvider", () => {
       { api },
     );
     expect(await screen.findByText("Low,High")).toBeInTheDocument();
+  });
+
+  it("keeps the app mounted when the scale arrives, so nothing the operator opened is lost", async () => {
+    let mounts = 0;
+    function Counter() {
+      useEffect(() => {
+        mounts += 1;
+      }, []);
+      return <Probe />;
+    }
+    const { api } = fakeClient([
+      {
+        method: "GET",
+        path: /\/catalogue\/severity$/,
+        body: { levels: [{ level: 1, name: "Low", colour: "#3fb68e" }] },
+      },
+    ]);
+    renderWithProviders(
+      <CatalogueSeverityProvider>
+        <Counter />
+      </CatalogueSeverityProvider>,
+      { api },
+    );
+    expect(await screen.findByText("Low")).toBeInTheDocument();
+    expect(mounts).toBe(1);
   });
 });
