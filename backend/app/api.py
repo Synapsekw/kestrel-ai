@@ -141,6 +141,7 @@ for _module in (
 for _module in (
     # each M unit inserts its router module on its own line above this one
     "app.drawings.router",
+    "app.workspace.router",
     "app.workspace.stubs",
 ):
     try:

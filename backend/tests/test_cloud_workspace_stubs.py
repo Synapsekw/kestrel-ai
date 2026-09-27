@@ -19,7 +19,9 @@ class _Runner:
         return False
 
 
-def test_the_profile_job_type_is_registered():
+def test_the_profile_job_type_is_registered(app):
+    """`app` builds the FastAPI app, which imports `app.pointclouds.router` and, through it,
+    `jobs_profile`, registering the type; run alone this file never otherwise imports it."""
     assert callable(get_job_type("pointcloud_profile"))
 
 

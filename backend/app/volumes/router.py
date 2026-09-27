@@ -1,6 +1,6 @@
 """Volume measurements (spec 2026-09-23-volumes §8, §11.1 paths 9-17)."""
 
-from fastapi import APIRouter, Depends, Request, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi import Path as PathParam
 
 from app.errors import AppError
@@ -70,11 +70,16 @@ def create_volume_measurement(
 def get_volume_measurement(
     measurementId: str,  # noqa: N803
     request: Request,
+    frame: str | None = Query(None, pattern="^site$"),
     handle: ProjectHandle = Depends(get_project),
 ) -> VolumeMeasurementOut:
     out, turned = service.get_measurement(handle, measurementId)
     if turned:
         publish_volumes_changed(request, handle, [measurementId])
+    if frame == "site":
+        from app.workspace.views import volume_in_site
+
+        out = volume_in_site(handle, out)
     return out
 
 
@@ -145,6 +150,7 @@ def get_volume_diff_tile(
 @router.get("/volumes/{measurementId}/footprints", response_model=VolumeFootprints)
 def get_volume_footprints(
     measurementId: str,  # noqa: N803
+    frame: str | None = Query(None, pattern="^site$"),
     handle: ProjectHandle = Depends(get_project),
 ) -> VolumeFootprints:
     """The same footprints the job masks, for display; runs that cannot be used are skipped here
@@ -177,6 +183,10 @@ def get_volume_footprints(
         )
         for f in found
     ]
+    if frame == "site":
+        from app.workspace.views import footprints_in_site
+
+        items = footprints_in_site(handle, top.crs_wkt, items)
     return VolumeFootprints(items=items, truncated=truncated)
 
 

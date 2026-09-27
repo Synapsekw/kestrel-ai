@@ -83,6 +83,20 @@ describe("Icon", () => {
 
   it("lists every name for the gallery", () => {
     expect(ICON_NAMES).toContain("elevation");
+    for (const name of [
+      "cursor",
+      "hand",
+      "area",
+      "profile",
+      "polygon",
+      "zone",
+      "align",
+      "north",
+      "eye-off",
+      "grip",
+      "more",
+    ])
+      expect(ICON_NAMES).toContain(name);
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });
 });

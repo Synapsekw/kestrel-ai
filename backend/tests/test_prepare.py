@@ -97,3 +97,23 @@ def test_orientation_is_cleared_even_when_piexif_cannot_parse(tmp_path, make_jpe
     with Image.open(tmp_path / "out.jpg") as im:
         assert im.size == (200, 300)
         assert im.getexif().get(piexif.ImageIFD.Orientation, 1) == 1
+
+
+def test_process_one_returns_camera_and_writes_the_thumbnail(tmp_path):
+    from imagery_camera_helpers import dji_jpeg
+
+    from app.datasets import images
+    from app.datasets.prepare import THUMB_SIDE
+
+    assert THUMB_SIDE == images.THUMB_SIDE
+    src = dji_jpeg(tmp_path / "src" / "DJI_0001.jpg", size=(1200, 900))
+    thumb = tmp_path / "thumbs" / "id-1.jpg"
+    out = process_one(str(src), str(tmp_path / "out.jpg"), 4000, 95, str(thumb))
+    assert out.action == "converted" and out.src == str(src)
+    assert out.camera.rel_alt == 38.40 and out.camera.orig_w == 5280
+    assert out.thumb == str(thumb)
+    with Image.open(thumb) as im:
+        assert im.size == (256, 192)
+    again = process_one(str(src), str(tmp_path / "out.jpg"), 4000, 95, str(tmp_path / "thumbs" / "id-2.jpg"))
+    assert again.action == "existing" and again.camera.rel_alt == 38.40  # read from the source header
+    assert (tmp_path / "thumbs" / "id-2.jpg").exists()

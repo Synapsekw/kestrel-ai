@@ -11,8 +11,8 @@ from app.db.models import CloudMeasurement, PointCloud
 from app.jobs.schemas import JobOut
 
 CloudMeasurementKind = Literal["point", "distance", "height", "vertical", "area", "profile"]
-# C-B1 added "area" (and params.method = "rings"); C-B2 adds "profile".
-CreatableCloudMeasurementKind = Literal["point", "distance", "height", "vertical", "area"]
+# C-B1 added "area" (and params.method = "rings"); C-B2 added "profile".
+CreatableCloudMeasurementKind = Literal["point", "distance", "height", "vertical", "area", "profile"]
 CloudMeasurementStatus = Literal["ready", "computing", "failed"]
 CloudViewSubjectKind = Literal["finding", "cloud_measurement"]
 Vec3 = Annotated[list[float], Field(min_length=3, max_length=3)]

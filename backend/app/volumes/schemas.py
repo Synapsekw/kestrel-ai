@@ -179,6 +179,7 @@ class VolumeMeasurementOut(BaseModel):
     job_id: str | None
     created_at: datetime
     updated_at: datetime
+    polygon_site: VolumeRing | None = None  # frame=site (M-B1); output only
 
 
 class VolumeMeasurementList(BaseModel):
@@ -229,6 +230,7 @@ class VolumeFootprint(BaseModel):
     detection_id: str
     class_id: str
     ring: VolumeRing
+    ring_site: VolumeRing | None = None  # frame=site (M-B1)
 
 
 class VolumeFootprints(BaseModel):

@@ -80,6 +80,9 @@ def run_surface_build(ctx: JobContext) -> dict:
         row.method = params["method"]
         row.build_params = {**params, "cell_size_m": result.cell_size_m, "auto_cell": result.auto_cell}
         row.stats = result.build_stats
+        if row.captured_on is None and row.point_cloud_id:
+            source = s.get(PointCloud, row.point_cloud_id)
+            row.captured_on = source.captured_on if source is not None else None
     ctx.publish("surfaces.changed", {"surface_ids": [surface_id]})
     return {
         "surface_id": surface_id,

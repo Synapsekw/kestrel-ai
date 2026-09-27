@@ -209,14 +209,20 @@ def test_bulk_delete_updates_the_source_count(imported, client):
 
 
 def test_derived_files_are_published_atomically(imported, client, project_dir):
-    """A half-written cache file must never be visible under the name the next request reads."""
+    """A half-written cache file must never be visible under the name the next request reads.
+
+    The import now pre-generates each frame's thumbnail (unit I-BK), so `cache/thumbs` already
+    holds one jpg per imported image; this asserts the two derived files this test itself
+    requested exist, not that they are the only files in the cache.
+    """
     pid = imported["pid"]
     image = _list(client, pid, limit=1)["items"][0]
     client.get(f"/api/v1/projects/{pid}/images/{image['id']}/thumbnail")
     client.get(f"/api/v1/projects/{pid}/images/{image['id']}/file", params={"max_side": 160})
     cache = project_dir / "cache"
     assert [p.name for p in cache.rglob("*.tmp*")] == []
-    assert sorted(p.name for p in cache.rglob("*.jpg")) == [f"{image['id']}.jpg", f"{image['id']}_160.jpg"]
+    names = {p.name for p in cache.rglob("*.jpg")}
+    assert {f"{image['id']}.jpg", f"{image['id']}_160.jpg"} <= names
 
 
 def test_bulk_delete_drops_the_summary_rows(imported, client):

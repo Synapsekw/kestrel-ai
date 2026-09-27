@@ -59,7 +59,7 @@ export function SurfaceList({
                 <span className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{s.name}</span>
                   <Pill size="sm" tone={s.kind === "design" ? "accent" : "neutral"}>
-                    {s.kind === "design" ? "Design" : "From cloud"}
+                    {s.kind === "design" ? "Design" : s.kind === "dem" ? "Imported elevation" : "From cloud"}
                   </Pill>
                 </span>
                 {s.status === "building" ? (

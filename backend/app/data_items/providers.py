@@ -168,10 +168,13 @@ class Maps(_Provider):
 
 
 class Elevations(_Provider):
-    """Surfaces: a cloud DSM is dated by its cloud, a design surface is never dated."""
+    """Surfaces, dated by their own `captured_on`; a cloud DSM whose column is still null falls
+    back to its cloud's date, and a design surface is never dated (map workspace spec §4 item 7)."""
 
     type = "elevation"
-    _day = case((Surface.kind == "cloud_dsm", PointCloud.captured_on), else_=None)
+    _day = func.coalesce(
+        Surface.captured_on, case((Surface.kind == "cloud_dsm", PointCloud.captured_on), else_=None)
+    )
 
     def columns(self):
         return self._day, Surface.created_at, Surface.id, Surface.name
