@@ -12,7 +12,7 @@ import { recalculate, saveVolume } from "./saveVolume";
 import { useVolumeStore } from "./volumeStore";
 
 /** A user-initiated write failed: log it and tell the operator (T16-1). */
-function reportWrite(action: string, err: unknown): void {
+export function reportWrite(action: string, err: unknown): void {
   const message = messageOf(err, `could not ${action}`);
   pushLog(`${action} failed: ${message}`);
   toast("danger", message);

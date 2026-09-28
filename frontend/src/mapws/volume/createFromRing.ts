@@ -1,11 +1,10 @@
 import type { ApiClient } from "@contract/client";
-import { messageOf } from "@/api/errors";
 import { createVolume, listVolumes } from "@/api/volumes";
-import { pushLog } from "@/app/diagnostics";
 import type { WorkspaceLayer } from "@/mapws/w4host";
 import { useJobsStore } from "@/store/jobs";
 import { toast } from "@/ui";
 import { nextName } from "@/volumes/model";
+import { reportWrite } from "./useVolume";
 import { topLayerFor, volumeToolDisabled } from "./volumeModel";
 
 /** U finished: POST /volumes on the r date's DSM with the ring in site coordinates (spec §10, R-W4-1). */
@@ -34,9 +33,7 @@ export async function createFromRing(
     return created.measurement.id;
   } catch (err) {
     // A user write failed: log it and say so (T16-1).
-    const message = messageOf(err, "could not create the measurement");
-    pushLog(`create the volume measurement failed: ${message}`);
-    toast("danger", message);
+    reportWrite("create the volume measurement", err);
     return null;
   }
 }

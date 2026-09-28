@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { VolumeMeasurement } from "@contract/client";
 import { errorBody, exampleProject, fakeClient, runningJob } from "@/test/fixtures";
 import { MEASUREMENT_ID, PROJECT_ID, exampleMeasurement, exampleSurface } from "@/test/volumeFixtures";
@@ -75,6 +75,14 @@ describe("VolumeInspector", () => {
   beforeEach(() => {
     localStorage.clear();
     useVolumeStore.setState({ autoRecalc: true, heatmap: true, drawing: null });
+  });
+
+  it("disarms a mask drawing when the pane closes (another selection, or the workspace unmounts)", async () => {
+    const view = render(fakeClient(routes()).api);
+    expect(await screen.findByTestId("volume-inspector")).toBeInTheDocument();
+    act(() => useVolumeStore.getState().setDrawing("stable"));
+    view.unmount();
+    expect(useVolumeStore.getState().drawing).toBeNull();
   });
 
   it("shows net, cut and fill, tonnage and the uncertainty", async () => {

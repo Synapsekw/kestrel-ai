@@ -24,6 +24,7 @@ const R = "2026-09-14";
 const TOOLS: Record<string, MapTool> = {
   volume: volumeTool,
   select: { ...volumeTool, id: "select", draw: { shape: "none" }, Overlay: undefined },
+  pan: { ...volumeTool, id: "pan", draw: { shape: "none" }, Overlay: undefined },
 };
 const RING: [number, number][] = [
   [10, 20],
@@ -108,6 +109,26 @@ describe("VolumeDrawOverlay", () => {
     });
   });
 
+  it("opens the new volume but keeps a tool the operator picked while it was being created", async () => {
+    const { stores, requests } = setup([
+      { method: "GET", path: /\/volumes$/, body: { items: [] } },
+      {
+        method: "POST",
+        path: /\/volumes$/,
+        status: 202,
+        body: { measurement: { ...exampleMeasurement, id: "v-new" }, job: runningJob },
+      },
+    ]);
+    act(() => stores.tools.getState().activate("volume"));
+    complete(stores);
+    act(() => stores.tools.getState().activate("pan"));
+    await waitFor(() =>
+      expect(stores.workspace.getState().selection).toEqual({ kind: "volume", id: "v-new" }),
+    );
+    expect(requests.some((q) => q.method === "POST")).toBe(true);
+    expect(stores.tools.getState().active).toBe("pan");
+  });
+
   it("draws an exclusion on the selected volume instead of creating one", async () => {
     const { stores, requests } = setup(maskRoutes(), UTM39);
     act(() => {
@@ -157,6 +178,22 @@ describe("VolumeDrawOverlay", () => {
     expect(requests.filter((q) => q.method !== "GET")).toEqual([]);
     expect(useVolumeStore.getState().drawing).toBeNull();
     expect(stores.tools.getState().active).toBe("select");
+  });
+
+  it("says the top surface is gone (not a CRS problem) when it was deleted, and writes nothing", async () => {
+    const routes = maskRoutes().map((r) =>
+      r.method === "GET" && String(r.path) === String(/\/surfaces$/) ? { ...r, body: { items: [] } } : r,
+    );
+    const { stores, requests } = setup(routes, UTM39);
+    act(() => {
+      stores.workspace.getState().select({ kind: "volume", id: MEASUREMENT_ID });
+      useVolumeStore.getState().setDrawing("exclusion");
+      stores.tools.getState().activate("volume");
+    });
+    complete(stores);
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    expect(useToastStore.getState().toasts[0].text).toMatch(/top surface of this measurement is gone/);
+    expect(requests.filter((q) => q.method !== "GET")).toEqual([]);
   });
 
   it("toasts a failed mask save and leaves the drawing mode", async () => {

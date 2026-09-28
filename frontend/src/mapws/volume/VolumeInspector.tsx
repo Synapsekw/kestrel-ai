@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import type { components } from "@contract/client";
 import { useApi } from "@/api/client";
@@ -73,6 +73,10 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
   const setHeatmap = useVolumeStore((s) => s.setHeatmap);
   const drawing = useVolumeStore((s) => s.drawing);
   const setDrawing = useVolumeStore((s) => s.setDrawing);
+  // The mask pen belongs to this measurement's pane: closing it (another selection, or the workspace
+  // unmounting) disarms it, so a later U never writes a mask on a volume by accident. Harmless under
+  // StrictMode's re-mount: nothing is armed before the pane has mounted.
+  useEffect(() => () => useVolumeStore.getState().setDrawing(null), []);
   const activate = useTools((s) => s.activate);
   // Masks are drawn with W1's drawing pipeline: the "volume" tool, which keeps the selection (T8-2).
   const toggleMask = (kind: "stable" | "exclusion") => {

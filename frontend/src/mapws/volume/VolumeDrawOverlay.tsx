@@ -1,10 +1,8 @@
 import { useEffect } from "react";
 import type { ApiClient } from "@contract/client";
 import { useApi } from "@/api/client";
-import { messageOf } from "@/api/errors";
 import { listSurfaces } from "@/api/surfaces";
 import { fetchVolume } from "@/api/volumes";
-import { pushLog } from "@/app/diagnostics";
 import {
   useTools,
   useWorkspace,
@@ -16,11 +14,14 @@ import {
 import { toast } from "@/ui";
 import { createFromRing } from "./createFromRing";
 import { saveVolume } from "./saveVolume";
+import { reportWrite } from "./useVolume";
 import { openRing, withExclusion } from "./volumeFeatures";
 import { sameFrame, volumeSelection } from "./volumeModel";
 import { useVolumeStore } from "./volumeStore";
 
 const OTHER_CRS = "Draw masks in the Measurements view: this surface is in another CRS than the map.";
+const TOP_GONE =
+  "The top surface of this measurement is gone. Open it in the Measurements view to pick another one.";
 
 /**
  * A mask drawn for the selected measurement (ruling T8-2). Mask rings are stored in the top surface's
@@ -38,7 +39,11 @@ async function saveMask(
   try {
     const [m, surfaces] = await Promise.all([fetchVolume(api, projectId, id), listSurfaces(api, projectId)]);
     const top = surfaces.find((s) => s.id === m.top_surface_id);
-    if (!top || !sameFrame(frame, top)) {
+    if (!top) {
+      toast("info", TOP_GONE);
+      return;
+    }
+    if (!sameFrame(frame, top)) {
       toast("info", OTHER_CRS);
       return;
     }
@@ -48,9 +53,7 @@ async function saveMask(
         : withExclusion(m, ring, crypto.randomUUID());
     await saveVolume(api, projectId, id, patch, autoRecalc);
   } catch (err) {
-    const message = messageOf(err, "could not save the mask");
-    pushLog(`save the volume mask failed: ${message}`);
-    toast("danger", message);
+    reportWrite("save the mask", err);
   }
 }
 
@@ -87,19 +90,23 @@ export function VolumeDrawOverlay({ projectId, frame }: ToolOverlayProps) {
 
   useEffect(() => {
     if (!completed || completed.toolId !== "volume" || completed.geometry.type !== "Polygon") return;
+    // Back to Select only if the operator has not picked another tool meanwhile.
+    const leaveTool = () => {
+      if (tools.getState().active === "volume") activate("select");
+    };
     const ring = openRing(completed.geometry.coordinates[0]);
     clearCompleted();
     if (drawing && selection?.kind === "volume") {
       void saveMask(api, projectId, selection.id, drawing, ring, frame, autoRecalc).then(() => {
         setDrawing(null);
-        activate("select");
+        leaveTool();
       });
       return;
     }
     void createFromRing(api, projectId, layers, r, ring).then((id) => {
       if (!id) return;
       select(volumeSelection(id));
-      activate("select");
+      leaveTool();
     });
   }, [completed]); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
