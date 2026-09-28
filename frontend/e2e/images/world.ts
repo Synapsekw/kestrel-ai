@@ -244,7 +244,13 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
   // not production bugs — a packaged build never double-invokes effects, and the loader's own
   // admission control is a hard, structural bound.
   const thumbFlight = new Map<string, number>(); // url -> outstanding mock-side requests
-  const settled = new WeakSet<Request>();
+  // Per-request state, so a `requestfailed` that reaches Node before our own route handler even
+  // ran (the abort can be that fast) never decrements a URL we never counted, and never counts one
+  // we never will: "counted" only after the handler's own `bumpThumb(+1)`; "settled" once whichever
+  // side (the handler's delay finishing, or this event) has applied the matching -1; a bare
+  // `requestfailed` with no prior state marks "failed-early" so the handler skips counting it
+  // entirely once it does run.
+  const thumbReqState = new WeakMap<Request, "counted" | "failed-early" | "settled">();
   const bumpThumb = (url: string, delta: 1 | -1) => {
     const next = (thumbFlight.get(url) ?? 0) + delta;
     if (next <= 0) thumbFlight.delete(url);
@@ -252,13 +258,14 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
     world.thumbsInFlight = thumbFlight.size;
     world.maxThumbsInFlight = Math.max(world.maxThumbsInFlight, world.thumbsInFlight);
   };
-  const settleThumb = (req: Request) => {
-    if (settled.has(req)) return;
-    settled.add(req);
-    bumpThumb(req.url(), -1);
-  };
   page.on("requestfailed", (req) => {
-    if (req.url().includes("/thumbnail")) settleThumb(req);
+    if (!req.url().includes("/thumbnail")) return;
+    if (thumbReqState.get(req) === "counted") {
+      thumbReqState.set(req, "settled");
+      bumpThumb(req.url(), -1);
+    } else if (!thumbReqState.has(req)) {
+      thumbReqState.set(req, "failed-early");
+    }
   });
 
   // --- derived image state (C0 rulings 4, 5)
@@ -562,7 +569,14 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
       const tail = img[2] ?? "";
       if (tail === "/thumbnail") {
         const thumbReq = route.request();
-        bumpThumb(thumbReq.url(), 1);
+        // `requestfailed` may already have reached us before this handler ran at all (the abort
+        // can be that fast): if so, this request was never in flight from our side and never will
+        // be, so it must never touch the count in either direction.
+        const alreadyFailed = thumbReqState.get(thumbReq) === "failed-early";
+        if (!alreadyFailed) {
+          thumbReqState.set(thumbReq, "counted");
+          bumpThumb(thumbReq.url(), 1);
+        }
         if (opts.thumbDelayMs) await new Promise((r) => setTimeout(r, opts.thumbDelayMs));
         return route
           .fulfill({
@@ -572,7 +586,13 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
             body: PNG,
           })
           .catch(() => undefined) // the page aborted the fetch (a row scrolled out)
-          .finally(() => settleThumb(thumbReq));
+          .finally(() => {
+            // Only undo a +1 this exact request made; a `requestfailed` may have already settled
+            // it while we were asleep (skip), and a never-counted request has nothing to undo.
+            if (thumbReqState.get(thumbReq) !== "counted") return;
+            thumbReqState.set(thumbReq, "settled");
+            bumpThumb(thumbReq.url(), -1);
+          });
       }
       if (tail === "/file")
         return route.fulfill({
