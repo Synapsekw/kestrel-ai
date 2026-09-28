@@ -1,0 +1,86 @@
+import { useEffect, useRef } from "react";
+import type { PointCloud } from "@/api/clouds";
+import { getCloudCameras } from "@/api/cloudCameras";
+import { useApi } from "@/api/client";
+import { ApiFailure, messageOf } from "@/api/errors";
+import { pushLog } from "@/app/diagnostics";
+import { useChangesStore } from "@/store/changes";
+import { useCamerasStore } from "./store";
+
+/**
+ * C-L1 controller Ruling 4: a bump of only `imagesRevision`/`pointcloudsRevision` is coalesced
+ * behind this trailing debounce, since `pointclouds.changed` also fires on every measurement save
+ * and report-view PUT, and `boxes.changed` bumps `imagesRevision` — a refetch per bump would be a
+ * storm of <=2 MB GETs during a bulk capture or a detect job.
+ */
+export const REVISION_REFETCH_MS = 1000;
+
+/**
+ * Loads the open cloud's cameras (spec §13: once per cloud open and on `images.changed`; C-L1
+ * Ruling 4 adds `pointclouds.changed`, the cloud's CRS, and a failed offset save via `reloadTick`).
+ *
+ * A change of cloud id, of the CRS key, or of `reloadTick` fetches at once. A change of only the
+ * revision counters instead (re)starts a `REVISION_REFETCH_MS` timer, so a burst of bumps sends one
+ * request after the pause (while a request from before the pause may still be in flight, or a
+ * request from a previous cloud open). Every request carries a sequence number and only the answer
+ * of the latest request the hook has issued is allowed to land — a stale one, for this cloud or a
+ * previous one, is dropped even if it resolves after the newer one (the store's `receive`/`fail`
+ * additionally drop anything that does not belong to the store's current `cloudId`).
+ *
+ * A plain hook with no dependency on the viewer, so it can run in the always-mounted cameras
+ * feature rather than the layer, which mounts only while the view is running (controller Ruling 3).
+ */
+export function useCloudCameras(projectId: string, cloud: PointCloud | null): void {
+  const api = useApi();
+  const imagesRevision = useChangesStore((s) => s.imagesRevision);
+  const pointcloudsRevision = useChangesStore((s) => s.pointcloudsRevision);
+  const reloadTick = useCamerasStore((s) => s.reloadTick);
+  const cloudId = cloud?.status === "ready" ? cloud.id : null;
+  const crsKey = cloud ? `${cloud.epsg ?? ""}|${cloud.proj4 ?? ""}` : "";
+
+  const seq = useRef(0);
+  /** The last (cloudId, crsKey, reloadTick) combination fetched at once; a run whose combination
+   * differs is an "open" (a fresh cloud, a CRS just assigned, or an explicit reload) and fetches
+   * immediately. A run with the same combination is a revision-only bump and gets debounced. */
+  const immediateKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!cloudId) {
+      immediateKey.current = null;
+      if (useCamerasStore.getState().cloudId !== null) useCamerasStore.getState().reset(null);
+      return;
+    }
+
+    const fetchNow = () => {
+      const mySeq = ++seq.current;
+      getCloudCameras(api, projectId, cloudId)
+        .then((set) => {
+          if (seq.current !== mySeq) return; // superseded by a newer request
+          useCamerasStore.getState().receive(cloudId, set);
+        })
+        .catch((e: unknown) => {
+          if (seq.current !== mySeq) return;
+          if (e instanceof ApiFailure && e.code === "needs_coordinates") {
+            useCamerasStore.getState().fail(cloudId, "needs_coordinates", null);
+            return;
+          }
+          const message = messageOf(e, "could not load the drone photos");
+          pushLog(`cameras for ${cloudId} failed: ${message}`);
+          useCamerasStore.getState().fail(cloudId, "error", message);
+        });
+    };
+
+    const key = `${cloudId}|${crsKey}|${reloadTick}`;
+    const isOpenOrReload = immediateKey.current !== key;
+    immediateKey.current = key;
+
+    if (isOpenOrReload) {
+      if (useCamerasStore.getState().cloudId !== cloudId) useCamerasStore.getState().reset(cloudId);
+      fetchNow();
+      return;
+    }
+
+    const timer = window.setTimeout(fetchNow, REVISION_REFETCH_MS);
+    return () => window.clearTimeout(timer);
+  }, [api, projectId, cloudId, crsKey, reloadTick, imagesRevision, pointcloudsRevision]);
+}
