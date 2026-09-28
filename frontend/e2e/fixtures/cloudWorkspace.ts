@@ -89,6 +89,34 @@ export function ws(page: Page) {
     // <svg> carries role="img" aria-label="Site map: ...". The brief/spec expected a "Site map" region.
     minimap: page.getByTestId("cloud-minimap"),
     photoList: page.getByRole("list", { name: "Photos that saw this point" }), // C-L1, confirmed
+    // C-P1 PinCallout.tsx: the draft's create form inside `callout` (its Type combobox trigger is
+    // named "Type: <label>", the Ui Combobox's trigger aria-label).
+    createForm: page.getByTestId("pin-callout-create"),
+    // C-P1 FindingsTab.tsx: one toggle row per pin (aria-pressed), labelled with "F-0001 · …".
+    findingRow: (number: string): Locator =>
+      page
+        .getByRole("list", { name: "Findings on this cloud" })
+        .getByRole("button", { name: new RegExp(number) }),
+    // C-M1 MeasurementsTab.tsx: one toggle row per saved measurement (aria-pressed).
+    measurementRow: (name: string): Locator =>
+      page.getByRole("list", { name: "Saved measurements" }).getByRole("button", { name: new RegExp(name) }),
+    // C-M1 AttachFinding.tsx: the Ui Combobox trigger, "Attach to finding: <current>".
+    attachFinding: page.getByRole("button", { name: /^Attach to finding:/ }),
+    // C-P1 MeasureSlot.tsx: the finding inspector's linked measurements.
+    linkedMeasurements: page.getByRole("list", { name: "Linked measurements" }),
+    // C-R1 ReportViewCard.tsx: "Refresh view" (a complete view) or "Refresh" (saved before settle).
+    refreshView: page
+      .getByRole("region", { name: "Report view" })
+      .getByRole("button", { name: /^Refresh( view)?$/ }),
+  };
+}
+
+/** I-FW's cloud arrival on the Images workspace (ArrivalMarker.tsx; the same names images-workspace.spec asserts). */
+export function arrival(page: Page) {
+  return {
+    // ArrivalProbe: a `hidden` DOM stand-in for the Konva ring (data-at, data-r): assert attributes, not visibility
+    ring: page.getByTestId("arrival-marker"),
+    backTo3d: page.getByRole("link", { name: "Back to 3D" }),
   };
 }
 
