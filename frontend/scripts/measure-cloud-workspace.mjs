@@ -681,6 +681,14 @@ if (mode === "pins") {
     const v = await viewPut;
     made.push({ id: f.id, anchor: f.anchor, captureMs: Date.now() - t0, viewStatus: v.status() });
     await page.keyboard.press("Escape");
+    // Driver defect (Task 9, task-11-report.md problem 1): one Escape only disarms "Pin a finding"
+    // back to Orbit; the just-created finding stays selected, so its callout (now PinCalloutView)
+    // stays open and can cover the next offset's click point. A second Escape would deselect once
+    // idle in Orbit, but closing it explicitly is immediate and does not depend on that state order.
+    if (await w.callout.isVisible()) {
+      await w.calloutClose.click();
+      await sleep(300);
+    }
   }
   result.pins = made;
   result.byView = {};
@@ -707,6 +715,13 @@ if (mode === "pins") {
   await sleep(500);
   const views = (await api(`/pointclouds/${env.KESTREL_CLOUD_ID}/views`)).body.items;
   result.moved = { id: first, stale: views.find((x) => x.subject_id === first)?.stale ?? null };
+  // Driver defect (Task 9, task-11-report.md problem 2): `made[0].anchor` (== `result.pins[0].anchor`,
+  // same array) was left at its pre-move value, so pins-check (reading this file back after a
+  // restart) compared the *current* anchor against the *original* one and reported a false "anchor
+  // moved across the restart". Record the anchor Move pin actually left it at — pins-check then still
+  // requires the restart to keep that one unchanged (d ~= 0).
+  const movedFinding = (await api(`/findings/${first}`)).body;
+  made.find((m) => m.id === first).anchor = movedFinding.anchor;
 }
 
 if (mode === "pins-check") {

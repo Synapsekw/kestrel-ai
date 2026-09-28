@@ -124,6 +124,17 @@ test("cameras: the switch shows the glyphs, a glyph opens its popover, Look thro
   await expect.poll(() => overlays(page)).not.toContain("cameras");
 });
 
+test("cameras: the offset row does not push the cloud panel into a horizontal scrollbar (acceptance criterion 1)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1480, height: 900 });
+  await open(page); // camerasJson() has one source ("Flight 14 Sep"), so its OffsetRow renders
+  const panel = page.getByTestId("cloud-panel");
+  await expect(panel.getByRole("group", { name: /Height offset/ })).toBeVisible();
+  const overflow = await panel.evaluate((el) => el.scrollWidth - el.clientWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
+
 test("cameras: a cloud without a CRS disables the switch with the reason", async ({ page }) => {
   await open(page, "", {
     status: 409,

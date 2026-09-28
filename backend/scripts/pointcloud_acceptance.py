@@ -25,12 +25,19 @@ import argparse
 import json
 import math
 import os
+import sys
 import threading
 import time
 from pathlib import Path
 
 import httpx
 import psutil
+
+# Run as a file (`python scripts\pointcloud_acceptance.py`), Python puts scripts/ on the path, not
+# backend/ (same as scripts/design_acceptance.py).
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.pointclouds.profile_cut import EPS  # noqa: E402
 
 CONVERTER = "potreeconverter.exe"
 
@@ -379,8 +386,20 @@ def band_widths(s, z, z_lo: float, z_hi: float, bin_m: float = 0.1) -> list[dict
     return rows
 
 
+MIN_BIN_POINTS = 3
+"""A bin needs at least this many points to count towards the median (Task 18, task-11-report.md
+problem "C-B2 or the scenario"): the app's profile and this script's from-source crosscheck do not
+always agree on which points fall exactly on a slab edge (the app is inclusive within
+`profile_cut.EPS`; this crosscheck now matches it, see run_crosscheck), so a bin whose count sits
+right at the cutoff can hold N points on one side and N-1 on the other. At the old cutoff of 5, a
+5-vs-4 split meant the bin was scored on one side and dropped on the other, changing which values
+the median is even taken over. 3 still drops truly sparse, noisy bins (the statistic is a wall
+thickness in a clean cross-section, where "real" bins hold many points) while no longer being
+fragile to that one-point split."""
+
+
 def _summary(rows: list[dict]) -> dict:
-    widths = sorted(r["width"] for r in rows if r["n"] >= 5)
+    widths = sorted(r["width"] for r in rows if r["n"] >= MIN_BIN_POINTS)
     if not widths:
         return {"bins": 0, "median_m": None, "max_m": None}
     return {
@@ -512,7 +531,16 @@ def run_profile(a) -> dict:
 
 def run_crosscheck(a) -> dict:
     """The top-band widths from the source LAS itself (independent of app/pointclouds/profile.py):
-    chunks of 2 M points, only the slab kept."""
+    chunks of 2 M points, only the slab kept.
+
+    The slab test mirrors `app/pointclouds/profile_cut.py::cut` exactly, `EPS` included: that inclusive
+    margin is a deliberate, ruled design choice (plan 2026-09-27-clouds-b2 Ruling 5, "slab and segment
+    edges are inclusive within EPS = 1e-6 m ... so exact edges survive float64 noise at UTM
+    magnitudes"), not a spec deviation. Task 18 (task-11-report.md criterion 5): without this margin
+    here, a point right at the slab edge could be on the app's side of the line and not this script's,
+    so a bin's point count (and, before MIN_BIN_POINTS, whether the bin counted towards the median at
+    all) could differ between the two for no reason but the two boundary rules disagreeing.
+    """
     import laspy
     import numpy as np
 
@@ -521,6 +549,7 @@ def run_crosscheck(a) -> dict:
     dx, dy = B["x"] - ax, B["y"] - ay
     length = math.hypot(dx, dy)
     ux, uy = dx / length, dy / length
+    half = a.thickness / 2
     s_all, z_all = [], []
     with laspy.open(a.source) as f:
         for chunk in f.chunk_iterator(2_000_000):
@@ -528,7 +557,7 @@ def run_crosscheck(a) -> dict:
             y = np.asarray(chunk.y, dtype=np.float64) - ay
             s = x * ux + y * uy
             t = -x * uy + y * ux
-            keep = (np.abs(t) <= a.thickness / 2) & (s >= 0) & (s <= length)
+            keep = (np.abs(t) <= half + EPS) & (s >= -EPS) & (s <= length + EPS)
             s_all.append(s[keep])
             z_all.append(np.asarray(chunk.z, dtype=np.float64)[keep])
     s = np.concatenate(s_all) if s_all else np.zeros(0)

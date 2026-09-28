@@ -152,6 +152,42 @@ def test_band_widths_measure_the_extent_per_height_bin():
     assert [r["n"] for r in rows] == [3, 2]
 
 
+def test_summary_drops_bins_under_three_points_but_keeps_three():
+    # Task 18 (task-11-report.md criterion 5): the old cutoff was 5 points, so a bin that happened to
+    # have 5 on one side of a boundary disagreement and 4 on the other flipped from scored to dropped,
+    # which is exactly what changed which value the median landed on. Below the new MIN_BIN_POINTS = 3
+    # a bin is still dropped as too sparse to trust; at or above it, it counts.
+    acc = _load("pointcloud_acceptance")
+    assert acc.MIN_BIN_POINTS == 3
+    rows = [
+        {"z": 1.0, "width": 9.0, "n": 2},  # dropped: below the cutoff
+        {"z": 2.0, "width": 0.4, "n": 3},  # kept: exactly at the cutoff
+        {"z": 3.0, "width": 0.5, "n": 4},  # kept
+    ]
+    out = acc._summary(rows)
+    # _summary's median is widths[len // 2] (the upper of the two middles on an even count), not an
+    # average: sorted([0.4, 0.5])[2 // 2] == 0.5.
+    assert out == {"bins": 2, "median_m": 0.5, "max_m": 0.5}
+
+
+def test_crosscheck_keeps_the_same_slab_edges_as_the_apps_profile_cut(tmp_path):
+    # Same edge cases as app/pointclouds/profile_cut.py's own
+    # test_the_slab_keeps_its_edges_and_drops_one_step_outside (test_pointcloud_profile_cut.py):
+    # exactly on the thickness/2, 0 and length edges is kept; 0.001 m beyond any of them is dropped.
+    # The line here runs the other way (A = rim + outside_m -> B = rim), so s counts down from A to B,
+    # but the same four edges apply. Before Task 18, this script's own keep mask had no EPS margin, so
+    # it was only accidentally as inclusive as the app at these exact values (plain `<=`/`>=` already
+    # keeps an exact boundary); this test locks in that the two now share one formula, not two that
+    # happen to agree here.
+    acc = _load("pointcloud_acceptance")
+    inside = [(5.0, 0.1, 0.0), (5.0, -0.1, 0.0), (0.0, 0.0, 0.0), (10.0, 0.0, 0.0)]
+    outside = [(5.0, 0.101, 0.0), (5.0, -0.101, 0.0), (10.001, 0.0, 0.0), (-0.001, 0.0, 0.0)]
+    src = make_las(tmp_path / "edges.las", 0, points=np.array(inside + outside))
+    args = type("A", (), {"source": str(src), "rim": "0,0,0", "outside_m": 10.0, "thickness": 0.2})()
+    out = acc.run_crosscheck(args)
+    assert out["slab_points"] == 4
+
+
 def _png(width: int, height: int) -> bytes:
     from PIL import Image
 

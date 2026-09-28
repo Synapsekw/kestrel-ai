@@ -178,12 +178,18 @@ export function Slider({
             style={{ left: `${((s - min) / span) * 100}%` }}
           />
         ))}
-        <span className="pointer-events-none absolute inset-0" style={{ transform: `translateX(${pct}%)` }}>
-          <span
-            data-part="thumb"
-            className="absolute left-0 top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink shadow-[0_0_0_3px_rgba(143,123,255,.45)] reduce-effects:shadow-none transition-transform duration-fast group-hover:scale-110 reduce-motion:transition-none"
-          />
-        </span>
+        {/* `left: pct%` (the tick marks above use the same convention) positions against the
+            track's own width. A translateX(pct%) wrapper sized to the track (as this used to be)
+            moves by a percentage of *its own* width, i.e. the track's width again, so its layout
+            box lands up to a full track-width past the track at high values — invisible
+            (pointer-events-none, no fill) but still countable "ink overflow", which is what forced
+            the cloud panel into a horizontal scrollbar whenever a slider sat above 0% (task-18-brief
+            item 1). `left` is a box offset within the track, not a transform, so it cannot do that. */}
+        <span
+          data-part="thumb"
+          className="pointer-events-none absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-ink shadow-[0_0_0_3px_rgba(143,123,255,.45)] reduce-effects:shadow-none transition-transform duration-fast group-hover:scale-110 reduce-motion:transition-none"
+          style={{ left: `${pct}%` }}
+        />
       </div>
       {showValue && (
         <output className="min-w-[4ch] text-right font-mono text-2xs tabular-nums text-muted">

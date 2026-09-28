@@ -148,6 +148,23 @@ describe("Select", () => {
   });
 });
 
+describe("Input", () => {
+  // Same gotcha as Select above (`fieldClass`, Input.tsx): a caller's own width class (e.g. a dense
+  // offset field at w-20, CamerasPanelRow.tsx) must replace the default full width, not lose to it,
+  // or the input claims the whole flex row and pushes its siblings into a horizontal scrollbar
+  // (task-18-brief.md item 1).
+  it("lets a caller's width class replace the default full width", () => {
+    render(<Input aria-label="Offset" className="w-20" />);
+    expect(screen.getByLabelText("Offset").className).toContain("w-20");
+    expect(screen.getByLabelText("Offset").className).not.toContain("w-full");
+  });
+
+  it("is full width when the caller gives no width class", () => {
+    render(<Input aria-label="Name" />);
+    expect(screen.getByLabelText("Name").className).toContain("w-full");
+  });
+});
+
 describe("Aero glass controls", () => {
   it("fields sit on the field token with a quiet border, and a danger border when invalid", () => {
     render(

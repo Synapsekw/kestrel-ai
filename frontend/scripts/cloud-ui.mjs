@@ -36,6 +36,11 @@ export function ui(page) {
     hintCancel: hint.getByRole("button", { name: "Cancel", exact: true }),
     callout,
     typeCombo: callout.getByRole("button", { name: /^Type:/ }),
+    // PinCalloutView's Close (PinCallout.tsx): the callout a just-created finding switches to once
+    // Enter creates it. Task 18 item 2: it stays open after one Escape (only a second Escape, once
+    // the armed tool has already gone back to Orbit, deselects it), so a driver that presses one
+    // Escape and moves on finds it still covering the next click.
+    calloutClose: callout.getByRole("button", { name: "Close", exact: true }),
     photoList: page.getByRole("list", { name: "Photos that saw this point" }),
     view: (v) => page.getByRole("button", { name: v, exact: true }),
     async captureMissing() {
