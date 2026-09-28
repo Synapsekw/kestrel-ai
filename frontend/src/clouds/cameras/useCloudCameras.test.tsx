@@ -180,6 +180,75 @@ describe("useCloudCameras", () => {
     expect(useCamerasStore.getState().set).toEqual(second);
   });
 
+  it("reopening the same cloud shows Loading until the fresh answer, and resets the switch choice", async () => {
+    // The store is module-level: without a reset on a hook instance's first run, a reopen showed
+    // the old payload as "ready" and the image → cloud arrival acted on it (final review I1).
+    const old = cameraSet([{ x: 1, y: 1, z: 1 }]);
+    const fresh = cameraSet([
+      { x: 1, y: 1, z: 1 },
+      { x: 2, y: 2, z: 2 },
+    ]);
+    let body = old;
+    let release: () => void = () => {};
+    let gate: Promise<void> = Promise.resolve();
+    const base = fakeClient([]).api;
+    const api: typeof base = {
+      ...base,
+      GET: (async () => {
+        const answer = body;
+        await gate;
+        return { data: answer, error: undefined, response: new Response(null, { status: 200 }) };
+      }) as typeof base.GET,
+    };
+    const first = mount(api, exampleCloud);
+    await waitFor(() => expect(useCamerasStore.getState().status).toBe("ready"));
+    act(() => useCamerasStore.getState().setVisible(false));
+    first.unmount();
+
+    body = fresh;
+    gate = new Promise<void>((r) => (release = r));
+    mount(api, exampleCloud);
+    expect(useCamerasStore.getState().status).toBe("loading");
+    expect(useCamerasStore.getState().set).toBeNull();
+    expect(useCamerasStore.getState().visible).toBeNull();
+    release();
+    await waitFor(() => expect(useCamerasStore.getState().set).toEqual(fresh));
+  });
+
+  it("a late answer from an unmounted instance is dropped when the same cloud is reopened", async () => {
+    const stale = cameraSet([{ x: 1, y: 1, z: 1 }]);
+    const fresh = cameraSet([{ x: 9, y: 9, z: 9 }]);
+    const releases: (() => void)[] = [];
+    const base = fakeClient([]).api;
+    let calls = 0;
+    const api: typeof base = {
+      ...base,
+      GET: (async () => {
+        calls += 1;
+        const mine = calls;
+        await new Promise<void>((r) => releases.push(r));
+        return {
+          data: mine === 1 ? stale : fresh,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
+      }) as typeof base.GET,
+    };
+    const first = mount(api, exampleCloud);
+    await waitFor(() => expect(releases).toHaveLength(1));
+    first.unmount();
+    mount(api, exampleCloud);
+    await waitFor(() => expect(releases).toHaveLength(2));
+
+    releases[0](); // the old instance's answer lands first: it must not count as the reopen's
+    await new Promise((r) => setTimeout(r, 0));
+    expect(useCamerasStore.getState().status).toBe("loading");
+    expect(useCamerasStore.getState().set).toBeNull();
+
+    releases[1]();
+    await waitFor(() => expect(useCamerasStore.getState().set).toEqual(fresh));
+  });
+
   it("shows the cameras by default when any exist, and remembers the operator's choice", () => {
     const s = useCamerasStore.getState();
     s.reset(CLOUD_ID);

@@ -16,16 +16,24 @@ import { useCamerasStore } from "./store";
 export const REVISION_REFETCH_MS = 1000;
 
 /**
+ * The latest request any hook instance has issued. Module-level, like the store it feeds: a request
+ * from an instance that has since unmounted (the workspace left and reopened on the same cloud) is
+ * superseded by the new instance's first request and cannot land after it (final review I1).
+ */
+let latestSeq = 0;
+
+/**
  * Loads the open cloud's cameras (spec §13: once per cloud open and on `images.changed`; C-L1
  * Ruling 4 adds `pointclouds.changed`, the cloud's CRS, and a failed offset save via `reloadTick`).
  *
  * A change of cloud id, of the CRS key, or of `reloadTick` fetches at once. A change of only the
  * revision counters instead (re)starts a `REVISION_REFETCH_MS` timer, so a burst of bumps sends one
  * request after the pause (while a request from before the pause may still be in flight, or a
- * request from a previous cloud open). Every request carries a sequence number and only the answer
- * of the latest request the hook has issued is allowed to land — a stale one, for this cloud or a
- * previous one, is dropped even if it resolves after the newer one (the store's `receive`/`fail`
- * additionally drop anything that does not belong to the store's current `cloudId`).
+ * request from a previous cloud open). Every request carries a module-level sequence number and only
+ * the answer of the latest request any instance of the hook has issued is allowed to land — a stale
+ * one, for this cloud or a previous one, or from an instance that has unmounted, is dropped even if
+ * it resolves after the newer one (the store's `receive`/`fail` additionally drop anything that does
+ * not belong to the store's current `cloudId`). A hook instance's first run resets the store.
  *
  * A plain hook with no dependency on the viewer, so it can run in the always-mounted cameras
  * feature rather than the layer, which mounts only while the view is running (controller Ruling 3).
@@ -38,7 +46,6 @@ export function useCloudCameras(projectId: string, cloud: PointCloud | null): vo
   const cloudId = cloud?.status === "ready" ? cloud.id : null;
   const crsKey = cloud ? `${cloud.epsg ?? ""}|${cloud.proj4 ?? ""}` : "";
 
-  const seq = useRef(0);
   /** The last (cloudId, crsKey, reloadTick) combination fetched at once; a run whose combination
    * differs is an "open" (a fresh cloud, a CRS just assigned, or an explicit reload) and fetches
    * immediately. A run with the same combination is a revision-only bump and gets debounced. */
@@ -60,14 +67,14 @@ export function useCloudCameras(projectId: string, cloud: PointCloud | null): vo
 
     const fetchNow = () => {
       fetchedRevisions.current = revisions;
-      const mySeq = ++seq.current;
+      const mySeq = ++latestSeq;
       getCloudCameras(api, projectId, cloudId)
         .then((set) => {
-          if (seq.current !== mySeq) return; // superseded by a newer request
+          if (latestSeq !== mySeq) return; // superseded by a newer request, from any instance
           useCamerasStore.getState().receive(cloudId, set);
         })
         .catch((e: unknown) => {
-          if (seq.current !== mySeq) return;
+          if (latestSeq !== mySeq) return;
           if (e instanceof ApiFailure && e.code === "needs_coordinates") {
             useCamerasStore.getState().fail(cloudId, "needs_coordinates", null);
             return;
@@ -79,11 +86,16 @@ export function useCloudCameras(projectId: string, cloud: PointCloud | null): vo
     };
 
     const key = `${cloudId}|${crsKey}|${reloadTick}`;
+    // A hook instance's first run is a cloud open even when the store still holds this cloud: the
+    // store outlives the workspace, and its payload (and the operator's switch choice, P10) belong to
+    // the previous open. Refs survive StrictMode's simulated remount, so that re-run is not a first run.
+    const firstRun = immediateKey.current === null;
     const isOpenOrReload = immediateKey.current !== key;
     immediateKey.current = key;
 
     if (isOpenOrReload) {
-      if (useCamerasStore.getState().cloudId !== cloudId) useCamerasStore.getState().reset(cloudId);
+      if (firstRun || useCamerasStore.getState().cloudId !== cloudId)
+        useCamerasStore.getState().reset(cloudId);
       fetchNow();
       return;
     }
