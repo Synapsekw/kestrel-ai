@@ -1,0 +1,244 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { act, waitFor } from "@testing-library/react";
+import type { Drawing } from "@/api/drawings";
+import "@/mapws/plugins";
+import { makeStores, renderInWorkspace } from "@/mapws/test/harness";
+import alignDrawing from "@/mapws/tools/alignDrawing.tool";
+import { toolRegistry } from "@/mapws/tools/toolStore";
+import { useChangesStore } from "@/store/changes";
+import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
+import { useToastStore } from "@/ui";
+import { MISSED_DRAWING } from "../georef/alignModel";
+import { useAlignStore } from "../georef/alignStore";
+import { applyAffine, type Vec2 } from "../georef/fit";
+import { REFUSAL_TEXT } from "../georef/messages";
+import { ALIGN_TOOL_ID, AlignOverlay } from "./AlignOverlay";
+import { useDrawingsStore } from "./drawingsStore";
+import { DRAWING_ID, drawingRowOf, pdfDrawing, placedPdfDrawing, SITE_FRAME } from "./testFixtures";
+
+const ROW_KEY = `drawing:${DRAWING_ID}`;
+/** The view the workspace store publishes, and the 1000 × 1000 px stage the Overlay measures. */
+const VIEW = { center: [500500, 4982500] as Vec2, resolution: 1, rotation: 0 };
+
+function mount(o: { seed?: Drawing[] | null; routes?: FakeRoute[]; hidden?: boolean } = {}) {
+  if (o.seed !== null) useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, o.seed ?? [pdfDrawing]);
+  const stores = makeStores({
+    frame: SITE_FRAME,
+    lookup: (id) => (id === ALIGN_TOOL_ID ? alignDrawing : undefined),
+  });
+  const ws = stores.workspace.getState();
+  ws.setViewInfo(VIEW);
+  if (o.hidden) ws.setLayerState(ROW_KEY, { visible: false });
+  ws.select({ kind: "drawing", id: DRAWING_ID });
+  stores.tools.getState().activate(ALIGN_TOOL_ID);
+  // The first matching route answers: `routes` override the saving PUT.
+  const client = fakeClient([
+    ...(o.routes ?? []),
+    { method: "PUT", path: /\/georef$/, body: placedPdfDrawing },
+  ]);
+  renderInWorkspace(<AlignOverlay projectId={PROJECT_ID} frame={SITE_FRAME} />, { stores, api: client.api });
+  // W1's point draw spec: every map click completes one Point, and further clicks wait until it is cleared.
+  const click = (c: Vec2) => act(() => stores.tools.getState().addVertex(c));
+  return { stores, click, requests: client.requests };
+}
+
+const onDrawing = (src: Vec2): Vec2 => applyAffine(useAlignStore.getState().session!.transform, src);
+
+function key(k: string, target: EventTarget = window, init: KeyboardEventInit = {}) {
+  const e = new KeyboardEvent("keydown", { key: k, bubbles: true, cancelable: true, ...init });
+  act(() => void target.dispatchEvent(e));
+  return e;
+}
+
+const PAIRS: [Vec2, Vec2][] = [
+  [
+    [100, -100],
+    [500002, 4982998],
+  ],
+  [
+    [4800, -100],
+    [500096, 4982998],
+  ],
+  [
+    [100, -3400],
+    [500002, 4982932],
+  ],
+  [
+    [4800, -3400],
+    [500096, 4982932],
+  ],
+];
+
+describe("the align-drawing tool (spec §8.3)", () => {
+  beforeEach(() => {
+    useChangesStore.setState({ mapWorkspaceRevision: 0 });
+    useAlignStore.getState().end();
+    useDrawingsStore.setState({ key: null, projectId: null, byId: {}, order: [] });
+    useToastStore.getState().clear();
+    vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(1000);
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(1000);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it("is the K tool of the site group, discovered as a plugin, usable only with a ready drawing selected", () => {
+    expect(alignDrawing).toMatchObject({
+      id: "align-drawing",
+      action: "align-drawing",
+      group: "site",
+      icon: "align",
+      draw: { shape: "point" },
+    });
+    expect(toolRegistry.get("align-drawing")).toBe(alignDrawing);
+    const row = drawingRowOf(pdfDrawing).layer!;
+    const ctx = { frame: SITE_FRAME, selection: null, surveys: [], layers: [row], r: null };
+    const selection = { kind: "drawing", id: DRAWING_ID };
+    expect(alignDrawing.disabledReason!(ctx)).toBe("Select a drawing first");
+    expect(alignDrawing.disabledReason!({ ...ctx, selection: { kind: "finding", id: "f1" } })).toBe(
+      "Select a drawing first",
+    );
+    expect(alignDrawing.disabledReason!({ ...ctx, selection })).toBeNull();
+    expect(
+      alignDrawing.disabledReason!({ ...ctx, selection, layers: [{ ...row, status: "importing" }] }),
+    ).toBe("The drawing is still importing");
+    expect(alignDrawing.disabledReason!({ ...ctx, selection, layers: [{ ...row, status: "failed" }] })).toBe(
+      "The drawing failed to import",
+    );
+  });
+
+  it("starts a provisional session at 60% of the view, centred, and pairs two clicks from W1's completed points", () => {
+    const { stores, click } = mount();
+    const s0 = useAlignStore.getState().session!;
+    expect(s0.drawingId).toBe(DRAWING_ID);
+    const [e0, n0, e1, n1] = [
+      ...applyAffine(s0.transform, [0, -3508]),
+      ...applyAffine(s0.transform, [4967, 0]),
+    ];
+    expect((e0 + e1) / 2).toBeCloseTo(500500);
+    expect((n0 + n1) / 2).toBeCloseTo(4982500);
+    expect(e1 - e0).toBeCloseTo(600);
+    click(onDrawing([100, -100]));
+    expect(stores.tools.getState().completed).toBeNull();
+    expect(useAlignStore.getState().session!.pendingSrc).not.toBeNull();
+    click([500002, 4982998]);
+    const s = useAlignStore.getState().session!;
+    expect(s.pairs).toHaveLength(1);
+    expect(s.pairs[0].src[0]).toBeCloseTo(100);
+    expect(s.pairs[0].dst).toEqual([500002, 4982998]);
+  });
+
+  it("starts once the drawings list arrives", async () => {
+    mount({ seed: null, routes: [{ method: "GET", path: /\/drawings$/, body: { items: [pdfDrawing] } }] });
+    expect(useAlignStore.getState().session).toBeNull();
+    await waitFor(() => expect(useAlignStore.getState().session?.drawingId).toBe(DRAWING_ID));
+  });
+
+  it("does not start on a drawing that is still importing", () => {
+    mount({ seed: [{ ...pdfDrawing, status: "importing" }] });
+    expect(useAlignStore.getState().session).toBeNull();
+  });
+
+  it("shows a hidden drawing row, so its map layer (and the marks) exist", () => {
+    const { stores } = mount({ hidden: true });
+    expect(stores.workspace.getState().layerState[ROW_KEY].visible).toBe(true);
+  });
+
+  it("starts afresh when the drawing is deselected (its session discarded) and selected again", () => {
+    const { stores } = mount();
+    act(() => {
+      stores.workspace.getState().select(null);
+      useAlignStore.getState().end();
+    });
+    expect(useAlignStore.getState().session).toBeNull();
+    act(() => stores.workspace.getState().select({ kind: "drawing", id: DRAWING_ID }));
+    expect(useAlignStore.getState().session?.drawingId).toBe(DRAWING_ID);
+  });
+
+  it("resumes a placement saved in the site frame with its points", () => {
+    mount({ seed: [placedPdfDrawing] });
+    const s = useAlignStore.getState().session!;
+    expect(s.pairs.map((p) => p.id)).toEqual(["cp1", "cp2", "cp3"]);
+    expect(useAlignStore.getState().notice).toBeNull();
+  });
+
+  it("ignores a first click off the drawing and says why", () => {
+    const { click } = mount();
+    click([500001, 4982001]);
+    expect(useAlignStore.getState().session!.pendingSrc).toBeNull();
+    expect(useAlignStore.getState().notice).toBe(MISSED_DRAWING);
+  });
+
+  it("Esc clears a pending click before W1 sees it; with nothing pending it passes through", () => {
+    const { click } = mount();
+    click(onDrawing([100, -100]));
+    expect(key("Escape").defaultPrevented).toBe(true);
+    expect(useAlignStore.getState().session!.pendingSrc).toBeNull();
+    expect(key("Escape").defaultPrevented).toBe(false);
+  });
+
+  it("leaves keys typed into a field alone", () => {
+    const { click } = mount();
+    click(onDrawing([100, -100]));
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    expect(key("Escape", input).defaultPrevented).toBe(false);
+    expect(useAlignStore.getState().session!.pendingSrc).not.toBeNull();
+    input.remove();
+  });
+
+  it("Backspace removes the last pair; Enter saves a valid fit with PUT georef and ends the session", async () => {
+    const { click, requests } = mount();
+    for (const [src, dst] of PAIRS) {
+      click(onDrawing(src));
+      click(dst);
+    }
+    expect(key("Backspace").defaultPrevented).toBe(true);
+    expect(useAlignStore.getState().session!.pairs).toHaveLength(3);
+    expect(key("z", window, { ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(useAlignStore.getState().session!.pairs).toHaveLength(2);
+    click(onDrawing(PAIRS[2][0]));
+    click(PAIRS[2][1]);
+    expect(key("Enter").defaultPrevented).toBe(true);
+    // A second Enter while the save is in flight sends nothing more.
+    key("Enter");
+    await waitFor(() => expect(useAlignStore.getState().session).toBeNull());
+    // The saved drawing arrives in the list: K stays active, but the session does not restart.
+    await act(async () => {});
+    expect(useAlignStore.getState().session).toBeNull();
+    const puts = requests.filter((r) => r.method === "PUT");
+    expect(puts).toHaveLength(1);
+    expect(puts[0].body).toMatchObject({ model: "similarity", dst_frame: "site" });
+    expect((puts[0].body as { points: unknown[] }).points).toHaveLength(3);
+    expect(useDrawingsStore.getState().byId[DRAWING_ID].georef_version).toBe(2);
+    expect(useToastStore.getState().toasts.map((t) => t.text)).toEqual(["Placement saved · RMSE 6.0 cm"]);
+  });
+
+  it("Enter without a valid fit passes through to W1", () => {
+    const { click } = mount();
+    click(onDrawing(PAIRS[0][0]));
+    click(PAIRS[0][1]);
+    expect(key("Enter").defaultPrevented).toBe(false);
+    expect(useAlignStore.getState().session).not.toBeNull();
+  });
+
+  it("a refused save keeps the session and says why", async () => {
+    const { click } = mount({
+      routes: [
+        {
+          method: "PUT",
+          path: /\/georef$/,
+          status: 422,
+          body: { error: { code: "collinear", message: "collinear", details: {} } },
+        },
+      ],
+    });
+    for (const [src, dst] of PAIRS.slice(0, 3)) {
+      click(onDrawing(src));
+      click(dst);
+    }
+    key("Enter");
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => t.text)).toEqual([REFUSAL_TEXT.collinear]),
+    );
+    expect(useAlignStore.getState().session!.pairs).toHaveLength(3);
+  });
+});

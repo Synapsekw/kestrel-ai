@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
-import type TileLayer from "ol/layer/Tile";
+import TileLayer from "ol/layer/Tile";
+import VectorLayer from "ol/layer/Vector";
+import type VectorSource from "ol/source/Vector";
 import type TileImage from "ol/source/TileImage";
 import type { Drawing } from "@/api/drawings";
 import { useChangesStore } from "@/store/changes";
@@ -18,7 +20,19 @@ import { dxfDrawing, drawingRowOf, pdfDrawing, placedPdfDrawing, SITE_FRAME } fr
 
 type Layer = TileLayer<TileImage>;
 type FakeMap = ReturnType<typeof fakeOlMap>;
-const added = (map: FakeMap): Layer[] => map.addLayer.mock.calls.map((c) => c[0] as Layer);
+const added = (map: FakeMap): Layer[] =>
+  map.addLayer.mock.calls.map((c) => c[0] as unknown).filter((l): l is Layer => l instanceof TileLayer);
+/** The align session's marks layers (bubbles, residual lines), in the order they were added. */
+const marksOf = (map: FakeMap): VectorLayer<VectorSource>[] =>
+  map.addLayer.mock.calls
+    .map((c) => c[0] as unknown)
+    .filter((l): l is VectorLayer<VectorSource> => l instanceof VectorLayer);
+const kinds = (l: VectorLayer<VectorSource>) =>
+  l
+    .getSource()!
+    .getFeatures()
+    .map((f) => (f.get("mark") as { kind: string }).kind)
+    .sort();
 
 function mountOn(maps: { map: FakeMap; side: RowSide }[], d: Drawing = placedPdfDrawing) {
   // The list the mount reads: `placedPdfDrawing` and `pdfDrawing` share an id, so seed only `d`.
@@ -125,11 +139,13 @@ describe("DrawingMount", () => {
     const { map } = mount(pdfDrawing);
     const layer = added(map)[0];
     act(() => useAlignStore.getState().begin(session(pdfDrawing.id)));
-    expect(layer.getVisible()).toBe(true);
+    // Not placed: nothing to show until the first `t` preview exists (the bare tiles would be 422s).
+    expect(layer.getVisible()).toBe(false);
     expect(layer.getOpacity()).toBeCloseTo(0.4);
     expect(layer.getSource()!.getUrls()![0]).not.toMatch(/[?&]t=/);
     act(() => void vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS));
     expect(PREVIEW_DEBOUNCE_MS).toBe(250);
+    expect(layer.getVisible()).toBe(true);
     expect(layer.getSource()!.getUrls()![0]).toContain("t=0.03%2C0%2C1%2C0%2C0.03%2C2");
     act(() => useAlignStore.getState().end());
     expect(layer.getVisible()).toBe(false);
@@ -138,10 +154,70 @@ describe("DrawingMount", () => {
     expect(added(map)).toHaveLength(1);
   });
 
+  it("a quick restart never shows the previous session's transform", () => {
+    vi.useFakeTimers();
+    const { map } = mount(pdfDrawing);
+    const layer = added(map)[0];
+    act(() => useAlignStore.getState().begin(session(pdfDrawing.id)));
+    act(() => void vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS));
+    act(() => {
+      useAlignStore.getState().end();
+      useAlignStore.getState().begin({ ...session(pdfDrawing.id), transform: [0.05, 0, 7, 0, 0.05, 8] });
+    });
+    expect(layer.getVisible()).toBe(false);
+    expect(layer.getSource()!.getUrls()![0]).not.toMatch(/[?&]t=/);
+    act(() => void vi.advanceTimersByTime(PREVIEW_DEBOUNCE_MS));
+    expect(layer.getVisible()).toBe(true);
+    expect(layer.getSource()!.getUrls()![0]).toContain("t=0.05%2C0%2C7%2C0%2C0.05%2C8");
+  });
+
+  it("a placed drawing stays shown while it is realigned", () => {
+    const { map } = mount();
+    act(() => useAlignStore.getState().begin(session(placedPdfDrawing.id)));
+    expect(added(map)[0].getVisible()).toBe(true);
+  });
+
+  it("draws the session's numbered bubbles and residual lines on every map side, above the drawings", () => {
+    const left = fakeOlMap();
+    const right = fakeOlMap();
+    mountOn(
+      [
+        { map: left, side: "left" },
+        { map: right, side: "right" },
+      ],
+      pdfDrawing,
+    );
+    expect(marksOf(left)).toHaveLength(0);
+    const s: AlignSession = {
+      ...session(pdfDrawing.id),
+      pairs: [{ id: "cp1", src: [100, -100], dst: [5, 1] }],
+      pendingSrc: [200, -200],
+      nextId: 2,
+    };
+    act(() => useAlignStore.getState().begin(s));
+    for (const map of [left, right]) {
+      expect(marksOf(map)).toHaveLength(1);
+      expect(marksOf(map)[0].getZIndex()).toBeGreaterThan(2003);
+      expect(kinds(marksOf(map)[0])).toEqual(["dst", "pending", "residual", "src"]);
+    }
+    const bubble = marksOf(left)[0]
+      .getSource()!
+      .getFeatures()
+      .find((f) => f.get("mark").kind === "dst")!;
+    const style = marksOf(left)[0].getStyleFunction()!(bubble, 1) as import("ol/style").Style;
+    expect(style.getText()!.getText()).toBe("1");
+    act(() => useAlignStore.getState().undo());
+    expect(kinds(marksOf(left)[0])).toEqual(["dst", "residual", "src"]);
+    act(() => useAlignStore.getState().end());
+    expect(left.removeLayer).toHaveBeenCalledWith(marksOf(left)[0]);
+    expect(right.removeLayer).toHaveBeenCalledWith(marksOf(right)[0]);
+  });
+
   it("ignores another drawing's align session", () => {
     const { map } = mount(pdfDrawing);
     act(() => useAlignStore.getState().begin(session("someone-else")));
     expect(added(map)[0].getVisible()).toBe(false);
+    expect(marksOf(map)).toHaveLength(0);
   });
 
   it("toasts once when the drawing's tiles are gone (404), and takes the layer off the map", async () => {

@@ -17,6 +17,8 @@ interface AlignState {
   session: AlignSession | null;
   /** One line for the inspector: a missed click, a restart in the site frame. */
   notice: string | null;
+  /** Bumped by every `begin`: a preview settled in an earlier session never applies to this one. */
+  epoch: number;
   begin: (session: AlignSession, notice?: string | null) => void;
   click: (p: Vec2) => void;
   removePair: (id: string) => void;
@@ -33,7 +35,8 @@ interface AlignState {
 export const useAlignStore = create<AlignState>((set, get) => ({
   session: null,
   notice: null,
-  begin: (session, notice = null) => set({ session, notice }),
+  epoch: 0,
+  begin: (session, notice = null) => set((st) => ({ session, notice, epoch: st.epoch + 1 })),
   click: (p) => {
     const s = get().session;
     if (!s) return;
