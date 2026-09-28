@@ -99,6 +99,47 @@ describe("VolumeMount", () => {
     await waitFor(() => expect(polys.getSource()?.getFeatures()).toHaveLength(1));
   });
 
+  it("drops only the measurement whose site read fails and draws the rest", async () => {
+    const other = { ...exampleMeasurement, id: "v-gone", name: "Pile 2" };
+    const { map } = mount([
+      { method: "GET", path: /\/surfaces$/, body: { items: [exampleSurface] } },
+      { method: "GET", path: /\/volumes$/, body: { items: [exampleMeasurement, other] } },
+      { method: "GET", path: /\/volumes\/v-gone/, status: 404, body: { detail: "gone" } },
+      {
+        method: "GET",
+        path: /\/volumes\/v0/,
+        body: { ...exampleMeasurement, polygon_site: exampleMeasurement.polygon_native },
+      },
+    ]);
+    const polys = (added(map, VectorLayer) as VectorLayer[])[1];
+    await waitFor(() => expect(pushLog).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        polys
+          .getSource()
+          ?.getFeatures()
+          .map((f) => f.getId()),
+      ).toEqual([MEASUREMENT_ID]),
+    );
+  });
+
+  it("a failed vertex save toasts and re-reads the volumes so the polygon reverts", async () => {
+    const stores = makeStores();
+    const { map, requests } = mount(
+      [...routes(), { method: "PATCH", path: /\/volumes\//, status: 500, body: { detail: "boom" } }],
+      stores,
+    );
+    act(() => stores.workspace.getState().select({ kind: "volume", id: MEASUREMENT_ID }));
+    await waitFor(() => expect(map.addInteraction).toHaveBeenCalled());
+    const lists = () => requests.filter((r) => r.method === "GET" && /\/volumes$/.test(r.url)).length;
+    const before = lists();
+    const modify = map.addInteraction.mock.calls.at(-1)?.[0] as Modify;
+    act(() => void modify.dispatchEvent("modifyend"));
+    await waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1));
+    await waitFor(() => expect(lists()).toBe(before + 1));
+    expect(requests.find((r) => r.method === "PATCH")?.body).toHaveProperty("polygon_site");
+  });
+
   it("shows the selected measurement's heatmap clamped to its ring, edits only it, and opacity keeps the tiles", async () => {
     const stores = makeStores();
     const { map, rerender } = mount(routes(), stores);

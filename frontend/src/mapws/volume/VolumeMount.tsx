@@ -113,8 +113,14 @@ export function VolumeMount({ map, zIndex, opacity, projectId, frame }: LayerMou
           newest.map(async (m): Promise<Drawn | null> => {
             const t = byId.get(m.top_surface_id);
             if (t && sameFrame(frame, t)) return { m, ring: m.polygon_native };
-            const site = await fetchVolumeSite(api, projectId, m.id);
-            return site.polygon_site ? { m, ring: site.polygon_site } : null;
+            // One failed site read (e.g. its top surface is gone) drops that polygon, not the layer.
+            try {
+              const site = await fetchVolumeSite(api, projectId, m.id);
+              return site.polygon_site ? { m, ring: site.polygon_site } : null;
+            } catch (err: unknown) {
+              pushLog(`volumes layer: ${m.name}: ${messageOf(err, "could not read its site polygon")}`);
+              return null;
+            }
           }),
         );
         if (cancelled) return;
@@ -131,7 +137,8 @@ export function VolumeMount({ map, zIndex, opacity, projectId, frame }: LayerMou
 
   // The selected measurement's machine footprints; a finding change can drop one (M-B5 hand-off).
   const footprintKey = selected && selected.masks.detection_run_ids.length > 0 ? selected.id : null;
-  const selectedMasks = selected?.masks;
+  // The runs, not the masks object: every volumes re-read makes a new object with the same runs.
+  const footprintRuns = selected?.masks.detection_run_ids.join(",") ?? "";
   useEffect(() => {
     if (!footprintKey) return;
     let cancelled = false;
@@ -154,7 +161,7 @@ export function VolumeMount({ map, zIndex, opacity, projectId, frame }: LayerMou
     return () => {
       cancelled = true;
     };
-  }, [api, projectId, footprintKey, selectedMasks, findingsRevision]);
+  }, [api, projectId, footprintKey, footprintRuns, findingsRevision]);
   const footprints =
     loadedFootprints && loadedFootprints.id === footprintKey ? loadedFootprints.rings : NO_RINGS;
 
@@ -210,16 +217,19 @@ export function VolumeMount({ map, zIndex, opacity, projectId, frame }: LayerMou
     modify.on("modifyend", () => {
       const ring = openRing((feature.getGeometry() as Polygon).getCoordinates()[0]);
       const { api: a, projectId: p, autoRecalc: auto } = ctx.current;
-      saveVolume(a, p, selectedId, { polygon_site: ring }, auto).catch((err: unknown) =>
-        toast("danger", messageOf(err, "could not save the polygon")),
-      );
+      // A success publishes volumes.changed (PATCH /volumes/{id}), which re-reads the list; a
+      // failure re-reads it here so the moved polygon snaps back to what the server holds.
+      saveVolume(a, p, selectedId, { polygon_site: ring }, auto).catch((err: unknown) => {
+        toast("danger", messageOf(err, "could not save the polygon"));
+        reloadVolumes();
+      });
     });
     map.addInteraction(modify);
     return () => {
       map.removeInteraction(modify);
       modify.dispose();
     };
-  }, [map, source, selectedId, editable, drawn]);
+  }, [map, source, selectedId, editable, drawn, reloadVolumes]);
 
   // Heatmap: the volume_diff site tiles of the selected, calculated measurement, clamped to its ring.
   const heatUrl =
