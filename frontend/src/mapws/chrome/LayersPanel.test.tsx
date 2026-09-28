@@ -110,6 +110,10 @@ describe("LayersPanel (spec §5.2)", () => {
       fireEvent.click(screen.getByRole("button", { name: "Add a layer" }));
       fireEvent.click(screen.getByRole("menuitem", { name: /Import drawing/ }));
       expect(useAddData.getState()).toMatchObject({ open: true, tile: "drawing" });
+      // The Drawings group's own "+ Import" goes to the same place.
+      useAddData.setState({ open: false, tile: null });
+      fireEvent.click(screen.getByRole("button", { name: "+ Import" }));
+      expect(useAddData.getState()).toMatchObject({ open: true, tile: "drawing" });
     } finally {
       useAddData.setState({ projectId: null, open: false, tile: null });
     }

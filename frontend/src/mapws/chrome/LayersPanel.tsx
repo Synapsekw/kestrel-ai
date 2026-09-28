@@ -126,7 +126,7 @@ export function LayersPanel({ rows, notInCompare, projectId }: LayersPanelProps)
                     <button
                       type="button"
                       disabled={!ready}
-                      onClick={() => openAddData()}
+                      onClick={() => openAddData("drawing")}
                       className={cx(
                         "rounded-chip text-2xs text-accent-ink hover:underline disabled:opacity-45",
                         focusRing,
