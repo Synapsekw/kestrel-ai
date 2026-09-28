@@ -14,10 +14,7 @@ import {
 // R-W5-3: M-B3's vectors; backend/tests/test_drawings_georef.py reads the same file (spec §15).
 // Preflight (Task 2, deviation c): the fixture has 20 cases, incl. `similarity_near_collinear_accepted`.
 const VECTORS = JSON.parse(
-  readFileSync(
-    resolve(__dirname, "../../../../contract/fixtures/georef-fit-vectors.json"),
-    "utf8",
-  ),
+  readFileSync(resolve(__dirname, "../../../../contract/fixtures/georef-fit-vectors.json"), "utf8"),
 ) as {
   tolerance: { coef_rel: number; metres: number };
   cases: {
@@ -39,10 +36,8 @@ const VECTORS = JSON.parse(
   }[];
 };
 const rel = (got: number, want: number) =>
-  Math.abs(got - want) / Math.max(1, Math.abs(want)) <=
-  VECTORS.tolerance.coef_rel;
-const metres = (got: number, want: number) =>
-  Math.abs(got - want) <= VECTORS.tolerance.metres;
+  Math.abs(got - want) / Math.max(1, Math.abs(want)) <= VECTORS.tolerance.coef_rel;
+const metres = (got: number, want: number) => Math.abs(got - want) <= VECTORS.tolerance.metres;
 
 describe("fitGeoref agrees with georef.py on the shared vectors", () => {
   it("runs all 20 vectors", () => expect(VECTORS.cases).toHaveLength(20));
@@ -55,26 +50,18 @@ describe("fitGeoref agrees with georef.py on the shared vectors", () => {
       return;
     }
     if (!got.ok) throw new Error(`refused: ${got.error}`);
-    got.transform.forEach((v, i) =>
-      expect(rel(v, want.transform[i]), `transform[${i}]`).toBe(true),
-    );
+    got.transform.forEach((v, i) => expect(rel(v, want.transform[i]), `transform[${i}]`).toBe(true));
     expect(rel(got.scale, want.scale), "scale").toBe(true);
     if (want.rotation_deg !== undefined)
       expect(rel(got.rotation_deg, want.rotation_deg), "rotation").toBe(true);
     expect(metres(got.rmse_m, want.rmse_m), "rmse").toBe(true);
-    got.residuals_m.forEach((r, i) =>
-      expect(metres(r, want.residuals_m[i]), `residual ${i}`).toBe(true),
-    );
+    got.residuals_m.forEach((r, i) => expect(metres(r, want.residuals_m[i]), `residual ${i}`).toBe(true));
     expect(got.warnings).toEqual(want.warnings);
   });
 
   it("covers every refusal and warning the spec names", () => {
-    const errors = new Set(
-      VECTORS.cases.flatMap((c) => (c.expect.ok ? [] : [c.expect.error])),
-    );
-    const warnings = new Set(
-      VECTORS.cases.flatMap((c) => (c.expect.ok ? c.expect.warnings : [])),
-    );
+    const errors = new Set(VECTORS.cases.flatMap((c) => (c.expect.ok ? [] : [c.expect.error])));
+    const warnings = new Set(VECTORS.cases.flatMap((c) => (c.expect.ok ? c.expect.warnings : [])));
     expect([...errors].sort()).toEqual([
       "collinear",
       "degenerate",
@@ -82,18 +69,13 @@ describe("fitGeoref agrees with georef.py on the shared vectors", () => {
       "too_few_points",
       "too_many_points",
     ]);
-    expect([...warnings].sort()).toEqual([
-      "rmse_high",
-      "scale_mismatch",
-      "shear",
-    ]);
+    expect([...warnings].sort()).toEqual(["rmse_high", "scale_mismatch", "shear"]);
   });
 });
 
 describe("fitGeoref (own cases)", () => {
   const T: Affine = [0.02, -0.01, 500000, 0.01, 0.02, 4983000];
-  const pairs = (src: [number, number][]): FitPair[] =>
-    src.map((s) => ({ src: s, dst: applyAffine(T, s) }));
+  const pairs = (src: [number, number][]): FitPair[] => src.map((s) => ({ src: s, dst: applyAffine(T, s) }));
 
   it("recovers a similarity from 2 points and an affine from 3, to 1e-9, with RMSE exactly 0 at the minimum", () => {
     const s = fitGeoref(
@@ -114,9 +96,7 @@ describe("fitGeoref (own cases)", () => {
     for (const r of [s, a]) {
       if (!r.ok) throw new Error(r.error);
       r.transform.forEach((v, i) =>
-        expect(Math.abs(v - T[i]) / Math.max(1, Math.abs(T[i]))).toBeLessThan(
-          1e-9,
-        ),
+        expect(Math.abs(v - T[i]) / Math.max(1, Math.abs(T[i]))).toBeLessThan(1e-9),
       );
       expect(r.rmse_m).toBe(0);
       expect(r.scale).toBeCloseTo(Math.hypot(0.02, 0.01), 12); // the mean axis length
@@ -137,10 +117,7 @@ describe("fitGeoref (own cases)", () => {
 
   it("refuses more than 12 pairs", () => {
     const many = pairs(
-      Array.from(
-        { length: MAX_PAIRS + 1 },
-        (_, i) => [i * 10, (i % 3) * 7] as [number, number],
-      ),
+      Array.from({ length: MAX_PAIRS + 1 }, (_, i) => [i * 10, (i % 3) * 7] as [number, number]),
     );
     expect(fitGeoref("similarity", many)).toEqual({
       ok: false,

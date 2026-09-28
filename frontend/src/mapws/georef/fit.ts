@@ -18,12 +18,7 @@ export interface FitPair {
   src: Vec2;
   dst: Vec2;
 }
-export type FitRefusal =
-  | "too_few_points"
-  | "too_many_points"
-  | "degenerate"
-  | "collinear"
-  | "reflection";
+export type FitRefusal = "too_few_points" | "too_many_points" | "degenerate" | "collinear" | "reflection";
 export type FitWarning = "rmse_high" | "scale_mismatch" | "shear";
 export type FitResult =
   | {
@@ -103,8 +98,7 @@ export function fitGeoref(
   const n = pairs.length;
   if (n < MIN_PAIRS[model]) return refuse("too_few_points");
   if (n > MAX_PAIRS) return refuse("too_many_points");
-  if (!pairs.every((p) => [...p.src, ...p.dst].every(Number.isFinite)))
-    return refuse("degenerate");
+  if (!pairs.every((p) => [...p.src, ...p.dst].every(Number.isFinite))) return refuse("degenerate");
 
   // 2. Means (plain sums in index order) and centred coordinates.
   let mx = 0;
@@ -211,14 +205,7 @@ export function fitGeoref(
   if (!(scale >= 1e-12)) return refuse("degenerate");
 
   // 8. Translation.
-  const transform: Affine = [
-    a,
-    b,
-    ex - a * mx - b * my,
-    d,
-    e,
-    ey - d * mx - e * my,
-  ];
+  const transform: Affine = [a, b, ex - a * mx - b * my, d, e, ey - d * mx - e * my];
 
   // 9. Residuals: exactly zero with the model's minimum number of pairs.
   let residuals_m: number[];
@@ -237,34 +224,22 @@ export function fitGeoref(
   // 10. Reported scale and rotation; any non-finite result is degenerate.
   const scaleM = scale * dstUnitM;
   const rotation_deg = (Math.atan2(d, a) * 180) / Math.PI;
-  if (
-    ![...transform, rmse_m, scaleM, rotation_deg, ...residuals_m].every(
-      Number.isFinite,
-    )
-  )
+  if (![...transform, rmse_m, scaleM, rotation_deg, ...residuals_m].every(Number.isFinite))
     return refuse("degenerate");
 
   // 11. Warnings, in this order.
   const warnings: FitWarning[] = [];
   if (rmse_m > 0.25) warnings.push("rmse_high");
-  if (unitsScale !== null && Math.abs(scaleM / unitsScale - 1) > 0.02)
-    warnings.push("scale_mismatch");
+  if (unitsScale !== null && Math.abs(scaleM / unitsScale - 1) > 0.02) warnings.push("scale_mismatch");
   if (model === "affine") {
     const s = a * a + b * b + d * d + e * e;
     const q = Math.sqrt(Math.max(s * s - 4 * det * det, 0));
     const s1 = Math.sqrt((s + q) / 2);
     const s2 = Math.sqrt(Math.max((s - q) / 2, 0));
     const angle =
-      (Math.acos(
-        Math.min(
-          1,
-          Math.abs(a * b + d * e) / (Math.hypot(a, d) * Math.hypot(b, e)),
-        ),
-      ) *
-        180) /
+      (Math.acos(Math.min(1, Math.abs(a * b + d * e) / (Math.hypot(a, d) * Math.hypot(b, e)))) * 180) /
       Math.PI;
-    if (s2 === 0 || s1 / s2 - 1 > 0.02 || Math.abs(90 - angle) > 1)
-      warnings.push("shear");
+    if (s2 === 0 || s1 / s2 - 1 > 0.02 || Math.abs(90 - angle) > 1) warnings.push("shear");
   }
   return {
     ok: true,
