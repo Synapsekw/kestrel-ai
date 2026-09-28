@@ -9,6 +9,52 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## I/M/C wave closes — 2026-09-28 (`task/imc-x`, programme unit IMC-X)
+
+All three sub-projects of the inspection-platform wave (Images, Maps, Point clouds; `main` at
+`8a635fa`) are merged. IMC-X (programme ruling R9) ran the full gate on the combined tree, froze the
+sidecar, ran the frozen smoke, built one installer and wrote the combined operator walkthrough
+`docs/evidence/imc/walkthrough.md` (97 steps: Images 1–30, Maps 31–60, Point clouds 61–86,
+cross-links 87–97; plus "Checks only you can do" and "Operator-visible rulings").
+
+**Changes in this unit.** Contract prose follow-ups from the hand-offs (segment 409
+`assist_model_missing` also covers SAM `unavailable`; `exportLibraryDataset` / `startTrainingRun` no
+longer list `task_not_supported`, and the export's undeclarable 422 is gone, with its
+`REFUSES_VALID_DATA` allowance; `importElevation` 404 is only the align-to surface, a missing file is
+422 `source_missing`, and `no_coordinates` is listed; `createRuns` 422 names `invalid_geometry`;
+`reviewMapDetections` 409 details `{finding_id, finding_ids, count}`); `schema.d.ts` regenerated.
+`BoxWriteResult.repaired`, `BoxReviewResult.finding_ids_deleted` and `UnmappedClassesError` were
+already fixed by I units. Prettier on the e2e `app-settings`, `catalogue`, `model-gsd` specs and the
+`dji-flight.json` fixture. `smoke_frozen.ps1` now predicts through `detectImage` (`/preannotate` was
+retired by I-FW; ADR `vault/decisions/2026-09-28-gotcha-retired-routes-break-the-frozen-smoke.md`).
+
+**Ruling (IMC-X): `not_found` messages keep the local path** (`datasets/images.py:118`,
+`drawings/detect.py:37`, `maps/service.py:48`). Kestrel is a single-user desktop app; the path is the
+one the operator chose, and it helps them find the file. No key or secret can reach these messages.
+
+**Gate (at `db620ec`, suites one at a time):** contract check ok; ruff check + format ok; pytest
+3946 passed, 13 skipped, 1 failed → the stale `exportLibraryDataset` allowance, fixed and re-run
+(passes); frontend lint + tokens ok; vitest 525 files / 3535 tests passed; build ok; e2e 162 passed,
+1 skipped (ports 5620/5621, 1.5 min; `images-perf` and `images-smart-measure` passed first time, no
+cold-start failure).
+
+**Frozen sidecar** (`backend\scriptsuild.ps1`, 3,631 MB in 14,537 files, 211 s): `smoke_frozen.ps1
+-SamWeights E:\Dev\Yolo\models\sam2.1_t.pt` → `smoke ok` in 36.6 s: `geo ok`, `design ok`,
+`drawings ok 200x100 2` (pypdfium2 bundled), `volumes ok pdf … xlsx …`, `pointcloud ok 50000`,
+`cuda True NVIDIA GeForce RTX 5070 Ti`, `starter ok 3`, `import ok 3 images`, `cloud ok 50000 206`,
+`predict ok 0 boxes cuda`, `sam ok cuda 10 vertices encode 556 ms decode 125 ms`, `dataset ok`,
+`worker ok`, `export ok` (ONNX), keyring skipped (a key is stored). `cargo test` (frozen sidecar
+present): 8 passed. `check:webview` (inside `build-installer.ps1`): `webview ok points=49797
+edl=on pins=50 capture=1600x1000 colours=3`, with the known WARN `capture render.edl=false`.
+
+**Installer** (built at `c4080c7`, not installed — the operator installs):
+`E:\Dev\Yolo\installers\Kestrel AI_0.1.0_x64-setup-c4080c7.exe`, 1,976,758,434 bytes (1,885.2 MB),
+SHA256 `a024b9b2698d9ed0b4271f9f46cd4bc6f55f74027cc4682baee08caf21dd62b9`, no WebView2 bootstrapper.
+
+**Left for the operator:** install, then run `docs/evidence/imc/walkthrough.md`, including its
+"Checks only you can do" (C-G criteria 4/5/7/8, M-X real-data checks, DXF click-to-select, 20k-point
+capture map pan, the resized input fields).
+
 ## Point clouds lands — 2026-09-28 (`task/c-g`, unit G evidence)
 
 Sub-project C (spec `docs/superpowers/specs/2026-09-26-point-cloud-workspace-design.md`, index
