@@ -172,10 +172,11 @@ const dot = (a: V, b: V) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const norm = (a: V) => Math.sqrt(dot(a, a));
 const neg = (a: V): V => [-a[0], -a[1], -a[2]];
 
+export const TOO_LARGE = "these coordinates are too large to measure";
+
 function finite<T extends Record<string, number | null>>(out: T, code: string): T {
   for (const v of Object.values(out))
-    if (v !== null && !Number.isFinite(v))
-      throw new MeasureRefusal(code, "these coordinates are too large to measure");
+    if (v !== null && !Number.isFinite(v)) throw new MeasureRefusal(code, TOO_LARGE);
   return out;
 }
 
@@ -216,7 +217,8 @@ function selfIntersects(q: readonly P2[]): boolean {
   const n = q.length;
   let m = 0;
   for (const [x, y] of q) m = Math.max(m, Math.abs(x), Math.abs(y));
-  const eps = 1e-12 * Math.max(1, m) ** 2;
+  const scale = Math.max(1, m);
+  const eps = 1e-12 * scale * scale;
   for (let i = 0; i < n; i++) {
     const a = q[i];
     const b = q[(i + 1) % n];
@@ -264,6 +266,8 @@ export function areaResults(points: readonly MPoint[], params: CloudMeasurementP
   }
   const bigN: V = [sx / 2, sy / 2, sz / 2];
   const surface = norm(bigN);
+  if (!(Number.isFinite(surface) && Number.isFinite(perimeter)))
+    throw new MeasureRefusal("degenerate_polygon", TOO_LARGE);
   if (surface < MIN_AREA_M2)
     throw new MeasureRefusal(
       "degenerate_polygon",
@@ -288,9 +292,12 @@ export function areaResults(points: readonly MPoint[], params: CloudMeasurementP
   const horizontal = Math.hypot(facing[0], facing[1]);
   const plan = Math.abs(bigN[2]);
   let su = 0;
-  for (const v of pts) su += v.uncertainty_m ** 2;
+  for (const v of pts) su += v.uncertainty_m * v.uncertainty_m;
   let sr = 0;
-  for (const v of q) sr += dot(v, nhat) ** 2;
+  for (const v of q) {
+    const d = dot(v, nhat);
+    sr += d * d;
+  }
   return {
     ...nullResults(),
     ...finite(
@@ -350,6 +357,8 @@ export function fitRing(points: readonly MPoint[]): RingFit {
   for (let i = 0; i < k; i++) suv += u[i] * v[i];
   const trace = suu + svv;
   const det = suu * svv - suv * suv;
+  if (![mx, my, suu, svv, suv, trace * trace, det].every(Number.isFinite))
+    throw new MeasureRefusal("collinear_ring", TOO_LARGE);
   const disc = Math.sqrt(Math.max((trace * trace) / 4 - det, 0));
   const lmax = trace / 2 + disc;
   const lmin = trace / 2 - disc;
@@ -372,10 +381,13 @@ export function fitRing(points: readonly MPoint[]): RingFit {
   const cy = my - e / 2;
   const r = Math.sqrt(Math.max((d * d) / 4 + (e * e) / 4 - f, 0));
   let rr = 0;
-  for (const p of points) rr += (Math.hypot(p.x - cx, p.y - cy) - r) ** 2;
+  for (const p of points) {
+    const t = Math.hypot(p.x - cx, p.y - cy) - r;
+    rr += t * t;
+  }
   const rms = Math.sqrt(rr / k);
   let mu = 0;
-  for (const p of points) mu += p.uncertainty_m ** 2;
+  for (const p of points) mu += p.uncertainty_m * p.uncertainty_m;
   mu /= k;
   let z = 0;
   for (const p of points) z += p.z;
