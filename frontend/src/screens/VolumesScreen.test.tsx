@@ -8,7 +8,7 @@ import {
   exampleMeasurement,
   exampleSurface,
 } from "@/test/volumeFixtures";
-import { renderWithProviders } from "@/test/render";
+import { LocationProbe, renderWithProviders } from "@/test/render";
 import { useDiffLayer } from "@/volumes/diffLayer";
 import { useVolumeLayers, type VolumeLayerOptions } from "@/volumes/volumeLayers";
 import { VolumesScreen } from "./VolumesScreen";
@@ -48,15 +48,15 @@ describe("VolumesScreen", () => {
     const { api } = fakeClient(base([], [], []));
     renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/measurements`,
-      path: "/p/:projectId/measurements",
+      route: `/p/${PROJECT_ID}/measurements/volumes`,
+      path: "/p/:projectId/measurements/volumes",
     });
     expect(await screen.findByText("Import a point cloud first")).toBeInTheDocument();
     const second = fakeClient(base([], []));
     renderWithProviders(<VolumesScreen />, {
       api: second.api,
-      route: `/p/${PROJECT_ID}/measurements`,
-      path: "/p/:projectId/measurements",
+      route: `/p/${PROJECT_ID}/measurements/volumes`,
+      path: "/p/:projectId/measurements/volumes",
     });
     expect(await screen.findByText("Build a surface from a point cloud")).toBeInTheDocument();
   });
@@ -71,15 +71,15 @@ describe("VolumesScreen", () => {
     const empty = fakeClient([notBuilt, ...base([], [], [])]);
     renderWithProviders(<VolumesScreen />, {
       api: empty.api,
-      route: `/p/${PROJECT_ID}/measurements`,
-      path: "/p/:projectId/measurements",
+      route: `/p/${PROJECT_ID}/measurements/volumes`,
+      path: "/p/:projectId/measurements/volumes",
     });
     expect(await screen.findByText("Import a point cloud first")).toBeInTheDocument();
     const listed = fakeClient([notBuilt, ...base([exampleSurface], [exampleMeasurement], [])]);
     renderWithProviders(<VolumesScreen />, {
       api: listed.api,
-      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/measurements/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/volumes/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
     expect(screen.getByRole("heading", { level: 1, name: "Measurements" })).toBeInTheDocument();
@@ -93,8 +93,8 @@ describe("VolumesScreen", () => {
     const { api } = fakeClient(base([exampleSurface, other], [moved]));
     const first = renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/measurements/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/volumes/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("May survey");
     expect(vi.mocked(useDiffLayer).mock.calls.at(-1)?.[2]).toBeNull();
@@ -105,8 +105,8 @@ describe("VolumesScreen", () => {
     vi.mocked(useDiffLayer).mockClear();
     renderWithProviders(<VolumesScreen />, {
       api: same.api,
-      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/measurements/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/volumes/:measurementId",
     });
     await waitFor(() => expect(vi.mocked(useDiffLayer).mock.calls.at(-1)?.[2]).toContain("/diff-tiles/"));
   });
@@ -116,8 +116,8 @@ describe("VolumesScreen", () => {
     const { api } = fakeClient(base([exampleSurface], [stale]));
     renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/measurements/${MEASUREMENT_ID}`,
-      path: "/p/:projectId/measurements/:measurementId",
+      route: `/p/${PROJECT_ID}/measurements/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/volumes/:measurementId",
     });
     expect(await screen.findByTestId("surface-view")).toHaveTextContent("April survey");
     expect(screen.getByRole("list", { name: "Surfaces" })).toHaveTextContent("From cloud");
@@ -141,8 +141,8 @@ describe("VolumesScreen", () => {
     ]);
     renderWithProviders(<VolumesScreen />, {
       api,
-      route: `/p/${PROJECT_ID}/measurements`,
-      path: "/p/:projectId/measurements/*",
+      route: `/p/${PROJECT_ID}/measurements/volumes`,
+      path: "/p/:projectId/measurements/volumes/*",
     });
     await screen.findByTestId("surface-view");
     fireEvent.click(screen.getByRole("button", { name: /Draw measurement/ }));
@@ -163,5 +163,25 @@ describe("VolumesScreen", () => {
     // The Draw tool must not stay armed: the next polygon drawn should not silently overwrite
     // this measurement's own polygon.
     await waitFor(() => expect(layerOpts().tool).toBe("pan"));
+  });
+
+  it("stays in the volume view when New is pressed", async () => {
+    const { api } = fakeClient(base([exampleSurface], []));
+    renderWithProviders(
+      <>
+        <VolumesScreen />
+        <LocationProbe />
+      </>,
+      {
+        api,
+        route: `/p/${PROJECT_ID}/measurements/volumes`,
+        path: "/p/:projectId/measurements/volumes/*",
+      },
+    );
+    await screen.findByTestId("surface-view");
+    fireEvent.click(screen.getByRole("button", { name: "New measurement" }));
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(`/p/${PROJECT_ID}/measurements/volumes`),
+    );
   });
 });

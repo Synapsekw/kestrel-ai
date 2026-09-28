@@ -10,6 +10,7 @@ import {
   classifyPixels,
   diagnosticsEnabled,
   installHook,
+  readPins,
   type FrameCameraSample,
   type ViewerStats,
 } from "./viewer/diagnostics";
@@ -334,6 +335,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           const r = canvas.getBoundingClientRect();
           return e.pickWithNormal(r.left + r.width / 2, r.top + r.height / 2);
         },
+        pins: () => readPins(),
       });
       releaseHook = () => {
         stopRecording();

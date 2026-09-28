@@ -208,7 +208,7 @@ async function stubDesignApi(page: Page, posts: Record<string, unknown[]>) {
 test("imports a LandXML design with no target and lists it", async ({ page }) => {
   const posts: Record<string, unknown[]> = { inspections: [], previews: [], surfaces: [], deletes: [] };
   await stubDesignApi(page, posts);
-  await page.goto(`/p/${P}/measurements`);
+  await page.goto(`/p/${P}/measurements/volumes`);
   await page.getByRole("button", { name: "Import design surface" }).click();
   const dialog = page.getByRole("dialog", { name: "Import design surface" });
   await dialog.getByLabel("Design file").fill("C:\\temp\\site-tin.xml");
@@ -254,7 +254,7 @@ test("a DWG shows the fix inline", async ({ page }) => {
         ),
       ),
   );
-  await page.goto(`/p/${P}/measurements`);
+  await page.goto(`/p/${P}/measurements/volumes`);
   await page.getByRole("button", { name: "Import design surface" }).click();
   const dialog = page.getByRole("dialog", { name: "Import design surface" });
   await dialog.getByLabel("Design file").fill("C:\\temp\\site.dwg");

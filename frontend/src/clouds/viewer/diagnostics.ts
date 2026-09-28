@@ -113,6 +113,8 @@ export interface CloudViewerDiagnostics {
     u: number;
     normal: [number, number, number] | null;
   } | null;
+  /** C-P1: the pins layer's pins in client px (spec §7 "Diagnostics hook"); empty without a pins layer. */
+  pins(): PinDiag[];
 }
 
 declare global {
@@ -153,6 +155,29 @@ function safeStorage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+/** One pin as the e2e and acceptance runs read it (C-P1). `x`, `y` are client px. */
+export interface PinDiag {
+  id: string;
+  x: number;
+  y: number;
+  state: "visible" | "back" | "hidden";
+  occluded: boolean;
+  normal: [number, number, number] | null;
+  /** Duration of the pins layer's last per-frame pass, ms. */
+  passMs: number;
+}
+
+let pinsProbe: (() => PinDiag[]) | null = null;
+
+/** The mounted pins layer registers its snapshot here (null on unmount); the viewer hook reads it. */
+export function setPinsProbe(probe: (() => PinDiag[]) | null): void {
+  pinsProbe = probe;
+}
+
+export function readPins(): PinDiag[] {
+  return pinsProbe ? pinsProbe() : [];
 }
 
 const DOMINANT = 40;

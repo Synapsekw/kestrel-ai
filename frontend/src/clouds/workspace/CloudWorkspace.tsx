@@ -11,6 +11,8 @@ import { readBudget, writeBudget } from "@/clouds/viewer/budget";
 import { reducedEffects } from "@/clouds/viewer/edl";
 import { defaultColour, defaultElevationRange } from "@/clouds/viewer/materialOptions";
 import type { ColourAvailability } from "@/clouds/viewer/types";
+import { ReportViewCard as ReportViewCardView } from "@/clouds/views/ReportViewCard";
+import { useViewCapture } from "@/clouds/views/useViewCapture";
 import { Alert, Button } from "@/ui";
 import { canClip } from "./clipEngine";
 import { defaultCloud } from "./cloudActions";
@@ -29,7 +31,7 @@ import { Minimap } from "./SiteMinimap";
 import { Palette } from "./Palette";
 import { Readout } from "./Readout";
 import { LikelyViews as LikelyViewsSeam } from "@/clouds/cameras/LikelyViews";
-import { noViewCapture, WorkspaceSeamsContext, type WorkspaceSeams } from "./seams";
+import { WorkspaceSeamsContext, type WorkspaceSeams } from "./seams";
 import { ENTRY, type CloudToolId } from "./tools";
 import type { FeatureContext, InspectorTab, RenderSettings } from "./types";
 import { useClipTool } from "./useClipTool";
@@ -96,8 +98,19 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
   }, [running, hasView]);
 
   // seams: R1 and L1 fill these
-  const requestViewCapture: WorkspaceSeams["requestViewCapture"] = noViewCapture;
-  const ReportViewCard: WorkspaceSeams["ReportViewCard"] = null;
+  const viewCapture = useViewCapture({
+    projectId,
+    cloudId: cloud.id,
+    viewer,
+    render: () => ({
+      colour_mode: render.colour,
+      point_budget: render.budget,
+      point_size: render.pointSize,
+      clip_box: clip.box,
+    }),
+  });
+  const requestViewCapture: WorkspaceSeams["requestViewCapture"] = viewCapture.requestViewCapture;
+  const ReportViewCard: WorkspaceSeams["ReportViewCard"] = ReportViewCardView;
   const LikelyViews: WorkspaceSeams["LikelyViews"] = LikelyViewsSeam;
   // end seams
   const seams = useMemo<WorkspaceSeams>(

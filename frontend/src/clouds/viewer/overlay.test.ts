@@ -1,6 +1,6 @@
-import { Color, Line, LineBasicMaterial, LineSegments, Points, PointsMaterial } from "three";
+import { Color, Line, LineBasicMaterial, LineSegments, Mesh, Points, PointsMaterial } from "three";
 import { describe, expect, it } from "vitest";
-import { localPositions, overlayObject } from "./overlay";
+import { localPositions, overlayObject, polygonMesh, polygonTriangles } from "./overlay";
 
 describe("overlay geometry", () => {
   it("stores UTM points relative to a local origin so float32 keeps millimetres", () => {
@@ -79,5 +79,60 @@ describe("overlay objects", () => {
     expect([m.opacity, m.transparent, m.depthTest]).toEqual([0.65, true, false]);
     expect(o.geometry.getAttribute("position").count).toBe(2);
     expect(o.renderOrder).toBe(10);
+  });
+
+  it("builds a polygon as M1's translucent mesh under its outline (render order 9)", () => {
+    const tri = [...pts, { x: 243001, y: 3178002, z: 1 }];
+    const o = overlayObject({ kind: "polygon", points: tri, tone: "warn" }, origin, red);
+    expect(o).toBeInstanceOf(Mesh);
+    expect(o.renderOrder).toBe(9);
+    expect(o.geometry.getIndex()?.count).toBe(3);
+  });
+});
+
+describe("polygon fill", () => {
+  const v = (x: number, y: number, z: number) => ({ x, y, z });
+  const area2d = (pts: { x: number; y: number; z: number }[], tri: number[], ax: "xy" | "xz") => {
+    let a = 0;
+    for (let i = 0; i < tri.length; i += 3) {
+      const [p, q, r] = [pts[tri[i]], pts[tri[i + 1]], pts[tri[i + 2]]];
+      const [u1, v1, u2, v2] =
+        ax === "xy"
+          ? [q.x - p.x, q.y - p.y, r.x - p.x, r.y - p.y]
+          : [q.x - p.x, q.z - p.z, r.x - p.x, r.z - p.z];
+      a += Math.abs(u1 * v2 - v1 * u2) / 2;
+    }
+    return a;
+  };
+
+  it("triangulates a square into two triangles", () => {
+    const sq = [v(0, 0, 0), v(1, 0, 0), v(1, 1, 0), v(0, 1, 0)];
+    const t = polygonTriangles(sq);
+    expect(t).toHaveLength(6);
+    expect(area2d(sq, t, "xy")).toBeCloseTo(1, 12);
+  });
+
+  it("covers a concave outline exactly once", () => {
+    const l = [v(0, 0, 5), v(2, 0, 5), v(2, 1, 5), v(1, 1, 5), v(1, 2, 5), v(0, 2, 5)];
+    expect(area2d(l, polygonTriangles(l), "xy")).toBeCloseTo(3, 12);
+  });
+
+  it("triangulates a vertical wall patch at UTM magnitudes in its own plane", () => {
+    const w = [
+      v(553100, 4983000, 10),
+      v(553102, 4983000, 10),
+      v(553102, 4983000, 11.5),
+      v(553100, 4983000, 11.5),
+    ];
+    expect(area2d(w, polygonTriangles(w), "xz")).toBeCloseTo(3, 9);
+  });
+
+  it("has no triangles below three vertices, and a translucent mesh relative to the origin", () => {
+    expect(polygonTriangles([v(0, 0, 0), v(1, 0, 0)])).toEqual([]);
+    const m = polygonMesh([v(10, 10, 0), v(11, 10, 0), v(11, 11, 0)], v(10, 10, 0), new Color(1, 0, 0));
+    const pos = m.geometry.getAttribute("position");
+    expect([pos.getX(1), pos.getY(1), pos.getZ(1)]).toEqual([1, 0, 0]);
+    expect(m.geometry.getIndex()?.count).toBe(3);
+    expect((m.material as { transparent: boolean }).transparent).toBe(true);
   });
 });
