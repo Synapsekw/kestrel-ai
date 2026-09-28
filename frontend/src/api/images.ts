@@ -4,7 +4,6 @@ import { unwrap } from "./errors";
 export type ListImagesQuery = NonNullable<
   paths["/api/v1/projects/{projectId}/images"]["get"]["parameters"]["query"]
 >;
-export type PreannotateResult = components["schemas"]["PreannotateResult"];
 
 export const IMAGE_PAGE_SIZE = 200;
 
@@ -70,19 +69,6 @@ export function bulkMarkEmpty(
     api.POST("/api/v1/projects/{projectId}/images/bulk-mark-empty", {
       params: { path: { projectId } },
       body: { image_ids: imageIds, marked_empty: value },
-    }),
-  );
-}
-
-/** No body: the backend uses the project's pre-annotation model and its defaults. */
-export function preannotateImage(
-  api: ApiClient,
-  projectId: string,
-  imageId: string,
-): Promise<PreannotateResult> {
-  return unwrap(
-    api.POST("/api/v1/projects/{projectId}/images/{imageId}/preannotate", {
-      params: { path: { projectId, imageId } },
     }),
   );
 }

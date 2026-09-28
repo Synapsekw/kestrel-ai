@@ -296,31 +296,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/images/{imageId}/preannotate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                imageId: components["parameters"]["imageId"];
-            };
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Replaced by `detectImage` (image inspection spec §11.2). Run the project's pre-annotation model (or `model_id`) on one image synchronously and
-         *     write proposal boxes with `local_model` provenance. Skipped (`skipped: true`) when the
-         *     image already has boxes from that model. Runs at `imgsz` 2560 by default.
-         * @deprecated
-         */
-        post: operations["preannotateImage"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/projects/{projectId}/images/{imageId}/boxes": {
         parameters: {
             query?: never;
@@ -4775,60 +4750,6 @@ export interface components {
             footprint: components["schemas"]["GeoJsonPolygon"] | components["schemas"]["GeoJsonPoint"] | null;
             footprint_kind: components["schemas"]["ImageFootprintKind"];
         };
-        /**
-         * @example {
-         *       "imgsz": 2560,
-         *       "conf": 0.25
-         *     }
-         */
-        PreannotateRequest: {
-            /** @description a library model id; defaults to the project's pre-annotation model */
-            model_id?: string;
-            /** @default 2560 */
-            imgsz: number;
-            /** @default 0.25 */
-            conf: number;
-        };
-        /**
-         * @example {
-         *       "skipped": false,
-         *       "model_id": "m0000000-2222-4000-8000-000000000001",
-         *       "items": [
-         *         {
-         *           "id": "b0000000-6666-4000-8000-000000000002",
-         *           "image_id": "10000000-5555-4000-8000-000000000001",
-         *           "class_id": "c1a2b3c4-0000-4000-8000-000000000004",
-         *           "x": 1210.5,
-         *           "y": 802,
-         *           "w": 96,
-         *           "h": 61,
-         *           "angle": 0,
-         *           "confidence": 0.81,
-         *           "provenance": {
-         *             "kind": "local_model",
-         *             "model_id": "m0000000-2222-4000-8000-000000000001",
-         *             "provider": null,
-         *             "model_name": "yolo11m-coco",
-         *             "query_run_id": null
-         *           },
-         *           "review_state": "unreviewed",
-         *           "reviewed_at": null,
-         *           "created_at": "2026-09-17T11:00:00Z",
-         *           "shape": "box",
-         *           "points": null,
-         *           "assist": null,
-         *           "area_px": 5856,
-         *           "updated_at": "2026-09-17T11:00:00Z"
-         *         }
-         *       ]
-         *     }
-         */
-        PreannotateResult: {
-            /** @description true when the image already had boxes from this model */
-            skipped: boolean;
-            model_id: string;
-            items: components["schemas"]["Box"][];
-        };
         /** @enum {string} */
         ProvenanceKind: "person" | "local_model" | "cloud_provider";
         /** @enum {string} */
@@ -5046,7 +4967,7 @@ export interface components {
             updated: number;
             /** @description findings the accepts created (defect types) */
             finding_ids_created: string[];
-            /** @description untouched findings the unreviews deleted */
+            /** @description findings this request deleted: a rejected box's finding (rejects are reported here too), or an untouched finding an unreview removed */
             finding_ids_deleted: string[];
         };
         /**
@@ -5081,7 +5002,7 @@ export interface components {
          *     }
          */
         BoxWriteResult: components["schemas"]["Box"] & {
-            /** @description the server changed the geometry (made valid, clipped to the image, re-oriented or rounded); the UI says so */
+            /** @description a polygon's geometry changed beyond plain rounding to keep it valid: a self-intersecting or otherwise invalid ring was made valid, clipped to the image bounds, or snapped to merge two vertices too close to survive rounding; the UI says so. Never set for a box, rotated box or point, and re-orientation alone never counts. */
             repaired: boolean;
             /** @description the annotation's finding (a person's annotation on a defect type creates one); null when it has none */
             finding_id: string | null;
@@ -5422,7 +5343,7 @@ export interface components {
             size_mb: number;
             sha256: string;
             /**
-             * @description `invalid`: the file failed its sha256 check; `unavailable`: the SAM modules failed to import in this build (spec §16), so the tool is off whatever the file
+             * @description `invalid`: the file failed its sha256 check; `unavailable`: the SAM modules failed to import in this build (spec §16), or the model failed to load or run even after falling back to the CPU, so the tool is off whatever the file
              * @enum {string}
              */
             state: "missing" | "ready" | "invalid" | "unavailable";
@@ -12449,44 +12370,6 @@ export interface operations {
             default: components["responses"]["Error"];
         };
     };
-    preannotateImage: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                projectId: components["parameters"]["projectId"];
-                imageId: components["parameters"]["imageId"];
-            };
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["PreannotateRequest"];
-            };
-        };
-        responses: {
-            /** @description proposals now on the image (all boxes from that model, new or existing) */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PreannotateResult"];
-                };
-            };
-            /** @description the chosen library model's weights file is missing (`code` is `model_unavailable`) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            503: components["responses"]["LibraryUnavailable"];
-            default: components["responses"]["Error"];
-        };
-    };
     listBoxes: {
         parameters: {
             query?: never;
@@ -13557,7 +13440,7 @@ export interface operations {
                     "application/json": components["schemas"]["JobRef"];
                 };
             };
-            /** @description `path` is not absolute or does not exist (`code` is `not_found`) */
+            /** @description `path` is not absolute, is not a `.pt` file, or does not exist (`code` is `not_found`) */
             404: {
                 headers: {
                     [name: string]: unknown;
