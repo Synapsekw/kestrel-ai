@@ -2,6 +2,7 @@ import type { RouteObject } from "react-router-dom";
 import { CloudsScreen, Later, VolumesScreen } from "@/app/lazyScreens";
 import { FindingsScreen } from "@/findings/FindingsScreen";
 import { MapWorkspace } from "@/mapws/MapWorkspace";
+import { MeasurementsScreen } from "@/measurements/MeasurementsScreen";
 import { OverviewScreen } from "@/overview/OverviewScreen";
 import { ReportsPlaceholder } from "@/reports/ReportsPlaceholder";
 import { AnalyticsScreen } from "@/screens/AnalyticsScreen";
@@ -57,9 +58,12 @@ export const projectRoutes: RouteObject[] = [
   },
   // F §8.6: the list, and the inspector at findings/:findingId (the canonical finding link).
   { path: "findings/:findingId?", element: <FindingsScreen /> },
-  // Measurements: interim host, today's Volumes screen.
+  // Measurements (R8, M-W6): the union list; the kept volume view lives under it. The old
+  // `measurements/:measurementId` volume links redirect to `measurements/volumes/:measurementId`
+  // (legacyRedirects.tsx).
+  { path: "measurements", element: <MeasurementsScreen /> },
   {
-    path: "measurements",
+    path: "measurements/volumes",
     element: (
       <Later>
         <VolumesScreen />
@@ -67,7 +71,7 @@ export const projectRoutes: RouteObject[] = [
     ),
   },
   {
-    path: "measurements/:measurementId",
+    path: "measurements/volumes/:measurementId",
     element: (
       <Later>
         <VolumesScreen />

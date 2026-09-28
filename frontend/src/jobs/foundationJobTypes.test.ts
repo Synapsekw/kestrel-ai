@@ -8,10 +8,10 @@ import { jobTitle, resultTarget } from "./jobLabels";
 const NEW: [Job["type"], string, string][] = [
   ["pointcloud_import", "Point cloud import", "/p/p/clouds"],
   ["pointcloud_export", "Point cloud export", "/p/p/clouds"],
-  ["surface_build", "Build surface", "/p/p/measurements"],
-  ["volume_calc", "Calculate volume", "/p/p/measurements"],
-  ["volume_export", "Export volumes", "/p/p/measurements"],
-  ["design_import", "Design surface import", "/p/p/measurements"],
+  ["surface_build", "Build surface", "/p/p/measurements/volumes"],
+  ["volume_calc", "Calculate volume", "/p/p/measurements/volumes"],
+  ["volume_export", "Export volumes", "/p/p/measurements/volumes"],
+  ["design_import", "Design surface import", "/p/p/measurements/volumes"],
 ];
 
 describe("the new job types", () => {
