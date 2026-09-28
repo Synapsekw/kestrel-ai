@@ -33,6 +33,15 @@ export interface ViewCapture {
 
 /** A burst of `findings.changed` / `pointclouds.changed` re-reads the views once. */
 export const VIEWS_SETTLE_MS = 400;
+/** The bulk run's closing toast; `skipped`: subjects deleted during the run. */
+function bulkSummary(total: number, failed: number, skipped: number): string {
+  const gone = skipped ? `${skipped} no longer there` : "";
+  if (failed) return `${failed} of ${total} report views were not saved${gone && `; ${gone}`}`;
+  if (skipped === total) return `No report views saved: ${gone}`;
+  if (skipped) return `Saved ${total - skipped} of ${total} report views; ${gone}`;
+  return `Saved ${total} report views`;
+}
+
 export const NOT_SAVED = "The report view was not saved. Use Capture in the inspector to try again.";
 export const QUEUE_STOPPED =
   "The 3D view could not take report views. Reload the view, then use Capture missing views.";
@@ -196,14 +205,7 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
         const cancelledAt = run.cancelled as BulkRun["cancelled"];
         if (cancelledAt === "user") toast("info", `Stopped after ${done} of ${total} report views`);
         else if (cancelledAt === "no" && done === total)
-          toast(
-            failed ? "info" : "ok",
-            failed
-              ? `${failed} of ${total} report views were not saved`
-              : skipped
-                ? `Saved ${total - skipped} of ${total} report views (${skipped} skipped: no longer there)`
-                : `Saved ${total} report views`,
-          );
+          toast(failed || skipped === total ? "info" : "ok", bulkSummary(total, failed, skipped));
       } catch (err) {
         if (run.cancelled === "no")
           toast("info", `Could not list the missing views: ${messageOf(err, "unknown error")}`);

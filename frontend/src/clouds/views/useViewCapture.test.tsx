@@ -276,9 +276,43 @@ describe("useViewCapture", () => {
     await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
     const toasts = useToastStore.getState().toasts;
     expect(toasts.map((t) => t.text)).not.toContain(NOT_SAVED);
-    expect(toasts.at(-1)).toMatchObject({
-      tone: "ok",
-      text: "Saved 1 of 2 report views (1 skipped: no longer there)",
+    expect(toasts.at(-1)).toMatchObject({ tone: "ok", text: "Saved 1 of 2 report views; 1 no longer there" });
+  });
+
+  it("says plainly when every view in a bulk run was skipped, and counts skips beside failures", async () => {
+    api.listFindings.mockResolvedValue({
+      items: [cloudFinding("f1"), cloudFinding("f2")],
+      next_cursor: null,
+    });
+    api.listCloudMeasurements.mockResolvedValue([]);
+    api.listCloudViews.mockResolvedValue({ items: [] });
+    api.putFindingView3d.mockRejectedValue(new ApiFailure("not_found", "Finding not found", 404));
+    const { result: hook } = mount();
+    act(() => hook.current.captureMissing());
+    await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+      tone: "info",
+      text: "No report views saved: 2 no longer there",
+    });
+
+    useToastStore.getState().clear();
+    api.listFindings.mockResolvedValue({
+      items: [cloudFinding("f1"), cloudFinding("f2"), cloudFinding("f3")],
+      next_cursor: null,
+    });
+    api.putFindingView3d.mockImplementation(async (_a, _p, id: string) =>
+      id === "f1"
+        ? Promise.reject(new ApiFailure("not_found", "Finding not found", 404))
+        : id === "f2"
+          ? Promise.reject(new Error("boom"))
+          : viewOut({ subject_id: id, sha256: "new" }),
+    );
+    act(() => hook.current.captureMissing());
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0));
+    await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+      tone: "info",
+      text: "1 of 3 report views were not saved; 1 no longer there",
     });
   });
 

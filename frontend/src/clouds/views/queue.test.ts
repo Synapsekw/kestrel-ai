@@ -248,14 +248,24 @@ describe("the capture queue", () => {
     expect(deps.onFail).toHaveBeenCalledWith(F1, expect.any(Error), false);
   });
 
-  it("a PUT answered 404 (the subject is gone) is a quiet skip, not a failure", async () => {
+  it("a bulk missing job whose PUT answers not_found (the subject is gone) is a quiet skip", async () => {
     const gone = new ApiFailure("not_found", "Finding not found", 404);
-    const upload = vi.fn().mockRejectedValueOnce(gone).mockRejectedValueOnce(gone);
+    const upload = vi.fn().mockRejectedValue(gone);
     const { queue, deps } = harness({ upload });
     expect(await queue.enqueue(F1, "missing", { quiet: true })).toBe("skipped");
-    expect(await queue.enqueue(F1, "create")).toBe("skipped");
     expect(deps.onFail).not.toHaveBeenCalled();
     expect(deps.onBusy).toHaveBeenLastCalledWith("finding:f1", false);
+  });
+
+  it("an explicit capture of a deleted subject, or another 404, still fails", async () => {
+    const upload = vi
+      .fn()
+      .mockRejectedValueOnce(new ApiFailure("not_found", "Finding not found", 404))
+      .mockRejectedValueOnce(new ApiFailure("cloud_gone", "Point cloud not found", 404));
+    const { queue, deps } = harness({ upload });
+    expect(await queue.enqueue(F1, "refresh")).toBe("failed");
+    expect(deps.onFail).toHaveBeenCalledWith(F1, expect.any(ApiFailure), false);
+    expect(await queue.enqueue(F1, "missing", { quiet: true })).toBe("failed");
   });
 
   it("an image over 6 MiB is not uploaded", async () => {

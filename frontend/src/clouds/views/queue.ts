@@ -13,7 +13,7 @@ import { subjectKey, type QueueReason } from "./viewStore";
 export type SubjectGeometry =
   { kind: "finding"; anchor: Vec3 } | { kind: "cloud_measurement"; measurement: CloudMeasurement };
 
-/** `skipped`: the subject was deleted meanwhile (the PUT answered 404) — nothing to save, no report. */
+/** `skipped`: a bulk "missing" job whose subject was deleted meanwhile (`not_found`) — no report. */
 export type JobOutcome = "saved" | "failed" | "stopped" | "skipped";
 
 export interface QueueDeps {
@@ -143,7 +143,8 @@ export class CaptureQueue {
           outcome = "stopped";
           this.drop();
           this.deps.onFail(job.subject, err, true);
-        } else if (err instanceof ApiFailure && err.status === 404) outcome = "skipped";
+        } else if (job.reason === "missing" && err instanceof ApiFailure && err.code === "not_found")
+          outcome = "skipped"; // an explicit capture of a deleted subject still says "not saved"
         else {
           outcome = "failed";
           if (!job.quiet) this.deps.onFail(job.subject, err, false);
