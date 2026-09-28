@@ -5,8 +5,8 @@ Every write here changes a detection's `review_state` (or class) and the run's `
 `app/detect/counts.py`. A crash can therefore never leave a review without its increment; the
 `recount` job stays the repair tool for anything older.
 
-Photo runs are reviewed box by box through `app/datasets/boxes.py`, which applies the same rules to
-the box's `QueryRun`; `accept_above` on a photo run goes through `boxes.review_boxes`.
+Photo runs are reviewed box by box through `app/imagery/annotations.py`, which applies the same rules
+to the box's `QueryRun`; `accept_above` on a photo run goes through `annotations.review_boxes`.
 """
 
 from __future__ import annotations
