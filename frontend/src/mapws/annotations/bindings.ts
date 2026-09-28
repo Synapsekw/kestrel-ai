@@ -9,7 +9,7 @@ import type { WorkspaceLayer } from "@/mapws/types";
  * here, never from mapws/context, mapws/data, mapws/layers, mapws/tools, mapws/inspect, mapws/view,
  * mapws/timeline or mapws/readout directly.
  */
-export { useTools, useWorkspace, useWorkspaceStores } from "@/mapws/context";
+export { WorkspaceProvider, useTools, useWorkspace, useWorkspaceStores } from "@/mapws/context";
 export { SELECTION_PROP, layerRegistry } from "@/mapws/layers/layerRegistry";
 export type {
   LayerKind,
