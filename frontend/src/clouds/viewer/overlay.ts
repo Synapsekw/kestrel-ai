@@ -3,8 +3,13 @@ import {
   BufferGeometry,
   Color,
   DoubleSide,
+  Line,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
+  Points,
+  PointsMaterial,
   SRGBColorSpace,
   ShapeUtils,
   Vector2,
@@ -14,7 +19,9 @@ import type { Vec3 } from "./camera";
 export type OverlayTone = "accent" | "ok" | "warn";
 export type OverlayShape =
   | { kind: "line"; points: Vec3[]; closed?: boolean; tone: OverlayTone }
-  | { kind: "points"; points: Vec3[]; tone: OverlayTone }
+  | { kind: "points"; points: Vec3[]; tone: OverlayTone; size?: number }
+  /** Pairs of points, one segment each, in one draw call (C-L1's camera frustums). */
+  | { kind: "segments"; points: Vec3[]; tone: OverlayTone; opacity?: number }
   /** A translucent fill in the outline's own plane (an area measurement, spec §8.3). */
   | { kind: "polygon"; points: Vec3[]; tone: OverlayTone };
 
@@ -97,4 +104,35 @@ export function polygonMesh(points: readonly Vec3[], origin: Vec3, color: Color)
   );
   mesh.renderOrder = 9;
   return mesh;
+}
+
+/**
+ * The three.js object for one overlay shape, positioned relative to `origin` (the caller places the
+ * overlay group at `origin` in float64). Lines and points are built as S1 built them; segments are
+ * one `LineSegments` (C-L1); a polygon is `polygonMesh` (C-M1, render order 9, under its outline).
+ * All draw over the cloud (`depthTest: false`); the non-polygon kinds at render order 10.
+ */
+export function overlayObject(
+  s: OverlayShape,
+  origin: Vec3,
+  color: Color,
+): Line | LineSegments | Points | Mesh {
+  if (s.kind === "polygon") return polygonMesh(s.points, origin, color);
+  const geom = new BufferGeometry();
+  const closed = s.kind === "line" && !!s.closed;
+  geom.setAttribute("position", new BufferAttribute(localPositions(s.points, origin, closed), 3));
+  const obj =
+    s.kind === "points"
+      ? new Points(
+          geom,
+          new PointsMaterial({ color, size: s.size ?? 8, sizeAttenuation: false, depthTest: false }),
+        )
+      : s.kind === "segments"
+        ? new LineSegments(
+            geom,
+            new LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: s.opacity ?? 1 }),
+          )
+        : new Line(geom, new LineBasicMaterial({ color, depthTest: false, transparent: true }));
+  obj.renderOrder = 10;
+  return obj;
 }

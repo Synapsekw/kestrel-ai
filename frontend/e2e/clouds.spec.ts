@@ -1,4 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
+import { emptyCameras, routeCameras } from "./fixtures/cameras";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, hollowStack, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 
@@ -30,10 +31,14 @@ async function viewerSettled(page: Page) {
   await page.evaluate(() => window.__kestrelCloudViewer?.setEdl(true));
 }
 
-/** The fixture cloud, and a list holding only it: the mock's example cloud has other bounds. */
+/** The fixture cloud, and a list holding only it: the mock's example cloud has other bounds. Cameras
+ * are routed empty (C-L1): without this, the always-mounted cameras feature falls through to the
+ * Prism mock's example `CloudCameraSet`, which draws a frustum and a warn-point glyph that can land
+ * a stray render frame inside this file's idle-frame checks. */
 async function routeCloud(page: Page) {
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
+  await routeCameras(page, P, emptyCameras());
 }
 
 test.beforeEach(async ({ page }) => {
