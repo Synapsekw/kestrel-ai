@@ -74,7 +74,15 @@ export function ws(page: Page) {
     inspectorTabs,
     findingsTab: inspectorTabs.getByRole("tab", { name: /^Findings/ }),
     measurementsTab: inspectorTabs.getByRole("tab", { name: /^Measurements/ }),
-    inspectorPanel: page.getByRole("tabpanel"),
+    // Inspector.tsx has no `role="tabpanel"` anywhere (Tabs.tsx's tab buttons carry no
+    // aria-controls either): the active tab's body is a plain, unlabelled <div> inside the same
+    // GlassPanel as the tab bar. `cloud-inspector` (the GlassPanel's own test id) is the closest
+    // real, stable container — it includes the tab bar, not just the body, so a caller that needs
+    // only the body's content should scope further (e.g. `findingsTab`/`measurementsTab`'s own
+    // named regions: `getByRole("list", { name: "Findings on this cloud" })` /
+    // `getByRole("list", { name: "Saved measurements" })`, or FindingsTab's own
+    // `getByTestId("cloud-findings-tab")`).
+    inspectorPanel: page.getByTestId("cloud-inspector"),
     view: (v: "Top" | "Front" | "Side" | "Iso"): Locator =>
       page.getByRole("button", { name: v, exact: true }),
     // SiteMinimap.tsx: the panel has data-testid="cloud-minimap" with no region role; only its inner
