@@ -43,15 +43,23 @@ export function useCloudCameras(projectId: string, cloud: PointCloud | null): vo
    * differs is an "open" (a fresh cloud, a CRS just assigned, or an explicit reload) and fetches
    * immediately. A run with the same combination is a revision-only bump and gets debounced. */
   const immediateKey = useRef<string | null>(null);
+  /** The revision pair the latest request was sent for. A run with the same combination and the same
+   * pair has nothing new to fetch: StrictMode's mount, unmount, mount re-runs the effect that way, and
+   * a second GET a pause later would land a fresh `set` after the view settled, so the glyph overlay
+   * is set again and the render loop wakes for another second (C-L1 idle-frame debug). */
+  const fetchedRevisions = useRef<string | null>(null);
+  const revisions = `${imagesRevision}|${pointcloudsRevision}`;
 
   useEffect(() => {
     if (!cloudId) {
       immediateKey.current = null;
+      fetchedRevisions.current = null;
       if (useCamerasStore.getState().cloudId !== null) useCamerasStore.getState().reset(null);
       return;
     }
 
     const fetchNow = () => {
+      fetchedRevisions.current = revisions;
       const mySeq = ++seq.current;
       getCloudCameras(api, projectId, cloudId)
         .then((set) => {
@@ -79,8 +87,9 @@ export function useCloudCameras(projectId: string, cloud: PointCloud | null): vo
       fetchNow();
       return;
     }
+    if (fetchedRevisions.current === revisions) return;
 
     const timer = window.setTimeout(fetchNow, REVISION_REFETCH_MS);
     return () => window.clearTimeout(timer);
-  }, [api, projectId, cloudId, crsKey, reloadTick, imagesRevision, pointcloudsRevision]);
+  }, [api, projectId, cloudId, crsKey, reloadTick, revisions]);
 }

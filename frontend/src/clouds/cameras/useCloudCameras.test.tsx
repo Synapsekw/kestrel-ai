@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { StrictMode, type ReactNode } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PointCloud } from "@/api/clouds";
 import { useChangesStore } from "@/store/changes";
@@ -22,7 +22,9 @@ interface CamerasGetInit {
 }
 
 function mount(api: ReturnType<typeof fakeClient>["api"], cloud: PointCloud | null) {
-  const wrapper = ({ children }: { children: ReactNode }) => <TestApiProvider api={api}>{children}</TestApiProvider>;
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <TestApiProvider api={api}>{children}</TestApiProvider>
+  );
   return renderHook(({ c }) => useCloudCameras(PROJECT_ID, c), { wrapper, initialProps: { c: cloud } });
 }
 
@@ -53,6 +55,28 @@ describe("useCloudCameras", () => {
     act(() => useChangesStore.setState((s) => ({ pointcloudsRevision: s.pointcloudsRevision + 1 })));
     await vi.advanceTimersByTimeAsync(REVISION_REFETCH_MS);
     expect(requests).toHaveLength(3);
+  });
+
+  it("a re-run of the effect with nothing changed (StrictMode's mount, unmount, mount) sends no second GET", async () => {
+    // A second GET a pause later landed a fresh `set` object after the view had settled: the glyph
+    // overlay was set again, the render loop woke for another second (clouds.spec.ts idle check).
+    vi.useFakeTimers();
+    const { api, requests } = fakeClient([{ method: "GET", path: /\/cameras$/, body: cameraSet([]) }]);
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <StrictMode>
+        <TestApiProvider api={api}>{children}</TestApiProvider>
+      </StrictMode>
+    );
+    renderHook(() => useCloudCameras(PROJECT_ID, exampleCloud), { wrapper });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(requests).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(REVISION_REFETCH_MS * 3);
+    expect(requests).toHaveLength(1);
+
+    // a real bump still refetches after the pause
+    act(() => useChangesStore.getState().bumpImages());
+    await vi.advanceTimersByTimeAsync(REVISION_REFETCH_MS);
+    expect(requests).toHaveLength(2);
   });
 
   it("a burst of revision bumps sends one GET after the pause", async () => {
@@ -139,7 +163,11 @@ describe("useCloudCameras", () => {
         calls += 1;
         const mine = calls;
         if (mine === 1) await gate;
-        return { data: mine === 1 ? first : second, error: undefined, response: new Response(null, { status: 200 }) };
+        return {
+          data: mine === 1 ? first : second,
+          error: undefined,
+          response: new Response(null, { status: 200 }),
+        };
       }) as typeof base.GET,
     };
     // the initial open issues the first (gated) request; reload() issues a second, faster one for
