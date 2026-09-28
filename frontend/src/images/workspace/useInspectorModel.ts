@@ -23,7 +23,7 @@ export function useInspectorModel(projectId: string, imageId: string | null): In
   const revision = useChangesStore((s) => s.findingsRevision);
   const { types } = useProjectTypes(projectId);
   const { selectedId, boxes } = useSelection();
-  const { findingOf, linkFindings } = useFindingLinks();
+  const { findingOf, linkFindings, loaded } = useFindingLinks();
   const [page, setPage] = useState<{ id: string | null; items: Finding[]; more: boolean }>({
     id: null,
     items: [],
@@ -41,11 +41,15 @@ export function useInspectorModel(projectId: string, imageId: string | null): In
   }, [api, projectId, imageId, revision]);
   const items = page.id === imageId ? page.items : [];
   // FC-R16: the box → finding links live in FC's store; this page fills them (FA adds its own accepts).
+  // C1: FC's loadImage clears `findingOf`, so link only once FC holds THIS frame, and again after
+  // every load of it (`loaded` is a new object per load), whichever of the two reads lands first.
+  const frame = loaded?.id === imageId ? loaded : null;
   useEffect(() => {
+    if (!frame) return;
     const links: Record<string, string> = {};
     for (const f of items) if (f.anchor.kind === "image") links[f.anchor.annotation_id] = f.id;
     if (Object.keys(links).length) linkFindings(links);
-  }, [items, linkFindings]);
+  }, [frame, items, linkFindings]);
   const findingIdOf = useCallback((boxId: string) => findingOf[boxId] ?? null, [findingOf]);
   const state = useMemo(
     () => inspectorState({ selectedId, boxes, findingOf: findingIdOf, types }),

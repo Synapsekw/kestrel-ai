@@ -136,13 +136,20 @@ export function useActiveMeasurement(): Segment | null {
   return m ? { x1: m.x1, y1: m.y1, x2: m.x2, y2: m.y2 } : null;
 }
 
+/**
+ * FC-R16's box → finding links. `loaded` is the frame FC's store holds (a new object on every
+ * `loadImage`): FC's `loadImage` resets `findingOf` (PER_IMAGE), so a caller relinks whenever it
+ * changes, never before the frame is in (C1: the findings page may answer before the frame).
+ */
 export function useFindingLinks(): {
   findingOf: Readonly<Record<string, string>>;
   linkFindings: (l: Record<string, string>) => void;
+  loaded: ImageDetail | null;
 } {
   const findingOf = useImagesWorkspace((s) => s.findingOf);
   const linkFindings = useImagesWorkspace((s) => s.linkFindings);
-  return { findingOf, linkFindings };
+  const loaded = useDetail();
+  return { findingOf, linkFindings, loaded };
 }
 
 export function useShapeActions(projectId: string): { remove: (id: string) => void } {

@@ -52,13 +52,14 @@ describe("inspectorState", () => {
 });
 
 const links: Record<string, string> = { sug2: "f9" }; // FA's accept already linked sug2
+const frameIn = { id: IMAGE_ID }; // one object: FC's store hands back the same frame until a new load
 vi.mock("./seams", () => ({
   useSelection: () => ({ selectedId: ANNOTATION_ID, select: vi.fn(), boxes, boxesLoaded: true }),
   // A real Zustand `findingOf` selector hands back a new object once `linkFindings` sets new state,
   // which is what re-triggers useInspectorModel's memo; this double reproduces that reactivity with
   // its own state instead of mutating one fixed object in place (which would never invalidate it).
   // `linkFindings` is a stable callback (like a Zustand action) and only sets new state when a link
-  // actually changed, so useInspectorModel's effect (deps: [items, linkFindings]) settles instead of
+  // actually changed, so useInspectorModel's effect (deps: [frame, items, linkFindings]) settles instead of
   // looping.
   useFindingLinks: () => {
     // A copy, not an alias: `links` is mutated in place below (for the test's own assertions),
@@ -68,7 +69,8 @@ vi.mock("./seams", () => ({
       Object.assign(links, l);
       setCurrent((prev) => (Object.entries(l).every(([k, v]) => prev[k] === v) ? prev : { ...prev, ...l }));
     }, []);
-    return { findingOf: current, linkFindings };
+    // The frame is in FC's store (C1: the model links only once it is).
+    return { findingOf: current, linkFindings, loaded: frameIn };
   },
 }));
 
