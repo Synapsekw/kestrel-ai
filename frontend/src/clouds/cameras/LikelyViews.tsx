@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components --
+   LIKELY_VIEWS_DEFAULT and absoluteImagePath are exported next to the component that uses them
+   (C-P1's default and the attach-path test need them); not a fast-refresh boundary. */
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { thumbnailUrl } from "@contract/client";

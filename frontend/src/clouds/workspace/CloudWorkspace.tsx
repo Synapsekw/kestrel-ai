@@ -28,6 +28,7 @@ import { NOTICE_INSET } from "./layout";
 import { Minimap } from "./SiteMinimap";
 import { Palette } from "./Palette";
 import { Readout } from "./Readout";
+import { LikelyViews as LikelyViewsSeam } from "@/clouds/cameras/LikelyViews";
 import { noViewCapture, WorkspaceSeamsContext, type WorkspaceSeams } from "./seams";
 import { ENTRY, type CloudToolId } from "./tools";
 import type { FeatureContext, InspectorTab, RenderSettings } from "./types";
@@ -97,7 +98,7 @@ function ReadyWorkspace({ projectId, cloud, clouds, maps, onImport, onDetails }:
   // seams: R1 and L1 fill these
   const requestViewCapture: WorkspaceSeams["requestViewCapture"] = noViewCapture;
   const ReportViewCard: WorkspaceSeams["ReportViewCard"] = null;
-  const LikelyViews: WorkspaceSeams["LikelyViews"] = null;
+  const LikelyViews: WorkspaceSeams["LikelyViews"] = LikelyViewsSeam;
   // end seams
   const seams = useMemo<WorkspaceSeams>(
     () => ({ requestViewCapture, ReportViewCard, LikelyViews }),

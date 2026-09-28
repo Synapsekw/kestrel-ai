@@ -155,7 +155,7 @@ describe("CloudWorkspace (spec §6)", () => {
       ["Area", false],
       ["Cross-section", false],
       ["Pin a finding", false],
-      ["Photo link", false],
+      ["Photo link", true],
     ] as const)
       expect(toolbar().querySelector(`[aria-label="${name}"]`)!.hasAttribute("disabled"), name).toBe(
         !enabled,
