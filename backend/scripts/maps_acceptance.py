@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import re
 import statistics
 import sys
 import time
@@ -27,13 +28,33 @@ RES0 = 1024.0  # app/workspace/grid.py: res(z) = 1024 / 2**z m/px, 256 px tiles
 VOLUME_TOLERANCE = 0.02  # toe_plane against the analytic cone
 
 
+# A Windows absolute path, raw or JSON-escaped (C:\\x, C:\x, C:/x), up to a quote, space or comma.
+_PATH = re.compile(r"[A-Za-z]:(?:\\\\|\\|/)[^\s\"',]*")
+
+
 class StepFailed(Exception):
     pass
 
 
+def redact(text: str) -> str:
+    """Error text goes into the evidence JSON: no operator or scratch path in it."""
+    return _PATH.sub("<path>", text)
+
+
+def imports_pass(m: dict, maps: dict, surfaces: dict) -> bool:
+    """Every manifest ortho and DSM registered, and at least one of each."""
+    return 0 < len(maps) == len(m["orthos"]) and 0 < len(surfaces) == len(m["dsms"])
+
+
+def layers_pass(layers: list[dict], expected: int) -> bool:
+    """One layer per import, at least one, all in the site frame."""
+    return 0 < len(layers) == expected and all(la["in_frame"] for la in layers)
+
+
 def check(r: httpx.Response, *codes: int) -> dict:
     if r.status_code not in (codes or (200, 201, 202)):
-        raise StepFailed(f"{r.request.method} {r.request.url.path} -> {r.status_code}: {r.text[:400]}")
+        text = f"{r.request.method} {r.request.url.path} -> {r.status_code}: {r.text[:400]}"
+        raise StepFailed(redact(text))
     return r.json() if r.content else {}
 
 
@@ -53,7 +74,7 @@ def wait(c: httpx.Client, pid: str, jid: str | None, timeout: float = 1800) -> d
         job = check(c.get(f"/projects/{pid}/jobs/{jid}"))
         if job["state"] in ("succeeded", "failed", "cancelled"):
             if job["state"] != "succeeded":
-                raise StepFailed(f"job {jid} {job['state']}: {job.get('error')}")
+                raise StepFailed(redact(f"job {jid} {job['state']}: {job.get('error')}"))
             return job
         time.sleep(0.5)
     raise StepFailed(f"job {jid} timed out")
@@ -70,7 +91,7 @@ def run_step(raw: dict, name: str, fn) -> object:
     try:
         return fn()
     except (StepFailed, httpx.HTTPError, KeyError, TypeError, ValueError) as e:
-        raw["steps"][name] = {"pass": False, "error": f"{type(e).__name__}: {e}"}
+        raw["steps"][name] = {"pass": False, "error": redact(f"{type(e).__name__}: {e}")}
         return None
 
 
@@ -100,7 +121,7 @@ def main() -> int:
     finally:
         c.close()
         a.out.parent.mkdir(parents=True, exist_ok=True)
-        a.out.write_text(json.dumps(raw, indent=2, default=str))
+        a.out.write_text(json.dumps(raw, indent=2, default=str) + "\n")
     print(json.dumps({k: v.get("pass") if isinstance(v, dict) else None for k, v in raw["steps"].items()}))
     return 0
 
@@ -129,7 +150,7 @@ def _run(c: httpx.Client, a, m: dict, raw: dict) -> None:
             "maps": len(maps),
             "surfaces": len(surfaces),
             "seconds": round(time.time() - t, 1),
-            "pass": True,
+            "pass": imports_pass(m, maps, surfaces),
         }
 
     run_step(raw, "imports", imports)
@@ -150,7 +171,7 @@ def _run(c: httpx.Client, a, m: dict, raw: dict) -> None:
                 {k: layer.get(k) for k in ("kind", "group", "status", "in_frame", "date", "max_zoom")}
                 for layer in layers
             ],
-            "pass": len(layers) == len(maps) + len(surfaces) and all(la["in_frame"] for la in layers),
+            "pass": layers_pass(layers, len(maps) + len(surfaces)),
         }
 
     run_step(raw, "frame", frame)
@@ -190,7 +211,7 @@ def _run(c: httpx.Client, a, m: dict, raw: dict) -> None:
                     for p0, p1 in zip(pts[:-1], pts[1:], strict=True):
                         best = min(best, seg_dist((e, n), p0, p1))
             offsets.append(None if best == math.inf else round(best, 4))
-        worst = None if None in offsets else max(offsets)
+        worst = None if not offsets or None in offsets else max(offsets)
         steps["dxf"] = {
             "method": (dxf.get("georef") or {}).get("method"),
             "epsg": (dxf.get("georef") or {}).get("epsg"),
@@ -233,7 +254,7 @@ def _run(c: httpx.Client, a, m: dict, raw: dict) -> None:
             "residuals_m": g["residuals_m"],
             "warnings": g["warnings"],
             "georef_version": placed["georef_version"],
-            "pass": g["rmse_m"] is not None,
+            "pass": g["rmse_m"] is not None and len(g["residuals_m"]) == len(points) > 0,
         }
 
     run_step(raw, "pdf", pdf_step)
@@ -324,7 +345,7 @@ def _run(c: httpx.Client, a, m: dict, raw: dict) -> None:
         if not cloud_dsm:
             steps["dsm_crosscheck"] = {"pass": None, "note": "operator data needed (walkthrough)"}
             return
-        dem = surfaces["2026-09-14"] if "2026-09-14" in surfaces else surfaces[m["dsms"][-1]["date"] or "dtm"]
+        dem = surfaces["2026-09-14"]  # the Sep DSM (R-T15), the volumes' top surface
         e0, n0 = m["stockpile"][0]
         dz = []
         for i in range(20):
