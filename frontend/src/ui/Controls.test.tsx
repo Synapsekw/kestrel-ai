@@ -146,6 +146,19 @@ describe("Select", () => {
     );
     expect(screen.getByRole("combobox", { name: "Class" }).parentElement!.className).toContain("w-full");
   });
+
+  // Its doc: the wrapper carries the width, the select itself is always full width inside it (C-G
+  // final review I4: fieldClass's width rule must not strip the select's own w-full).
+  it("keeps the select itself full width inside a sized wrapper", () => {
+    render(
+      <Select aria-label="Hotkey" wrapperClassName="w-32" className="font-mono">
+        <option value="">none</option>
+      </Select>,
+    );
+    const select = screen.getByRole("combobox", { name: "Hotkey" });
+    expect(select.className.split(/\s+/)).toContain("w-full");
+    expect(select.parentElement!.className.split(/\s+/)).toContain("w-32");
+  });
 });
 
 describe("Input", () => {

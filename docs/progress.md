@@ -62,7 +62,9 @@ chimney rows, 5 hand thickness, 7-8 eye checks; commands in `docs/evidence/cloud
 criterion 6's weak clip test; the driver's exit crash after a good `pins` run (Node 24.11 libuv) and
 the launcher's lack of port parameters (C-G follow-up); the occlusion cone's trade-off for far-side
 pins without a normal, and the spec §7 wording (coordinator); IMC-X: eyeball the shared `Input` and
-`Slider` in Images and Maps, run `pnpm -C frontend check:webview` on the packaged exe (it expects
+`Slider` in Images and Maps, and the sized fields that now keep their own width (Catalogue types
+search, Sources survey date, Site areas rename, Map layers contour interval, Map drawings EPSG and
+PDF page, the project types hotkey select; list in the README's "Changes to other units' code"), run `pnpm -C frontend check:webview` on the packaged exe (it expects
 `edl=on pins=50 capture=1600x1000`), and webview memory at a real 3 M points (measured at about 404 k);
 deferred minors B2-B7 and B9-B13 (`minors-triage.md` in the C-G SDD workspace).
 

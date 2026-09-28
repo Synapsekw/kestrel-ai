@@ -93,7 +93,8 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
         aria-invalid={invalid || undefined}
         className={fieldClass(
           invalid,
-          cx("appearance-none pr-8", dense ? "h-7 pl-2 text-sm" : "h-[34px] pl-3", className),
+          // always full width inside the wrapper, which carries the caller's width (see its doc)
+          cx("w-full appearance-none pr-8", dense ? "h-7 pl-2 text-sm" : "h-[34px] pl-3", className),
         )}
         {...rest}
       >

@@ -136,7 +136,7 @@ export function ProjectTypesSection({
                 onChange={(e) =>
                   edit(rows.map((x) => (x.typeId === r.typeId ? { ...x, override: e.target.value } : x)))
                 }
-                className="w-32"
+                wrapperClassName="w-32"
               >
                 <option value="">
                   {r.catalogueHotkey ? `Default (${r.catalogueHotkey.toUpperCase()})` : "None"}
