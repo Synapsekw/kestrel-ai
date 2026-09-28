@@ -1,9 +1,10 @@
 import { codeOf, messageOf } from "@/api/errors";
+import { TOO_MANY_PAIRS } from "./alignModel";
 import { MIN_PAIRS, type FitRefusal, type FitResult, type FitWarning, type GeorefModelName } from "./fit";
 
 export const REFUSAL_TEXT: Record<FitRefusal, string> = {
   too_few_points: "Add more control points.",
-  too_many_points: "At most 12 pairs: delete one to add another.",
+  too_many_points: TOO_MANY_PAIRS,
   collinear: "These points lie on one line. Add a point away from that line.",
   reflection:
     "These points are picked in mirrored order: pick each pair on the drawing and on the map in the same order.",

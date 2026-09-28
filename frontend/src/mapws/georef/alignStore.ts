@@ -94,18 +94,22 @@ function epsgOfWkt(wkt: string | null): number | null {
  * `crs`/`embedded` placements compare `epsg` (their transform maps into the drawing's own CRS,
  * `backend/app/drawings/placement.py:88-109`).
  *
- * Deviation from the dispatched PF7 formula: the brief gives
- * `g.dst_crs_wkt === frame.crs_wkt || epsgOfWkt(g.dst_crs_wkt) === frame.epsg`, but that `||` can
- * never be false once the first operand is true regardless of operand order, so it fails the brief's
- * own verbatim test (a frame spread with only `epsg` overridden, `crs_wkt` left unchanged, must
- * report "not in frame"). EPSG is treated as authoritative whenever the frame carries one; the WKT
- * string is compared only as a fallback for a `crs` frame with no EPSG.
+ * PF7 (restored per controller ruling, fix round 1): WKT-string identity is checked first and is
+ * sufficient on its own — `epsg`/`crs_wkt` are always derived together server-side
+ * (`backend/app/workspace/frame.py:76-103`, `frame_for_epsg` / `frame_for_crs`), and `frame_for_crs`
+ * can produce a frame whose `epsg` is set (a pyproj match) while its `crs_wkt` has no parseable
+ * `ID`/`AUTHORITY` tag; the drawing's `dst_crs_wkt` is stored as that exact string, so an EPSG-first
+ * comparison would wrongly report "another CRS" and discard the saved control points for that same
+ * frame. `epsgOfWkt` is only a fallback for the case the WKT strings differ (re-serialised, but the
+ * same CRS) and the frame does carry an EPSG.
  */
 export function placementInFrame(g: DrawingGeoref, frame: SiteFrame): boolean {
   if (g.method === "control_points") {
     if (g.dst_crs_wkt === null) return frame.kind === "local";
-    if (frame.kind !== "crs") return false;
-    return frame.epsg !== null ? epsgOfWkt(g.dst_crs_wkt) === frame.epsg : g.dst_crs_wkt === frame.crs_wkt;
+    return (
+      frame.kind === "crs" &&
+      (g.dst_crs_wkt === frame.crs_wkt || (frame.epsg !== null && epsgOfWkt(g.dst_crs_wkt) === frame.epsg))
+    );
   }
   return frame.kind === "crs" && g.epsg !== null && g.epsg === frame.epsg;
 }

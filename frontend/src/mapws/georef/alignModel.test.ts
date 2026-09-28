@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ApiFailure } from "@/api/errors";
 import { LOCAL } from "@/mapws/test/fixtures";
 import { dxfDrawing, pdfDrawing, placedPdfDrawing, SITE_FRAME } from "@/mapws/drawings/testFixtures";
+import type { SiteFrame } from "@/mapws/types";
 import { applyAffine, MAX_PAIRS, type Affine } from "./fit";
 import {
   clickAt,
@@ -22,6 +23,20 @@ import { placementInFrame, sessionFor, viewportOf } from "./alignStore";
 const SRC: Extent4 = [0, -3000, 4000, 0];
 const VIEW: Extent4 = [500000, 4982000, 501000, 4983000];
 const TRUE: Affine = [0.02, 0, 500010, 0, 0.02, 4982990];
+
+/**
+ * A genuinely different, internally consistent frame (fix round 1, controller ruling): unlike
+ * `{...SITE_FRAME, epsg: 32639}`, this frame's `crs_wkt` and `epsg` actually agree with each other,
+ * the way the server always produces them (`backend/app/workspace/frame.py` `frame_for_epsg` /
+ * `frame_for_crs`).
+ */
+const OTHER_CRS_FRAME: SiteFrame = {
+  kind: "crs",
+  epsg: 32639,
+  crs_wkt: 'PROJCRS["WGS 84 / UTM zone 39N",ID["EPSG",32639]]',
+  name: "WGS 84 / UTM zone 39N",
+  proj4: "+proj=utm +zone=39 +datum=WGS84 +units=m +no_defs",
+};
 
 function session() {
   return startSession({
@@ -167,15 +182,25 @@ describe("messages", () => {
 describe("sessions and the frame (R-W5-5)", () => {
   it("knows a placement's frame from its WKT or EPSG", () => {
     expect(placementInFrame(placedPdfDrawing.georef!, SITE_FRAME)).toBe(true);
-    expect(
-      placementInFrame(placedPdfDrawing.georef!, {
-        ...SITE_FRAME,
-        epsg: 32639,
-      }),
-    ).toBe(false);
+    expect(placementInFrame(placedPdfDrawing.georef!, OTHER_CRS_FRAME)).toBe(false);
     expect(placementInFrame(dxfDrawing.georef!, SITE_FRAME)).toBe(true);
     // Preflight adaptation #2: the local-frame literal uses fixtures.ts's LOCAL (SiteFrame requires crs_wkt).
     expect(placementInFrame({ ...placedPdfDrawing.georef!, dst_crs_wkt: null }, LOCAL)).toBe(true);
+  });
+
+  it("matches by WKT identity even when the frame's EPSG is set but its WKT has no ID/AUTHORITY tag (fix round 1 (c))", () => {
+    // frame_for_crs (backend/app/workspace/frame.py) can produce exactly this: epsg set from a
+    // pyproj match, crs_wkt with no parseable EPSG tag. The drawing's dst_crs_wkt is that same
+    // string, so the match must not depend on epsgOfWkt succeeding.
+    const untaggedFrame: SiteFrame = {
+      kind: "crs",
+      epsg: 32638,
+      crs_wkt: 'PROJCRS["Custom local CRS, no ID tag"]',
+      name: "Custom",
+      proj4: "+proj=utm +zone=38 +datum=WGS84 +units=m +no_defs",
+    };
+    const g = { ...placedPdfDrawing.georef!, dst_crs_wkt: untaggedFrame.crs_wkt };
+    expect(placementInFrame(g, untaggedFrame)).toBe(true);
   });
   it("resumes the saved control points in the same frame", () => {
     const r = sessionFor(placedPdfDrawing, VIEW, SITE_FRAME);
@@ -184,10 +209,7 @@ describe("sessions and the frame (R-W5-5)", () => {
     expect(r.notice).toBeNull();
   });
   it("starts afresh, with a notice, when placed in another CRS", () => {
-    const r = sessionFor(placedPdfDrawing, VIEW, {
-      ...SITE_FRAME,
-      epsg: 32639,
-    });
+    const r = sessionFor(placedPdfDrawing, VIEW, OTHER_CRS_FRAME);
     expect(r.session.pairs).toHaveLength(0);
     expect(r.notice).toMatch(/placed in another CRS/);
   });
