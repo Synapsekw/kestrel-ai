@@ -29,7 +29,13 @@ describe("parseArrival", () => {
   });
 
   it("defaults r and allows no from", () => {
-    expect(parseArrival(q("at=10,20"))).toEqual({ kind: "point", px: 10, py: 20, r: DEFAULT_ARRIVAL_R, cloudId: null });
+    expect(parseArrival(q("at=10,20"))).toEqual({
+      kind: "point",
+      px: 10,
+      py: 20,
+      r: DEFAULT_ARRIVAL_R,
+      cloudId: null,
+    });
   });
 
   it.each(["r=0", "r=-3", "r=abc", "r="])("falls back to r=24 for %s", (r) => {
@@ -75,7 +81,9 @@ describe("helpers", () => {
   });
 
   it("strips only the named keys", () => {
-    expect(stripKeys(q("at=1,2&r=3&from=cloud:c&filter=x"), ["at", "r", "from", "finding"]).toString()).toBe("filter=x");
+    expect(stripKeys(q("at=1,2&r=3&from=cloud:c&filter=x"), ["at", "r", "from", "finding"]).toString()).toBe(
+      "filter=x",
+    );
   });
 
   it("keeps an arrival inside the frame, edges included", () => {
