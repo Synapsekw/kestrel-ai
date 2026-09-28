@@ -143,7 +143,7 @@ export function MeasurePanel({
     const picks = tool.picks;
     setSaving(true);
     void createCloudMeasurement(api, projectId, cloud.id, { kind: tool.tool, points })
-      .then((m) => {
+      .then(({ measurement: m }) => {
         setItems((xs) => [...xs, m]);
         setSavedPicks(picks);
         setError(null);
