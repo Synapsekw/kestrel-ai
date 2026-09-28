@@ -57,6 +57,7 @@ export {
   DEFAULT_BROWSER_FILTERS,
   Filmstrip,
   filtersToIndexQuery,
+  FLAG_GPS,
   indexNeighbours,
   MiniMap,
   useImageIndex,
