@@ -47,6 +47,7 @@ function fakeViewer() {
     requestRender,
     emit: (cam: FrameCamera) => act(() => frames.forEach((f) => f(cam))),
     settle: () => act(() => settles.forEach((s) => s())),
+    listeners: () => ({ frames: frames.size, settles: settles.size }),
   };
 }
 
@@ -179,6 +180,15 @@ describe("PinsLayer", () => {
     v.emit(south);
     expect(readPins().map((p) => [p.id, p.state])).toEqual([["a", "visible"]]);
     unmount();
+    expect(readPins()).toEqual([]);
+  });
+
+  it("removes its frame and settle listeners and the pins probe on unmount", () => {
+    const v = fakeViewer();
+    const { unmount } = mount(v, [pin("a", at(0, 0, 0))]);
+    expect(v.listeners()).toEqual({ frames: 1, settles: 1 });
+    unmount();
+    expect(v.listeners()).toEqual({ frames: 0, settles: 0 });
     expect(readPins()).toEqual([]);
   });
 });
