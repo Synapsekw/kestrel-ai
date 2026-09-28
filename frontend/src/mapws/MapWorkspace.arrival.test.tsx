@@ -176,6 +176,17 @@ describe("sel and tool survive a ?map= arrival (R-P1)", () => {
     expect(screen.getByRole("button", { name: /^Zone/ })).toHaveAttribute("aria-pressed", "false");
   });
 
+  it("sends a map with no coordinates to its evaluation screen, not the workspace (spec §14)", async () => {
+    arrive(
+      base(onMap, 200, { map: { ...exampleGeoMap, crs_wkt: null, proj4: null } }),
+      `map=${MAP_ID}&sel=run:r1`,
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/maps/${MAP_ID}/evaluate`),
+    );
+    expect(screen.getByTestId("location")).not.toHaveTextContent("sel=");
+  });
+
   it("arms ?tool=zone after the map arrival settles", async () => {
     arrive(base(onMap), `map=${MAP_ID}&tool=zone`);
     await waitFor(() => expect(screen.getByTestId("location")).not.toHaveTextContent("map="));

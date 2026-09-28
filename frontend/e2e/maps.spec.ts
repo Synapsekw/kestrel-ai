@@ -295,6 +295,12 @@ test("a map without coordinates is listed greyed and opens its evaluation view (
   await expect(page).toHaveURL(new RegExp(`/p/${P}/maps/${MAP_FLAT}/evaluate$`));
   await expect(page.getByTestId("map-panel")).toContainText("No coordinates in this file");
   await expect(page.getByRole("radio", { name: "Results" })).toBeChecked();
+  // Every other way in (a workspace link, an old bookmark) also settles on the evaluation view (I1).
+  for (const way of [`/p/${P}/maps?map=${MAP_FLAT}`, `/p/${P}/maps/${MAP_FLAT}`]) {
+    await page.goto(way);
+    await expect(page).toHaveURL(new RegExp(`/p/${P}/maps/${MAP_FLAT}/evaluate$`));
+    await expect(page.getByTestId("map-panel")).toContainText("No coordinates in this file");
+  }
 });
 
 test("the evaluation view labels, draws an evaluation zone, scores and exports", async ({ page }) => {
