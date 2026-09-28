@@ -1,6 +1,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ComponentProps,
   type KeyboardEvent,
@@ -159,6 +160,7 @@ export function PinCalloutCreate({
     () => defectTypes.find((t) => t.id === initialTypeId)?.default_severity ?? null,
   );
   const [note, setNote] = useState("");
+  const noteRef = useRef<HTMLTextAreaElement>(null);
 
   // T6-4: the project's types can load after the draft opens (`defectTypes` arrives as a new array
   // once that GET answers). Adjusting state during render in response to that prop change (React's
@@ -197,12 +199,19 @@ export function PinCalloutCreate({
   });
 
   const onKeyDown = (e: KeyboardEvent<HTMLFormElement>) => {
-    if (e.key !== "Enter" || e.shiftKey || e.defaultPrevented) return;
+    if (e.defaultPrevented) return;
     const t = e.target as HTMLElement;
+    // Spec §9.4 "Esc discards the draft": W1 skips typing targets, so the note handles its own Esc.
+    if (e.key === "Escape" && t === noteRef.current) {
+      e.preventDefault();
+      onCancel();
+      return;
+    }
+    if (e.key !== "Enter" || e.shiftKey) return;
     if (t.closest('[role="listbox"]') || t.getAttribute("aria-expanded") === "true") return;
-    // T6-3: Enter on a focused non-submit button (Cancel, a Severity segment) activates that button
-    // instead of creating; W1's own Enter routing already ignores buttons, so nothing double-fires.
-    if (t instanceof HTMLButtonElement && t.type !== "submit") return;
+    // Final-review ruling (T6-3 re-ruled): only Cancel keeps its own Enter. The closed Type trigger
+    // and a Severity segment create; `preventDefault` stops their click and W1's Enter routing.
+    if (t.closest("[data-enter-self]")) return;
     e.preventDefault();
     submit();
   };
@@ -230,6 +239,8 @@ export function PinCalloutCreate({
           onChange={(id) => {
             setTypeId(id);
             setSeverity(defectTypes.find((t) => t.id === id)?.default_severity ?? null);
+            // Before the list closes: the popover then leaves focus where it is (useFocusTrap).
+            noteRef.current?.focus();
           }}
         />
         <Segmented
@@ -240,6 +251,7 @@ export function PinCalloutCreate({
           onChange={(v) => setSeverity(v === NONE ? null : Number(v))}
         />
         <Textarea
+          ref={noteRef}
           aria-label="Note"
           placeholder="Note"
           rows={2}
@@ -247,7 +259,7 @@ export function PinCalloutCreate({
           onChange={(e) => setNote(e.target.value)}
         />
         <div className="flex items-center justify-end gap-2">
-          <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+          <Button type="button" size="sm" variant="ghost" data-enter-self onClick={onCancel}>
             Cancel <KeyChord chord={cloudShortcut("cancel")} />
           </Button>
           <Button type="submit" size="sm" variant="primary" disabled={!typeId} loading={busy}>

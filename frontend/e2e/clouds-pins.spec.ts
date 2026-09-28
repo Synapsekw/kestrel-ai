@@ -137,8 +137,8 @@ test("pin flow: M, pick, choose a type, Enter creates with F's cloud anchor, the
   await expect(form.getByRole("button", { name: "Create" })).toBeDisabled();
   await form.getByRole("button", { name: /^Type:/ }).click();
   await page.getByRole("listbox").getByText("Spalling").click();
-  // focus out of the form (the type button keeps it after the list closes), then the global Enter
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  // the pick moves focus to the note; a plain Enter there creates (final-review ruling)
+  await expect(form.getByRole("textbox", { name: "Note" })).toBeFocused();
   await page.keyboard.press("Enter");
 
   await expect.poll(() => posts.length).toBe(1);

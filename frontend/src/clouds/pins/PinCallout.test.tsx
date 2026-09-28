@@ -205,12 +205,52 @@ describe("PinCalloutCreate", () => {
     );
   });
 
-  it("Enter on the focused Cancel button cancels, not creates (T6-3)", async () => {
+  it("Enter on the focused Cancel button cancels, not creates (T6-3 as re-ruled)", async () => {
     const onCreate = vi.fn();
     const onCancel = vi.fn();
     withSeams(<CreateWithCancel onCreate={onCreate} onCancel={onCancel} />, []);
     screen.getByRole("button", { name: /^Cancel/ }).focus();
     await userEvent.keyboard("{Enter}");
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCreate).not.toHaveBeenCalled();
+  });
+
+  it("pick a type, Enter creates once (focus moves to the note)", async () => {
+    const onCreate = vi.fn();
+    withSeams(<Create initialTypeId={null} onCreate={onCreate} />, []);
+    await userEvent.click(screen.getByRole("button", { name: /^Type:/ }));
+    await userEvent.click(within(screen.getByRole("listbox")).getByText(types.get(TYPE_CRACK)!.name));
+    expect(screen.getByRole("textbox", { name: "Note" })).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ typeId: TYPE_CRACK }));
+  });
+
+  it("Enter on the closed Type trigger creates once and does not reopen the list", async () => {
+    const onCreate = vi.fn();
+    withSeams(<Create initialTypeId={TYPE_SPALLING} onCreate={onCreate} />, []);
+    screen.getByRole("button", { name: /^Type:/ }).focus();
+    await userEvent.keyboard("{Enter}");
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("listbox")).toBeNull();
+  });
+
+  it("Enter on a severity segment creates once", async () => {
+    const onCreate = vi.fn();
+    withSeams(<Create initialTypeId={TYPE_SPALLING} onCreate={onCreate} />, []);
+    const none = within(screen.getByRole("radiogroup", { name: "Severity" })).getAllByRole("radio")[0];
+    await userEvent.click(none);
+    expect(none).toHaveFocus();
+    await userEvent.keyboard("{Enter}");
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ typeId: TYPE_SPALLING, severity: null }));
+  });
+
+  it("Esc in the note cancels the draft", async () => {
+    const onCreate = vi.fn();
+    const onCancel = vi.fn();
+    withSeams(<CreateWithCancel onCreate={onCreate} onCancel={onCancel} />, []);
+    await userEvent.type(screen.getByRole("textbox", { name: "Note" }), "abc{Escape}");
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onCreate).not.toHaveBeenCalled();
   });
