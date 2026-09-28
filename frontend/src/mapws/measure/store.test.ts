@@ -48,3 +48,26 @@ describe("useMeasurementsStore.set (M-W3 A14)", () => {
     expect(useMeasurementsStore.getState().items).toEqual([]);
   });
 });
+
+describe("useMeasurementsStore.upsert (M-W3 P6)", () => {
+  beforeEach(() => {
+    useMeasurementsStore.getState().set([], false);
+  });
+
+  it("adds a row the list has not brought yet, and a later unchanged list keeps its stations", () => {
+    useMeasurementsStore.getState().upsert(full);
+    useMeasurementsStore.getState().set([listed()], false);
+    expect(profileView(useMeasurementsStore.getState().items[0]).stations).toEqual([0, 10, 20, 30, 40, 50]);
+  });
+
+  it("replaces a stored row but keeps its site vertices when the new row has none", () => {
+    useMeasurementsStore.getState().set([full], false);
+    useMeasurementsStore
+      .getState()
+      .upsert({ ...full, name: "Renamed", vertices_site: undefined, updated_at: "2026-09-28T08:00:00Z" });
+    const row = useMeasurementsStore.getState().items[0];
+    expect(row.name).toBe("Renamed");
+    expect(row.updated_at).toBe("2026-09-28T08:00:00Z");
+    expect(row.vertices_site).toEqual(full.vertices_site);
+  });
+});
