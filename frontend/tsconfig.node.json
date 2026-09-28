@@ -15,5 +15,5 @@
     "noUnusedParameters": true,
     "types": ["node"]
   },
-  "include": ["vite.config.ts", "playwright.config.ts", "tailwind.config.ts", "postcss.config.js"]
+  "include": ["vite.config.ts", "playwright.config.ts", "playwright.perf.config.ts", "tailwind.config.ts", "postcss.config.js"]
 }
