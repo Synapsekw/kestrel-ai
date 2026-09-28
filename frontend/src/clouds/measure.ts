@@ -91,10 +91,12 @@ export function isGeographic(cloud: Pick<PointCloud, "proj4">): boolean {
   return !!cloud.proj4 && /\+proj=(longlat|latlong)\b/.test(cloud.proj4);
 }
 
+/** The refusal a geographic cloud gives every non-point kind (S1); single-sourced (M1 Ruling R3). */
+export const NEEDS_PROJECTED_CRS = "distances need a projected coordinate system; this cloud is in degrees";
+
 /** What the server would refuse, said before Save (spec §9.3; Review Focus 4). */
 export function refusal(kind: MeasureKind, pts: MPoint[], geographic: boolean): string | null {
-  if (kind !== "point" && geographic)
-    return "distances need a projected coordinate system; this cloud is in degrees";
+  if (kind !== "point" && geographic) return NEEDS_PROJECTED_CRS;
   if (kind === "vertical" && pts.length === 2 && Math.abs(pts[1].z - pts[0].z) < MIN_VERTICAL_SPAN_M) {
     return "pick points further apart vertically (at least 0.5 m)";
   }
