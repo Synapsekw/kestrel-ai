@@ -87,6 +87,8 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
   const [saving, setSaving] = useState(false);
   const inFlight = useRef(false);
   const viewDir = useRef<[number, number, number] | null>(null);
+  /** The line the latest preview request was for; answers for any other line are dropped. */
+  const wantedPreview = useRef<string | null>(null);
   const [preview, setPreview] = useState<{ key: string; data: ProfileData } | null>(null);
   const [full, setFull] = useState<{ key: string; data: ProfileData } | null>(null);
 
@@ -135,8 +137,12 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
   const samplePreview = (l: SectionLine) => {
     const v = viewer.current;
     if (!v) return;
+    wantedPreview.current = lineKey(l);
     void previewSlab(v, l)
-      .then(setPreview)
+      .then((r) => {
+        // A late answer for an earlier line must not drop the current line's preview.
+        if (r.key === wantedPreview.current) setPreview(r);
+      })
       .catch((e: unknown) => toast("danger", messageOf(e, "could not sample the section")));
   };
 
@@ -198,9 +204,13 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
     if (!state.kind) return;
     const v = viewer.current;
     const project = (q: { x: number; y: number; z: number }) => v?.project(q) ?? null;
-    const closes =
-      canCloseArea(state) &&
+    const onOutline =
+      state.picks.length > 0 &&
       (nearVertex(project, state.picks[0], p) || nearVertex(project, state.picks[state.picks.length - 1], p));
+    // The second click of a double-click that closed the outline lands on a vertex again: it is not
+    // the first vertex of a new outline (Review Focus 1). A click elsewhere still starts one (Ruling 4).
+    if (state.kind === "area" && state.closed && onOutline) return;
+    const closes = canCloseArea(state) && onOutline;
     const action: CloudToolAction = { type: "pick", point: p, closes };
     const next = cloudToolReducer(state, action);
     dispatch(action);

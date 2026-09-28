@@ -16,7 +16,22 @@ import { HintBar } from "../HintBar";
 import { WorkspaceSeamsContext, type WorkspaceSeams } from "../seams";
 import { ENTRY, type CloudToolId } from "../tools";
 import type { FeatureContext, WorkspaceFeature } from "../types";
+import type { ProfilePanelProps } from "@/clouds/measuring/ProfilePanel";
 import { useMeasureFeature } from "./measure";
+
+// The real panel, with its props recorded: jsdom has no 2D canvas, so what the panel was handed
+// (its data, its "Save as distance" callback) is read here rather than off pixels.
+const panelProps = vi.hoisted(() => ({ last: null as ProfilePanelProps | null }));
+vi.mock("@/clouds/measuring/ProfilePanel", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/clouds/measuring/ProfilePanel")>();
+  return {
+    ...real,
+    ProfilePanel: (props: ProfilePanelProps) => {
+      panelProps.last = props;
+      return <real.ProfilePanel {...props} />;
+    },
+  };
+});
 
 const base = {
   point_cloud_id: CLOUD_ID,
@@ -113,6 +128,7 @@ beforeEach(() => {
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
   useChangesStore.setState({ pointcloudsRevision: 0 });
   useToastStore.getState().clear();
+  panelProps.last = null;
 });
 
 describe("the measure feature (C-M1 in C-W1's slot)", () => {
@@ -248,6 +264,101 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     m.tap([pick(E, N), pick(E + 2, N), pick(E + 2, N + 2), pick(E + 2.01, N + 2.01)]);
     expect(screen.getByTestId("measure-hint")).toHaveTextContent("3 vertices · closed");
     expect(m.tool().canCommit).toBe(true);
+  });
+
+  it("the double-click close on the first vertex: the second click keeps the closed outline", async () => {
+    const m = mount("area", [listRoute(() => [])]);
+    await screen.findByTestId("measure-hint");
+    m.tap([
+      pick(E, N),
+      pick(E + 2, N),
+      pick(E + 2, N + 2),
+      pick(E + 0.01, N + 0.01),
+      pick(E + 0.01, N + 0.01),
+    ]);
+    expect(screen.getByTestId("measure-hint")).toHaveTextContent("3 vertices · closed");
+    // A click away from the outline still starts a new one (Ruling 4).
+    m.tap([pick(E + 20, N + 20)]);
+    expect(screen.getByTestId("measure-hint")).toHaveTextContent("1 vertex");
+    expect(screen.getByTestId("measure-hint")).not.toHaveTextContent("closed");
+  });
+
+  it("a late slab preview for an earlier line never drops the current line's preview, and no line shows another's", async () => {
+    const m = mount("section", [listRoute(() => [])]);
+    await screen.findByTestId("measure-hint");
+    const waiting: (() => void)[] = [];
+    m.viewer.h.sampleSlab.mockImplementation(
+      (a: number[], b: number[], thicknessM: number) =>
+        new Promise((resolve) => {
+          const count = waiting.length === 0 ? 7 : 3;
+          waiting.push(() =>
+            resolve({
+              s: new Float64Array(count),
+              z: new Float64Array(count),
+              rgb: null,
+              count,
+              total: count,
+              a,
+              b,
+              thicknessM,
+            }),
+          );
+        }),
+    );
+    m.tap([pick(E, N, 5), pick(E + 12, N, 5)]); // line A: its answer comes last
+    m.tap([pick(E, N + 30, 5), pick(E + 12, N + 30, 5)]); // line B
+    expect(waiting).toHaveLength(2);
+    await act(async () => waiting[1]());
+    await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
+    await act(async () => waiting[0]());
+    await new Promise((r) => setTimeout(r, 20));
+    expect(panelProps.last?.data?.count).toBe(3);
+    expect(panelProps.last?.line.a.y).toBe(N + 30);
+    // A new line C while its sample is pending: B's preview is not C's section (the key gate).
+    m.tap([pick(E, N + 60, 5), pick(E + 12, N + 60, 5)]);
+    expect(waiting).toHaveLength(3);
+    expect(panelProps.last?.line.a.y).toBe(N + 60);
+    expect(panelProps.last?.data).toBeNull();
+    await act(async () => waiting[2]());
+    await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
+  });
+
+  it("Save as distance saves a distance and asks for its view capture", async () => {
+    const m = mount("section", [
+      listRoute(() => []),
+      {
+        method: "POST",
+        path: /\/measurements$/,
+        status: 201,
+        body: {
+          ...base,
+          id: "d9",
+          kind: "distance",
+          name: "Distance 9",
+          status: "ready",
+          points: [],
+          params: null,
+          results: {},
+        },
+      },
+    ]);
+    await screen.findByTestId("measure-hint");
+    m.tap([pick(E, N, 5), pick(E + 12, N, 5)]);
+    await waitFor(() => expect(panelProps.last).not.toBeNull());
+    const a = { x: E + 1, y: N, z: 5, uncertainty_m: 0.1 };
+    const b = { x: E + 4, y: N, z: 6, uncertainty_m: 0.1 };
+    act(() => panelProps.last!.onSaveDistance(a, b));
+    await waitFor(() => expect(posts(m.requests)).toHaveLength(1));
+    expect((posts(m.requests)[0] as unknown as { body: unknown }).body).toEqual({
+      kind: "distance",
+      points: [a, b],
+    });
+    await waitFor(() =>
+      expect(m.seams.requestViewCapture).toHaveBeenCalledWith(
+        { kind: "cloud_measurement", id: "d9" },
+        "save",
+      ),
+    );
   });
 
   it("cross-section: preview, Save answers 202, then Full resolution after pointclouds.changed", async () => {
