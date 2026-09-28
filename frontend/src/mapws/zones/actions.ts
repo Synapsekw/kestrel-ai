@@ -66,3 +66,8 @@ export async function removeZone(api: ApiClient, projectId: string, id: string):
   await deleteSiteArea(api, projectId, id);
   useZonesStore.getState().remove(id);
 }
+
+/** The toast after a zone delete (W3-14: the inspector's Delete and W1's `Del`); the server recounts. */
+export function zoneDeleted(name: string): string {
+  return `${name} deleted — counts update in the background`;
+}
