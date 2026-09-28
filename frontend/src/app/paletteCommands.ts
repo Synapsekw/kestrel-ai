@@ -129,10 +129,10 @@ const DATA_ICON: Record<string, IconName> = {
 
 export function dataHref(projectId: string, item: { id: string; type: string }): string {
   const base = `/p/${projectId}`;
-  if (item.type === "map") return `${base}/maps/${item.id}`;
+  if (item.type === "map") return `${base}/maps?map=${item.id}`;
   if (item.type === "point_cloud") return `${base}/clouds/${item.id}`;
-  if (item.type === "elevation") return `${base}/measurements/volumes`;
-  if (item.type === "drawing") return `${base}/maps`;
+  if (item.type === "elevation") return `${base}/maps?sel=surface:${item.id}`;
+  if (item.type === "drawing") return `${base}/maps?sel=drawing:${item.id}`;
   return `${base}/images`;
 }
 

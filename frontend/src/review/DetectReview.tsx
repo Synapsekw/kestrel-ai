@@ -118,7 +118,7 @@ export function DetectReview({ projectId }: { projectId: string }) {
             projectId={projectId}
             source={source}
             onOpenMap={(run) =>
-              navigate(`/p/${projectId}/maps/${source.map_id}?mode=review&run=${encodeURIComponent(run.id)}`)
+              navigate(`/p/${projectId}/maps?map=${source.map_id}&sel=run:${encodeURIComponent(run.id)}`)
             }
           />
         </>

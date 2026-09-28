@@ -26,7 +26,7 @@ function renderScreen(routes: FakeRoute[]) {
       <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/site-areas`]}>
         <Routes>
           <Route path="/p/:projectId/site-areas" element={<SiteAreasScreen />} />
-          <Route path="/p/:projectId/maps/:mapId" element={<MapProbe />} />
+          <Route path="/p/:projectId/maps" element={<MapProbe />} />
         </Routes>
       </MemoryRouter>
     </TestApiProvider>,
@@ -66,14 +66,14 @@ describe("SiteAreasScreen", () => {
     await waitFor(() => expect(screen.queryByText("North laydown yard")).not.toBeInTheDocument());
   });
 
-  it("opens the chosen map with the outline tool", async () => {
+  it("opens the chosen map in the workspace with the zone tool", async () => {
     renderScreen([]);
     const select = await screen.findByLabelText("Map");
     // Only a georeferenced map can place an area on the ground.
     expect(within(select).queryByText(/Flat scan/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Draw an area" }));
     expect(await screen.findByTestId("map-probe")).toHaveTextContent(
-      `/p/${PROJECT_ID}/maps/${MAP_ID}?draw=site-area`,
+      `/p/${PROJECT_ID}/maps?map=${MAP_ID}&tool=zone`,
     );
   });
 

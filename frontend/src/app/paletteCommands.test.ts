@@ -100,11 +100,11 @@ describe("palette commands", () => {
   });
 
   it("links each data type to where it opens", () => {
-    expect(dataHref("p", { id: "m1", type: "map" })).toBe("/p/p/maps/m1");
+    expect(dataHref("p", { id: "m1", type: "map" })).toBe("/p/p/maps?map=m1");
     expect(dataHref("p", { id: "c1", type: "point_cloud" })).toBe("/p/p/clouds/c1");
     expect(dataHref("p", { id: "s1", type: "image_set" })).toBe("/p/p/images");
-    expect(dataHref("p", { id: "e1", type: "elevation" })).toBe("/p/p/measurements/volumes");
-    expect(dataHref("p", { id: "d1", type: "drawing" })).toBe("/p/p/maps");
+    expect(dataHref("p", { id: "e1", type: "elevation" })).toBe("/p/p/maps?sel=surface:e1");
+    expect(dataHref("p", { id: "d1", type: "drawing" })).toBe("/p/p/maps?sel=drawing:d1");
   });
 
   it("searches findings and data in two groups, naming the type from the project's classes", async () => {
