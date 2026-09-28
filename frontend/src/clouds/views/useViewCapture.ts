@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import type { CloudViewRender } from "@contract/client";
+import type { CloudViewOut, CloudViewRender } from "@contract/client";
 import { useApi } from "@/api/client";
 import { listCloudMeasurements } from "@/api/cloudMeasurements";
 import { listCloudViews, putCloudMeasurementView3d, putFindingView3d } from "@/api/cloudViews";
@@ -42,6 +42,25 @@ const FINDINGS_CAP = 500;
 type BulkRun = { cancelled: "no" | "user" | "leave" };
 
 /**
+ * Keeps the store's current entry for any key a PUT committed for (`onView`) after `startSeq` was
+ * read, instead of the `listCloudViews` snapshot for it. Without this, a read in flight while a
+ * capture's PUT completes can land afterwards and describe the pre-PUT server state, silently
+ * reverting a just-saved (or just-refreshed) view to absent/stale (reviewer finding, fix round 1).
+ */
+function keepFresherViews(
+  current: Record<string, CloudViewOut> | null,
+  items: CloudViewOut[],
+  lastPutSeq: ReadonlyMap<string, number>,
+  startSeq: number,
+): Record<string, CloudViewOut> {
+  const next: Record<string, CloudViewOut> = {};
+  for (const v of items) next[`${v.subject_kind}:${v.subject_id}`] = v;
+  if (current)
+    for (const [key, seq] of lastPutSeq) if (seq > startSeq && key in current) next[key] = current[key];
+  return next;
+}
+
+/**
  * The workspace's report-view client (spec §11.3): the one-at-a-time capture queue, the views of
  * this cloud in `useViewStore`, and "Capture missing views". Unmounting is leaving the workspace:
  * queued captures are dropped silently.
@@ -55,10 +74,16 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
   });
 
   const queueRef = useRef<CaptureQueue | null>(null);
+  // Per-key PUT sequence numbers, for `keepFresherViews`: bumped once per successful capture,
+  // reset whenever this effect (re-)sets up for a project/cloud.
+  const putSeq = useRef(0);
+  const lastPutSeq = useRef(new Map<string, number>());
   useEffect(() => {
     const store = useViewStore.getState;
     store().reset(projectId, cloudId);
     store().setReady(viewer.current !== null);
+    putSeq.current = 0;
+    lastPutSeq.current = new Map();
     const cache = new Map<string, SubjectGeometry>();
     const queue = new CaptureQueue({
       engine: () => (viewer.current ? captureEngineFrom(viewer.current) : null),
@@ -83,7 +108,12 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
         s.kind === "finding"
           ? putFindingView3d(api, projectId, s.id, image, meta, signal)
           : putCloudMeasurementView3d(api, projectId, cloudId, s.id, image, meta, signal),
-      onView: (v) => store().putView(v),
+      onView: (v) => {
+        const key = `${v.subject_kind}:${v.subject_id}`;
+        putSeq.current += 1;
+        lastPutSeq.current.set(key, putSeq.current);
+        store().putView(v);
+      },
       onBusy: (key, busy) => store().setBusy(key, busy),
       onFail: (s, err, stopped) => {
         pushLog(`report view ${subjectKey(s)} failed: ${messageOf(err, "unknown error")}`);
@@ -107,6 +137,7 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
       let done = 0;
       let failed = 0;
       let total = 0;
+      const startSeq = putSeq.current;
       try {
         const [findings, measurements, views] = await Promise.all([
           listFindings(api, projectId, { anchor_kind: ["cloud"], data_id: cloudId, limit: FINDINGS_CAP }),
@@ -114,8 +145,9 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
           listCloudViews(api, projectId, cloudId),
         ]);
         if (run.cancelled !== "no") return;
-        store().setViews(views.items);
-        const todo = missingSubjects(cloudId, findings.items, measurements, views.items);
+        const kept = keepFresherViews(store().views, views.items, lastPutSeq.current, startSeq);
+        useViewStore.setState({ views: kept });
+        const todo = missingSubjects(cloudId, findings.items, measurements, Object.values(kept));
         total = todo.length;
         if (total === 0) {
           toast("ok", "Every finding and measurement here has a current report view");
@@ -176,9 +208,13 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
     lastCloud.current = key;
     let cancelled = false;
     const read = () => {
+      const startSeq = putSeq.current;
       listCloudViews(api, projectId, cloudId).then(
         (list) => {
-          if (!cancelled) useViewStore.getState().setViews(list.items);
+          if (cancelled) return;
+          useViewStore.setState((s) => ({
+            views: keepFresherViews(s.views, list.items, lastPutSeq.current, startSeq),
+          }));
         },
         (err) => {
           if (cancelled) return;

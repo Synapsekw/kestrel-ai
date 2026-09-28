@@ -10,7 +10,7 @@ import { useToastStore } from "@/ui";
 import type { CloudViewerHandle } from "../CloudViewer";
 import type { CaptureResult } from "../viewer/capture";
 import { setAnchorNormal } from "./normals";
-import { useViewCapture } from "./useViewCapture";
+import { QUEUE_STOPPED, useViewCapture } from "./useViewCapture";
 import { useViewStore } from "./viewStore";
 
 const api = vi.hoisted(() => ({
@@ -123,6 +123,20 @@ describe("useViewCapture", () => {
     await waitFor(() => expect(useViewStore.getState().busy).toEqual({}));
   });
 
+  it("keeps a fresher local write when a listCloudViews response lands after it", async () => {
+    // The initial mount read is left in flight (resolved manually, below) while a capture's PUT
+    // completes; its stale snapshot must not revert the just-saved view (reviewer finding).
+    let resolveList!: (v: { items: ReturnType<typeof viewOut>[] }) => void;
+    api.listCloudViews.mockImplementationOnce(() => new Promise((r) => (resolveList = r)));
+    const { result: hook } = mount();
+    setAnchorNormal("f1", [0, -1, 0]);
+    act(() => hook.current.requestViewCapture({ kind: "finding", id: "f1" }, "create"));
+    await waitFor(() => expect(useViewStore.getState().views?.["finding:f1"]?.sha256).toBe("new"));
+    resolveList({ items: [viewOut({ subject_id: "old" })] });
+    await new Promise((r) => setTimeout(r, 20));
+    expect(useViewStore.getState().views?.["finding:f1"]?.sha256).toBe("new");
+  });
+
   it("re-reads the views once after a burst of pointclouds.changed", async () => {
     mount();
     await waitFor(() => expect(api.listCloudViews).toHaveBeenCalledTimes(1));
@@ -223,5 +237,39 @@ describe("useViewCapture", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(viewer.h.capture).toHaveBeenCalledTimes(1);
     expect(useToastStore.getState().toasts.at(-1)?.text).toBe("Stopped after 1 of 3 report views");
+  });
+
+  it("shows a mixed summary toast when some captures in a bulk run fail", async () => {
+    api.listFindings.mockResolvedValue({
+      items: [cloudFinding("f1"), cloudFinding("f2")],
+      next_cursor: null,
+    });
+    api.listCloudMeasurements.mockResolvedValue([]);
+    api.listCloudViews.mockResolvedValue({ items: [] });
+    api.putFindingView3d.mockImplementation(async (_a, _p, id: string) =>
+      id === "f2" ? Promise.reject(new Error("boom")) : viewOut({ subject_id: id, sha256: "new" }),
+    );
+    const { result: hook } = mount();
+    act(() => hook.current.captureMissing());
+    await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({
+      tone: "info",
+      text: "1 of 2 report views were not saved",
+    });
+  });
+
+  it("stops the bulk run without a summary toast when the engine fails", async () => {
+    api.listFindings.mockResolvedValue({
+      items: [cloudFinding("f1"), cloudFinding("f2")],
+      next_cursor: null,
+    });
+    api.listCloudMeasurements.mockResolvedValue([]);
+    api.listCloudViews.mockResolvedValue({ items: [] });
+    const { result: hook, viewer } = mount();
+    viewer.h.capture.mockRejectedValueOnce(new Error("context lost"));
+    act(() => hook.current.captureMissing());
+    await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+    expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ tone: "info", text: QUEUE_STOPPED });
+    expect(api.putFindingView3d).not.toHaveBeenCalled();
   });
 });
