@@ -45,8 +45,9 @@ const READY_BUDGET_MS = 5_000;
 // images-perf.spec.ts uses.
 const FRAME_BUDGET_MS = 33.4;
 const TIMER_JITTER_MS = 0.5;
-// Same heuristic as src/app/effects.ts's `isSoftwareRenderer`, plus "software" itself.
-const SOFTWARE_RENDERER_RE = /swiftshader|basic render|software/i;
+// Same heuristic as src/app/effects.ts's `isSoftwareRenderer`, plus "software" and "llvmpipe"
+// (Mesa's software rasterizer) themselves.
+const SOFTWARE_RENDERER_RE = /swiftshader|basic render|software|llvmpipe/i;
 
 interface FrameStats {
   frames: number;
@@ -127,10 +128,10 @@ interface MapScaleOutcome {
  * wait for `expectedCount` points, read the WebGL renderer, and — only on hardware GL — run ~1s of
  * drag-pan + ~1s of wheel-zoom while the frame probe records rAF cadence. On software GL (SwiftShader
  * et al) the pan/zoom phase is skipped and annotated instead: that phase would measure the
- * rasterizer, not the app (see the file header). Throws if the point count is never reached (the
- * caller decides what that means for its own test); returns `{locked: true, stats: null}` if the
- * interaction phase never comes back within `INTERACTION_BUDGET_MS` (a hard main-thread lock even on
- * hardware GL, not just a slow one).
+ * rasterizer, not the app (see the file header). Throws (failing the calling test) if the point
+ * count is never reached; returns `{locked: true, stats: null}` if the interaction phase never
+ * comes back within `INTERACTION_BUDGET_MS` (a hard main-thread lock even on hardware GL, not just
+ * a slow one).
  */
 async function measureCaptureMap(
   page: Page,
@@ -146,12 +147,15 @@ async function measureCaptureMap(
   await expect(w.browserView.getByRole("radio", { name: "Map" })).toHaveAttribute("aria-checked", "true");
 
   const renderer = await rendererString(page);
-  if (SOFTWARE_RENDERER_RE.test(renderer)) {
+  const noRenderer = renderer.trim().length === 0 || renderer === "no WebGL context";
+  if (noRenderer || SOFTWARE_RENDERER_RE.test(renderer)) {
     test.info().annotations.push({
       type: "skip-pan",
-      description:
-        "software GL (SwiftShader) — pan frame time measures the rasterizer, not the app; " +
-        "check on the installed build (IMC-X walkthrough)",
+      description: noRenderer
+        ? `no usable WebGL renderer (saw "${renderer}") — treating as software GL; pan frame time ` +
+          "cannot be measured"
+        : "software GL (SwiftShader/llvmpipe) — pan frame time measures the rasterizer, not the app; " +
+          "check on the installed build (IMC-X walkthrough)",
     });
     return { readyMs, renderer, panSkipped: true, locked: false, stats: null };
   }
@@ -184,11 +188,21 @@ async function measureCaptureMap(
       await page.waitForTimeout(16);
     }
   };
-  const watchdog = new Promise<"timeout">((resolve) =>
-    setTimeout(() => resolve("timeout"), INTERACTION_BUDGET_MS),
-  );
-  const raced = await Promise.race([interact().then(() => "done" as const), watchdog]);
-  if (raced === "timeout") return { readyMs, renderer, panSkipped: false, locked: true, stats: null };
+  const interactPromise = interact();
+  let watchdogTimer: ReturnType<typeof setTimeout>;
+  const watchdog = new Promise<"timeout">((resolve) => {
+    watchdogTimer = setTimeout(() => resolve("timeout"), INTERACTION_BUDGET_MS);
+  });
+  const raced = await Promise.race([interactPromise.then(() => "done" as const), watchdog]);
+  clearTimeout(watchdogTimer!);
+  if (raced === "timeout") {
+    // The page may be main-thread-locked: `interactPromise` can stay pending indefinitely, or
+    // eventually reject once the test/browser tears down (e.g. a `page.mouse.move` erroring on a
+    // closed context). Either way this test has already moved on, so swallow it here rather than
+    // let it surface as an unhandled rejection after the test ends.
+    interactPromise.catch(() => undefined);
+    return { readyMs, renderer, panSkipped: false, locked: true, stats: null };
+  }
 
   const stats = await page.evaluate(() => (window as unknown as { __mapPerf: Probe }).__mapPerf.stop());
   return { readyMs, renderer, panSkipped: false, locked: false, stats };
@@ -217,14 +231,7 @@ async function runScaleCheck(page: Page, info: TestInfo, points: number): Promis
   await openImage(page, P, frames[0].id, "4000x3000");
   const w = ws(page);
 
-  let outcome: MapScaleOutcome;
-  try {
-    outcome = await measureCaptureMap(page, w, String(points));
-  } catch {
-    const seen = await w.captureMap.getAttribute("data-point-count").catch(() => null);
-    test.fixme(true, `capture map never reached ${points} points (saw ${seen}); hand off back to I-FB`);
-    return;
-  }
+  const outcome = await measureCaptureMap(page, w, String(points));
   await info.attach(`map-${points}-outcome.json`, {
     body: JSON.stringify(outcome, null, 2),
     contentType: "application/json",
@@ -251,14 +258,14 @@ async function runScaleCheck(page: Page, info: TestInfo, points: number): Promis
   });
 }
 
-test("capture map at 20,000 points switches in budget and pans/zooms without locking the page", async ({
+test("capture map at 20,000 points reaches the point count within budget (pan/zoom on hardware GL only)", async ({
   page,
 }, info) => {
   test.setTimeout(45_000);
   await runScaleCheck(page, info, 20_000);
 });
 
-test("capture map at 100,000 points switches in budget and pans/zooms without locking the page", async ({
+test("capture map at 100,000 points reaches the point count within budget (pan/zoom on hardware GL only)", async ({
   page,
 }, info) => {
   test.setTimeout(45_000);

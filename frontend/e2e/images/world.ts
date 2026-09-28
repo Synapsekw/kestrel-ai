@@ -218,7 +218,7 @@ export async function serveImages(page: Page, opts: WorldOptions): Promise<World
     maxThumbsInFlight: 0,
     maxIdsPerList: 0,
   };
-  const byId = new Map(opts.frames.map((f, i) => [f.id, { f, i }]));
+  const byId = new Map(opts.frames.map((f) => [f.id, { f }]));
   let seq = 0;
   const nextId = (prefix: string) => `${prefix}0000000-7777-4000-8000-${String(++seq).padStart(12, "0")}`;
   const frames = () => (world.imported ? world.frames : []);
