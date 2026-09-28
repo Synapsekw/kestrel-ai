@@ -1,12 +1,13 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiClient, type Job } from "@contract/client";
 import { useJobsStore } from "@/store/jobs";
 import { CLOUD_ID, exampleCloud } from "@/test/cloudFixtures";
 import { callsTo, emitViewState, resetFake } from "@/test/fakeCloudViewer";
 import { exampleGeoMap, fakeClient, fakeFetch, MAP_ID, PROJECT_ID, runningJob } from "@/test/fixtures";
-import { LocationProbe, renderWithProviders } from "@/test/render";
+import { LocationProbe, renderWithProviders, TestApiProvider } from "@/test/render";
 import { useToastStore } from "@/ui";
 import { useViewStore } from "@/clouds/views/viewStore";
 import { clipKey } from "./clip";
@@ -269,19 +270,32 @@ describe("CloudWorkspace (spec §6)", () => {
       { method: "GET", path: /\/maps$/, body: { items: [exampleGeoMap] } },
       ...routes([{ ...exampleCloud, map_id: MAP_ID }]),
     ]);
-    // A path that also matches the maps route, so the probe is still there after the jump.
-    renderWithProviders(
-      <>
-        <CloudWorkspace />
-        <LocationProbe />
-      </>,
-      { api, route: `/p/${PROJECT_ID}/clouds/${CLOUD_ID}`, path: "/p/:projectId/:section/:cloudId?" },
+    // The workspace jump lands outside CloudWorkspace's own route (it's a query-string arrival on
+    // the maps route now, not a path segment), so a second Route stands in for it, the way the
+    // real router would swap trees; the probe renders either way.
+    render(
+      <TestApiProvider api={api}>
+        <MemoryRouter initialEntries={[`/p/${PROJECT_ID}/clouds/${CLOUD_ID}`]}>
+          <Routes>
+            <Route
+              path="/p/:projectId/clouds/:cloudId?"
+              element={
+                <>
+                  <CloudWorkspace />
+                  <LocationProbe />
+                </>
+              }
+            />
+            <Route path="/p/:projectId/maps" element={<LocationProbe />} />
+          </Routes>
+        </MemoryRouter>
+      </TestApiProvider>,
     );
     await screen.findByRole("toolbar", { name: "Point cloud tools" });
     expect(screen.queryByRole("button", { name: "Show on map" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "fake pick" }));
     await userEvent.click(await screen.findByRole("button", { name: "Show on map" }));
-    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/maps/${MAP_ID}?at=`);
+    expect(screen.getByTestId("location")).toHaveTextContent(`/p/${PROJECT_ID}/maps?map=${MAP_ID}&at=`);
   });
 
   it("has no Show on map without a linked map, even with a pick", async () => {

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { exampleProject, fakeClient, runningJob } from "@/test/fixtures";
 import {
   CLOUD_ID,
@@ -163,6 +163,21 @@ describe("VolumesScreen", () => {
     // The Draw tool must not stay armed: the next polygon drawn should not silently overwrite
     // this measurement's own polygon.
     await waitFor(() => expect(layerOpts().tool).toBe("pan"));
+  });
+
+  it("links every measurement row to the map workspace, beside (not inside) its row button", async () => {
+    const { api } = fakeClient(base([exampleSurface], [exampleMeasurement]));
+    renderWithProviders(<VolumesScreen />, {
+      api,
+      route: `/p/${PROJECT_ID}/measurements/volumes/${MEASUREMENT_ID}`,
+      path: "/p/:projectId/measurements/volumes/:measurementId",
+    });
+    const list = await screen.findByRole("list", { name: "Measurements" });
+    const link = within(list).getByRole("link", {
+      name: `Open ${exampleMeasurement.name} in map`,
+    });
+    expect(link).toHaveAttribute("href", `/p/${PROJECT_ID}/maps?sel=volume:${MEASUREMENT_ID}`);
+    expect(link.closest("button")).toBeNull();
   });
 
   it("stays in the volume view when New is pressed", async () => {

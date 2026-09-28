@@ -52,7 +52,7 @@ export function BrowserPane(p: BrowserPaneProps) {
       <div key={p.mode} className="flex min-h-0 flex-1 flex-col gap-2 animate-pop reduce-motion:animate-none">
         {p.mode === "grid" ? (
           <>
-            <div className="min-h-0 flex-1">
+            <div className="flex min-h-0 flex-1 flex-col">
               <BrowserGrid
                 projectId={p.projectId}
                 index={p.index}

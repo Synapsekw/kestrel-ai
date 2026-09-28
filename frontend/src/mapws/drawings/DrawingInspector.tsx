@@ -60,6 +60,31 @@ function methodText(d: Drawing): string {
   return `Placed with ${g.points.length} control points · ${g.model === "affine" ? "Affine" : "Similarity"}`;
 }
 
+/** Inspector bodies mounted per drawing id (normally 0 or 1). */
+const mountedBodies = new Map<string, number>();
+
+/**
+ * R-W5-9: deselecting the drawing (this Body unmounting for good) discards its unsaved session.
+ * Task 8 F1: the discard waits a microtask and is skipped when a Body for the same drawing has
+ * mounted again by then. The session belongs to the K Overlay, which starts it once per selection
+ * (`startedFor`). If the discard ran synchronously on a remount, the Overlay would not start it
+ * again, leaving K pressed and dead. Two remounts cause this: StrictMode unmounting and remounting
+ * both at once (dev, e2e), and a parent remounting the inspector with the selection unchanged.
+ */
+function useDiscardSessionOnLeave(id: string) {
+  useEffect(() => {
+    mountedBodies.set(id, (mountedBodies.get(id) ?? 0) + 1);
+    return () => {
+      const left = (mountedBodies.get(id) ?? 1) - 1;
+      if (left > 0) mountedBodies.set(id, left);
+      else mountedBodies.delete(id);
+      queueMicrotask(() => {
+        if (!mountedBodies.has(id)) useAlignStore.getState().endFor(id);
+      });
+    };
+  }, [id]);
+}
+
 /** Spec §5.3 "Drawing": georef method, control points, model, RMSE and warnings, Save placement. */
 export function DrawingInspector({ selection, projectId, onClose }: InspectorBodyProps) {
   const id = selection.id;
@@ -84,8 +109,7 @@ export function DrawingInspector({ selection, projectId, onClose }: InspectorBod
   const revision = useChangesStore((s) => s.mapWorkspaceRevision);
   const gone = useDrawingsStore((s) => s.key === `${projectId}:${revision}` && !(id in s.byId));
 
-  // R-W5-9: deselecting the drawing (this Body unmounting) discards its unsaved session.
-  useEffect(() => () => useAlignStore.getState().endFor(id), [id]);
+  useDiscardSessionOnLeave(id);
   useEffect(() => {
     if (gone) onClose();
   }, [gone, onClose]);

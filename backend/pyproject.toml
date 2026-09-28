@@ -21,8 +21,9 @@ markers = [
     "live: calls a cloud provider, needs an API key in the environment",
     "potreeconverter: runs the real PotreeConverter from backend/third_party (skipped when fetch_potreeconverter.ps1 has not run)",
     "real_data: runs the migration dry run on the operator's real project folders (KESTREL_REAL_PROJECTS); skipped when unset",
+    "perf: timing budgets (spec 2026-09-26-image-inspection §17 flow 7); run with -m perf on an idle machine",
 ]
-addopts = "-m 'not gpu and not live'"
+addopts = "-m 'not gpu and not live and not perf'"
 filterwarnings = [
     "error::DeprecationWarning:app.*",
     "ignore:The anyio.abc.BlockingPortal alias is deprecated:DeprecationWarning",

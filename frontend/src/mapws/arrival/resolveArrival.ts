@@ -31,7 +31,7 @@ export async function resolveArrival(
     }
     if (req.kind === "map") {
       const map = await fetchMap(ctx.api, ctx.projectId, req.mapId);
-      const plan = planMapArrival({ map, at: req.at, frame: ctx.frame });
+      const plan = planMapArrival({ projectId: ctx.projectId, map, at: req.at, frame: ctx.frame });
       return plan.kind === "navigate" ? { navigate: plan.to } : plan;
     }
     if (req.kind === "finding") {

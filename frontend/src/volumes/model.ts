@@ -43,7 +43,7 @@ export function labels(kind: BaseKind, base?: Pick<SurfaceRef, "kind" | "capture
 
 const nf = new Intl.NumberFormat("en-GB", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
 
-/** "1 234.5 m³": the app's thin grouping (MapsScreen writes pixel counts the same way). */
+/** "1 234.5 m³": the app's thin grouping (MapEvaluateScreen writes pixel sizes the same way). */
 export function formatM3(v: number | null | undefined): string {
   return v == null ? "—" : `${nf.format(v).replace(/,/g, " ")} m³`;
 }

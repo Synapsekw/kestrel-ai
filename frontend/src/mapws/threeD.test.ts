@@ -29,6 +29,21 @@ describe("Open this spot in 3D (today's jump contract, spec 2026-09-23-point-clo
     });
   });
 
+  it("carries a detection's footprint as `fp`, in the cloud's CRS, as the old map viewer's jump did", () => {
+    const corners = [
+      [243495, 3178205],
+      [243505, 3178205],
+      [243505, 3178195],
+      [243495, 3178195],
+    ];
+    expect(openIn3dHref(PROJECT_ID, 243500, 3178200, "2026-09-14", ctx, corners)).toEqual({
+      href:
+        `/p/${PROJECT_ID}/clouds/${CLOUD_ID}?at=243500.000,3178200.000` +
+        "&fp=243495.000,3178205.000;243505.000,3178205.000;243505.000,3178195.000;243495.000,3178195.000",
+      cloud,
+    });
+  });
+
   it("explains why it cannot", () => {
     expect(openIn3dHref(PROJECT_ID, 1, 1, "2026-09-14", ctx)).toEqual({
       href: null,

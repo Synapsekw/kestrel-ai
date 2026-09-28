@@ -75,6 +75,79 @@ PDF page, the project types hotkey select; list in the README's "Changes to othe
 `edl=on pins=50 capture=1600x1000`), and webview memory at a real 3 M points (measured at about 404 k);
 deferred minors B2-B7 and B9-B13 (`minors-triage.md` in the C-G SDD workspace).
 
+## Maps (M) lands — 2026-09-28 (`task/m-x`, unit M-X evidence)
+
+Sub-project M (spec `docs/superpowers/specs/2026-09-26-map-workspace-design.md`, index
+`docs/superpowers/plans/2026-09-27-maps-index.md`) is built, gated and evidenced. Units: C0 contract
+and migration 0012; B1 site frame and tiles; B2 elevation import; B3 drawings; B4 map measurements,
+profile and the `GET /measurements` union; B5 volume/detect edits; W1 workspace shell; W2 compare
+modes; W3 measure, zone and finding tools; W4 volume, detections and review; W5 drawings UI; W6 the
+Measurements tab; X (this entry).
+
+X: `MapsScreen` trimmed into `MapEvaluateScreen` (`maps/:mapId/evaluate`: labels, evaluation zones,
+score, and Results for maps without coordinates); `maps/:mapId` and `past/maps/:mapId` open the
+workspace (review links become `sel=run:`, draw links `tool=zone`); a map with no coordinates now
+navigates straight to its evaluation screen instead of landing in the workspace (final review I1);
+DetectReview, Site areas, Clouds "Show on map", the palette and every volume row link into the
+workspace; `SurveysScreen` deleted. E2E: the seven §15 flows on the Prism mock plus one opt-in
+real-backend flow; the frame-time scenario (p95 16.7–16.8 ms in three runs, SwiftShader); the
+acceptance run (synthetic stand-ins: frame EPSG:32633, DXF max offset 0.0052 m, PDF RMSE ≈ 1e-9 m,
+best-fit-plane volume +0.000 % against the analytic cone; the DSM-vs-cloud cross-check is an operator
+step). Product fixes found by the flows: the Z readout, the row menu's Align, a detection's Open in 3D
+footprint, `sel`/`tool` after a `map=` arrival, the instant minimap, Import drawing opening the drawing
+import, and the no-CRS arrival (I1). Evidence: `docs/evidence/maps/README.md`.
+
+**Gate at `333d68f` (Task 16b, full suites, one at a time):** contract check clean; backend ruff and
+`ruff format --check` clean, full `pytest` 3927 passed/16 skipped/15 deselected; frontend lint 0
+errors/21 pre-existing warnings, tokens ok; full vitest 522 files/3411 tests passed; build clean
+(`tsc -b` + `vite build`); full e2e 160 passed/1 skipped (`maps-real-backend.spec.ts`, opt-in, by
+design); `cargo test` skipped, no frozen sidecar in this worktree. Full tails in
+`docs/evidence/maps/README.md` "Gate". No installer here (R9): IMC-X freezes the sidecar, runs the
+smoke, builds the installer and writes the combined walkthrough.
+
+## Images lands — 2026-09-28 (`task/i-e`, unit I-E evidence)
+
+Sub-project I (spec `docs/superpowers/specs/2026-09-26-image-inspection-design.md`, plans
+`docs/superpowers/plans/2026-09-27-images-*.md`) is built, gated and evidenced end to end. Units:
+C0 (contract, migration 0011, seams), BA (annotations, shapes, review extras, lengths), BK (XMP,
+thumbnails at import, camera/GSD, footprints, backfill), BX (summary, columnar index, filters), BS
+(SAM 2.1 tiny assist), BP (shapes from detection, interactive and batch detect), BT (label writers,
+segment datasets, seg training), FC (canvas, tools, keymap), FB (browser, map), FA (AI UX), FW
+(workspace assembly, redirects, old screens deleted), E (this entry).
+
+**Evidence** (`docs/evidence/images/README.md`): e2e flows 1–7 (`frontend/e2e/images-*.spec.ts`)
+against a stateful route-faked backend whose DJI fixture is written by the real backend
+(`backend/tests/test_images_e2e_fixture.py`); the same flows 1–5 on the real API with the offline
+SAM and YOLO seams (`backend/tests/test_images_journey.py`); frame budget with 500 annotations
+(`pnpm -C frontend e2e:perf`): p95 16.7 ms in all three runs (headless Chromium), annotation scene
+draw p95 2.5–3.3 ms, at most one annotation draw per frame and no hit-graph rebuild while panning
+(the CI proxy); 20,000 images: index to caption 78 ms, backend index median 56 ms, at most
+32 thumbs in the DOM (grid 24 + filmstrip 8) and 8 fetches in flight (ThumbLoader peak; network
+storm guard saw 16 ≤ 24), #15,000 opens. Capture map ready at 20k points 276–378 ms, at 100k
+1360–1407 ms; its pan phase is skipped on headless Chromium's software GL (SwiftShader), so IMC-X
+pans a 20k-point map on the installed build.
+
+**Fixed in I-E:** flow 7 found `BrowserPane.tsx`'s grid wrapper was not a flex column, so the grid
+was unbounded and virtualisation rendered all 20,000 tiles (`0a4b10f`, I-FW's file). Plus seven
+cheap deferred minors of other I units (Task 11b).
+
+**Retired by operator decision 2026-09-28:** resuming an interrupted detection run and bulk-undo of
+accepted labels (unpromote) — no UI successor. The unused client helpers `fetchQueryRun`,
+`fetchQueryRuns`, `promoteQueryRun`, `unpromoteQueryRun` are deleted; the backend routes stay;
+`resumeQueryRun` stays (the Setup agent's "Resume first labeling" calls it).
+
+**Gate on `task/i-e`:** contract clean; ruff clean; pytest 3927 passed, 16
+skipped, 16 deselected; frontend lint clean; vitest 3505 tests passed
+(528 files); build ok; e2e 133 passed (ports 5590/5591) — `images-perf.spec.ts:105` ("500
+annotations: at most one annotation draw per frame and no hit-graph rebuild while panning") failed
+once in the full run (`hitDrawsDuringInput` 1000 instead of 0), then passed alone twice: a load
+flake under full-suite worker contention, not a real regression; cargo test skipped
+(no frozen sidecar).
+
+**Not done here (R9):** no installer. IMC-X runs the full gate, freezes the sidecar, runs
+`smoke_frozen.ps1` (including the segment call, spec §21 risk 2), builds one installer and runs
+the walkthrough in `docs/evidence/images/README.md` on it.
+
 ## Foundation lands — 2026-09-27 (`task/f-x`, unit X evidence)
 
 Sub-project F (spec `docs/superpowers/specs/2026-09-26-foundation-design.md`, index plan

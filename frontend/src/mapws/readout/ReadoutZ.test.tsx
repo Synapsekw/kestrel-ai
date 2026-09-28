@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { act, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { PROJECT_ID, fakeClient } from "@/test/fixtures";
@@ -14,7 +15,7 @@ vi.mock("../data/useWorkspaceLayers", async (importOriginal) => {
   };
 });
 
-function setup() {
+function setup(opts: { strict?: boolean } = {}) {
   Object.assign(layerFeed, {
     loading: false,
     layers: [surfaceLayer("dsm", "2026-09-14"), surfaceLayer("design", null, "design")],
@@ -36,7 +37,8 @@ function setup() {
     stores.workspace.getState().setLayerState("surface:dsm", { visible: true });
     stores.workspace.getState().setLayerState("surface:design", { visible: true });
   });
-  renderInWorkspace(<ReadoutZ projectId={PROJECT_ID} frame={UTM33} />, {
+  const readout = <ReadoutZ projectId={PROJECT_ID} frame={UTM33} />;
+  renderInWorkspace(opts.strict ? <StrictMode>{readout}</StrictMode> : readout, {
     stores,
     api,
   });
@@ -54,6 +56,14 @@ describe("ReadoutZ (M §5 Coordinates, W2-5)", () => {
       y: 4982000,
       surface_ids: ["dsm"],
     });
+  });
+
+  it("still samples under StrictMode's mount, cleanup and remount", async () => {
+    const { ws, requests } = setup({ strict: true });
+    expect(await screen.findByTestId("readout-z")).toHaveTextContent("Z —");
+    act(() => ws.getState().setPointer([500100, 4982000]));
+    expect(await screen.findByText("Z 612.35 m")).toBeInTheDocument();
+    expect(requests).toHaveLength(1);
   });
 
   it("hides without a visible elevation row of r; a design never counts", async () => {

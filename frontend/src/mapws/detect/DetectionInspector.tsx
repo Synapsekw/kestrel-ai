@@ -25,7 +25,7 @@ import { useDetectStore } from "./detectStore";
 import { useReview, type KindOf, type ReviewAction } from "./useReview";
 
 /** The detection inspector (spec §5.3): type, confidence, model, map date, review state, the accept /
- * reject / type buttons of MapReviewPanel on F's review keys, and the 3D jump (R-W4-13). */
+ * reject / type buttons on F's review keys, and the 3D jump (R-W4-13). */
 export function DetectionInspector({ selection, projectId }: InspectorBodyProps) {
   const api = useApi();
   const navigate = useNavigate();
@@ -99,7 +99,8 @@ export function DetectionInspector({ selection, projectId }: InspectorBodyProps)
 
   const t = types.get(d.class_id);
   const state = REVIEW_STATE[d.review_state];
-  const jump = d.corners_site && survey ? openIn3d(...boxCentre(d.corners_site), survey.date) : null;
+  const jump =
+    d.corners_site && survey ? openIn3d(...boxCentre(d.corners_site), survey.date, d.corners_site) : null;
   // Why there is no 3D button; nothing while the run is still loading.
   const noJumpReason = !d.corners_site
     ? "This detection has no site coordinates, so it cannot be opened in 3D."

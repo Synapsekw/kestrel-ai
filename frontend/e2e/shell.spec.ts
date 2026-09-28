@@ -109,7 +109,8 @@ test("old addresses land on the new tabs", async ({ page }) => {
 });
 
 test("the map viewer is full-bleed: no tabs, and the breadcrumb names the tab", async ({ page }) => {
-  await page.goto(`/p/${P}/maps/${MAP}`);
+  // The map detail left in the tab is the evaluation screen; `maps/:mapId` now redirects to the workspace.
+  await page.goto(`/p/${P}/maps/${MAP}/evaluate`);
   await expect(page.getByRole("banner")).toContainText("Maps");
   await expect(page.getByRole("tablist")).toHaveCount(0);
 });

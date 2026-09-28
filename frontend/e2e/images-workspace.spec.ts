@@ -34,7 +34,7 @@ const image = (id: string) => ({
   width: 4000,
   height: 2667,
   source_id: "s1",
-  group_key: null,
+  group_key: "",
   capture_time: null,
   lat: null,
   lon: null,
@@ -101,7 +101,9 @@ async function world(page: Page) {
   await page.route(`${api}/pointclouds`, (r) => r.fulfill(jsonReply({ items: [] })));
 }
 
-test("the Images tab lands on its first image; /review and /query land in the workspace", async ({ page }) => {
+test("the Images tab lands on its first image; /review and /query land in the workspace", async ({
+  page,
+}) => {
   await world(page);
   await page.goto(`/p/${P}/images`);
   await expect(page).toHaveURL(new RegExp(`/p/${P}/images/${IMG}$`));

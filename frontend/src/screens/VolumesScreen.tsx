@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type OlMap from "ol/Map";
 import {
   surfaceOrthoTileUrl,
@@ -31,7 +31,7 @@ import { volumeViewPath } from "@/measurements/links";
 import { ImportDesignButton } from "@/surfaces/ImportDesignButton";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
-import { Alert, Button, EmptyState, Pill, Segmented, Switch, toast } from "@/ui";
+import { Alert, Button, buttonClass, EmptyState, Icon, Pill, Segmented, Switch, toast } from "@/ui";
 import { BuildSurfaceDialog } from "@/volumes/BuildSurfaceDialog";
 import { ExportVolumesDialog } from "@/volumes/ExportVolumesDialog";
 import { MeasurePanel } from "@/volumes/MeasurePanel";
@@ -337,10 +337,10 @@ export function VolumesScreen() {
           ) : (
             <ul className="flex flex-col gap-1" aria-label="Measurements">
               {onSurface.map((m) => (
-                <li key={m.id}>
+                <li key={m.id} className="flex items-center gap-1">
                   <Button
                     variant={m.id === active?.id ? "secondary" : "ghost"}
-                    className="w-full justify-between"
+                    className="min-w-0 flex-1 justify-between"
                     onClick={() => navigate(volumeViewPath(projectId, m.id))}
                   >
                     <span className="truncate">{m.name}</span>
@@ -351,6 +351,14 @@ export function VolumesScreen() {
                       </Pill>
                     </span>
                   </Button>
+                  <Link
+                    to={`/p/${projectId}/maps?sel=volume:${m.id}`}
+                    aria-label={`Open ${m.name} in map`}
+                    title="Open in map"
+                    className={buttonClass("ghost", "sm")}
+                  >
+                    <Icon name="map" />
+                  </Link>
                 </li>
               ))}
             </ul>

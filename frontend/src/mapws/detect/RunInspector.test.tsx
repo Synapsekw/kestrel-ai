@@ -104,6 +104,25 @@ describe("RunInspector", () => {
     expect(screen.getByText(/never changes the survey's counts/)).toBeInTheDocument();
   });
 
+  it("says why a failed run failed (its job's error)", async () => {
+    const job = {
+      ...runningJob,
+      type: "map_detect" as const,
+      state: "failed" as const,
+      error: "GPU out of memory",
+    };
+    render([
+      {
+        method: "GET",
+        path: /\/map-runs\/[^/]+$/,
+        body: { ...exampleMapRun, state: "failed", job_id: job.id, detection_count: 0 },
+      },
+      { method: "GET", path: /\/jobs\/[^/]+$/, body: job },
+    ]);
+    expect(await screen.findByTestId("run-inspector")).toHaveTextContent("Failed");
+    expect(await screen.findByText("GPU out of memory")).toBeInTheDocument();
+  });
+
   it("says when the run cannot be loaded", async () => {
     render([
       {

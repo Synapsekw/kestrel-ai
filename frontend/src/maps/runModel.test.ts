@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { exampleMapRun } from "@/test/fixtures";
-import { countsFromDensity, runTitle, toggleCompare, validateRunForm } from "./runModel";
+import { CLASS_ID, exampleGeoMap, exampleMapRun, exampleProject } from "@/test/fixtures";
+import { boxFacts, countsFromDensity, runTitle, toggleCompare, validateRunForm } from "./runModel";
 
 describe("run model", () => {
   it("sums density cells per class", () => {
@@ -47,5 +47,18 @@ describe("run model", () => {
       ]),
     ).toBe('Describe what to find, e.g. "excavators".');
     expect(validateRunForm({ kind: "local_model", modelId: "m1" }, providers)).toBeNull();
+  });
+});
+
+describe("boxFacts", () => {
+  it("gives the popover's size and native centre for the UTM example map", () => {
+    const facts = boxFacts(
+      exampleGeoMap,
+      { x: 1000, y: 2000, w: 100, h: 50, classId: CLASS_ID(1) },
+      exampleProject.classes,
+      0.91,
+    );
+    expect(facts.size).toBe("3.0 × 1.5 m");
+    expect(facts.readout.native).toBe("500031.50, 4982939.25 · EPSG:32633");
   });
 });

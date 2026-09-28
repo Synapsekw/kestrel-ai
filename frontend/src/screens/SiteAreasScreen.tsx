@@ -5,7 +5,6 @@ import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { listMaps } from "@/api/maps";
 import { deleteSiteArea, listSiteAreas, updateSiteArea, type SiteArea } from "@/api/siteAreas";
-import { DRAW_PARAM, DRAW_SITE_AREA } from "@/analytics/useSiteAreaOverlay";
 import { Alert, Button, EmptyState, Field, Input, Select, SkeletonRows } from "@/ui";
 
 function AreaRow({
@@ -159,7 +158,7 @@ export function SiteAreasScreen() {
         <Button
           variant="primary"
           icon="plus"
-          onClick={() => navigate(`/p/${projectId}/maps/${mapId}?${DRAW_PARAM}=${DRAW_SITE_AREA}`)}
+          onClick={() => navigate(`/p/${projectId}/maps?map=${mapId}&tool=zone`)}
         >
           Draw an area
         </Button>
