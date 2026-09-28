@@ -253,7 +253,9 @@ test("import from the empty workspace: a refusal, then an admissible file goes i
   await routeOctree(page, CLOUD, grid(2));
 
   await page.goto(`/p/${P}/clouds`);
-  await expect(page.getByText("Import a LAS or LAZ point cloud")).toBeVisible(); // S1's empty-state copy
+  // A first load, 15 s like the suite's other first loads: on a slow CI runner (run 36458626779) the
+  // dev server's ~900 modules for the clouds screen took 9.5 s to arrive in a fresh context.
+  await expect(page.getByText("Import a LAS or LAZ point cloud")).toBeVisible({ timeout: 15_000 }); // S1's empty-state copy
   await page.getByRole("button", { name: "Import", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("LAS or LAZ file").fill("D:\\clouds\\huge.las");
