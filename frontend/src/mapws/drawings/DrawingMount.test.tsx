@@ -192,6 +192,27 @@ describe("DrawingMount", () => {
     expect(url).not.toMatch(/[?&]t=/);
   });
 
+  it("tiles at the drawing's georef_version, not a lagging row version (no snap-back after Save)", () => {
+    useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, [placedPdfDrawing]);
+    const { api } = fakeClient([{ method: "GET", path: /\/drawings$/, body: { items: [placedPdfDrawing] } }]);
+    const map = fakeOlMap();
+    render(
+      <TestApiProvider api={api}>
+        <DrawingMount
+          row={drawingRowOf(placedPdfDrawing, "1")}
+          map={map as never}
+          side="both"
+          zIndex={2003}
+          opacity={0.8}
+          style={{}}
+          projectId={PROJECT_ID}
+          frame={SITE_FRAME}
+        />
+      </TestApiProvider>,
+    );
+    expect(added(map)[0].getSource()!.getUrls()![0]).toContain("v=2");
+  });
+
   it("previews an align session at half opacity with the session transform (debounced 250 ms)", () => {
     vi.useFakeTimers();
     const { map } = mount(pdfDrawing);

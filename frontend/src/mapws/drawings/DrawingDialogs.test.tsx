@@ -57,6 +57,14 @@ describe("DrawingDialogs (the row menu's actions, PF8)", () => {
     expect(useDrawingUi.getState().intent).toBeNull();
   });
 
+  it("Align on a drawing that is not ready only selects it: K is never left active and dead", () => {
+    useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, [{ ...pdfDrawing, status: "importing" }]);
+    const { stores } = show();
+    ask("align");
+    expect(stores.workspace.getState().selection).toEqual({ kind: "drawing", id: pdfDrawing.id });
+    expect(stores.tools.getState().active).not.toBe(ALIGN_TOOL_ID);
+  });
+
   it("Properties only selects the drawing (PF11)", () => {
     const { stores } = show();
     ask("properties");

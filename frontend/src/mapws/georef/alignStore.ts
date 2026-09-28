@@ -19,7 +19,9 @@ interface AlignState {
   notice: string | null;
   /** Bumped by every `begin`: a preview settled in an earlier session never applies to this one. */
   epoch: number;
-  begin: (session: AlignSession, notice?: string | null) => void;
+  /** The site frame (`frameKey`) the session's map points were picked in; a switch ends it. */
+  frameKey: string | null;
+  begin: (session: AlignSession, notice?: string | null, frameKey?: string | null) => void;
   click: (p: Vec2) => void;
   removePair: (id: string) => void;
   /** Backspace / Ctrl+Z; false when there was nothing to undo. */
@@ -36,7 +38,9 @@ export const useAlignStore = create<AlignState>((set, get) => ({
   session: null,
   notice: null,
   epoch: 0,
-  begin: (session, notice = null) => set((st) => ({ session, notice, epoch: st.epoch + 1 })),
+  frameKey: null,
+  begin: (session, notice = null, frameKey = null) =>
+    set((st) => ({ session, notice, frameKey, epoch: st.epoch + 1 })),
   click: (p) => {
     const s = get().session;
     if (!s) return;

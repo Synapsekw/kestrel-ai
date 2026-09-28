@@ -18,7 +18,15 @@ import {
 } from "@/ui";
 import { useAlignStore } from "../georef/alignStore";
 import type { FitWarning, GeorefModelName, Vec2 } from "../georef/fit";
-import { fitSummary, formatMetres, georefErrorText, savedFitSummary, WARNING_TEXT } from "../georef/messages";
+import { useChangesStore } from "@/store/changes";
+import {
+  fitSummary,
+  georefErrorText,
+  placementSavedText,
+  residualText,
+  savedFitSummary,
+  WARNING_TEXT,
+} from "../georef/messages";
 import { ALIGN_TOOL_ID } from "./AlignOverlay";
 import { reimportDrawing, toggleKnockout } from "./drawingActions";
 import { familyOf, type DrawingFamily } from "./drawingImport";
@@ -53,7 +61,7 @@ function methodText(d: Drawing): string {
 }
 
 /** Spec §5.3 "Drawing": georef method, control points, model, RMSE and warnings, Save placement. */
-export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
+export function DrawingInspector({ selection, projectId, onClose }: InspectorBodyProps) {
   const id = selection.id;
   const api = useApi();
   const activate = useTools((s) => s.activate);
@@ -62,12 +70,32 @@ export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
   const notice = useAlignStore((s) => (s.session?.drawingId === id ? s.notice : null));
   const [confirmClear, setConfirmClear] = useState(false);
   const [busy, setBusy] = useState<"save" | "clear" | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  // Final review #5: an error belongs to the points and model it was raised for; once they change
+  // (or the session ends) it is stale and not shown.
+  const [errorState, setErrorState] = useState<{ text: string; pairs: unknown; model: unknown } | null>(null);
+  const setError = (text: string | null) =>
+    setErrorState(text === null ? null : { text, pairs: session?.pairs, model: session?.model });
+  const error =
+    errorState && errorState.pairs === session?.pairs && errorState.model === session?.model
+      ? errorState.text
+      : null;
+
+  // Final review #7: the current list is loaded and has no such drawing (deleted elsewhere).
+  const revision = useChangesStore((s) => s.mapWorkspaceRevision);
+  const gone = useDrawingsStore((s) => s.key === `${projectId}:${revision}` && !(id in s.byId));
 
   // R-W5-9: deselecting the drawing (this Body unmounting) discards its unsaved session.
   useEffect(() => () => useAlignStore.getState().endFor(id), [id]);
+  useEffect(() => {
+    if (gone) onClose();
+  }, [gone, onClose]);
 
-  if (!drawing) return <p className="p-4 text-sm text-muted">Loading drawing…</p>;
+  if (!drawing)
+    return (
+      <p className="p-4 text-sm text-muted">
+        {gone ? "This drawing is no longer available." : "Loading drawing…"}
+      </p>
+    );
   const d = drawing;
   const family = familyOf(d.format);
   const g = d.georef;
@@ -95,6 +123,7 @@ export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
 
   // Task 9 ruling: ending the session hands back to Select, so K is never left active and dead.
   function finish() {
+    setError(null);
     useAlignStore.getState().endFor(id);
     activate("select");
   }
@@ -106,7 +135,7 @@ export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
     try {
       const next = await saveAlignment(api, projectId, session);
       finish();
-      toast("ok", `Placement saved · RMSE ${formatMetres(next.georef?.rmse_m ?? 0)}`);
+      toast("ok", placementSavedText(session.model, session.pairs.length, next.georef?.rmse_m ?? null));
     } catch (e) {
       setError(georefErrorText(e));
     } finally {
@@ -115,6 +144,7 @@ export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
   }
 
   async function clear() {
+    setError(null);
     setBusy("clear");
     try {
       useDrawingsStore.getState().upsert(await clearDrawingGeoref(api, projectId, id));
@@ -197,7 +227,7 @@ export function DrawingInspector({ selection, projectId }: InspectorBodyProps) {
                     <td className="py-1 font-mono">
                       {r.dst[0].toFixed(2)} / {r.dst[1].toFixed(2)}
                     </td>
-                    <td className="py-1 font-mono">{r.residual === null ? "–" : formatMetres(r.residual)}</td>
+                    <td className="py-1 font-mono">{residualText(model, rows.length, r.residual)}</td>
                     <td className="py-1 text-right">
                       {session && (
                         <IconButton

@@ -4,7 +4,8 @@ import { useTools, useWorkspace, useWorkspaceStores } from "@/mapws/context";
 import type { ToolOverlayProps } from "@/mapws/tools/toolStore";
 import { chordOf, isTypingTarget, toast } from "@/ui";
 import { sessionFor, useAlignStore, viewportOf } from "../georef/alignStore";
-import { formatMetres, georefErrorText } from "../georef/messages";
+import { frameKey } from "@/api/drawings";
+import { georefErrorText, placementSavedText } from "../georef/messages";
 import { useDrawing } from "./drawingsStore";
 import { saveAlignment } from "./saveAlignment";
 
@@ -37,6 +38,13 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
   // Start (or keep) the session of the selected drawing, provisionally at 60% of the view (PF17).
   useEffect(() => {
     const el = stage.current;
+    const fkey = frameKey(frame);
+    // Final review #8: a site-frame switch makes the picked map points meaningless; start afresh.
+    const current = useAlignStore.getState();
+    if (current.session && current.frameKey !== fkey) {
+      current.end();
+      startedFor.current = null;
+    }
     if (!drawingId) startedFor.current = null;
     if (!drawingId || !drawing || drawing.status !== "ready" || !el || startedFor.current === drawingId)
       return;
@@ -48,7 +56,7 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
     // Side-by-side splits the stage between two maps that share one view.
     const width = ws.mode === "side" ? el.clientWidth / 2 : el.clientWidth;
     const r = sessionFor(drawing, viewportOf(ws.viewInfo, [width, el.clientHeight]), frame);
-    useAlignStore.getState().begin(r.session, r.notice);
+    useAlignStore.getState().begin(r.session, r.notice, fkey);
     // The marks and the preview are drawn by the row's Mount, which exists only while it is visible.
     const key = `drawing:${drawingId}`;
     if (ws.layerState[key]?.visible === false) ws.setLayerState(key, { visible: true });
@@ -72,17 +80,26 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
       const st = useAlignStore.getState();
       const chord = chordOf(e);
       let acted = false;
-      if (chord === "Escape") acted = st.cancelPending();
-      else if (chord === "Backspace" || chord === "Ctrl+Z") acted = st.undo();
+      if (chord === "Escape") {
+        acted = st.cancelPending();
+        // Final review #1: with nothing pending, Esc hands back to Select and keeps the session (the
+        // inspector still offers Save/Discard); W1's cancel would deselect and so discard it.
+        const sel = workspace.getState().selection;
+        if (!acted && st.session && sel?.kind === "drawing" && st.session.drawingId === sel.id) {
+          activate("select");
+          acted = true;
+        }
+      } else if (chord === "Backspace" || chord === "Ctrl+Z") acted = st.undo();
       else if (chord === "Enter" && st.session?.fit?.ok) {
         acted = true;
         if (!saving.current) {
           saving.current = true;
-          saveAlignment(api, projectId, st.session)
+          const s = st.session;
+          saveAlignment(api, projectId, s)
             .then((d) => {
               // Task 9 ruling: a save hands back to Select, so K is never left active and dead.
               activate("select");
-              toast("ok", `Placement saved · RMSE ${formatMetres(d.georef?.rmse_m ?? 0)}`);
+              toast("ok", placementSavedText(s.model, s.pairs.length, d.georef?.rmse_m ?? null));
             })
             .catch((err: unknown) => toast("danger", georefErrorText(err)))
             .finally(() => {
@@ -97,7 +114,7 @@ export function AlignOverlay({ projectId, frame }: ToolOverlayProps) {
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [api, projectId, activate]);
+  }, [api, projectId, activate, workspace]);
 
   return <div ref={stage} aria-hidden className="pointer-events-none absolute inset-0" />;
 }

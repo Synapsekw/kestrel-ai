@@ -43,6 +43,9 @@ export function DrawingMount({ row, map, zIndex, opacity, projectId, frame }: La
     session,
     ready,
     placed,
+    // Final review #6: the drawing's own georef_version (the row's `version`, layers.py) arrives
+    // with a Save's upsert; the row's lags until the workspace refetch, which would snap back.
+    version: drawing ? String(drawing.georef_version) : (row.version ?? "0"),
   });
   useAlignMarks(map, session);
   return null;
@@ -61,6 +64,7 @@ interface TilesInput {
   session: AlignSession | null;
   ready: boolean;
   placed: boolean;
+  version: string;
 }
 
 /**
@@ -70,7 +74,20 @@ interface TilesInput {
  * updates.
  */
 function useDrawingTiles(input: TilesInput) {
-  const { row, map, zIndex, opacity, projectId, frame, knockout, hiddenKey, session, ready, placed } = input;
+  const {
+    row,
+    map,
+    zIndex,
+    opacity,
+    projectId,
+    frame,
+    knockout,
+    hiddenKey,
+    session,
+    ready,
+    placed,
+    version,
+  } = input;
   const { baseUrl, token } = useBackend();
   const gone = useGoneLayers((s) => s.gone.has(row.key));
   const vector = row.layer?.vector === true;
@@ -83,7 +100,6 @@ function useDrawingTiles(input: TilesInput) {
   const transform = session?.transform ?? null;
   const live = useMemo(() => (PREVIEW_TILES && transform ? { epoch, transform } : null), [epoch, transform]);
   const settled = useDebouncedValue(live, PREVIEW_DEBOUNCE_MS);
-  const version = row.version ?? "0";
   const activePreview = session && settled?.epoch === epoch ? settled.transform : null;
 
   // The toast names the row as it reads now, and the build starts from the latest query, without

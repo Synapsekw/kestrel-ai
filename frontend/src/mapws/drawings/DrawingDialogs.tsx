@@ -27,7 +27,9 @@ export function DrawingDialogs({ projectId }: PanelProps) {
     const d = useDrawingsStore.getState().byId[intent.id];
     if (intent.kind === "properties" || intent.kind === "align" || intent.kind === "layers")
       select({ kind: "drawing", id: intent.id });
-    if (intent.kind === "align") activate(ALIGN_TOOL_ID);
+    // Final review #4: K on a drawing that is not ready would sit active and dead (W1's activate
+    // does not consult disabledReason), so a not-ready drawing is only selected.
+    if (intent.kind === "align" && d?.status === "ready") activate(ALIGN_TOOL_ID);
     if (intent.kind === "knockout" && d) void toggleKnockout(api, projectId, d);
     if (intent.kind === "reimport" && d) reimportDrawing(d);
   }, [intent, select, activate, api, projectId]);

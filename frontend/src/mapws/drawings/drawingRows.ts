@@ -28,10 +28,21 @@ export function drawingRows(ctx: LayerRowsContext): LayerRow[] {
 export function drawingRowMenu(row: LayerRow): MenuItem[] {
   const ask = (kind: DrawingIntent["kind"]) => () => useDrawingUi.getState().request({ kind, id: row.id });
   const knockedOut = useDrawingsStore.getState().byId[row.id]?.layer_state.knockout_white === true;
+  const status = row.layer?.status;
+  const alignHint =
+    status === "ready" ? undefined : status === "failed" ? "The import failed" : "Still importing";
   return [
     // PF11: a raster drawing has no pickable map features, so the menu is the way to its inspector.
     { id: "properties", label: "Properties", icon: "info", onSelect: ask("properties") },
-    { id: "align", label: "Align", icon: "align", shortcut: "K", onSelect: ask("align") },
+    {
+      id: "align",
+      label: "Align",
+      icon: "align",
+      shortcut: "K",
+      disabled: status !== "ready",
+      hint: alignHint,
+      onSelect: ask("align"),
+    },
     row.layer?.vector
       ? { id: "layers", label: "Layers…", icon: "layers", onSelect: ask("layers") }
       : {

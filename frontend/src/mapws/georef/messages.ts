@@ -54,6 +54,21 @@ export function savedFitSummary(
   return { tone: "ok", text: `RMSE ${formatMetres(rmse_m)}` };
 }
 
+/**
+ * A residual cell: none at (or under) the model's minimum pair count, where the fit is exact by
+ * construction and a "0.0 cm" would read as a perfect placement.
+ */
+export function residualText(model: GeorefModelName, pairs: number, residual: number | null): string {
+  return residual === null || pairs <= MIN_PAIRS[model] ? "–" : formatMetres(residual);
+}
+
+/** The "Save placement" toast; the RMSE only above the minimum pair count (see `residualText`). */
+export function placementSavedText(model: GeorefModelName, pairs: number, rmse_m: number | null): string {
+  return rmse_m === null || pairs <= MIN_PAIRS[model]
+    ? "Placement saved"
+    : `Placement saved · RMSE ${formatMetres(rmse_m)}`;
+}
+
 /** A failed `PUT …/georef` (B3: 422 `too_few_points` | `too_many_points` | `degenerate` | `collinear` | `reflection`) in words. */
 export function georefErrorText(err: unknown): string {
   const code = codeOf(err);

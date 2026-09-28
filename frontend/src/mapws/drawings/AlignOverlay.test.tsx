@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, waitFor } from "@testing-library/react";
+import { create } from "zustand";
 import type { Drawing } from "@/api/drawings";
 import "@/mapws/plugins";
 import { makeStores, renderInWorkspace } from "@/mapws/test/harness";
 import alignDrawing from "@/mapws/tools/alignDrawing.tool";
 import selectTool from "@/mapws/tools/select.tool";
 import { toolRegistry } from "@/mapws/tools/toolStore";
+import type { SiteFrame } from "@/mapws/types";
 import { useChangesStore } from "@/store/changes";
 import { fakeClient, PROJECT_ID, type FakeRoute } from "@/test/fixtures";
 import { useToastStore } from "@/ui";
@@ -20,8 +22,18 @@ import { DRAWING_ID, drawingRowOf, pdfDrawing, placedPdfDrawing, SITE_FRAME } fr
 const ROW_KEY = `drawing:${DRAWING_ID}`;
 /** The view the workspace store publishes, and the 1000 × 1000 px stage the Overlay measures. */
 const VIEW = { center: [500500, 4982500] as Vec2, resolution: 1, rotation: 0 };
+const OTHER_FRAME: SiteFrame = { ...SITE_FRAME, epsg: 32639, crs_wkt: 'PROJCRS["UTM 39N",ID["EPSG",32639]]' };
+
+/** The site frame the workspace hands the Overlay; a test switches it mid-session. */
+const useFrame = create<{ frame: SiteFrame }>(() => ({ frame: SITE_FRAME }));
+const switchFrame = (frame: SiteFrame) => useFrame.setState({ frame });
+function Host() {
+  const frame = useFrame((s) => s.frame);
+  return <AlignOverlay projectId={PROJECT_ID} frame={frame} />;
+}
 
 function mount(o: { seed?: Drawing[] | null; routes?: FakeRoute[]; hidden?: boolean } = {}) {
+  useFrame.setState({ frame: SITE_FRAME });
   if (o.seed !== null) useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, o.seed ?? [pdfDrawing]);
   const stores = makeStores({
     frame: SITE_FRAME,
@@ -37,7 +49,7 @@ function mount(o: { seed?: Drawing[] | null; routes?: FakeRoute[]; hidden?: bool
     ...(o.routes ?? []),
     { method: "PUT", path: /\/georef$/, body: placedPdfDrawing },
   ]);
-  renderInWorkspace(<AlignOverlay projectId={PROJECT_ID} frame={SITE_FRAME} />, { stores, api: client.api });
+  renderInWorkspace(<Host />, { stores, api: client.api });
   // W1's point draw spec: every map click completes one Point, and further clicks wait until it is cleared.
   const click = (c: Vec2) => act(() => stores.tools.getState().addVertex(c));
   return { stores, click, requests: client.requests };
@@ -168,12 +180,48 @@ describe("the align-drawing tool (spec §8.3)", () => {
     expect(useAlignStore.getState().notice).toBe(MISSED_DRAWING);
   });
 
-  it("Esc clears a pending click before W1 sees it; with nothing pending it passes through", () => {
-    const { click } = mount();
+  it("Esc clears a pending click before W1 sees it; with nothing pending it returns to Select, keeping the session", () => {
+    const { stores, click } = mount();
+    click(onDrawing(PAIRS[0][0]));
+    click(PAIRS[0][1]);
     click(onDrawing([100, -100]));
     expect(key("Escape").defaultPrevented).toBe(true);
     expect(useAlignStore.getState().session!.pendingSrc).toBeNull();
-    expect(key("Escape").defaultPrevented).toBe(false);
+    expect(stores.tools.getState().active).toBe(ALIGN_TOOL_ID);
+    // Final review #1: nothing pending — K hands back to Select; the unsaved pairs stay (not W1's
+    // cancel, which would deselect the drawing and discard the session).
+    expect(key("Escape").defaultPrevented).toBe(true);
+    expect(stores.tools.getState().active).toBe("select");
+    expect(stores.workspace.getState().selection).toEqual({ kind: "drawing", id: DRAWING_ID });
+    expect(useAlignStore.getState().session!.pairs).toHaveLength(1);
+  });
+
+  it("the hint says what Esc and Backspace do", () => {
+    expect(alignDrawing.hint).toContain("Esc cancels a pending click · Backspace removes the last pair");
+  });
+
+  it("a site-frame switch mid-session ends the old-frame session and starts afresh", () => {
+    const { click } = mount();
+    click(onDrawing(PAIRS[0][0]));
+    click(PAIRS[0][1]);
+    expect(useAlignStore.getState().session!.pairs).toHaveLength(1);
+    act(() => switchFrame(OTHER_FRAME));
+    const s = useAlignStore.getState().session!;
+    expect(s.drawingId).toBe(DRAWING_ID);
+    expect(s.pairs).toHaveLength(0);
+  });
+
+  it("a save at the minimum pair count does not claim a perfect fit", async () => {
+    const { click } = mount();
+    for (const [src, dst] of PAIRS.slice(0, 2)) {
+      click(onDrawing(src));
+      click(dst);
+    }
+    // Two pairs fit a similarity exactly: Enter needs a valid fit, which the minimum is.
+    key("Enter");
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => t.text)).toEqual(["Placement saved"]),
+    );
   });
 
   it("leaves keys typed into a field alone", () => {

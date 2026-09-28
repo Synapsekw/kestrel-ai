@@ -9,7 +9,7 @@ const alignDrawing: MapTool = {
   icon: "align",
   label: "Align drawing",
   action: "align-drawing",
-  hint: "Click a point on the drawing, then the same point on the map · Enter saves · Esc clears the last click",
+  hint: "Click a point on the drawing, then the same point on the map · Enter saves · Esc cancels a pending click · Backspace removes the last pair",
   draw: { shape: "point" },
   // PF11: a raster drawing is selected from its row menu ("Align"); PF2: the row's contract `status`.
   disabledReason: ({ selection, layers }) => {

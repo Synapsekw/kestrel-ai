@@ -6,6 +6,7 @@ import { renderWithProviders } from "@/test/render";
 import drawingInspector from "@/mapws/inspect/drawing.inspector";
 import { useGoneLayers } from "@/mapws/layers/goneLayers";
 import { useChangesStore } from "@/store/changes";
+import { useToastStore } from "@/ui";
 import { MISSED_DRAWING } from "../georef/alignModel";
 import { sessionFor, useAlignStore } from "../georef/alignStore";
 import { applyAffine, type Vec2 } from "../georef/fit";
@@ -51,13 +52,13 @@ function sessionWith(pairs: [Vec2, Vec2][], d = pdfDrawing) {
     act(() => useAlignStore.getState().click(dst));
   }
 }
-function show(api: ApiClient, id = DRAWING_ID) {
+function show(api: ApiClient, id = DRAWING_ID, onClose: () => void = () => {}) {
   return renderWithProviders(
     <DrawingInspector
       selection={{ kind: "drawing", id }}
       projectId={PROJECT_ID}
       frame={SITE_FRAME}
-      onClose={() => {}}
+      onClose={onClose}
     />,
     { api },
   );
@@ -67,6 +68,7 @@ describe("DrawingInspector (spec §5.3)", () => {
   beforeEach(() => {
     useAlignStore.getState().end();
     useGoneLayers.setState({ gone: new Set() });
+    useToastStore.getState().clear();
     activate.mockClear();
   });
 
@@ -240,5 +242,61 @@ describe("DrawingInspector (spec §5.3)", () => {
     sessionWith(PAIRS.slice(0, 1));
     unmount();
     expect(useAlignStore.getState().session).toBeNull();
+  });
+  it("at the minimum pair count shows no residuals and saves without claiming a perfect fit", async () => {
+    load();
+    const { api } = fakeClient([{ method: "PUT", path: /\/georef$/, body: placedPdfDrawing }]);
+    show(api);
+    sessionWith(PAIRS.slice(0, 2));
+    const table = screen.getByRole("table", { name: "Control points" });
+    expect(within(table).queryByText(/cm$/)).toBeNull();
+    expect(within(table).getAllByText("–")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Save placement" }));
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => t.text)).toEqual(["Placement saved"]),
+    );
+  });
+
+  it("a saved placement at the minimum shows no residuals", () => {
+    const g = placedPdfDrawing.georef!;
+    load({
+      ...placedPdfDrawing,
+      georef: { ...g, points: g.points.slice(0, 2), residuals_m: [0, 0], rmse_m: 0 },
+    });
+    show(fakeClient([]).api);
+    const table = screen.getByRole("table", { name: "Control points" });
+    expect(within(table).queryByText(/cm$/)).toBeNull();
+    expect(within(table).getAllByText("–")).toHaveLength(2);
+  });
+
+  it("clears a save error once the points change, and on Discard", async () => {
+    load();
+    const { api } = fakeClient([
+      {
+        method: "PUT",
+        path: /\/georef$/,
+        status: 422,
+        body: { error: { code: "collinear", message: "collinear", details: {} } },
+      },
+    ]);
+    show(api);
+    sessionWith(PAIRS);
+    fireEvent.click(screen.getByRole("button", { name: "Save placement" }));
+    expect(await screen.findByText(/lie on one line/)).toBeInTheDocument();
+    act(() => useAlignStore.getState().undo());
+    expect(screen.queryByText(/lie on one line/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Save placement" }));
+    expect(await screen.findByText(/lie on one line/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Discard" }));
+    expect(screen.queryByText(/lie on one line/)).toBeNull();
+  });
+
+  it("a drawing deleted elsewhere says so and deselects, instead of loading forever", async () => {
+    useChangesStore.setState({ mapWorkspaceRevision: 0 });
+    useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, [dxfDrawing]);
+    const onClose = vi.fn();
+    show(fakeClient([]).api, DRAWING_ID, onClose);
+    expect(screen.getByText("This drawing is no longer available.")).toBeInTheDocument();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 });

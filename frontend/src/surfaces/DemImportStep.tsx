@@ -36,6 +36,8 @@ export function DemImportStep({
   const api = useApi();
   const { mode } = useBackend();
   const [targets, setTargets] = useState<Surface[]>([]);
+  // Final review #9: Start waits for the targets, or it would send no align_to_surface_id.
+  const [targetsLoaded, setTargetsLoaded] = useState(false);
   const [form, setForm] = useState<DemForm>(initialDemForm);
   const [fieldError, setFieldError] = useState<{ field: DemField; error: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +47,8 @@ export function DemImportStep({
     let cancelled = false;
     listSurfaces(api, projectId)
       .then((all) => !cancelled && setTargets(alignTargets(all)))
-      .catch(() => !cancelled && setTargets([]));
+      .catch(() => !cancelled && setTargets([]))
+      .finally(() => !cancelled && setTargetsLoaded(true));
     return () => {
       cancelled = true;
     };
@@ -69,6 +72,7 @@ export function DemImportStep({
 
   async function submit(e: FormEvent) {
     e.preventDefault();
+    if (!targetsLoaded) return;
     const r = toElevationRequest(form, targets);
     if (!r.ok) return setFieldError({ field: r.field, error: r.error });
     setBusy(true);
@@ -99,7 +103,7 @@ export function DemImportStep({
           <Button onClick={onClose} disabled={busy}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" icon="import" loading={busy}>
+          <Button type="submit" variant="primary" icon="import" loading={busy} disabled={!targetsLoaded}>
             Start import
           </Button>
         </>

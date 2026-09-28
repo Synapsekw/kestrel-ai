@@ -73,4 +73,14 @@ describe("the drawing layer kind", () => {
     useDrawingsStore.getState().set("p:0", "p", [on]);
     expect(drawingRowMenu(drawingRowOf(on))[2].label).toBe("Show white");
   });
+  it("row menu: Align is disabled, with a hint, while the drawing is not ready", () => {
+    useDrawingsStore.getState().set("p:0", "p", [pdfDrawing]);
+    const ready = drawingRowMenu(drawingRowOf(pdfDrawing)).find((i) => i.id === "align")!;
+    expect(ready.disabled).toBeFalsy();
+    for (const status of ["importing", "failed"] as const) {
+      const align = drawingRowMenu(drawingRowOf({ ...pdfDrawing, status })).find((i) => i.id === "align")!;
+      expect(align.disabled).toBe(true);
+      expect(align.hint).toBeTruthy();
+    }
+  });
 });
