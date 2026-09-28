@@ -240,9 +240,27 @@ def project_id(client, project_dir) -> str:
     ]
 
 
+# Read timeout for one in-process request. schemathesis's default is 10 s; a request here takes
+# milliseconds, but a slow CI runner can stall any one of them for seconds (a gen-2 GC pass lands
+# on whichever request is in flight), so the limit only has to catch a real hang.
+REQUEST_TIMEOUT = 60
+
+
 @schema.parametrize()
 @settings(max_examples=3, deadline=None, suppress_health_check=list(HealthCheck))
 def test_responses_conform(case, app, project_id, tmp_path):
+    try:
+        _check_conformance(case, app, project_id, tmp_path)
+    finally:
+        # The APIOperation (and its schema) live as long as the pytest item, i.e. the whole
+        # session: a pinned app keeps its routers, job runner and agent runner reachable, one per
+        # test. ~250 leaked apps grew the heap to ~7M objects and gen-2 GC pauses to 4 s locally,
+        # over schemathesis's 10 s read timeout on the slow Windows CI runner (ReadTimeout flake).
+        case.operation.app = None
+        case.operation.schema.app = None
+
+
+def _check_conformance(case, app, project_id, tmp_path):
     if "projectId" in (case.path_parameters or {}):
         case.path_parameters["projectId"] = project_id
     if isinstance(case.body, dict) and "folder" in case.body:
@@ -253,7 +271,7 @@ def test_responses_conform(case, app, project_id, tmp_path):
         del case.query["cursor"]
     case.operation.schema.app = app  # in-process ASGI transport, no sockets
     case.operation.app = app
-    response = case.call(headers=AUTH)
+    response = case.call(headers=AUTH, timeout=REQUEST_TIMEOUT)
     op_id = case.operation.definition.raw.get("operationId")
     if op_id in BACKEND_PENDING:
         # The contract is ahead of the backend until BACKEND_PENDING[op_id] lands.

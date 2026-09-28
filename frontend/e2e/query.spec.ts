@@ -52,8 +52,10 @@ test("estimates and starts a cloud detection, then reviews results, accepts as l
   await expect(page.getByTestId("image-count")).toHaveText("2 images selected");
   const grouped = page.waitForRequest((r) => r.url().includes("group_key=0031"));
   await page.getByLabel("Images", { exact: true }).selectOption("group");
-  // The project's flights come from the stats: a list, not a key to type.
-  await page.getByLabel("Flight or tile").selectOption("0031");
+  // The project's flights come from the stats: a list, not a key to type. Until the stats answer the
+  // field is a text box with the same label, so ask for the list by role (a <select> is a combobox,
+  // the fallback <input> a textbox): that waits for the stats instead of typing into the fallback.
+  await page.getByRole("combobox", { name: "Flight or tile" }).selectOption("0031");
   await grouped;
 
   await page.getByRole("radio", { name: "Cloud provider" }).click();
