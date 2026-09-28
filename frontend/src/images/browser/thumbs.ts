@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { diagnosticsEnabled } from "@/clouds/viewer/diagnostics";
 
 /** Spec §7.2 / §15: at most 8 thumbnail fetches in flight; a tile that scrolls out aborts its fetch. */
 export const THUMB_MAX_IN_FLIGHT = 8;
@@ -47,6 +48,8 @@ export class ThumbLoader {
   private readonly cacheMax: number;
   private readonly queue: Job[] = [];
   private active = 0;
+  /** The highest `active` has been since construction or the last `resetPeak()` (diagnostics only). */
+  private peakActive = 0;
   private readonly cache = new Map<string, string>();
   private readonly pending = new Map<string, Pending>();
 
@@ -64,6 +67,16 @@ export class ThumbLoader {
 
   get queued(): number {
     return this.queue.length;
+  }
+
+  /** The peak of `inFlight` since construction or the last `resetPeak()` (spec §15 budget: <= 8). */
+  get peak(): number {
+    return this.peakActive;
+  }
+
+  /** Starts a fresh peak window at the current `inFlight` (e2e: measure one phase of a flow). */
+  resetPeak(): void {
+    this.peakActive = this.active;
   }
 
   /** A loaded object URL, without changing the recency order (safe during render). */
@@ -155,6 +168,7 @@ export class ThumbLoader {
         continue;
       }
       this.active += 1;
+      this.peakActive = Math.max(this.peakActive, this.active);
       this.fetchBlob(job.url, job.signal)
         .then((blob) => {
           const src = this.remember(job.url, this.createUrl(blob));
@@ -188,6 +202,39 @@ export class ThumbLoader {
 
 /** The app's one loader: the grid and the filmstrip share its 8 slots and its cache. */
 export const thumbLoader = new ThumbLoader();
+
+/**
+ * e2e reads the loader's own admission-control count directly (spec §15: at most 8 thumbnail
+ * fetches in flight), instead of inferring it from network request timing: a dev-only React
+ * StrictMode double-mount asks the same URL twice a few ms apart, and Playwright's abort
+ * notification over CDP lags the real client-side abort, so a network-level count can read up to
+ * ~2x this loader's real, structurally-bounded cap (plan 2026-09-27-images-e Task 8 investigation).
+ * Same pattern as `clouds/viewer/diagnostics.ts`'s `window.__kestrelCloudViewer`.
+ */
+export interface ThumbLoaderDiagnostics {
+  /** Fetches genuinely admitted right now. */
+  inFlight(): number;
+  /** The peak of `inFlight` since the loader started or the last `resetPeak()`. */
+  peak(): number;
+  resetPeak(): void;
+}
+
+declare global {
+  interface Window {
+    __kestrelThumbs?: ThumbLoaderDiagnostics;
+  }
+}
+
+/** Installs `window.__kestrelThumbs` over `loader` (default: the app's singleton). Idempotent. */
+export function installThumbDiagnostics(loader: ThumbLoader = thumbLoader): void {
+  window.__kestrelThumbs = {
+    inFlight: () => loader.inFlight,
+    peak: () => loader.peak,
+    resetPeak: () => loader.resetPeak(),
+  };
+}
+
+if (typeof window !== "undefined" && diagnosticsEnabled()) installThumbDiagnostics();
 
 /** A tile's thumbnail: loads while mounted, aborts on unmount (scroll-out). */
 export function useThumb(
