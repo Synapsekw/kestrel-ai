@@ -843,7 +843,17 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
       },
     ],
     ["GET", /^\/maps$/, (r) => reply(r, { items: world.maps })],
-    ["GET", /^\/maps\/([^/]+)$/, (r, m) => reply(r, world.maps.find((x) => x.id === m[1]) ?? world.maps[0])],
+    [
+      "GET",
+      /^\/maps\/([^/]+)$/,
+      (r, m) => {
+        const map = world.maps.find((x) => x.id === m[1]);
+        // An unknown id is a gone map, never another map (it would hide "map gone" and no-CRS arrivals).
+        return map
+          ? reply(r, map)
+          : reply(r, { error: { code: "not_found", message: "Map not found" } }, 404);
+      },
+    ],
     ["GET", /^\/surfaces$/, (r) => reply(r, { items: world.surfaces })],
     [
       "GET",
