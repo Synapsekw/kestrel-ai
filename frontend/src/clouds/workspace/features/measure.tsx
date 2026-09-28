@@ -186,6 +186,9 @@ export function useMeasureFeature(ctx: FeatureContext): WorkspaceFeature {
       });
     return () => {
       current = false;
+      // the fallback belongs to this version of the row: a new readyKey (another row, or this one
+      // recomputed) must not show it while its own profile loads (C-G final review m9)
+      setFallback(null);
     };
   }, [api, projectId, cloud.id, selId, readyKey, selLineJson, viewer]);
 

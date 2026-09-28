@@ -730,6 +730,41 @@ describe("the measure feature (C-M1 in C-W1's slot)", () => {
     expect(useToastStore.getState().toasts.map((t) => t.text)).toContain("profile file missing");
   });
 
+  it("a fallback preview is dropped when the ready row changes (C-G final review m9)", async () => {
+    const rows = [savedProfile("r3", "ready", N + 20)];
+    let profileCalls = 0;
+    // the first read of r3's profile fails (the fallback samples the line); the next one, for the
+    // row's new version, is still on its way
+    const secondHangs = (api: ApiClient): ApiClient =>
+      ({
+        ...api,
+        GET: ((path: string, init: unknown) =>
+          path.endsWith("/profile") && ++profileCalls > 1
+            ? new Promise(() => undefined)
+            : api.GET(path as never, init as never)) as ApiClient["GET"],
+      }) as ApiClient;
+    mount(
+      "orbit",
+      [
+        listRoute(() => rows),
+        {
+          method: "GET",
+          path: /\/measurements\/r3\/profile$/,
+          status: 500,
+          body: errorBody("internal", "profile file missing"),
+        },
+      ],
+      secondHangs,
+    );
+    await userEvent.click(await screen.findByRole("button", { name: /Section r3/ }));
+    await waitFor(() => expect(panelProps.last?.data?.count).toBe(3));
+    rows[0] = { ...rows[0], updated_at: "2026-09-27T10:05:00Z" };
+    act(() => useChangesStore.setState((s) => ({ pointcloudsRevision: s.pointcloudsRevision + 1 })));
+    await waitFor(() => expect(profileCalls).toBe(2));
+    // the old version's fallback must not stand in for the new version while it loads
+    await waitFor(() => expect(panelProps.last?.data ?? null).toBeNull());
+  });
+
   it("a ready row's fallback preview never takes over a draft line's preview (m5)", async () => {
     const m = mount("section", [
       listRoute(() => [savedProfile("r3", "ready", N + 20)]),
