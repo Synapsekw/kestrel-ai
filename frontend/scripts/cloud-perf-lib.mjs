@@ -19,6 +19,12 @@ export function frameStats(values) {
   };
 }
 
+/** "fn" or "fn@part": a function name, optionally narrowed to scripts whose url contains part. */
+function nameSpec(key) {
+  const at = key.indexOf("@");
+  return { key, fn: at < 0 ? key : key.slice(0, at), url: at < 0 ? null : key.slice(at + 1) };
+}
+
 /**
  * Total time (ms) spent in each named function over a CDP CPU profile, callees included. A node
  * under an ancestor of the same name is not counted again (recursion). Sample time is the profile's
@@ -39,10 +45,7 @@ export function profileTotals(profile, names) {
   };
   const out = Object.fromEntries(names.map((n) => [n, 0]));
   // "fn@part": functionName fn in a script whose url contains part (a generic method name like frame)
-  const specs = names.map((key) => {
-    const at = key.indexOf("@");
-    return { key, fn: at < 0 ? key : key.slice(0, at), url: at < 0 ? null : key.slice(at + 1) };
-  });
+  const specs = names.map(nameSpec);
   const walk = (node, open) => {
     const { functionName, url = "" } = node.callFrame;
     const hit = specs.filter(
@@ -106,12 +109,16 @@ export function colourSpread(samples) {
   };
 }
 
-/** Calls per named function from CDP precise coverage (callCount): the first range is the function. */
+/** Calls per named function from CDP precise coverage (callCount): the first range is the function.
+ * A name "fn@part" counts only fn in scripts whose url contains part. */
 export function coverageCounts(coverage, names) {
+  const specs = names.map(nameSpec);
   const out = Object.fromEntries(names.map((n) => [n, 0]));
   for (const script of coverage.result)
     for (const fn of script.functions)
-      if (names.includes(fn.functionName)) out[fn.functionName] += fn.ranges[0]?.count ?? 0;
+      for (const s of specs)
+        if (s.fn === fn.functionName && (s.url === null || (script.url ?? "").includes(s.url)))
+          out[s.key] += fn.ranges[0]?.count ?? 0;
   return out;
 }
 

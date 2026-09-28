@@ -15,7 +15,8 @@
   views      every stored report view: bytes, sha256 against listCloudViews, size, stale (§16.10)
   cameras    the cameras payload's counts (§16.7 context)
 
-Each prints one JSON line. The backend's pid (--backend-pid) is needed for the RSS figures.
+Each prints one JSON line. The backend's pid (--backend-pid) is needed for the RSS figures. The token is
+--token, else KESTREL_TOKEN, else APP_TOKEN (the launcher keeps it off the command line).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import threading
 import time
 from pathlib import Path
@@ -97,6 +99,15 @@ class PeakSampler:
         self._stop.set()
         self._t.join(5)
         return self.peak_tree
+
+
+def resolve_token(cli: str | None, environ) -> str:
+    """--token when given, else KESTREL_TOKEN, else APP_TOKEN: the dev-mode launcher passes the token
+    through the environment so it never appears on a process command line (C-G)."""
+    token = cli or environ.get("KESTREL_TOKEN") or environ.get("APP_TOKEN")
+    if not token:
+        raise SystemExit("no token: pass --token or set KESTREL_TOKEN / APP_TOKEN")
+    return token
 
 
 def client(base: str, token: str, transport: httpx.BaseTransport | None = None) -> httpx.Client:
@@ -614,7 +625,7 @@ def main() -> int:
         ],
     )
     p.add_argument("--base")
-    p.add_argument("--token")
+    p.add_argument("--token", help="default: KESTREL_TOKEN, else APP_TOKEN")
     p.add_argument("--project-folder")
     p.add_argument("--project-id")
     p.add_argument("--source")
@@ -626,6 +637,7 @@ def main() -> int:
     p.add_argument("--thickness", type=float, default=0.2)
     p.add_argument("--out", help="also write the JSON line to this file")
     a = p.parse_args()
+    a.token = resolve_token(a.token, os.environ)
     run = {
         "import": run_import,
         "cancel": run_cancel,

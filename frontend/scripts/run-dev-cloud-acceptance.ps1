@@ -8,7 +8,8 @@
   ids) and out\ (results, screenshots). The first run in a -Work creates the project and imports -Cloud
   (and -Photos) through backend\scripts\pointcloud_acceptance.py setup. A later run with the same
   -Work reopens that project: starting everything again is the "restart" of spec section 16 item 2.
-  The token is random per run and never written anywhere. Every process is stopped at the end.
+  The token is random per run, never written anywhere and on no process command line (it goes through
+  the environment). Every process is stopped at the end, and survivors are reported.
 
   A worktree has no backend\third_party\potreeconverter; unless KESTREL_POTREECONVERTER is set, the
   converter next to -Python's checkout (<backend>\.venv\Scripts\python.exe -> <backend>\third_party)
@@ -59,6 +60,32 @@ function Wait-Http([string] $Url, [int] $Seconds) {
   throw "nothing answered $Url within $Seconds s"
 }
 
+# Every process id under $Id (itself included), read before the kill so survivors can be checked after.
+function Get-ProcessTree([int] $Id) {
+  $all = @(Get-CimInstance Win32_Process | Select-Object ProcessId, ParentProcessId)
+  $ids = @($Id); $i = 0
+  while ($i -lt $ids.Count) {
+    $ids += @($all | Where-Object { $_.ParentProcessId -eq $ids[$i] -and $ids -notcontains $_.ProcessId } | ForEach-Object { $_.ProcessId })
+    $i++
+  }
+  return $ids
+}
+# Edge processes on this run's profile folder (--user-data-dir).
+function Get-ProfileEdge {
+  $dir = "$Work\edge"
+  @(Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($dir) } |
+    ForEach-Object { $_.ProcessId })
+}
+# A stale Edge on the same profile (an earlier run that was killed) would take the new window and its
+# CDP port: stop it first.
+$stale = @(Get-ProfileEdge)
+if ($stale.Count -gt 0) {
+  Write-Warning "stopping $($stale.Count) Edge process(es) left on $Work\edge by an earlier run"
+  $stale | ForEach-Object { & taskkill /T /F /PID $_ 2>&1 | Out-Null }
+  Start-Sleep -Seconds 1
+  if (@(Get-ProfileEdge).Count -gt 0) { throw "an Edge process on $Work\edge could not be stopped" }
+}
+
 $vars = "APP_TOKEN", "APP_PORT", "APP_DATA_DIR", "APP_CORS_ORIGINS", "VITE_DEV_PORT", "APP_BACKEND_URL", "APP_BACKEND_TOKEN",
   "KESTREL_CDP_PORT", "KESTREL_PROJECT_ID", "KESTREL_CLOUD_ID", "KESTREL_CRACK_TYPE", "KESTREL_BACKEND_URL", "KESTREL_TOKEN",
   "KESTREL_BUDGET", "KESTREL_WEBVIEW_DIR", "KESTREL_BROWSER_PROCESS", "KESTREL_WORK_DIR", "KESTREL_MODE", "KESTREL_EFFECTS",
@@ -93,7 +120,8 @@ try {
 
   if (-not $state) {
     if (-not $Cloud) { throw "the first run in $Work needs -Cloud" }
-    $setup = @("scripts\pointcloud_acceptance.py", "setup", "--base", $base, "--token", $token, "--project-folder", "$Work\project",
+    # no --token: the script reads APP_TOKEN (set above), so the token is on no process command line
+    $setup = @("scripts\pointcloud_acceptance.py", "setup", "--base", $base, "--project-folder", "$Work\project",
       "--source", ([System.IO.Path]::GetFullPath($Cloud)), "--backend-pid", "$($backend.Id)")
     if ($Photos) { $setup += @("--photos", ([System.IO.Path]::GetFullPath($Photos))) }
     Push-Location "$repo\backend"
@@ -133,13 +161,19 @@ try {
   # taskkill writes to stderr when a child is already gone; under "Stop" that would abort this block
   # and leave the rest running (found in the smoke run: Vite and the backend survived)
   $ErrorActionPreference = "Continue"
+  $tree = @()
+  foreach ($p in @($browser, $vite, $backend)) { if ($p) { $tree += Get-ProcessTree $p.Id } }
+  $tree += Get-ProfileEdge
   foreach ($p in @($browser, $vite, $backend)) {
     if ($p -and -not $p.HasExited) { & taskkill /T /F /PID $p.Id 2>&1 | Out-Null }
   }
   # Edge may hand the window to a process that is not the one started: stop every Edge process of this profile.
-  $profileDir = "$Work\edge"
-  Get-CimInstance Win32_Process -Filter "Name='msedge.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Contains($profileDir) } |
-    ForEach-Object { & taskkill /T /F /PID $_.ProcessId 2>&1 | Out-Null }
+  Get-ProfileEdge | ForEach-Object { & taskkill /T /F /PID $_ 2>&1 | Out-Null }
+  Start-Sleep -Milliseconds 500
+  $left = @($tree | Sort-Object -Unique | Where-Object { Get-Process -Id $_ -ErrorAction SilentlyContinue })
+  if ($left.Count -gt 0) {
+    Write-Warning "PROCESSES OF THIS RUN ARE STILL RUNNING: $($left -join ', ') (stop them before the next run)"
+  }
   foreach ($n in $vars) { Remove-Item "Env:$n" -ErrorAction SilentlyContinue }
   if ($converterSet) { Remove-Item "Env:KESTREL_POTREECONVERTER" -ErrorAction SilentlyContinue }
 }

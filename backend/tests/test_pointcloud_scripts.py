@@ -260,3 +260,14 @@ def test_views_compares_bytes_sha_and_size():
     by = {r["subject_id"]: r for r in out["rows"]}
     assert by["f1"]["ok"] is True
     assert by["m1"]["ok"] is False and by["m1"]["size"] == [800, 500] and by["m1"]["sha_ok"] is False
+
+
+def test_token_comes_from_the_environment_when_no_flag_is_given():
+    # C-G Task 9 fix round 1 (m6): the launcher passes the token through the environment, so it is
+    # never on a process command line; --token keeps working for manual runs.
+    acc = _load("pointcloud_acceptance")
+    assert acc.resolve_token("cli", {"KESTREL_TOKEN": "k", "APP_TOKEN": "a"}) == "cli"
+    assert acc.resolve_token(None, {"KESTREL_TOKEN": "k", "APP_TOKEN": "a"}) == "k"
+    assert acc.resolve_token(None, {"APP_TOKEN": "a"}) == "a"
+    with pytest.raises(SystemExit, match="token"):
+        acc.resolve_token(None, {})

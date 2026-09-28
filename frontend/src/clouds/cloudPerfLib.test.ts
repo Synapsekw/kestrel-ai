@@ -153,4 +153,24 @@ describe("cloud-perf-lib (C-G drivers)", () => {
     // the first range is the whole function; inner ranges are blocks and are not calls
     expect(coverageCounts(coverage, ["pickAtClient", "absent"])).toEqual({ pickAtClient: 17, absent: 0 });
   });
+
+  it("narrows coverage counts to one script with name@url-part", () => {
+    // two functions named runOcclusion: the pins layer's settle pass and the engine's implementation
+    const coverage = {
+      result: [
+        {
+          url: "http://x/src/clouds/pins/PinsLayer.tsx",
+          functions: [{ functionName: "runOcclusion", ranges: [{ count: 3 }] }],
+        },
+        {
+          url: "http://x/src/clouds/viewer/occlusion.ts",
+          functions: [{ functionName: "runOcclusion", ranges: [{ count: 5 }] }],
+        },
+      ],
+    };
+    expect(coverageCounts(coverage, ["runOcclusion@PinsLayer", "runOcclusion"])).toEqual({
+      "runOcclusion@PinsLayer": 3,
+      runOcclusion: 8,
+    });
+  });
 });

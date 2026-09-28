@@ -29,9 +29,16 @@ const shots = env.KESTREL_SHOTS ?? path.join(env.KESTREL_WORK_DIR, "out");
  * (pins/pinsController.ts, the span its own lastPassMs times), hence "frame@pinsController". */
 const FN = {
   pins: (env.KESTREL_FN_PINS ?? "frame@pinsController").split(","),
-  occlusion: (env.KESTREL_FN_OCCLUSION ?? "occlusion").split(","),
+  occlusion: (env.KESTREL_FN_OCCLUSION ?? "runOcclusion@PinsLayer").split(","),
   hover: (env.KESTREL_FN_HOVER ?? "pickAtClient").split(","),
 };
+/** The occlusion pass per settle is the pins layer's `runOcclusion` (pins/PinsLayer.tsx: the settle
+ * callback, one call per settle); the engine's implementation of the same name (viewer/occlusion.ts,
+ * which answers null while the view moves) is recorded beside it. */
+const OCC_ENGINE = "runOcclusion@viewer/occlusion";
+/** Driver pins for `perf` (§13: pin pass ≤ 1 ms at 200, ≤ 2.5 ms at 500). */
+const PIN_COUNT = Number(env.KESTREL_PIN_COUNT ?? 200);
+const PERF_NOTE = "C-G perf pin";
 const MOCKUP =
   env.KESTREL_MOCKUP ??
   "E:\\Dev\\Yolo\\app\\.superpowers\\brainstorm\\1481982-1790403567\\content\\ws-clouds.html";
@@ -45,6 +52,13 @@ const fail = (why) => {
   console.log(`measure FAIL ${why}`);
   process.exit(1);
 };
+/** A metric that could not be measured (a zero total or call count would read as a pass): the JSON
+ * is still written, with `problems`, and the driver exits 1. */
+const problems = [];
+const problem = (why) => {
+  console.log(`measure PROBLEM ${why}`);
+  problems.push(why);
+};
 const api = async (p, init = {}) => {
   const r = await fetch(`${env.KESTREL_BACKEND_URL}/api/v1/projects/${env.KESTREL_PROJECT_ID}${p}`, {
     ...init,
@@ -57,6 +71,30 @@ const api = async (p, init = {}) => {
   const text = await r.text();
   return { status: r.status, body: text ? JSON.parse(text) : null };
 };
+/** Every finding on this cloud (keyset pages of 500). */
+async function listFindings() {
+  const found = [];
+  let cursor = null;
+  do {
+    const next = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
+    const r = await api(`/findings?data_id=${env.KESTREL_CLOUD_ID}&limit=500${next}`);
+    if (r.status !== 200) fail(`listFindings ${r.status}`);
+    found.push(...r.body.items);
+    cursor = r.body.next_cursor ?? null;
+  } while (cursor);
+  return found;
+}
+/** CPU profile and call counts over `fn` (precise coverage is reset first, so it counts this window). */
+async function profiled(cdp, fn) {
+  await cdp.send("Profiler.startPreciseCoverage", { callCount: true, detailed: false });
+  await cdp.send("Profiler.takePreciseCoverage");
+  await cdp.send("Profiler.start");
+  const value = await fn();
+  const profile = (await cdp.send("Profiler.stop")).profile;
+  const coverage = await cdp.send("Profiler.takePreciseCoverage");
+  await cdp.send("Profiler.stopPreciseCoverage");
+  return { value, profile, coverage };
+}
 const hypot3 = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
 
@@ -114,8 +152,21 @@ await page.addInitScript(() => {
     return raf(cb);
   };
 });
+/** page.evaluate that waits out a navigation (Vite's dependency optimiser reloads the page once
+ * when it finds a new import; the first load can still be settling): retried, else `fallback`. */
+async function evalSafe(fn, arg, fallback = null, tries = 50) {
+  for (let i = 0; i < tries; i += 1) {
+    try {
+      return await page.evaluate(fn, arg);
+    } catch (e) {
+      if (!/Execution context was destroyed|navigation|Target closed/.test(String(e))) throw e;
+      await sleep(200);
+    }
+  }
+  return fallback;
+}
 await page.waitForFunction(() => document.readyState === "complete", null, { timeout: 60_000 });
-await page.evaluate(
+await evalSafe(
   ([budget, fx, clipKey, keepClip]) => {
     localStorage.setItem("kestrel.diagnostics", "1");
     localStorage.setItem("kestrel.clouds.pointBudget", String(budget));
@@ -135,8 +186,8 @@ const go = (search = "") =>
     history.pushState({}, "", p);
     dispatchEvent(new PopStateEvent("popstate"));
   }, `/p/${env.KESTREL_PROJECT_ID}/clouds/${env.KESTREL_CLOUD_ID}${search}`);
-const stats = () => page.evaluate(() => window.__kestrelCloudViewer?.stats() ?? null);
-const pins = () => page.evaluate(() => window.__kestrelCloudViewer?.pins?.() ?? []);
+const stats = () => evalSafe(() => window.__kestrelCloudViewer?.stats() ?? null, undefined, null, 5);
+const pins = () => evalSafe(() => window.__kestrelCloudViewer?.pins?.() ?? [], undefined, [], 5);
 const pose = () => page.evaluate(() => window.__kestrelCloudViewer?.cameraPose() ?? null);
 const ring = () => page.evaluate(() => window.__kestrelCloudViewer?.frameTimes() ?? []);
 async function settle(timeoutMs = 60_000) {
@@ -278,7 +329,12 @@ async function createPins(n) {
     };
     const r = await api("/findings", {
       method: "POST",
-      body: JSON.stringify({ type_id: env.KESTREL_CRACK_TYPE, severity: (i % 4) + 1, anchor }),
+      body: JSON.stringify({
+        type_id: env.KESTREL_CRACK_TYPE,
+        severity: (i % 4) + 1,
+        anchor,
+        note: PERF_NOTE,
+      }),
     });
     if (r.status !== 201) fail(`createFinding ${r.status} ${JSON.stringify(r.body)}`);
     made.push(r.body.id);
@@ -367,35 +423,54 @@ if (mode === "layout") {
 if (mode === "perf") {
   await go();
   await settle();
-  const have = (await api(`/findings?data_id=${env.KESTREL_CLOUD_ID}&limit=500`)).body?.items?.length ?? 0;
-  if (have < 200) await createPins(200 - have);
+  // PIN_COUNT driver pins (note PERF_NOTE; §13 has targets at 200 and 500): create the missing ones,
+  // delete the driver's surplus from an earlier run with a larger count; other findings are kept.
+  const all = await listFindings();
+  const ours = all.filter((f) => f.note === PERF_NOTE);
+  if (ours.length < PIN_COUNT) await createPins(PIN_COUNT - ours.length);
+  for (const f of ours.slice(PIN_COUNT)) {
+    const r = await api(`/findings/${f.id}`, { method: "DELETE" });
+    if (r.status >= 300) fail(`deleteFinding ${r.status}`);
+  }
+  const expectedPins = all.length - ours.length + PIN_COUNT;
+  result.pinCount = PIN_COUNT;
   const memory = memorySampler();
-  // a fresh open (the viewer unmounts on the Overview and mounts again): first points and settled
-  await page.evaluate((p) => {
-    history.pushState({}, "", p);
-    dispatchEvent(new PopStateEvent("popstate"));
-  }, `/p/${env.KESTREL_PROJECT_ID}`);
-  await sleep(1000);
-  await go();
+
+  // a cold open (finding 3): the HTTP cache cleared and disabled, then a full page load, so no octree
+  // node comes from memory or from the persistent cache in <Work>\edge (S1 measured its first open).
+  // The OS file cache on the backend side cannot be cleared from here.
+  const net = await context.newCDPSession(page);
+  await net.send("Network.enable");
+  await net.send("Network.clearBrowserCache");
+  await net.send("Network.setCacheDisabled", { cacheDisabled: true });
+  await page.goto(new URL(`/p/${env.KESTREL_PROJECT_ID}/clouds/${env.KESTREL_CLOUD_ID}`, page.url()).href);
   let s = await settle();
   for (let i = 0; i < 100 && s && s.settledMs == null; i += 1) {
     await sleep(100);
     s = await stats();
   }
+  await net.send("Network.setCacheDisabled", { cacheDisabled: false });
+  result.open = { warm: false, httpCacheCleared: true };
   result.firstPointsMs = s?.firstPointsMs ?? null;
   result.settledMs = s?.settledMs ?? null;
   result.visiblePoints = s?.numVisiblePoints ?? null;
-  for (let i = 0; i < 100 && (await pins()).length < 200; i += 1) await sleep(200);
+  if (result.firstPointsMs == null || result.settledMs == null) problem("open: no firstPointsMs/settledMs");
+  for (let i = 0; i < 150 && (await pins()).length < expectedPins; i += 1) await sleep(200);
   const rows = await pins();
   result.pins = rows.length;
   result.pinsVisible = rows.filter((p) => p.state === "visible").length;
+  if (rows.length !== expectedPins) problem(`pins: ${rows.length} drawn, ${expectedPins} expected`);
   if (effects === "full" && (await w.edl.getAttribute("aria-checked")) !== "true") await w.edl.click();
   result.edl = (await w.edl.getAttribute("aria-checked")) === "true";
   await w.findingsTab.click(); // every panel shown: inspector on Findings, cameras as they default
   await settle();
 
-  // orbit, no profiler attached: the frame times (spec §13 orbit p50/p95)
+  // orbit, no profiler attached: the frame times (spec §13 orbit p50/p95). The page's own rAF calls
+  // must grow here: the positive control for the idle check below (minor m2).
+  const rafCalls = () => page.evaluate(() => window.__rafCalls);
+  const calls0 = await rafCalls();
   const o = await measuredOrbit(ORBIT_MS, env.KESTREL_ORBIT_INPUT ?? "mouse");
+  result.orbitRafCalls = (await rafCalls()) - calls0;
   result.orbitInput = o.input;
   result.orbitStart = o.start;
   result.orbitCameraMoved = +o.cameraMoved.toFixed(3);
@@ -405,25 +480,77 @@ if (mode === "perf") {
   if (o.cameraMoved <= 1e-3) fail(`the orbit did not move the camera (${o.input})`);
   if (o.raf.length < 60 || o.render.length === 0)
     fail(`orbit samples raf=${o.raf.length} render=${o.render.length}`);
+  if (result.orbitRafCalls <= 0) fail("the page made no rAF call during the orbit (idle control)");
   await settle();
 
-  // orbit again under the CPU profiler (G5: 100 us sampling, an estimate): the pin pass per frame
+  // orbit again under the CPU profiler and call counting (G5: 100 us sampling, an estimate): the pin
+  // pass per frame it ran in, and nothing of the occlusion pass or the hover pick while moving (m3).
+  // The pins layer's own timer (PinDiag.passMs, the same span) is sampled alongside (m1).
   const cdp = await context.newCDPSession(page);
   await cdp.send("Profiler.enable");
   await cdp.send("Profiler.setSamplingInterval", { interval: 100 });
-  await cdp.send("Profiler.start");
-  const po = await measuredOrbit(PROFILED_ORBIT_MS, o.input);
-  const orbitProfile = (await cdp.send("Profiler.stop")).profile;
-  const frames = po.render.length || po.raf.length;
-  result.pinPassMsPerFrame = +(sum(profileTotals(orbitProfile, FN.pins)) / Math.max(1, frames)).toFixed(4);
-  result.pinPassFrames = frames;
+  const passSamples = [];
+  let sampling = true;
+  const passSampler = (async () => {
+    while (sampling) {
+      const v = await page.evaluate(() => window.__kestrelCloudViewer?.pins?.()[0]?.passMs ?? null);
+      if (typeof v === "number" && Number.isFinite(v)) passSamples.push(v);
+      await sleep(50);
+    }
+  })();
+  const po = await profiled(cdp, () => measuredOrbit(PROFILED_ORBIT_MS, o.input));
+  sampling = false;
+  await passSampler;
+  const pinMs = sum(profileTotals(po.profile, FN.pins));
+  const pinRuns = sum(coverageCounts(po.coverage, FN.pins));
+  result.pinPass = {
+    measured: pinMs > 0 && pinRuns > 0,
+    totalMs: +pinMs.toFixed(3),
+    framesRan: pinRuns,
+    ringFrames: po.value.render.length,
+    msPerFrame: pinRuns ? +(pinMs / pinRuns).toFixed(4) : null,
+    hookPassMs: frameStats(passSamples),
+  };
+  if (!result.pinPass.measured) problem(`pin pass: ${FN.pins} total ${pinMs} ms over ${pinRuns} calls`);
+  result.duringOrbit = {
+    occlusionMs: +sum(profileTotals(po.profile, [...FN.occlusion, OCC_ENGINE])).toFixed(3),
+    occlusionCalls: sum(coverageCounts(po.coverage, FN.occlusion)),
+    hoverPickCalls: sum(coverageCounts(po.coverage, FN.hover)),
+  };
 
-  // settle: the occlusion pass runs once
-  await cdp.send("Profiler.start");
-  await settle();
-  await sleep(1500);
-  const occTotals = profileTotals((await cdp.send("Profiler.stop")).profile, FN.occlusion);
-  result.occlusionMsPerSettle = +sum(occTotals).toFixed(3);
+  // one settle under the profiler (finding 2): profiling and counting start first, then a short
+  // scripted turn makes the view move and settle again, so the settle's occlusion pass lands inside
+  // the window (the viewer calls it IDLE_AFTER_MS = 1 s after the last frame).
+  const occ = await profiled(cdp, async () => {
+    await page.evaluate(() => window.__kestrelCloudViewer.scriptOrbit(0.2));
+    await settle();
+    await sleep(2500);
+  });
+  const occMs = sum(profileTotals(occ.profile, FN.occlusion));
+  const occCalls = sum(coverageCounts(occ.coverage, FN.occlusion));
+  result.occlusion = {
+    measured: occMs > 0 && occCalls > 0,
+    totalMs: +occMs.toFixed(3),
+    calls: occCalls,
+    msPerSettle: occCalls ? +(occMs / occCalls).toFixed(3) : null,
+    engineMs: +sum(profileTotals(occ.profile, [OCC_ENGINE])).toFixed(3),
+  };
+  if (!result.occlusion.measured)
+    problem(`occlusion: ${FN.occlusion} total ${occMs} ms over ${occCalls} calls`);
+  // cross-check: the hook's own timed occlusion over the same shown pins (CloudViewer.tsx occlusion)
+  const shown = new Set((await pins()).filter((p) => p.state !== "hidden").map((p) => p.id));
+  const pts = (await listFindings())
+    .filter((f) => shown.has(f.id))
+    .map((f) => [f.anchor.x, f.anchor.y, f.anchor.z]);
+  const hook = await page.evaluate(
+    ([p]) =>
+      window.__kestrelCloudViewer.occlusion(
+        p,
+        p.map(() => 0.3),
+      ),
+    [pts],
+  );
+  result.occlusion.hook = { pins: pts.length, ms: +hook.ms.toFixed(3), settled: hook.result !== null };
 
   // idle: no frame and no running animation 1 s after settle (the page's own rAF calls, the render
   // ring, and the animations as the e2e fixture counts them)
@@ -439,56 +566,73 @@ if (mode === "perf") {
     calls: window.__rafCalls,
     ring: window.__kestrelCloudViewer.frameTimes(),
   }));
+  const idleRenders = ringTail(idle0.ring, idle1.ring, idle1.calls - idle0.calls);
   result.idle = {
     rafCalls: idle1.calls - idle0.calls,
-    renders: ringTail(idle0.ring, idle1.ring, 0).n,
+    renders: idleRenders.n,
+    rendersExact: idleRenders.exact,
     animations: await runningAnimations(),
   };
 
-  // hover pick: rate and cost over 5 s of mouse movement without a button. The viewer hover-picks
-  // only while a picking tool is armed (engine.ts pointermove: events.isArmed()), so the Point tool
-  // is armed for the window; the path keeps to canvas points clear of pins and panels.
+  // hover pick: rate and cost, three 5 s windows of mouse movement without a button; the medians are
+  // the result (m4). The viewer hover-picks only while a picking tool is armed (engine.ts
+  // pointermove: events.isArmed()), so the Point tool is armed; the path keeps to canvas points clear
+  // of pins and panels.
   await page.keyboard.press("p");
   const c = await canvasCentre();
-  let path2 = [];
+  let hoverPath = [];
   for (const r of [0.2, 0.12, 0.06]) {
-    path2 = await page.evaluate(
+    hoverPath = await page.evaluate(
       ([cx, cy, rx, ry]) => {
         const canvas = document.querySelector('[data-testid="cloud-canvas"]');
-        const out = [];
+        const found = [];
         for (let k = 0; k < 90; k += 1) {
           const x = cx + Math.sin(k / 15) * rx;
           const y = cy + Math.cos(k / 15) * ry;
-          if (document.elementFromPoint(x, y) === canvas) out.push([x, y]);
+          if (document.elementFromPoint(x, y) === canvas) found.push([x, y]);
         }
-        return out;
+        return found;
       },
       [c.x, c.y, c.w * r, c.h * r],
     );
-    if (path2.length >= 30) break;
+    if (hoverPath.length >= 30) break;
   }
-  result.hoverPathPoints = path2.length;
-  await cdp.send("Profiler.startPreciseCoverage", { callCount: true, detailed: false });
-  await cdp.send("Profiler.takePreciseCoverage"); // resets the counters: count only the hover window
-  await cdp.send("Profiler.start");
-  const t0 = Date.now();
-  for (let i = 0; path2.length && Date.now() - t0 < 5000; i += 1) {
-    const [x, y] = path2[i % path2.length];
-    await page.mouse.move(x, y);
-    await sleep(16);
-  }
-  const hoverS = (Date.now() - t0) / 1000;
-  const hoverProfile = (await cdp.send("Profiler.stop")).profile;
-  const calls = coverageCounts(await cdp.send("Profiler.takePreciseCoverage"), FN.hover);
-  await cdp.send("Profiler.stopPreciseCoverage");
-  const hoverMs = sum(profileTotals(hoverProfile, FN.hover));
-  const hoverCalls = sum(calls);
-  result.hoverPickHz = +(hoverCalls / hoverS).toFixed(2);
-  result.hoverPickMsPerCall = hoverCalls ? +(hoverMs / hoverCalls).toFixed(3) : null;
+  result.hoverPathPoints = hoverPath.length;
+  const hoverRuns = [];
+  if (hoverPath.length === 0) problem("hover: no canvas point clear of pins and panels");
+  else
+    for (let run = 0; run < 3; run += 1) {
+      const h = await profiled(cdp, async () => {
+        const t0 = Date.now();
+        for (let i = 0; Date.now() - t0 < 5000; i += 1) {
+          const [x, y] = hoverPath[i % hoverPath.length];
+          await page.mouse.move(x, y);
+          await sleep(16);
+        }
+        return (Date.now() - t0) / 1000;
+      });
+      const ms = sum(profileTotals(h.profile, FN.hover));
+      const n = sum(coverageCounts(h.coverage, FN.hover));
+      hoverRuns.push({
+        seconds: h.value,
+        calls: n,
+        totalMs: +ms.toFixed(3),
+        hz: +(n / h.value).toFixed(2),
+        msPerCall: n ? +(ms / n).toFixed(3) : null,
+      });
+      if (n === 0 || ms === 0) problem(`hover run ${run + 1}: ${FN.hover} total ${ms} ms over ${n} calls`);
+    }
   await page.keyboard.press("Escape"); // back to Orbit
-  result.fnNames = FN;
+  const median = (xs) => {
+    const v = xs.filter((x) => typeof x === "number").sort((a, b) => a - b);
+    return v.length ? v[Math.floor(v.length / 2)] : null;
+  };
+  result.hoverRuns = hoverRuns;
+  result.hoverPickHz = median(hoverRuns.map((r) => r.hz));
+  result.hoverPickMsPerCall = median(hoverRuns.map((r) => r.msPerCall));
+  result.fnNames = { ...FN, occlusionEngine: OCC_ENGINE };
   result.timingNote =
-    "pin pass, occlusion and hover pick: CPU-profile estimates, 100 us sampling (ruling G5)";
+    "pin pass, occlusion and hover pick: CPU-profile estimates, 100 us sampling, with precise-coverage call counting on (ruling G5)";
 
   const m = memory.stop();
   result.webviewPeakGB = +(m.peakBytes / 1e9).toFixed(2);
@@ -510,7 +654,9 @@ if (mode === "pins") {
     [20, 60],
     [-20, -60],
   ]) {
-    await page.keyboard.press("m");
+    // the palette button, not the M key: a key goes to a focused field instead (seen in clip mode)
+    const pinTool = w.tool("Pin a finding");
+    if ((await pinTool.getAttribute("aria-pressed")) !== "true") await pinTool.click();
     const c = await canvasCentre();
     const at = await clearPoint(c.x + dx, c.y + dy, 60);
     if (!at) fail(`no clear canvas point near (${dx}, ${dy})`);
@@ -566,15 +712,33 @@ if (mode === "pins") {
 if (mode === "pins-check") {
   const file = env.KESTREL_PINS ?? path.join(shots, "pins-full.json");
   const before = JSON.parse(fs.readFileSync(file, "utf8")).pins;
+  const RESTART_TOL_M = 1e-6;
+  result.restartTolM = RESTART_TOL_M;
   result.rows = [];
   for (const p of before) {
     const f = (await api(`/findings/${p.id}`)).body;
     await arrive(`?finding=${p.id}`);
     const pick = await page.evaluate(() => window.__kestrelCloudViewer.pickCenter());
     const a = f.anchor;
+    // the stored anchor must survive the restart unchanged (finding 4): float64 JSON both ways, so
+    // RESTART_TOL_M is round-off only; the re-pick must land within the uncertainty
+    const pre = p.anchor ?? null;
+    const dRestart = pre ? hypot3([pre.x, pre.y, pre.z], [a.x, a.y, a.z]) : null;
+    const kept = dRestart !== null && dRestart <= RESTART_TOL_M;
     const d = pick ? hypot3([pick.x, pick.y, pick.z], [a.x, a.y, a.z]) : null;
     const tol = Math.max(a.uncertainty_m ?? 0, pick?.uncertainty_m ?? 0);
-    result.rows.push({ id: p.id, anchor: a, pick, d, tol, pass: d !== null && d <= tol });
+    result.rows.push({
+      id: p.id,
+      pre,
+      anchor: a,
+      dRestart,
+      kept,
+      pick,
+      d,
+      tol,
+      pass: kept && d !== null && d <= tol,
+    });
+    if (!kept) problem(`pins-check ${p.id}: anchor moved ${dRestart} m across the restart`);
   }
   await shot(page, path.join(shots, "pins-after-restart.png"));
 }
@@ -591,17 +755,28 @@ if (mode === "clip") {
   if (!centre) fail("no clear canvas point to recentre the clip box");
   await page.mouse.click(centre.x, centre.y);
   await settle();
-  await page.keyboard.press("p");
+  // the Point tool from the palette (a key would go to a focused hint-bar field), re-armed before
+  // every click: a missed save must not leave the next clicks in Orbit
+  const point = w.tool("Point");
+  const armPoint = async () => {
+    if ((await point.getAttribute("aria-pressed")) !== "true") await point.click();
+  };
   const c = await canvasCentre();
+  // the 5 x 4 click grid spans ±KESTREL_CLIP_SPREAD of the canvas around its centre (default 0.4)
+  const spread = Number(env.KESTREL_CLIP_SPREAD ?? 0.4);
+  result.spread = spread;
   const saved = [];
+  const misses = [];
+  let clicks = 0;
   for (let i = 0; i < 5; i += 1)
     for (let j = 0; j < 4; j += 1) {
       const at = await clearPoint(
-        c.x - c.w * 0.4 + (c.w * 0.8 * i) / 4,
-        c.y - c.h * 0.4 + (c.h * 0.8 * j) / 3,
+        c.x - c.w * spread + (c.w * 2 * spread * i) / 4,
+        c.y - c.h * spread + (c.h * 2 * spread * j) / 3,
         40,
       );
       if (!at) continue;
+      await armPoint();
       const post = page
         .waitForResponse(
           (r) => /\/measurements$/.test(new URL(r.url()).pathname) && r.request().method() === "POST",
@@ -611,19 +786,22 @@ if (mode === "clip") {
         )
         .catch(() => null);
       await page.mouse.click(at.x, at.y);
+      clicks += 1;
       await page.keyboard.press("Enter");
       const r = await post;
-      if (r && r.status() === 201) {
+      if (r && r.ok()) {
         const body = await r.json();
         saved.push(body.measurement ?? body); // a point saves bare; a kind with a job as {measurement, job}
-      } else await page.keyboard.press("Escape");
+      } else misses.push({ at, status: r ? r.status() : null });
     }
   let views = [];
   for (const until = Date.now() + 90_000; Date.now() < until; await sleep(500)) {
     views = (await api(`/pointclouds/${env.KESTREL_CLOUD_ID}/views`)).body.items;
     if (saved.every((m) => views.some((v) => v.subject_id === m.id))) break;
   }
-  result.clicks = 20;
+  result.clicks = clicks;
+  result.misses = misses;
+  if (clicks < 20) problem(`clip: ${clicks} of 20 clicks made (no canvas point clear of pins and panels)`);
   result.rows = saved.map((m) => {
     const box = views.find((v) => v.subject_id === m.id)?.render.clip_box ?? null;
     const p = m.points[0];
@@ -635,6 +813,7 @@ if (mode === "clip") {
     };
   });
   result.saved = saved.length;
+  if (saved.length === 0) problem("clip: no click saved a point (nothing to test against the box)");
   result.outside = result.rows.filter((r) => r.inside === false).length;
   result.noBox = result.rows.filter((r) => r.box === null).length;
   await shot(page, path.join(shots, "clip.png"));
@@ -735,6 +914,11 @@ if (mode === "hold") {
   );
 }
 
+result.problems = problems;
 fs.writeFileSync(out, JSON.stringify(result, null, 2));
+if (problems.length) {
+  console.log(`measure ${mode} FAIL ${problems.length} unmeasured or short, see ${out}`);
+  process.exit(1);
+}
 console.log(`measure ${mode} ok ${out}`);
 process.exit(0);

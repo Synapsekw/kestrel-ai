@@ -30,7 +30,10 @@ export function pngSize(bytes: Uint8Array): { width: number; height: number } | 
 export function colourSpread(samples: number[]): { distinct: number; nonBackground: number };
 export function coverageCounts(
   coverage: {
-    result: Array<{ functions: Array<{ functionName: string; ranges: Array<{ count: number }> }> }>;
+    result: Array<{
+      url?: string;
+      functions: Array<{ functionName: string; ranges: Array<{ count: number }> }>;
+    }>;
   },
   names: string[],
 ): Record<string, number>;
