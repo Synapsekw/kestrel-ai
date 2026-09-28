@@ -12,8 +12,8 @@ import type { CloudViewerHandle } from "../CloudViewer";
 import type { CaptureReason, ViewSubject } from "../workspace/seams";
 import { captureEngineFrom } from "./captureEngine";
 import { findingAnchor, missingSubjects } from "./missing";
-import { CaptureQueue, type SubjectGeometry } from "./queue";
-import { subjectKey, useViewStore } from "./viewStore";
+import { CaptureQueue, type JobOutcome, type SubjectGeometry } from "./queue";
+import { subjectKey, useViewStore, type QueueReason } from "./viewStore";
 
 export type RenderNow = Pick<CloudViewRender, "colour_mode" | "point_budget" | "point_size" | "clip_box">;
 
@@ -73,7 +73,8 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
     useViewStore.getState().setReady(viewer.current !== null);
   });
 
-  const queueRef = useRef<CaptureQueue | null>(null);
+  // Every capture that is not the bulk run's own (automatic requests and the card's buttons).
+  const requestRef = useRef<((s: ViewSubject, r: QueueReason) => void) | null>(null);
   // Per-key PUT sequence numbers, for `keepFresherViews`: bumped once per successful capture,
   // reset whenever this effect (re-)sets up for a project/cloud.
   const putSeq = useRef(0);
@@ -84,7 +85,11 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
     store().setReady(viewer.current !== null);
     putSeq.current = 0;
     lastPutSeq.current = new Map();
+    // A bulk item's geometry from the lists read when the run started, for its own job only.
     const cache = new Map<string, SubjectGeometry>();
+    // Keys requested outside the bulk run since it started: their geometry may have moved since the
+    // lists were read, so the run never hands them list geometry (final review).
+    const touched = new Set<string>();
     const queue = new CaptureQueue({
       engine: () => (viewer.current ? captureEngineFrom(viewer.current) : null),
       resolve: async (s) => {
@@ -121,7 +126,13 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
       },
       log: pushLog,
     });
-    queueRef.current = queue;
+    const request = (s: ViewSubject, r: QueueReason) => {
+      const key = subjectKey(s);
+      touched.add(key);
+      cache.delete(key); // a waiting bulk job for it now resolves fresh geometry
+      void queue.enqueue(s, r);
+    };
+    requestRef.current = request;
 
     let bulk: BulkRun | null = null;
     const cancelMissing = (why: "user" | "leave") => {
@@ -138,6 +149,7 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
       let failed = 0;
       let total = 0;
       const startSeq = putSeq.current;
+      touched.clear();
       try {
         const [findings, measurements, views] = await Promise.all([
           listFindings(api, projectId, { anchor_kind: ["cloud"], data_id: cloudId, limit: FINDINGS_CAP }),
@@ -156,8 +168,22 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
         store().setBulk({ done, total });
         for (const item of todo) {
           if (run.cancelled !== "no") break;
-          cache.set(subjectKey(item.subject), item.geometry);
-          const outcome = await queue.enqueue(item.subject, "missing", { quiet: true });
+          const key = subjectKey(item.subject);
+          const stored = store().views?.[key];
+          if ((lastPutSeq.current.get(key) ?? 0) > startSeq && stored && !stored.stale) {
+            // Saved during this run (a move's own capture): re-capturing from the list geometry
+            // would put the pin back in its old place and mark it current.
+            done += 1;
+            if (run.cancelled === "no") store().setBulk({ done, total });
+            continue;
+          }
+          if (!touched.has(key)) cache.set(key, item.geometry);
+          let outcome: JobOutcome;
+          try {
+            outcome = await queue.enqueue(item.subject, "missing", { quiet: true });
+          } finally {
+            cache.delete(key); // also when a stop dropped it unresolved
+          }
           if (outcome === "stopped") break; // the queue already reported it (or we left)
           if (outcome === "failed") failed += 1;
           done += 1;
@@ -184,14 +210,14 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
     };
 
     store().setActions({
-      enqueue: (s, r) => void queue.enqueue(s, r),
+      enqueue: request,
       captureMissing: () => void captureMissing(),
       cancelMissing: () => cancelMissing("user"),
     });
     return () => {
       cancelMissing("leave");
       queue.dispose();
-      queueRef.current = null;
+      requestRef.current = null;
       cache.clear();
       useViewStore.getState().reset(null, null);
     };
@@ -232,7 +258,7 @@ export function useViewCapture({ projectId, cloudId, viewer, render }: UseViewCa
   }, [api, projectId, cloudId, findingsRevision, pointcloudsRevision]);
 
   const requestViewCapture = useCallback((subject: ViewSubject, reason: CaptureReason) => {
-    void queueRef.current?.enqueue(subject, reason);
+    requestRef.current?.(subject, reason);
   }, []);
   const captureMissing = useCallback(() => useViewStore.getState().actions?.captureMissing(), []);
   const cancelMissing = useCallback(() => useViewStore.getState().actions?.cancelMissing(), []);

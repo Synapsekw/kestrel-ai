@@ -272,4 +272,81 @@ describe("useViewCapture", () => {
     expect(useToastStore.getState().toasts.at(-1)).toMatchObject({ tone: "info", text: QUEUE_STOPPED });
     expect(api.putFindingView3d).not.toHaveBeenCalled();
   });
+
+  describe("a bulk run over subjects the operator touches meanwhile", () => {
+    const moved = (id: string) => ({
+      ...cloudFinding(id),
+      anchor: { kind: "cloud" as const, cloud_id: "c1", x: 99, y: 20, z: 5, uncertainty_m: 0.05 },
+      attachment_count: 0,
+      comment_count: 0,
+    });
+    const marksFor = (h: ReturnType<typeof fakeViewer>["h"], i: number) =>
+      (h.capture.mock.calls[i] as unknown as [unknown, unknown])[1];
+    const putsFor = (id: string) => api.putFindingView3d.mock.calls.filter((c) => c[2] === id).length;
+
+    beforeEach(() => {
+      api.listCloudMeasurements.mockResolvedValue([]);
+      api.listCloudViews.mockResolvedValue({ items: [] });
+      api.fetchFinding.mockImplementation(async (_a, _p, id: string) => moved(id));
+    });
+
+    it("does not re-capture a subject an automatic request saved during the run", async () => {
+      api.listFindings.mockResolvedValue({
+        items: [cloudFinding("f1"), cloudFinding("f2"), cloudFinding("f3")],
+        next_cursor: null,
+      });
+      let n = 0;
+      api.putFindingView3d.mockImplementation(async (_a, _p, id: string) =>
+        viewOut({ subject_id: id, sha256: `${id}-${(n += 1)}` }),
+      );
+      const { result: hook, viewer } = mount();
+      let release!: (r: CaptureResult) => void;
+      viewer.h.capture.mockImplementationOnce(() => new Promise<CaptureResult>((r) => (release = r)));
+      act(() => hook.current.captureMissing());
+      await waitFor(() => expect(viewer.h.capture).toHaveBeenCalledTimes(1)); // f1, held
+      act(() => hook.current.requestViewCapture({ kind: "finding", id: "f3" }, "move"));
+      release(result());
+      await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+      expect(putsFor("f3")).toBe(1);
+      expect(useViewStore.getState().views?.["finding:f3"]?.sha256).toBe("f3-2");
+      expect(marksFor(viewer.h, 1)).toEqual([{ kind: "finding", at: [99, 20, 5] }]);
+      expect(viewer.h.capture).toHaveBeenCalledTimes(3); // f1, f3 (move), f2 - not f3 again
+      expect(useToastStore.getState().toasts.at(-1)?.text).toBe("Saved 3 report views");
+    });
+
+    it("a bulk item stopped by an engine failure leaves no stale geometry for a later request", async () => {
+      api.listFindings.mockResolvedValue({ items: [cloudFinding("f1")], next_cursor: null });
+      const { result: hook, viewer } = mount();
+      let fail!: (e: Error) => void;
+      viewer.h.capture.mockImplementationOnce(() => new Promise<CaptureResult>((_r, j) => (fail = j)));
+      act(() => hook.current.requestViewCapture({ kind: "finding", id: "fa" }, "create"));
+      await waitFor(() => expect(viewer.h.capture).toHaveBeenCalledTimes(1)); // fa, held
+      act(() => hook.current.captureMissing());
+      await waitFor(() => expect(useViewStore.getState().busy["finding:f1"]).toBe(true)); // f1 waits
+      fail(new Error("context lost"));
+      await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+      expect(api.putFindingView3d).not.toHaveBeenCalled();
+      api.fetchFinding.mockClear();
+      act(() => hook.current.requestViewCapture({ kind: "finding", id: "f1" }, "move"));
+      await waitFor(() => expect(api.putFindingView3d).toHaveBeenCalledTimes(1));
+      expect(api.fetchFinding).toHaveBeenCalledWith(expect.anything(), "p1", "f1");
+      expect(marksFor(viewer.h, 1)).toEqual([{ kind: "finding", at: [99, 20, 5] }]);
+    });
+
+    it("a move merged into a waiting bulk item captures the moved anchor", async () => {
+      api.listFindings.mockResolvedValue({ items: [cloudFinding("f1")], next_cursor: null });
+      const { result: hook, viewer } = mount();
+      let release!: (r: CaptureResult) => void;
+      viewer.h.capture.mockImplementationOnce(() => new Promise<CaptureResult>((r) => (release = r)));
+      act(() => hook.current.requestViewCapture({ kind: "finding", id: "fa" }, "create"));
+      await waitFor(() => expect(viewer.h.capture).toHaveBeenCalledTimes(1)); // fa, held
+      act(() => hook.current.captureMissing());
+      await waitFor(() => expect(useViewStore.getState().busy["finding:f1"]).toBe(true)); // f1 waits
+      act(() => hook.current.requestViewCapture({ kind: "finding", id: "f1" }, "move"));
+      release(result());
+      await waitFor(() => expect(useViewStore.getState().bulk).toBeNull());
+      expect(putsFor("f1")).toBe(1);
+      expect(marksFor(viewer.h, 1)).toEqual([{ kind: "finding", at: [99, 20, 5] }]);
+    });
+  });
 });
