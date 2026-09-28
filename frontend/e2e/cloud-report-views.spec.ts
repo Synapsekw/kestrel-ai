@@ -224,13 +224,16 @@ test("a capture that starts while a node is loading waits for it and saves a com
     })
     .toBeGreaterThan(0);
   await startCaptureMissing(page);
-  // the first capture is in its wait by now (the page may not paint during it, so no UI signal)
-  await page.waitForTimeout(1_000);
-  const released = Date.now();
+  // the first capture holds the loop and waits on the held root (the page may not paint during it,
+  // so the engine's own state is the signal, not the UI)
+  await expect
+    .poll(async () => page.evaluate(() => window.__kestrelCloudViewer?.stats().frozen ?? false), {
+      timeout: 20_000,
+    })
+    .toBe(true);
   release();
   await expect.poll(() => uploads.length, { timeout: 30_000 }).toBe(3);
-  // well inside CAPTURE_TIMEOUT_MS (10 s): the wait ended on the load, not the timeout
-  expect(Date.now() - released).toBeLessThan(8_000);
+  // the wait ended on the load, not on CAPTURE_TIMEOUT_MS: every view is complete
   expect(uploads.map((u) => u.meta.render.complete)).toEqual([true, true, true]);
 });
 
