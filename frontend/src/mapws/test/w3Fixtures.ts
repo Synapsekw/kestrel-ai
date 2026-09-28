@@ -69,9 +69,7 @@ export const SHOWN_ALL = { layerState: {}, order: {} };
  * W1's stores for a UTM 38 site with the two surveys, `l` = Aug, `r` = Sep, the layers loaded (M-W3
  * preflight P2: seeded straight into `workspace.setLayers`, no `useWorkspaceLayers` mock).
  */
-export function w3Stores(
-  opts: { mode?: CompareMode; frame?: SiteFrame; layers?: WorkspaceLayer[] } = {},
-) {
+export function w3Stores(opts: { mode?: CompareMode; frame?: SiteFrame; layers?: WorkspaceLayer[] } = {}) {
   const stores = makeStores({ frame: opts.frame ?? UTM38, surveys: SURVEYS });
   const ws = stores.workspace.getState();
   ws.setLayers(opts.layers ?? LAYERS, false);
@@ -81,15 +79,15 @@ export function w3Stores(
 }
 
 /** Replaces the layers on an already-built `w3Stores()` (M-W3 preflight P2). */
-export function seedLayers(
-  stores: ReturnType<typeof makeStores>,
-  layers: WorkspaceLayer[] = LAYERS,
-): void {
+export function seedLayers(stores: ReturnType<typeof makeStores>, layers: WorkspaceLayer[] = LAYERS): void {
   stores.workspace.getState().setLayers(layers, false);
 }
 
 /** W1's `renderInWorkspace`, re-exported so every W3 test imports its fixtures from one module. */
 export { renderInWorkspace };
+
+/** W1's local-metres frame (M-W3: local frames come from W1's fixture). */
+export { LOCAL } from "@/mapws/test/fixtures";
 
 type Kind = "distance" | "area" | "profile";
 

@@ -9,6 +9,9 @@ export type MapMeasurement = S["MapMeasurement"];
 export type MapMeasurementKind = S["MapMeasurementKind"];
 export type MapMeasurementCreate = S["MapMeasurementCreate"];
 export type MapMeasurementPatch = S["MapMeasurementPatch"];
+export type MapDistanceResults = S["MapDistanceResults"];
+export type MapAreaResults = S["MapAreaResults"];
+export type MapProfileResults = S["MapProfileResults"];
 
 /** Spec §13: the layer reads at most 2 000 measurements, 500 a page. */
 export const MEASUREMENTS_PAGE = 500;
