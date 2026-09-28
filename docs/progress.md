@@ -9,6 +9,30 @@ tags: [operations, evidence]
 Resume instructions for a new session: read this file top to bottom, then the plan for the
 sub-project whose state is not `merged`, then continue from its first unchecked task.
 
+## Maps (M) lands — 2026-09-28 (`task/m-x`, unit M-X evidence)
+
+Sub-project M (spec `docs/superpowers/specs/2026-09-26-map-workspace-design.md`, index
+`docs/superpowers/plans/2026-09-27-maps-index.md`) is built, gated and evidenced. Units: C0 contract
+and migration 0012; B1 site frame and tiles; B2 elevation import; B3 drawings; B4 map measurements,
+profile and the `GET /measurements` union; B5 volume/detect edits; W1 workspace shell; W2 compare
+modes; W3 measure, zone and finding tools; W4 volume, detections and review; W5 drawings UI; W6 the
+Measurements tab; X (this entry).
+
+X: `MapsScreen` trimmed into `MapEvaluateScreen` (`maps/:mapId/evaluate`: labels, evaluation zones,
+score, and Results for maps without coordinates); `maps/:mapId` and `past/maps/:mapId` open the
+workspace (review links become `sel=run:`, draw links `tool=zone`); DetectReview, Site areas,
+Clouds "Show on map", the palette and every volume row link into the workspace; `SurveysScreen`
+deleted. E2E: the seven §15 flows on the Prism mock plus one opt-in real-backend flow; the frame-time
+scenario (p95 16.7–16.8 ms in three runs, SwiftShader); the acceptance run (synthetic stand-ins: frame
+EPSG:32633, DXF max offset 0.0052 m, PDF RMSE ≈ 1e-9 m, best-fit-plane volume +0.000 % against the
+analytic cone; the DSM-vs-cloud cross-check is an operator step). Product fixes found by the flows: the
+Z readout, the row menu's Align, a detection's Open in 3D footprint, `sel`/`tool` after a `map=`
+arrival, the instant minimap, and Import drawing opening the drawing import. Evidence:
+`docs/evidence/maps/README.md`.
+
+**Gate at (pending final gate):** (pending final gate). No installer here (R9): IMC-X freezes the
+sidecar, runs the smoke, builds the installer and writes the combined walkthrough.
+
 ## Foundation lands — 2026-09-27 (`task/f-x`, unit X evidence)
 
 Sub-project F (spec `docs/superpowers/specs/2026-09-26-foundation-design.md`, index plan
