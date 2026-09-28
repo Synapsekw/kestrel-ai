@@ -16,6 +16,7 @@ import { ImagesWorkspace } from "./ImagesWorkspace";
 import workspaceSource from "./ImagesWorkspace.tsx?raw";
 import browserSource from "./BrowserPane.tsx?raw";
 import { KEYS_NOTICE, resetKeysNoticeSession } from "./keysNotice";
+import { DELETED_TOAST } from "./useFrameGuard";
 import type { ImageIndexState, KeyHandlers } from "./seams";
 
 const h = vi.hoisted(() => ({
@@ -370,6 +371,35 @@ describe("ImagesWorkspace", () => {
       "data-scope",
       "1 selected",
     );
+  });
+
+  describe("the frame guard (I1)", () => {
+    const deletedToasts = () => h.toast.mock.calls.filter((c) => c[1] === DELETED_TOAST).length;
+
+    it("under the unlabeled filter, a re-read without the open frame keeps it open, no toast", async () => {
+      mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}?filter=unlabeled`);
+      await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+      setIndex([IMAGE_ID_2]); // the frame got its first box, so it is no longer unlabeled
+      expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
+      expect(deletedToasts()).toBe(0);
+    });
+
+    it("with the default filters, a deleted frame moves on and toasts once", async () => {
+      mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
+      setIndex([IMAGE_ID_2]);
+      await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID_2}`));
+      setIndex([IMAGE_ID_2]);
+      expect(deletedToasts()).toBe(1);
+    });
+
+    it("an emptied index lands on the tab once, without looping", async () => {
+      mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
+      setIndex([]);
+      await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images`));
+      setIndex([]);
+      expect(loc()).toBe(`/p/${PROJECT_ID}/images`);
+      expect(deletedToasts()).toBe(1);
+    });
   });
 
   describe("an arrival on the frame FC's store already holds (I2)", () => {

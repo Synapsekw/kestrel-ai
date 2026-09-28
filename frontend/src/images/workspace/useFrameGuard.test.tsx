@@ -10,22 +10,26 @@ vi.mock("@/ui", async (importOriginal) => ({
   toast: (...a: unknown[]) => toast(...a),
 }));
 
-function Page({ ids }: { ids: string[] | null }) {
+interface Opts {
+  filtered?: boolean;
+  gone?: boolean;
+}
+function Page({ ids, opts }: { ids: string[] | null; opts: Opts }) {
   const { imageId = null } = useParams();
-  useFrameGuard("p", imageId, ids);
+  useFrameGuard("p", imageId, ids, { filtered: opts.filtered ?? false, gone: opts.gone ?? false });
   return null;
 }
-function mount(url: string, ids: string[] | null) {
-  const tree = (i: string[] | null) => (
+function mount(url: string, ids: string[] | null, first: Opts = {}) {
+  const tree = (i: string[] | null, opts: Opts) => (
     <MemoryRouter initialEntries={[url]}>
       <Routes>
-        <Route path="/p/:projectId/images/:imageId?" element={<Page ids={i} />} />
+        <Route path="/p/:projectId/images/:imageId?" element={<Page ids={i} opts={opts} />} />
       </Routes>
       <LocationProbe />
     </MemoryRouter>
   );
-  const r = render(tree(ids));
-  return { update: (i: string[] | null) => r.rerender(tree(i)) };
+  const r = render(tree(ids, first));
+  return { update: (i: string[] | null, opts: Opts = first) => r.rerender(tree(i, opts)) };
 }
 const loc = () => screen.getByTestId("location").textContent;
 
@@ -56,6 +60,19 @@ describe("useFrameGuard (§16)", () => {
     update(["a", "c"]);
     expect(loc()).toBe("/p/p/images/b");
     expect(toast).not.toHaveBeenCalled();
+  });
+  it("a frame that leaves a FILTERED index stays open without a toast (I1)", () => {
+    const { update } = mount("/p/p/images/b", ["a", "b", "c"], { filtered: true });
+    update(["a", "c"]); // e.g. the first box drawn on an unlabeled frame
+    expect(loc()).toBe("/p/p/images/b");
+    expect(toast).not.toHaveBeenCalled();
+  });
+  it("a frame confirmed gone moves on even under filters (I1)", () => {
+    const { update } = mount("/p/p/images/b", ["a", "b", "c"], { filtered: true });
+    update(["a", "c"]);
+    update(["a", "c"], { filtered: true, gone: true });
+    expect(loc()).toBe("/p/p/images/c");
+    expect(toast).toHaveBeenCalledExactlyOnceWith("info", DELETED_TOAST);
   });
   it("leaves a deep link outside the filters alone", () => {
     mount("/p/p/images/z", ["a", "b"]);

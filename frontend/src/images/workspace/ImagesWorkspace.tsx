@@ -99,18 +99,25 @@ function filtersFor(preset: Preset): BrowserFilterState {
 /**
  * FC's `useImageData` loads one frame into FC's store (nothing else calls it, so a frame is read
  * once); mounted only while an image is open, so the bare tab and an empty project read no image.
- * Ruling 13: a frame that fails to load shows the error in the centre pane.
+ * Ruling 13: a frame that fails to load shows the error in the centre pane. The frame guard lives
+ * here because its "confirmed gone" is this load's 404 (I1).
  */
 function FrameGate({
   projectId,
   imageId,
+  ids,
+  filtered,
   children,
 }: {
   projectId: string;
   imageId: string;
+  /** The ready index's ids, else null (a new query is loading). */
+  ids: readonly string[] | null;
+  filtered: boolean;
   children: ReactNode;
 }) {
-  const { error } = useImageData(projectId, imageId);
+  const { error, notFound } = useImageData(projectId, imageId);
+  useFrameGuard(projectId, imageId, ids, { filtered, gone: notFound });
   if (error)
     return (
       <div className="grid h-full place-items-center p-6">
@@ -200,9 +207,6 @@ export function ImagesWorkspace() {
     ready: frame !== null && boxesLoaded,
     onOpenInspector: () => setInspectorOpen(true),
   });
-  // A filter change re-queries the index (status "loading", so null here), which resets the guard:
-  // a frame the new filters exclude was not deleted. A re-read after images.changed stays ready.
-  useFrameGuard(projectId, imageId, ready ? index.ids : null);
   useEffect(() => showKeysNoticeOnce(() => toast("info", KEYS_NOTICE)), []);
 
   const aiIndex = useMemo(
@@ -344,7 +348,14 @@ export function ImagesWorkspace() {
     >
       <div className="relative min-h-0 flex-1 bg-bg">
         {imageId ? (
-          <FrameGate projectId={projectId} imageId={imageId}>
+          // A filter change re-queries the index (status "loading", so null ids), which resets the
+          // guard; a re-read after images.changed stays ready, and under filters only a 404 moves on.
+          <FrameGate
+            projectId={projectId}
+            imageId={imageId}
+            ids={ready ? index.ids : null}
+            filtered={filtered}
+          >
             <ImageCanvas
               projectId={projectId}
               types={project?.classes ?? []}
