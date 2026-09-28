@@ -31,8 +31,28 @@ function stats(values: number[]): Stats {
   };
 }
 
-/** rAF deltas while the mouse drags an orbit for `ms` (300 ms warm-up, gaps over 500 ms dropped). */
-async function orbitDeltas(page: Page, ms: number): Promise<number[]> {
+/** Euclidean distance between two `[x, y, z]` points (matches `clouds-engine-v2.spec.ts`'s `dist`). */
+const dist = (a: readonly number[], b: readonly number[]) =>
+  Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+
+/**
+ * Browser rAF deltas measured over `ms` while the engine's own `scriptOrbit()` (spec §7 diagnostics
+ * hook, already exercised by `clouds-engine.spec.ts` "frame times fill during an orbit") turns the
+ * camera continuously (300 ms warm-up, gaps over 500 ms dropped).
+ *
+ * Fix round 1 (review): the original harness dragged the mouse from the canvas's own centre pixel.
+ * With 200 pins on screen (`gridPins(200)`), that pixel — and several others tried nearby — landed on
+ * a pin's DOM element (`kp-pin-drop`/`kp-pin-head`, `pinsController.ts`) or a docked panel instead of
+ * the bare `<canvas>`: `document.elementFromPoint` at the drag's start confirmed this. Pins intercept
+ * the pointer before three.js's `OrbitControls` (which listens on the canvas element itself) ever sees
+ * it, so `pointerdown` never reached the controls and the camera silently never moved — exactly Review
+ * Focus item 4 ("the drag never moved the camera"), just not caught because the original test never
+ * checked `cameraPose()`. `scriptOrbit()` drives the camera directly (`engine.ts`'s `orbitScript`
+ * stepping `camera.position` every tick), so the measurement no longer depends on which pixel happens
+ * to be clickable. `orbit = false` is RED-proof only (no camera motion at all): never used by the real
+ * test.
+ */
+async function orbitDeltas(page: Page, ms: number, orbit = true): Promise<number[]> {
   await page.evaluate(() => {
     const w = window as unknown as { __deltas: number[]; __on: boolean };
     w.__deltas = [];
@@ -47,17 +67,11 @@ async function orbitDeltas(page: Page, ms: number): Promise<number[]> {
     };
     requestAnimationFrame(tick);
   });
-  const box = (await page.getByTestId("cloud-canvas").boundingBox())!;
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  await page.mouse.move(cx, cy);
-  await page.mouse.down();
-  const t0 = Date.now();
-  for (let i = 0; Date.now() - t0 < ms; i += 1) {
-    await page.mouse.move(cx + Math.sin(i / 20) * box.width * 0.3, cy + Math.cos(i / 35) * box.height * 0.05);
-    await page.waitForTimeout(16);
+  if (orbit) {
+    await page.evaluate((s) => window.__kestrelCloudViewer!.scriptOrbit(s), ms / 1000);
+  } else {
+    await page.waitForTimeout(ms); // RED-proof only: no scripted orbit, so the camera never moves
   }
-  await page.mouse.up();
   return page.evaluate(() => {
     const w = window as unknown as { __deltas: number[]; __on: boolean };
     w.__on = false;
@@ -70,10 +84,26 @@ test("frame-time harness: a scripted orbit with 200 pins (reported, not asserted
   await serveCloudWorld(page, { findings: gridPins(200) });
   await page.goto(`/p/${P}/clouds/${CLOUD}`);
   await viewerSettled(page);
-  await expect.poll(async () => (await pinStates(page)).length, { timeout: 20_000 }).toBe(200);
+  const pinCount = async () => (await pinStates(page)).length;
+  await expect.poll(pinCount, { timeout: 20_000 }).toBe(200);
+  const pins = await pinCount();
+
+  // Fix round 1 (review): `raf.samples` alone proves nothing — the local rAF tick loop below runs
+  // on the browser's own clock whether or not the camera moves. `frameTimes()` reads V1's FrameRing
+  // (frontend/src/clouds/viewer/frameRing.ts), which is never cleared, so a non-empty `frameTimes()`
+  // is equally satisfied by load-phase frames alone. Record the pose and the ring length *before* the
+  // orbit, then require the pose to have actually moved and the ring to have grown, and score `render`
+  // only over the orbit-window tail. FrameRing's capacity is 600 (frameRing.ts `FRAME_RING_SIZE`); 5 s
+  // at 60 Hz is at most ~300 pushes, comfortably under the cap, so the ring cannot wrap mid-orbit and
+  // the tail-by-length-diff below is not corrupted by wrap-around.
+  const poseBefore = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+  const renderCountBefore = await page.evaluate(() => window.__kestrelCloudViewer!.frameTimes().length);
 
   const raf = stats(await orbitDeltas(page, 5_000));
-  const renders = await page.evaluate(() => window.__kestrelCloudViewer!.frameTimes());
+
+  const poseAfter = await page.evaluate(() => window.__kestrelCloudViewer!.cameraPose()!);
+  const rendersAll = await page.evaluate(() => window.__kestrelCloudViewer!.frameTimes());
+  const renders = rendersAll.slice(renderCountBefore);
   const render = stats(renders);
   const env = await page.evaluate(() => {
     const gl = document.createElement("canvas").getContext("webgl2");
@@ -83,12 +113,20 @@ test("frame-time harness: a scripted orbit with 200 pins (reported, not asserted
       viewport: `${innerWidth}x${innerHeight}@${devicePixelRatio}`,
     };
   });
-  const run = { at: new Date().toISOString(), ...env, pins: 200, raf, render };
+  const run = { at: new Date().toISOString(), ...env, pins, raf, render };
   await test
     .info()
     .attach("frame-time.json", { body: JSON.stringify(run, null, 2), contentType: "application/json" });
   test.info().annotations.push({ type: "frame-time", description: JSON.stringify({ raf, render }) });
 
+  // an orbit really happened: the camera moved, and the render ring grew during the orbit window
+  expect(dist(poseAfter.position, poseBefore.position), "the orbit must move the camera").toBeGreaterThan(
+    0.01,
+  );
+  expect(
+    renders.length,
+    "the render ring must grow during the orbit, not just during load",
+  ).toBeGreaterThanOrEqual(30);
   // real samples, not an empty window
   expect(raf.samples).toBeGreaterThanOrEqual(60);
   expect(render.samples).toBeGreaterThan(0);

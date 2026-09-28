@@ -1,25 +1,43 @@
 {
   "runs": [
     {
-      "at": "2026-09-28T09:21:07.925Z",
+      "at": "2026-09-28T09:41:55.438Z",
+      "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+      "viewport": "1280x720@1",
+      "pins": 200,
+      "raf": {
+        "samples": 280,
+        "p50": 16.7,
+        "p95": 16.7,
+        "max": 33.4
+      },
+      "render": {
+        "samples": 297,
+        "p50": 16.8,
+        "p95": 19.1,
+        "max": 35.4
+      }
+    },
+    {
+      "at": "2026-09-28T09:42:12.734Z",
       "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
       "viewport": "1280x720@1",
       "pins": 200,
       "raf": {
         "samples": 283,
         "p50": 16.7,
-        "p95": 16.8,
-        "max": 66.6
+        "p95": 16.7,
+        "max": 16.8
       },
       "render": {
-        "samples": 62,
-        "p50": 17.1,
-        "p95": 40.8,
-        "max": 67.9
+        "samples": 301,
+        "p50": 16.9,
+        "p95": 18.1,
+        "max": 24.8
       }
     },
     {
-      "at": "2026-09-28T09:21:25.346Z",
+      "at": "2026-09-28T09:42:28.551Z",
       "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
       "viewport": "1280x720@1",
       "pins": 200,
@@ -27,31 +45,13 @@
         "samples": 282,
         "p50": 16.7,
         "p95": 16.8,
-        "max": 49.9
+        "max": 16.8
       },
       "render": {
-        "samples": 70,
+        "samples": 301,
         "p50": 16.8,
-        "p95": 21.8,
-        "max": 56.6
-      }
-    },
-    {
-      "at": "2026-09-28T09:21:41.575Z",
-      "webglRenderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
-      "viewport": "1280x720@1",
-      "pins": 200,
-      "raf": {
-        "samples": 284,
-        "p50": 16.7,
-        "p95": 16.7,
-        "max": 50
-      },
-      "render": {
-        "samples": 64,
-        "p50": 17.2,
-        "p95": 29.2,
-        "max": 65.3
+        "p95": 17.7,
+        "max": 18.6
       }
     }
   ]

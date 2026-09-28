@@ -193,3 +193,30 @@ renders.
 - Static checks only (`node --check` on both `.mjs`, a PowerShell `Parser.ParseFile` pass on the
   `.ps1`, a `node -e import()` smoke test) — G never runs `pnpm check:webview` or
   `build-installer.ps1` (ruling G11); IMC-X runs it against the packaged exe.
+
+## Task 5 fix round 1: `clouds-frame-time.spec.ts` was reporting load-phase frames, not orbit frames
+
+Review round 1 (Review Focus item 4 — "the drag never moved the camera") found that the harness's
+original mouse drag, starting from the canvas's own centre pixel with 200 pins on screen
+(`gridPins(200)`), could land on a pin's DOM element (`kp-pin-drop`/`kp-pin-head`,
+`frontend/src/clouds/pins/pinsController.ts`) or a docked panel instead of the bare `<canvas>`
+(`document.elementFromPoint` at the drag's start confirmed this). Pins intercept the pointer before
+three.js's `OrbitControls` — which listens on the canvas element itself — ever sees it, so the
+camera silently never moved. The old assertions could not catch this: the local rAF tick counter
+runs on the browser's own clock regardless of camera motion, and V1's `FrameRing`
+(`frontend/src/clouds/viewer/frameRing.ts`) is never cleared, so `frameTimes()` returning a handful
+of load-phase frames alone was already enough to pass `render.samples > 0`. The original 3
+evidence runs' `render.samples` (62, 70, 64) versus `raf.samples` (283, 282, 284) show this in
+hindsight: `render` was scoring only leftover load-phase pushes, not 5 s of orbit.
+
+Fix: the harness now drives the camera with the engine's own `scriptOrbit()` diagnostics hook
+(already exercised by `clouds-engine.spec.ts` — "frame times fill during an orbit"), which steps
+`camera.position` directly every tick and is immune to what's on top of the canvas. It also records
+`cameraPose()` and `frameTimes().length` before the orbit and asserts the pose actually moved and
+the ring grew by ≥ 30 frames during the orbit window, scoring `render` only over that tail
+(`frameTimes()`'s ring caps at 600; 5 s at 60 Hz is ~300 pushes, so no wrap can occur mid-orbit).
+`pins` in the evidence JSON is now the polled pin count, not the literal `200`.
+
+The 3 runs originally captured under the buggy methodology were replaced (not appended to) with 3
+fresh orbit-only runs; `render.samples` in the new runs (≈ 280–301) now tracks `raf.samples`
+(≈ 280–283) as expected for a genuine ~5 s orbit.
