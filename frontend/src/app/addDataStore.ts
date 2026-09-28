@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
-/** The importers behind Add data (spec section 6.4); Drawing arrives with the Maps workspace. */
-export type AddDataTile = "photos" | "orthomosaic" | "elevation" | "point_cloud";
+/** The importers behind Add data (spec section 6.4); the Maps workspace adds Drawing (M §8.2). */
+export type AddDataTile = "photos" | "orthomosaic" | "elevation" | "point_cloud" | "drawing";
 
 interface AddDataState {
   open: boolean;

@@ -67,6 +67,7 @@ describe("palette commands", () => {
       "Add an orthomosaic",
       "Add an elevation model",
       "Add a point cloud",
+      "Add a drawing",
       "New project",
       "Toggle reduced effects",
     ]);
