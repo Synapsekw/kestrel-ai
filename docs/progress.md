@@ -23,9 +23,9 @@ segment datasets, seg training), FC (canvas, tools, keymap), FB (browser, map), 
 against a stateful route-faked backend whose DJI fixture is written by the real backend
 (`backend/tests/test_images_e2e_fixture.py`); the same flows 1–5 on the real API with the offline
 SAM and YOLO seams (`backend/tests/test_images_journey.py`); frame budget with 500 annotations
-(`pnpm -C frontend e2e:perf`): p95 16.7 ms in all three runs, annotation scene draw p95 2.5–3.3 ms,
-at most one annotation draw per frame and no hit-graph rebuild while panning (the CI proxy);
-20,000 images: index to caption 78 ms, backend index median 56 ms, at most
+(`pnpm -C frontend e2e:perf`): p95 16.7 ms in all three runs (headless Chromium), annotation scene
+draw p95 2.5–3.3 ms, at most one annotation draw per frame and no hit-graph rebuild while panning
+(the CI proxy); 20,000 images: index to caption 78 ms, backend index median 56 ms, at most
 32 thumbs in the DOM (grid 24 + filmstrip 8) and 8 fetches in flight (ThumbLoader peak; network
 storm guard saw 16 ≤ 24), #15,000 opens. Capture map ready at 20k points 276–378 ms, at 100k
 1360–1407 ms; its pan phase is skipped on headless Chromium's software GL (SwiftShader), so IMC-X

@@ -59,8 +59,8 @@ p50/p95/max of `requestAnimationFrame` intervals during the input.
 | 2 | 2 % | 555 | 16.7 / 16.7 / 16.8 | 2.5 | 176 | 1 | 0 |
 | 3 | 20 % | 573 | 16.7 / 16.7 / 33.3 | 3.3 | 176 | 1 | 0 |
 
-All three pass the budget (p95 ≤ 17.2 ms). Run 3 dropped one frame (max 33.3 ms, one interval out
-of 573) with another unit's work on the machine; p95 is unaffected. CPU load is the Win32
+All three pass the budget (p95 ≤ 17.2 ms). Run 3 dropped a frame — max 33.3 ms (at least one
+dropped frame) — with another unit's work on the machine; p95 is unaffected. CPU load is the Win32
 processor `LoadPercentage` sampled just before each run.
 
 Environment: `HeadlessChrome/153.0.8010.12` on Windows 10.0 x64, `hardwareConcurrency` 24,
