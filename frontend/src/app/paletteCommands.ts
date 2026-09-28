@@ -65,6 +65,7 @@ const IMPORTERS: { tile: AddDataTile; title: string }[] = [
   { tile: "orthomosaic", title: "Add an orthomosaic" },
   { tile: "elevation", title: "Add an elevation model" },
   { tile: "point_cloud", title: "Add a point cloud" },
+  { tile: "drawing", title: "Add a drawing" },
 ];
 
 /** The Actions group: the route's enabled actions, each importer, New project, reduced effects. */
@@ -132,7 +133,7 @@ export function dataHref(projectId: string, item: { id: string; type: string }):
   const base = `/p/${projectId}`;
   if (item.type === "map") return `${base}/maps/${item.id}`;
   if (item.type === "point_cloud") return `${base}/clouds/${item.id}`;
-  if (item.type === "elevation") return `${base}/measurements`;
+  if (item.type === "elevation") return `${base}/measurements/volumes`;
   if (item.type === "drawing") return `${base}/maps`;
   return `${base}/images`;
 }

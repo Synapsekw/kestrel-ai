@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { CloudViewPose } from "@contract/client";
 import { nearFar, siteDiagonal, type Bounds6, type Vec3 as XYZ } from "./camera";
-import { localPositions, type OverlayShape } from "./overlay";
+import { overlayObject, type OverlayShape } from "./overlay";
 import type { Vec3 } from "./types";
 
 export const CAPTURE_WIDTH = 1600;
@@ -144,23 +144,6 @@ export async function encodeView(
   return canvas.convertToBlob({ type: "image/jpeg", quality: JPEG_QUALITY });
 }
 
-/** One overlay shape as a three object relative to `origin` (float32-safe), drawn over the points:
- * the same object `setOverlay` builds, with the colour given. */
-export function shapeObject(shape: OverlayShape, origin: XYZ, color: THREE.Color): THREE.Object3D {
-  const geom = new THREE.BufferGeometry();
-  const closed = shape.kind === "line" && !!shape.closed;
-  geom.setAttribute("position", new THREE.BufferAttribute(localPositions(shape.points, origin, closed), 3));
-  const obj =
-    shape.kind === "line"
-      ? new THREE.Line(geom, new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true }))
-      : new THREE.Points(
-          geom,
-          new THREE.PointsMaterial({ color, size: 8, sizeAttenuation: false, depthTest: false }),
-        );
-  obj.renderOrder = 10;
-  return obj;
-}
-
 /** The capture's marks as three objects relative to `origin`, for V1's overlay pass. */
 export function markObjects(
   marks: readonly CaptureMark[],
@@ -187,7 +170,7 @@ export function markObjects(
       sprite.renderOrder = 11;
       out.push(sprite);
     } else {
-      for (const s of m.shapes) out.push(shapeObject(s, origin, colours[s.tone]));
+      for (const s of m.shapes) out.push(overlayObject(s, origin, colours[s.tone]));
     }
   }
   return out;

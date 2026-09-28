@@ -72,10 +72,9 @@ test("Add data offers five tiles and opens the map importer", async ({ page }) =
   await page.goto(`/p/${P}/overview`);
   await page.getByRole("button", { name: "Add data" }).first().click();
   const dialog = page.getByRole("dialog", { name: "Add data" });
-  for (const name of ["Photos", "Orthomosaic", "Elevation", "Point cloud"]) {
+  for (const name of ["Photos", "Orthomosaic", "Elevation", "Point cloud", "Drawing"]) {
     await expect(dialog.getByRole("button", { name: new RegExp(name) })).toBeEnabled();
   }
-  await expect(dialog.getByRole("button", { name: /Drawing/ })).toHaveAttribute("aria-disabled", "true");
   await entrancesDone(page);
   await page.screenshot({ path: evidencePath("foundation-s1", "add-data.png") });
   await dialog.getByRole("button", { name: /Orthomosaic/ }).click();

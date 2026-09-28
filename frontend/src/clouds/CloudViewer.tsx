@@ -10,6 +10,7 @@ import {
   classifyPixels,
   diagnosticsEnabled,
   installHook,
+  readPins,
   type FrameCameraSample,
   type ViewerStats,
 } from "./viewer/diagnostics";
@@ -82,6 +83,12 @@ export interface CloudViewerHandle {
    * must not request a render (setOverlay, requestRender) unconditionally, or the view never goes idle.
    */
   onSettle(cb: () => void): () => void;
+  /**
+   * C-L1: fires each time the camera leaves a `lookThrough` pose by itself (navigation input or a
+   * view command; see `CloudEngine.onLeavePose`), never on `restore()`; survives a cloud switch and
+   * an engine rebuild. Returns the unsubscribe.
+   */
+  onLeavePose(cb: () => void): () => void;
   /** C-V2: null while the view is not settled, or without a running engine. */
   occlusion(points: readonly Vec3[], tolM: readonly number[]): boolean[] | null;
   /** C-V2: the report view (one at a time); rejects without a running engine. */
@@ -131,6 +138,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
   const engine = useRef<CloudEngine | null>(null);
   const [bridge] = useState(() => new FrameBridge()); // lazy: one bridge for the shell's life
   const [settle] = useState(() => new Set<() => void>()); // the handle's settle listeners, across engines
+  const [leftPose] = useState(() => new Set<() => void>()); // the handle's leave-pose listeners, across engines
   const callbacks = useRef({
     onPick: props.onPick,
     onHover: props.onHover,
@@ -232,6 +240,15 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
         }
       }
     });
+    const stopLeavePose = e.onLeavePose(() => {
+      for (const cb of [...leftPose]) {
+        try {
+          cb();
+        } catch (err) {
+          console.error(err);
+        }
+      }
+    });
     const stopCapture = e.onCaptureState((busy) => setSavingKey(busy ? key : null));
 
     let releaseHook = () => {};
@@ -318,6 +335,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           const r = canvas.getBoundingClientRect();
           return e.pickWithNormal(r.left + r.width / 2, r.top + r.height / 2);
         },
+        pins: () => readPins(),
       });
       releaseHook = () => {
         stopRecording();
@@ -329,6 +347,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
       releaseHook();
       stopEffects();
       stopSettle();
+      stopLeavePose();
       stopCapture();
       setSavingKey((k) => (k === key ? null : k)); // a token change rebuilds under the same sceneKey mid-capture
       bridge.detach();
@@ -410,6 +429,12 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           settle.delete(cb);
         };
       },
+      onLeavePose(cb) {
+        leftPose.add(cb);
+        return () => {
+          leftPose.delete(cb);
+        };
+      },
       occlusion: (points, tolM) => engine.current?.occlusion(points, tolM) ?? null,
       capture: (pose, marks, opts) =>
         engine.current
@@ -417,7 +442,7 @@ export const CloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(funct
           : Promise.reject(new Error("the 3D view is not running")),
       pickWithNormal: (x, y) => engine.current?.pickWithNormal(x, y) ?? null,
     }),
-    [bridge, settle],
+    [bridge, settle, leftPose],
   );
 
   return (

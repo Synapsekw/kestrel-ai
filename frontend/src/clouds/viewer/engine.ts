@@ -46,7 +46,7 @@ import { letterbox, photoFrame, photoToCanvas, type LookPose, type LookThrough }
 import { makeMaterialOptions, type ColourMode } from "./materialOptions";
 import { mouseButtonsFor, resolveNavMode } from "./navMode";
 import { runOcclusion } from "./occlusion";
-import { localPositions, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
+import { overlayObject, tokenColor, tokenRgb, type OverlayShape } from "./overlay";
 import { pcaNormal } from "./normal";
 import { pickAllPoints, type DrawnPoint } from "./pickAll";
 import { flipRows, splitHalves } from "./pixels";
@@ -159,6 +159,13 @@ export interface CloudEngine {
    * goes idle.
    */
   onSettle(cb: () => void): () => void;
+  /**
+   * C-L1: fires each time the camera leaves a `lookThrough` pose by itself — navigation input (a
+   * drag, a wheel, a double-click, fly) or a view command (`fit`, `topView`, `lookAt`, `setView`,
+   * `goToPose`) — so a layer never has to guess which inputs leave a photo. Not fired by the handle's
+   * own `restore()`, nor by a second `lookThrough`. Returns the unsubscribe.
+   */
+  onLeavePose(cb: () => void): () => void;
   /** C-V2: after settle, which points a drawn point hides (null while the view is not settled). */
   occlusion(points: readonly Vec3[], tolM: readonly number[]): boolean[] | null;
   /** C-V2: the 1600 × 1000 report view of `pose` with `marks`, one at a time. */
@@ -281,6 +288,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
    */
   let posed: { position: THREE.Vector3; target: THREE.Vector3; fov: number } | null = null;
   const settleListeners = new Set<() => void>();
+  const leavePoseListeners = new Set<() => void>();
   let renderedSinceSettle = false;
   const captureListeners = new Set<(busy: boolean) => void>();
   let capturing = false;
@@ -300,6 +308,13 @@ export function createEngine(o: EngineOptions): CloudEngine {
     camera.fov = posed.fov;
     camera.updateProjectionMatrix();
     posed = null;
+    for (const cb of [...leavePoseListeners]) {
+      try {
+        cb();
+      } catch (err) {
+        pushErrorOnce(stats.errors, `onLeavePose: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
   /** Leaves a photo pose, and puts back the default FOV a stored pose (goToPose) or a photo may have set. */
   function frameDefault(): void {
@@ -910,21 +925,8 @@ export function createEngine(o: EngineOptions): CloudEngine {
       disposeChildren(overlay, (c) => c.userData.key === key);
       for (const s of shapes) {
         const color = tokenColor(tokenRgb(s.tone === "accent" ? "accent" : s.tone === "ok" ? "ok" : "warn"));
-        const geom = new THREE.BufferGeometry();
-        const closed = s.kind === "line" && !!s.closed;
-        geom.setAttribute("position", new THREE.BufferAttribute(localPositions(s.points, origin, closed), 3));
-        const obj =
-          s.kind === "line"
-            ? new THREE.Line(
-                geom,
-                new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true }),
-              )
-            : new THREE.Points(
-                geom,
-                new THREE.PointsMaterial({ color, size: 8, sizeAttenuation: false, depthTest: false }),
-              );
+        const obj = overlayObject(s, origin, color);
         obj.userData.key = key;
-        obj.renderOrder = 10;
         overlay.add(obj);
       }
       requestRender();
@@ -954,6 +956,7 @@ export function createEngine(o: EngineOptions): CloudEngine {
       frameCallbacks.clear();
       if (fly.isEnabled) fly.disable();
       settleListeners.clear();
+      leavePoseListeners.clear();
       captureListeners.clear();
       // the canvas is keyed by the shell's `generation` only: a new cloud reuses this WebGL context,
       // so every buffer this scene made is released here, not left to the context's end
@@ -1026,6 +1029,12 @@ export function createEngine(o: EngineOptions): CloudEngine {
       settleListeners.add(cb);
       return () => {
         settleListeners.delete(cb);
+      };
+    },
+    onLeavePose(cb) {
+      leavePoseListeners.add(cb);
+      return () => {
+        leavePoseListeners.delete(cb);
       };
     },
     occlusion: (points, tolM) => runOcclusion(parts, points, tolM),

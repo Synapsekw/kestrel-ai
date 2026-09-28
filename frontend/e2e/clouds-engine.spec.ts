@@ -1,5 +1,6 @@
 // frontend/e2e/clouds-engine.spec.ts
 import { test, expect, type Page } from "@playwright/test";
+import { emptyCameras, routeCameras } from "./fixtures/cameras";
 import { CLOUD, cloudJson, jsonRoute } from "./fixtures/clouds";
 import { buildOctree, redGreenGrid, routeOctree } from "./fixtures/potreeOctree";
 import { SWIFTSHADER_ARGS, edlOn, viewerSettled } from "./fixtures/viewer";
@@ -15,6 +16,9 @@ test.beforeEach(async ({ page }) => {
 async function openGrid(page: Page) {
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds`, { items: [cloudJson()] });
   await jsonRoute(page, `/api/v1/projects/${P}/pointclouds/${CLOUD}`, cloudJson());
+  // Empty (C-L1): the frame-times idle check below is exact, and the Prism mock's example
+  // `CloudCameraSet` otherwise lands a stray glyph render inside that window.
+  await routeCameras(page, P, emptyCameras());
   await routeOctree(
     page,
     CLOUD,

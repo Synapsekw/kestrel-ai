@@ -8,6 +8,7 @@ import {
   buildRequest,
   exportState,
   formatM3,
+  formatTonnes,
   groupRuns,
   headline,
   labels,
@@ -16,6 +17,7 @@ import {
   pixelToNative,
   scaleFactorText,
   staleText,
+  tonnage,
   uncertaintyText,
   viewIn3dHref,
   worstTone,
@@ -121,5 +123,24 @@ describe("volumes model", () => {
       expect(PANEL_BASE_KINDS).toEqual(["toe_plane", "toe_surface", "flat", "surface"]);
       expect(BASE_KIND_TEXT.toe_lowest).toBe("Stockpile toe — lowest point");
     });
+  });
+});
+
+describe("tonnage", () => {
+  it("is net times density, and null without a material or results", () => {
+    const m = {
+      ...exampleMeasurement,
+      material: { name: "Gravel", density_t_m3: 1.8 },
+    };
+    expect(tonnage(m)).toBeCloseTo(1232.4 * 1.8, 6);
+    expect(tonnage({ ...m, material: null })).toBeNull();
+    expect(tonnage({ ...m, results: null })).toBeNull();
+  });
+  it("formats tonnes with the thin grouping", () => {
+    expect(formatTonnes(2218.32)).toBe("2 218.3 t");
+    expect(formatTonnes(null)).toBe("—");
+  });
+  it("has M-C0's lowest-point label", () => {
+    expect(BASE_KIND_TEXT.toe_lowest).toBeTruthy();
   });
 });

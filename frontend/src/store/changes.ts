@@ -18,6 +18,9 @@ interface ChangesState {
   surfacesRevision: number;
   /** Bumped on `volumes.changed`. */
   volumesRevision: number;
+  /** Bumped on `map_measurements.changed`, `volumes.changed` and `pointclouds.changed`: the
+   * Measurements tab's union list (M-W6). */
+  measurementsRevision: number;
   /** Bumped on `catalogue.changed` (F §13): a type or the severity scale changed. */
   catalogueRevision: number;
   /** Bumped on `data.changed` (spec 2026-09-26-foundation section 13): the tab counts and the Data list. */
@@ -25,6 +28,9 @@ interface ChangesState {
   /** Bumped on `findings.changed` (except the echo of this client's own write) and after this
    * client's own finding writes (F §8.3). */
   findingsRevision: number;
+  /** `payload.ids` of the last `findings.changed` (M-W4 opens a finding a review just created, M-B5 R-B5-9);
+   * cleared by `bumpFindings`, so an own write never leaves a stale list for a waiter. */
+  lastFindingIds: string[];
   /** Own finding writes whose `findings.changed` echo is still expected (rulings R8). */
   findingEchoes: EchoLedger;
   expectFindingEchoes: (ids: readonly string[]) => void;
@@ -68,14 +74,21 @@ const PROJECT_SCOPED_EVENTS: ReadonlySet<string> = new Set([
   "map_measurements.changed",
 ]);
 
+function idsOf(ev: AppEvent): string[] {
+  const ids = (ev.payload as { ids?: unknown } | null)?.ids;
+  return Array.isArray(ids) ? ids.filter((x): x is string => typeof x === "string") : [];
+}
+
 export const useChangesStore = create<ChangesState>((set) => ({
   imagesRevision: 0,
   boxesRevision: {},
   surfacesRevision: 0,
   volumesRevision: 0,
+  measurementsRevision: 0,
   catalogueRevision: 0,
   dataRevision: 0,
   findingsRevision: 0,
+  lastFindingIds: [],
   findingEchoes: EMPTY_LEDGER,
   expectFindingEchoes: (ids) =>
     set((s) => ({ findingEchoes: expectEchoes(s.findingEchoes, ids, Date.now()) })),
@@ -88,7 +101,7 @@ export const useChangesStore = create<ChangesState>((set) => ({
   openProjectId: null,
   setOpenProject: (openProjectId) => set({ openProjectId }),
   bumpImages: () => set((s) => ({ imagesRevision: s.imagesRevision + 1 })),
-  bumpFindings: () => set((s) => ({ findingsRevision: s.findingsRevision + 1 })),
+  bumpFindings: () => set((s) => ({ findingsRevision: s.findingsRevision + 1, lastFindingIds: [] })),
   bumpData: () => set((s) => ({ dataRevision: s.dataRevision + 1 })),
   applyEvent: (ev) =>
     set((s) => {
@@ -103,14 +116,26 @@ export const useChangesStore = create<ChangesState>((set) => ({
         return { boxesRevision, imagesRevision: s.imagesRevision + 1 };
       }
       if (ev.type === "surfaces.changed") return { surfacesRevision: s.surfacesRevision + 1 };
-      if (ev.type === "volumes.changed") return { volumesRevision: s.volumesRevision + 1 };
-      if (ev.type === "pointclouds.changed") return { pointcloudsRevision: s.pointcloudsRevision + 1 };
+      if (ev.type === "volumes.changed")
+        return {
+          volumesRevision: s.volumesRevision + 1,
+          measurementsRevision: s.measurementsRevision + 1,
+        };
+      if (ev.type === "pointclouds.changed")
+        return {
+          pointcloudsRevision: s.pointcloudsRevision + 1,
+          measurementsRevision: s.measurementsRevision + 1,
+        };
       if (ev.type === "data.changed") return { dataRevision: s.dataRevision + 1 };
       if (ev.type === "findings.changed") {
         // This client's own write already bumped once; its echo would re-read every view again.
         const echo = consumeEcho(s.findingEchoes, ev.payload, Date.now());
         if (echo.skip) return { findingEchoes: echo.ledger };
-        return { findingsRevision: s.findingsRevision + 1, findingEchoes: echo.ledger };
+        return {
+          findingsRevision: s.findingsRevision + 1,
+          findingEchoes: echo.ledger,
+          lastFindingIds: idsOf(ev),
+        };
       }
       if (ev.type === "migration.changed") return { projectsRevision: s.projectsRevision + 1 };
       if (ev.type === "catalogue.changed") return { catalogueRevision: s.catalogueRevision + 1 };
@@ -125,7 +150,10 @@ export const useChangesStore = create<ChangesState>((set) => ({
       if (ev.type === "drawings.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
       if (ev.type === "maps.changed") return { mapWorkspaceRevision: s.mapWorkspaceRevision + 1 };
       if (ev.type === "map_measurements.changed")
-        return { mapMeasurementsRevision: s.mapMeasurementsRevision + 1 };
+        return {
+          mapMeasurementsRevision: s.mapMeasurementsRevision + 1,
+          measurementsRevision: s.measurementsRevision + 1,
+        };
       return s;
     }),
 }));

@@ -11,10 +11,15 @@ export const legacyProjectRedirects: RouteObject[] = [
   { path: "past/maps/:mapId", element: <Redirect to={(p) => `/p/${p.projectId}/maps/${p.mapId}`} /> },
   { path: "sources", element: <Redirect to={(p) => `/p/${p.projectId}/maps`} /> },
   { path: "surveys", element: <Redirect to={(p) => `/p/${p.projectId}/analytics`} /> },
-  { path: "volumes", element: <Redirect to={(p) => `/p/${p.projectId}/measurements`} /> },
+  { path: "volumes", element: <Redirect to={(p) => `/p/${p.projectId}/measurements/volumes`} /> },
   {
     path: "volumes/:measurementId",
-    element: <Redirect to={(p) => `/p/${p.projectId}/measurements/${p.measurementId}`} />,
+    element: <Redirect to={(p) => `/p/${p.projectId}/measurements/volumes/${p.measurementId}`} />,
+  },
+  // F's interim host put a volume at measurements/:id; the tab now owns /measurements (M-W6).
+  {
+    path: "measurements/:measurementId",
+    element: <Redirect to={(p) => `/p/${p.projectId}/measurements/volumes/${p.measurementId}`} />,
   },
   { path: "datasets", element: <Redirect to={(p) => `/models/datasets?project=${p.projectId}`} /> },
   { path: "train", element: <Redirect to={() => "/models/training"} /> },

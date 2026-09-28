@@ -208,7 +208,7 @@ test("builds a surface, measures a pile, goes stale on a base change, recalculat
   page,
 }) => {
   const state = await fakeVolumes(page);
-  await page.goto(`/p/${P}/measurements`);
+  await page.goto(`/p/${P}/measurements/volumes`);
   await expect(page.getByText("Build a surface from a point cloud")).toBeVisible();
 
   // 1. Build a surface; the hillshade renders.
@@ -227,7 +227,7 @@ test("builds a surface, measures a pile, goes stale on a base change, recalculat
     .getByRole("list", { name: "Measurements" })
     .getByRole("button", { name: /Pile 1/ })
     .click();
-  await expect(page).toHaveURL(new RegExp(`/measurements/${M}$`));
+  await expect(page).toHaveURL(new RegExp(`/measurements/volumes/${M}$`));
   await expect(page.getByTestId("results-panel")).toContainText("1 234.5 m³");
   await expect(page.getByTestId("results-panel")).toContainText("± 14.2 m³ (indicative)");
   await page.screenshot({ path: evidencePath("volumes", "results.png"), fullPage: true });

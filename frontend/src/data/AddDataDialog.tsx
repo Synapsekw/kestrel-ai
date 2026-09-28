@@ -3,6 +3,7 @@ import type { Project } from "@contract/client";
 import type { AddDataTile } from "@/app/addDataStore";
 import { ImportCloudDialog } from "@/clouds/ImportCloudDialog";
 import { ImportMapDialog } from "@/maps/ImportMapDialog";
+import { ImportDrawingDialog } from "@/mapws/drawings/ImportDrawingDialog";
 import { useChangesStore } from "@/store/changes";
 import { ImportElevationDialog } from "@/surfaces/ImportElevationDialog";
 import { Dialog, Icon, Tooltip, cx, focusRing, lift, pressable, toast, transition } from "@/ui";
@@ -14,6 +15,7 @@ const TILE_NAME: Record<AddDataTile, string> = {
   orthomosaic: "Orthomosaic",
   elevation: "Elevation",
   point_cloud: "Point cloud",
+  drawing: "Drawing",
 };
 
 /** F §6.4: five tiles, each opening today's importer; closes once the import job is queued. */
@@ -45,6 +47,8 @@ export function AddDataDialog({
     return <ImportElevationDialog projectId={pid} onClose={onClose} onStarted={() => started("elevation")} />;
   if (tile === "point_cloud")
     return <ImportCloudDialog projectId={pid} onClose={onClose} onStarted={() => started("point_cloud")} />;
+  if (tile === "drawing")
+    return <ImportDrawingDialog projectId={pid} onClose={onClose} onStarted={() => started("drawing")} />;
 
   return (
     <Dialog
@@ -56,7 +60,7 @@ export function AddDataDialog({
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {ADD_DATA_TILES.map((t) => {
-          const choose = t.tile === "drawing" || t.disabledReason ? undefined : t.tile;
+          const choose = t.disabledReason ? undefined : t.tile;
           const button = (
             <button
               key={t.tile}

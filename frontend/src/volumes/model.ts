@@ -258,3 +258,14 @@ export function headline(m: VolumeMeasurement): string {
   if (lab.headline === "both") return `${formatM3(r.fill_m3)} / ${formatM3(r.cut_m3)}`;
   return formatM3(r.fill_m3);
 }
+
+/** "2 218.3 t": tonnes with the app's thin grouping. */
+export function formatTonnes(t: number | null | undefined): string {
+  return t == null ? "—" : `${nf.format(t).replace(/,/g, " ")} t`;
+}
+
+/** Tonnage = net × density (spec 2026-09-26-map-workspace §10); null without a material or results. */
+export function tonnage(m: Pick<VolumeMeasurement, "results" | "material">): number | null {
+  if (!m.results || !m.material) return null;
+  return m.results.net_m3 * m.material.density_t_m3;
+}

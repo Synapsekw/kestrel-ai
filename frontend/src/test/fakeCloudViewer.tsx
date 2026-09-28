@@ -124,6 +124,7 @@ export const FakeCloudViewer = forwardRef<CloudViewerHandle, CloudViewerProps>(
               lookThrough: () => null,
               sampleSlab: () => Promise.reject(new Error("the fake viewer samples no slab")),
               onSettle: () => () => {},
+              onLeavePose: () => () => {},
               occlusion: () => null,
               capture: () => Promise.reject(new Error("the fake viewer captures nothing")),
               pickWithNormal: () => null,

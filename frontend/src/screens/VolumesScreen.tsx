@@ -27,6 +27,7 @@ import {
 } from "@/api/volumes";
 import { pushLog } from "@/app/diagnostics";
 import { useOnJobsFinished } from "@/jobs/useOnJobsFinished";
+import { volumeViewPath } from "@/measurements/links";
 import { ImportDesignButton } from "@/surfaces/ImportDesignButton";
 import { useChangesStore } from "@/store/changes";
 import { useJobsStore } from "@/store/jobs";
@@ -166,7 +167,7 @@ export function VolumesScreen() {
           .then((created) => {
             useJobsStore.getState().upsert(created.job);
             setMeasurements((all) => [created.measurement, ...(all ?? [])]);
-            navigate(`/p/${projectId}/measurements/${created.measurement.id}`);
+            navigate(volumeViewPath(projectId, created.measurement.id));
             setTool("pan");
           })
           .catch((err: unknown) => report("create the measurement", err));
@@ -302,7 +303,7 @@ export function VolumesScreen() {
             activeId={top?.id ?? null}
             onSelect={(id) => {
               setPickedSurface(id);
-              navigate(`/p/${projectId}/measurements`);
+              navigate(volumeViewPath(projectId));
             }}
             onBuild={() => setBuilding({})}
             onRebuild={(s) => setBuilding({ cloudId: s.point_cloud_id ?? undefined })}
@@ -324,7 +325,7 @@ export function VolumesScreen() {
               aria-label="New measurement"
               title="New measurement (P)"
               onClick={() => {
-                navigate(`/p/${projectId}/measurements`);
+                navigate(volumeViewPath(projectId));
                 setTool("measure");
               }}
             >
@@ -340,7 +341,7 @@ export function VolumesScreen() {
                   <Button
                     variant={m.id === active?.id ? "secondary" : "ghost"}
                     className="w-full justify-between"
-                    onClick={() => navigate(`/p/${projectId}/measurements/${m.id}`)}
+                    onClick={() => navigate(volumeViewPath(projectId, m.id))}
                   >
                     <span className="truncate">{m.name}</span>
                     <span className="flex items-center gap-1.5 text-xs tabular-nums text-muted">

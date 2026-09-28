@@ -12,7 +12,8 @@ import {
 import { pushLog } from "@/app/diagnostics";
 import { isTypingTarget } from "@/ui/keymap";
 import { AcceptAbove } from "@/review/AcceptAbove";
-import { Button, Field, Kbd, Pill, Progress, Select, cx, toast, type PillTone } from "@/ui";
+import { Button, Field, Kbd, Pill, Progress, Select, cx, toast } from "@/ui";
+import { REVIEW_STATE as STATE } from "./reviewState";
 
 export interface MapReviewPanelProps {
   projectId: string;
@@ -29,13 +30,6 @@ export interface MapReviewPanelProps {
   /** A review write landed: the run's counts and the map's boxes need a refresh. */
   onChanged: () => void;
 }
-
-const STATE: Record<MapDetection["review_state"], { label: string; tone: PillTone }> = {
-  unreviewed: { label: "Not reviewed", tone: "neutral" },
-  accepted: { label: "Accepted", tone: "ok" },
-  edited: { label: "Class changed", tone: "ok" },
-  rejected: { label: "Rejected", tone: "danger" },
-};
 
 function fail(action: string, err: unknown) {
   const message = messageOf(err, `could not ${action}`);

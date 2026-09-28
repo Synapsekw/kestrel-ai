@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 
 from app.db.models import CloudCameraOffset, Image, PointCloud, Source
 from app.errors import AppError, not_found
+from app.imagery.footprint import effective_yaw
 from app.pointclouds import rows
 from app.pointclouds.schemas import CloudCameraSet, CloudCameraSource
 from app.projects.service import ProjectHandle
@@ -33,8 +34,6 @@ ASSUMED_DIAGONAL_FOV_DEG = 84.0  # DJI's common wide lens
 MIN_BUFFER_M = 100.0
 M_PER_DEG_LAT = 111_320.0
 MIN_COS_LAT = 0.01
-YAW_SANITY_PITCH = -80.0  # I spec section 7.4
-YAW_SANITY_DIFF = 90.0
 
 # canonical name -> the `image` column I-C0 created (I spec section 7.3). The only place C names them.
 POSE_COLUMNS: dict[str, str] = {
@@ -80,26 +79,6 @@ def _num(value: Any) -> float | None:
 def _positive_int(value: Any) -> int | None:
     f = _num(value)
     return int(f) if f is not None and f > 0 else None
-
-
-def _angle_diff(a: float, b: float) -> float:
-    d = abs(a - b) % 360.0
-    return min(d, 360.0 - d)
-
-
-def effective_yaw(pitch: float | None, gimbal_yaw: float | None, flight_yaw: float | None) -> float | None:
-    """Gimbal yaw, falling back to flight yaw. Near nadir, a gimbal yaw more than 90 deg off the flight
-    yaw is body-relative on some airframes, so flight yaw is used (I spec section 7.4)."""
-    if gimbal_yaw is None:
-        return flight_yaw
-    if (
-        pitch is not None
-        and pitch < YAW_SANITY_PITCH
-        and flight_yaw is not None
-        and _angle_diff(gimbal_yaw, flight_yaw) > YAW_SANITY_DIFF
-    ):
-        return flight_yaw
-    return gimbal_yaw
 
 
 def pose_select() -> list:

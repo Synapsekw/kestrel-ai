@@ -2,7 +2,7 @@ import { useAddData, type AddDataTile } from "@/app/addDataStore";
 import type { IconName } from "@/ui";
 
 export interface AddDataTileInfo {
-  tile: AddDataTile | "drawing";
+  tile: AddDataTile;
   title: string;
   hint: string;
   icon: IconName;
@@ -17,7 +17,7 @@ export const ADD_DATA_TILES: AddDataTileInfo[] = [
   {
     tile: "elevation",
     title: "Elevation",
-    hint: "A design surface, or a DSM built from a cloud",
+    hint: "A design surface, a DSM/DTM GeoTIFF, or a DSM built from a cloud",
     icon: "elevation",
   },
   { tile: "point_cloud", title: "Point cloud", hint: "LAS or LAZ", icon: "cloud" },
@@ -26,7 +26,6 @@ export const ADD_DATA_TILES: AddDataTileInfo[] = [
     title: "Drawing",
     hint: "DXF, LandXML, or a PDF/PNG plan",
     icon: "drawing",
-    disabledReason: "Arrives with the Maps workspace",
   },
 ];
 
