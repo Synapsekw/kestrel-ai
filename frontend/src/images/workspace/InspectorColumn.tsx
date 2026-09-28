@@ -1,5 +1,6 @@
 import { type ReactNode, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
+import type { PointCloud } from "@/api/clouds";
 import type { ImageDetail } from "@/api/images";
 import { FindingInspector } from "@/findings/FindingInspector";
 import { useProjectTypes } from "@/findings/useProjectTypes";
@@ -18,6 +19,8 @@ export interface InspectorColumnProps {
   detail: ImageDetail | null;
   onDetail: (d: ImageDetail) => void;
   distanceRef: RefObject<HTMLInputElement>;
+  /** The workspace's one read of the project's clouds (m1). */
+  clouds: readonly PointCloud[];
   onShowOnImage: (boxId: string) => void;
 }
 
@@ -28,6 +31,7 @@ export function InspectorColumn({
   detail,
   onDetail,
   distanceRef,
+  clouds,
   onShowOnImage,
 }: InspectorColumnProps) {
   const navigate = useNavigate();
@@ -92,6 +96,7 @@ export function InspectorColumn({
         detail={detail}
         onDetail={onDetail}
         distanceRef={distanceRef}
+        clouds={clouds}
       />
     );
   } else {

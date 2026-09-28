@@ -77,6 +77,7 @@ import { useArrival } from "./useArrival";
 import { useFrameGuard } from "./useFrameGuard";
 import { useInspectorModel } from "./useInspectorModel";
 import { useMinWidth } from "./useMinWidth";
+import { useProjectClouds } from "./useProjectClouds";
 
 // FA: registers its key rows and the S tool before FC's keymap first reads them (idempotent).
 ensureAiRegistered();
@@ -86,6 +87,9 @@ const LABEL_NEXT: Record<Exclude<LabelNext, { imageId: string }>, string> = {
   "no-images": "No images to label yet.",
   failed: "Couldn't find the next image to label. Try again.",
 };
+/** m3: one empty list, so FC's canvas sees a stable `types` until the project loads. */
+const NO_TYPES: readonly never[] = [];
+
 /** Ruling 3: the narrow-width overlays (not GlassPanels, so `bg-glass-solid`). */
 const OVERLAY =
   "absolute top-3 bottom-12 z-20 overflow-y-auto rounded-panel bg-glass-solid shadow-elev-2 animate-slide-in reduce-motion:animate-none";
@@ -127,6 +131,33 @@ function FrameGate({
   return <>{children}</>;
 }
 
+/**
+ * Ruling 15 / m4: the pane entrance (rise, staggered) plays for the panes present at the
+ * workspace's first mount only. `play` is read once, when this pane mounts, so a pane that mounts
+ * later (the window crossing 960 / 1100 px) appears still, and a running rise is never cut short.
+ */
+function PaneEntrance({
+  index,
+  play,
+  className,
+  children,
+}: {
+  index: number;
+  play: boolean;
+  className?: string;
+  children: ReactNode;
+}) {
+  const [rise] = useState(play);
+  return (
+    <div
+      style={rise ? stagger(index) : undefined}
+      className={cx("min-h-0", rise && "stagger animate-rise reduce-motion:animate-none", className)}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** The Images tab (§6): browser | canvas | inspector over a status bar; one mount for every image. */
 export function ImagesWorkspace() {
   const { projectId = "", imageId: routeImageId } = useParams();
@@ -146,6 +177,9 @@ export function ImagesWorkspace() {
   const [importing, setImporting] = useState(false);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [browserOpen, setBrowserOpen] = useState(false);
+  // m4: the first entrance has played once any animation in the workspace ends (an event, not an
+  // effect); panes that mount after that do not rise.
+  const [entered, setEntered] = useState(false);
   const wide = useMinWidth(1100);
   const roomy = useMinWidth(960);
   const distanceRef = useRef<HTMLInputElement>(null);
@@ -156,6 +190,8 @@ export function ImagesWorkspace() {
   const detail = useDetail();
   const frame = useLoadedFrame(imageId);
   const model = useInspectorModel(projectId, imageId);
+  // m1: one clouds read per workspace mount (Open in 3D), not one per image panel.
+  const clouds = useProjectClouds(projectId);
   const ctx = useCommandContext(projectId);
   const imageUrl = useImageUrl(projectId);
   const { boxes, boxesLoaded, select } = useSelection();
@@ -183,7 +219,12 @@ export function ImagesWorkspace() {
   const [entryHandled, setEntryHandled] = useState<string | null>(null);
   if (entry && entryHandled !== search) {
     setEntryHandled(search);
-    if (entry.preset) setFilters(filtersFor(entry.preset));
+    const { preset, sourceId } = entry;
+    if (preset || sourceId)
+      setFilters((f) => {
+        const base = preset ? filtersFor(preset) : f;
+        return sourceId ? { ...base, sourceId } : base;
+      });
     if (entry.batch) setBatch({ ids: null });
   } else if (!entry && entryHandled !== null) setEntryHandled(null);
   const hasEntry = entry !== null;
@@ -335,6 +376,7 @@ export function ImagesWorkspace() {
       detail={detail}
       onDetail={setDetail}
       distanceRef={distanceRef}
+      clouds={clouds}
       onShowOnImage={showOnImage}
     />
   );
@@ -358,7 +400,7 @@ export function ImagesWorkspace() {
           >
             <ImageCanvas
               projectId={projectId}
-              types={project?.classes ?? []}
+              types={project?.classes ?? NO_TYPES}
               imageUrl={imageUrl}
               neighbourIds={[nb.prev, nb.next].filter((id): id is string => id !== null)}
               suggestions={<SuggestionsLayer />}
@@ -400,23 +442,23 @@ export function ImagesWorkspace() {
   );
 
   return (
-    <div className="relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-y-2.5 px-3.5 pt-3">
+    <div
+      className="relative grid h-full min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-y-2.5 px-3.5 pt-3"
+      onAnimationEnd={entered ? undefined : () => setEntered(true)}
+    >
       <h1 className="sr-only">Images</h1>
       <div className={cx("grid min-h-0 gap-3", roomy ? "grid-cols-[280px_minmax(0,1fr)]" : "grid-cols-1")}>
         {roomy && (
-          <div style={stagger(0)} className="stagger min-h-0 animate-rise reduce-motion:animate-none">
+          <PaneEntrance index={0} play={!entered}>
             {browser}
-          </div>
+          </PaneEntrance>
         )}
         <InspectorLayout
           inspector={
             wide ? (
-              <div
-                style={stagger(2)}
-                className="stagger min-h-0 overflow-y-auto animate-rise reduce-motion:animate-none"
-              >
+              <PaneEntrance index={2} play={!entered} className="overflow-y-auto">
                 {inspector}
-              </div>
+              </PaneEntrance>
             ) : null
           }
         >

@@ -1,5 +1,6 @@
 import { useId, useState, type RefObject } from "react";
 import { useNavigate } from "react-router-dom";
+import type { PointCloud } from "@/api/clouds";
 import { useApi } from "@/api/client";
 import { messageOf } from "@/api/errors";
 import { setMarkedEmpty, setSubjectDistance, type ImageDetail } from "@/api/images";
@@ -7,13 +8,14 @@ import { useChangesStore } from "@/store/changes";
 import { Button, Field, Input, InspectorPane, InspectorSection, Kbd, MenuButton, toast } from "@/ui";
 import { cloudsContaining, openIn3dHref } from "./openIn3d";
 import { SOURCE_LABEL } from "./measureText";
-import { useProjectClouds } from "./useProjectClouds";
 
 export interface ImagePanelProps {
   projectId: string;
   detail: ImageDetail;
   onDetail: (d: ImageDetail) => void;
   distanceRef: RefObject<HTMLInputElement>;
+  /** The project's clouds, read once per workspace mount (m1), for Open in 3D. */
+  clouds: readonly PointCloud[];
 }
 
 const FOOTPRINT: Record<string, string> = {
@@ -35,11 +37,10 @@ function Row({ label, value }: { label: string; value: string }) {
 }
 
 /** §6.3 "nothing selected": camera metadata, distance source, subject distance, footprint, N. */
-export function ImagePanel({ projectId, detail, onDetail, distanceRef }: ImagePanelProps) {
+export function ImagePanel({ projectId, detail, onDetail, distanceRef, clouds }: ImagePanelProps) {
   const api = useApi();
   const navigate = useNavigate();
   const fieldId = useId();
-  const clouds = useProjectClouds(projectId);
   const cam = detail.camera;
   const [draft, setDraft] = useState("");
   const [fieldError, setFieldError] = useState<string | null>(null);

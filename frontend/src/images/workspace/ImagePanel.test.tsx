@@ -33,13 +33,17 @@ const detail = {
 } as unknown as ImageDetail;
 
 function setup(routes = [] as Parameters<typeof fakeClient>[0]) {
-  const { api, requests } = fakeClient([
-    { method: "GET", path: /\/pointclouds$/, body: { items: [exampleCloud] } },
-    ...routes,
-  ]);
+  const { api, requests } = fakeClient(routes);
   const onDetail = vi.fn();
+  // m1: the workspace reads the clouds once per mount and hands them down; the panel reads none.
   renderWithProviders(
-    <ImagePanel projectId={PROJECT_ID} detail={detail} onDetail={onDetail} distanceRef={createRef()} />,
+    <ImagePanel
+      projectId={PROJECT_ID}
+      detail={detail}
+      onDetail={onDetail}
+      distanceRef={createRef()}
+      clouds={[exampleCloud]}
+    />,
     { api },
   );
   return { requests, onDetail };
@@ -84,5 +88,11 @@ describe("ImagePanel", () => {
     setup();
     await userEvent.click(await screen.findByRole("button", { name: "Image actions" }));
     expect(screen.getByRole("menuitem", { name: /Open in 3D · Chimney stack 3D/ })).toBeInTheDocument();
+  });
+
+  it("reads no clouds itself (m1: one read per workspace mount)", async () => {
+    const { requests } = setup();
+    await screen.findByRole("button", { name: "Image actions" });
+    expect(requests.filter((r) => r.url.includes("/pointclouds"))).toEqual([]);
   });
 });

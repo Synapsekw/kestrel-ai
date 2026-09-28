@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { ReactNode } from "react";
@@ -31,6 +31,7 @@ const h = vi.hoisted(() => ({
   loadError: null as string | null,
   /** Stands in for FC's fetch-then-`loadImage` (I2); null = the frame never reloads. */
   onLoad: null as ((id: string) => void) | null,
+  canvasTypes: [] as unknown[],
 }));
 
 function makeIndex(ids: string[], flags: number[]): ImageIndexState {
@@ -87,12 +88,20 @@ vi.mock("./seams", async (importOriginal) => {
       return { keyHandlers: h.aiLayer };
     },
     ensureAiRegistered: () => h.ensureAiRegistered(),
-    ImageCanvas: (p: { children?: ReactNode; suggestions?: ReactNode; overlay?: ReactNode }) => (
-      <div data-testid="image-canvas">
-        <div data-testid="canvas-suggestions">{p.suggestions ? "suggestions" : ""}</div>
-        {p.children}
-      </div>
-    ),
+    ImageCanvas: (p: {
+      children?: ReactNode;
+      suggestions?: ReactNode;
+      overlay?: ReactNode;
+      types: unknown;
+    }) => {
+      h.canvasTypes.push(p.types);
+      return (
+        <div data-testid="image-canvas">
+          <div data-testid="canvas-suggestions">{p.suggestions ? "suggestions" : ""}</div>
+          {p.children}
+        </div>
+      );
+    },
     ToolPalette: (p: { children?: ReactNode }) => <div data-testid="tool-palette">{p.children}</div>,
     ZoomCluster: () => null,
     BrowserFilters: (p: { onChange: (f: unknown) => void; value: object }) => (
@@ -191,6 +200,7 @@ beforeEach(() => {
   h.aiOptions.mockClear();
   h.loadError = null;
   h.onLoad = null;
+  h.canvasTypes = [];
   h.layers = [];
   useIndex.setState({ index: makeIndex([IMAGE_ID, IMAGE_ID_2], [5, 0]) });
   useImagesWorkspace.getState().reset();
@@ -235,12 +245,36 @@ describe("ImagesWorkspace", () => {
     expect(h.keymapOpts).toEqual({ enabled: false });
   });
 
+  it("?source= (the old /query link) becomes the flight filter and is dropped (m2)", async () => {
+    mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}?source=s1&batch=1`);
+    const dialog = await screen.findByRole("dialog", { name: "Detect on many images" });
+    expect(dialog).toHaveAttribute("data-scope", "This flight");
+    await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+    expect(h.lastFilters).toHaveBeenLastCalledWith(expect.objectContaining({ sourceId: "s1" }));
+  });
+
   it("next-image moves without remounting the panes", async () => {
     mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
     const pane = screen.getByRole("region", { name: "Image browser" });
     fw("next-image");
     await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID_2}`));
     expect(screen.getByRole("region", { name: "Image browser" })).toBe(pane);
+  });
+
+  it("reads the project's clouds once per mount, not per image or per deselect (m1)", async () => {
+    const { requests } = mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
+    const cloudReads = () => requests.filter((r) => r.url.includes("/pointclouds")).length;
+    await waitFor(() => expect(cloudReads()).toBe(1));
+    fw("next-image");
+    await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID_2}`));
+    act(() => useImagesWorkspace.setState({ imageId: IMAGE_ID_2, image: { ...detail, id: IMAGE_ID_2 } }));
+    fw("previous-image");
+    await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
+    act(() => useImagesWorkspace.setState({ imageId: IMAGE_ID, image: detail }));
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    expect(cloudReads()).toBe(1);
   });
 
   it("the key layers go FA first, then FC's, then FW's", () => {
@@ -435,6 +469,48 @@ describe("ImagesWorkspace", () => {
       await waitFor(() => expect(useImagesWorkspace.getState().view.scale).toBeCloseTo(2.5));
       await waitFor(() => expect(loc()).toBe(`/p/${PROJECT_ID}/images/${IMAGE_ID}`));
     });
+  });
+
+  it("hands FC's canvas one stable empty types list until the project loads (m3)", () => {
+    mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`, [
+      {
+        method: "GET",
+        path: /\/projects\/[^/]+$/,
+        status: 503,
+        body: { error: { code: "x", message: "down" } },
+      },
+    ]);
+    fw("grid-map");
+    fw("grid-map");
+    expect(h.canvasTypes.length).toBeGreaterThan(1);
+    expect(new Set(h.canvasTypes).size).toBe(1);
+  });
+
+  it("the pane entrance plays on the first mount only, not when the window crosses 960 px (m4)", () => {
+    let wideEnough = true;
+    const listeners = new Set<() => void>();
+    vi.stubGlobal("matchMedia", (q: string) => ({
+      get matches() {
+        return q.includes("960") ? wideEnough : true;
+      },
+      addEventListener: (_: string, l: () => void) => listeners.add(l),
+      removeEventListener: (_: string, l: () => void) => listeners.delete(l),
+    }));
+    mount(`/p/${PROJECT_ID}/images/${IMAGE_ID}`);
+    const pane = () => screen.getByRole("region", { name: "Image browser" }).parentElement!;
+    expect(pane()).toHaveClass("animate-rise");
+    // jsdom has no AnimationEvent, so React listens for the prefixed name; send both.
+    for (const type of ["animationend", "webkitAnimationEnd"])
+      fireEvent(pane(), new Event(type, { bubbles: true }));
+    act(() => {
+      wideEnough = false;
+      listeners.forEach((l) => l());
+    });
+    act(() => {
+      wideEnough = true;
+      listeners.forEach((l) => l());
+    });
+    expect(pane()).not.toHaveClass("animate-rise");
   });
 
   it("reads the image index exactly once for the whole workspace (budget)", () => {

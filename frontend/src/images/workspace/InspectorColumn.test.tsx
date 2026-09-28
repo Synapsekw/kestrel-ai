@@ -28,10 +28,7 @@ vi.mock("@/findings/FindingInspector", () => ({
   ),
 }));
 
-const { api } = fakeClient([
-  { method: "GET", path: /\/projects\/[^/]+$/, body: typedProject },
-  { method: "GET", path: /\/pointclouds$/, body: { items: [] } },
-]);
+const { api } = fakeClient([{ method: "GET", path: /\/projects\/[^/]+$/, body: typedProject }]);
 const defect = { ...personBox, id: ANNOTATION_ID, class_id: TYPE_SPALLING, w: 100, h: 50 } as Box;
 const model = (state: InspectorModel["state"]): InspectorModel => ({
   state,
@@ -49,6 +46,7 @@ function renderColumn(state: InspectorModel["state"], onShowOnImage = vi.fn()) {
       detail={null}
       onDetail={vi.fn()}
       distanceRef={createRef()}
+      clouds={[]}
       onShowOnImage={onShowOnImage}
     />,
     { api },
