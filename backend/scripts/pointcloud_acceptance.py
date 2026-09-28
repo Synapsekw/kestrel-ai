@@ -108,13 +108,11 @@ class PeakSampler:
         return self.peak_tree
 
 
-def resolve_token(cli: str | None, environ) -> str:
+def resolve_token(cli: str | None, environ) -> str | None:
     """--token when given, else KESTREL_TOKEN, else APP_TOKEN: the dev-mode launcher passes the token
-    through the environment so it never appears on a process command line (C-G)."""
-    token = cli or environ.get("KESTREL_TOKEN") or environ.get("APP_TOKEN")
-    if not token:
-        raise SystemExit("no token: pass --token or set KESTREL_TOKEN / APP_TOKEN")
-    return token
+    through the environment so it never appears on a process command line (C-G). None when there is
+    none: main() reports that as a usage error."""
+    return cli or environ.get("KESTREL_TOKEN") or environ.get("APP_TOKEN") or None
 
 
 def client(base: str, token: str, transport: httpx.BaseTransport | None = None) -> httpx.Client:
@@ -677,6 +675,8 @@ def main() -> int:
     p.add_argument("--out", help="also write the JSON line to this file")
     a = p.parse_args()
     a.token = resolve_token(a.token, os.environ)
+    if not a.token:
+        p.error("no token: pass --token or set KESTREL_TOKEN / APP_TOKEN")
     run = {
         "import": run_import,
         "cancel": run_cancel,

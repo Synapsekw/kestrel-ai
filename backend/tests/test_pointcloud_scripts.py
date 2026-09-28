@@ -344,5 +344,17 @@ def test_token_comes_from_the_environment_when_no_flag_is_given():
     assert acc.resolve_token("cli", {"KESTREL_TOKEN": "k", "APP_TOKEN": "a"}) == "cli"
     assert acc.resolve_token(None, {"KESTREL_TOKEN": "k", "APP_TOKEN": "a"}) == "k"
     assert acc.resolve_token(None, {"APP_TOKEN": "a"}) == "a"
-    with pytest.raises(SystemExit, match="token"):
-        acc.resolve_token(None, {})
+    assert acc.resolve_token(None, {}) is None
+
+
+def test_no_token_is_a_usage_error_not_a_traceback(monkeypatch, capsys):
+    # C-G final review m11: argparse's own error (exit 2, the usage line, the message on stderr)
+    acc = _load("pointcloud_acceptance")
+    monkeypatch.delenv("KESTREL_TOKEN", raising=False)
+    monkeypatch.delenv("APP_TOKEN", raising=False)
+    monkeypatch.setattr(acc.sys, "argv", ["pointcloud_acceptance.py", "import"])
+    with pytest.raises(SystemExit) as e:
+        acc.main()
+    assert e.value.code == 2
+    err = capsys.readouterr().err
+    assert "usage:" in err and "no token: pass --token or set KESTREL_TOKEN / APP_TOKEN" in err
