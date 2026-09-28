@@ -40,9 +40,12 @@ accepted labels (unpromote) — no UI successor. The unused client helpers `fetc
 `fetchQueryRuns`, `promoteQueryRun`, `unpromoteQueryRun` are deleted; the backend routes stay;
 `resumeQueryRun` stays (the Setup agent's "Resume first labeling" calls it).
 
-**Gate on `task/i-e`:** contract clean; ruff clean; pytest <GATE: passed> passed, <GATE: skipped>
-skipped, <GATE: deselected> deselected; frontend lint clean; vitest <GATE: tests> passed
-(<GATE: files> files); build ok; e2e <GATE: e2e passed> passed (ports 5590/5591); cargo test skipped
+**Gate on `task/i-e`:** contract clean; ruff clean; pytest 3927 passed, 16
+skipped, 16 deselected; frontend lint clean; vitest 3505 tests passed
+(528 files); build ok; e2e 133 passed (ports 5590/5591) — `images-perf.spec.ts:105` ("500
+annotations: at most one annotation draw per frame and no hit-graph rebuild while panning") failed
+once in the full run (`hitDrawsDuringInput` 1000 instead of 0), then passed alone twice: a load
+flake under full-suite worker contention, not a real regression; cargo test skipped
 (no frozen sidecar).
 
 **Not done here (R9):** no installer. IMC-X runs the full gate, freezes the sidecar, runs
