@@ -1,6 +1,7 @@
 import { deflateSync } from "node:zlib";
-import type { Page, Route, WebSocketRoute } from "@playwright/test";
+import { errors, type Page, type Route, type WebSocketRoute } from "@playwright/test";
 import proj4 from "proj4";
+import { maxZoomFor, SITE_MAX_Z } from "../../src/mapws/view/siteGrid";
 import { fromMock, jsonReply } from "../mock";
 
 /** The contract's Project example, which the Prism mock serves for every project id. */
@@ -194,6 +195,23 @@ export async function sitePixel(
   n: number,
   testId = "site-map",
 ): Promise<{ x: number; y: number }> {
+  const timeoutOnly =
+    <T>(onTimeout: () => T) =>
+    (err: unknown) => {
+      if (err instanceof errors.TimeoutError) return onTimeout();
+      throw err; // page closed, evaluation error: not a placement problem
+    };
+  await page
+    .waitForFunction(() => !!window.__kestrelSiteMap, undefined, { timeout: 10_000 })
+    .catch(
+      timeoutOnly(() => {
+        throw new Error("window.__kestrelSiteMap never appeared: call enableDiagnostics(page) before goto");
+      }),
+    );
+  // A fresh settle count per call: a stale one would return the pixel from before a pan started.
+  await page.evaluate(() => {
+    delete (window as Window & { __kestrelSitePixel?: unknown }).__kestrelSitePixel;
+  });
   // The hook lands with the view, before the workspace fits the site (and a fit or centre animates),
   // so wait until the point is inside the pane and has not moved for three frames.
   const settled = await page
@@ -214,7 +232,7 @@ export async function sitePixel(
       [e, n, testId] as const,
       { polling: "raf", timeout: 10_000 },
     )
-    .catch(() => null);
+    .catch(timeoutOnly(() => null));
   const p = (await settled?.jsonValue()) as [number, number] | null | undefined;
   if (!p) throw new Error(`site ${e}, ${n} is not on screen in ${testId}`);
   const box = await page.getByTestId(testId).boundingBox();
@@ -304,6 +322,10 @@ const footprint = (site: Site) => [site.minE, site.minN, site.maxE, site.maxN];
 /** The drawings' linework and default placement: the site box inset by 10 m. */
 const inset = (site: Site) => [site.minE + 10, site.minN + 10, site.maxE - 10, site.maxN - 10];
 
+/** A raster's own tile pyramid depth (backend/app/maps/tiles.py max_zoom). */
+const ownMaxZoom = (w: number, h: number) =>
+  Math.max(w, h) > 256 ? Math.ceil(Math.log2(Math.max(w, h) / 256)) : 0;
+
 const jobBody = (type: string, id: string, params: Json = {}): Json => ({
   id,
   project_id: P,
@@ -335,6 +357,7 @@ function mapBody(tpl: Json, site: Site, id: string, name: string, date: string |
     captured_on: date,
     width,
     height,
+    tile_grid: { tile_size: 256, max_zoom: ownMaxZoom(width, height) },
     job_id: null,
     ...(flat
       ? {
@@ -408,7 +431,10 @@ function surfaceBody(
     captured_on: date,
     elevation_role: kind === "dem" ? "dsm" : null,
     map_id: null,
-    tile_grid: { tile_size: 256, max_zoom: 8 },
+    tile_grid: {
+      tile_size: 256,
+      max_zoom: ownMaxZoom((site.maxE - site.minE) / cell, (site.maxN - site.minN) / cell),
+    },
     measurement_count: 0,
     job_id: null,
     created_at: T,
@@ -457,6 +483,8 @@ const layerBody = (l: {
   date: string | null;
   meta: string;
   footprint: number[] | null;
+  /** The layer's native metres per pixel (null: a vector drawing, drawn to the grid's last zoom). */
+  nativeRes: number | null;
   extra?: Json;
 }): Json => ({
   kind: l.kind,
@@ -471,7 +499,8 @@ const layerBody = (l: {
   date: l.date,
   date_is_import_date: false,
   footprint_site: l.footprint,
-  max_zoom: l.footprint === null ? null : 22,
+  // As backend/app/workspace/layers.py: grid.max_zoom_for(native), Z_MAX for vector drawings.
+  max_zoom: l.footprint === null ? null : l.nativeRes ? maxZoomFor(l.nativeRes) : SITE_MAX_Z,
   meta: l.meta,
   surface_kind: null,
   elevation_role: null,
@@ -479,6 +508,13 @@ const layerBody = (l: {
   placed: null,
   ...l.extra,
 });
+
+/** A raster drawing's metres per pixel: sqrt(|det|) of its georef transform (the backend's rule). */
+function nativeResOf(d: Json): number | null {
+  const t = (d.georef as { transform?: number[] } | null)?.transform;
+  if (!t || t.length < 6) return null;
+  return Math.sqrt(Math.abs(t[0] * t[4] - t[1] * t[3])) || null;
+}
 
 function drawingLayer(d: Json, site: Site): Json {
   const vector = d.format === "dxf" || d.format === "landxml";
@@ -492,6 +528,7 @@ function drawingLayer(d: Json, site: Site): Json {
     date: (d.captured_on as string | null) ?? null,
     meta: placed ? "placed" : "not placed",
     footprint: placed ? ((d.bounds_site as number[] | null) ?? inset(site)) : null,
+    nativeRes: vector ? null : nativeResOf(d),
     extra: {
       status: d.status ?? "ready",
       tile_kind: vector || !placed ? null : "drawing_raster",
@@ -677,21 +714,27 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
         areal_scale_factor: 0.9992,
       };
     }
-    if (kind === "profile")
+    if (kind === "profile") {
+      // One series per surface sent (unknown ids are skipped); each later survey peaks 2.5 m higher.
+      const series = surfaceIds.flatMap((id, i) => {
+        const s = world.surfaces.find((x) => x.id === id);
+        if (!s) return [];
+        const date = (s.captured_on as string | null) ?? null;
+        return [{ surface_id: id, label: String(s.name), date, z: [600.1, 606.4 + 2.5 * i, 600.2] }];
+      });
+      const zs = series.flatMap((x) => x.z);
       return {
         length_m: grid * 1.0004,
         grid_length_m: grid,
         stations_m: [0, grid / 2, grid],
-        series: [
-          { surface_id: DSM_AUG, label: "DSM 14 Aug 2026", date: AUG, z: [600.1, 606.4, 600.3] },
-          { surface_id: DSM_SEP, label: "DSM 14 Sep 2026", date: SEP, z: [600.1, 608.9, 600.2] },
-        ],
-        z_min: 600.1,
-        z_max: 608.9,
+        series,
+        z_min: zs.length ? Math.min(...zs) : null,
+        z_max: zs.length ? Math.max(...zs) : null,
         cut_area_m2: 0,
         fill_area_m2: 12.5,
         nodata_fraction: 0,
       };
+    }
     return {
       length_m: grid * 1.0004,
       grid_length_m: grid,
@@ -815,6 +858,7 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
                 date: (x.captured_on as string | null) ?? null,
                 meta: x.crs_wkt ? "3.0 cm · 3.2 GB" : "no coordinates",
                 footprint: x.crs_wkt ? footprint(site) : null,
+                nativeRes: GSD_M,
               }),
             ),
             ...world.surfaces.map((s) =>
@@ -826,6 +870,7 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
                 date: (s.captured_on as string | null) ?? null,
                 meta: s.kind === "design" ? "from Site plan rev C" : "598.1 – 624.8 m",
                 footprint: footprint(site),
+                nativeRes: Number(s.cell_size_m ?? 0.1),
                 extra: { surface_kind: s.kind, elevation_role: s.elevation_role },
               }),
             ),
@@ -990,6 +1035,7 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
       async (r, _m, body) => {
         const b = body as Json;
         const insp = world.inspections[String(b.inspection_id)];
+        if (!insp) return r.fallback();
         const placement = (b.placement ?? { method: "none" }) as Json;
         const id = nextId("d");
         const job = startJob("drawing_import", { drawing_id: id });
@@ -1033,6 +1079,7 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
       /^\/drawings\/georef-fit$/,
       (r, _m, body) => {
         const b = body as { model: string; points: { src: number[]; dst: number[] }[] };
+        // A similarity fit even for `model: "affine"`: enough for a fake (the model is only echoed).
         const fit = similarityFit(b.points);
         return reply(r, { model: b.model, warnings: [], ...fit });
       },
@@ -1052,6 +1099,7 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
         const d = world.drawings.find((x) => x.id === m[1]);
         if (!d) return r.fallback();
         const b = body as { model: string; points: { id?: string; src: number[]; dst: number[] }[] };
+        // A similarity fit even for `model: "affine"`: enough for a fake (the model is only echoed).
         const fit = similarityFit(b.points);
         const full = drawingBody(d, site);
         // Raster drawings use src = (col, −row); vector ones their own units.
@@ -1235,6 +1283,7 @@ export async function serveMapWorkspace(page: Page, opts: WorldOptions = {}): Pr
           created_at: T,
           ...b,
           polygon_wgs84: wgs,
+          // The workspace always sends polygon_wgs84; the map_id + polygon_px variant is not faked.
           polygon_site: wgs.map((p) => toSite(site, p)),
         };
         world.siteAreas.push(a);

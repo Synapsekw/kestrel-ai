@@ -63,6 +63,14 @@ test("a fake volume job finishes and the read after it carries the base's number
   expect(created.status).toBe(202);
   expect(created.job.state).toBe("succeeded");
   expect(created.vol).toMatchObject({ status: "ready", results: { net_m3: 1412.6 } });
+
+  // Layer max_zoom follows the backend's maxZoomFor(native res): 3 cm maps 17, 10 cm DSMs 15.
+  const layers = await page.evaluate(async (api) => {
+    const r = await fetch(`${api}/map-workspace/layers`);
+    return ((await r.json()) as { items: { kind: string; max_zoom: number | null }[] }).items;
+  }, `/api/v1/projects/${P}`);
+  expect(layers.filter((l) => l.kind === "map").map((l) => l.max_zoom)).toEqual([17, 17]);
+  expect(layers.filter((l) => l.kind === "surface").map((l) => l.max_zoom)).toEqual([15, 15, 15]);
 });
 
 test("an event the fake sends reaches the app over the routed events socket", async ({ page }) => {
@@ -71,8 +79,20 @@ test("an event the fake sends reaches the app over the routed events socket", as
   await expect(page.getByTestId("map-workspace")).toBeVisible();
   // `drawings.changed` bumps the workspace revision, and the layers list re-reads only on that.
   const reads = () => world.calls.filter((c) => c.path === "/map-workspace/layers").length;
-  await expect.poll(reads).toBeGreaterThan(0);
-  await page.waitForTimeout(1000);
+  // Wait for the load's own reads to stop: the same count on three polls in a row.
+  let last = -1;
+  let same = 0;
+  await expect
+    .poll(
+      () => {
+        const n = reads();
+        same = n > 0 && n === last ? same + 1 : 0;
+        last = n;
+        return same;
+      },
+      { intervals: [250] },
+    )
+    .toBeGreaterThanOrEqual(2);
   const before = reads();
   world.sendEvent("drawings.changed", { ids: [] });
   await expect.poll(reads).toBeGreaterThan(before);
