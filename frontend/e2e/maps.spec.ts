@@ -123,6 +123,17 @@ test.beforeEach(async ({ page }) => {
 
 const layers = (page: Page) => page.getByTestId("layer-row");
 
+/**
+ * Show the Sep DSM (surface rows are hidden by default, R-DSM), wait for its Z readout, then hover
+ * the site centre so the readout samples the fixture's elevation there.
+ */
+async function showDsmAndHover(page: Page) {
+  await page.getByRole("button", { name: "Show DSM 14 Sep" }).click();
+  await expect(page.getByTestId("readout-z")).toBeVisible();
+  const c = await sitePixel(page, SITE.cE, SITE.cN);
+  await page.mouse.move(c.x, c.y);
+}
+
 /** The workspace strips arrival params; what settles is `/p/P/maps` with view params only (R-URL). */
 const settledMapsUrl = (u: URL) =>
   u.pathname === `/p/${P}/maps` && !u.searchParams.has("map") && !u.searchParams.has("at");
@@ -193,19 +204,10 @@ test("flow 1: two orthos aligned, swipe the divider, side-by-side mirrors the cr
 });
 
 test("the Z readout samples the right date's DSM under the pointer (§5 Coordinates)", async ({ page }) => {
-  // Known W2 defect, kept honest rather than papered over: ReadoutValue (mapws/readout/ReadoutZ.tsx)
-  // memoises its sampler and cancels it in an effect cleanup; React StrictMode's dev double-mount
-  // runs that cleanup once, so the sampler is dead before the first pointer move and no
-  // POST /map-workspace/sample is ever sent ("Z —"). Remove test.fail() once it is fixed.
-  test.fail();
   const world = await serveMapWorkspace(page);
   await page.goto(`/p/${P}/maps?l=${AUG}&r=${SEP}`);
-  // Surface rows are hidden by default (R-DSM): show the Sep DSM first.
-  await page.getByRole("button", { name: "Show DSM 14 Sep" }).click();
-  await expect(page.getByTestId("readout-z")).toBeVisible();
-  const c = await sitePixel(page, SITE.cE, SITE.cN);
-  await page.mouse.move(c.x, c.y);
-  await expect(page.getByTestId("coord-readout")).toContainText("612.34");
+  await showDsmAndHover(page);
+  await expect(page.getByTestId("readout-z")).toHaveText("Z 612.34 m");
   expect(world.calls.some((x) => x.path === "/map-workspace/sample")).toBe(true);
 });
 
@@ -242,13 +244,10 @@ test("the coordinates readout fits at 1280 px with the frame switch shown (R-HX)
   const readout = page.getByTestId("coord-readout");
   await expect(readout).toContainText("EPSG:32633");
   await expect(readout.getByRole("button", { name: "Local metres · 2 surfaces" })).toBeVisible();
-  // The widest row: E, N and the Z readout under the pointer next to the switch. (Z shows "—"
-  // until the sampler defect in the Z readout test is fixed.)
-  await page.getByRole("button", { name: "Show DSM 14 Sep" }).click();
-  await expect(readout.getByTestId("readout-z")).toBeVisible();
-  const c = await sitePixel(page, SITE.cE, SITE.cN);
-  await page.mouse.move(c.x, c.y);
+  // The widest row: E, N and a sampled Z under the pointer, next to the switch.
+  await showDsmAndHover(page);
   await expect(readout).toContainText(/E 500\d{3}\.\d{2}/);
+  await expect(readout.getByTestId("readout-z")).toHaveText("Z 612.34 m");
   await entrancesDone(page);
 
   const fit = await readout.evaluate((el) => {

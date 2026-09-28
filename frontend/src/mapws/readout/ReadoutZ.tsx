@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components -- pickReadoutRow is a pure helper tested with it. */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useApi } from "@/api/client";
 import { useWorkspace } from "../context";
 import { RASTER_KINDS, useRasterLayers } from "../data/useRasterLayers";
@@ -10,7 +10,7 @@ import { elevationRows } from "../layers/rasterRows";
 import type { PanelProps } from "../panels/panelRegistry";
 import type { LayerUserState } from "../state/workspaceStore";
 import { sampleInFrame } from "./sampleApi";
-import { SAMPLE_INTERVAL_MS, createThrottledSampler } from "./throttledSampler";
+import { SAMPLE_INTERVAL_MS, type Sampler, createThrottledSampler } from "./throttledSampler";
 
 /** Ruling W2-5: the topmost visible elevation row dated r; undated designs never count. */
 export function pickReadoutRow(
@@ -33,22 +33,28 @@ function ReadoutValue({ projectId, row }: { projectId: string; row: LayerRow }) 
   const api = useApi();
   const pointer = useWorkspace((s) => s.pointer);
   const [z, setZ] = useState<number | null>(null);
-  const sampler = useMemo(
-    () =>
-      createThrottledSampler({
-        intervalMs: SAMPLE_INTERVAL_MS,
-        sample: async (x, y, signal) => {
-          const res = await sampleInFrame(api, projectId, { x, y, surface_ids: [row.id] }, signal);
-          return res.samples.find((s) => s.surface_id === row.id)?.z ?? null;
-        },
-        onResult: setZ,
-      }),
-    [api, projectId, row.id],
-  );
-  useEffect(() => () => sampler.cancel(), [sampler]);
+  const sampler = useRef<Sampler | null>(null);
+  // Created in the effect, not memoised: cancel() is final, and StrictMode's mount, cleanup and
+  // remount would otherwise leave a dead sampler that never sends a request. Declared before the
+  // pointer effect, so it runs first in every commit.
   useEffect(() => {
-    if (pointer) sampler.push(pointer[0], pointer[1]);
-  }, [sampler, pointer]);
+    const s = createThrottledSampler({
+      intervalMs: SAMPLE_INTERVAL_MS,
+      sample: async (x, y, signal) => {
+        const res = await sampleInFrame(api, projectId, { x, y, surface_ids: [row.id] }, signal);
+        return res.samples.find((v) => v.surface_id === row.id)?.z ?? null;
+      },
+      onResult: setZ,
+    });
+    sampler.current = s;
+    return () => {
+      s.cancel();
+      if (sampler.current === s) sampler.current = null;
+    };
+  }, [api, projectId, row.id]);
+  useEffect(() => {
+    if (pointer) sampler.current?.push(pointer[0], pointer[1]);
+  }, [pointer]);
   const shown = pointer && z !== null && Number.isFinite(z) ? `${z.toFixed(2)} m` : "—";
   return (
     <span
