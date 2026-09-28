@@ -29,9 +29,7 @@ const gsdEstimate = {
  * had ever seen - and the run found three objects about 1.5 m across on a site whose dump trucks
  * are 8.9 m. Now the dialog derives the scale, shows the evidence, and refuses to start without one.
  */
-test("a model with no training scale offers its derived one, with the evidence for it", async ({
-  page,
-}) => {
+test("a model with no training scale offers its derived one, with the evidence for it", async ({ page }) => {
   const example = await fromMock(page, `/api/v1/library/models/${MODEL}`);
   // ICVD_V4 as it really was: trained, with a dataset in its provenance, and no scale recorded.
   const model: Record<string, unknown> = { ...example, name: "ICVD_V4", train_gsd_cm: null };
