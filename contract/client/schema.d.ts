@@ -3359,9 +3359,8 @@ export interface paths {
         /**
          * Build the YOLO export (`images/`, `labels/`, `data.yaml`) under `library\datasets\<slug>-<id8>\`
          *     through a `dataset` library job, hard-linking images on the same volume and copying
-         *     otherwise. `detect` writes axis-aligned labels, `obb` rotated ones; a task this build cannot
-         *     write or train answers 422 (`code` is `task_not_supported`). A missing source project fails
-         *     the job with the list of missing projects.
+         *     otherwise. `detect` writes axis-aligned labels, `obb` rotated ones, `segment` polygon ones. A missing
+         *     source project fails the job with the list of missing projects.
          */
         post: operations["exportLibraryDataset"];
         delete?: never;
@@ -3643,8 +3642,8 @@ export interface paths {
          * Import a plain DSM or DTM GeoTIFF as a `dem` surface (map-workspace spec §7). An
          *     `elevation_import` job copies it when it already conforms, else re-grids it (onto the
          *     `align_to_surface_id` surface's lattice when one is given). There is no preview step. A file
-         *     with no CRS, an RGB image, or a geographic or feet CRS without a target fails the job with a
-         *     readable message. Publishes `surfaces.changed`.
+         *     with no CRS or an RGB image is refused with a 422; a geographic or feet CRS without a target
+         *     is refused too (or fails the job with a readable message if found only while re-gridding). Publishes `surfaces.changed`.
          */
         post: operations["importElevation"];
         delete?: never;
@@ -11603,7 +11602,7 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
-        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a region with no unmasked window (`empty_region`); a malformed body (`validation_error`). */
+        /** @description `createRuns`'s 422s: the model has classes with no project class and no remembered mapping (`code` is `unmapped_classes`); nothing was queued, map them with `PUT /model-class-maps/{modelId}` and retry. Also answered here: a segmentation library model (`task_not_supported`); a run with neither a library `model_id` nor a cloud `provider` (`model_or_provider_required`); a cloud-provider run's blank `query` (`query_required`); a map region that is not a valid closed ring or cannot reach the map's pixels (`invalid_geometry`); a region with no unmasked window (`empty_region`); a malformed body (`validation_error`). */
         UnmappedClasses: {
             headers: {
                 [name: string]: unknown;
@@ -12864,7 +12863,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the smart-polygon weights are missing or failed their check (`code` is `assist_model_missing`) */
+            /** @description the smart-polygon weights are missing or failed their check, or SAM is unavailable: its modules failed to import in this build, or the model failed to load or run even on the CPU (`code` is `assist_model_missing`; `details.state` is `missing`, `invalid` or `unavailable`). `unavailable` is not sticky: a later request tries again */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -12903,7 +12902,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the smart-polygon weights are missing or failed their check (`code` is `assist_model_missing`) */
+            /** @description the smart-polygon weights are missing or failed their check, or SAM is unavailable: its modules failed to import in this build, or the model failed to load or run even on the CPU (`code` is `assist_model_missing`; `details.state` is `missing`, `invalid` or `unavailable`). `unavailable` is not sticky: a later request tries again */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -15068,7 +15067,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
-            /** @description the review would delete findings and `confirm_finding_delete` is not true (`code` is `finding_would_be_deleted`; details `{finding_ids}`) */
+            /** @description the review would delete findings and `confirm_finding_delete` is not true (`code` is `finding_would_be_deleted`; details `{finding_id, finding_ids, count}`: the first id, up to the first listed ids, and the total) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18904,15 +18903,6 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a task this build cannot write or train (`code` is `task_not_supported`) */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
             503: components["responses"]["LibraryUnavailable"];
             default: components["responses"]["Error"];
         };
@@ -19016,7 +19006,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description a task this build cannot write or train (`code` is `task_not_supported`), or a base model whose task differs from the dataset's (`code` is `task_mismatch`) */
+            /** @description a base model whose task differs from the dataset's (`code` is `task_mismatch`) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -19384,7 +19374,7 @@ export interface operations {
                     "application/json": components["schemas"]["SurfaceWithJob"];
                 };
             };
-            /** @description the file or the `align_to_surface_id` surface does not exist (`code` is `not_found`) */
+            /** @description the `align_to_surface_id` surface does not exist (`code` is `not_found`); a missing file is a 422 `source_missing` */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -19402,7 +19392,7 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
-            /** @description the file is not a .tif or .tiff (`code` is `validation_error`, `details.reason` is `extension`); not a single-band elevation raster (`not_elevation`); gone or changed since it was chosen (`source_missing`); outside the `align_to_surface_id` surface (`no_overlap`); a geographic output CRS (`geographic_output`) or one not in metres (`non_metric_output`) without a target; a grid over the cell ceiling (`grid_too_large`); not enough free disk (`insufficient_disk`) */
+            /** @description the file is not a .tif or .tiff (`code` is `validation_error`, `details.reason` is `extension`); not a single-band elevation raster (`not_elevation`); missing, not an absolute path, or gone or changed since it was chosen (`source_missing`); no CRS or no geotransform, or an `align_to_surface_id` surface with no CRS (`no_coordinates`); outside the `align_to_surface_id` surface (`no_overlap`); a geographic output CRS (`geographic_output`) or one not in metres (`non_metric_output`) without a target; a grid over the cell ceiling (`grid_too_large`); not enough free disk (`insufficient_disk`) */
             422: {
                 headers: {
                     [name: string]: unknown;

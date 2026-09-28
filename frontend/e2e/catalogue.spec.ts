@@ -20,13 +20,20 @@ test("the Catalogue classifies a migrated type, offers the backfill and edits th
     (url) => url.pathname === "/api/v1/catalogue/severity",
     (route) =>
       fulfilJson(route, {
-        levels: route.request().method() === "PUT" ? (route.request().postDataJSON() as { levels: unknown }).levels : SEVERITY,
+        levels:
+          route.request().method() === "PUT"
+            ? (route.request().postDataJSON() as { levels: unknown }).levels
+            : SEVERITY,
       }),
   );
 
   await page.goto("/catalogue");
-  await expect(page.getByRole("heading", { name: "Catalogue", exact: true })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText("2 types came from your existing projects. Mark which are defects.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Catalogue", exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(
+    page.getByText("2 types came from your existing projects. Mark which are defects."),
+  ).toBeVisible();
 
   await page.getByRole("row", { name: /Excavator/ }).click();
   await page.getByRole("radio", { name: "Defect", exact: true }).click();
