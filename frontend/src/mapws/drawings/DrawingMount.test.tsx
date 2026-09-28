@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render } from "@testing-library/react";
+import Feature from "ol/Feature";
+import LineString from "ol/geom/LineString";
 import TileLayer from "ol/layer/Tile";
 import VectorLayer from "ol/layer/Vector";
+import VectorTileLayer from "ol/layer/VectorTile";
+import type VectorTileSource from "ol/source/VectorTile";
 import type VectorSource from "ol/source/Vector";
 import type TileImage from "ol/source/TileImage";
 import type { Drawing } from "@/api/drawings";
@@ -22,6 +26,11 @@ type Layer = TileLayer<TileImage>;
 type FakeMap = ReturnType<typeof fakeOlMap>;
 const added = (map: FakeMap): Layer[] =>
   map.addLayer.mock.calls.map((c) => c[0] as unknown).filter((l): l is Layer => l instanceof TileLayer);
+type VLayer = VectorTileLayer<VectorTileSource>;
+const addedVector = (map: FakeMap): VLayer[] =>
+  map.addLayer.mock.calls
+    .map((c) => c[0] as unknown)
+    .filter((l): l is VLayer => l instanceof VectorTileLayer);
 /** The align session's marks layers (bubbles, residual lines), in the order they were added. */
 const marksOf = (map: FakeMap): VectorLayer<VectorSource>[] =>
   map.addLayer.mock.calls
@@ -114,10 +123,59 @@ describe("DrawingMount", () => {
     expect(added(map)[0].getVisible()).toBe(false);
   });
 
-  it("never throws for a vector drawing: a hidden layer until vector tiles arrive (PF5)", () => {
+  it("draws a placed DXF as vector tiles, with its hidden layers applied as a style", () => {
     const { map } = mount(dxfDrawing);
-    expect(added(map)).toHaveLength(1);
-    expect(added(map)[0].getVisible()).toBe(false);
+    expect(added(map)).toHaveLength(0);
+    const layers = addedVector(map);
+    expect(layers).toHaveLength(1);
+    expect(layers[0].getVisible()).toBe(true);
+    expect(layers[0].getOpacity()).toBe(0.8);
+    expect(layers[0].getSource()!.getUrls()![0]).toContain(`/drawings/${dxfDrawing.id}/vtiles/{z}/{x}/{y}?`);
+    const style = layers[0].getStyleFunction()!;
+    const line = (layer: string) => new Feature({ geometry: new LineString([0, 0, 1, 1], "XY"), layer });
+    expect(style(line("WALLS"), 1)).toBeDefined();
+    expect(style(line("TEXT"), 1)).toBeUndefined();
+  });
+
+  it("restyles a DXF when its hidden layers change, without re-URLing its tiles", () => {
+    const { map } = mount(dxfDrawing);
+    const layer = addedVector(map)[0];
+    const url = layer.getSource()!.getUrls()![0];
+    const line = new Feature({ geometry: new LineString([0, 0, 1, 1], "XY"), layer: "WALLS" });
+    const next: Drawing = { ...dxfDrawing, layer_state: { hidden_layers: ["WALLS"], knockout_white: false } };
+    act(() => useDrawingsStore.getState().set(`${PROJECT_ID}:0`, PROJECT_ID, [next]));
+    expect(addedVector(map)).toHaveLength(1);
+    expect(layer.getSource()!.getUrls()![0]).toBe(url);
+    expect(layer.getStyleFunction()!(line, 1)).toBeUndefined();
+  });
+
+  it("draws nothing for a DXF that is not placed and not being aligned", () => {
+    const { map } = mount({ ...dxfDrawing, georef: null });
+    expect(addedVector(map)[0].getVisible()).toBe(false);
+  });
+
+  it("toasts once in Side-by-side when a DXF's vector tiles are gone (404)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 404 })),
+    );
+    const left = fakeOlMap();
+    const right = fakeOlMap();
+    mountOn(
+      [
+        { map: left, side: "left" },
+        { map: right, side: "right" },
+      ],
+      dxfDrawing,
+    );
+    const vtile = () => ({ setFeatures: vi.fn(), setState: vi.fn() });
+    addedVector(left)[0].getSource()!.getTileLoadFunction()(vtile() as never, "u1");
+    addedVector(right)[0].getSource()!.getTileLoadFunction()(vtile() as never, "u2");
+    await vi.waitFor(() => expect(right.removeLayer).toHaveBeenCalled());
+    expect(left.removeLayer).toHaveBeenCalled();
+    expect(useToastStore.getState().toasts).toHaveLength(1);
+    expect(useToastStore.getState().toasts[0].text).toMatch(/site-plan is no longer available/);
+    expect(useChangesStore.getState().mapWorkspaceRevision).toBe(1);
   });
 
   it("puts the frame key and knockout on the tile URL", () => {

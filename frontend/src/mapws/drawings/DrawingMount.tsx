@@ -10,7 +10,7 @@ import type { LayerMountProps, LayerRow } from "../layers/layerRegistry";
 import type { SiteFrame } from "../types";
 import { siteTileGrid } from "../view/siteFrame";
 import { useAlignMarks } from "./alignMarks";
-import { createDrawingLayer, PREVIEW_TILES, type DrawingLayerHandle } from "./drawingTiles";
+import { createDrawingLayer, hiddenLayers, PREVIEW_TILES, type DrawingLayerHandle } from "./drawingTiles";
 import { useDrawing } from "./drawingsStore";
 import { useDebouncedValue } from "./useDebouncedValue";
 
@@ -29,7 +29,21 @@ export function DrawingMount({ row, map, zIndex, opacity, projectId, frame }: La
   const ready = (drawing?.status ?? row.layer?.status) === "ready";
   const placed = drawing ? drawing.georef !== null : row.layer?.placed === true;
   const knockout = drawing?.layer_state.knockout_white === true;
-  useDrawingTiles({ row, map, zIndex, opacity, projectId, frame, knockout, session, ready, placed });
+  // A stable key, so a list refetch with the same hidden layers does not restyle.
+  const hiddenKey = drawing ? [...hiddenLayers(drawing)].sort().join("\n") : "";
+  useDrawingTiles({
+    row,
+    map,
+    zIndex,
+    opacity,
+    projectId,
+    frame,
+    knockout,
+    hiddenKey,
+    session,
+    ready,
+    placed,
+  });
   useAlignMarks(map, session);
   return null;
 }
@@ -42,18 +56,21 @@ interface TilesInput {
   projectId: string;
   frame: SiteFrame;
   knockout: boolean;
+  /** DXF/LandXML layer names to hide, joined by newlines (a restyle, never a refetch). */
+  hiddenKey: string;
   session: AlignSession | null;
   ready: boolean;
   placed: boolean;
 }
 
 /**
- * The drawing's tile layer (raster now; vector tiles from slice B). Built, added, removed and
+ * The drawing's tile layer (raster tiles, or vector tiles for DXF/LandXML). Built, added, removed and
  * disposed inside one effect, only when its source must change (RasterMount's pattern); the version,
- * knockout and preview transform re-URL it, and visibility, opacity and z are property updates.
+ * knockout and preview transform re-URL it; visibility, opacity, z and hidden layers are property
+ * updates.
  */
 function useDrawingTiles(input: TilesInput) {
-  const { row, map, zIndex, opacity, projectId, frame, knockout, session, ready, placed } = input;
+  const { row, map, zIndex, opacity, projectId, frame, knockout, hiddenKey, session, ready, placed } = input;
   const { baseUrl, token } = useBackend();
   const gone = useGoneLayers((s) => s.gone.has(row.key));
   const vector = row.layer?.vector === true;
@@ -106,7 +123,7 @@ function useDrawingTiles(input: TilesInput) {
 
   // Declared after the build effect, and keyed by its inputs too, so they re-apply to a rebuilt layer.
   // An unplaced drawing has no tiles until its first `t` preview (Task 7 review carry-over).
-  const shown = ready && !vector && (placed || activePreview !== null);
+  const shown = ready && (placed || activePreview !== null);
   const aligning = session !== null;
   useEffect(() => {
     const layer = handleRef.current?.layer;
@@ -150,4 +167,8 @@ function useDrawingTiles(input: TilesInput) {
     projectId,
     gone,
   ]);
+
+  useEffect(() => {
+    handleRef.current?.setHidden(new Set(hiddenKey ? hiddenKey.split("\n") : []));
+  }, [hiddenKey, map, rowId, rowKey, vector, maxZoom, projection, fkey, baseUrl, token, projectId, gone]);
 }
