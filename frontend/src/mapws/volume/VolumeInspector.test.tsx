@@ -13,9 +13,11 @@ const h = vi.hoisted(() => ({
     l: null as string | null,
     select: (() => {}) as (s: unknown) => void,
   },
+  activate: vi.fn(),
 }));
 vi.mock("@/mapws/w4host", () => ({
   useWorkspace: (sel: (s: unknown) => unknown) => sel(h.state),
+  useTools: (sel: (s: unknown) => unknown) => sel({ activate: h.activate }),
 }));
 
 const UTM39 = {
@@ -138,6 +140,19 @@ describe("VolumeInspector", () => {
       }),
     );
     expect(requests.some((r) => r.url.endsWith("/calculate"))).toBe(false);
+  });
+
+  it("starts and stops a mask drawing through the volume tool", async () => {
+    h.activate.mockClear();
+    render(fakeClient(routes()).api);
+    fireEvent.click(await screen.findByRole("button", { name: /Masks & alignment/ }));
+    const exclusion = screen.getByRole("button", { name: "Draw exclusion" });
+    fireEvent.click(exclusion);
+    expect(useVolumeStore.getState().drawing).toBe("exclusion");
+    expect(h.activate).toHaveBeenLastCalledWith("volume");
+    fireEvent.click(exclusion);
+    expect(useVolumeStore.getState().drawing).toBeNull();
+    expect(h.activate).toHaveBeenLastCalledWith("select");
   });
 
   it("disables mask drawing with the reason and links the volume view when the surface is in another CRS", async () => {

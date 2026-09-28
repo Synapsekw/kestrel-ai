@@ -8,7 +8,7 @@ import { createVolumeExport } from "@/api/volumes";
 import { relativeTime } from "@/findings/format";
 import { useNow } from "@/jobs/useNow";
 import { useTrackedJob } from "@/jobs/useTrackedJob";
-import { useWorkspace, type InspectorBodyProps } from "@/mapws/w4host";
+import { useTools, useWorkspace, type InspectorBodyProps } from "@/mapws/w4host";
 import { useJobsStore } from "@/store/jobs";
 import {
   Alert,
@@ -72,6 +72,13 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
   const setHeatmap = useVolumeStore((s) => s.setHeatmap);
   const drawing = useVolumeStore((s) => s.drawing);
   const setDrawing = useVolumeStore((s) => s.setDrawing);
+  const activate = useTools((s) => s.activate);
+  // Masks are drawn with W1's drawing pipeline: the "volume" tool, which keeps the selection (T8-2).
+  const toggleMask = (kind: "stable" | "exclusion") => {
+    const next = drawing === kind ? null : kind;
+    setDrawing(next);
+    activate(next ? "volume" : "select");
+  };
   const { job } = useTrackedJob(projectId, m?.status === "calculating" ? m.job_id : null);
   const nowMs = useNow(60_000);
   const [name, setName] = useState<string | null>(null);
@@ -345,7 +352,7 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
                 size="sm"
                 disabled={!drawable || m.base.kind !== "surface"}
                 aria-pressed={drawing === "stable"}
-                onClick={() => setDrawing(drawing === "stable" ? null : "stable")}
+                onClick={() => toggleMask("stable")}
               >
                 Draw stable area
               </Button>
@@ -353,7 +360,7 @@ export function VolumeInspector({ selection, projectId, frame }: InspectorBodyPr
                 size="sm"
                 disabled={!drawable}
                 aria-pressed={drawing === "exclusion"}
-                onClick={() => setDrawing(drawing === "exclusion" ? null : "exclusion")}
+                onClick={() => toggleMask("exclusion")}
               >
                 Draw exclusion
               </Button>
