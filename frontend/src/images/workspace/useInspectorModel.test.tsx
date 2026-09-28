@@ -15,7 +15,12 @@ import { useInspectorModel } from "./useInspectorModel";
  * `PER_IMAGE` (`findingOf: {}`), so links written before the frame lands are wiped; the model must
  * relink once FC's store holds the frame it loaded.
  */
-const detail = { ...exampleImage, camera: null, footprint: null, footprint_kind: "none" } as unknown as ImageDetail;
+const detail = {
+  ...exampleImage,
+  camera: null,
+  footprint: null,
+  footprint_kind: "none",
+} as unknown as ImageDetail;
 const defect = { ...personBox, id: ANNOTATION_ID } as Box;
 
 function mount() {

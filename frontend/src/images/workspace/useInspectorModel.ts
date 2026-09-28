@@ -9,6 +9,8 @@ import { inspectorState, type InspectorState } from "./inspectorState";
 import { useFindingLinks, useSelection } from "./seams";
 
 export const IMAGE_FINDINGS_LIMIT = 500;
+/** One empty page, so the link effect does not re-run on every render before the page lands. */
+const NO_FINDINGS: Finding[] = [];
 export interface InspectorModel {
   state: InspectorState;
   findings: Finding[];
@@ -39,7 +41,7 @@ export function useInspectorModel(projectId: string, imageId: string | null): In
       cancelled = true;
     };
   }, [api, projectId, imageId, revision]);
-  const items = page.id === imageId ? page.items : [];
+  const items = page.id === imageId ? page.items : NO_FINDINGS;
   // FC-R16: the box → finding links live in FC's store; this page fills them (FA adds its own accepts).
   // C1: FC's loadImage clears `findingOf`, so link only once FC holds THIS frame, and again after
   // every load of it (`loaded` is a new object per load), whichever of the two reads lands first.
