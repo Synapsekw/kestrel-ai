@@ -41,3 +41,13 @@ export async function deleteSiteArea(api: ApiClient, projectId: string, areaId: 
     }),
   );
 }
+
+/** M-B1: `frame=site` adds `polygon_site` (the open outline in the site frame) to every area. */
+export async function listSiteAreasInFrame(api: ApiClient, projectId: string): Promise<SiteArea[]> {
+  const page = await unwrap(
+    api.GET("/api/v1/projects/{projectId}/site-areas", {
+      params: { path: { projectId }, query: { frame: "site" } },
+    }),
+  );
+  return page.items;
+}
