@@ -106,7 +106,7 @@ def create_profile_measurement(
         row = CloudMeasurement(
             point_cloud_id=cloud_id,
             kind="profile",
-            name=body.name or measurements._next_name(s, cloud_id, "profile"),
+            name=body.name or measurements.next_name(s, cloud_id, "profile"),
             note=body.note,
             points=[a, b],
             results={},

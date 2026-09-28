@@ -53,7 +53,8 @@ def list_for(handle: ProjectHandle, cloud_id: str) -> list[CloudMeasurement]:
     return items
 
 
-def _next_name(s, cloud_id: str, kind: str) -> str:
+def next_name(s, cloud_id: str, kind: str) -> str:
+    """The next free default name for `kind` on the cloud ("Distance 3"); profile.py uses it too."""
     label = LABELS[kind]
     pattern = re.compile(rf"^{re.escape(label)} (\d+)$")
     names = s.execute(
@@ -172,7 +173,7 @@ def insert(
         row = CloudMeasurement(
             point_cloud_id=cloud_id,
             kind=kind,
-            name=name or _next_name(s, cloud_id, kind),
+            name=name or next_name(s, cloud_id, kind),
             note=note,
             points=points,
             results=results,
